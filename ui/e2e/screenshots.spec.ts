@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import {
     diffFile,
@@ -140,3 +141,29 @@ test('the root size grows with the window', async ({ page }) => {
     await settled(page)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px')
 })
+
+// A narrow window, about the narrowest the UI holds up in (DESIGN.md): the behaviour specs hold that it fits, these
+// how it looks. The ticket page whole, for the strip rail, its one column, and the lists in its panels; the tickets
+// list for the columns it lets go.
+test.describe('in a narrow window', () => {
+    test.use({ viewport: { width: 820, height: 900 } })
+
+    test('tickets/ABC-102 narrow', async ({ page }) => {
+        await openInDark(page, 'tickets/ABC-102')
+        await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
+    })
+
+    test('tickets narrow', async ({ page }) => {
+        await openInDark(page, 'tickets')
+        await screenshotMain(page, 'tickets-narrow-dark.png')
+    })
+})
+
+// Opens `route` in dark, its clock frozen, as every screenshot here is taken.
+async function openInDark(page: Page, route: string): Promise<void> {
+    await page.clock.setFixedTime(NOW)
+    await storeTheme(page, 'dark')
+    await signIn(page)
+    await page.goto(route)
+    await settled(page)
+}
