@@ -15,7 +15,7 @@ from canopy.core import conversation
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Callable, Collection, Iterable
+    from collections.abc import Callable, Collection, Iterable, Sequence
 
 type Source = Literal["ticket", "message", "chore_run", "decision", "tick"]
 
@@ -56,8 +56,8 @@ class Found:
     """A search's words, its hits in source order and newest first within each, and the sources that had more."""
 
     words: tuple[str, ...]
-    hits: tuple[Hit, ...]
-    more: tuple[Source, ...]
+    hits: Sequence[Hit]
+    more: Sequence[Source]
 
 
 def words(query: str) -> tuple[str, ...]:
@@ -93,7 +93,7 @@ def search(conn: sqlite3.Connection, query: str) -> Found:
         if len(rows) > PER_SOURCE:
             more.append(source)
         hits.extend(hit(row, snippet(str(row["text"]), terms)) for row in rows[:PER_SOURCE])
-    return Found(words=terms, hits=tuple(hits), more=tuple(more))
+    return Found(words=terms, hits=hits, more=more)
 
 
 def snippet(text: str, terms: Iterable[str]) -> str:

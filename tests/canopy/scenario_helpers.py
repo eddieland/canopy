@@ -304,13 +304,13 @@ class Ticked:
     #: The tick's row, closed.
     tick: records.Tick
     #: Its decisions, in the order it recorded them.
-    decisions: tuple[records.Decision, ...]
+    decisions: Sequence[records.Decision]
     #: The runs it started, each waited for until it ended.
-    runs: tuple[Ran, ...]
+    runs: Sequence[Ran]
     #: What `canopy tick` printed: the line that says how the tick ended, and what went wrong if it failed.
     printed: Printed
     #: The runs it started and left at work, with `hold=True`.
-    working: tuple[Working, ...] = ()
+    working: Sequence[Working] = ()
 
     @property
     def actions(self) -> list[str]:
@@ -379,10 +379,10 @@ class Scenario:
             started = self.conn.execute("SELECT id FROM runs WHERE tick_id = ? ORDER BY id", (tick.id,)).fetchall()
             # A run is detached from the tick, so the worker's script must last until it ends.
             ids = [int(r["id"]) for r in started]
-            runs = () if hold else tuple(self.ran(wait_for_run(self.conn, run_id)) for run_id in ids)
-        working = tuple(self._at_work(run_id) for run_id in ids) if hold else ()
+            runs = [] if hold else [self.ran(wait_for_run(self.conn, run_id)) for run_id in ids]
+        working = [self._at_work(run_id) for run_id in ids] if hold else []
         made = db.decisions_for_tick(self.conn, tick.id)
-        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), tuple(made), runs, printed, working)
+        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), made, runs, printed, working)
         self.story.append(f"tick {tick.id}, exits {exited}: {ticked}")
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked

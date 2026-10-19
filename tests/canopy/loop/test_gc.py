@@ -194,12 +194,12 @@ def test_gc_without_dry_run_removes_nothing_yet(canopy_env: CanopyEnv, capsys: p
 def test_the_text_report(snapshot: SnapshotAssertion) -> None:
     report = gc.Report(
         at="2026-10-18T09:30:00.000Z",
-        kinds=(
+        kinds=[
             gc.Kind("run files", "files", 812, 1_288_490_188, 301, 430_000_000, "run_files_days = 30"),
             gc.Kind("harness attention", "rows", 52_000, 9_100_000, 0, 0, "journal_days = 90"),
             gc.Kind("journal WAL", "files", 0, 0, 0, 0, "checkpointed"),
-        ),
+        ],
         journal_size=126_000_000,
-        notes=("repo: git count-objects failed in /ws/repos/repo",),
+        notes=["repo: git count-objects failed in /ws/repos/repo"],
     )
     assert "\n".join(gc_cli.render(report)) == snapshot

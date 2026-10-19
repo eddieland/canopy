@@ -22,7 +22,7 @@ from canopy.loop import attention, duties
 from canopy.runs import policy
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.context import Context
@@ -66,7 +66,7 @@ class Pace:
 class Before:
     """What the loop read before a tick, to tell afterwards whether the tick changed anything."""
 
-    attention: tuple[attention.Item, ...]
+    attention: Sequence[attention.Item]
     tickets: frozenset[tuple[object, ...]]
     phases: Mapping[tuple[str, str | None], str | None]
 
@@ -77,7 +77,7 @@ def before(ctx: Context) -> Before:
     Returns:
         What `idle` and `churn` compare the journal with after the tick.
     """
-    return Before(tuple(attention.listed(ctx)), db.tickets_snapshot(ctx.conn), db.phases(ctx.conn))
+    return Before(attention.listed(ctx), db.tickets_snapshot(ctx.conn), db.phases(ctx.conn))
 
 
 def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:

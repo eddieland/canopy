@@ -92,8 +92,8 @@ def test_every_word_must_be_in_one_field_and_wildcards_are_literal(ctx: Context)
     db.record_decision(ctx.conn, tick, None, "wait", "coverage at 500 in somexmodule")
 
     assert [h.snippet for h in search.search(ctx.conn, "50% some_").hits] == ["coverage at 50% in some_module"]
-    assert search.search(ctx.conn, "coverage nowhere").hits == ()
-    assert search.search(ctx.conn, "back\\slash").hits == ()
+    assert search.search(ctx.conn, "coverage nowhere").hits == []
+    assert search.search(ctx.conn, "back\\slash").hits == []
 
 
 def test_each_source_gives_its_newest_hits_and_says_when_it_has_more(ctx: Context) -> None:
@@ -104,8 +104,8 @@ def test_each_source_gives_its_newest_hits_and_says_when_it_has_more(ctx: Contex
 
     found = search.search(ctx.conn, "waits")
     assert [h.snippet for h in found.hits] == [f"decision {i} waits" for i in reversed(range(3, len(ids)))]
-    assert found.more == ("decision",)
-    assert search.search(ctx.conn, "decision 2 waits").more == ()
+    assert found.more == ["decision"]
+    assert search.search(ctx.conn, "decision 2 waits").more == []
 
 
 def test_a_snippet_is_one_line_cut_around_the_first_match() -> None:

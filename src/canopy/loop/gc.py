@@ -25,7 +25,7 @@ from canopy.reviews import start as review_start
 from canopy.runs import dispatch
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from datetime import datetime
 
     from canopy.core.config import Retention
@@ -68,9 +68,9 @@ class Report:
     """What `canopy gc --dry-run` reports: each kind, the journal's size in bytes, and what could not be read."""
 
     at: str
-    kinds: tuple[Kind, ...]
+    kinds: Sequence[Kind]
     journal_size: int
-    notes: tuple[str, ...]
+    notes: Sequence[str]
 
 
 def measure(ctx: Context, now: datetime) -> Report:
@@ -85,7 +85,7 @@ def measure(ctx: Context, now: datetime) -> Report:
     runs = _cutoff(now, retention.run_files_days)
     by_runs = f"run_files_days = {retention.run_files_days}"
     notes: list[str] = []
-    kinds = (
+    kinds = [
         files.kind("run files", _run_files(ctx.conn, runs), by_runs),
         files.kind(
             "tick files",
@@ -101,8 +101,8 @@ def measure(ctx: Context, now: datetime) -> Report:
         *_git_objects(ctx, notes),
         _sandbox_caches(),
         _memory_text(ctx.conn, now, retention),
-    )
-    return Report(at=db.format_time(now), kinds=kinds, journal_size=_regular_size(journal) or 0, notes=tuple(notes))
+    ]
+    return Report(at=db.format_time(now), kinds=kinds, journal_size=_regular_size(journal) or 0, notes=notes)
 
 
 def _cutoff(now: datetime, days: int) -> str:

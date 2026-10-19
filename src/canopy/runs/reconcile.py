@@ -47,7 +47,7 @@ class Reconciled:
     """What reconcile leaves: the capacity, and each cloned repository's leased slots, by repository name."""
 
     capacity: Capacity
-    leased: Mapping[str, tuple[pools.Slot, ...]] = field(default_factory=dict[str, tuple[pools.Slot, ...]])
+    leased: Mapping[str, Sequence[pools.Slot]] = field(default_factory=dict[str, list[pools.Slot]])
 
 
 def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
@@ -78,10 +78,10 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
-    leased: dict[str, tuple[pools.Slot, ...]] = {}
+    leased: dict[str, list[pools.Slot]] = {}
     for name, pool_, slots in found:
         still = _return_stale(log, name, pool_, slots, held=held, returned=returned)
-        leased[name] = (*leased.get(name, ()), *still)
+        leased.setdefault(name, []).extend(still)
     for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     if not running:

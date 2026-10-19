@@ -1,9 +1,9 @@
 """Each frozen dataclass in canopy, its programs, and its tests holds no mutable collection (AGENTS.md).
 
 A frozen dataclass is a value: nothing changes it once made. A `list`, `dict`, or `set` field would let anything that
-holds it change it anyway, so a sequence is a `tuple`, a set a `frozenset`, and a mapping is typed `Mapping`. A class
-that keeps state it changes, such as a stack of open blocks, is not frozen. The test reads the annotations, as the
-type checker does, so a field typed `Mapping` that holds a dict passes.
+reads it change it anyway, so a field is typed by what its readers need, `Sequence` or `Mapping`, and the type checker
+refuses a change through it. A class that keeps state it changes, such as a stack of open blocks, is not frozen. The
+test reads the annotations, as the type checker does, so a field typed `Sequence` that holds a list passes.
 """
 
 import ast

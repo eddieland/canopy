@@ -24,6 +24,8 @@ from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
@@ -54,7 +56,7 @@ class Prepared:
     body: str
     context: str | None
     cwd: Path
-    argv: tuple[str, ...]
+    argv: Sequence[str]
 
 
 def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
@@ -81,7 +83,7 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         cwd, argv, _ = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
         raise TrialError(str(e)) from e
-    return Prepared(name, chore, body, context, cwd, tuple(argv))
+    return Prepared(name, chore, body, context, cwd, argv)
 
 
 def record(ctx: Context, prepared: Prepared) -> Recorded:

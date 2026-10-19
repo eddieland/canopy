@@ -24,7 +24,7 @@ import dataclasses
 import json
 import os
 import stat
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal
@@ -187,7 +187,7 @@ type Entry = Text | ToolCall | Step | Error
 class Transcript:
     """What a log holds of one session. `truncated` when a bound cut anything; `unreadable` events did not validate."""
 
-    entries: tuple[Entry, ...] = ()
+    entries: Sequence[Entry] = ()
     truncated: bool = False
     unreadable: int = 0
 
@@ -331,7 +331,7 @@ def _parse(lines: Iterable[str], session_id: str, *, truncated: bool) -> Transcr
         entries.append(dataclasses.replace(entry, call=call or None))
         chars += size
         truncated = truncated or (isinstance(entry, Text | ToolCall) and entry.cut)
-    return Transcript(tuple(entries), truncated, unreadable)
+    return Transcript(entries, truncated, unreadable)
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:

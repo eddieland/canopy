@@ -169,8 +169,8 @@ class Digest:
     ticks: Mapping[str, int]
     runs_started: Mapping[str, int]
     runs_ended: Mapping[str, int]
-    done: tuple[DoneRun, ...]
-    blocked: tuple[BlockedRun, ...]
+    done: Sequence[DoneRun]
+    blocked: Sequence[BlockedRun]
     attention: Mapping[str, int]
     oldest: str | None
     running: int
@@ -263,8 +263,8 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
         ticks=dict(ticks),
         runs_started=dict(started),
         runs_ended=dict(ended),
-        done=tuple(done),
-        blocked=tuple(blocked),
+        done=done,
+        blocked=blocked,
         attention=dict(Counter(i.reason for i in items)),
         oldest=age(oldest, now) if oldest is not None else None,
         running=len(db.running_runs(conn, "runs")),

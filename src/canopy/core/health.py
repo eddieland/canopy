@@ -17,7 +17,7 @@ from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus, TickSt
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from datetime import datetime
 
     from canopy.core.spend import Kind
@@ -108,9 +108,9 @@ class Health:
     since: str
     until: str
     days: int
-    outcomes: tuple[Outcome, ...] = ()
-    failures: tuple[Failure, ...] = ()
-    refusals: tuple[Refusal, ...] = ()
+    outcomes: Sequence[Outcome] = ()
+    failures: Sequence[Failure] = ()
+    refusals: Sequence[Refusal] = ()
 
 
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
@@ -128,12 +128,7 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
         refusals = _refusals(conn, since, until)
     failures.sort(key=lambda f: (f.started_at, spend.KINDS.index(f.kind), f.id), reverse=True)
     return Health(
-        since=since,
-        until=until,
-        days=days,
-        outcomes=tuple(outcomes),
-        failures=tuple(failures[:FAILURES]),
-        refusals=tuple(refusals),
+        since=since, until=until, days=days, outcomes=outcomes, failures=failures[:FAILURES], refusals=refusals
     )
 
 

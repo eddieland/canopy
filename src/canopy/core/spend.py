@@ -21,7 +21,7 @@ from canopy.core import contract, db, records
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Mapping
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
@@ -195,18 +195,18 @@ class Breakdown:
     since: str
     until: str
     days: int
-    per_day: tuple[Day, ...]
+    per_day: Sequence[Day]
     totals: Costs
-    ticks: tuple[TickGroup, ...]
-    woken: tuple[Woken, ...]
-    unpriced: tuple[Unpriced, ...]
+    ticks: Sequence[TickGroup]
+    woken: Sequence[Woken]
+    unpriced: Sequence[Unpriced]
     idle_share: float | None = None
     done: int = 0
     per_done: float | None = None
-    tickets: tuple[TicketSpend, ...] = ()
-    pull_requests: tuple[PullRequestSpend, ...] = ()
-    first_calls: tuple[FirstCalls, ...] = ()
-    tools: tuple[ToolSpend, ...] = ()
+    tickets: Sequence[TicketSpend] = ()
+    pull_requests: Sequence[PullRequestSpend] = ()
+    first_calls: Sequence[FirstCalls] = ()
+    tools: Sequence[ToolSpend] = ()
 
 
 def window_start(now: datetime, days: int) -> datetime:
@@ -261,18 +261,18 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         since=since,
         until=until,
         days=days,
-        per_day=tuple(per_day),
+        per_day=per_day,
         totals=totals,
-        ticks=tuple(ticks),
-        woken=tuple(_woken(rows)),
-        unpriced=tuple(unpriced),
+        ticks=ticks,
+        woken=_woken(rows),
+        unpriced=unpriced,
         idle_share=_idle_share(ticks),
         done=len(done),
         per_done=total / len(done) if done and total is not None else None,
-        tickets=tuple(tickets),
-        pull_requests=tuple(pull_requests),
-        first_calls=tuple(first_calls),
-        tools=tuple(tools),
+        tickets=tickets,
+        pull_requests=pull_requests,
+        first_calls=first_calls,
+        tools=tools,
     )
 
 
