@@ -199,8 +199,7 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
      `cache/warm.bin` and note its inode: `ls -i .treehouse/*/*/toy-calc/cache/warm.bin`.
   2. Set `pools.backend = "canopy"` in the toy user config and run `canopy workspace sync --dry-run`. Expect
      `toy-calc: to move: 2 idle treehouse slots into pools/`, the same for each other repository, and nothing changed
-     on disk. Its `slots` line still counts canopy's pool before the move (`0 of 2, would make 2`); the real sync makes
-     none.
+     on disk, with `toy-calc: slots: 2 of 2`: the dry run counts the slots its move brings in, as the real sync does.
   3. `canopy workspace sync`. Expect `toy-calc: moved: moved 2 of 2 idle treehouse slots into pools/`, then
      `toy-calc: slots: 2 of 2`, and exit 0. The slots are `pools/toy-calc/1/toy-calc` and `pools/toy-calc/2/toy-calc`,
      `git -C repos/toy-calc worktree list` names them, each has a row with no holder, and
@@ -225,15 +224,14 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
      run end on its own, with its PR: its slot is reset as in step 2, the worker's commits gone from it.
 - **S47. A switch with a run in flight, both ways** (M45). A lease goes back to the pool that made it.
   1. Under treehouse, start a run. While its worker runs, set `"canopy"` and sync. Expect `moved 1 of 1 idle
-     treehouse slots into pools/`, canopy's pool made up to its size (`slots: 2 of 2, made 1`), and the run's slot
-     left in `.treehouse/`.
+     treehouse slots into pools/`, no slot made in place of the run's (`slots: 1 of 2; 1 left in treehouse's pool,
+     moved in by a later sync`), exit 0, and the run's slot left in `.treehouse/`.
   2. `canopy tick` while it runs. Expect no `canopy lease with no running worker; returned` line for its slot in the
      log, and the run still running in `canopy status`.
   3. Let it end, or stop it. Expect its `run_slots` row to say `treehouse`, and the slot `available` in
      `treehouse status --json`, run in `repos/toy-calc` with `TREEHOUSE_ROOT` the workspace root.
-  4. Sync. Expect it to move that slot, now idle. Read from the code, this fails with a declared size: step 1's sync
-     already made canopy's pool up to it, so the move is refused at the bound (`kept: moved 0 of 1 ...`) and sync
-     exits 1. If it does, file it.
+  4. Sync. Expect it to move that slot, now idle, its caches with it: `moved 1 of 1 idle treehouse slots into
+     pools/`, then `slots: 2 of 2`, and exit 0. `.treehouse/` holds no slot of toy-calc's.
   5. The other way: start a run under canopy, set `"treehouse"` while it runs, and sync. Expect `removed 1 of 1 idle
      slots of canopy's pool`, the run's slot left in `pools/`, and treehouse's pool made up to its size. When the run
      ends, its slot goes back to canopy's pool, its row with no holder, and the next sync removes it (`removed 1 of
