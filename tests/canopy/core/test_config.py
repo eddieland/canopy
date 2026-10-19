@@ -154,7 +154,8 @@ def test_triage_is_off_by_default_and_only_the_operator_turns_it_on(canopy_env: 
     # It loosens the plan gate, so unlike the rest of `[policy]` a shared file may not touch it (TRUST_MODEL T7).
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert (cfg.policy.plan_triage, cfg.policy.trivial, cfg.runtime.plan_triage_timeout_minutes) == ("off", "", 10)
-    canopy_env.append_user('\n[policy]\nplan_triage = "on"\ntrivial = "A typo."\n')
+    # The operator need not say what is trivial: the triage's prompt has its own measure.
+    canopy_env.append_user('\n[policy]\nplan_triage = "on"\n')
     assert load(canopy_env.root, canopy_env.user_file).policy.plan_triage == "on"
     canopy_env.append_shared('[policy]\ntrivial = "Anything at all."\n')
     with pytest.raises(ConfigError, match=r"policy\.trivial is private"):
@@ -245,9 +246,6 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
             "[loop]\nidle_max_minutes = 14\n",
             r"loop\.idle_max_minutes \(14\) must be at least loop\.interval_minutes \(15\)",
         ),
-        # With nothing trivial, every triage would answer `plan` and cost a run for nothing (DESIGN §25).
-        ('[policy]\nplan_triage = "on"\n', r"policy\.trivial must say what counts as trivial when policy\.plan_triage"),
-        ('[policy]\nplan_triage = "on"\ntrivial = "  "\n', r"policy\.trivial must say what counts as trivial"),
         (f"[policy]\ntrivial = '{'x' * 2001}'\n", "at most 2000 characters"),
         ('[policy]\nplan_triage = "yes"\n', "Input should be 'off' or 'on'"),
         ("[runtime]\nplan_triage_timeout_minutes = 0\n", "greater than or equal to 1"),

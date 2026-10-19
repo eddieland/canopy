@@ -480,24 +480,15 @@ class Policy(Section):
     # Whether a ticket waits on a plan the operator approved before its implement (DESIGN §25): a guard in code. A
     # ticket's own setting, `canopy plan KEY` or `--skip`, overrides it.
     plan: Annotated[Literal["off", "approve"], Scope.SHARED, Tighten.LATER] = "off"
-    #: Whether a cheaper agent first judges a ticket the policy would plan, and waives its plan for work `trivial`
-    #: describes (DESIGN §25, Triage before a plan). Private, unlike the rest of the table: it loosens the operator's
+    #: Whether a cheaper agent first judges a ticket the policy would plan, and waives its plan for work it judges
+    #: trivial (DESIGN §25, Triage before a plan). Private, unlike the rest of the table: it loosens the operator's
     #: plan gate, which a shared file must not (TRUST_MODEL T7).
     plan_triage: Annotated[Literal["off", "on"], Scope.PRIVATE] = "off"
-    #: Plain language for the triage agent: what the operator counts as trivial. Without it nothing is.
+    #: Plain language for the triage agent: what the operator counts as trivial, in place of its prompt's own measure.
+    #: Optional: without it, the agent judges by that measure.
     trivial: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trivial)] = ""
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
-
-    @model_validator(mode="after")
-    def _trivial_when_triaged(self) -> Policy:
-        # With nothing trivial, every triage would answer `plan` and cost a run for nothing.
-        if self.plan_triage == "on" and not self.trivial.strip():
-            raise ValueError(
-                'policy.trivial must say what counts as trivial when policy.plan_triage is "on"; without it every '
-                "triage would answer plan"
-            )
-        return self
 
 
 class Trust(Section):

@@ -38,7 +38,7 @@ WORKER_PRIVATE: dict[str, str] = {
 #: the notice.
 TRIAGE = "plan-triage.md"
 #: Placeholders a triage's prompt must use: its own authorization check, which names the queue labels on a public
-#: ticket (D051), and the operator's words for what is trivial, without which it judges by its own.
+#: ticket (D051), and the operator's words for what is trivial, which take the place of the prompt's own measure.
 REQUIRED_TRIAGE = ("AUTHORIZATION", "TRIVIAL")
 # The prompts of `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8). An override of either would be
 # read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the

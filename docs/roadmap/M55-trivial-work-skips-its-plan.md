@@ -82,4 +82,7 @@ ticket's waiver is in force, naming the review and the triage's reason, with no 
 result. Then, 2026-10-19, the web UI's plan card, which shows a ticket's triage running, its waiver with the run
 and its reason and, until the implement starts, Ask for a plan to undo it, or the triage that left the ticket to be
 planned; and triage runs as a kind of their own in `canopy spend`, `canopy health`, and the spend page, with the plans
-they waived. Left: the feedback half (M54).
+they waived. Then, 2026-10-19, `policy.trivial` made optional (the operator: a model can tell trivial work without
+being told): the triage prompt carries its own measure, settled work with one reasonable way to do it, and the
+operator's words, where set, take its place; `"on"` without them is no longer a config error. Left: the feedback half
+(M54).

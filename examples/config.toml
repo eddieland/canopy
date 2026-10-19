@@ -76,8 +76,9 @@ worker_timeout_minutes = 45
 # worker_cmd_suffix = "--model provider/model"
 
 # Optional, with the workspace's policy.plan = "approve": before a ticket's first plan, a cheaper agent judges whether
-# its work is trivial by your words below, and if so waives the plan (DESIGN §25, Triage before a plan). When unsure,
-# or if anything fails, the ticket is planned. Private, unlike the rest of [policy]: only your own files turn it on.
+# its work is trivial, and if so waives the plan (DESIGN §25, Triage before a plan). When unsure, or if anything fails,
+# the ticket is planned. Private, unlike the rest of [policy]: only your own files turn it on. It judges by its own
+# measure: settled work with one reasonable way to do it. Set trivial only to put your words in place of that.
 # [policy]
 # plan_triage = "on"
 # trivial = """A typo in docs or comments; one config value changed; a dependency moved by a patch version."""
