@@ -6,6 +6,7 @@ import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Clipped, Tip } from '@/components/tip'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
@@ -28,10 +29,12 @@ export function ReviewsTable({ reviews, pr = true }: { reviews: ReviewSummary[];
 
 function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
     const sha = (
-        <span className="readout shrink-0 text-xs text-muted-foreground" title={review.sha}>
-            {pr ? '' : 'at '}
-            {shortSha(review.sha)}
-        </span>
+        <Tip fact={review.sha} mono>
+            <span className="readout shrink-0 text-xs text-muted-foreground">
+                {pr ? '' : 'at '}
+                {shortSha(review.sha)}
+            </span>
+        </Tip>
     )
     return (
         <ListRow
@@ -42,9 +45,7 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             {/* The dot is how its run ended; the verdict's color, its worst finding. */}
             <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
-                <span className="truncate" title={verdictText(review)}>
-                    {verdictText(review)}
-                </span>
+                <Clipped text={verdictText(review)} />
             </span>
             <ReviewLink id={review.id} />
             {pr && (

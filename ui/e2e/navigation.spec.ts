@@ -421,9 +421,10 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
         'href',
         'https://github.com/acme/web/tree/agent/ABC-101-login',
     )
-    // The slots' shared directory is said once, in the header; each slot's path is on its number.
+    // The slots' shared directory is said once, in the header; each slot's path is in its number's tip.
     await expect(web.getByTestId('pool-root')).toHaveText('.treehouse/web-3f9c2a1b/')
-    await expect(working.getByText('#1')).toHaveAttribute('title', '.treehouse/web-3f9c2a1b/1/web')
+    await working.getByText('#1').focus()
+    await expect(page.getByRole('tooltip')).toHaveText('.treehouse/web-3f9c2a1b/1/web')
     await expect(working).not.toContainText('.treehouse/web-3f9c2a1b/1/web')
     await expect(working).toContainText('opencode 48211')
     await expect(web.getByTestId('worktree-3')).toHaveAttribute('data-state', 'held')
@@ -474,7 +475,9 @@ test('a slot with long text keeps it inside its row', async ({ page }) => {
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     await expect(slot).toContainText('great_gasdbq_0 340928')
     const processes = slot.getByTestId('worktree-processes')
-    await expect(processes).toHaveAttribute('title', /great_gasdbq_11 340939/u)
+    // Every one in its tip, which the keyboard's focus opens as hovering does.
+    await processes.focus()
+    await expect(page.getByRole('tooltip')).toContainText('great_gasdbq_11 340939')
     const overflow = await slot.evaluate((li) => {
         const edge = li.getBoundingClientRect().right
         return [...li.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > edge + 0.5).length

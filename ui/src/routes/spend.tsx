@@ -11,6 +11,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Clipped } from '@/components/tip'
 import { TickRow } from '@/components/tick-row'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { axisNames, axisStep, HEADROOM } from '@/lib/chart'
@@ -633,9 +634,7 @@ function Tools({ tools, days }: { tools: SpendTool[]; days: number }) {
                         <tr key={`${tool.kind} ${tool.tool}`} className="text-right" data-testid="spend-tool">
                             <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
                                 {/* The row's name, as the ticket table's title reads: medium weight, cut to fit. */}
-                                <span className="block truncate font-sans font-medium" title={tool.tool}>
-                                    {tool.tool}
-                                </span>
+                                <Clipped text={tool.tool} className="block font-sans font-medium" />
                             </th>
                             <td className="pl-3 text-left text-muted-foreground">{tool.kind}</td>
                             <td className="readout pl-3" title={`in ${tool.runs} runs`}>
