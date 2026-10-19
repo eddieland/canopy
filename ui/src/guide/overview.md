@@ -88,8 +88,7 @@ right now, running first and then the ones waiting on you, and what the last 24 
 a link to the spend page. A ticket you stopped drops out of the working runs once its run ends; a question it left
 behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to
 canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a
-narrow window the rail folds to icons; **Open the rail** brings it back, and the book at the foot of the icons opens
-this guide, so it stays one click away however narrow the window gets.
+narrow window the rail folds to icons; **Open the rail** brings it back.
 
 ## Search
 

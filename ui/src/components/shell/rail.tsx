@@ -18,9 +18,6 @@ import { cn } from '@/lib/utils'
 // Where the version links: every release's notes, newest first.
 const RELEASES = 'https://github.com/eddieland/canopy/releases'
 
-// What the guide is, on the hover of each way into it.
-const GUIDE_HINT = 'How the web UI works, a page each'
-
 // Rows the rail lists before `+N more`: with the nav and the spend, four keep the sticky part within an 800px window.
 const RAIL_RUNS = 4
 
@@ -134,7 +131,7 @@ export function RailFooter() {
                 {meta === undefined ? '' : `canopy ${meta.version}`}
             </a>
             <div className="flex items-center gap-1.5">
-                <FooterLink to="/guide" title={GUIDE_HINT} testId="rail-guide">
+                <FooterLink to="/guide" title="How the web UI works, a page each" testId="rail-guide">
                     <BookOpen aria-hidden />
                     Guide
                 </FooterLink>
@@ -148,29 +145,6 @@ export function RailFooter() {
                 </FooterLink>
             </div>
         </div>
-    )
-}
-
-/**
- * The strip's foot, at the window's foot as the whole rail's is: the guide, as an icon the size of the nav's, named on
- * hover and to a screen reader, so it is one click from every page however narrow the window. Settings, opened least,
- * stays in the sheet's foot.
- */
-export function StripGuide() {
-    return (
-        <Link
-            to="/guide"
-            title={`Guide: ${GUIDE_HINT}`}
-            data-testid="strip-guide"
-            className={cn(
-                'flex h-8 items-center justify-center rounded-sm text-muted-foreground transition-colors outline-none',
-                'hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                'data-[status=active]:text-foreground',
-            )}
-        >
-            <BookOpen aria-hidden className="size-4" />
-            <span className="sr-only">Guide</span>
-        </Link>
     )
 }
 

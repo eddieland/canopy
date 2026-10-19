@@ -159,12 +159,9 @@ Rules:
   atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
   dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
-  strip's foot, at the window's foot as the rail's footer is, opens the guide: a book (`BookOpen`) the size of the
-  nav's icons, named `Guide` on hover and to a screen reader (`StripGuide`), so the guide is one click from every page
-  at 820px as it is beside a whole rail. Settings, opened least, stays in the sheet's foot. The breakpoint is the
-  viewport's, as the rail's place is the window's; what a list shows, and every other layout step inside the pane, is
-  its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is made for; a phone's is
-  not.
+  breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
+  inside the pane, is its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is
+  made for; a phone's is not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -926,8 +923,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   the code and why to the design. It talks to the operator as `you`, in plain, direct sentences, as good developer
   docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
   stands in for one, and they stay rare enough to land. A new page is a file there and a line in its group in
-  `SOURCES`; the rail's foot, under the version, opens the guide, as the strip's foot does, and the book atop every
-  other page opens its page about that one.
+  `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
+  about that one.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
   operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
   `surface` with a hairline border: its question as the title (`Leave this page?`), what leaving loses under it, then
