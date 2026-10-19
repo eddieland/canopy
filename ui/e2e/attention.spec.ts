@@ -252,6 +252,9 @@ test.describe('on half a monitor', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
     test('the list fills the width, and an item opens in its place, its reply in reach', async ({ page }) => {
+        // Panels rise into place as a page opens; with motion reduced they rest where they end, so the list's top,
+        // measured once, is where it stays.
+        await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.goto('attention')
         await settled(page)
         const list = page.getByTestId('attention-list')
