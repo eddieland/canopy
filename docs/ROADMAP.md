@@ -1680,21 +1680,26 @@ first, in §25.
 - **The setting.** `policy.plan_triage`, `"off"` (default) or `"on"`, and `policy.trivial`, plain language for the
   triage agent saying what counts as trivial, as `review.low_impact` does for the reviewer (§21): without it nothing is
   trivial. Both private: unlike `policy.plan`, which a shared file may only tighten, triage loosens the operator's
-  plan gate, so only the operator turns it on (T7). `runtime.plan_triage_cmd` names the model, a cheaper one than
-  `plan_cmd`'s recommended, with a short timeout of its own.
+  plan gate, so only the operator turns it on (T7). `"on"` without `policy.trivial` is a config error.
+  `runtime.plan_triage_cmd` names the model, a cheaper one than `plan_cmd`'s recommended, with a short timeout of its
+  own, `runtime.plan_triage_timeout_minutes` (10).
 - **When it runs.** Only for a plan the policy asks for: a ticket whose own setting says `plan` (`canopy plan KEY`, or
   `start --plan`) is planned whatever triage would say, since that is the operator's word for that ticket. Before the
-  first `plan` of such a ticket the overseer dispatches a `triage-plan` run, once per ticket; under M54, before a
+  first `plan` of such a ticket, with no branch and no plan run yet, the overseer dispatches a `triage-plan` run, once
+  per ticket: a second is refused `triaged` however the first ended, and one not due `bad_triage`. Under M54, before a
   feedback plan too, once per round of feedback.
 - **The run.** A read-only run with a verdict, as M25's `triage-ci` is (DESIGN §23): it leases no slot, reads the ticket
-  through the tracker's read tools and the repository's primary clone, and writes nothing anywhere. It still counts
-  toward `capacity.max_workers` with workers and reviews, since it is an agent run with spend: a slot bounds worktrees,
-  the cap bounds runs. Its definition is the planner's with nothing to edit (T6). Result line:
+  through the tracker's read tools and the named repositories' primary clones, linked from a directory of canopy's,
+  and writes nothing anywhere. It still counts toward `capacity.max_workers` with workers and reviews, since it is an
+  agent run with spend: a slot bounds worktrees, the cap bounds runs. Its definition, `canopy-plan-triage`, is the
+  planner's with nothing to edit (T6). Result line:
   `{"status":"done|failed","verdict":"trivial|plan","reason":"one sentence"}`. Its prompt says: when unsure, `plan`.
 - **Fails closed.** Only a `done` run with the verdict `trivial` waives the plan. A `plan` verdict, a failure, a
   timeout, or a result that does not validate leaves the ticket needing its plan, and the next tick dispatches `plan`
   as today. The waiver is a journal fact naming the run and its reason, distinct from the operator's `--skip`, shown on
-  the ticket's page and by `canopy show`. The operator undoes it with `canopy plan KEY` until the `implement` starts.
+  the ticket's page and by `canopy show`. The operator undoes it with `canopy plan KEY` until the `implement` starts,
+  and `canopy forget` ends it. A triage that ends other than `done` raises no run attention item, since the plan
+  follows at once, and the `implement` a waiver lets through never hears the triage's reason.
 - **Feedback stays gated.** Under M54, a `trivial` verdict on a round of feedback returns it to today's rules rather
   than letting it through: a trusted reviewer's items dispatch `resume`, and anyone else's wait for the operator's
   go-ahead (D089). So triage never lets an untrusted reviewer's text start a worker.
@@ -1716,9 +1721,10 @@ first, in §25.
   feedback round, its timeout, and capacity); T6 (the triage run writes nothing); T7 (both keys private).
 - Tests with the fakes: `trivial` waives the plan and `implement` follows unplanned; `plan`, `failed`, a timeout, and a
   bad result each leave the plan needed; a ticket set to `plan` by the operator is never triaged; one triage per
-  ticket; `canopy plan KEY` undoes a waiver; a `high` review of a waived ticket's PR raises `not_trivial`, a `normal`
-  one does not; a trivial feedback round
-  with an untrusted item waits for the go-ahead; `"off"` leaves every snapshot unchanged.
+  ticket, refused `triaged`; `triage_off` and `bad_triage`; a failed triage raising no attention item, with the plan
+  following; `canopy plan KEY` undoes a waiver and `canopy forget` ends one; a `high` review of a waived ticket's PR
+  raises `not_trivial`, a `normal` one does not; a trivial feedback round with an untrusted item waits for the
+  go-ahead; `"off"` leaves every snapshot unchanged.
 - **No model per run.** Triage chooses no model for the work. With plans on, the operator runs a cheaper `worker_cmd`
   (2026-10-17), since every worker then has an approved plan or a ticket judged trivial: a setting of theirs, not a
   choice an agent makes.
@@ -1729,7 +1735,12 @@ Accept: written with the design, before work starts. Live, once built: over a we
 spend page shows triage runs' cost against the planner runs they saved; every waived ticket's PR is one the operator
 agrees needed no plan, or that its review judged `high` and raised `not_trivial`.
 
-Status: not started.
+Status: in progress. Designed 2026-10-19 (DESIGN §25, Triage before a plan). The design settles what the sketch left
+open: when a triage is due and the guards that hold it to once per ticket; that it reads the named repositories'
+primary clones through links, as a plan's desk links slots; that only a validated result writes the waiver, which
+`unplanned` reads in code and `canopy forget` ends; and that `not_trivial` lasts until the ticket is done or
+forgotten. Open for the operator: the feedback half, which M54's design settles; the sandbox role for
+`plan_triage_cmd`; and whether a waiver sends an event to the sinks.
 
 ## M56. Fixing CI is part of resume
 
