@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Pencil, Send, Trash2, Undo2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
@@ -14,11 +15,25 @@ import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader, PanelLoading } from '@/components/panel'
 import { DiffPanels } from '@/components/review-diff'
+import type { Wanted } from '@/components/review-diff'
+import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { DRAFT_TONE, MAX_DRAFT_CHARS, draftChars, movedHead, open, placeThreads, waiting } from '@/lib/drafts'
+import {
+    DRAFT_TONE,
+    MAX_DRAFT_CHARS,
+    draftAnchor,
+    draftChars,
+    listDrafts,
+    movedHead,
+    open,
+    placeThreads,
+    threadWhere,
+    waiting,
+} from '@/lib/drafts'
+import type { Placed } from '@/lib/reviews'
 import { draftDroppedText, draftEditedText, draftsSentText, draftsSentToast } from '@/lib/outcomes'
 import { shortSha } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
@@ -28,11 +43,14 @@ import { cn } from '@/lib/utils'
  * PR's diff): what canopy's reader last read of the PR, never a worker's copy. A thread sits at its line, under its
  * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
  * draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
- * dropped, or sent where it sits; the head panel sends every waiting one together, as one comment review.
+ * dropped, or sent where it sits; the head panel lists every draft with a link to its card, and sends every waiting one
+ * together, as one comment review.
  */
 export function ReviewThreads({ url }: { url: string }) {
     const client = useQueryClient()
     const query = useQuery(pullRequestThreadsQuery(url))
+    // The file of the draft whose link the operator last followed, a new object each time, so the diff shows it.
+    const [wanted, setWanted] = useState<Wanted | null>(null)
     const changed = () => void refreshThreads(client, url)
     const { data } = query
     if (data === undefined) {
@@ -46,11 +64,12 @@ export function ReviewThreads({ url }: { url: string }) {
     const placed = placeThreads(data)
     return (
         <>
-            <RepliesPanel threads={data} onChange={changed} />
+            <RepliesPanel threads={data} placed={placed} onChange={changed} onFollow={(file) => setWanted({ file })} />
             {data.diff !== null && (
                 <DiffPanels
                     diff={data.diff}
                     placed={placed}
+                    wanted={wanted}
                     cards={['thread', 'threads']}
                     renderCard={(t) => <ThreadCard key={t.id} thread={t} onChange={changed} />}
                 />
@@ -85,9 +104,20 @@ export function ReviewThreads({ url }: { url: string }) {
 
 /**
  * The head of a PR's threads: how workers' comments reach GitHub now, when the reader last read the PR, a warning when
- * its head is past the diff the page shows, the drafts for the review's body, and a send of every waiting draft.
+ * its head is past the diff the page shows, every draft with a link to its card, the drafts for the review's body, and
+ * a send of every waiting draft. `onFollow` hears a link followed to a draft on a file, by the file's index.
  */
-function RepliesPanel({ threads, onChange }: { threads: PullRequestThreads; onChange: () => void }) {
+function RepliesPanel({
+    threads,
+    placed,
+    onChange,
+    onFollow,
+}: {
+    threads: PullRequestThreads
+    placed: Placed<ReviewThread>
+    onChange: () => void
+    onFollow: (file: number) => void
+}) {
     const [said, setSaid] = useState<string | null>(null)
     const toast = useToast()
     const sendable = waiting(threads)
@@ -149,6 +179,7 @@ function RepliesPanel({ threads, onChange }: { threads: PullRequestThreads; onCh
                     <p className="text-muted-foreground">No run kept a diff of it, so its threads are listed whole.</p>
                 )}
             </div>
+            <DraftList threads={threads} placed={placed} onFollow={onFollow} />
             {threads.pr_drafts.length > 0 && (
                 <div className="flex flex-col gap-2 border-t p-3" data-testid="pr-drafts">
                     <span className="panel-label">The review&apos;s body</span>
@@ -181,6 +212,68 @@ function RepliesPanel({ threads, onChange }: { threads: PullRequestThreads; onCh
     )
 }
 
+/**
+ * Every draft for the PR, in the order their cards show, each a row: its status, its run and number, its first line
+ * linking to its card, and where the card sits. Following a link to a card on a file opens that file, as a review's
+ * findings list does. Nothing when the PR has no draft.
+ */
+function DraftList({
+    threads,
+    placed,
+    onFollow,
+}: {
+    threads: PullRequestThreads
+    placed: Placed<ReviewThread>
+    onFollow: (file: number) => void
+}) {
+    const listed = listDrafts(threads, placed)
+    if (listed.length === 0) {
+        return null
+    }
+    return (
+        <div className="border-t" data-testid="draft-list">
+            <span className="panel-label block px-3 pt-3">
+                Drafts <span className="readout text-muted-foreground">{listed.length}</span>
+            </span>
+            <ol className="divide-y">
+                {listed.map(({ draft, where, file }) => (
+                    <ListRow key={draftAnchor(draft)} kind="thread-draft" className="py-2 text-sm">
+                        <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} className="justify-center" />
+                        <span className="readout text-xs text-muted-foreground">
+                            <RunLink id={draft.run} /> {draft.number}
+                        </span>
+                        {/* A router link, not a bare `#` href, which the page's <base> would send to the root. */}
+                        <Link
+                            to="/pull-requests/pr"
+                            search={{ url: threads.url }}
+                            hash={draftAnchor(draft)}
+                            onClick={() => {
+                                if (file !== null) {
+                                    onFollow(file)
+                                }
+                            }}
+                            className={cn(
+                                'min-w-0 truncate text-accent underline-offset-4 hover:underline',
+                                (draft.status === 'superseded' || draft.status === 'dropped') && 'line-through',
+                            )}
+                        >
+                            <MemoryText text={firstLine(draft.text)} className="whitespace-nowrap" />
+                        </Link>
+                        <span className="max-w-56 truncate font-mono text-xs text-muted-foreground" title={where}>
+                            {where}
+                        </span>
+                    </ListRow>
+                ))}
+            </ol>
+        </div>
+    )
+}
+
+// A draft's first line with text, which its row shows; its card shows the rest.
+function firstLine(text: string): string {
+    return text.split('\n').find((line) => line.trim() !== '') ?? text
+}
+
 // What `canopy draft send` takes for the drafts, run by run, for the button's hover.
 function sendRefs(drafts: Draft[]): string {
     const runs = [...new Set(drafts.map((d) => d.run))]
@@ -197,7 +290,7 @@ function sendRefs(drafts: Draft[]): string {
  * that answer it. One the operator sent wears `sent by you`. A thread no draft answers shows as it is.
  */
 export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChange: () => void }) {
-    const where = thread.path === null ? null : thread.line === null ? thread.path : `${thread.path}:${thread.line}`
+    const where = threadWhere(thread)
     return (
         <article className="rounded-md border bg-surface-raised p-3 text-sm" data-testid="review-thread">
             <header className="flex flex-wrap items-center gap-2">
@@ -262,8 +355,9 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
     const ref = `run:${draft.run} ${draft.number}`
     return (
         <article
+            id={draftAnchor(draft)}
             className={cn(
-                'rounded-md border bg-surface p-3 text-sm',
+                'scroll-mt-16 rounded-md border bg-surface p-3 text-sm',
                 draft.status === 'waiting' && 'border-status-blocked/40',
             )}
             data-testid="draft"

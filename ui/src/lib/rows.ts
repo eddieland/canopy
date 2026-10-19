@@ -212,6 +212,13 @@ export const ROW_COLUMNS = {
         ['title', FREE],
         ['facts', 'auto'],
     ],
+    /** A PR's draft in its threads' head: where it stands, its run and number, its text, and where its card is. */
+    'thread-draft': [
+        ['state', '6rem'],
+        ['id', '5rem'],
+        ['title', FREE],
+        ['facts', 'auto'],
+    ],
     /** A search hit: where it opens, its label, the snippet, and its age. */
     'search-hit': [
         ['subject', '9rem'],

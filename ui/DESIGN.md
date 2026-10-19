@@ -1363,9 +1363,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
   panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head, a
-  `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, the drafts for the review's
-  body, and in its foot `Send N waiting`, which sends every waiting draft as one comment review, its command on hover,
-  with a muted line saying it approves nothing and resolves no thread. Then the diff (`DiffPanels`), each thread's card
+  `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, a `Drafts` list of every
+  draft in the order their cards show (a `thread-draft` row: its status chip, `run:N` and its number, its first line
+  linking to its card, and where the card sits in muted monospace), whose links open the card's file as a review's
+  findings list does, the drafts for the review's body, and in its foot `Send N waiting`, which sends every waiting
+  draft as one comment review, its command on hover, with a muted line saying it approves nothing and resolves no
+  thread. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
