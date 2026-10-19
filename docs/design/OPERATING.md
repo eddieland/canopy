@@ -571,7 +571,7 @@ OpenCode is read again before it is built.
 ### What OpenCode does with a model
 
 canopy chooses no model yet: a run gets OpenCode's default unless its template passes one (§12). ROADMAP M58 would have
-canopy choose the worker's (The worker's model, below), and rests on what follows, read from OpenCode's source at
+canopy choose each agent's (Each agent's model, below), and rests on what follows, read from OpenCode's source at
 1.19.3 (2026-10-19). A later OpenCode is read again before it is built.
 
 - **Which model a run uses.** `opencode run` sends its `--model` with the prompt, and the session
@@ -619,52 +619,76 @@ canopy choose the worker's (The worker's model, below), and rests on what follow
   model the provider reports back. Without `--format json`, `opencode run` writes `> <agent> · <model>` to stderr at
   the first reply, without the provider.
 
-### The worker's model (M58)
+### Each agent's model (M58)
 
-Designed, not built (ROADMAP M58, REQUIREMENTS R23). Until it lands, a worker runs on OpenCode's default unless its
+Designed, not built (ROADMAP M58, REQUIREMENTS R23). Until it lands, an agent runs on OpenCode's default unless its
 template passes a model, and the journal cannot say which (above). This part says what changes in §8, §11, §12, §14,
-and §22.
+§21, §22, and §25.
 
 The operator wants to canary a model: run one ticket's workers on another model, and compare what they did and cost,
-before every worker takes it. So canopy chooses the worker's model itself, from a default and an override per ticket
-that only the operator sets, checks it against the models OpenCode has before a run starts, and records it on the run.
+before every worker takes it. And each agent's model is a choice of its own: the reviewer on a model other than the
+worker's (§21), the triage on a cheaper one than the planner's (§25). So canopy chooses every agent's model itself,
+from a default per agent and an override per ticket that only the operator sets, checks it against the models
+OpenCode has before a run starts, and records it on the run.
 
-**Which runs.** The model covers `canopy-worker` and `canopy-worker-private`, so every `implement` and `resume`, public
-and private: the runs a canary compares, and those every proposal for it named. The planner, and the splitter while
-one exists (M46 removes it), are the operator's to add (Open, below); adding one renders the same key into its
-definition and changes nothing else here. The overseer, chores, reviews, and triage choose theirs in their own
-templates, as today (§19, §21, §25).
+**Which agents.** Every agent canopy defines, each under a name of its own (the operator, 2026-10-19):
 
-**Which model.** A run's model is its ticket's override if one is set, else `runtime.worker_model`, else none: the
-runtime's default, as today, which is OpenCode config's `model` or the model the operator last picked in OpenCode's TUI
-(above). It is fixed at dispatch and recorded on the run, so a running run keeps its model whatever is set after.
+| Name | Definition | Runs |
+|---|---|---|
+| `worker` | `canopy-worker`, `canopy-worker-private` | `implement`, `resume` |
+| `planner` | `canopy-planner` | `plan` |
+| `splitter` | `canopy-splitter` | `split`, while one exists (M46 removes it) |
+| `plan_triage` | `canopy-plan-triage` | `needs-plan` |
+| `reviewer` | `canopy-reviewer` | reviews (§21) |
+| `overseer` | `canopy-overseer` | each tick's overseer |
+| `chore` | `canopy-chore` | chores on `runtime.chore_cmd` (§19) |
 
-**The setting.** `runtime.worker_model`, a `provider/model` id, empty by default. Private, as every `runtime` key is
-(§12): a model is what the operator's spend buys, and the provider it names is sent the ticket and the code, so a
-shared workspace file must choose neither (TRUST_MODEL T7). An id, here and in an override, is one line of at most 200
-characters, a provider and a model joined by its first `/`, each non-empty, with no whitespace, control character,
-quote, or backtick. canopy writes it quoted, so no id can add a key to a definition. Config load checks its shape and
-never reads OpenCode's list (below), so it stays fast; dispatch checks the rest.
+A public and a private ticket's workers share `worker`: a canary compares a ticket's runs, whichever kind of ticket it
+is. A future agent gets a name in the same PR that defines it.
+
+**Which model.** A run's model is its ticket's override for its agent if one is set, else the agent's default, else
+none: the runtime's default, as today, which is OpenCode config's `model` or the model the operator last picked in
+OpenCode's TUI (above). The overseer and chores work on no one ticket, so only the default reaches them; nor does an
+override reach a review of a PR no ticket of canopy's owns (§21). A run's model is fixed when it starts and recorded
+on it, so a running run keeps its model whatever is set after.
+
+**The defaults.** `[runtime.models]`, one key per agent name above, each a `provider/model` id, empty by default:
+
+```toml
+[runtime.models]
+worker = "provider-a/large"
+reviewer = "provider-b/large"
+plan_triage = "provider-a/small"
+```
+
+Private, as every `runtime` key is (§12): a model is what the operator's spend buys, and the provider it names is sent
+the ticket and the code, so a shared workspace file must choose neither (TRUST_MODEL T7). An unknown name is a config
+error, as any unknown key is. An id, here and in an override, is one line of at most 200 characters, a provider and a
+model joined by its first `/`, each non-empty, with no whitespace, control character, quote, or backtick. canopy
+writes it quoted, so no id can add a key to a definition. Config load checks its shape and never reads OpenCode's list
+(below), so it stays fast; a run's start checks the rest.
 
 **The definition, not the template.** When canopy renders a snapshot (Where the runtime finds canopy's definitions,
-above), it writes the run's model as `model:` in the frontmatter of the covered definitions, and no key for none. The
-digest covers the rendered text, so each model gets a snapshot of its own, immutable (D040), and a run's snapshot names
-the model it asked for: the overseer and every run without an override load the one rendered for
-`runtime.worker_model`, and a run with an override its own model's. The definition's `model:` beats a repository's
-`model` and the default, and a repository cannot define a canopy agent to change it, since the shadowing check refuses
-that (above). A subagent the worker calls runs on the worker's model unless its own definition names one (above).
+above), it writes each agent's model as `model:` in the frontmatter of that agent's definitions, and no key for none.
+The digest covers the rendered text, so each set of models gets a snapshot of its own, immutable (D040), and a run's
+snapshot names the model it asked for: the overseer and every run without an override load the one rendered from
+`[runtime.models]`, and a run with an override one rendered with its ticket's overrides in place. The definition's
+`model:` beats a repository's `model` and the default, and a repository cannot define a canopy agent to change it,
+since the shadowing check refuses that (above). A subagent an agent calls runs on that agent's model unless its own
+definition names one (above).
 
-The templates stay the operator's: `worker_cmd`, `private_worker_cmd`, and the prefix and suffix are unchanged, so
-custom and sandboxed templates keep working. But a template's `--model` beats the definition's `model:` (above): a
-covered template that passed one would override every model canopy chooses, while the run's record named another, and
-spoil the canary unseen. So a `--model` word, or one starting `--model=`, in `worker_cmd`, `private_worker_cmd`,
-`worker_cmd_prefix`, or `worker_cmd_suffix` is a config error naming the key and saying to set `runtime.worker_model`
-instead. The short `-m` is not looked for, since a wrapper ahead of the runtime may take one of its own, and a wrapper
-script that adds `--model` itself is past the check, as it is past §12's `{definitions_dir}` check. Refused rather than
-warned about: a warning on every config load reaches a log nobody reads, and a refusal costs one edit, once.
-`split_cmd` and `plan_cmd` may still pass one while their agents are not covered, which is how the operator chooses
-the planner's model; since the prefix and suffix wrap them too (§12), a model kept in the suffix for all four moves
-into `runtime.worker_model` and those two templates.
+The templates stay the operator's: every `runtime` template and the worker prefix and suffix are unchanged, so custom
+and sandboxed templates keep working. But a template's `--model` beats the definition's `model:` (above): a template
+that passed one would override every model canopy chooses for its agent, while the run's record named another, and
+spoil the canary unseen. So a `--model` word, or one starting `--model=`, in any `runtime` template (`overseer_cmd`,
+`worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd`, `plan_triage_cmd`, `chore_cmd`, `review_cmd`) or in
+`worker_cmd_prefix` or `worker_cmd_suffix` is a config error naming the key and saying which `runtime.models` key to
+set instead. The short `-m` is not looked for, since a wrapper ahead of the runtime may take one of its own, and a
+wrapper script that adds `--model` itself is past the check, as it is past §12's `{definitions_dir}` check. Refused
+rather than warned about: a warning on every config load reaches a log nobody reads, and a refusal costs one edit,
+once. §12's example, §21's advice to point `review_cmd` at another model, and §25's to point `plan_triage_cmd` at a
+cheaper one become `runtime.models` keys in the PR that builds this. A chore's own `cmd` (§19) is the operator's
+program, outside the check as a wrapper script is; its runs record no model.
 
 **What OpenCode has.** Models come and go with a provider's key or config and the catalog's marks (above), so canopy
 holds no list of its own. It reads `opencode models` through `infra/procs.py`, in the workspace root, with
@@ -681,25 +705,29 @@ can still fail when called, since listing reaches no provider for most (above): 
   page (§22). Rejected: reading in the repository's primary clone, which would run the repository's plugins outside
   any sandbox, as nothing else canopy runs does (§24); reading in the leased slot from `_run`, which costs the lease
   and the setup the check exists to save.
-- **At each dispatch** whose run has a model, once the guards that read only the journal have passed. Each
-  `canopy dispatch` is its own process, so a list kept between them would be a cache canopy must keep fresh, over the
-  one OpenCode keeps, and a tick dispatches few runs. Rejected: once a tick, the same cache, read minutes before the
-  dispatch it checks.
+- **At each start** of a run whose agent has a model: each dispatch, once the guards that read only the journal have
+  passed, each review and chore canopy starts, and each tick before its overseer. Each is its own check, so a list kept
+  between them would be a cache canopy must keep fresh, over the one OpenCode keeps, and a tick starts few runs.
+  Rejected: once a tick, the same cache, read minutes before the run it checks.
 
-`canopy models` prints the list as dispatch reads it, one id a line, and exits 1 saying why when the read fails.
+`canopy models` prints the list as a run's start reads it, one id a line, and exits 1 saying why when the read fails.
 Reading it refuses nothing.
 
-**Dispatch.** Two guards join §8 step 1's, last, for a covered run with a model:
+**A run's start.** Two guards join §8 step 1's, last, for a run whose agent has a model, and a review, a chore, and a
+tick's overseer check the same before they start:
 
-- `model_missing`: the list does not hold the run's model: gone since the override was set, or never there for
-  `runtime.worker_model`.
+- `model_missing`: the list does not hold the run's model: gone since it was set, or never there for a default.
 - `model_list_failed`: the list could not be read.
 
-Each records an attention item of its own name about the ticket, as an `attempt_limit` refusal does, lasting as long
-as the overseer keeps asking (§14). Its detail names the model, where it came from (the override or
-`runtime.worker_model`), and for `model_list_failed` why the read failed. A refusal spends no attempt and leases no
-slot, and the next dispatch reads the list again, so the ticket goes on by itself once the provider is back in
-OpenCode's config, the operator names another model, or the read works.
+A dispatch refused so records an attention item of its own name about the ticket, as an `attempt_limit` refusal does,
+lasting as long as the overseer keeps asking (§14). A review or chore not started so records the same item about its
+PR or chore, and the next tick tries again. A tick whose overseer's model is refused starts no overseer, as a tick
+whose `canopy --version` check failed does not (§6), ends with a status of its own, and raises the item as a harness
+item, as `canopy_unavailable` is. Each item's detail names the model, where it came from (the ticket's override or the
+`runtime.models` key), and for `model_list_failed` why the read failed. A refusal spends no attempt and leases no slot,
+and the next start reads the list again, so the work goes on by itself once the provider is back in OpenCode's config,
+the operator names another model, or the read works. A refused `needs-plan` is no failed triage: the ticket waits on the
+item rather than being planned, since the operator chose that triage's model (§25).
 
 Neither falls back to the default: a canary's run on a model nobody chose would read as the canary's. OpenCode never
 falls back either, so the check changes how a gone model fails, not whether: an attention item and a kept slot, rather
@@ -709,54 +737,67 @@ list its models it would most likely fail, spend an attempt, and wait for a repl
 next tick at no cost. A dry run reads the list and refuses alike (D036): the read is a guard's, which starts no agent,
 leases nothing, and changes nothing the next live tick reads.
 
-`canopy dispatch` takes no model, and the state block carries none: a model is not the overseer's to weigh.
+`canopy dispatch` takes no model, and the state block carries none: a model is not the overseer's to weigh, its own
+included.
 
-**The override.** `canopy model KEY provider/model` sets a ticket's model, `canopy model KEY --clear` removes it, and
-`canopy model KEY` prints the model the ticket's next run would get and where it comes from. The override is a journal
-fact on the ticket, with when and through which channel it was set. It covers every covered run of the ticket until it
-is cleared, so a canary stays on one model across its `implement` and every `resume`, and one equal to
-`runtime.worker_model` keeps the ticket there when the default changes. It takes a ticket, public or private, and:
+**The override.** `canopy model KEY provider/model` sets the model of the ticket's workers, `--agent NAME` that of
+another of its agents (`planner`, `splitter`, `plan_triage`, or `reviewer`), and `--clear` removes one, or with no
+`--agent` every override the ticket has. `canopy model KEY` prints, for each of the ticket's agents, the model its next
+run would get and where it comes from. An override is a journal fact on the ticket and agent, with when and through
+which channel it was set. It covers every run of that agent for the ticket until it is cleared, so a canary stays on
+one model across its `implement` and every `resume`, and one equal to the default keeps the ticket there when the
+default changes. It takes a ticket, public or private, and:
 
-- refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `stop`, `reply`, and `grant` do, so neither
-  the overseer nor a worker chooses a model (TRUST_MODEL T1): a model sets what a run costs and which provider reads
-  the ticket and the code, and an agent steered by ticket text must choose neither.
-- refuses `bad_model` for an id of the wrong shape, and, reading the list as dispatch does, `model_missing` for a model
-  it does not hold and `model_list_failed` when it cannot be read. `--clear` reads no list.
+- refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `stop`, `reply`, and `grant` do, so no
+  agent chooses a model (TRUST_MODEL T1): a model sets what a run costs and which provider reads the ticket and the
+  code, and an agent steered by ticket text must choose neither.
+- refuses `bad_model` for an id of the wrong shape or an agent name it does not take, and, reading the list as a run's
+  start does, `model_missing` for a model it does not hold and `model_list_failed` when it cannot be read. `--clear`
+  reads no list.
 - takes a ticket canopy has not seen yet, its key checked as every key is (§17), so the operator can set the model
   before labeling the ticket and its first run takes it. The override alone does not make a ticket a candidate.
-- leaves a running run alone: it keeps its model, and the override reaches the ticket's next run.
+- leaves a running run alone: it keeps its model, and the override reaches the agent's next run for the ticket.
 - outlasts `canopy forget` (§22), as the start record does: it is the operator's setting for the ticket, not its work.
 
-**Recorded on the run.** A migration adds `model` to `runs`: the id canopy asked for, empty for the runtime's default.
-Runs from before it are empty too, whatever their template chose.
+**From the web UI.** The ticket's page (§22) has a Model panel: each of the ticket's agents, the model its next run
+would get, and where that comes from, with a control to set or clear the override. Its choices are the list as a
+run's start reads it, served by a read the panel makes when the operator opens the control, not on every page load,
+since each read is an OpenCode process; an id typed by hand is checked against the same list. The write goes through
+the function `canopy model` calls, refusing as it does, and the journal records the web channel (T8). `[runtime.models]`
+shows read-only on the settings page with the rest of the loop's settings: the defaults are config, and the config
+files stay the operator's to edit, as every setting is until M41's settings page writes them.
+
+**Recorded on the run.** A migration adds `model` to `runs`, `review_runs`, `chore_runs`, and `ticks`: the id canopy
+asked for, empty for the runtime's default. Rows from before it are empty too, whatever their template chose.
 
 - `canopy status` names a run's model beside its kind, and nothing for an empty one, so a workspace that sets none
-  reads as today. `canopy show KEY` names the ticket's override and each run's model. The web UI's run page shows the
-  run's, and the ticket's page its override, read-only: a control to set it is a write from the web channel, for a
-  later milestone under TRUST_MODEL T8.
-- `canopy spend` (§11) breaks each kind's cost down by model, empty ones as `default`, and the web UI's spend page
-  shows the same, so a canary's runs read against the rest. Comparing more than cost, such as how many resumes a PR
-  took, is the operator's, from the runs and PRs: issue #418 leaves comparison reports out.
+  reads as today. `canopy show KEY` names the ticket's overrides and each run's model. The web UI's run, review, chore,
+  and tick pages show theirs, and the ticket's page its Model panel.
+- `canopy spend` (§11) breaks each kind's cost down by model, empty ones as `default`, the overseer's and chores'
+  included, and the web UI's spend page shows the same, so a canary's runs read against the rest. Comparing more than
+  cost, such as how many resumes a PR took, is the operator's, from the runs and PRs: issue #418 leaves comparison
+  reports out.
 
 **What served.** canopy records what it asked for, not what the session says served. No event names the model a call
-went to (above); the session's own record does, read with `opencode export`. With a covered template's `--model`
-refused, that record names the model asked for, or the run failed before its first call, since OpenCode never falls
-back. It can differ only for a subagent whose own definition names a model, whose calls are its own session's and not
-counted (above). The operator who wants to see it reads it with `opencode export`, by the session id on the run. A run
-on the runtime's default leaves its model unknown, so a canary sets `runtime.worker_model` for its baseline, and every
-run it compares names its model. Rejected: `opencode export` after every run, the first OpenCode-only command canopy
-would run after each (Session titles turned one down, above). It would be a second runtime process outside any
-sandbox, printing the whole session to read two fields from a store a sandboxed worker can write (§24), in a format
-canopy would have to follow (§22 turned it down for transcripts).
+went to (above); the session's own record does, read with `opencode export`. With a template's `--model` refused, that
+record names the model asked for, or the run failed before its first call, since OpenCode never falls back. It can
+differ only for a subagent whose own definition names a model, whose calls are its own session's and not counted
+(above). The operator who wants to see it reads it with `opencode export`, by the session id on the run. A run on the
+runtime's default leaves its model unknown, so a canary sets its agent's default for its baseline, and every run it
+compares names its model. Rejected: `opencode export` after every run, the first OpenCode-only command canopy would run
+after each (Session titles turned one down, above). It would be a second runtime process outside any sandbox, printing
+the whole session to read two fields from a store a sandboxed worker can write (§24), in a format canopy would have to
+follow (§22 turned it down for transcripts).
 
 **Trust model changes.** Proposed, for M58's PR:
 
-- T1: the worker's model is the operator's choice alone, from `runtime.worker_model` or `canopy model`, which refuses
-  `inside_run`. No dispatch flag, label, or state block field lets an agent choose it, and a model OpenCode does not
-  list refuses the run rather than falling back.
+- T1: every agent's model is the operator's choice alone, from `runtime.models` or `canopy model`, which refuses
+  `inside_run`, and the ticket page's control. No dispatch flag, label, or state block field lets an agent choose one,
+  the overseer's own included, and a model OpenCode does not list refuses the run rather than falling back.
 - T5: a run records the model canopy asked for; the session's record says what served.
-- T7: `runtime.worker_model` is private, as every `runtime` key is.
-- T8: only if the web UI's control is built.
+- T7: `runtime.models` is private, as every `runtime` key is.
+- T8: the web UI's writes gain the override, through `canopy model`'s function, and its reads the model list, an
+  `opencode models` process in the workspace root, started only by the operator's session.
 
 Rejected:
 
@@ -765,16 +806,13 @@ Rejected:
 - canopy adding `--model` to the templates: it would rewrite the operator's templates, wrappers included, where the
   definitions are canopy's to render (D040).
 - A list of models shipped with canopy, or read at config load: models come and go, and every command loads config.
+- One model for every agent, or one override covering every agent of a ticket: the reviewer is recommended a model
+  other than the worker's (§21), the triage a cheaper one than the planner's (§25), and a canary of the worker's model
+  would otherwise move its review and triage with it.
 - Two models side by side on one ticket (issue #418): one worker per ticket stays.
 
-Open:
-
-- Which agents beyond the two workers: the planner, whose `plan_cmd` already takes the worker prefix and suffix (§12),
-  and the splitter while it exists. The reviewer (§21 recommends a model other than the worker's), the overseer (M40's
-  open model per run), and chores could reuse the mechanism later.
-- A web UI control for the override, under TRUST_MODEL T8.
-- The commit trailer naming the run's model (issue #275, §8), which needs no change to the shipped prompts once canopy
-  knows the model before the run starts. It follows from this part and is not designed here.
+Follows from this, not designed here: the commit trailer naming the run's model (issue #275, §8), which needs no
+change to the shipped prompts once canopy knows the model before the run starts.
 
 ### The operator's skill
 
