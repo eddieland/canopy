@@ -28,10 +28,11 @@ If code and the design disagree, the design doc wins until a decision entry says
   from. A milestone the operator closes on real use, before every live check in its Accept has run, moves the
   unrun ones there.
 - Small PRs. One concern per PR. Conventional commit messages.
-- A behavior change updates the docs that state it, in the same PR: a PR that changes what a tick does and leaves the
-  design saying otherwise is incomplete. The design says what canopy does and why, not how the code does it; what
-  belongs there, and where the rest goes, is at the top of `docs/design/README.md`. Most PRs add a sentence there, or
-  change one, or none.
+- The design (`docs/design/`) is a map, not a spec of every behavior: what each part promises, the guards, the
+  contracts between parts, and why, briefly. Its bar is at the top of `docs/design/README.md`; read it before adding
+  a line. The default for a PR is no design change. A PR that changes a promise the design states changes that
+  sentence; a new feature gets a few sentences; how the code does it, flags, keys, edge cases, measurements, and
+  history never go there. A section past about 100 lines is pruned before it grows.
 - Add a dependency judiciously: when it clearly beats the code we would write instead, and its PR says why. It gets a
   `docs/DECISIONS.md` entry only when it passes that file's bar: code across canopy is shaped around it, it handles
   untrusted input, or it would otherwise be proposed again. Most need none. A dev-only tool (a linter, a checker, a
@@ -285,8 +286,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 - `make all` passes.
 - New behavior has a test using the fakes.
-- Docs updated: the design where it states the behavior, within its bar, `README.md` if the install path or daily surface
-  changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where a page of it
-  describes what changed, in the guide's own voice (`ui/AGENTS.md`), and `DECISIONS.md` only if the change passes
-  its bar.
+- Docs updated: the design only where it states a promise this changes, within its bar, `README.md` if the install
+  path or daily surface changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where
+  a page of it describes what changed, in the guide's own voice (`ui/AGENTS.md`), and `DECISIONS.md` only if the
+  change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

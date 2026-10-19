@@ -44,7 +44,8 @@ if TYPE_CHECKING:
 MAX_CHARS = 100_000
 DIR_NAME = "plans"
 # A copy of a plan in a run's working directory: in a worker's, the approved plan it follows, and in a plan run's desk,
-# the plan it replaces (DESIGN §25, The worker's copy). Written fresh for each run and removed before its slots go back.
+# the plan it replaces (DESIGN §25, Workers follow the plan). Written fresh for each run and removed before its slots
+# go back.
 COPY = ".canopy-plan.md"
 REPLACED = COPY
 # The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25).
@@ -314,8 +315,8 @@ def state_section(
     """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
 
     A ticket that needs no plan, has none, and had no plan run has no `plan` key, so with `policy.plan` off the block
-    is as it was before plans (DESIGN §25, Off unless configured). Triage's facts are there only while triage touches
-    the ticket: `triage_due` while it is on, and `waived` while a waiver is in force, which makes the plan not needed.
+    is as it was before plans (DESIGN §25). Triage's facts are there only while triage touches the ticket: `triage_due`
+    while it is on, and `waived` while a waiver is in force, which makes the plan not needed.
     """
     key = ticket.key
     waived = waiver(conn, ticket)

@@ -19,8 +19,8 @@ run used. Designed in §13, beside where the runtime finds canopy's definitions.
   `model:` key into the frontmatter of each agent's definitions, as it renders the rebase rules and the private
   worker's tracker tools today. The digest covers the rendered text, so each set of models gets its own immutable
   snapshot (D040), and a run's snapshot names the model it asked for. The templates stay as they are, so custom and
-  sandboxed templates keep working, though a template's `--model` beats the definition's `model:` (§13, What OpenCode
-  does with a model), so a `--model` in any `runtime` template or the worker prefix or suffix is a config error naming
+  sandboxed templates keep working, though a template's `--model` beats the definition's `model:` (§13, Each agent's
+  model), so a `--model` in any `runtime` template or the worker prefix or suffix is a config error naming
   the key and the `runtime.models` key to set instead. No model set renders no key: the runtime's default, as today,
   which is config's `model` or else the model the operator last picked in OpenCode's TUI.
 - **A default per agent.** `[runtime.models]`, one `provider/model` id per agent name, each empty by default, private
@@ -77,7 +77,7 @@ own record agrees; `canopy spend` shows their cost under that model; a model not
 set, and one dropped from the provider config after it was set refuses the ticket's next dispatch with an attention
 item; with `runtime.models.reviewer` set, the PR's review runs on that model and names it.
 
-Status: in progress. Stage 0's source read is done (2026-10-19, OpenCode 1.19.3, §13 What OpenCode does with a
+Status: in progress. Stage 0's source read is done (2026-10-19, OpenCode 1.19.3, §13 Each agent's
 model). A `model:` in the definition is the model `opencode run --agent` uses, and `opencode models` prints, offline,
 one `provider/model` a line for the providers with a key, a login, or config, the same list a run's model is looked up
 in. It changed the plan in three places: a template's `--model` beats the definition's, so a template that passes one
