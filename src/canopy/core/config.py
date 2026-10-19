@@ -286,7 +286,7 @@ def _wrapper(value: str) -> str:
 
 #: The longest model id canopy takes, in `runtime.worker_model` (DESIGN §13, The worker's model).
 MAX_MODEL_ID = 200
-# Characters no model id holds: quotes and a backtick, which the definitions and prompts quote it with.
+#: Characters no model id holds: quotes and a backtick, which the definitions and prompts quote it with.
 _MODEL_ID_REFUSED = "\"'`"
 #: The option a covered worker template must not pass: OpenCode's `--model` beats the definition's `model:` (§13).
 MODEL_OPTION = "--model"
