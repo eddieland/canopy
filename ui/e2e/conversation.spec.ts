@@ -20,6 +20,22 @@ test("the operator's own words sit on the right of the thread, everyone else's o
     expect(Math.round(theirs.x)).toBe(Math.round(all.x + 12))
 })
 
+test("a public ticket's page says where a reply goes one way: its chip on hover and its reply box agree", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-105')
+    await settled(page)
+    // The description is the ticket's state; what public means is the chip's, on hover.
+    await expect(page.locator('main header p')).toHaveText(/^plan waiting on you · active \d+\w+ ago$/u)
+    const chip = page.locator('main header [title]').filter({ hasText: /^public$/u })
+    await expect(chip).toHaveAttribute('title', /comments stay on the tracker; a reply you send here stays in canopy/u)
+    await page.getByRole('button', { name: 'Show a note for its next worker' }).click()
+    await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveAttribute(
+        'placeholder',
+        'For its next worker, as an instruction. It stays in canopy, never on the ticket.',
+    )
+})
+
 test("a PR's URL in a worker's report is named as the PR is anywhere: its page, then GitHub", async ({ page }) => {
     await page.goto('tickets/ABC-103')
     await settled(page)

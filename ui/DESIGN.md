@@ -300,7 +300,13 @@ Rules:
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
   query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
   a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
-  (`code`) never breaks across lines.
+  (`code`) never breaks across lines. Prose inside a panel keeps the same measure, `max-w-3xl`, however wide the
+  panel: Settings' explanations, the sentence under Spend's totals, as the guide's article and a plan do.
+- **One heading ladder**: a page has one `h1`, its `PageHeader`'s title; every panel's label is an `h2`; what heads a
+  part of a panel (a run's memory's `Wrote` and `Read`) is an `h3` in `panel-label` type; and a plan's own headings
+  start under its panel's, its `#` an `h3` (`PlanHeading` in `src/lib/plan-schema.ts`, styled by its `data-level`).
+  No level is skipped, so a screen reader's list of headings is the page's outline; `e2e/headings.spec.ts` holds every
+  route to it. A list of links named by its region (the guide's sidebar groups) is not a heading.
 - **A detail page leads with what it is about.** Its title is its subject's, after its reference in a muted
   monospace (`PageHeader`'s `subject`), as a ticket's page has always led: `run:39 Debounce search input`,
   `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
@@ -525,8 +531,13 @@ side.
   top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
   what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
-  `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
-  of its rows.
+  `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
+  name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
+  key, a PR) in its monospace link; a day or a group of ticks is in the table's own type. Its panel's header repeats
+  none of its rows.
+- **Figures** (the Spend page's totals) are a window's sums, not a count of what is now, so they are not `Counter`s:
+  each a `panel-label` over a `text-lg` readout, in a grid inside their panel, with what a label counts on its hover.
+  A `Counter` stays the attention and worktrees pages' count of the present, with its state's color.
 
 ## Charts
 
@@ -669,7 +680,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the two read as
   one; at real costs it is a sliver beside a worker's, so its trend across days is read from the table, not the bars.
   A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column gone missing.
-  A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
+  Each series has one name, in the totals, the legend, the table, and a bar's hover (`SERIES`), with what it counts on
+  the name's hover: `overseer` is the live overseer's whole spend, idle ticks' included, as `canopy spend` counts it,
+  and `idle ticks` the part of it idle ticks made, drawn under the rest. So the totals and the table say the overseer's
+  whole, and a bar's hover says its day, then each series' cost, `overseer $1.00 (idle ticks $0.25)`. The page's
+  description is the window's state, `$10.51 over 7 days · 2 tickets done` (`spendLine`); what the page shows on
+  every visit is its title's help. The chart is `aria-hidden`: the table under it, newest day first,
   holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one before, and
   scrolls past a week (`PanelScroll`), sideways when the pane is too narrow for its columns. A week names every day on
   the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in place of
@@ -743,7 +759,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a reply nothing
   waits on, and a chore's note form always does, `Show a note for its next runs`, since nothing ever waits on a note;
   it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
-  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree.
+  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On
+  a public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
+  canopy, never on the ticket.`, as the ticket's `public` chip says on hover, where its comments stay on the tracker.
+  A ticket's page description is its state, not what public or private means: the running run, a question waiting,
+  its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
+  (`ticketDescription`).
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
@@ -834,22 +855,23 @@ sliver beside four others; and its axis names short call numbers without measuri
   what the agent did far more often than to ask why its context grew; each kind of page (a run's, a chore run's, a
   tick's) keeps it open or closed across reloads, as Pretty is kept (`src/lib/context-chart-open.ts`), so the rows
   start under the header, the counts, and one line. Open, a bar per call, as tall as what it was sent (input, cache
-  read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the call
+  read, and cache write), 32px at most, from one baseline, the peak's at 80% with its size over it: what the call
   carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
   segment's corners rounded. The first call's is the runtime's own overhead and canopy's prompt, the prompt's tokens
   its characters over four; a call the runtime counted none of has no bar. The bars are a `ToggleGroup`'s items, each
   named for its call, size, and step on hover and to a screen reader; the axis under them names each call, every
-  fifth back from the last past twelve, with the legend at its end. The call picked, at first the one the largest
-  addition grew, sits raised, and a line under the chart says what grew it: the step on the call before, then what
-  that call printed (its text, and its tool calls, each input and output), largest first, each its share of the step
-  by its characters (`≈4.2k`, the characters on hover), at most five and then how many more. The first call's line
-  splits it into the prompt and the runtime's own; a call smaller than the one before says so and names nothing. Each
-  entry named is a button that shows its row, as the line's largest addition is, open or closed: it turns By call and
-  the search off, opens the row if it is a tool call, scrolls it to the window's middle, focuses it, and sets it on the
-  accent's tint at 14%. A session with fewer than two calls the runtime counted tokens for has the line alone, with no
-  `Disclosure`: one bar says nothing the line does not, and a call that printed only an error has no bar to add. The
-  one call's split into the prompt and the runtime's own is on the peak's hover. By call, each call's line has its
-  step after its input, `30.2k in (+4.3k) · 1.8k out`.
+  fifth back from the last past twelve, with the legend at its end, one word each, `carried` and `added`, what the
+  first call's two parts are on their hover. The call picked, at first the one the largest addition grew, sits raised,
+  and a line under the chart, one readout with its call in `foreground`, says what grew it: the step on the call
+  before, then what that call printed (its text, and its tool calls, each input and output), largest first, each its
+  share of the step by its characters (`≈4.2k`, the characters on hover), at most five and then how many more. The
+  first call's line splits it into the prompt and the runtime's own; a call smaller than the one before says so and
+  names nothing. Each entry named is a button that shows its row, as the line's largest addition is, open or closed:
+  it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle, focuses
+  it, and sets it on the accent's tint at 14%. A session with fewer than two calls the runtime counted tokens for has
+  the line alone, with no `Disclosure`: one bar says nothing the line does not, and a call that printed only an error
+  has no bar to add. The one call's split into the prompt and the runtime's own is on the peak's hover. By call, each
+  call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
   tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
   naming the file (a run's says `the run's log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in

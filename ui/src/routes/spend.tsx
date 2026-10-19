@@ -28,6 +28,7 @@ import {
     seriesCost,
     shareText,
     SPEND_WINDOWS,
+    spendLine,
     spendWindow,
 } from '@/lib/spend'
 import type { SpendWindowDays } from '@/lib/spend'
@@ -38,6 +39,12 @@ import { NO_TICKET } from '@/lib/words'
 interface SpendSearch {
     days?: SpendWindowDays | undefined
 }
+
+// What the page shows on every visit, on its title's hover: its description is the window's state.
+const HELP =
+    "What agent runs cost each UTC day, as the runtime reported it: the overseer, idle ticks' part of it apart, and " +
+    "the workers, chores, and reviews it started; beside it, the tickets the loop marked done and what each ticket's " +
+    "and PR's own runs cost; and which tools put the most into the runs' context. As canopy spend --days N prints it."
 
 // What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
@@ -61,6 +68,10 @@ const KIND_LABEL = {
     chores: 'chore runs',
     reviews: 'review runs',
 } as const
+
+// The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
+// columns read.
+const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'chores', 'reviews', 'dry_run'] as const
 
 // The by-day chart's axis names every day of up to a week, and every fifth past that, back from today.
 const AXIS_ALL = SPEND_WINDOWS[0]
@@ -97,11 +108,8 @@ function SpendPage() {
     const failed = data === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="Spend">
-                What agent runs cost each UTC day, as the runtime reported it: the overseer, with idle ticks apart, and
-                the workers, chores, and reviews it started; and beside it, the tickets the loop marked done and what
-                each ticket&apos;s and PR&apos;s own runs cost; and which tools put the most into the runs&apos;
-                context. As <code className="font-mono text-xs">canopy spend --days {days}</code> prints it.
+            <PageHeader title="Spend" help={HELP}>
+                {data === undefined ? (query.isPending ? 'reading the spend' : null) : spendLine(data)}
             </PageHeader>
             <Panel data-testid="spend-totals">
                 <PanelHeader label="Totals">
@@ -221,14 +229,15 @@ function SpendPage() {
  */
 function Totals({ found }: { found: SpendBreakdown }) {
     const { totals } = found
+    // Each series by the name the legend and the table give it, the overseer's whole before idle ticks' part of it.
     const cells = [
-        { label: 'total', usd: totals.total, testId: 'total' },
-        { label: 'overseer', usd: totals.overseer, testId: 'overseer' },
-        { label: 'idle ticks', usd: totals.idle, testId: 'idle' },
-        { label: 'workers and splits', usd: totals.workers, testId: 'workers' },
-        { label: 'chores', usd: totals.chores, testId: 'chores' },
-        { label: 'reviews', usd: totals.reviews, testId: 'reviews' },
-        { label: 'dry runs', usd: totals.dry_run, testId: 'dry-run' },
+        { label: 'total', hint: undefined, usd: totals.total, testId: 'total' },
+        ...TOTALS_ORDER.flatMap((key) => SERIES.filter((series) => series.key === key)).map((series) => ({
+            label: series.label,
+            hint: series.hint,
+            usd: totals[series.key],
+            testId: series.key.replace('_', '-'),
+        })),
     ]
     const unpriced = found.unpriced
         .filter((u) => u.unpriced > 0)
@@ -241,9 +250,11 @@ function Totals({ found }: { found: SpendBreakdown }) {
     return (
         <div className="flex flex-col gap-3 p-3">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-4 @3xl:grid-cols-7">
-                {cells.map(({ label, usd, testId }) => (
+                {cells.map(({ label, hint, usd, testId }) => (
                     <div key={testId} className="flex flex-col gap-0.5">
-                        <dt className="panel-label">{label}</dt>
+                        <dt className="panel-label" title={hint}>
+                            {label}
+                        </dt>
                         <dd className="readout text-lg text-foreground" data-testid={`spend-total-${testId}`}>
                             <Cost usd={usd} />
                         </dd>
@@ -272,7 +283,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                 </div>
             </dl>
             {(spent || ended) && (
-                <p className="text-xs text-muted-foreground" data-testid="spend-idle-share">
+                <p className="max-w-3xl text-xs text-muted-foreground" data-testid="spend-idle-share">
                     {spent && (
                         <>
                             Idle ticks were{' '}
@@ -304,7 +315,7 @@ function ByDay({ days }: { days: SpendDay[] }) {
             <Chart key={days.length} days={days} />
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" data-testid="spend-legend">
                 {SERIES.map((series) => (
-                    <li key={series.key} className="flex items-center gap-1.5">
+                    <li key={series.key} className="flex items-center gap-1.5" title={series.hint}>
                         <span aria-hidden className={cn('size-2.5 rounded-xs', series.fill)} />
                         {series.label}
                     </li>
@@ -316,7 +327,11 @@ function ByDay({ days }: { days: SpendDay[] }) {
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">day</th>
                             {SERIES.map((series) => (
-                                <th key={series.key} className="panel-label pb-1.5 pl-3 font-normal">
+                                <th
+                                    key={series.key}
+                                    className="panel-label pb-1.5 pl-3 font-normal"
+                                    title={series.hint}
+                                >
                                     {series.label}
                                 </th>
                             ))}
@@ -332,7 +347,7 @@ function ByDay({ days }: { days: SpendDay[] }) {
                                 </th>
                                 {SERIES.map((series) => (
                                     <td key={series.key} className="readout pl-3 text-muted-foreground">
-                                        <Cost usd={costOf(day, series.key)} />
+                                        <Cost usd={day.costs[series.key]} />
                                     </td>
                                 ))}
                                 <td className="readout pl-3 text-foreground">
@@ -490,14 +505,6 @@ function Bar({ day, top, peak }: { day: SpendDay; top: number; peak: PeakAlign |
     )
 }
 
-/** A series' cost on a day for the table: a dash when nothing in it reported one, as everywhere else. */
-function costOf(day: SpendDay, key: (typeof SERIES)[number]['key']): number | null {
-    if (key === 'overseer') {
-        return day.costs.overseer === null ? null : seriesCost(day.costs, key)
-    }
-    return day.costs[key]
-}
-
 /**
  * Each ticket with a run, or a review naming it, that started in the window, or marked done in it, the costliest
  * first: its key and title, its runs and reviews, what they cost, and when and how it was marked done. Not the
@@ -524,7 +531,7 @@ function Tickets({ tickets, days }: { tickets: SpendTicket[]; days: number }) {
                             <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
                                 <span className="flex min-w-0 items-center gap-2">
                                     <TicketLink ticketKey={ticket.key} className="shrink-0" />
-                                    <TicketTitle title={ticket.title} />
+                                    <TicketTitle title={ticket.title} className="text-xs" />
                                 </span>
                             </th>
                             <td className="readout pl-3" title={`${ticket.runs} runs, ${ticket.reviews} reviews`}>
@@ -625,7 +632,8 @@ function Tools({ tools, days }: { tools: SpendTool[]; days: number }) {
                     {tools.map((tool) => (
                         <tr key={`${tool.kind} ${tool.tool}`} className="text-right" data-testid="spend-tool">
                             <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                <span className="block truncate" title={tool.tool}>
+                                {/* The row's name, as the ticket table's title reads: medium weight, cut to fit. */}
+                                <span className="block truncate font-sans font-medium" title={tool.tool}>
                                     {tool.tool}
                                 </span>
                             </th>

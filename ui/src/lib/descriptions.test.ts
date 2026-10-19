@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Limit, ReviewSummary } from '@/api/types'
+import type { Limit, ReviewSummary, TicketPlans } from '@/api/types'
 
 import {
     choreRunDescription,
@@ -9,6 +9,7 @@ import {
     reviewDescription,
     runDescription,
     tickDescription,
+    ticketDescription,
 } from './descriptions'
 
 const REVIEW: ReviewSummary = {
@@ -113,6 +114,55 @@ describe('tickDescription', () => {
     it('says how it ended, its decisions, and what woke it', () => {
         expect(tickDescription({ status: 'ok', woken_by: 'timer' }, 4)).toBe('ok · 4 decisions · woken by timer')
         expect(tickDescription({ status: 'failed', woken_by: null }, 0)).toBe('failed · no decisions')
+    })
+})
+
+describe('ticketDescription', () => {
+    const IDLE = { running_run: null, awaiting: null }
+    const NO_PLAN: TicketPlans = {
+        changes_asked: null,
+        needed: false,
+        newest: null,
+        planning: null,
+        plans: [],
+        policy: 'off',
+        setting: null,
+        threads: [],
+    }
+
+    it('says the run working it and the question waiting on you, and nothing for a ticket at rest', () => {
+        expect(ticketDescription({ running_run: 41, awaiting: 3 }, NO_PLAN)).toBe('run:41 running · waiting on you')
+        expect(ticketDescription(IDLE, NO_PLAN)).toBe('')
+        expect(ticketDescription(IDLE, undefined)).toBe('')
+    })
+
+    it('says a plan is needed only while it has none and needs one', () => {
+        expect(ticketDescription(IDLE, { ...NO_PLAN, needed: true })).toBe('plan needed')
+    })
+
+    it("says its plan's status, as its card's chip says it", () => {
+        const plan = {
+            id: 2,
+            run_id: 41,
+            status: 'proposed',
+            created_at: '2026-10-08T11:00:00Z',
+            approved_at: null,
+            approved_channel: null,
+        } as const
+        const file = {
+            plan,
+            path: '/state/plans/ABC-1/41.md',
+            text: '# Plan\n',
+            problem: null,
+            sha256: 'abc',
+            edited: false,
+            changed_since_approval: false,
+        }
+        const plans: TicketPlans = { ...NO_PLAN, needed: true, plans: [plan], newest: file }
+        expect(ticketDescription(IDLE, plans)).toBe('plan waiting on you')
+        expect(ticketDescription(IDLE, { ...plans, planning: 7 })).toBe('plan proposed')
+        const approved = { ...plan, status: 'approved', approved_at: '2026-10-08T11:30:00Z' } as const
+        expect(ticketDescription(IDLE, { ...plans, newest: { ...file, plan: approved } })).toBe('plan approved')
     })
 })
 

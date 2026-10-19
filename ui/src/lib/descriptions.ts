@@ -1,8 +1,9 @@
 // What a detail page's description says: its subject's state, never what every page of its kind shows, which is the
 // title's help (ui/DESIGN.md, the detail skeleton). Each is the facts known, joined as one line: `done · implement`.
 
-import type { ChoreRun, Limit, PullRequest, ReviewSummary, Run, Tick } from '@/api/types'
+import type { ChoreRun, Limit, PullRequest, ReviewSummary, Run, Tick, TicketPlans, TicketSummary } from '@/api/types'
 import { stuck } from '@/lib/limits'
+import { planWaits } from '@/lib/plan-state'
 import { reviewRef, runRef } from '@/lib/refs'
 import { verdictText } from '@/lib/reviews'
 import { NO_TICKET, readable } from '@/lib/words'
@@ -50,6 +51,21 @@ export function tickDescription(tick: Pick<Tick, 'status' | 'woken_by'>, decisio
     return line(readable(tick.status), counted(decisions, 'decision'), woken)
 }
 
+/**
+ * A ticket's page: where it stands now, the run working it and the question waiting on the operator, then its plan's
+ * status while it has one or needs one, as `run:41 running · plan waiting on you`. Its phase, branch, and what its
+ * runs cost are its Work panel's fields; whether it is public or private, its title's chip. Empty when it has none of
+ * these; the page follows it with when the ticket was last active.
+ */
+export function ticketDescription(
+    ticket: Pick<TicketSummary, 'running_run' | 'awaiting'>,
+    plans: TicketPlans | undefined,
+): string {
+    const running = ticket.running_run === null ? null : `${runRef(ticket.running_run)} running`
+    const waiting = ticket.awaiting === null ? null : 'waiting on you'
+    return line(running, waiting, plans === undefined ? null : planWords(plans))
+}
+
 /** How many of a noun, in words: `no reviews`, `1 review`, `3 reviews`. */
 export function counted(n: number, noun: string): string {
     if (n === 0) {
@@ -60,4 +76,13 @@ export function counted(n: number, noun: string): string {
 
 function line(...parts: (string | null)[]): string {
     return parts.filter((p) => p !== null && p !== '').join(' · ')
+}
+
+// A plan's status in words, as its card's chip says it, or null for a ticket that has no plan and needs none.
+function planWords(plans: TicketPlans): string | null {
+    const newest = plans.newest?.plan
+    if (newest === undefined) {
+        return plans.needed ? 'plan needed' : null
+    }
+    return planWaits(plans) ? 'plan waiting on you' : `plan ${newest.status}`
 }

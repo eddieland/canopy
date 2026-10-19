@@ -129,9 +129,10 @@ export function ReplyForm({
         }
     } else if (target.isPublic) {
         // Only while one waits does the box ask about an untrusted review; a ticket with none has nothing to say of it.
+        // The ticket's comments stay on the tracker, as its chip says on hover; this box writes to canopy alone.
         placeholder = untrusted
-            ? 'Stays in canopy, never on the ticket. Say what to do about the untrusted review.'
-            : 'Stays in canopy, never on the ticket. The next worker reads it as an instruction.'
+            ? 'Say what to do about the untrusted review. It stays in canopy, never on the ticket.'
+            : 'For its next worker, as an instruction. It stays in canopy, never on the ticket.'
     }
 
     return (
