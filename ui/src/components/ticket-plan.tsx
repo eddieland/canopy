@@ -535,7 +535,8 @@ function ConfirmDecision({
 /** The ticket's earlier plans, newest first, each read only once opened. */
 function EarlierPlans({ ticketKey, plans }: { ticketKey: string; plans: PlanSummary[] }) {
     return (
-        <Panel data-testid="earlier-plans">
+        // As wide as the plan above it, not the plan and its comments: its plans read in the plan's measure.
+        <Panel data-testid="earlier-plans" className="max-w-[51rem]">
             <PanelHeader label="Earlier plans">
                 <span className="readout text-xs text-muted-foreground">{plans.length}</span>
             </PanelHeader>
@@ -556,7 +557,6 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
             <li className="flex flex-col">
                 <div className="flex items-center gap-2 px-3 py-2 text-sm">
                     <Disclosure open={open} what={`plan ${plan.id}`} />
-                    <span>plan {plan.id}</span>
                     <Chip>{plan.status}</Chip>
                     <span className="text-muted-foreground">
                         written <Age at={plan.created_at} variant="ago" />

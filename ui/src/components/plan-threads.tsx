@@ -233,7 +233,7 @@ export function AskForChanges({
                 value={note}
                 maxLength={MAX_REQUEST}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder="A note on the whole plan, optional"
+                placeholder="A note on the whole plan"
                 className={cn(
                     'field-sizing-content max-h-32 min-h-8 min-w-32 flex-1 resize-none py-1',
                     // Empty in the actions' line, one line, its prompt cut to fit rather than grow the line taller.

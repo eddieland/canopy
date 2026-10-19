@@ -8,6 +8,7 @@ import {
     ChevronDown,
     ChevronUp,
     Code,
+    Diff,
     Italic,
     List,
     ListOrdered,
@@ -416,7 +417,13 @@ export function PlanEditor({
         // stops at its text's measure (`.plan-doc`'s 48rem and the panel's padding), so on a wide page the comments
         // stay against the text, as a shared document's margin does, and the room left over goes after them.
         <div ref={frame} className="@container relative min-w-0">
-            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
+            <div
+                className={cn(
+                    'grid min-w-0 items-start gap-6',
+                    // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20.
+                    '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]',
+                )}
+            >
                 <Panel>
                     <PanelHeader label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -429,8 +436,9 @@ export function PlanEditor({
                             {previous !== undefined && (
                                 <span className="flex items-center gap-1">
                                     {/* A mode, named for what it shows: the plan as it reads now, what changed since
-                                        marked on it. */}
+                                        marked on it. Its icon says it is a control while it is off too. */}
                                     <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
+                                        <Diff aria-hidden />
                                         Changes since {previous.label}
                                     </Toggle>
                                     {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
@@ -494,8 +502,10 @@ export function PlanEditor({
                         </PanelFooter>
                     )}
                 </Panel>
-                <Panel>
-                    <PanelHeader label="Comments">
+                {/* Beside the plan, its comments are a margin, not a box: cards on the page, each level with its
+                    passage, under a header that stays at the top of the page with their count. */}
+                <Panel className={cn(beside && 'border-transparent bg-transparent')}>
+                    <PanelHeader label="Comments" sticky={beside}>
                         <span className="readout text-xs text-muted-foreground">{open} open</span>
                     </PanelHeader>
                     <PlanThreads

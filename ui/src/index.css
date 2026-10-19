@@ -847,7 +847,7 @@
     /* The comments beside a plan, each at its passage (src/lib/plan-margin.ts): apart, each is a card of its own, */
     /* and so is one whose passage is gone, under them. */
     .plan-margin[data-aligned] > :is([data-align], article) {
-        @apply mx-2 rounded-md border;
+        @apply mx-2 rounded-md border bg-surface;
     }
     /* The cards that follow the placed ones (a passage gone) keep the gap between cards. */
     .plan-margin[data-aligned] > article:not([data-align]) {
