@@ -9,8 +9,8 @@ runs](SANDBOXING.md). Next: [Garbage collection](GARBAGE_COLLECTION.md).
 ROADMAP M44, REQUIREMENTS R18. The parts below are plans' files and journal records, plan runs, the gate
 (`policy.plan`, `canopy plan`, and the `unplanned` and `plan_changed` guards), the overseer's part, the worker's copy,
 and reading, editing, and commenting on a plan. §7, §8, §12, §14, §20, and §22 describe canopy with plans off; this
-section says what plans change in each. Triage before a plan (M55, REQUIREMENTS R22), designed and not built, waives
-the plan for work the operator's own words call trivial.
+section says what plans change in each. Triage before a plan (M55, REQUIREMENTS R22), partly built, waives the plan
+for work the operator's own words call trivial.
 
 Without plans, the `implement` worker plans inside its own session, and nothing of that plan survives but the run's
 summary. A **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done,
@@ -354,8 +354,11 @@ The schema is in `migrations/`.
 
 ### Triage before a plan (M55)
 
-Designed, not built (ROADMAP M55, REQUIREMENTS R22). Until M55 lands, every ticket that needs a plan is planned, and
-§8, §12, §14, and §21 describe canopy as it is. This part says what changes in each.
+Partly built (ROADMAP M55, REQUIREMENTS R22). Built: the configuration, the run and its prompt, dispatch's guards,
+the waiver, and what the state block and `canopy show` say of them. Not yet: the overseer prompt's row, so the
+overseer still dispatches `plan` where a triage is due; the ticket's plan card in the web UI; the reviewer's second
+opinion; the spend page's kind; and feedback rounds. Until each lands, §8, §12, §14, and §21 describe canopy as it
+is there. This part says what changes in each.
 
 With plans on, a typo fix or a one-line config change still costs a planner run, and the operator's reading and
 approval of a plan nobody needed. A **triage** is a cheaper run that reads the ticket and the code first and judges, by
@@ -427,13 +430,13 @@ plan does (Dispatch, above), so that the `implement` it waives the plan for is p
 
 **The run.** It has the shape §23 gives `triage-ci`: a read-only run with a verdict that leases no slot, skips the git
 steps and push verification, and counts toward `capacity.max_workers` with workers and reviews, since it is an agent
-run with spend: a slot bounds worktrees, the cap bounds runs. Neither is built; whichever is built first builds that
-shape for both. It runs `plan_triage_cmd` with `plan_triage_timeout_minutes` in a directory of canopy's holding one
-link per named repository's primary clone (§18), as a plan's desk holds one per slot, so the runtime loads no
-repository's own config from its cwd, and the shadowing check (§13) covers each link, as for a review (§21). It reads
-each repository as its primary clone holds it, which may lag the base branch: enough to judge a change's size and
-reach, without a slot's lease or setup. The directory is removed, never following a link, on every exit path, and
-reconcile treats a dead triage like any other run.
+run with spend: a slot bounds worktrees, the cap bounds runs. It is the first of the two built: having no slots, it
+records the repositories it reads with the run, a shape `triage-ci` can take as it is. It runs `plan_triage_cmd` with
+`plan_triage_timeout_minutes` in the ticket's desk (§18), holding one link per named repository's primary clone, as a
+plan's desk holds one per slot, so the runtime loads no repository's own config from its cwd, and the shadowing check
+(§13) covers each link, as for a review (§21). It reads each repository as its primary clone holds it, which may lag
+the base branch: enough to judge a change's size and reach, without a slot's lease or setup. The desk is removed,
+never following a link, on every exit path, and reconcile treats a dead triage like any other run.
 
 **The prompt.** `prompts/plan-triage.md`, and `plan-triage-private.md` for a started ticket (§22). What the rest of
 this part relies on:
@@ -483,7 +486,8 @@ and is in force only while the ticket's own setting is unset:
 A waiver goes ahead without the operator's glance: a change that fits the operator's words for trivial usually is, and
 waiting on the operator would give back the time triage saves (the operator, 2026-10-17). No attention item names it.
 The `implement` prompt does not hear of it: the worker works as an unplanned `implement` does, with `{{PLAN}}` at
-`None.`, so the triage's reason, model text written from the ticket, never reaches a worker.
+`None.`, so the triage's reason, model text written from the ticket, never reaches a worker. Nor does its report: the
+earlier runs a worker's prompt carries, and a private ticket's conversation, leave triages out.
 
 **A second opinion after.** Size says little about risk: a long PR repeating one change can be trivial, and a one-line
 change can break everything, so no line count is checked (the operator, 2026-10-17). Where `review.agent_prs` is on,
@@ -545,8 +549,10 @@ Open:
 - Feedback rounds: what a round is, how its one triage is counted in code, whether it is a run kind of its own, and
   whether a waived round's PR gets `not_trivial` too. M54's design settles them.
 - Which sandbox role holds `plan_triage_cmd` (§24): it reads primary clones, not worktrees, which neither the `worker`
-  nor the `review` policy expects.
-- Whether a waiver should send an event to the operator's sinks, as a waiting plan sends `plan.proposed` (§20).
+  nor the `review` policy expects. Until it is settled, a triage runs in none (TRUST_MODEL T6).
+- Whether a waiver should send an event to the operator's sinks, as a waiting plan sends `plan.proposed` (§20). Until
+  it is settled, a waiver sends none of its own; the triage's `run.ended` reaches a sink that takes runs, as any run's
+  does.
 
 ### Trust model changes
 

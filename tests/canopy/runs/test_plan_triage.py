@@ -1,0 +1,381 @@
+"""Triage before a plan (DESIGN §25, ROADMAP M55): a `triage-plan` run, and the waiver its `trivial` verdict writes.
+
+A triage leases no slot: it reads each repository's primary clone through a link in its desk, writes nothing, and
+judges by the operator's words for trivial whether the ticket needs a plan. Only a validated `done` `trivial` result
+waives the plan; anything else leaves the ticket to be planned at once, with no attention item and no retry.
+"""
+
+import json
+import sqlite3
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from pathlib import Path
+
+import pytest
+
+from canopy.cli.main import main
+from canopy.core import db, plans
+from canopy.core.vocab import PlanSetting, RunKind, RunStatus, TickStatus
+from canopy.loop import attention
+from tests.canopy.helpers import (
+    KEY,
+    LABEL,
+    InlineRunner,
+    agent_runs,
+    approve_policy,
+    commands_run,
+    context,
+    decisions,
+    dispatch_and_run,
+    dispatch_refused,
+    in_tick,
+    operator,
+    planner_does,
+    pool_statuses,
+    present,
+    prompt_of,
+    scripted,
+    waits,
+)
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
+from tests.conftest import CanopyEnv, GitPool
+
+TRIVIAL = "A typo in docs or comments; one config value changed."
+REASON = "The ticket fixes one misspelled word in a comment."
+TRIAGE = ("--label", LABEL, "--kind", "triage-plan")
+IMPLEMENT = ("--label", LABEL, "--kind", "implement")
+PLAN = ("--label", LABEL, "--kind", "plan")
+TEXT = "# Plan for PROJ-1\n\n## Steps\n\nFix the word.\n"
+UNPLANNED = (
+    "refused:unplanned",
+    f"{KEY} needs a plan before its implement, and it has no plan approved; dispatch `plan` or wait for it",
+)
+
+
+def triage_on(env: CanopyEnv) -> None:
+    """Plans on in the workspace, and triage on in the operator's own file, with their words for trivial."""
+    approve_policy(env)
+    env.append_user(f'\n[policy]\nplan_triage = "on"\ntrivial = "{TRIVIAL}"\n')
+
+
+def verdict(judged: str, reason: str = REASON) -> dict[str, object]:
+    """A triage's `done` result with `judged` as its verdict."""
+    return {"status": "done", "verdict": judged, "reason": reason}
+
+
+@contextmanager
+def triage_reports(result: Mapping[str, object] | str, *commands: list[str]) -> Iterator[None]:
+    """Until the block ends, the fake triage agent runs `commands`, then prints `result`, verbatim if a string."""
+    line = result if isinstance(result, str) else json.dumps(result)
+    with scripted("PLAN_TRIAGE", {"COMMANDS": json.dumps(commands), "RESULT": line}):
+        yield
+
+
+def test_a_trivial_verdict_waives_the_plan_and_the_implement_follows_unplanned(
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, treehouse_state: Path
+) -> None:
+    triage_on(canopy_env)
+    where = ["python3", "-c", "import os; print(os.path.realpath('repo'))"]
+    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial"), where))
+    assert (ran.kind, ran.status, ran.branch) == (RunKind.TRIAGE_PLAN, RunStatus.DONE, "")
+
+    # It ran its own agent in a desk linking the primary clone, leased nothing, and left nothing behind.
+    desk = canopy_env.root / "desks" / KEY
+    [triage] = agent_runs(agent_log)
+    argv = triage["argv"]
+    assert isinstance(argv, list)
+    assert argv[:3] == ["run", "--agent", "canopy-plan-triage"]
+    assert triage["cwd"] == str(desk)
+    [[linked]] = commands_run(agent_log)
+    assert linked["stdout"].strip() == str(canopy_env.repo.resolve())
+    assert not desk.exists()
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    assert db.run_slots(scenario.conn, ran.id) == []
+    assert db.run_reads(scenario.conn, ran.id) == ["repo"]
+
+    # Its prompt carries the operator's words and its own label check, and none of a worker's instructions.
+    assert ran.prompt.startswith("# canopy triage: plan\n")
+    assert TRIVIAL in ran.prompt
+    assert f"carries none of the labels `{LABEL}`" in ran.prompt
+    assert f"- `repo` at `{desk / 'repo'}`." in ran.prompt
+    assert "Standing instructions" not in ran.prompt
+
+    # The waiver is a journal fact naming the run and its reason, which is the run's report.
+    ticket = present(db.get_ticket(scenario.conn, KEY))
+    waiver = present(plans.waiver(scenario.conn, ticket))
+    assert (waiver.run_id, waiver.reason) == (ran.id, REASON)
+    assert [(m["kind"], m["body"]) for m in db.run_messages(scenario.conn, ran.id)] == [("report", REASON)]
+    assert plans.history(scenario.conn, KEY) == []
+
+    # So `unplanned` lets the implement through, and its worker never hears the triage's reason.
+    implement = scenario.run(worker=pushes())
+    assert implement.status == RunStatus.DONE
+    assert REASON not in implement.prompt
+    # Once it has started, the plan cannot be asked for: it would describe work already started.
+    refused = scenario.operator("plan", KEY, code=1)
+    assert "plan refused (bad_plan)" in refused.err
+
+
+@pytest.mark.parametrize(
+    ("result", "status", "note"),
+    [
+        (verdict("plan"), RunStatus.DONE, ""),
+        ({"status": "failed", "reason": "The ticket says nothing yet."}, RunStatus.FAILED, ""),
+        ({"status": "done", "verdict": "trivial"}, RunStatus.UNKNOWN, "not a valid triage result"),
+        ({"status": "done", "verdict": "small", "reason": REASON}, RunStatus.UNKNOWN, "not a valid triage result"),
+        ("trivial, I think", RunStatus.UNKNOWN, "not a valid triage result"),
+    ],
+    ids=["plan", "failed", "no-reason", "bad-verdict", "no-result"],
+)
+def test_anything_but_a_trivial_verdict_leaves_the_plan_needed_and_the_plan_follows(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
+    result: Mapping[str, object] | str,
+    status: RunStatus,
+    note: str,
+) -> None:
+    triage_on(canopy_env)
+    with triage_reports(result):
+        run = dispatch_and_run(conn, *TRIAGE)
+    assert run["status"] == status
+    assert note in str(run["result_json"])
+    assert conn.execute("SELECT count(*) FROM plan_waivers").fetchone()[0] == 0
+    # The ticket needs its plan, as if triage were off; however the triage ended, nothing waits on a human.
+    assert dispatch_refused(conn, *IMPLEMENT) == [UNPLANNED]
+    assert attention.from_runs(conn) == []
+    with planner_does(plan=TEXT):
+        planned = dispatch_and_run(conn, *PLAN)
+    assert planned["status"] == RunStatus.DONE
+
+
+def test_a_triage_that_times_out_waives_nothing_even_with_a_trivial_line(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    triage_on(canopy_env)
+    printed = f"fake agent: starting\n{json.dumps(verdict('trivial'))}\n"
+    run = dispatch_and_run(conn, *TRIAGE, runner=InlineRunner(timeout_agent=True, timeout_stdout=printed))
+    assert run["status"] == RunStatus.TIMEOUT
+    assert "the triage timed out after 10 minutes" in str(run["result_json"])
+    assert conn.execute("SELECT count(*) FROM plan_waivers").fetchone()[0] == 0
+    assert dispatch_refused(conn, *IMPLEMENT) == [UNPLANNED]
+    assert attention.from_runs(conn) == []
+
+
+def test_a_ticket_is_triaged_once_however_its_triage_ended(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    triage_on(canopy_env)
+    with triage_reports({"status": "failed", "reason": "The tracker did not answer."}):
+        first = dispatch_and_run(conn, *TRIAGE)
+    reason = f"{KEY} had triage run {first['id']}; a ticket is triaged once, however that ended"
+    assert dispatch_refused(conn, *TRIAGE) == [("refused:triaged", reason)]
+    # Not even once its work is forgotten: the bound is its runs', never reset (D030).
+    assert operator("forget", KEY) == 0
+    assert dispatch_refused(conn, *TRIAGE) == [("refused:triaged", reason)]
+
+
+def test_triage_is_off_by_default(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
+    approve_policy(canopy_env)
+    assert dispatch_refused(conn, *TRIAGE) == [
+        ("refused:triage_off", 'policy.plan_triage is not "on": dispatch plan for a ticket that needs one')
+    ]
+
+
+def test_the_operators_own_word_on_a_plan_is_never_triaged(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
+) -> None:
+    triage_on(canopy_env)
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
+    assert operator("plan", KEY) == 0
+    assert dispatch_refused(conn, *TRIAGE) == [
+        ("refused:bad_triage", f"the operator asked for {KEY}'s plan, so it is planned, whatever a triage would say")
+    ]
+    assert operator("plan", KEY, "--skip") == 0
+    assert dispatch_refused(conn, *TRIAGE) == [
+        ("refused:bad_triage", f"the operator skipped {KEY}'s plan, so there is nothing to triage")
+    ]
+
+
+def test_no_triage_is_due_without_a_plan_the_policy_asks_for(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    # With plans off in the workspace, triage on alone has nothing to waive.
+    canopy_env.append_user(f'\n[policy]\nplan_triage = "on"\ntrivial = "{TRIVIAL}"\n')
+    assert dispatch_refused(conn, *TRIAGE) == [
+        ("refused:bad_triage", f'policy.plan is not "approve", so {KEY} needs no plan to triage')
+    ]
+    approve_policy(canopy_env)
+    with planner_does(plan=TEXT):
+        planned = dispatch_and_run(conn, *PLAN)
+    assert dispatch_refused(conn, *TRIAGE) == [
+        ("refused:bad_triage", f"{KEY} had plan run {planned['id']}; a ticket with a plan is not triaged")
+    ]
+    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-2-work' WHERE key = ?", (KEY,))
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
+    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-2-work' WHERE key = 'PROJ-2'")
+    assert dispatch_refused(conn, *TRIAGE, key="PROJ-2") == [
+        ("refused:bad_triage", "PROJ-2 already has work on agent/PROJ-2-work; a started ticket is not triaged")
+    ]
+
+
+def test_a_split_ticket_is_not_triaged(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
+    triage_on(canopy_env)
+    ctx = context(canopy_env)
+    tick_id = db.start_tick(conn, dry_run=False)
+    db.touch_ticket(conn, KEY, ctx.repo)
+    split = db.insert_run(
+        conn, tick_id=tick_id, key=KEY, kind="split", branch="", slots=[], runs_dir=ctx.state_dir, works_units=False
+    )
+    db.record_split_children(conn, KEY, split, {"PROJ-3": "repo"})
+    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+    assert dispatch_refused(conn, *TRIAGE) == [
+        ("refused:bad_triage", f"{KEY} was split into PROJ-3; triage those instead")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("args", "guard", "reason"),
+    [
+        (["--slug", "work"], "bad_slug", "a triage judges the work and names no branch; leave out --slug"),
+        (
+            ["--base", "agent/PROJ-2-work"],
+            "bad_base",
+            "a triage judges the work and starts from no branch; leave out --base",
+        ),
+        (["--request", "1"], "bad_request", "--request names the comment asking for a split; it is for split only"),
+    ],
+)
+def test_a_triage_takes_no_slug_base_or_request(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, args: list[str], guard: str, reason: str
+) -> None:
+    triage_on(canopy_env)
+    assert dispatch_refused(conn, *TRIAGE, *args) == [(f"refused:{guard}", reason)]
+
+
+def test_a_triage_needs_the_trackers_read_tools_and_a_free_worker(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
+) -> None:
+    triage_on(canopy_env)
+    # It leases no slot, but it is an agent run with spend: `capacity.max_workers` bounds it with the others.
+    canopy_env.append_user("\n[capacity]\nmax_workers = 0\n")
+    assert dispatch_refused(conn, *TRIAGE) == [("refused:capacity", "0 of 0 workers are running")]
+    canopy_env.write_shared(canopy_env.shared_file.read_text().replace('provider = "jira"', 'provider = "linear"'))
+    assert dispatch_refused(conn, *TRIAGE) == [
+        (
+            "refused:no_read_tools",
+            "no tracker read tools are known for the triage; set tracker.mcp_server and read_tools",
+        )
+    ]
+
+
+def test_a_primary_clone_that_shadows_canopys_agents_stops_the_triage(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    # The triage starts in its desk, whose links lead into the primary clones: OpenCode would read their config.
+    triage_on(canopy_env)
+    shadow = canopy_env.repo / ".opencode" / "agent" / "canopy-plan-triage.md"
+    shadow.parent.mkdir(parents=True)
+    shadow.write_text("---\npermission:\n  edit: allow\n---\n")
+    with triage_reports(verdict("trivial")):
+        run = dispatch_and_run(conn, *TRIAGE)
+    assert run["status"] == RunStatus.CRASHED
+    assert "defines one of canopy's agents" in str(run["result_json"])
+    assert conn.execute("SELECT count(*) FROM plan_waivers").fetchone()[0] == 0
+    assert attention.from_runs(conn) == []
+
+
+def test_asking_for_a_plan_undoes_a_waiver(scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool) -> None:
+    triage_on(canopy_env)
+    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial")))
+    shown = scenario.operator("show", KEY).out
+    assert f"Plan: waived 0s ago by triage run:{ran.id}, which judged it trivial:\n  {REASON}\n" in shown
+    assert f"`canopy plan {KEY}` asks for a plan instead, until its implement starts" in shown
+
+    asked = scenario.operator("plan", KEY)
+    assert f"Triage run {ran.id} had waived {KEY}'s plan; it is undone." in asked.out
+    ticket = present(db.get_ticket(scenario.conn, KEY))
+    assert ticket.plan_setting is PlanSetting.PLAN
+    assert plans.waiver(scenario.conn, ticket) is None
+    [(action, _)] = scenario.refuses(dispatches())
+    assert action == "refused:unplanned"
+
+
+def test_forgetting_a_ticket_ends_its_waiver(scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool) -> None:
+    triage_on(canopy_env)
+    scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial")))
+    scenario.operator("forget", KEY)
+    ticket = present(db.get_ticket(scenario.conn, KEY))
+    assert plans.waiver(scenario.conn, ticket) is None
+    # Planned again, as a forgotten ticket under "approve" is, and never triaged again.
+    [(action, _)] = scenario.refuses(dispatches())
+    assert action == "refused:unplanned"
+    [(action, _)] = scenario.refuses(dispatches(kind=RunKind.TRIAGE_PLAN))
+    assert action == "refused:triaged"
+
+
+def test_the_state_block_says_when_a_triage_is_due_and_which_waived_the_plan(
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
+) -> None:
+    triage_on(canopy_env)
+    scenario.seen()
+    scenario.tick(*waits(KEY), dry_run=True)
+    assert scenario.ticket_state()["plan"] == {
+        "needed": True,
+        "attempts": 0,
+        "limit": 3,
+        "newest": None,
+        "changes_asked": False,
+        "blocked": False,
+        "triage_due": True,
+    }
+    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial")))
+    scenario.tick(*waits(KEY), dry_run=True)
+    plan = scenario.ticket_state()["plan"]
+    assert (plan["needed"], plan["triage_due"], plan["waived"]) == (False, False, ran.id)
+
+
+def test_a_dry_run_triages_nothing(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
+    triage_on(canopy_env)
+    with in_tick(conn, dry_run=True) as tick_id:
+        runner = InlineRunner()
+        assert main(["dispatch", KEY, "--repo", "repo", *TRIAGE], runner=runner) == 0
+        assert runner.spawned == []
+        assert decisions(conn, tick_id) == [
+            ("dispatch:triage-plan", f"dry run: not dispatched; would triage {KEY}'s plan over repo; label {LABEL}")
+        ]
+
+
+def test_a_private_tickets_triage_reads_its_conversation_and_no_worker_reads_its_reason(
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path
+) -> None:
+    triage_on(canopy_env)
+    scenario.operator("start", KEY)
+    scenario.operator("reply", KEY, "Only the comment in the README.")
+    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN, label=None), worker=triage_reports(verdict("trivial")))
+    assert ran.row["private"] == 1
+    assert "there is no label to check" in ran.prompt
+    assert "Only the comment in the README." in ran.prompt
+    [triage] = agent_runs(agent_log)
+    assert "canopy-plan-triage" in triage["argv"]
+    # Its report is in the conversation the operator reads, and in no worker's prompt.
+    assert REASON in scenario.operator("show", KEY).out
+    implement = scenario.run(dispatches(label=None), worker=pushes())
+    assert "Only the comment in the README." in implement.prompt
+    assert REASON not in implement.prompt
+
+
+def test_a_triage_is_never_wrapped_as_a_worker_run(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, agent_log: Path
+) -> None:
+    # `worker_cmd_prefix` wraps the commands a worker run starts; a triage is no worker run (DESIGN §12, §25).
+    triage_on(canopy_env)
+    canopy_env.write_user(
+        canopy_env.user_file.read_text().replace("\n[runtime]\n", "\n[runtime]\nworker_cmd_prefix = 'env CANOPY_X=1'\n")
+    )
+    with triage_reports(verdict("plan")):
+        run = dispatch_and_run(conn, *TRIAGE)
+    assert run["status"] == RunStatus.DONE
+    [triage] = agent_runs(agent_log)
+    assert "CANOPY_X" not in json.dumps(triage["env"])
+    assert prompt_of(canopy_env, int(run["id"])).startswith("# canopy triage: plan\n")

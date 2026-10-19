@@ -411,6 +411,31 @@ class RunReason(Row):
 
 
 @dataclass(frozen=True)
+class RunRead(Row):
+    """A repository a run that leases no slot reads, by name, as its dispatch named it (DESIGN §25)."""
+
+    TABLE: ClassVar[str] = "run_reads"
+
+    run_id: int
+    repo: str
+
+
+@dataclass(frozen=True)
+class PlanWaiver(Row):
+    """A plan a triage run waived for its ticket, because its validated result judged the work trivial (DESIGN §25)."""
+
+    TABLE: ClassVar[str] = "plan_waivers"
+
+    id: int
+    ticket_key: str
+    #: The `triage-plan` run whose result waived it.
+    run_id: int
+    #: The triage's one-sentence reason, model text written from the ticket, shown to the operator and no worker.
+    reason: str
+    at: str
+
+
+@dataclass(frozen=True)
 class RunTool(Row):
     """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
 

@@ -220,6 +220,7 @@ worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy
 private_worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private {prompt}'
 split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-splitter {prompt}'
 plan_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-planner --format json {prompt}'
+plan_triage_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-plan-triage {prompt}'
 
 [paths]
 """

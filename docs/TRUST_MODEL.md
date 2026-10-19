@@ -67,6 +67,14 @@ Controls:
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
   before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
   approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
+- A triage's verdict (DESIGN §25, Triage before a plan) is an agent's judgment that ticket text can steer, and a
+  `trivial` one lifts the plan gate for its ticket: but only where the operator turned `policy.plan_triage` on, and
+  only for a plan the policy asked for. The operator's own `plan` setting for a ticket stands, and so does D089's gate
+  on feedback. Only a validated `done` `trivial` result writes the waiver, and its reason, model text written from the
+  ticket, reaches no worker's prompt. The PR's review is the backstop. Residual, accepted by the operator: a ticket's
+  text can talk a triage into `trivial`, and its work then goes to a PR unplanned. And a primary clone may lag its base
+  branch, so a `trivial` verdict can rest on code that has since changed; only the PR's review catches that until the
+  reviewer's second opinion (`not_trivial`, ROADMAP M55) is built.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -262,6 +270,11 @@ Controls in code, not prompts:
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
   an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
   asks for, and only the operator's channels ask for, skip, or approve a plan.
+- Triage: one `triage-plan` run per ticket, before its first plan, never reset and never granted (`triaged`), with its
+  own `runtime.plan_triage_timeout_minutes`, and counted within `capacity.max_workers` though it leases no slot. A
+  triage that ends any way but `done` is not run again, and raises no attention item, since the plan follows at once.
+  A waiver is written only by `_run` from a validated result, never by an agent or a command, and `unplanned` stays a
+  guard in code (DESIGN §25).
 
 ### T4. Damage to the operator's machine
 
@@ -379,6 +392,14 @@ Controls:
   private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
   still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
+- The triage agent (DESIGN §25, Triage before a plan) writes nothing: its definition, `canopy-plan-triage`, is the
+  planner's with nothing to edit, so it has no edit, shell, web, or subagent tools, and of the tracker only its read
+  tools, rendered as the planner's are. A triage is refused (`no_read_tools`) without them. It reads each repository
+  it names through a link in its desk to that repository's primary clone, which the shadowing check covers, as does the
+  check for the tracker server's tools. Residual: no sandbox holds it. `worker_cmd_prefix` does not wrap
+  `plan_triage_cmd`, and no sandbox role exists for it yet (DESIGN §24), so with M26's sandbox on, a triage still runs
+  outside the OS sandbox, reading ticket text anyone can write and the primary clones; its definition's tool denials
+  are its only bound.
 - With `trust.review_replies = "approve"`, a worker's comments leave the machine only as the operator sent them: its
   prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the GitHub
   server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker source
@@ -462,7 +483,9 @@ Controls, in code:
 - Those keys are private (DESIGN §12) and are read only from the operator's own files: the user file, in the user
   config directory, and the workspace's private file, in its state directory. A workspace file that sets one is a
   config error and the tick does not run.
-- `policy.*` values from the workspace file apply only when stricter than the built-in defaults.
+- `policy.*` values from the workspace file apply only when stricter than the built-in defaults. `policy.plan_triage`
+  and `policy.trivial` are private instead: triage loosens the operator's plan gate, so a shared file can neither turn
+  it on nor say what counts as trivial (DESIGN §25).
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not

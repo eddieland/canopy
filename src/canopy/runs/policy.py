@@ -9,9 +9,9 @@ covered the unit and worked on CI: a `resume` with `ci` among its reasons, or an
 these; the overseer's state block shows them.
 
 A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Nor is a plan, which writes
-down how the ticket will be done across every repository it touches (DESIGN §25). Their runs are counted per ticket,
-and never in a unit's counts. The operator grants a ticket more plans (`grant_ticket`); a split's limit only config
-raises.
+down how the ticket will be done across every repository it touches (DESIGN §25), nor a triage, which judges whether it
+needs a plan at all. Their runs are counted per ticket, and never in a unit's counts. The operator grants a ticket more
+plans (`grant_ticket`); a split's limit only config raises, and a triage's is one, which nothing raises.
 """
 
 from __future__ import annotations
@@ -39,8 +39,11 @@ KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
 RETIRED = RunKind.FIX_CI
 SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
+TRIAGE_PLAN = RunKind.TRIAGE_PLAN
+#: A ticket's triages: one, before its first plan, never reset or granted (DESIGN §25, Triage before a plan).
+TRIAGES_PER_TICKET = 1
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
-TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN)
+TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, TRIAGE_PLAN)
 # The kinds counted per ticket that `canopy grant` takes: a split creates tickets in the tracker, so only config raises
 # its limit.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
@@ -48,7 +51,7 @@ DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k is not RETIRED)
 
 
 def limits(config: Config) -> dict[str, int]:
-    """Return the most runs of each kind one unit may have, and for `split` and `plan`, one ticket."""
+    """Return the most runs of each kind one unit may have, and for the kinds counted per ticket, one ticket."""
     return {kind: _limit(config, RunKind(kind)) for kind in DISPATCH_KINDS}
 
 
@@ -68,6 +71,8 @@ def _limit(config: Config, kind: RunKind) -> int:
             return p.max_split_attempts
         case RunKind.PLAN:
             return p.max_plan_attempts
+        case RunKind.TRIAGE_PLAN:
+            return TRIAGES_PER_TICKET
         case _:
             assert_never(kind)
 
@@ -91,11 +96,13 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
     """
     counts: dict[Unit, dict[str, int]] = {}
     query = "SELECT r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
+    # Only the placeholder count is interpolated; the kinds are bound parameters.
+    kinds = f"r.kind NOT IN ({', '.join('?' * len(TICKET_KINDS))})"
     if ticket is None:
-        rows = conn.execute(f"{query}WHERE r.kind NOT IN (?, ?) GROUP BY r.ticket_key, s.repo, r.kind", TICKET_KINDS)
+        rows = conn.execute(f"{query}WHERE {kinds} GROUP BY r.ticket_key, s.repo, r.kind", TICKET_KINDS)
     else:
         rows = conn.execute(
-            f"{query}WHERE r.ticket_key = ? AND r.kind NOT IN (?, ?) GROUP BY r.ticket_key, s.repo, r.kind",
+            f"{query}WHERE r.ticket_key = ? AND {kinds} GROUP BY r.ticket_key, s.repo, r.kind",
             (ticket, *TICKET_KINDS),
         )
     for row in rows:

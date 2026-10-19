@@ -69,4 +69,11 @@ open: when a triage is due and the guards that hold it to once per ticket; that 
 primary clones through links, as a plan's desk links slots; that only a validated result writes the waiver, which
 `unplanned` reads in code and `canopy forget` ends; and that `not_trivial` lasts until the ticket is done or
 forgotten. Open for the operator: the feedback half, which M54's design settles; the sandbox role for
-`plan_triage_cmd`; and whether a waiver sends an event to the sinks.
+`plan_triage_cmd`; and whether a waiver sends an event to the sinks. Built 2026-10-19, against the fakes: the four
+private keys; the `triage-plan` run, slotless in a desk linking the primary clones, with `canopy-plan-triage`, its two
+prompts, and its result validated; dispatch's `triage_off`, `triaged`, and `bad_triage`, counted within capacity; the
+waiver, which only a validated `done` `trivial` result writes, `unplanned` reads, `canopy plan KEY` undoes, and
+`canopy forget` ends; the state block's `triage_due` and `waived`; `canopy show` naming it; and the TRUST_MODEL lines.
+Until the open three are settled, a triage runs in no sandbox and a waiver sends no event of its own. Left: the
+overseer prompt's triage row, without which the loop dispatches `plan` where a triage is due; the web UI's plan card;
+the reviewer's `not_trivial`; the spend page's kind; and the feedback half (M54).

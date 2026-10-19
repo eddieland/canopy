@@ -698,6 +698,7 @@ def insert_run(
     plan_id: int | None = None,
     reasons: Sequence[str] = (),
     rendered: Callable[[int], None] | None = None,
+    reads: Sequence[str] = (),
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -709,6 +710,7 @@ def insert_run(
     `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
     `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
+    `reads` are the repositories a run that leases no slot reads, a triage's, by name (DESIGN §25).
 
     Returns:
         The new run's id.
@@ -729,6 +731,7 @@ def insert_run(
             [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch, s.pool) for s in slots],
         )
         conn.executemany("INSERT INTO run_reasons (run_id, reason) VALUES (?, ?)", [(run_id, r) for r in reasons])
+        conn.executemany("INSERT INTO run_reads (run_id, repo) VALUES (?, ?)", [(run_id, r) for r in reads])
         event = started(run_id) if started is not None else None
         if event is not None:
             record_event(conn, event)
@@ -772,6 +775,14 @@ def reasons_in(row: sqlite3.Row) -> tuple[ResumeReason, ...]:
 def run_slots(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
     """Return the slots run `run_id` leased, by repository."""
     return conn.execute("SELECT * FROM run_slots WHERE run_id = ? ORDER BY repo", (run_id,)).fetchall()
+
+
+def run_reads(conn: sqlite3.Connection, run_id: int) -> list[str]:
+    """Return the repositories run `run_id`, a triage, reads without a slot (DESIGN §25), in the order it named them."""
+    rows = records.fetch_all(
+        conn, records.RunRead, "SELECT * FROM run_reads WHERE run_id = ? ORDER BY rowid", (run_id,)
+    )
+    return [r.repo for r in rows]
 
 
 def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, list[sqlite3.Row]]:
@@ -1030,13 +1041,16 @@ def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
-    """Return a ticket's latest `limit` ended runs since any forget, oldest first: id, kind, status, and end."""
+def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int, *, skip_kind: str | None = None) -> list[sqlite3.Row]:
+    """Return a ticket's latest `limit` ended runs since any forget, oldest first: id, kind, status, and end.
+
+    Runs of `skip_kind`, if given, are left out, and do not count toward `limit`.
+    """
     rows = conn.execute(
         "SELECT r.id, r.kind, r.status, r.ended_at FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key "
         "WHERE r.ticket_key = ? AND r.status != 'running' AND r.id > coalesce(t.forgotten_run_id, 0) "
-        "ORDER BY r.id DESC LIMIT ?",
-        (key, limit),
+        "AND (? IS NULL OR r.kind != ?) ORDER BY r.id DESC LIMIT ?",
+        (key, skip_kind, skip_kind, limit),
     ).fetchall()
     return rows[::-1]
 
