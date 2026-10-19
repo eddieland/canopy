@@ -19,13 +19,12 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
-from canopy.core.vocab import RunStatus, TickStatus
+from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     commit_and_push,
-    in_tick,
     pool,
     present,
     scripted,
@@ -93,8 +92,7 @@ def test_the_session_title_names_the_ticket_and_its_title(
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
     scenario.configures(runtime={"worker_cmd": template})
     if title is not None:
-        with in_tick(scenario.conn, ends_ok=True):
-            assert main(["ticket", "set", "PROJ-1", "--title", title]) == 0
+        scenario.overseer("ticket", "set", "PROJ-1", "--title", title)
     scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
     argv = w["argv"]
@@ -390,14 +388,12 @@ def test_a_run_is_claimed_once(scenario: Scenario, git_pool: GitPool, capsys: py
     assert "no run 99" in capsys.readouterr().err
 
     # A running run that another process claimed is refused too: the overseer cannot start a second worker in a slot.
-    with in_tick(conn) as tick_id:
-        assert main(dispatches("PROJ-2")[1:], runner=InlineRunner()) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-        conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
-        assert main(["_run", "2"]) == 1
-        still = present(db.get_run(conn, 2))
-        assert still["status"] == "running"
-        assert len(agent_runs(scenario.agent_log)) == 1
+    working = scenario.starts(dispatches("PROJ-2"))
+    assert main(["_run", str(working.id)]) == 1
+    assert "is not waiting to start" in capsys.readouterr().err
+    still = present(db.get_run(conn, working.id))
+    assert (still["status"], still["pid"]) == ("running", working.row["pid"])
+    assert len(agent_runs(scenario.agent_log)) == 1
 
 
 def test_sigterm_returns_the_slot(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:

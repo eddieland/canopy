@@ -11,7 +11,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import Phase, ResumeReason, RunKind, TickStatus
+from canopy.core.vocab import Phase, ResumeReason, RunKind
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
@@ -254,21 +254,20 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     assert ticket["last_run"]["repos"] == [{"repo": "api", "base": "main"}, {"repo": "web", "base": "main"}]
 
 
-def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
+def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
+    conn = ws_scenario.conn
+    with ws_scenario.ticking():
         # A review or ci cursor is a unit's: in a workspace of several it needs --repo, and one repository.
         reviewed = "2026-10-07T20:58:50Z"
-        assert main(["ticket", "set", "PROJ-1", "--cursor", f"review={reviewed}"]) == 2
-        assert "a review cursor belongs to one unit: name its repository with --repo" in capsys.readouterr().err
-        assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--cursor", "ci=9")) == 2
-        assert main(["ticket", "set", "PROJ-1", "--repo", "nope", "--phase", "ci_red"]) == 1
-        assert "'nope' is not a repository in this workspace (api, web)" in capsys.readouterr().err
-        assert (
-            main(["ticket", "set", "PROJ-1", "--repo", "api", "--cursor", f"review={reviewed}", "--phase", "ci_red"])
-            == 0
+        refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--cursor", f"review={reviewed}", code=2)
+        assert "a review cursor belongs to one unit: name its repository with --repo" in refused.err
+        ws_scenario.overseer(*dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--cursor", "ci=9"), code=2)
+        refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "nope", "--phase", "ci_red", code=1)
+        assert "'nope' is not a repository in this workspace (api, web)" in refused.err
+        updated = ws_scenario.overseer(
+            "ticket", "set", "PROJ-1", "--repo", "api", "--cursor", f"review={reviewed}", "--phase", "ci_red"
         )
-        assert capsys.readouterr().out == "updated PROJ-1 (api)\n"
+        assert updated.out == "updated PROJ-1 (api)\n"
         [unit] = db.units(conn, "PROJ-1")
         assert (unit["repo"], unit["phase"], unit["last_review_id"], unit["branch"]) == (
             "api",
@@ -279,52 +278,43 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
         ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase is None  # a phase about the PR is the unit's
         # A phase about the PR needs its unit; the ticket's own phases are the ticket's, --repo or not.
-        assert main(["ticket", "set", "PROJ-1", "--phase", "approved"]) == 2
-        assert "the approved phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
-        assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human"]) == 0
-        capsys.readouterr()
+        refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "approved", code=2)
+        assert "the approved phase belongs to one unit: name its repository with --repo" in refused.err
+        ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human")
         ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase == "needs_human"
         assert [u["phase"] for u in db.units(conn, "PROJ-1")] == ["ci_red"]
 
-        assert (
-            main(["attention", "PROJ-1", "needs_author", "--repo", "web", "--detail", "https://x.test/web/pull/2"]) == 0
-        )
-        assert (
-            main(["attention", "PROJ-1", "needs_author", "--repo", "api", "--detail", "https://x.test/api/pull/1"]) == 0
-        )
-        assert main(["attention", "PROJ-1", "multi_repo", "--detail", "api and web"]) == 0
-        assert main(["attention", "PROJ-1", "needs_author", "--repo", "nope", "--detail", "x"]) == 1
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-        # Two units needing an author are two items: an item is its ticket, reason, and repository.
-        assert [(i.subject, i.reason) for i in attention.current(conn)] == [
-            ("PROJ-1", "multi_repo"),
-            ("PROJ-1 (api)", "needs_author"),
-            ("PROJ-1 (web)", "needs_author"),
-        ]
+        ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "web", "--detail", PRS["web"])
+        ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "api", "--detail", PRS["api"])
+        ws_scenario.overseer("attention", "PROJ-1", "multi_repo", "--detail", "api and web")
+        ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "nope", "--detail", "x", code=1)
+    # Two units needing an author are two items: an item is its ticket, reason, and repository.
+    assert [(i.subject, i.reason) for i in attention.current(conn)] == [
+        ("PROJ-1", "multi_repo"),
+        ("PROJ-1 (api)", "needs_author"),
+        ("PROJ-1 (web)", "needs_author"),
+    ]
 
 
-def test_a_merge_conflict_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_merge_conflict_is_a_units_phase(ws_scenario: Scenario) -> None:
     """A PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
-    conn = ws.journal()
-    with in_tick(conn):
-        assert main(["ticket", "set", "PROJ-1", "--phase", "conflicted"]) == 2
-        assert "the conflicted phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
-        assert main(["ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted"]) == 0
-        [unit] = db.units(conn, "PROJ-1")
-        assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
-        ticket = present(db.get_ticket(conn, "PROJ-1"))
-        assert ticket.phase is None
+    conn = ws_scenario.conn
+    refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "conflicted", code=2)
+    assert "the conflicted phase belongs to one unit: name its repository with --repo" in refused.err
+    ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted")
+    [unit] = db.units(conn, "PROJ-1")
+    assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
+    ticket = present(db.get_ticket(conn, "PROJ-1"))
+    assert ticket.phase is None
 
 
-def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+def test_untrusted_review_is_a_units_phase(ws_scenario: Scenario) -> None:
     """Feedback on a PR from an untrusted reviewer is `untrusted_review`, the unit's phase like `changes_requested`."""
-    conn = ws.journal()
-    with in_tick(conn):
-        assert main(["ticket", "set", "PROJ-1", "--phase", "untrusted_review"]) == 2
-        err = capsys.readouterr().err
-        assert "the untrusted_review phase belongs to one unit: name its repository with --repo" in err
-        assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review"]) == 0
+    conn = ws_scenario.conn
+    refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "untrusted_review", code=2)
+    assert "the untrusted_review phase belongs to one unit: name its repository with --repo" in refused.err
+    ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review")
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")
     ticket = present(db.get_ticket(conn, "PROJ-1"))
