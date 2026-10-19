@@ -44,6 +44,11 @@ item you picked, so a link to it opens the same item.
 On half a monitor there's no room for both, so they take turns: the list gets the whole width, and the item you click
 opens in its place, with **Back to the list** at the top to return. The list remembers which one you were on.
 
+From the keyboard, `j` and `k` step down and up the list, opening each item beside it; the arrows do the same from a
+row. `r` puts you in the open item's reply box. On half a monitor `j` and `k` keep to the list and `r` opens the item
+you're on, straight into its reply; with an item open, `j` and `k` step through the items in its place. `?` lists every
+key.
+
 Under its head, an item leads with whatever its reason asks of you, so the thing to do is the first thing you see:
 
 - **A run that broke** (`worker failed`, `crashed`, `unpushed`, `unknown result`, `attempt limit`): the ticket's latest

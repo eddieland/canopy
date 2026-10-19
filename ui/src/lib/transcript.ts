@@ -478,6 +478,17 @@ export function hitsIn(entry: TranscriptEntry, query: string): Hits {
     return { row: holding(row), body: holding(body) }
 }
 
+/**
+ * How many lines of a model call hold `query`, By call: those of what it printed (`hitsIn`), every one of which its
+ * row opens to. What it was sent is left out, being what the call before it printed, so a line counts once.
+ */
+export function hitsInCall(call: ModelCall, query: string): number {
+    return call.output.reduce((sum, entry) => {
+        const hits = hitsIn(entry, query)
+        return sum + hits.row + hits.body
+    }, 0)
+}
+
 // An entry's lines as a search reads them: its row's, and what it opens to.
 interface Searched {
     row: readonly string[]

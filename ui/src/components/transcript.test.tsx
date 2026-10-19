@@ -354,8 +354,6 @@ describe('TranscriptPanel', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         fireEvent.click(screen.getByRole('button', { name: 'By call' }))
 
-        // By call keeps the whole transcript: there is no search.
-        expect(screen.queryByRole('searchbox')).toBeNull()
         const first = screen.getByRole('button', { name: /call 1/u })
         expect(first.textContent).toContain('I will read the failing test first. · bash, read')
         expect(screen.getByRole('button', { name: /call 3/u }).textContent).toContain('unfinished')
@@ -377,6 +375,51 @@ describe('TranscriptPanel', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'By call' }))
         expect(find()).toBeDefined()
+    })
+
+    it('searches By call too: it keeps the calls holding the search, opened to it and marked, and counts them', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        fireEvent.click(screen.getByRole('button', { name: 'By call' }))
+        search('rate limited')
+
+        expect(screen.getByTestId('transcript-found').textContent).toBe('1 line, 1 call')
+        expect(screen.queryByRole('button', { name: /call 1/u })).toBeNull()
+        const output = screen.getByRole('region', { name: 'call 2 output' })
+        expect(
+            within(output)
+                .getAllByRole('mark')
+                .map((mark) => mark.textContent),
+        ).toEqual(['rate limited'])
+        expect(allOpen().getAttribute('aria-pressed')).toBe('true')
+
+        // A tool call that holds it opens inside its call, as it does in order.
+        search('ENOENT')
+        // Its error is on its row and in its output, two lines, as in order.
+        expect(screen.getByTestId('transcript-found').textContent).toBe('2 lines, 1 call')
+        expect(call('npm test -- login').open).toBe(true)
+
+        search('zebra')
+        expect(screen.getByText('no call holds “zebra”')).toBeDefined()
+        fireEvent.keyDown(find(), { key: 'Escape' })
+        expect(screen.getAllByTestId('transcript-call')).toHaveLength(3)
+    })
+
+    it('puts the focus in its search on f, in order or By call, but never from a field being typed in', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        fireEvent.keyDown(document.body, { key: 'f' })
+        expect(document.activeElement).toBe(find())
+        expect(find().getAttribute('aria-keyshortcuts')).toBe('f')
+
+        const other = document.createElement('textarea')
+        document.body.append(other)
+        other.focus()
+        fireEvent.keyDown(other, { key: 'f' })
+        expect(document.activeElement).toBe(other)
+        other.remove()
+
+        fireEvent.click(screen.getByRole('button', { name: 'By call' }))
+        fireEvent.keyDown(document.body, { key: 'f' })
+        expect(document.activeElement).toBe(find())
     })
 
     it('says when canopy kept no prompt for the first call', () => {

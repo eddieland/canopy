@@ -1,6 +1,6 @@
 import { ChevronRight, ChevronsUpDown, Rows3 } from 'lucide-react'
-import { useState } from 'react'
-import type { ReactNode } from 'react'
+import { useRef, useState } from 'react'
+import type { ReactNode, Ref } from 'react'
 
 import type {
     Transcript,
@@ -23,6 +23,7 @@ import { RowGrid, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
+import { onScreen, usePageKey } from '@/hooks/use-page-key'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import type { TranscriptView } from '@/hooks/use-transcript-view'
 import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-open'
@@ -41,6 +42,7 @@ import {
     elapsed,
     findQueryOf,
     hitsIn,
+    hitsInCall,
     moreLabel,
     outcome,
     sentTokens,
@@ -69,7 +71,9 @@ const NO_CALLS: readonly Call[] = []
  * on, each of which keeps the chart open or closed (src/lib/context-chart-open.ts). With two model calls or more, By
  * call, the same entries are grouped by the model call they came from, each opening to what it was sent and what it
  * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
- * input or output holds it. A long transcript draws a page of its rows, or of its calls By call, and a fold after them
+ * input or output holds it; By call, it keeps the calls with a line that holds it, opened to it. `f` from anywhere on
+ * the page puts the focus in the search (ui/DESIGN.md, "Keys"). A long transcript draws a page of its rows, or of its
+ * calls By call, and a fold after them
  * draws more (`TRANSCRIPT_BUDGET`). All of it is agent output, rendered as text. `running` says the session has not
  * ended: its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header
  * names the session, on every page that shows one. With no events, it is its header alone, which says why in a few
@@ -97,9 +101,17 @@ export function TranscriptPanel({
     // One model call grouped is the events in order again.
     const groups = counts.calls > 1
     const callView = grouped && groups
-    // The search is the events' in order: By call keeps its own, whole.
-    const query = callView ? null : findQueryOf(found)
+    const query = findQueryOf(found)
     const words = query === null ? [] : [query]
+    const findField = useRef<HTMLInputElement>(null)
+    usePageKey('find', () => {
+        if (!onScreen(findField.current)) {
+            return false
+        }
+        findField.current.focus()
+        findField.current.select()
+        return true
+    })
     // Bumped by All open, on or off: each call remounts open or closed, then toggles on its own. It wins over the
     // search it was made under; a new search opens the calls it finds again.
     const [opened, setOpened] = useState<{ open: boolean; round: number; query: string | null }>({
@@ -113,11 +125,19 @@ export function TranscriptPanel({
     const numbered = ordered(
         'transcript',
         order,
-        entries.map((entry, i) => ({ entry, i, hits: query === null ? null : hitsIn(entry, query) })),
+        entries.map((entry, i) => ({ entry, i, hits: query === null || callView ? null : hitsIn(entry, query) })),
     )
     const shown = numbered.filter((n) => n.hits === null || n.hits.row + n.hits.body > 0)
-    // By call's rows: the entries before the first call, then the calls.
-    const callRows = calls.before.length + calls.calls.length
+    // By call's rows: the entries before the first call, then the calls, each with how many of its lines hold the
+    // search, and only those that hold it while there is one.
+    const callQuery = callView ? query : null
+    const before = calls.before
+        .map((entry) => ({ entry, lines: callQuery === null ? 0 : linesIn(hitsIn(entry, callQuery)) }))
+        .filter((b) => callQuery === null || b.lines > 0)
+    const callsShown = calls.calls
+        .map((call) => ({ call, lines: callQuery === null ? 0 : hitsInCall(call, callQuery) }))
+        .filter((c) => callQuery === null || c.lines > 0)
+    const callRows = before.length + callsShown.length
     // The rows drawn (TRANSCRIPT_BUDGET): a page of them, and each step a fold was asked for, until the transcript,
     // its view, or its search changes; and on through a row just shown, so it is drawn before it is scrolled to. The
     // draw-through is the showing's alone: a later search, view, or session starts again at a page.
@@ -135,9 +155,14 @@ export function TranscriptPanel({
     const more = () => setAsked({ budget, round, rows: drawn + TRANSCRIPT_BUDGET.step, through })
     // A search opens a call whose input or output holds it, until All open is turned on or off under it.
     const searchOpens = (hits: { body: number } | null) => hits !== null && hits.body > 0 && opened.query !== query
+    // By call, a search opens each call it keeps, as far as the lines that hold it, until All open is turned under it.
+    const callOpens = callQuery !== null && opened.query !== callQuery
     // All open stays on while the calls stand open together: it was turned on, or a search opened what it found.
-    const allOpen = opened.open || (!callView && shown.some((n) => searchOpens(n.hits)))
-    const lines = shown.reduce((sum, n) => sum + (n.hits === null ? 0 : n.hits.row + n.hits.body), 0)
+    const allOpen =
+        opened.open || (callView ? callOpens && callsShown.length > 0 : shown.some((n) => searchOpens(n.hits)))
+    const lines = callView
+        ? [...before, ...callsShown].reduce((sum, row) => sum + row.lines, 0)
+        : shown.reduce((sum, n) => sum + (n.hits === null ? 0 : linesIn(n.hits)), 0)
     // Why there is nothing to show, once read: the header says it, and the panel is that header alone.
     const why = transcript !== undefined && entries.length === 0 ? empty(transcript, running) : null
     return (
@@ -228,14 +253,14 @@ export function TranscriptPanel({
                             {transcript.truncated && <span>cut: the log holds more than a page shows</span>}
                             {transcript.unreadable > 0 && <span>{transcript.unreadable} events could not be read</span>}
                         </p>
-                        {!callView && (
-                            <Find
-                                value={typed}
-                                onChange={setTyped}
-                                lines={query === null ? null : lines}
-                                rows={shown.length}
-                            />
-                        )}
+                        <Find
+                            ref={findField}
+                            value={typed}
+                            onChange={setTyped}
+                            lines={query === null ? null : lines}
+                            rows={callView ? callRows : shown.length}
+                            what={callView ? 'calls' : 'rows'}
+                        />
                     </div>
                     <ContextChart
                         shape={shape}
@@ -243,22 +268,34 @@ export function TranscriptPanel({
                         open={chartOpen}
                         onOpenChange={(open) => setContextChartOpen(page, open)}
                     />
-                    {callView ? (
+                    {callView && callRows === 0 ? (
+                        <Empty>no call holds “{query}”</Empty>
+                    ) : callView ? (
                         <ol className="divide-y" data-testid="transcript-calls">
                             {ordered('transcript', order, [
-                                ...calls.before.map((entry, i) => (
-                                    <Entry key={`before-${i}`} entry={entry} start={startOf(entries)} open={false} />
-                                )),
-                                ...calls.calls.map((call) => (
-                                    <CallRow
-                                        key={`${call.n}-${opened.round}`}
-                                        call={call}
-                                        step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
-                                        prompt={transcript.prompt}
+                                ...before.map(({ entry }, i) => (
+                                    <Entry
+                                        key={`before-${i}`}
+                                        entry={entry}
                                         start={startOf(entries)}
-                                        open={opened.open}
+                                        open={false}
+                                        words={words}
                                     />
                                 )),
+                                ...callsShown.map(({ call }) => {
+                                    const open = opened.open || callOpens
+                                    return (
+                                        <CallRow
+                                            key={`${call.n}-${opened.round}-${open}`}
+                                            call={call}
+                                            step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
+                                            prompt={transcript.prompt}
+                                            start={startOf(entries)}
+                                            open={open}
+                                            query={callQuery}
+                                        />
+                                    )
+                                }),
                             ]).slice(0, drawn)}
                             {drawn < callRows && <Fold label={moreLabel(callRows - drawn, 'calls')} onShow={more} />}
                         </ol>
@@ -325,26 +362,37 @@ function empty(transcript: Transcript, running: boolean): { short: string; reaso
     }
 }
 
+/** How many lines of an entry hold a search, its row's and what it opens to. */
+function linesIn(hits: { row: number; body: number }): number {
+    return hits.row + hits.body
+}
+
 /**
- * The transcript's search field: a magnifier, the field, how many lines and rows hold the query once there is one,
- * and a clear button. Escape empties it.
+ * The transcript's search field: a magnifier, the field, how many lines and rows (or calls, By call) hold the query
+ * once there is one, and a clear button. Escape empties it; `f` focuses it.
  */
 function Find({
+    ref,
     value,
     onChange,
     lines,
     rows,
+    what,
 }: {
+    ref: Ref<HTMLInputElement>
     value: string
     onChange: (value: string) => void
     lines: number | null
     rows: number
+    what: 'rows' | 'calls'
 }) {
     return (
         <search className="ml-auto w-full @lg:w-72">
             <SearchField
+                ref={ref}
                 size="sm"
                 aria-label="Find lines in the transcript"
+                aria-keyshortcuts="f"
                 placeholder="Find lines"
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
@@ -358,7 +406,7 @@ function Find({
                 end={
                     lines !== null && (
                         <span className="readout shrink-0 text-xs text-muted-foreground" data-testid="transcript-found">
-                            {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? 'row' : 'rows'}
+                            {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? what.slice(0, -1) : what}
                         </span>
                     )
                 }
@@ -653,12 +701,14 @@ function CallRow({
     prompt,
     start,
     open,
+    query,
 }: {
     call: Call
     step: number | null
     prompt: TranscriptPrompt | null
     start: string | null
     open: boolean
+    query: string | null
 }) {
     const end = call.end
     const split = end?.split ?? null
@@ -700,24 +750,31 @@ function CallRow({
                     />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                    <CallBody call={call} prompt={prompt} start={start} split={split} />
+                    <CallBody call={call} prompt={prompt} start={start} split={split} query={query} />
                 </CollapsibleContent>
             </li>
         </Collapsible>
     )
 }
 
+/**
+ * What a model call was sent and what it did, By call. With a search, what it printed has the search's matches
+ * marked, and a tool call whose input or output holds it opened, as in order.
+ */
 function CallBody({
     call,
     prompt,
     start,
     split,
+    query = null,
 }: {
     call: Call
     prompt: TranscriptPrompt | null
     start: string | null
     split: TranscriptTokens | null
+    query?: string | null
 }) {
+    const words = query === null ? NO_WORDS : [query]
     return (
         // In a narrow panel the body takes the row's whole width; in a wider one it starts under the text.
         <RowGrid kind="transcript" className="pb-3" data-testid="transcript-call-body">
@@ -767,8 +824,14 @@ function CallBody({
                     ) : (
                         <ol className="divide-y rounded-sm border">
                             {call.output.map((entry, i) => (
-                                // oxlint-disable-next-line react/no-array-index-key -- a call's entries never reorder
-                                <Entry key={i} entry={entry} start={start} open={false} />
+                                <Entry
+                                    // oxlint-disable-next-line react/no-array-index-key -- they never reorder
+                                    key={i}
+                                    entry={entry}
+                                    start={start}
+                                    open={query !== null && hitsIn(entry, query).body > 0}
+                                    words={words}
+                                />
                             ))}
                         </ol>
                     )}

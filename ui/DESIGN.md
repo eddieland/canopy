@@ -140,6 +140,15 @@ Rules:
   then a small box on `surface` at the page's top left. It moves the focus to the page's `main`, so the next Tab is the
   page's own first stop rather than the rail's search, a dozen nav items, its runs, and its spend. It moves the focus
   by script: `#main` under the base path would be another page's address.
+- **Keys** (`src/lib/keys.ts`, `usePageKey`): one letter each, with no modifier, so the answer loop runs from the
+  keyboard. `j` and `k` choose the next and the previous attention item and focus its row, as the arrows do from a
+  row; `r` puts the focus in the page's reply or note box, opening a folded one first; `f` puts it in a transcript's
+  `Find lines`, in order or By call; `?` opens a dialog listing them all (`KeysDialog`, a Radix `Dialog`), with the
+  search box's `/` and the send key as Settings sets it. A key never fires while the focus is in a field, an editable
+  plan, a dialog, or a menu, where a letter is the element's own, nor with Ctrl, ⌘, or Alt held, which are the
+  browser's. A key is for what is shown: a form or field hidden, as the attention item behind its list at half width,
+  passes it on. The element a key focuses declares it (`aria-keyshortcuts`). Keys stay few and on the loop's path:
+  the list pages keep Tab and their own links.
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
   `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
@@ -793,7 +802,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   least 48rem wide (a container query, `@3xl`). Under that, on half a monitor, the list and the item take turns, each
   the page's whole width: the list shows until an item is chosen, which opens in its place with `Back to the list`
   (a ghost button with a left chevron) as its first stop, where the focus goes, since the row went with the list; back
-  on the list, its row is chosen and focused. An item the URL names opens so too. A reply that answers its item
+  on the list, its row is chosen and focused. An item the URL names opens so too. `j` and `k` (Keys) choose the next
+  and the previous item: with the list showing, its row is focused and the item stays shut; with an item open in
+  the list's place, the next opens there, the focus on its way back. `r` with the list showing opens the chosen item
+  with the focus in its reply. A reply that answers its item
   (`awaiting_reply`, `untrusted_review`) moves on: the next item that waits on the operator's answer and is not
   answered yet, after it in the list and then from the top (`nextWaiting`), is chosen and its row focused, the list in
   view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
@@ -923,7 +935,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   or off; a model call is numbers alone and is never kept. Escape or the clear button empties it, and a search nothing
   matches says so in place of the rows. A By call `Toggle` in the header, as Pretty is, groups the rows by the model
   call they came from (`byCall` in `src/lib/transcript.ts`), once the counts name two model calls (one call grouped
-  is the rows in order again), hiding the search, which is the rows' in order: each call a
+  is the rows in order again). The search stays: By call it keeps the calls with a line of their output that holds it,
+  each opened to it, its matches marked and a tool call that holds it opened as in order, and counts lines and calls;
+  what a call was sent is its predecessor's output, so it is not searched twice. Each call a
   `Collapsible` row, its number, what it did (its first text, then its tools by name, `read ×2`), an `unfinished` chip
   when the session ended first, its reason as above, its tokens `in · out`, and its cost. It opens to an input and an
   output section, each a `panel-label` with its tokens: the first call's input is the prompt canopy kept, in a block,
@@ -1182,8 +1196,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
   (below), an option that is on or off a `Checkbox` (or, for the lightswitch rave alone, a `Switch`), a choice of a
-  few options a `ToggleGroup`, and a row of an editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one
-  tab stop with the arrow keys between them.
+  few options a `ToggleGroup`, a row of an editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one
+  tab stop with the arrow keys between them, and a window over the page that holds no work a `Dialog`, centred as a
+  question before losing work is, with a ghost close button in its corner (the list of keys).
   Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
   component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
   and rich text's `show N more lines` shows more of text already on screen rather than opening a part, so it is a

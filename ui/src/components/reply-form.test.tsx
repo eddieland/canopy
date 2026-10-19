@@ -179,4 +179,29 @@ describe('ReplyForm', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
         expect((await screen.findByRole('alert')).textContent).toBe('canopy did not answer: is canopy loop running?')
     })
+
+    it('takes the focus on r from anywhere on the page, opening a folded form first', () => {
+        renderForm(TICKET)
+        fireEvent.keyDown(document.body, { key: 'r' })
+        expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Reply' }))
+        expect(screen.getByRole('textbox', { name: 'Reply' }).getAttribute('aria-keyshortcuts')).toBe('r')
+        cleanup()
+
+        // A public ticket with nothing waiting folds its form: the key opens it, and the box takes the focus.
+        renderForm({ ...TICKET, isPublic: true })
+        expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull()
+        fireEvent.keyDown(document.body, { key: 'r' })
+        expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Reply' }))
+    })
+
+    it('leaves r to a field being typed in, and to a capital', () => {
+        renderForm(TICKET)
+        const other = document.createElement('input')
+        document.body.append(other)
+        other.focus()
+        fireEvent.keyDown(other, { key: 'r' })
+        fireEvent.keyDown(document.body, { key: 'R', shiftKey: true })
+        expect(document.activeElement).toBe(other)
+        other.remove()
+    })
 })
