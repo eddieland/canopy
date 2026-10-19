@@ -6,10 +6,10 @@ approval for a plan nobody needed. A smaller, cheaper agent should be able to ju
 goes ahead unplanned. An option, to save tokens and the operator's time on obvious work. Sketch only; the design comes
 first, in §25.
 
-- **The setting.** `policy.plan_triage`, `"off"` (default) or `"on"`, and `policy.trivial`, plain language for the
-  triage agent saying what counts as trivial, as `review.low_impact` does for the reviewer (§21): without it nothing is
-  trivial. Both private: unlike `policy.plan`, which a shared file may only tighten, triage loosens the operator's
-  plan gate, so only the operator turns it on (T7). `"on"` without `policy.trivial` is a config error.
+- **The setting.** `policy.plan_triage`, `"off"` (default) or `"on"`, and `policy.trivial`, optional plain language
+  for the triage agent saying what counts as trivial, in place of its prompt's own measure (2026-10-19). Both private:
+  unlike `policy.plan`, which a shared file may only tighten, triage loosens the operator's plan gate, so only the
+  operator turns it on (T7).
   `runtime.plan_triage_cmd` names the model, a cheaper one than `plan_cmd`'s recommended, with a short timeout of its
   own, `runtime.plan_triage_timeout_minutes` (10).
 - **When it runs.** Only for a plan the policy asks for: a ticket whose own setting says `plan` (`canopy plan KEY`, or
