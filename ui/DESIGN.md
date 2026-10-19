@@ -172,7 +172,7 @@ Rules:
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
 - **Wide screens use the width** from `2xl`: the attention list widens, and a detail page puts its thread or main
-  content (below) beside the rest, a ticket's conversation beside its work, runs, and decisions, a chore's open
+  content (below) beside the rest, a ticket's conversation beside its work, runs, decisions, and memory, a chore's open
   findings and runs beside its schedule, notes, and spend. The source keeps the narrow order, which is the reading
   order; the grid only places that content in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose
   last is `1fr`, so a long thread or list leaves no gaps between the panels beside it. Content of two panels is one
@@ -231,14 +231,17 @@ Rules:
   `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
   opening the memory page, which is in no section and so reached from there. A tier's **band** heads its panel there and
   on a ticket's page: a chip naming the tier and its mode (the running tone at `use`, plain while recording) and the
-  server's sentence on what reads it. What a worker wrote is `MemoryText`: plain text, never `LinkedText`, since a link
-  in a note would be a worker's link read as canopy's, with each character that hides text named (`<U+200B>`) on a
-  `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled `would be served at use`
-  while recording. A run's page has it folded (`FoldPanel`): its header counts what the run wrote and read,
-  `wrote 2 · read none`, each tier's mode for the run on hover and to a screen reader, and `Show memory` opens the
-  rows; it reads `none, recording only` for a run that read nothing because its tier was recording. The memory page
-  leads with what waits on the operator: a Proposals panel, counted in `status-blocked` while one waits as the nav
-  counts them, and saying that none reaches a run until promoted;
+  server's sentence on what reads it. A ticket's page reads its notes far less than it decides, so its Memory panel,
+  last in the left column under its decisions, is folded on each visit: its count, the band, and `Show 3 notes`, which
+  opens the rows and, folded again at their foot, the digest (`Show what its next run is served`, `MemoryDigestFold`);
+  with no notes it is its header alone, counting `0`, as an empty list's is. What a worker wrote is `MemoryText`:
+  plain text, never `LinkedText`, since a link in a note would be a worker's link read as canopy's, with each
+  character that hides text named (`<U+200B>`) on a `status-failed` tint, so it is seen. A digest is the prompt's own
+  text in monospace, labelled `would be served at use` while recording. A run's page has it folded (`FoldPanel`): its
+  header counts what the run wrote and read, `wrote 2 · read none`, each tier's mode for the run on hover and to a
+  screen reader, and `Show memory` opens the rows; it reads `none, recording only` for a run that read nothing because
+  its tier was recording. The memory page leads with what waits on the operator: a Proposals panel, counted in
+  `status-blocked` while one waits as the nav counts them, and saying that none reaches a run until promoted;
   then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
   notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. From 120rem,
   the tickets sit beside the queue in 34rem, where their opened notes' columns fit and the queue still keeps a
@@ -360,7 +363,8 @@ Rules:
 - **One home per fact.** What a page says, it says once. Its subject's own name is its title, so the lists under it
   leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
   decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not
-  a field too; whether a ticket is private is its title's chip, not a notice under its actions. A run's, a tick's, and
+  a field too; a ticket's phase is its Work panel's field, not its description too; whether a ticket is private is
+  its title's chip, not a notice under its actions. A run's, a tick's, and
   a chore run's pages put each fact in the same home: the state, a run's kind, and its ticket in the description, so
   the identity panel's header is its name alone and its fields leave out the ticket; a chore run's chore in the trail,
   never a field; the session in the transcript's header, never a field; and the paths in the identity panel, but a
@@ -380,10 +384,10 @@ Rules:
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
-  lists: runs, decisions, spend. So in a narrow window a ticket's reply is reached before its runs and
-  decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
-  what its reason asks for first (below, "The attention detail"), then its conversation, the reply, and the ticket's
-  actions. An action over a whole list
+  lists: runs, decisions, spend, and a ticket's memory last, the least read. So in a narrow window a ticket's reply is
+  reached before its runs and decisions, and the attention detail, the other place a ticket is answered, reads in the
+  same order: the item, then what its reason asks for first (below, "The attention detail"), then its conversation,
+  the reply, and the ticket's actions. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
@@ -559,8 +563,8 @@ side.
   panel, headed by its noun, its `OrderToggle` from two rows, and its count. With no rows it is its header alone,
   counting `0`, with no `Empty` under it and no hairline under the header: the count already says it, and an empty
   list should not take a panel's worth of the page. A list the page's subject can never have is left out, not
-  counted: a PR canopy only reviews has no ticket, so no runs. A PR's page is built from it; the other detail pages
-  keep their `Empty` rows until they move to it, one rule for every page rather than one per page.
+  counted: a PR canopy only reviews has no ticket, so no runs. A PR's and a ticket's pages are built from it; the
+  other detail pages keep their `Empty` rows until they move to it, one rule for every page rather than one per page.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
