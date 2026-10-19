@@ -4,7 +4,7 @@ import shlex
 
 import pytest
 
-from canopy.runtime import invocation
+from canopy.runtime.opencode import invocation
 
 
 def test_the_default_template_points_the_runtime_at_the_definitions_and_asks_for_events() -> None:

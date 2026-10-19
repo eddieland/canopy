@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.runtime import events, transcript
-from canopy.runtime.transcript import Error, Step, Text, Tokens, ToolCall
+from canopy.runtime import entries, transcript
+from canopy.runtime.entries import Error, Step, Text, Tokens, ToolCall
 
 SESSION = "ses_abc123"
 T = 1_791_460_800_000  # 2026-10-08 12:00 UTC, in milliseconds
@@ -141,7 +141,7 @@ def test_an_event_that_does_not_validate_is_counted_and_left_out(tmp_path: Path)
 
 
 def test_text_is_shown_without_control_characters_and_cut(tmp_path: Path) -> None:
-    long = "x" * (transcript.MAX_TEXT + 10)
+    long = "x" * (entries.MAX_TEXT + 10)
     path = log(
         tmp_path,
         event("text", {"type": "text", "text": "a\x1b[31mred\x07\r\nline"}),
@@ -152,7 +152,7 @@ def test_text_is_shown_without_control_characters_and_cut(tmp_path: Path) -> Non
     first, second = found.entries
     assert first == Text(AT, "a [31mred \nline")
     assert isinstance(second, ToolCall)
-    assert (len(second.output), second.cut, second.title) == (transcript.MAX_TEXT, True, "two lines")
+    assert (len(second.output), second.cut, second.title) == (entries.MAX_TEXT, True, "two lines")
     assert found.truncated
 
 
@@ -245,22 +245,3 @@ def test_a_missing_prompt_a_symlink_and_a_directory_are_not_read(tmp_path: Path)
     (tmp_path / "dir.prompt").mkdir()
     for name in ("missing.prompt", "link.prompt", "dir.prompt"):
         assert transcript.prompt(tmp_path / name) is None
-
-
-def test_what_a_tool_call_did_is_its_command_else_its_title_on_one_line() -> None:
-    def did(line: str) -> tuple[str, str] | None:
-        found = events.parse_event(line)
-        assert found is not None
-        return transcript.did(found)
-
-    assert did(tool("bash", BASH)) == ("bash", "uv run pytest -q")  # not what the agent said it was for
-    read: dict[str, object] = {
-        "status": "completed",
-        "input": {"filePath": "/w/a.py"},
-        "output": "",
-        "title": "a.py\nb",
-    }
-    assert did(tool("read", read)) == ("read", "a.py b")
-    assert did(tool("todowrite", {"status": "error", "input": {}, "error": "no"})) == ("todowrite", "")
-    assert did(tool("bash", {"status": "running"})) is None  # printed only once it ends
-    assert did(event("text", {"type": "text", "text": "hi"})) is None

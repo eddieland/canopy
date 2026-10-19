@@ -168,8 +168,8 @@ canopy (harness, Python)
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,
                conversations, pools
-  runtime/     all canopy knows of the agent runtime (§13, D009): its events, transcripts, definitions' format, and
-               config files; nothing about tickets
+  runtime/     all canopy knows of the agent runtime (§13, D009): a surface that names no runtime, and behind it,
+               bound in one module, OpenCode's events, definitions' format, and config files; nothing about tickets
   infra/       plumbing that knows nothing about tickets or agents; procs.py is the only module that runs subprocesses
 ```
 

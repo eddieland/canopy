@@ -20,7 +20,7 @@ from canopy.core import conversation, db, definitions, outbox, progress
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.runtime import events, project_config
+from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -113,12 +113,12 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, l
         SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
     """
     cwd = _cwd(ctx, name, chore)
-    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
-    # reads project config from the directories above it too.
+    # The shipped `canopy-chore` is merged with whatever runtime config its working directory has (D044), and the
+    # runtime reads project config from the directories above it too.
     here = cwd.resolve()
-    shadowing = [found for d in (here, *here.parents) for found in project_config.shadowing(d)]
-    if shadowing:
-        raise SetupError(project_config.shadowing_message(shadowing))
+    refused = project_config.refusal((here, *here.parents))
+    if refused is not None:
+        raise SetupError(refused)
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
@@ -176,7 +176,7 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
-    output = events.read(done.stdout)
+    output = stdout.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn, "chore_runs", run_id, output.session_id, output.usage, digest=digest, tools=output.tools

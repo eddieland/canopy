@@ -141,8 +141,10 @@ an exposure stated in TRUST_MODEL T7's residual.
 
 OpenCode. The harness depends on one capability: run a named agent non-interactively in a given cwd with a prompt and
 read its stdout. MCP connectivity, OAuth, and tool permissions are the runtime's job. The runtime is swappable by
-editing the command templates (§12) and the `runtime` package (§5), which alone knows OpenCode: its events, the format
-of canopy's definitions, and the config files the shadowing check reads (D009). No interface: one runtime at a time.
+editing the command templates (§12) and the `runtime` package (§5). Its surface, which the rest of canopy calls, names
+no runtime, and holds what any runtime's output is bounded by; its implementation alone knows OpenCode: its events, the
+format of canopy's definitions, and the config files the shadowing check reads (D009). A new runtime is a new
+implementation bound in its place. No interface: one runtime at a time.
 
 Agent definitions ship in `agents/`:
 
