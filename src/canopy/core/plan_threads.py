@@ -17,6 +17,7 @@ from canopy.core.conversation import Refused
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
 
 # A comment or a reply has a reply's bound (DESIGN §22), as the UI's `MAX_COMMENT` does.
 MAX_BODY = conversation.MAX_OPERATOR
@@ -30,7 +31,7 @@ class Thread:
     """A comment on a passage of the ticket's plan, with its replies, oldest first."""
 
     thread: records.PlanThread
-    replies: list[records.PlanReply]
+    replies: Sequence[records.PlanReply]
 
 
 def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
@@ -75,7 +76,7 @@ def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: 
             "RETURNING *",
             (key, quote, prefix, suffix, text, db.now()),
         )
-    return Thread(thread, [])
+    return Thread(thread, ())
 
 
 def reply(conn: sqlite3.Connection, key: str, thread_id: int, body: str) -> records.PlanReply:

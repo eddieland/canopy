@@ -358,13 +358,13 @@ class Ticked:
     #: The tick's row, closed.
     tick: records.Tick
     #: Its decisions, in the order it recorded them.
-    decisions: list[records.Decision]
+    decisions: Sequence[records.Decision]
     #: The runs it started, each waited for until it ended.
-    runs: list[Ran]
+    runs: Sequence[Ran]
     #: What `canopy tick` printed: the line that says how the tick ended, and what went wrong if it failed.
     printed: Printed
     #: The runs it started and left at work, with `hold=True`.
-    working: list[Working] = field(default_factory=list)
+    working: Sequence[Working] = ()
 
     @property
     def actions(self) -> list[str]:
@@ -381,7 +381,7 @@ class Ticked:
         return "\n".join(lines)
 
 
-@dataclass(frozen=True)
+@dataclass
 class Scenario:
     """A workspace of one repository, `repo`, where a test plays the overseer, the workers, and the operator in turn."""
 

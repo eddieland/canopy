@@ -24,8 +24,8 @@ import dataclasses
 import json
 import os
 import stat
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -187,7 +187,7 @@ type Entry = Text | ToolCall | Step | Error
 class Transcript:
     """What a log holds of one session. `truncated` when a bound cut anything; `unreadable` events did not validate."""
 
-    entries: list[Entry] = field(default_factory=list[Entry])
+    entries: Sequence[Entry] = ()
     truncated: bool = False
     unreadable: int = 0
 

@@ -25,7 +25,7 @@ from canopy.reviews import start as review_start
 from canopy.runs import dispatch
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from datetime import datetime
 
     from canopy.core.config import Retention
@@ -68,9 +68,9 @@ class Report:
     """What `canopy gc --dry-run` reports: each kind, the journal's size in bytes, and what could not be read."""
 
     at: str
-    kinds: list[Kind]
+    kinds: Sequence[Kind]
     journal_size: int
-    notes: list[str]
+    notes: Sequence[str]
 
 
 def measure(ctx: Context, now: datetime) -> Report:

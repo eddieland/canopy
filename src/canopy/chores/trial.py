@@ -24,6 +24,8 @@ from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
@@ -54,7 +56,7 @@ class Prepared:
     body: str
     context: str | None
     cwd: Path
-    argv: list[str]
+    argv: Sequence[str]
 
 
 def prepare(ctx: Context, name: str, context: str | None) -> Prepared:

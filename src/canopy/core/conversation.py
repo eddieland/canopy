@@ -528,7 +528,7 @@ class Forgot:
     """What `forget` cleared: the ticket's branch and its units' PRs, as the journal had them."""
 
     branch: str | None
-    prs: list[str]
+    prs: Sequence[str]
 
 
 def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: Path) -> Forgot:

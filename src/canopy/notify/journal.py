@@ -8,7 +8,7 @@ from __future__ import annotations
 import operator
 import sqlite3
 from collections.abc import Collection, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from canopy.core import db
@@ -102,12 +102,12 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
 class Diff:
     """What changed for one sink since its last delivery: new items, and items it was told of that are gone."""
 
-    added: list[Item]
-    resolved: list[tuple[str, str]]  # (subject, reason)
-    resolved_fingerprints: list[str]
-    resolved_items: list[tuple[str | None, str, str | None]]  # (ticket key, reason, repo)
+    added: Sequence[Item]
+    resolved: Sequence[tuple[str, str]]  # (subject, reason)
+    resolved_fingerprints: Sequence[str]
+    resolved_items: Sequence[tuple[str | None, str, str | None]]  # (ticket key, reason, repo)
     # Whether each resolved item left because the operator dismissed it rather than because its cause is gone.
-    resolved_dismissed: list[bool] = field(default_factory=list[bool])
+    resolved_dismissed: Sequence[bool] = ()
 
     def __bool__(self) -> bool:
         """Whether anything changed.

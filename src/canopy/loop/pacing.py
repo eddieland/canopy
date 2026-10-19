@@ -22,6 +22,7 @@ from canopy.loop import attention
 from canopy.runs import policy
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.context import Context
@@ -59,8 +60,8 @@ class Pace:
 class Before:
     """What the loop read before a tick, to tell afterwards what the tick changed (`churn`)."""
 
-    attention: list[attention.Item]
-    phases: dict[tuple[str, str | None], str | None]
+    attention: Sequence[attention.Item]
+    phases: Mapping[tuple[str, str | None], str | None]
 
 
 def before(ctx: Context) -> Before:
