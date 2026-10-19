@@ -58,4 +58,5 @@ ticket's reviewer to `skeptic` and its worker to `minimalist` from its page, its
 both runs record them; the next ticket, with no override, runs `canopy`; and a persona file removed after it was set
 refuses that ticket's next run with an attention item.
 
-Status: not started. Designed 2026-10-19 (DESIGN §31).
+Status: in progress. Stage 0's list is in its PR (2026-10-19), for the operator to read before Stage 1 starts.
+Designed 2026-10-19 (DESIGN §31).
