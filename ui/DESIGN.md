@@ -249,10 +249,12 @@ Rules:
   since forgetting a note needs no lesson; a tier that is off shows no panel on the memory page, so with lessons off it
   holds Ticket notes alone: under a proposal an outline `Promote as written`, which saves at once, since most proposals
   need no edit, and a muted ghost `Edit and promote`, which opens the form (a private ticket's run's proposal, whose
-  words may hold what the operator kept off the tracker, has `Promote` in place of both, which opens the form and its
-  warning before the save, and on an attention item, which has no form, a muted line saying to promote it from the
-  memory page), then, apart from both at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a
-  ticket's note that keeps its text, on the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
+  words may hold what the operator kept off the tracker, and one whose key a lesson in force has, which it would
+  replace, have `Promote` in place of both, which opens the form and what it says before the save, the latter with a
+  muted `replaces memory:N` beside it, and on an attention item, which has no form, a muted line saying to promote it
+  from the memory page; until the lessons in force are read, `Promote as written` is disabled), then, apart from both
+  at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on
+  the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
   is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing
   keeps its line's room but shows it only while its row is hovered or holds the focus, as a row's copy button does, and
   always on a touch screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
@@ -281,8 +283,8 @@ Rules:
   refusal stays under the row, but one saying the memory changed under it (`not_pending`, `forgotten`, `unknown`,
   decided from the attention list or the CLI), which reads memory again, so its row may leave, and is said under the
   list too; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal` item
-  lists its proposals with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due
-  with `Renew` alone.
+  lists its proposals with `Promote as written`, which saves at once, but for those two, and `Reject`; a
+  `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never

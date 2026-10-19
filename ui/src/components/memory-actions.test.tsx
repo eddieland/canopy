@@ -41,12 +41,14 @@ const LESSON: MemoryEntry = {
     review_at: '2027-01-06T12:00:00Z',
     promoted_from: 7,
 }
+// A lesson under another key than ENTRY's, so ENTRY replaces none unless a test puts LESSON in force.
+const OTHER_LESSON: MemoryEntry = { ...LESSON, id: 3, key: 'web-build' }
 const NOTE: MemoryEntry = { ...ENTRY, id: 2, scope: 'ticket', repo: null, key: 'flaky-checkout', status: 'invalid' }
 const OVERVIEW: MemoryOverview = {
     state: null,
     tickets: [],
     proposals: [],
-    lessons: [LESSON],
+    lessons: [OTHER_LESSON],
     lessons_digest: null,
     repos: ['api', 'mobile', 'web'],
     past_proposals: [],
@@ -67,12 +69,13 @@ function promoted(fields: Partial<MemoryPromoted> = {}): MemoryPromoted {
 // Every write the buttons send, and what the server stand-in answers it; a read of the memory gets OVERVIEW.
 let sent: { path: string; body: unknown }[] = []
 let answer: Response | undefined
+let lessons: MemoryEntry[] = [OTHER_LESSON]
 
 const server: Middleware = {
     async onRequest({ request }) {
         const path = new URL(request.url).pathname
         if (request.method === 'GET') {
-            return Response.json(OVERVIEW)
+            return Response.json({ ...OVERVIEW, lessons })
         }
         const text = await request.text()
         sent.push({ path, body: text ? (JSON.parse(text) as unknown) : undefined })
@@ -83,6 +86,7 @@ const server: Middleware = {
 beforeEach(() => {
     sent = []
     answer = undefined
+    lessons = [OTHER_LESSON]
     api.use(server)
 })
 
@@ -95,8 +99,17 @@ function renderIn(ui: React.JSX.Element) {
     return render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>)
 }
 
+/** Clicks Promote as written once it is enabled, which it is when the lessons in force are read. */
+async function promoteAsWritten() {
+    const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Promote as written' })
+    await vi.waitFor(() => {
+        expect(button.disabled).toBe(false)
+    })
+    fireEvent.click(button)
+}
+
 describe('ProposalActions', () => {
-    it("opens the promote form on the proposal's words, naming the lesson it replaces and where", async () => {
+    it("opens the promote form on the proposal's words, saying it replaces no lesson, and where", async () => {
         renderIn(<ProposalActions proposal={ENTRY} onSaid={vi.fn<(said: string) => void>()} />)
         fireEvent.click(screen.getByRole('button', { name: 'Edit and promote' }))
         const form = screen.getByRole('form', { name: 'Promote memory:5' })
@@ -105,7 +118,7 @@ describe('ProposalActions', () => {
         ).toBe(ENTRY.text)
         await vi.waitFor(() => {
             expect(within(form).getByTestId('promote-replaces').textContent).toBe(
-                'It replaces memory:8, the lesson in force under web-tests: Run the tests once, with --run.',
+                'No lesson is in force under web-tests: it replaces none.',
             )
         })
         // A proposal for one repository keeps it unless another is named: no `every repository` to pick.
@@ -184,7 +197,7 @@ describe('ProposalActions', () => {
         )
         const onSaid = vi.fn<(said: string) => void>()
         renderIn(<ProposalActions proposal={ENTRY} edit={false} onSaid={onSaid} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Promote as written' }))
+        await promoteAsWritten()
         expect((await screen.findByRole('alert')).textContent).toBe(
             'refused (not_pending): proposal 5 is invalid: rejected',
         )
@@ -206,12 +219,39 @@ describe('ProposalActions as written', () => {
             'Reject',
             'Forget',
         ])
-        fireEvent.click(screen.getByRole('button', { name: 'Promote as written' }))
+        await promoteAsWritten()
         await vi.waitFor(() => {
             expect(onSaid).toHaveBeenCalledOnce()
         })
         expect(sent).toEqual([{ path: '/api/memory/5/promote', body: { text: null, repo: null } }])
         expect(screen.queryByRole('form')).toBeNull()
+    })
+})
+
+describe('ProposalActions replacing', () => {
+    it('never promotes over a lesson in force under its key in one click: Promote opens the form', async () => {
+        lessons = [LESSON]
+        renderIn(<ProposalActions proposal={ENTRY} onSaid={vi.fn<(said: string) => void>()} />)
+        expect((await screen.findByTestId('proposal-replaces')).textContent).toBe('replaces memory:8')
+        expect(screen.queryByRole('button', { name: 'Promote as written' })).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Edit and promote' })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+        const form = screen.getByRole('form', { name: 'Promote memory:5' })
+        expect(within(form).getByTestId('promote-replaces').textContent).toBe(
+            'It replaces memory:8, the lesson in force under web-tests: Run the tests once, with --run.',
+        )
+        expect(sent).toEqual([])
+    })
+
+    it('sends one that would replace a lesson to the memory page from an attention item, with no form', async () => {
+        lessons = [LESSON]
+        renderIn(
+            <ProposalActions proposal={ENTRY} edit={false} forget={false} onSaid={vi.fn<(said: string) => void>()} />,
+        )
+        expect((await screen.findByTestId('promote-replaces-elsewhere')).textContent).toMatch(
+            /^replaces memory:8: promote it from the memory page/u,
+        )
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Reject'])
     })
 })
 

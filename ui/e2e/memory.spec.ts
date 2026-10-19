@@ -54,6 +54,9 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(
         proposals.getByTestId('memory-6').getByTitle('its run worked a private ticket', { exact: false }),
     ).toHaveText('private')
+    // It is under lesson 8's key too, so it says what it would replace, and only the form promotes it.
+    await expect(proposals.getByTestId('memory-6').getByTestId('proposal-replaces')).toHaveText('replaces memory:8')
+    await expect(proposals.getByTestId('memory-6').getByRole('button', { name: 'Promote as written' })).toHaveCount(0)
 
     const lessons = page.getByTestId('memory-lessons')
     await expect(lessons.getByTestId('memory-band')).toHaveText(
@@ -124,8 +127,9 @@ test('the memory page narrows every panel by words, a repository, and a lesson�
 
     await page.getByRole('searchbox', { name: 'Filter memory by key, text, ticket, or repository' }).fill('billing')
     await expect(page).toHaveURL(/[?&]q=billing/u)
-    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('0 of 2')
-    await expect(proposals.getByText('no proposals with “billing”')).toBeVisible()
+    // Proposal 6 is under lesson 8's key, `billing-client`, so it holds the word too.
+    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('1 of 2')
+    await expect(proposals.getByTestId('memory-6')).toBeVisible()
     await expect(lessons.getByTestId('memory-8')).toBeVisible()
     await expect(
         notes.getByText('no note says “billing”, and no ticket with notes has it in its key or title'),

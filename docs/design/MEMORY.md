@@ -218,8 +218,10 @@ The web UI searches as the operator's shell does (`GET /api/memory/search`, the 
 its text), and takes `promote`, `reject`, `renew`, and `forget` (M52) through the same functions, so with the same
 guards and refusals, logged with channel `web` (§22). Promote takes the CLI's options, the lesson's words and its
 repository, and before the save names the lesson in force under the key it would replace, and warns while the text is
-still a private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the
-workspace's repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a
+still a private ticket's run's own words, as the CLI warns after. So a proposal whose key a lesson in force has, or a
+private ticket's run's, is never promoted in one click: its promote opens that form. The form reads the lessons in
+force and the workspace's repositories from the memory overview when it opens, rather than every ticket's memory
+carrying them: a
 ticket's page reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's
 ref typed out (`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge`
 stays the CLI's: a verb over many memories at once is not a click. The verbs show where the memories do: Promote,

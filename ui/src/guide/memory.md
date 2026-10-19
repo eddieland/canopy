@@ -141,7 +141,9 @@ lessons off, the page shows only Ticket notes, and each note still has Forget.
 - **Promote as written**, the first button, promotes the proposal at once, in its own words and for its own repository,
   as `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form. A proposal from a
   private ticket's run never promotes in one click: its one promote button is **Promote**, in place of both, which opens
-  the form, so you read the warning before you save, not after.
+  the form, so you read the warning before you save, not after. Nor does one whose key a lesson in force already has:
+  it says `replaces memory:N`, and its **Promote** opens the form with that lesson beside yours. Retiring a lesson your
+  runs rely on deserves more than one click, however confident the proposal sounds.
 - It promotes a ticket's note too, done or invalidated, as long as the note still has its text: what a ticket taught
   is often clearest once its PR has merged. The note stays its ticket's.
 - **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.
@@ -167,7 +169,8 @@ Three attention items keep you honest, all yours and never the overseer's, and n
 
 - `memory proposal`, when a ticket is marked done and its runs' proposals are waiting. Its merge has checked the work
   they came from, which makes now a good time to judge them. The item lists them, each with **Promote as written** and
-  **Reject**; to put one in your own words, promote it from the memory page.
+  **Reject**; to put one in your own words, or to promote one that would replace a lesson, or a private ticket's, go to
+  the memory page.
 - `lesson review`, for the lessons due, longest overdue first, each with **Renew**. Only while lessons are in use:
   switching to use brings every overdue lesson up at once, in one item, before any of them is served.
 - `lesson wrong`, for the lessons a run reported wrong since you last renewed them, with the way to the memory page,
