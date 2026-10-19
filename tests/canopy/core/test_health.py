@@ -133,6 +133,29 @@ def test_failures_are_the_newest_first_with_a_note_on_one_line(tmp_path: Path, j
     assert notes[4] == "overseer exited 1: no done line"
 
 
+def test_triage_and_plan_runs_are_kinds_of_their_own(tmp_path: Path, journals: Journals) -> None:
+    """A triage before a plan and a plan run (DESIGN §25) are rows of `runs`, but neither counts as a worker."""
+    conn = journals.open(tmp_path / "canopy.db")
+    t = tick(conn, earlier(NOW, 1), "ok")
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-1', 'ws', ?, ?)",
+        (earlier(NOW, 1),) * 2,
+    )
+    for kind, status, cost in (("implement", "done", 2.0), ("needs-plan", "done", 0.05), ("plan", "timeout", 0.5)):
+        conn.execute(
+            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path, cost_usd) "
+            "VALUES (?, 'PROJ-1', ?, '', ?, ?, 'l', ?)",
+            (t, kind, earlier(NOW, 1), status, cost),
+        )
+    found = health.report(conn, NOW, 7)
+    assert [(o.kind, o.what, o.status, o.failed, o.cost_usd) for o in found.outcomes if o.kind != "overseer"] == [
+        ("workers", "implement", "done", False, 2.0),
+        ("triage", "needs-plan", "done", False, 0.05),
+        ("plans", "plan", "timeout", True, 0.5),
+    ]
+    assert [(f.kind, f.what, f.subject) for f in found.failures] == [("plans", "plan", "PROJ-1")]
+
+
 def test_failures_are_at_most_the_newest_few(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     for n in range(health.FAILURES + 5):
