@@ -156,7 +156,12 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                     )}
                 </Panel>
                 {/* Its session id is the Tick panel's overseer field: said once. */}
-                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} session={false} />
+                <TranscriptPanel
+                    transcript={transcript}
+                    running={tick.status === 'running'}
+                    page="tick"
+                    session={false}
+                />
                 <TickOutputPanel id={tick.id} path={output} running={tick.status === 'running'} />
             </div>
         </>

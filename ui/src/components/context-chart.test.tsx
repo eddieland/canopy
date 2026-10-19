@@ -61,7 +61,7 @@ function chart(
     prompt: TranscriptPrompt | null = PROMPT,
     onShow: (i: number) => void = () => {},
 ) {
-    return render(<ContextChart shape={contextShape(entries, prompt)} onShow={onShow} />)
+    return render(<ContextChart shape={contextShape(entries, prompt)} onShow={onShow} open onOpenChange={() => {}} />)
 }
 
 // Whether some element says `words` whole, however its pieces are split among elements.
@@ -79,11 +79,40 @@ describe('ContextChart', () => {
         expect(container.childElementCount).toBe(0)
     })
 
-    it('has only its line for a session of one call, the call all prompt and overhead', () => {
+    it('has only its line for a session of one call, the call all prompt and overhead on its peak', () => {
         chart([text(1, 'Done.'), step(1, 500)], null)
-        expect(screen.getByText('peak 500 at call 1')).toBeDefined()
+        const peak = screen.getByText('peak 500 at call 1')
+        expect(peak.title).toBe('500 tokens: canopy kept no prompt, so all of it reads as the runtime’s own')
         expect(screen.queryByRole('radio')).toBeNull()
-        expect(says('call 1, 500 sent: canopy kept no prompt, so all of it reads as the runtime’s own')).toBe(true)
+        expect(screen.queryByRole('button', { name: /chart/u })).toBeNull()
+        expect(screen.queryByText(/^call 1/u)).toBeNull()
+    })
+
+    it('has only its line when a second call printed but the runtime counted no tokens for it', () => {
+        const error: TranscriptEntry = { kind: 'error', call: 2, at: null, name: 'ProviderError', message: 'down' }
+        chart([text(1, 'Reading.'), step(1, 500), error])
+        expect(screen.getByText('peak 500 at call 1')).toBeDefined()
+        expect(screen.queryByRole('radiogroup')).toBeNull()
+        expect(screen.queryByRole('button', { name: /chart/u })).toBeNull()
+    })
+
+    it('folds its bars under its line, the largest addition still shown from there', () => {
+        const onShow = vi.fn<(i: number) => void>()
+        const onOpenChange = vi.fn<(open: boolean) => void>()
+        render(
+            <ContextChart
+                shape={contextShape(SESSION, PROMPT)}
+                onShow={onShow}
+                open={false}
+                onOpenChange={onOpenChange}
+            />,
+        )
+        expect(screen.queryByRole('radiogroup')).toBeNull()
+        expect(screen.queryByTestId('context-grew')).toBeNull()
+        fireEvent.click(within(screen.getByTestId('context-largest')).getByRole('button'))
+        expect(onShow).toHaveBeenCalledWith(1)
+        fireEvent.click(screen.getByRole('button', { name: 'Show chart' }))
+        expect(onOpenChange).toHaveBeenCalledWith(true)
     })
 
     it('names each call by what it was sent, and picks the one the largest addition grew', () => {

@@ -37,8 +37,8 @@ The **Transcript** is the run's session, from its log, oldest first:
 
 The tally above it counts the tool calls, how many failed or were refused, and the model calls. **Find lines**
 searches the transcript and opens the calls that match. **By call** groups the events by model call instead, each call
-one row that opens to the same input and output. **All open** opens every call at once, for when you'd rather
-scroll than click.
+one row that opens to the same input and output; a session of one call has nothing to group, so it has no By call.
+**All open** opens every call at once, for when you'd rather scroll than click.
 
 A long session draws its first 100 rows, and a fold at the bottom, **Show 100 of 1,900 more rows**, draws the next
 100 a click. A long worker or overseer session can reach the server's limit of 2,000 entries, some 80,000 elements
@@ -56,14 +56,20 @@ where the errors live.
 
 ## Context
 
-Above the transcript, a bar for each model call shows how much it was sent. Each call carries everything before it, so
-what a run costs grows with the context it piles up, far more than with what it says. The line over the chart names
-the peak and the largest single addition: usually one tool call that returned a whole file, or a whole log, when a
-page of it would have done.
+Under the tally, one line names the session's peak context and its largest single addition: usually one tool call
+that returned a whole file, or a whole log, when a page of it would have done. Click the addition to find it in the
+transcript. Each call carries everything before it, so what a run costs grows with the context it piles up, far more
+than with what it says.
 
-Click a bar to see what that call added on the one before, largest first, and click an addition to find it in the
-transcript. The first bar splits into canopy's prompt and the runtime's own: the agent's definition, its system
-prompt, and its tools. Figures marked `≈` are estimates, shared out by characters.
+**Show chart** opens a bar for each model call, showing how much it was sent. It stays closed until you open it, since
+you mostly come here to read what the agent did, not to audit its token budget, and each kind of page remembers your
+choice: open it once on a run and every run's page opens with it. Click a bar to see what that call added on the one
+before, largest first, and click an addition to find it in the transcript. The first bar splits into canopy's prompt
+and the runtime's own: the agent's definition, its system prompt, and its tools. Figures marked `≈` are estimates,
+shared out by characters.
+
+A session with only one call the runtime counted tokens for has the line alone. One bar is not a chart; it is a
+number standing on a box. Hover the peak for how much of it was canopy's prompt.
 
 ## Stopping a run
 

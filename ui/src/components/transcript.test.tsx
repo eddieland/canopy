@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Transcript, TranscriptEntry, TranscriptTokens } from '@/api/types'
 import type { TranscriptView } from '@/hooks/use-transcript-view'
+import { setContextChartOpen } from '@/lib/context-chart-open'
 import { setListOrder } from '@/lib/list-order'
 import { TRANSCRIPT_BUDGET } from '@/lib/transcript'
 
@@ -11,6 +12,8 @@ import { TranscriptPanel } from './transcript'
 afterEach(() => {
     cleanup()
     setListOrder('transcript', 'oldest')
+    setContextChartOpen('run', false)
+    setContextChartOpen('tick', false)
 })
 
 const AT = '2026-10-08T12:00:00Z'
@@ -154,6 +157,11 @@ function rows() {
     return within(screen.getByTestId('transcript-entries'))
 }
 
+// The transcript's context chart.
+function chart() {
+    return within(screen.getByRole('region', { name: 'Context by model call' }))
+}
+
 // Whether some element says `text` whole, however its pieces are split among elements.
 function says(text: string): boolean {
     return screen.queryAllByText((_, element) => element?.textContent === text).length > 0
@@ -167,7 +175,7 @@ function before(a: string, b: string): boolean {
 
 describe('TranscriptPanel', () => {
     it('shows a skeleton, with no search and no empty words, until the transcript arrives', () => {
-        render(<TranscriptPanel transcript={undefined} running={false} />)
+        render(<TranscriptPanel transcript={undefined} running={false} page="run" />)
         expect(screen.getByTestId('panel-skeleton')).toBeDefined()
         expect(screen.queryByRole('searchbox')).toBeNull()
     })
@@ -189,13 +197,15 @@ describe('TranscriptPanel', () => {
         ['an ended session whose log is gone', 'no_log', false, 'its log is gone, or is not a file canopy reads'],
         ['an ended session with no events', 'read', false, 'the log holds none of the session’s events'],
     ] as const)('says why it is empty for %s', (_, status, running, words) => {
-        render(<TranscriptPanel transcript={transcript({ status, entries: [] })} running={running} />)
+        render(<TranscriptPanel transcript={transcript({ status, entries: [] })} running={running} page="run" />)
         expect(screen.getByText(words)).toBeDefined()
         expect(screen.queryByRole('searchbox')).toBeNull()
     })
 
     it('counts tool calls, failed and refused ones, model calls, and runtime errors, and says what is missing', () => {
-        render(<TranscriptPanel transcript={transcript({ truncated: true, unreadable: 3 })} running={false} />)
+        render(
+            <TranscriptPanel transcript={transcript({ truncated: true, unreadable: 3 })} running={false} page="run" />,
+        )
         expect(says('3 tool calls, 1 failed, 1 refused')).toBe(true)
         expect(says('2 model calls')).toBe(true)
         expect(screen.getByText('1 runtime error')).toBeDefined()
@@ -204,21 +214,21 @@ describe('TranscriptPanel', () => {
     })
 
     it('says how each tool call ended on its row: its error, or the guard that refused a canopy command', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         // A shell call's row says the command it ran, not the title the agent gave it.
         expect(call('npm test -- login').textContent).toContain('ENOENT: no such file or directory')
         expect(within(call('canopy decide')).getByText('refused: capacity')).toBeDefined()
     })
 
     it('says each model call’s tokens in and out as the CLI counts them, and a reason other than tool calls', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(call('1.2k in · 300 out').textContent).not.toContain('tool calls')
         const second = call('1.5k in · 60 out')
         expect(within(second).getByText('length')).toBeDefined()
     })
 
     it('opens a model call in order to what it was sent and what it did, built only once opened', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         const second = call('1.5k in · 60 out')
         expect(second.textContent).toContain('model call 2')
         expect(within(second).queryByRole('region', { name: 'call 2 input' })).toBeNull()
@@ -241,9 +251,9 @@ describe('TranscriptPanel', () => {
     })
 
     it('names the session in its header, but on a page that names it already', () => {
-        const { rerender } = render(<TranscriptPanel transcript={transcript()} running={false} />)
+        const { rerender } = render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(screen.getByText('session ses_abc')).toBeDefined()
-        rerender(<TranscriptPanel transcript={transcript()} running={false} session={false} />)
+        rerender(<TranscriptPanel transcript={transcript()} running={false} page="run" session={false} />)
         expect(screen.queryByText('session ses_abc')).toBeNull()
     })
 
@@ -255,6 +265,7 @@ describe('TranscriptPanel', () => {
                     entries: [{ kind: 'text', call: 1, at: AT, text: html, reasoning: false, cut: false }],
                 })}
                 running={false}
+                page="run"
             />,
         )
         expect(screen.getByText(html)).toBeDefined()
@@ -263,7 +274,7 @@ describe('TranscriptPanel', () => {
     })
 
     it('keeps the rows with a line that holds the search, marks it, counts it, and opens the calls it is in', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         search('LOGIN')
 
         // Two tool calls hold it: the shell call's command, in its row and its input; the read's path, in its row
@@ -278,7 +289,7 @@ describe('TranscriptPanel', () => {
     })
 
     it('says when no line holds the search, and shows every row again once it is cleared or escaped', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         search('zebra')
         expect(screen.getByText('no line holds “zebra”')).toBeDefined()
         expect(screen.getByTestId('transcript-found').textContent).toBe('0 lines, 0 rows')
@@ -295,7 +306,7 @@ describe('TranscriptPanel', () => {
     })
 
     it('opens and closes every call with All open, over what a search opened, until a new search', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(call('npm test -- login').open).toBe(false)
         fireEvent.click(allOpen())
         expect(call('npm test -- login').open).toBe(true)
@@ -315,7 +326,7 @@ describe('TranscriptPanel', () => {
     })
 
     it('flips to newest first and back', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(before('I will read the failing test first.', 'Trying again.')).toBe(true)
         fireEvent.click(screen.getByRole('button', { name: 'oldest first: show newest first' }))
         expect(before('Trying again.', 'I will read the failing test first.')).toBe(true)
@@ -324,7 +335,7 @@ describe('TranscriptPanel', () => {
     })
 
     it('groups the events by model call, each opening to what it was sent and what it did', () => {
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         fireEvent.click(screen.getByRole('button', { name: 'By call' }))
 
         // By call keeps the whole transcript: there is no search.
@@ -353,15 +364,37 @@ describe('TranscriptPanel', () => {
     })
 
     it('says when canopy kept no prompt for the first call', () => {
-        render(<TranscriptPanel transcript={transcript({ prompt: null })} running={false} />)
+        render(<TranscriptPanel transcript={transcript({ prompt: null })} running={false} page="run" />)
         fireEvent.click(screen.getByRole('button', { name: 'By call' }))
         fireEvent.click(screen.getByRole('button', { name: 'All open' }))
         expect(screen.getAllByRole('region', { name: /^call \d input$/u })).toHaveLength(3)
         expect(screen.getByText('canopy kept no prompt for this session')).toBeDefined()
     })
 
+    it('offers By call only with two model calls or more', () => {
+        const one = ENTRIES.filter((e) => e.call === 1)
+        render(<TranscriptPanel transcript={transcript({ entries: one })} running={false} page="run" />)
+        expect(screen.getByText('1 model call')).toBeDefined()
+        expect(screen.queryByRole('button', { name: 'By call' })).toBeNull()
+    })
+
+    it('keeps the context chart closed to its line, opened or not by each kind of page', () => {
+        const { rerender } = render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        expect(chart().queryByRole('radiogroup', { name: 'Model calls' })).toBeNull()
+
+        fireEvent.click(chart().getByRole('button', { name: 'Show chart' }))
+        expect(chart().getByRole('radiogroup', { name: 'Model calls' })).toBeDefined()
+        expect(chart().getByRole('button', { name: 'Hide chart' }).getAttribute('aria-expanded')).toBe('true')
+
+        // A tick's page keeps its own choice; a run's keeps the one made on it.
+        rerender(<TranscriptPanel transcript={transcript()} running={false} page="tick" />)
+        expect(chart().queryByRole('radiogroup')).toBeNull()
+        rerender(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        expect(chart().getByRole('radiogroup')).toBeDefined()
+    })
+
     it('draws a page of a long transcript’s rows, and a fold after them that shows more', () => {
-        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} />)
+        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} page="run" />)
         expect(rows().getByText(`said ${PAGE}`)).toBeDefined()
         expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
 
@@ -374,7 +407,7 @@ describe('TranscriptPanel', () => {
     })
 
     it('searches every entry, drawn or not, and draws what it keeps within the same budget', () => {
-        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} />)
+        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} page="run" />)
         search(`said ${LONG - 1}`)
         expect(rows().getByText(`said ${LONG - 1}`)).toBeDefined()
 
@@ -390,7 +423,7 @@ describe('TranscriptPanel', () => {
 
     it('opens only the rows it draws with All open', () => {
         const entries = Array.from({ length: LONG }, (_, i) => ({ ...(ENTRIES[2] as TranscriptEntry), call: i + 1 }))
-        render(<TranscriptPanel transcript={transcript({ entries })} running={false} />)
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
         fireEvent.click(allOpen())
         const open = screen.getAllByRole('group').filter((group) => group instanceof HTMLDetailsElement && group.open)
         expect(open).toHaveLength(PAGE)
@@ -398,7 +431,7 @@ describe('TranscriptPanel', () => {
 
     it('draws a page of a long session’s calls by call, and a fold after them', () => {
         const entries = said(PAGE + 50).flatMap((entry, i) => [{ ...entry, call: i + 1 }, step(i + 1)])
-        render(<TranscriptPanel transcript={transcript({ entries })} running={false} />)
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
         fireEvent.click(screen.getByRole('button', { name: 'By call' }))
         expect(screen.getByRole('button', { name: new RegExp(`^\\S+ call ${PAGE} `, 'u') })).toBeDefined()
         expect(screen.queryByRole('button', { name: new RegExp(`^\\S+ call ${PAGE + 1} `, 'u') })).toBeNull()
@@ -409,7 +442,9 @@ describe('TranscriptPanel', () => {
     it('draws on through the row a page shows from outside it, before scrolling to it', () => {
         const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
         const view = { ...VIEW, target: { i: LONG - 20, round: 1 } }
-        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} view={view} />)
+        render(
+            <TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} page="run" view={view} />,
+        )
         expect(rows().getByText(`said ${LONG - 19}`)).toBeDefined()
         expect(rows().queryByText(`said ${LONG - 18}`)).toBeNull()
         expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
@@ -419,29 +454,34 @@ describe('TranscriptPanel', () => {
         const entries = said(LONG)
         const view = { ...VIEW, target: { i: LONG - 20, round: 1 } }
         const { rerender } = render(
-            <TranscriptPanel transcript={transcript({ entries })} running={false} view={view} />,
+            <TranscriptPanel transcript={transcript({ entries })} running={false} page="run" view={view} />,
         )
         expect(rows().getByText(`said ${LONG - 19}`)).toBeDefined()
         rerender(
-            <TranscriptPanel transcript={transcript({ entries })} running={false} view={{ ...view, found: 'said' }} />,
+            <TranscriptPanel
+                transcript={transcript({ entries })}
+                running={false}
+                page="run"
+                view={{ ...view, found: 'said' }}
+            />,
         )
         expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
         expect(screen.getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` })).toBeDefined()
         // Cleared, the search starts again at a page too, not at the row shown before it.
-        rerender(<TranscriptPanel transcript={transcript({ entries })} running={false} view={view} />)
+        rerender(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" view={view} />)
         expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
     })
 
     it('shows the row the context chart names in order and unsearched, open and scrolled to', () => {
         const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
-        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         search('rate')
         expect(rows().queryByText('I will read the failing test first.')).toBeNull()
 
-        // The read's output is the most call 1 printed, so it is call 2's largest addition.
-        const chart = screen.getByRole('region', { name: 'Context by model call' })
-        const largest = within(chart).getAllByRole('button', { name: 'read filePath=src/login.ts' })[0]
-        fireEvent.click(largest as HTMLElement)
+        // The read's output is the most call 1 printed, so it is call 2's largest addition, on the chart's line even
+        // while the chart is closed.
+        expect(chart().queryByRole('radiogroup')).toBeNull()
+        fireEvent.click(chart().getByRole('button', { name: 'read filePath=src/login.ts' }))
 
         expect((find() as HTMLInputElement).value).toBe('')
         expect(rows().getByText('I will read the failing test first.')).toBeDefined()
