@@ -10,7 +10,6 @@
 # names none, and dispatch refuses a triage then (`no_read_tools`).
 description: canopy triage. Judges whether one ticket's work needs a plan before it is implemented; reads only.
 mode: primary
-temperature: 0.1
 permission:
   bash: deny
   # Nothing to write: no file is read back from a triage, and the primary clones it reads are the operator's.

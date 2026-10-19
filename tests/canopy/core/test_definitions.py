@@ -38,6 +38,15 @@ def test_no_agent_has_web_tools(name: str) -> None:
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
+@pytest.mark.parametrize("name", [name for name in definitions.agent_names() if name != "canopy-overseer"])
+def test_no_agent_but_the_overseer_sets_a_temperature(name: str) -> None:
+    # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
+    # that sets one. The overseer keeps its own: its decisions are the corpus prompt changes are evaluated on. The
+    # reviewer's is `runtime.review_temperature`, rendered into the snapshot rather than set in its bundled file.
+    frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
+    assert "\ntemperature:" not in frontmatter
+
+
 def test_the_operator_skill_is_not_in_the_snapshot(tmp_path: Path) -> None:
     # It is for the operator's own sessions; an operator's copy of it in $HOME would clash with a second one here.
     snapshot = definitions.ensure(tmp_path)
@@ -354,12 +363,6 @@ def test_the_reviewer_posts_nothing(tool: str) -> None:
 )
 def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
-
-
-def test_the_reviewer_sets_no_temperature() -> None:
-    # The reviewer runs on a model of the operator's choosing, and some refuse a request that sets one (DESIGN §21).
-    frontmatter = (resources.agents_dir() / "canopy-reviewer.md").read_text().split("---")[1]
-    assert "\ntemperature:" not in frontmatter
 
 
 @pytest.mark.parametrize(
