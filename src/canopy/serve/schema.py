@@ -144,6 +144,15 @@ class AttentionItem(_Model):
     """The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found."""
 
 
+class RunsSince(_Model):
+    """What the runs did since a moment: the page's note on returning to a tab left hidden (ui/DESIGN.md)."""
+
+    ended: int
+    """How many runs ended since then, whatever their status."""
+    prs_opened: int
+    """How many PRs a run that ended since then named first: named by none of the runs that ended before."""
+
+
 class RunActivity(_Model):
     """A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8)."""
 

@@ -927,6 +927,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/since": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count what the runs did since a moment
+         * @description How many runs ended since `since`, and how many PRs they opened, over the whole journal.
+         */
+        get: operations["getRunsSince"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search": {
         parameters: {
             query?: never;
@@ -4273,6 +4293,22 @@ export type components = {
             lessons: components["schemas"]["MemoryModeName"];
             /** @description Ticket notes' mode for this run. */
             ticket_notes: components["schemas"]["MemoryModeName"];
+        };
+        /**
+         * RunsSince
+         * @description What the runs did since a moment: the page's note on returning to a tab left hidden (ui/DESIGN.md).
+         */
+        RunsSince: {
+            /**
+             * Ended
+             * @description How many runs ended since then, whatever their status.
+             */
+            ended: number;
+            /**
+             * Prs Opened
+             * @description How many PRs a run that ended since then named first: named by none of the runs that ended before.
+             */
+            prs_opened: number;
         };
         /**
          * @description A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the operator's.
@@ -9192,6 +9228,83 @@ export interface operations {
             };
             /** @description No such run. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getRunsSince: {
+        parameters: {
+            query: {
+                /** @description The moment to count from, as an ISO 8601 time with its offset. */
+                since: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunsSince"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
