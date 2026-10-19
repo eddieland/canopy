@@ -271,16 +271,18 @@ def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
     """Return what the operator sent through canopy on each PR, by GitHub's ids: the comments and the reviews.
 
     A sent reply carries no mark and is by the operator's login, so these ids are how the loop knows it (DESIGN §29).
-    A staged reply's comment counts from the start: the operator may submit it on GitHub before canopy reads it.
+    A staged draft's reply and review count from the start: the operator may submit them on GitHub before canopy reads
+    the PR, and GitHub keeps a pending review's id, and each of its comments', when it is submitted.
 
     Returns:
         Each PR's URL, to its sent `comments` and `reviews`, each list of ids in order.
     """
     found: dict[str, dict[str, list[int]]] = {}
     rows = conn.execute(
-        "SELECT pr_url, sent_comment_id, sent_review_id FROM drafts WHERE status IN (?, ?) AND pr_url IS NOT NULL "
+        "SELECT pr_url, sent_comment_id, CASE WHEN status = ? THEN pending_review_id ELSE sent_review_id END "
+        "AS sent_review_id FROM drafts WHERE status IN (?, ?) AND pr_url IS NOT NULL "
         "ORDER BY pr_url, sent_at IS NULL, sent_at, id",
-        (DraftStatus.SENT, DraftStatus.STAGED),
+        (DraftStatus.STAGED, DraftStatus.SENT, DraftStatus.STAGED),
     )
     for r in rows:
         sent = found.setdefault(str(r["pr_url"]), {"comments": [], "reviews": []})

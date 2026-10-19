@@ -534,8 +534,8 @@ def _post(
     if end is not None and end.get("submitted") is True:
         _posted(conn, group, lines, outcome)
     elif end is not None and end.get("staged") is True:
-        # A staged review a read cannot find by its id is one only the operator can settle.
-        if pending is not None and _int(pending.get("id")) is not None:
+        # A staged review, or a reply in it, that a read cannot find by its id is not one canopy can settle as staged.
+        if pending is not None and _int(pending.get("id")) is not None and _replies_known(group, lines):
             _staged(conn, group, lines, pending, outcome)
         else:
             _unconfirmed(conn, group, pending, outcome)
@@ -672,6 +672,19 @@ def _posted(
             # The pending review an earlier post left was deleted first.
             conn.execute("UPDATE drafts SET pending_review = NULL, pending_review_id = NULL WHERE pr_url = ?", (pr,))
     outcome.posted.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
+
+
+def _replies_known(group: Sequence[records.Draft], lines: Mapping[str, Mapping[str, object]]) -> bool:
+    """Whether the post named each thread's draft's new comment by its id, which a staged draft is known by.
+
+    Returns:
+        True when every reply in `group` has its `comment` line, with an id.
+    """
+    return all(
+        _int(lines.get(f"comment:{d.comment_id}", {}).get("id")) is not None
+        for d in group
+        if d.kind is DraftKind.THREAD
+    )
 
 
 def _staged(

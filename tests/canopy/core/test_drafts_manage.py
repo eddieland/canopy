@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     thread,
 )
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
+from tests.conftest import executable
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -433,8 +434,11 @@ def test_staged_drafts_wait_in_one_pending_review_until_the_operator_submits_it_
     review = first.pending_review_id
     assert review is not None
     assert first.sent_comment_id is not None
-    # The loop knows the replies as the operator's before they submit them.
-    assert drafts.sent_by_pr(conn)[PR]["comments"] == [first.sent_comment_id, second.sent_comment_id]
+    # The loop knows the replies and the review as the operator's before they submit them.
+    assert drafts.sent_by_pr(conn)[PR] == {
+        "comments": [first.sent_comment_id, second.sent_comment_id],
+        "reviews": [review],
+    }
     assert "3 in the review you staged there" in drafted.waiting(conn)[0].detail
     assert "in the review you staged; submit or delete it" in scenario.operator("draft", "list").out
     refused = scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "Other.", code=1)
@@ -515,3 +519,24 @@ def test_a_tickets_draft_or_a_reaction_not_yet_added_is_not_staged(scenario: Sce
     refused = scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 2), code=1)
     assert "stage refused (reaction)" in refused.err
     assert reads(github_state, "post") == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_stage_that_names_no_id_for_a_reply_is_unconfirmed_not_staged(
+    scenario: Scenario, github_state: Path, tmp_path: Path
+) -> None:
+    conn = scenario.conn
+    # A poster that opens the review and says it is staged, but names no comment for the reply.
+    lines = [
+        {"kind": "as", "login": "me"},
+        {"kind": "pending", "review": "PRR_1", "id": 7001},
+        {"kind": "end", "submitted": False, "staged": True},
+    ]
+    printed = "".join(f"print({json.dumps(json.dumps(line))})\n" for line in lines)
+    poster = executable(tmp_path / "poster", f"#!/usr/bin/env python3\nimport sys\nsys.stdin.read()\n{printed}")
+    vcs = {"sources": {"github": {"kind": "vcs", "cmd": "canopy-connect-github", "post_cmd": str(poster)}}}
+    run_id = drafted_run(scenario, github_state, [thread(501)], vcs)
+    scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), code=1)
+    [draft] = all_drafts(conn)
+    assert draft.status is DraftStatus.UNCONFIRMED
+    assert draft.pending_review_id == 7001
