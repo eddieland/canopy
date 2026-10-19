@@ -1369,10 +1369,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head, a
   `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, a `Drafts` list of every
   draft in the order their cards show (a `thread-draft` row: its status chip, `run:N` and its number, its first line
-  linking to its card, and where the card sits in muted monospace), whose links open the card's file as a review's
-  findings list does, the drafts for the review's body, and in its foot `Send N waiting`, which sends every waiting
-  draft as one comment review, its command on hover, with a muted line saying it approves nothing and resolves no
-  thread. Then the diff (`DiffPanels`), each thread's card
+  linking to its card, or its reaction's name for one it sends alone, and where the card sits in muted monospace),
+  whose links open the card's file as a review's findings list does, the drafts for the review's body, and in its foot
+  `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, with a muted line
+  saying it approves nothing and resolves no thread. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
@@ -1387,10 +1387,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
   plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
   a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it
-  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped. Its
+  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped,
+  left out when the draft sends its reaction alone. A thread's draft that stages a reaction says so in a muted line
+  under the text (`draft-reaction`): the emoji, hidden from screen readers, then its name and whether it goes with the
+  reply or alone; one a failed send already added says so in `status-blocked` (`draft-reacted`). Its
   verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
   ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
-  the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
+  the text in a `Textarea` with its count against 4,000, `Save` disabled past it, and on a thread's draft a `Reaction`
+  `ToggleGroup` of GitHub's eight in its picker's order, each an emoji named for screen readers, the lit one pressed
+  again for none; `Save` also takes an empty text beside a reaction. What each verb did goes under it
   (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send
   did as well, since a send speaks for the operator outside canopy and the line under the card leaves with its attention
   item at the next tick: the draft's fate, or how many of several reached the PR, with the URL when they share one, and

@@ -6,7 +6,7 @@ import type { SubmitEvent } from 'react'
 
 import { dropDraft, editDraft, refreshThreads, sendDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
-import type { Draft, PullRequestThreads, ReviewThread } from '@/api/types'
+import type { Draft, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
 import { CommentText } from '@/components/comment-text'
 import { Textarea } from '@/components/input'
@@ -20,16 +20,20 @@ import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useToast } from '@/hooks/use-toast'
 import {
     DRAFT_TONE,
     MAX_DRAFT_CHARS,
+    REACTIONS,
+    REACTION_LOOKS,
     draftAnchor,
     draftChars,
     listDrafts,
     movedHead,
     open,
     placeThreads,
+    reactionOf,
     threadWhere,
     waiting,
 } from '@/lib/drafts'
@@ -257,7 +261,7 @@ function DraftList({
                                 (draft.status === 'superseded' || draft.status === 'dropped') && 'line-through',
                             )}
                         >
-                            <MemoryText text={firstLine(draft.text)} className="whitespace-nowrap" />
+                            <MemoryText text={rowText(draft)} className="whitespace-nowrap" />
                         </Link>
                         <span className="max-w-56 truncate font-mono text-xs text-muted-foreground" title={where}>
                             {where}
@@ -269,9 +273,14 @@ function DraftList({
     )
 }
 
-// A draft's first line with text, which its row shows; its card shows the rest.
-function firstLine(text: string): string {
-    return text.split('\n').find((line) => line.trim() !== '') ?? text
+// What a draft's row shows: its first line with text, as its card shows the rest, or its reaction when it sends that
+// alone, so the row's link is never empty.
+function rowText(draft: Pick<Draft, 'text' | 'reaction'>): string {
+    const line = draft.text.split('\n').find((l) => l.trim() !== '')
+    if (line === undefined && draft.reaction !== null) {
+        return `${REACTION_LOOKS[draft.reaction].label}, alone`
+    }
+    return line ?? draft.text
 }
 
 // What `canopy draft send` takes for the drafts, run by run, for the button's hover.
@@ -325,7 +334,9 @@ export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChang
 
 /**
  * One draft, a worker's text until the operator sends it: its run and number, where it stands, what the run did about
- * its thread, and its text, plain, every hidden character named. A waiting draft has Send, Edit, and Drop; one no read
+ * its thread, its text, plain, every hidden character named, and the reaction it stages on the comment it answers, if
+ * any, which it may send alone. A reaction an earlier send added though the rest of it posted nothing is named, since
+ * it is on GitHub already. A waiting draft has Send, Edit, and Drop; one no read
  * has checked yet, Edit and Drop; a dropped one, Undo. Send reads Sending… until the post returns, and a toast says
  * what it did as well as the line under the card. Its hash is the one a send carries, so what posts is the text shown.
  * A draft superseded by this one that carried the operator's edits is named, since they are not carried over. A
@@ -353,6 +364,8 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
     })
     const busy = send.isPending || drop.isPending
     const ref = `run:${draft.run} ${draft.number}`
+    // Only a review comment takes a reaction.
+    const reacts = draft.kind === 'thread'
     return (
         <article
             id={draftAnchor(draft)}
@@ -400,15 +413,26 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                     onCancel={() => setEditing(false)}
                 />
             ) : (
-                <MemoryText
-                    text={draft.text}
-                    lines
-                    className={cn(
-                        'mt-1.5 block',
-                        (draft.status === 'superseded' || draft.status === 'dropped') &&
-                            'text-muted-foreground line-through',
+                <>
+                    {draft.text !== '' && (
+                        <MemoryText
+                            text={draft.text}
+                            lines
+                            className={cn(
+                                'mt-1.5 block',
+                                (draft.status === 'superseded' || draft.status === 'dropped') &&
+                                    'text-muted-foreground line-through',
+                            )}
+                        />
                     )}
-                />
+                    {draft.reaction !== null && <StagedReaction reaction={draft.reaction} alone={draft.text === ''} />}
+                </>
+            )}
+            {draft.reacted !== null && draft.status !== 'sent' && (
+                <p className="mt-1 text-xs text-status-blocked" data-testid="draft-reacted">
+                    {REACTION_LOOKS[draft.reacted].label} is on the comment already: a send that posted nothing else
+                    added it, and sending again adds no second.
+                </p>
             )}
             {!editing && (open(draft) || draft.status === 'dropped' || draft.sent_url !== null) && (
                 <span className="mt-2 flex flex-wrap items-center gap-2">
@@ -430,7 +454,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                                 variant="outline"
                                 onClick={() => setEditing(true)}
                                 disabled={busy}
-                                title={`canopy draft edit ${ref} --text TEXT`}
+                                title={`canopy draft edit ${ref} --text TEXT${reacts ? ' --react NAME' : ''}`}
                             >
                                 <Pencil />
                                 Edit
@@ -474,9 +498,25 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
     )
 }
 
+/** The reaction a draft stages on the comment it answers, alone when it sends no reply. */
+function StagedReaction({ reaction, alone }: { reaction: Reaction; alone: boolean }) {
+    const look = REACTION_LOOKS[reaction]
+    return (
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="draft-reaction">
+            <span aria-hidden="true" className="text-sm">
+                {look.emoji}
+            </span>
+            {alone
+                ? `${look.label} on the comment it answers, alone: no reply.`
+                : `${look.label} on the comment it answers, with the reply.`}
+        </p>
+    )
+}
+
 /**
- * A draft's text in the operator's words, as `canopy draft edit`: plain text, held to the bound a draft is, kept as a
- * new version beside the run's own.
+ * A draft's words in the operator's own, as `canopy draft edit`: plain text, held to the bound a draft is, and for a
+ * thread's draft the reaction it stages, picked from the ones GitHub offers or none, so the text may be empty to send
+ * the reaction alone. Kept as a new version beside the run's own.
  */
 function EditDraft({
     draft,
@@ -489,12 +529,14 @@ function EditDraft({
 }) {
     const id = useId()
     const [text, setText] = useState(draft.text)
+    const [reaction, setReaction] = useState(draft.reaction)
     const edit = useMutation({
-        mutationFn: () => editDraft(draft.run, draft.number, text),
+        mutationFn: () => editDraft(draft.run, draft.number, text, reaction),
         onSuccess: (edited) => onSaved(draftEditedText(edited)),
     })
     const chars = draftChars(text)
-    const fits = text.trim() !== '' && chars <= MAX_DRAFT_CHARS
+    const said = text.trim() !== '' || (reaction !== null && text === '')
+    const fits = said && chars <= MAX_DRAFT_CHARS
 
     function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -529,6 +571,30 @@ function EditDraft({
                 spellCheck
                 className="min-h-20"
             />
+            {draft.kind === 'thread' && (
+                <span className="flex flex-wrap items-center gap-2">
+                    <span className="panel-label" id={`${id}-reaction`}>
+                        Reaction
+                    </span>
+                    <ToggleGroup
+                        type="single"
+                        value={reaction ?? ''}
+                        onValueChange={(value) => setReaction(reactionOf(value))}
+                        aria-labelledby={`${id}-reaction`}
+                    >
+                        {REACTIONS.map((r) => (
+                            <ToggleGroupItem key={r} value={r} aria-label={REACTION_LOOKS[r].label} title={r}>
+                                <span aria-hidden="true" className="text-sm">
+                                    {REACTION_LOOKS[r].emoji}
+                                </span>
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                    <span className="text-xs text-muted-foreground">
+                        {reaction === null ? 'None.' : 'Leave the text empty to send it alone.'}
+                    </span>
+                </span>
+            )}
             <span className="flex flex-wrap items-center gap-2">
                 <Button type="submit" size="sm" disabled={edit.isPending || !fits}>
                     Save
