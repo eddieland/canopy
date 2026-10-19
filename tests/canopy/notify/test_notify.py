@@ -1,7 +1,9 @@
 """Notification sinks (DESIGN §20, ROADMAP M10): per-sink delivery of the attention diff, events, and digests."""
 
+import dataclasses
 import json
 import os
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -12,7 +14,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
-from canopy.core.items import fingerprint
+from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
 from tests.canopy.helpers import InlineRunner, canopy, chore_reports, in_tick, messages, waits, worker_does
@@ -124,6 +126,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
             "reason": "needs_reviewer",
             "detail": "PROJ-9 detail",
             "since": message["attention"]["added"][0]["since"],
+            "ui": None,  # a tick run by hand serves no web UI to link to
         }
     ]
     assert message["attention"]["open"] == 1
@@ -446,3 +449,84 @@ def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None
     assert "- chore:deps lodash (dismissed)\n" in sent.text()
     [resolved] = json.loads(sent.json())["attention"]["resolved"]
     assert resolved["dismissed"] is True
+
+
+UI = "http://localhost:9000/canopy/"
+
+
+def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
+    since = "2026-10-19T12:00:00Z"
+    pr = "https://github.test/o/r/pull/7"
+    added = [
+        Item("PROJ-1", "needs_reviewer", "d", since),
+        Item("chore:deps", "lodash", "d", since, finding=True),
+        Item(f"pr:{pr}", "review_requested", "d", since),
+        Item(None, "repo_missing", "d", since, repo="web"),
+    ]
+    events = [
+        message.Event(1, "run.started", since, {"ticket": "PROJ-1", "run": 3}),
+        message.Event(2, "run.ended", since, {"ticket": "PROJ-1", "run": 3, "ui": "http://evil.test/"}),
+        message.Event(3, "plan.proposed", since, {"ticket": "PROJ-1", "run": 3, "plan": 1}),
+        message.Event(4, "chore.ended", since, {"chore": "deps", "run": 5}),
+        message.Event(5, "review.ended", since, {"pr": pr, "run": 6}),
+        message.Event(6, "loop.failing", since, {"tick": 9}),
+        message.Event(7, "loop.recovered", since, {"failed": 3}),
+    ]
+    change = notify_journal.Diff(added, [], [], [])
+    sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 4, events, ui=UI)
+    body = json.loads(sent.json())
+    assert body["ui"] == UI
+    assert body["attention"]["ui"] == f"{UI}attention"
+    assert [a["ui"] for a in body["attention"]["added"]] == [
+        f"{UI}tickets/PROJ-1",
+        f"{UI}chores/deps",
+        f"{UI}pull-requests/pr?url=https%3A%2F%2Fgithub.test%2Fo%2Fr%2Fpull%2F7",
+        f"{UI}attention",
+    ]
+    # An event's own field named `ui` is dropped: the link is canopy's.
+    assert [e["ui"] for e in body["events"]] == [
+        f"{UI}runs/3",
+        f"{UI}runs/3",
+        f"{UI}tickets/PROJ-1/plan",
+        f"{UI}chores/deps/runs/5",
+        f"{UI}reviews/6",
+        f"{UI}ticks/9",
+        None,
+    ]
+    # The text format links nothing, so `notify.cmd` sees no change.
+    assert sent.text() == dataclasses.replace(sent, ui=None).text()
+    assert "http://localhost" not in sent.text()
+
+
+def test_a_page_encodes_each_part_whole() -> None:
+    assert message.page(UI, "tickets", "a/../b?c#d") == f"{UI}tickets/a%2F..%2Fb%3Fc%23d"
+    assert message.page(None, "tickets", "PROJ-1") is None
+
+
+@pytest.mark.parametrize(
+    ("url", "error"),
+    [
+        ("localhost:9000", "must be an http:// or https:// URL"),
+        ("ftp://localhost/", "must be an http:// or https:// URL"),
+        ("http://localhost/<x>", "must be an http:// or https:// URL"),
+        ("http://localhost/a|b", "must be an http:// or https:// URL"),
+        ("http://user@localhost/", "no user part"),
+        ("http://localhost/?a=1", "no user part, query, or fragment"),
+        ("http://localhost/#top", "no user part, query, or fragment"),
+        ("http:///canopy", "must name a host"),
+        ("http://localhost:port/", "port that is not a number"),
+        ("http://localhost/" + "x" * 200, "must be an http:// or https:// URL"),
+    ],
+)
+def test_serve_url_is_checked(canopy_env: CanopyEnv, url: str, error: str) -> None:
+    canopy_env.append_user(f'\n[serve]\nurl = "{url}"\n')
+    with pytest.raises(ConfigError, match=re.escape(error)):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_serve_url_ends_in_a_slash_and_is_private(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user('\n[serve]\nurl = "https://canopy.home.test/canopy"\n')
+    assert load(canopy_env.root, canopy_env.user_file).serve.url == "https://canopy.home.test/canopy/"
+    canopy_env.append_shared('\n[serve]\nurl = "https://evil.test/"\n')
+    with pytest.raises(ConfigError, match="is private"):
+        load(canopy_env.root, canopy_env.user_file)

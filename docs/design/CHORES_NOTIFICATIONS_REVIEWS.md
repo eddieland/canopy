@@ -160,7 +160,8 @@ itself. No model writes it; a report needing judgment is a chore (§19).
 
 `text` is lines for a person; attention alone is exactly §14's message, so `notify.cmd` output is unchanged. `json` is
 one object holding the same diff, events, and digest as fields, each ticket key with its title (§13), and the text
-too. Its `version` changes only on an incompatible change; sinks ignore unknown fields.
+too. Its `version` changes only on an incompatible change; sinks ignore unknown fields. A tick the loop runs while
+serving the web UI (§22) gives each item and event its page there, at `serve.url` if set; `text` links nothing.
 
 Presentation is the sink's. The fields are the contract: a sink that can show more than lines builds its own message
 from them, as the Slack sink does with Block Kit, and the text is canopy's one rendering, for sinks that forward a
@@ -183,7 +184,7 @@ text runs nothing.
 - With `--threads` it threads posts by ticket, chore, or PR, a new thread each day. The threads are the sink's own
   state, never in canopy's journal; a retry after a partial delivery posts only the rest.
 - Journal text is escaped for Slack markup and every text object is `verbatim`, so no `@here`, mention, or disguised
-  link gets through.
+  link gets through. A web UI page canopy sent is linked under the sink's own word, `open`, only if it is a plain URL.
 
 Lint keeps the network out of the harness, as D015 keeps processes in one module: `urllib.request`, `http.client`, and
 `socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink.

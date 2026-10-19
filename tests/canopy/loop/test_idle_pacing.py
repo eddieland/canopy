@@ -854,9 +854,11 @@ def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
     time = FakeTime()
     run = tick.run
 
-    def asked_during(tick_ctx: Context, *, dry_run: bool, woken_by: tick.WokenBy | None = None) -> tick.Outcome:
+    def asked_during(
+        tick_ctx: Context, *, dry_run: bool, woken_by: tick.WokenBy | None = None, ui: str | None = None
+    ) -> tick.Outcome:
         asked.request()
-        return run(tick_ctx, dry_run=dry_run, woken_by=woken_by)
+        return run(tick_ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
 
     with overseer_does(), mock.patch.object(tick, "run", autospec=True, side_effect=asked_during):
         loop_ticks(ctx, time, asked=asked)

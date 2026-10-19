@@ -235,6 +235,7 @@ def run(
 
             serving = web.start(ctx, log, settings.reload, settings.asked)
             settings.backend = serving.backend
+            settings.ui = serving.links
         try:
             _header(
                 console,
@@ -295,6 +296,9 @@ class _Settings:
     asked: tick_now.TickNow  # a tick the web UI asked for, which the next wait takes
     console: Console
     backend: Backend | None = None  # the web UI's, which serves the new config too
+    # Where notifications' links open the web UI this loop serves; None when it serves none. `serve.` keys take
+    # effect at a restart (`reread.RESTART_PREFIX`), so a reload keeps it.
+    ui: str | None = None
 
     def apply(self) -> None:
         """Read the config again, if asked to. A config that does not load leaves everything as it was, and says why."""
@@ -387,7 +391,7 @@ def _ticks(
         settings.reload.ticking = True
         try:
             with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
-                outcome = _tick(ctx, dry_run=dry_run, woken_by=woken_by, log=log)
+                outcome = _tick(ctx, dry_run=dry_run, woken_by=woken_by, ui=settings.ui, log=log)
         finally:
             settings.reload.ticking = False
         ended = clock()
@@ -612,14 +616,16 @@ def _draining(labels: Sequence[str], elapsed: float) -> Text:
     )
 
 
-def _tick(ctx: Context, *, dry_run: bool, woken_by: WokenBy, log: logs.TickAdapter) -> tick.Outcome:
+def _tick(ctx: Context, *, dry_run: bool, woken_by: WokenBy, ui: str | None, log: logs.TickAdapter) -> tick.Outcome:
     """Run one tick, which `woken_by` started. An unexpected error ends that tick, not the loop, as a scheduler would.
+
+    `ui` is where its notifications' links open the web UI, when the loop serves one.
 
     Returns:
         The tick's outcome, or an `error` outcome naming the exception when the tick raised one.
     """
     try:
-        return tick.run(ctx, dry_run=dry_run, woken_by=woken_by)
+        return tick.run(ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
     # Logged with its traceback. The journal is in autocommit mode, so the next tick starts clean.
     except Exception as e:
         log.exception("tick raised; the loop goes on", extra={"error": str(e)})

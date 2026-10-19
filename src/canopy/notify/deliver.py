@@ -46,11 +46,18 @@ class Delivery:
 
 
 def publish(
-    ctx: Context, items: Sequence[Item], path: Path, log: logs.TickAdapter, *, dismissed: Collection[str] = ()
+    ctx: Context,
+    items: Sequence[Item],
+    path: Path,
+    log: logs.TickAdapter,
+    *,
+    dismissed: Collection[str] = (),
+    ui: str | None = None,
 ) -> list[Delivery]:
     """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed.
 
     `dismissed` holds the fingerprints of chore findings the operator dismissed: a sink told of one hears why it left.
+    `ui` is the web UI's address, ending in `/`, when the loop serves it: a `json` message then links to its pages.
 
     Returns:
         How each sink's delivery went, in name order.
@@ -62,7 +69,7 @@ def publish(
     if ctx.config.notify.takes(outbox.LOOP):
         _record_loop_events(ctx)
     deliveries = [
-        _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed)
+        _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed, ui=ui)
         for name, sink in sinks.items()
     ]
     journal.prune_events(ctx.conn, now)
@@ -188,6 +195,7 @@ def _deliver(
     now: datetime,
     log: logs.TickAdapter,
     dismissed: Collection[str],
+    ui: str | None,
 ) -> Delivery:
     row = journal.ensure_sink(ctx.conn, name)
     groups = [g for g in sink.events if g in _POINT_GROUPS]
@@ -202,7 +210,7 @@ def _deliver(
         since = str(row["last_digest_at"] or first)
         digest = message.digest(ctx.conn, items, since=since, now=now)
     msg = message.Message(
-        name, ctx.repo, path, change, len(items), events, digest, now, titles=message.titles(ctx.conn)
+        name, ctx.repo, path, change, len(items), events, digest, now, titles=message.titles(ctx.conn), ui=ui
     )
     if msg.is_empty():
         # Nothing to say; the cursor still moves past events of groups this sink does not take.
