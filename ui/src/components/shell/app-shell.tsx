@@ -22,7 +22,7 @@ import { Buddy } from './buddy'
 import { LiveReadouts, StreamReadout } from './live-readouts'
 import { LoopDownBand } from './loop-down-band'
 import { LoopPause } from './loop-pause'
-import { Mark } from './mark'
+import { Mark, Wordmark } from './mark'
 import { Nav } from './nav'
 import { NewerBuild } from './newer-build'
 import { RailFooter, RailSpend, RailWorking } from './rail'
@@ -113,7 +113,6 @@ export function AppShell() {
                         />
                         <div className="flex items-center gap-2.5">
                             <LiveMark stream={stream.status} />
-                            <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                             <StreamReadout stream={stream.status} />
                         </div>
                         <Ticker />
@@ -268,10 +267,15 @@ function RailButton() {
     )
 }
 
-/** The header's logo, alive with the stream and the latest tick. */
+/** The header's logo and name, alive with the stream and the latest tick. */
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
-    return <Mark live={stream === 'open'} ticking={tick?.status === 'running'} beat={tick?.id} />
+    return (
+        <>
+            <Mark live={stream === 'open'} ticking={tick?.status === 'running'} beat={tick?.id} />
+            <Wordmark beat={tick?.id} />
+        </>
+    )
 }
 
 /**
