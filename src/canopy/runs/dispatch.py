@@ -592,7 +592,8 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
 
     Raises:
         Refusal: a slug (`bad_slug`) or a base (`bad_base`) is given; the ticket (`bad_plan`) was split, or already has
-            a branch; or (`no_read_tools`) no tracker read tools are known for the planner.
+            a branch; its triage is due (`untriaged`); or (`no_read_tools`) no tracker read tools are known for the
+            planner.
     """
     if slug is not None:
         raise Refusal("bad_slug", "a plan writes down the work and names no branch; leave out --slug")
@@ -605,6 +606,9 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
     if ticket is not None and ticket.branch:
         # Its first implement recorded the branch: a plan now would describe work already started (DESIGN §25, Open).
         raise Refusal("bad_plan", f"{key} already has work on {ticket.branch}; a started ticket is not planned")
+    if plans.triage_refusal(ctx.conn, ctx.config.policy, key) is None:
+        # The operator's own `canopy plan` sets the ticket's setting, so its triage is no longer due and this passes.
+        raise Refusal("untriaged", f"{key} is due a triage before its plan; dispatch `needs-plan` first")
     if ctx.config.tracker.tools() is None:
         raise Refusal(
             "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"
@@ -654,9 +658,9 @@ def _check_planned(ctx: Context, key: str, kind: str) -> None:
     approved = plan is not None and plan.status is PlanStatus.APPROVED
     if kind == RunKind.IMPLEMENT and not approved and plans.needs_plan(ctx.conn, ctx.config.policy.plan, ticket):
         waiting = "its plan waits on the operator's approval" if plan is not None else "it has no plan approved"
-        raise Refusal(
-            "unplanned", f"{key} needs a plan before its implement, and {waiting}; dispatch `plan` or wait for it"
-        )
+        due = plans.triage_refusal(ctx.conn, ctx.config.policy, key) is None
+        then = "dispatch `needs-plan`, as its triage is due" if due else "dispatch `plan` or wait for it"
+        raise Refusal("unplanned", f"{key} needs a plan before its implement, and {waiting}; {then}")
     if plan is not None and approved and plans.approved_text(ctx.state_dir, plan) is None:
         path = plans.path_for(ctx.state_dir, key, plan.run_id)
         raise Refusal(
