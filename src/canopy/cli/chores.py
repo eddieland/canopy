@@ -138,9 +138,10 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
 def cmd_chore_install(name: str | None) -> int:
     """Set up example chore NAME, one canopy ships, in this workspace; with no NAME, list them.
 
-    The prompt goes in the workspace's .canopy/chore-prompts/ and the [chores.NAME] table in its private config. The
-    command owns both: running it again, as after upgrading canopy, replaces them with the shipped ones, and an edit
-    to either is lost. Answer a chore with `canopy reply chore:NAME` instead, which survives it.
+    The prompt goes in the workspace's .canopy/chore-prompts/, the agent the example comes with, if any, in
+    .canopy/chore-agents/NAME/, and the [chores.NAME] table in its private config. They stay as installed when canopy
+    is upgraded. The command owns them: running it again replaces them with the shipped ones, and an edit to any is
+    lost. Answer a chore with `canopy reply chore:NAME` instead, which survives it.
     """
     if name is None:
         for example in install.available():
@@ -155,9 +156,10 @@ def cmd_chore_install(name: str | None) -> int:
     except (install.InstallError, ConfigError) as e:
         raise CliError(f"chore install: {e}") from None
     except OSError as e:
-        raise CliError(f"chore install: could not write {e.filename}: {e.strerror}") from None
+        raise CliError(f"chore install: {e}") from None
     verb = "replaced" if installed.replaced else "wrote"
-    click.echo(f"{verb} {installed.prompt}, and [chores.{name}] in {installed.config_file}")
+    agent = f", its agent {installed.agent}," if installed.agent is not None else ""
+    click.echo(f"{verb} {installed.prompt}{agent} and [chores.{name}] in {installed.config_file}")
     for step in installed.next_steps:
         click.echo(step)
     click.echo(

@@ -1,18 +1,19 @@
 """`canopy chore install`: one of the example chores canopy ships, set up for the operator (DESIGN §19).
 
-An example is a prompt, `<name>.md`, and its config table, `<name>.toml`, in `examples/chores/`. Installing one copies
-the prompt into the workspace's state directory, `chore-prompts/<name>.md`, and writes the table to the workspace's
-private file, with `prompt` naming the copy and `cwd`, where the example has one, the workspace root. Both are the
-workspace's own, so another workspace's copy of the same example is filled in apart from it. The state directory is the
-operator's alone, as a prompt file must be (TRUST_MODEL T7), and the copy is not in `chores/`, under which a chore with
-no `cwd` runs. The command owns both: installing
-again replaces the prompt and the whole `[chores.<name>]` table with the shipped ones, so an upgraded canopy's example
-replaces the old, and an edit to either is lost. Every other line of the private file stays as it was, or nothing is
-written.
+An example is a prompt, `<name>.md`, and its config table, `<name>.toml`, in `examples/chores/`, and may come with the
+agent its `cmd` names, `agents/<agent>.md`. Installing one copies the prompt into the workspace's state directory,
+`chore-prompts/<name>.md`, and the agent to `chore-agents/<name>/agents/`, and writes the table to the workspace's
+private file: `prompt` names the copy, `cmd` starts by pointing `OPENCODE_CONFIG_DIR` at the agent's directory, and
+`cwd`, where the example has one, is the workspace root. All are the workspace's own: another workspace's copy of the
+same example is filled in apart from it, and an upgraded canopy changes none of them until the chore is installed again.
+The state directory is the operator's alone, as a prompt file must be (TRUST_MODEL T7), and neither copy is in
+`chores/`, under which a chore with no `cwd` runs.
 
-The table goes in the private file, since the last file that sets any chore replaces every other file's chores whole
-(`config.load`). With chores in the user file and none in the private file, a table written there would hide them all,
-so installing is refused.
+The command owns what it writes: installing again replaces the prompt, the agent, and the whole `[chores.<name>]` table
+with the shipped ones, and an edit to any is lost. Every other line of the private file stays as it was, or nothing is
+written. The table goes in the private file, since the last file that sets any chore replaces every other file's chores
+whole (`config.load`). With chores in the user file and none in the private file, a table written there would hide them
+all, so installing is refused.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import copy
 import json
 import os
 import re
+import shlex
+import shutil
 import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -37,10 +40,14 @@ if TYPE_CHECKING:
 
 #: The directory of the state directory installed prompts are copied into.
 PROMPTS_DIR = "chore-prompts"
+#: The directory of the state directory each installed chore's OpenCode config directory is in, by the chore's name.
+AGENTS_DIR = "chore-agents"
 #: The comment above an installed table, which says who owns it.
 MARKER = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
 # A line that starts a table or an array of tables, and so ends the one before it.
 _HEADER_RE = re.compile(r"[ \t]*\[")
+# The agent a command runs, by a name that is safe as one path component.
+_AGENT_RE = re.compile(r"--agent[ =]([a-z][a-z0-9-]*)(?:\s|$)")
 
 
 class InstallError(Exception):
@@ -55,9 +62,11 @@ class Installed:
     name: str
     #: The copy of the prompt the table names.
     prompt: Path
+    #: The copy of the agent its command runs, or None when the example comes with none.
+    agent: Path | None
     #: The private file the table is in.
     config_file: Path
-    #: Whether the prompt or the table was there before, and was replaced.
+    #: Whether the prompt, the agent, or the table was there before, and was replaced.
     replaced: bool
     #: What to do before the chore can run, from the example's comment, one line of it each.
     next_steps: tuple[str, ...]
@@ -81,9 +90,9 @@ def available() -> list[str]:
 
 
 def install(ws: Workspace, name: str) -> Installed:
-    """Install example chore `name` in `ws`: its prompt and its table, each replacing what was there.
+    """Install example chore `name` in `ws`: its prompt, its agent if it has one, and its table, replacing any there.
 
-    The prompt goes in the workspace's state directory, the table in its private file.
+    The prompt and the agent go in the workspace's state directory, the table in its private file.
 
     Returns:
         What was written, and what the operator still has to do.
@@ -117,14 +126,19 @@ def install(ws: Workspace, name: str) -> Installed:
     table["prompt"] = str(prompt)
     if "cwd" in table:
         table["cwd"] = str(ws.root.absolute())
+    agent_dir = ws.state_dir / AGENTS_DIR / name
+    agent = _agent(table.get("cmd"))
+    if agent is not None:
+        table["cmd"] = f"env OPENCODE_CONFIG_DIR={shlex.quote(str(agent_dir))} {table['cmd']}"
     config.Chore.model_validate(table)
     new_text, replaced = _with_table(old_text, name, _render(name, table))
     _check(private, old, new_text, name, table)
-    replaced = replaced or prompt.exists()
+    replaced = replaced or prompt.exists() or agent_dir.exists()
     prompt.parent.mkdir(mode=0o700, exist_ok=True)
     logs.write_private(prompt, (resources.example_chores_dir() / f"{name}.md").read_text(encoding="utf-8"))
+    copied = _copy_agent(agent, agent_dir)
     _write(private, new_text)
-    return Installed(name, prompt, private, replaced, _next_steps(shipped_text))
+    return Installed(name, prompt, copied, private, replaced, _next_steps(shipped_text))
 
 
 def _read(path: Path) -> dict[str, object]:
@@ -134,6 +148,35 @@ def _read(path: Path) -> dict[str, object]:
             return tomllib.load(f)
     except FileNotFoundError:
         return {}
+
+
+def _agent(cmd: object) -> Path | None:
+    """Return the agent definition the example comes with for the agent `cmd` runs, or None when it comes with none."""
+    found = _AGENT_RE.search(cmd) if isinstance(cmd, str) else None
+    if found is None:
+        return None
+    path = resources.example_chores_dir() / "agents" / f"{found[1]}.md"
+    return path if path.is_file() else None
+
+
+def _copy_agent(agent: Path | None, agent_dir: Path) -> Path | None:
+    """Replace `agent_dir` with an OpenCode config directory holding only a copy of `agent`; with no agent, remove it.
+
+    The copy and its directories are readable by the operator alone.
+
+    Returns:
+        The copy, or None when there is no agent.
+    """
+    if agent_dir.exists() or agent_dir.is_symlink():
+        shutil.rmtree(agent_dir)
+    if agent is None:
+        return None
+    agent_dir.parent.mkdir(mode=0o700, exist_ok=True)
+    agent_dir.mkdir(mode=0o700)
+    (agent_dir / "agents").mkdir(mode=0o700)
+    copied = agent_dir / "agents" / agent.name
+    logs.write_private(copied, agent.read_text(encoding="utf-8"))
+    return copied
 
 
 def _with_table(text: str, name: str, block: str) -> tuple[str, bool]:

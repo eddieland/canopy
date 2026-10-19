@@ -97,6 +97,7 @@ the commands below from the workspace root.
 | `runs/<run id>.prompt` | The prompt that run's worker got. |
 | `chores/<run id>.log`, `.prompt` | A chore run's output and prompt; `chores/<name>/` is a chore's own directory. |
 | `chore-prompts/<name>.md` | The prompt `canopy chore install NAME` copied; installing it again replaces it. |
+| `chore-agents/<name>/` | The agent an installed chore runs, if its example came with one, as an OpenCode config dir. |
 | `reviews/<run id>.log`, `.prompt` | A review run's output and prompt. |
 
 Config: the workspace's `canopy-workspace.toml`, which also lists the repositories, shared; the user file

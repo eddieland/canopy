@@ -1,4 +1,4 @@
-# Name your MCP servers in the prompt, define the canopy-introspect agent, and keep this chore out of the sandbox:
+# Name your MCP servers in the prompt, and keep this chore out of the sandbox; its agent comes with it:
 # https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-canopys-own-chores
 [chores.canopy-efficiency]
 prompt = "~/.config/canopy/chores/canopy-efficiency.md"

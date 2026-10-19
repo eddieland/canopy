@@ -1,4 +1,4 @@
-# Define the canopy-introspect agent, and keep this chore out of the sandbox:
+# Keep this chore out of the sandbox, since it reads the journal in .canopy/; its agent comes with it:
 # https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-canopys-own-chores
 [chores.canopy-health]
 prompt = "~/.config/canopy/chores/canopy-health.md"
