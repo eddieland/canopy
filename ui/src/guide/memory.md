@@ -78,7 +78,9 @@ repository, or in a ticket's key or title. The repository chips keep the proposa
 runs, a lesson for every repository included, since those runs read it too. While lessons are in use, the Lessons header
 has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
 keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. Searching a memory's words
-across the whole journal is still `canopy memory search`.
+across the whole journal is still `canopy memory search`. The **history** chip in the Proposals and Lessons headers
+lists what's no longer pending or in force under them: proposals rejected, lapsed, promoted, or forgotten, and lessons
+replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
 

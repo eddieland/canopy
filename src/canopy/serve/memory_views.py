@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, memory, memory_manage
-from canopy.core.vocab import MemoryCited, MemoryMode
+from canopy.core.vocab import MemoryCited, MemoryMode, MemoryScope
 from canopy.serve.schema import (
     MemoryDigest,
     MemoryEntry,
@@ -54,10 +54,11 @@ def state(ctx: Context) -> MemoryState | None:
     )
 
 
-def overview(ctx: Context) -> MemoryOverview:
+def overview(ctx: Context, *, history: bool = False) -> MemoryOverview:
     """Every tier's memory: the tickets with notes in force, the proposals waiting, the lessons, and what they serve.
 
     The notes are counted by ticket, not sent: a busy workspace holds thousands, and a ticket's own read lists them.
+    With `history`, the latest proposals and lessons no longer pending or in force too.
 
     Returns:
         The overview, with no digest of the lessons while proposals are off.
@@ -74,6 +75,8 @@ def overview(ctx: Context) -> MemoryOverview:
         lessons=[entry(ctx, m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
         lessons_digest=digest,
         repos=[r.name for r in ctx.ws.repos],
+        past_proposals=[entry(ctx, m) for m in memory.past(ctx.conn, MemoryScope.PROPOSAL)] if history else [],
+        past_lessons=[entry(ctx, m) for m in memory.past(ctx.conn, MemoryScope.LESSON)] if history else [],
     )
 
 

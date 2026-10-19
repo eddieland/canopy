@@ -365,6 +365,16 @@ export const memoryQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/memory', { signal })),
 })
 
+/**
+ * Every tier of agent memory with its history: the latest proposals and lessons no longer pending or in force too.
+ * Under the memory key, so what reads memory again reads this too.
+ */
+export const memoryHistoryQuery = queryOptions({
+    queryKey: [...keys.memory, 'history'] as const,
+    queryFn: async ({ signal }) =>
+        unwrap(await api.GET('/api/memory', { params: { query: { history: true } }, signal })),
+})
+
 /** A ticket's notes, and what its next run would be served (DESIGN §28). */
 export function ticketMemoryQuery(key: string) {
     return queryOptions({

@@ -157,3 +157,16 @@ test('opened notes line up with the lessons, and the tickets with notes flip', a
     await notes.getByTestId('order-memory-tickets').click()
     await expect(rows.first()).toHaveAttribute('data-testid', 'memory-ticket-ABC-100')
 })
+
+test('the memory page shows its history on asking: the proposal promotion used up', async ({ page }) => {
+    await page.goto('memory')
+    await settled(page)
+    const proposals = page.getByTestId('memory-proposals')
+    await expect(proposals.getByTestId('memory-past-decided')).toHaveCount(0)
+    await proposals.getByRole('link', { name: 'history' }).click()
+    await expect(page).toHaveURL(/[?&]history=true/u)
+    // The mock's lesson 8 was promoted from proposal 7, which promoting superseded.
+    const decided = proposals.getByTestId('memory-past-decided')
+    await expect(decided.getByTestId('memory-7').getByTestId('memory-stand')).toHaveText('superseded')
+    await expect(page.getByTestId('memory-lessons').getByText('no lesson replaced or forgotten yet')).toBeVisible()
+})

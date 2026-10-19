@@ -60,6 +60,8 @@ function renderOver(ui: React.JSX.Element, overview: Partial<MemoryOverview>) {
         lessons: [],
         lessons_digest: null,
         repos: ['api'],
+        past_proposals: [],
+        past_lessons: [],
         ...overview,
     } satisfies MemoryOverview)
     return renderRouted(ui, { client })

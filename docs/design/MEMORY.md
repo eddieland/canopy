@@ -244,12 +244,14 @@ so where a memory was used shows both ways: a memory names the latest runs that 
 the rest, those from before the journal named them among them; a run's page marks, among what it read, what it relied
 on and what it reported wrong.
 
-The memory page leads with the proposals waiting on the operator, the one queue memory has and the one that expires,
-then the lessons, then the tickets with notes, which have nothing to decide there. A busy workspace holds thousands of
-notes and hundreds of lessons, so the memory page lists the tickets with notes in force, one row each with its count,
-and reads a ticket's notes only when the operator opens its row; the lessons come reported wrong first, then by review
-date, so what calls for the operator heads the list. Wherever a list shows a memory in force that its digest's cap
-leaves out, its row says so, as left out of the prompt at `use` and as what would be left out while recording.
+The memory page can also list, when asked, the latest proposals and lessons no longer pending or in force, as `canopy
+memory list --all` does for notes, so a rejected proposal or a replaced lesson can be looked back on. The memory page
+leads with the proposals waiting on the operator, the one queue memory has and the one that expires, then the lessons,
+then the tickets with notes, which have nothing to decide there. A busy workspace holds thousands of notes and hundreds
+of lessons, so the memory page lists the tickets with notes in force, one row each with its count, and reads a ticket's
+notes only when the operator opens its row; the lessons come reported wrong first, then by review date, so what calls
+for the operator heads the list. Wherever a list shows a memory in force that its digest's cap leaves out, its row says
+so, as left out of the prompt at `use` and as what would be left out while recording.
 
 What a worker wrote is shown as plain text, never Markdown or a link, unlike other journal text (D113): a link in a note
 would be a worker's link the operator reads as canopy's. Every character the bounds refuse is shown by its code point,
