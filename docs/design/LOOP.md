@@ -42,8 +42,9 @@ in order:
      to read. The latest `ok` tick's point is what the web UI calls acknowledged (§22); idle pacing reads it (below).
    - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
      ticket whose latest question has no operator message after it (§22), and for each public ticket whose latest plan
-     run asked one (§25), `chore_failed` for each configured chore whose latest ended run did not end `ok` (§19), and
-     `repo_missing` for each mapped repository with no clone.
+     run asked one (§25), `not_trivial` for each unit whose PR a review judged `high` while a triage's waiver of its
+     ticket's plan is in force (§25), `chore_failed` for each configured chore whose latest ended run did not end `ok`
+     (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the state block**, the overseer's whole message: a generated `## State` section holding one compact JSON
    object on one line, since it is re-read on every step. The overseer's prompt (`prompts/overseer.md` or the
    operator's override, §12) is not in it but is the body of the overseer's agent definition (§13), sent as the system

@@ -851,7 +851,9 @@ was in force, the notice has ended, and no newer run of the check exists, so the
 adds the harness's `memory_proposal`, about a done ticket whose runs' proposals wait on the operator, and
 `lesson_review` and `lesson_wrong`, about the workspace, each one item naming every lesson it is about; none while
 `memory.proposals` is off, and the last two only at `use` (§28). Review replies add the harness's `drafts_waiting`,
-about a unit whose PR has drafts unsent, or a ticket with its own draft unsent (§29). An item about one unit of a
+about a unit whose PR has drafts unsent, or a ticket with its own draft unsent (§29). Triage before a plan adds the
+harness's `not_trivial`, about a unit whose PR a review judged `high` impact while a triage's waiver of its ticket's
+plan is in force (§25). An item about one unit of a
 ticket names its repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest

@@ -39,7 +39,8 @@ from tests.canopy.helpers import (
     scripted,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
+from tests.canopy.review_helpers import head, reviewer_reports
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
 
 TRIVIAL = "A typo in docs or comments; one config value changed."
@@ -335,6 +336,48 @@ def test_the_state_block_says_when_a_triage_is_due_and_which_waived_the_plan(
     scenario.tick(*waits(KEY), dry_run=True)
     plan = scenario.ticket_state()["plan"]
     assert (plan["needed"], plan["triage_due"], plan["waived"]) == (False, False, ran.id)
+
+
+@pytest.mark.parametrize(
+    ("waived", "impact", "raised"),
+    [(True, "high", True), (True, "normal", False), (False, "high", False)],
+    ids=["waived-high", "waived-normal", "planned-high"],
+)
+def test_a_review_that_judges_a_waived_tickets_pr_high_raises_not_trivial(
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool, *, waived: bool, impact: str, raised: bool
+) -> None:
+    # The reviewer's second opinion (DESIGN §25): it is not told of the waiver, and its impact is checked against it.
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    scenario.configures(runtime={"review_cmd": template}, review={"agent_prs": True})
+    triage = None
+    if waived:
+        triage_on(canopy_env)
+        triage = scenario.run(dispatches(kind=RunKind.NEEDS_PLAN), worker=triage_reports(verdict("trivial")))
+    implement = scenario.run(worker=pushes())
+    assert implement.status == RunStatus.DONE
+    pr = "https://example.test/pr/1"
+    assert [u["pr_url"] for u in db.units(scenario.conn, KEY)] == [pr]
+    report = {"status": "done", "verdict": "clean", "impact": impact, "summary": "It changes the retry policy."}
+    reviewed = scenario.review(reviews(head(git_pool), pr, ticket=KEY), reviewer=reviewer_reports(report))
+    assert "trivial" not in reviewed.prompt
+    scenario.tick(*waits(KEY))
+    items = [i for i in attention.current(scenario.conn) if i.reason == attention.NOT_TRIVIAL]
+    if not raised:
+        assert items == []
+        return
+    [item] = items
+    assert (item.ticket_key, item.repo) == (KEY, "repo")
+    assert item.detail == (
+        f"review:{reviewed.id} judged {pr} high impact, but triage run:{present(triage).id} waived its plan as "
+        f"trivial: {REASON}"
+    )
+    # The overseer neither sees nor records it: the harness raises it every tick, until the ticket is forgotten or done.
+    assert attention.for_overseer(scenario.conn) == []
+    scenario.tick(*waits(KEY))
+    assert attention.NOT_TRIVIAL in [i.reason for i in attention.current(scenario.conn)]
+    scenario.operator("forget", KEY)
+    scenario.tick(*waits(KEY))
+    assert attention.NOT_TRIVIAL not in [i.reason for i in attention.current(scenario.conn)]
 
 
 @pytest.mark.parametrize(
