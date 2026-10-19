@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SpendCosts, SpendDay } from '@/api/types'
 
-import { axisNames, chartTop, dayHint, dayLabel, doneText, seriesCost, SERIES, shareText, spendWindow } from './spend'
+import { chartTop, dayHint, dayLabel, dearestDay, doneText, seriesCost, SERIES, shareText, spendWindow } from './spend'
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -45,10 +45,15 @@ describe('spend', () => {
         expect(dayLabel('2026-12-31')).toBe('Dec 31')
     })
 
-    it("names every day of a week, and every fifth of a month back from today's", () => {
-        expect(Array.from({ length: 7 }, (_, i) => axisNames(i, 7))).toEqual(Array.from({ length: 7 }, () => true))
-        const month = Array.from({ length: 30 }, (_, i) => i).filter((i) => axisNames(i, 30))
-        expect(month).toEqual([4, 9, 14, 19, 24, 29])
+    it('finds the dearest day, the latest of equals, so its total is said over its bar', () => {
+        const week = [
+            day('2026-10-06', { total: 2 }),
+            day('2026-10-07', { total: 4.5 }),
+            day('2026-10-08', { total: 1 }),
+        ]
+        expect(dearestDay(week)).toBe(1)
+        expect(dearestDay([day('2026-10-07', { total: 3 }), day('2026-10-08', { total: 3 })])).toBe(1)
+        expect(dearestDay([day('2026-10-08', {})])).toBe(-1)
     })
 
     it('takes only the windows the page offers', () => {
