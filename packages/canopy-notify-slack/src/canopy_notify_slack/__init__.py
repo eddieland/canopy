@@ -8,7 +8,8 @@ The secret comes from a file that belongs to the operator and that nobody else c
 environment, or canopy's config: `--webhook-file PATH`, by default
 `$XDG_CONFIG_HOME/canopy/slack-webhook`, or `--token-file PATH`, by default `$XDG_CONFIG_HOME/canopy/slack-token`.
 Text from the journal, which agents and org members wrote, is escaped for Slack's markup and set `verbatim`, so it
-cannot mention a person or `@channel`, or show one link and point at another.
+cannot mention a person or `@channel`, or show one link and point at another. The page of canopy's web UI the message
+gives an item or event, while the loop serves one, is linked after it under the sink's own word, `open`.
 
 With `--channel` and `--threads`, what is about one ticket, chore, or review goes in its own thread, a new one each
 day, recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest goes in the channel.
@@ -298,6 +299,10 @@ _MAX_CONTEXT = 10
 # Digest runs listed by name, as the text format lists them.
 _DIGEST_LISTED = 10
 _URL = re.compile(r"https?://[^\s|]+")
+# A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
+# can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
+_PAGE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+_MAX_PAGE = 2000
 _STATUS_EMOJI = {
     "done": ":white_check_mark:",
     "blocked": ":raising_hand:",
@@ -339,6 +344,30 @@ def _linked(text: object) -> str:
     return " ".join(f"<{word}>" if _URL.fullmatch(word) else word for word in escape(text).split(" "))
 
 
+def _open(page: object) -> str:
+    """A link labelled `open` to `page`, the web UI's page canopy sent for an item or event, if it is a plain URL.
+
+    The label is the sink's own word, never text from the message, so the link cannot show one address and open
+    another.
+
+    Returns:
+        The Slack link, or nothing when `page` is missing or not a plain `http` or `https` URL.
+    """
+    if not isinstance(page, str) or len(page) > _MAX_PAGE or not _PAGE.fullmatch(page):
+        return ""
+    return f"<{page.replace('&', '&amp;')}|open>"
+
+
+def _with_open(first: str, page: object) -> str:
+    """`first`, then a link to `page` if there is one.
+
+    Returns:
+        The Slack text.
+    """
+    link = _open(page)
+    return f"{first} · {link}" if link else first
+
+
 def _when(at: object) -> str:
     """`at`, an ISO time, as a Slack date in the reader's own time zone, falling back to `at` as written.
 
@@ -374,67 +403,71 @@ def _counted(counts: object) -> str:
     return ", ".join(f"{escape(k)} {escape(v)}" for k, v in sorted(counts.items(), key=lambda kv: str(kv[0])))
 
 
-def _run_started(e: Mapping[str, object]) -> Block:
-    return _section(
-        f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
-        f"{escape(e.get('run'))} started",
+def _run_started(e: Mapping[str, object]) -> list[str]:
+    return [
+        (
+            f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
+            f"{escape(e.get('run'))} started"
+        ),
         f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))} on `{escape(e.get('branch') or '-')}`",
-    )
+    ]
 
 
-def _run_ended(e: Mapping[str, object]) -> Block:
+def _run_ended(e: Mapping[str, object]) -> list[str]:
     prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
     run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
-    return _section(
+    return [
         _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
         *(_linked(pr) for pr in prs),
         _linked(e.get("summary")) if e.get("summary") else "",
         _quote("Question", e.get("question")),
-    )
+    ]
 
 
-def _chore_ended(e: Mapping[str, object]) -> Block:
+def _chore_ended(e: Mapping[str, object]) -> list[str]:
     findings = e.get("findings") or 0
-    return _section(
+    return [
         _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
         + f" · {escape(findings)} finding{'s' if findings != 1 else ''}",
         _linked(e.get("summary")) if e.get("summary") else "",
-    )
+    ]
 
 
-def _review_ended(e: Mapping[str, object]) -> Block:
+def _review_ended(e: Mapping[str, object]) -> list[str]:
     ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
     findings = e.get("findings") or 0
     counted = f" · {escape(findings)} finding{'s' if findings != 1 else ''}" if verdict else ""
-    return _section(
+    return [
         _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
         _linked(e.get("pr")) if e.get("pr") else "",
-    )
+    ]
 
 
-def _loop_failing(e: Mapping[str, object]) -> Block:
-    return _section(
+def _loop_failing(e: Mapping[str, object]) -> list[str]:
+    return [
         f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok",
         f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}; log `{escape(e.get('log'))}`",
-    )
+    ]
 
 
-def _loop_recovered(e: Mapping[str, object]) -> Block:
-    return _section(f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks")
+def _loop_recovered(e: Mapping[str, object]) -> list[str]:
+    return [f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks"]
 
 
-def _sink_failing(e: Mapping[str, object]) -> Block:
-    return _section(
-        f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row", f"`{escape(e.get('error'))}`"
-    )
+def _sink_failing(e: Mapping[str, object]) -> list[str]:
+    return [
+        f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row",
+        f"`{escape(e.get('error'))}`",
+    ]
 
 
-def _test(e: Mapping[str, object]) -> Block:
-    return _section(f":test_tube: {_linked(e.get('text'))}")
+def _test(e: Mapping[str, object]) -> list[str]:
+    return [f":test_tube: {_linked(e.get('text'))}"]
 
 
-_EVENTS: dict[str, Callable[[Mapping[str, object]], Block]] = {
+# Each event kind's lines, the first naming what happened: the event's page in the web UI is linked after it.
+_EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
     "chore.ended": _chore_ended,
@@ -450,21 +483,15 @@ def _event(e: Mapping[str, object]) -> Block:
     """One event as a section built from its fields. A kind this sink does not know shows its text-format line.
 
     Returns:
-        The section block.
+        The section block, its first line linking to the event's page in the web UI when canopy sent one.
     """
     build = _EVENTS.get(str(e.get("kind")))
-    return build(e) if build is not None else _section(_linked(e.get("line") or e.get("kind")))
+    first, *rest = build(e) if build is not None else [_linked(e.get("line") or e.get("kind"))]
+    return _section(_with_open(first, e.get("ui")), *rest)
 
 
 def _attention(attention: Mapping[str, object]) -> list[Block]:
-    out = [
-        _section(
-            f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}",
-            _linked(a.get("detail")) if a.get("detail") else "",
-            f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
-        )
-        for a in _dicts(attention.get("added"))
-    ]
+    out = [_added(a) for a in _dicts(attention.get("added"))]
     resolved = [
         f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
         f"{escape(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
@@ -473,6 +500,20 @@ def _attention(attention: Mapping[str, object]) -> list[Block]:
     if resolved:
         out.append(_section("*Resolved*", *resolved))
     return out
+
+
+def _added(a: Mapping[str, object]) -> Block:
+    """A new attention item: what it is about and why, linking to its page in the web UI, then its detail and age.
+
+    Returns:
+        The section block.
+    """
+    what = f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}"
+    return _section(
+        _with_open(what, a.get("ui")),
+        _linked(a.get("detail")) if a.get("detail") else "",
+        f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
+    )
 
 
 def _digest(digest: Mapping[str, object]) -> list[Block]:
@@ -544,7 +585,7 @@ def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]
         body += [_DIVIDER] if body else []
         body += _digest({str(k): v for k, v in digest.items()})
     if counts and header:
-        out.append(_context(" · ".join(counts)))
+        out.append(_context(_with_open(" · ".join(counts), message.get("ui"))))
     out += body
     omitted = message.get("omitted")
     more = omitted if isinstance(omitted, int) else 0
