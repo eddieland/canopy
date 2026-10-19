@@ -464,6 +464,29 @@ class PlanThreadView(_Model):
     """Its replies, oldest first."""
 
 
+class PlanTriage(_Model):
+    """A ticket's triage before its plan (DESIGN §25, Triage before a plan): its run, how it ended, and its verdict."""
+
+    run_id: int
+    """The `needs-plan` run. A ticket is triaged at most once."""
+    status: str
+    """The run's status: running while it reads; done when it judged; else failed, timeout, unknown, crashed, or
+    stopped, and the ticket is planned as if triage were off."""
+    verdict: Literal["trivial", "plan"] | None = None
+    """What a run that ended `done` judged; none while it runs or for one that ended any other way."""
+    reason: str | None = None
+    """Its one-sentence reason, or the harness's note for a run that judged nothing, on one line: model text written
+    from the ticket, untrusted, which no worker reads."""
+    waived: bool = False
+    """Whether its waiver is in force, so the ticket's implement goes ahead unplanned: false once the operator asked
+    for a plan or skipped it themselves, or forgot the ticket."""
+    undoable: bool = False
+    """Whether asking for a plan still undoes the waiver in force: its implement has not started, so the ticket has no
+    branch. Once it has, asking is refused `bad_plan`."""
+    at: datetime
+    """When it ended, or when it started while it runs."""
+
+
 class TicketPlans(_Model):
     """A ticket's plans: whether it needs one, the newest as its file stands, the earlier ones, and the comments."""
 
@@ -475,6 +498,9 @@ class TicketPlans(_Model):
     """`policy.plan`."""
     planning: int | None = None
     """The plan run writing a plan for it now, if one is: the plan verbs and a save refuse until it ends."""
+    triage: PlanTriage | None = None
+    """Its triage before a plan (DESIGN §25), if it has had one: running, the waiver it gave, or the one that left it
+    to be planned. `needed` stays the policy's word; a waiver in force means it waits on no plan all the same."""
     changes_asked: datetime | None = None
     """When the operator asked for changes no planner has read yet, as the overseer reads it; none if they have not."""
     newest: PlanFile | None = None
@@ -733,6 +759,8 @@ class PlanChanged(_Model):
     """The plan a request or a skip superseded, if the ticket had one."""
     already: bool
     """Whether the ticket's setting already said so, and nothing was superseded."""
+    waived: int | None = None
+    """The triage run whose waiver a request undid, or a skip replaced with the operator's own (DESIGN §25)."""
 
 
 class PlanSave(_Model):
@@ -1627,8 +1655,11 @@ type SpendGroup = Annotated[
     ),
 ]
 type SpendKind = Annotated[
-    Literal["overseer", "workers", "chores", "reviews"],
-    Field(description="A kind of agent run: each tick's overseer, worker and split runs, chore runs, review runs."),
+    Literal["overseer", "workers", "triage", "chores", "reviews"],
+    Field(
+        description="A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan "
+        "(`needs-plan`, DESIGN §25), chore runs, review runs."
+    ),
 ]
 
 
@@ -1643,6 +1674,8 @@ class SpendCosts(_Model):
     """Dry runs' overseers, apart from `overseer`."""
     workers: float | None = None
     """Worker and split runs."""
+    triage: float | None = None
+    """Triage runs, which judge whether a ticket needs its plan (`needs-plan`, DESIGN §25)."""
     chores: float | None = None
     """Chore runs, the operator's tries included."""
     reviews: float | None = None
@@ -1768,7 +1801,7 @@ class SpendBreakdown(_Model):
     woken: list[SpendWoken]
     """The loop's live ticks by what woke them, the most common first."""
     unpriced: list[SpendUnpriced]
-    """A row per kind of run, in a fixed order: overseer, workers, chores, reviews."""
+    """A row per kind of run, in a fixed order: overseer, workers, triage, chores, reviews."""
     idle_share: float | None = None
     """Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
     no cost, so there is nothing to share."""
@@ -1779,6 +1812,9 @@ class SpendBreakdown(_Model):
     per_done: float | None = None
     """The window's whole spend, the overseer's and chores' included, over the tickets marked done in it, in US
     dollars; None when none was, or nothing reported a cost."""
+    waived: int = 0
+    """How many triage runs that started in the window waived their ticket's plan (DESIGN §25): the planner runs
+    triage saved, to read against what it cost."""
     tickets: list[SpendTicket] = []
     """Each ticket with a run or review run that started in the window, or marked done in it, the costliest first."""
     pull_requests: list[SpendPullRequest] = []

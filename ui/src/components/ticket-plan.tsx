@@ -72,11 +72,7 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="ticket-plan">
             {newest === null && (
                 <Panel>
-                    <Empty size="panel">
-                        {plans.planning === null
-                            ? 'no plan yet: the next tick dispatches a planner'
-                            : `no plan yet: run ${plans.planning} is writing one`}
-                    </Empty>
+                    <Empty size="panel">{emptyText(plans)}</Empty>
                 </Panel>
             )}
             {newest !== null && newest.text !== null && (
@@ -107,6 +103,21 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
             />
         </section>
     )
+}
+
+// What the plan's page says with no plan to show: a planner or a triage at work, a triage's waiver, or the planner to
+// come.
+function emptyText(plans: TicketPlans): string {
+    if (plans.planning !== null) {
+        return `no plan yet: run ${plans.planning} is writing one`
+    }
+    if (plans.triage?.status === 'running') {
+        return `no plan yet: run ${plans.triage.run_id} is judging whether it needs one`
+    }
+    if (plans.triage?.waived === true) {
+        return `no plan: triage run ${plans.triage.run_id} judged it trivial and waived it`
+    }
+    return 'no plan yet: the next tick dispatches a planner'
 }
 
 /**

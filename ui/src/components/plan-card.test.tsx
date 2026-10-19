@@ -3,6 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { triage } from '@/api/mocks'
 import type { PlanSummary, TicketPlans } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
@@ -22,6 +23,7 @@ const PLANS: TicketPlans = {
     setting: null,
     policy: 'approve',
     planning: null,
+    triage: null,
     changes_asked: null,
     plans: [PLAN],
     newest: {
@@ -57,7 +59,8 @@ const PLANS: TicketPlans = {
     ],
 }
 
-// Every write the card sends, and the server stand-in's answer to it, as `canopy plan --approve`'s.
+// Every write the card sends, and the server stand-in's answer to it, as `canopy plan --approve`'s, or as
+// `canopy plan`'s when it undoes triage run 7's waiver.
 let sent: { path: string; body: unknown }[] = []
 
 const server: Middleware = {
@@ -65,8 +68,12 @@ const server: Middleware = {
         if (request.method === 'GET') {
             return Response.json({})
         }
-        sent.push({ path: new URL(request.url).pathname, body: JSON.parse(await request.text()) as unknown })
-        return Response.json({ action: 'approve', already: false, plan: 2, superseded: null })
+        const body = JSON.parse(await request.text()) as { action: string }
+        sent.push({ path: new URL(request.url).pathname, body })
+        const { action } = body
+        return action === 'request'
+            ? Response.json({ action, already: false, plan: null, superseded: null, waived: 7 })
+            : Response.json({ action: 'approve', already: false, plan: 2, superseded: null, waived: null })
     },
 }
 
@@ -135,5 +142,57 @@ describe('PlanCard', () => {
             'policy.plan is approve: every implement waits on a plan you approve.',
         )
         expect(card.textContent).toContain('Run 7 is writing a new plan.')
+    })
+
+    it("names a triage's waiver while it is in force, why, and how to undo it, as canopy plan does", async () => {
+        await renderCard({ newest: null, plans: [], threads: [], triage: triage() })
+        const card = await screen.findByTestId('plan-card')
+        // Not the operator's skip: the hover says whose word it is.
+        expect(screen.getByText('waived').closest('[title]')?.getAttribute('title')).toContain(
+            'Triage run 7 judged it trivial',
+        )
+        expect(screen.getByRole('link', { name: 'run:7' })).toBeTruthy()
+        expect(card.textContent).toMatch(/triagerun:7 trivial/u)
+        expect(card.textContent).toContain('It fixes one misspelled word in a comment, which policy.trivial names.')
+        expect(card.textContent).toContain('Triage waived its plan: the next tick can implement it unplanned.')
+
+        fireEvent.click(screen.getByRole('button', { name: 'Ask for a plan' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            "Triage run 7 had waived ABC-1's plan; it is undone. ABC-1 is planned first: the next tick dispatches a " +
+                'planner, and nothing is implemented until you approve its plan.',
+        )
+        expect(sent).toEqual([{ path: '/api/tickets/ABC-1/plan', body: { action: 'request' } }])
+    })
+
+    it('offers no undo once the waived implement has started, and none for a triage that waived nothing', async () => {
+        await renderCard({ newest: null, plans: [], threads: [], triage: triage({ undoable: false }) })
+        expect((await screen.findByTestId('plan-card')).textContent).toContain(
+            'Triage waived its plan, and its implement went ahead unplanned.',
+        )
+        expect(screen.queryByRole('button', { name: 'Ask for a plan' })).toBeNull()
+        cleanup()
+
+        const judged = triage({ verdict: 'plan', waived: false, undoable: false, reason: 'It changes a schema.' })
+        await renderCard({ newest: null, plans: [], threads: [], triage: judged })
+        const card = await screen.findByTestId('plan-card')
+        expect(screen.getByText('needed')).toBeTruthy()
+        expect(card.textContent).toMatch(/triagerun:7 needs a plan/u)
+        expect(card.textContent).toContain('It changes a schema.')
+        expect(card.textContent).toContain('None yet: the next tick dispatches a planner.')
+        expect(screen.queryByRole('button', { name: 'Ask for a plan' })).toBeNull()
+        cleanup()
+
+        const failed = triage({ status: 'timeout', verdict: null, waived: false, undoable: false, reason: 'timed out' })
+        await renderCard({ newest: null, plans: [], threads: [], triage: failed })
+        expect((await screen.findByTestId('plan-card')).textContent).toMatch(/triagerun:7 timeout/u)
+    })
+
+    it('says which run is judging whether the ticket needs a plan, and nothing it said yet', async () => {
+        const running = triage({ status: 'running', verdict: null, waived: false, undoable: false, reason: null })
+        await renderCard({ newest: null, plans: [], threads: [], triage: running })
+        const card = await screen.findByTestId('plan-card')
+        expect(card.textContent).toMatch(/triagerun:7 running/u)
+        expect(card.textContent).toContain('Run 7 is judging whether it needs a plan at all.')
+        expect(card.textContent).not.toContain('triage said')
     })
 })
