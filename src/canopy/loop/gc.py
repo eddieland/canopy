@@ -348,7 +348,8 @@ def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retentio
     """The connectors' runs (DESIGN §30), which a pass removes as it does the harness's attention rows.
 
     One goes once it is outside the attention list's window and older than `journal_days`, unless it is its source's
-    newest run, or its newest that recorded the query's result.
+    newest run, or its newest that recorded the query's result. A poll's run, made between ticks, is outside the window
+    once it started before the window's oldest tick.
 
     Returns:
         The kind.
@@ -357,11 +358,12 @@ def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retentio
     row = conn.execute(
         f"SELECT count(*) AS n, sum({_RUN_BYTES}) AS b, "  # noqa: S608
         f"sum(removable) AS rn, sum(CASE WHEN removable THEN {_RUN_BYTES} END) AS rb FROM ("
-        "SELECT *, tick_id < ? AND started_at < ? AND id NOT IN ("
+        "SELECT *, coalesce(tick_id < ?, started_at < (SELECT started_at FROM ticks WHERE id = ?)) "
+        "AND started_at < ? AND id NOT IN ("
         "SELECT max(id) FROM connector_runs GROUP BY source UNION "
         "SELECT max(id) FROM connector_runs WHERE query_result IS NOT NULL GROUP BY source) AS removable "
         "FROM connector_runs)",
-        (_window(conn), cutoff),
+        (window := _window(conn), window, cutoff),
     ).fetchone()
     return Kind(
         "connector runs",

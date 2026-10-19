@@ -15,6 +15,10 @@ not a gate, not an early wake. A deferred start waits the same way before the fi
 Each tick's row records whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so
 spend can be split by what it bought (ROADMAP M33).
 
+A tick is the overseer's turn; between ticks the loop also polls the connectors, every `connect.every_minutes` from the
+last read, whatever `loop.*` paces the ticks at (`poll`, DESIGN §6). A poll reads the world into the journal and ends
+no wait, and none runs while the loop is paused.
+
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
 `canopy pause` and `canopy resume` write the same journal row, which the wait reads at every step.
@@ -48,7 +52,7 @@ from rich.text import Text
 
 from canopy.core import config, db, notice, pause
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import attention, duties, pacing, reread, tick, tick_now
+from canopy.loop import attention, duties, pacing, poll, reread, tick, tick_now
 
 if TYPE_CHECKING:
     import sqlite3
@@ -328,6 +332,35 @@ class _Settings:
         self.pace = pace
 
 
+@dataclass
+class _Polls:
+    """When the wait after a tick polls the connectors (`poll.run`): `connect.every_minutes` after the last read."""
+
+    settings: _Settings
+    clock: Callable[[], float]
+    log: logs.TickAdapter
+    #: When the connectors last ran, a tick's or a poll's, on `clock`.
+    last: float = 0.0
+
+    def ticked(self) -> float:
+        """Note that a tick has just ended: it ran the connectors, unless its reconcile failed, so the next poll waits.
+
+        Returns:
+            The time, on `clock`.
+        """
+        self.last = self.clock()
+        return self.last
+
+    def step(self) -> None:
+        """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused."""
+        self.settings.apply()
+        ctx = self.settings.ctx
+        if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
+            return
+        self.last = self.clock()
+        poll.run(ctx, self.log)
+
+
 def _stamped(label: Text, rest: str) -> Text:
     """A line of the loop's own, outside any tick's block: the time, `label`, and `rest` as plain text.
 
@@ -380,6 +413,7 @@ def _ticks(
         _log_woken(log, woken, seen=0, since=None, read_at=None)
         woken_by = woken or "start"
     idle_count = 0
+    polls = _Polls(settings, clock, log)
     while not stop.requested:
         settings.apply()
         ctx, pace = settings.ctx, settings.pace
@@ -395,7 +429,7 @@ def _ticks(
                 outcome = _tick(ctx, dry_run=dry_run, woken_by=woken_by, ui=settings.ui, log=log)
         finally:
             settings.reload.ticking = False
-        ended = clock()
+        ended = polls.ticked()
         if keys is not None:
             # Keys pressed during the tick are dropped, all but a pause, which holds the next tick.
             _toggle_pause(ctx, keys(), log)
@@ -441,7 +475,7 @@ def _ticks(
             keys=keys,
             asked=settings.asked.take,
             log=log,
-            each_step=settings.apply,
+            each_step=polls.step,
         )
         _log_woken(log, woken, seen=seen, since=since, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")

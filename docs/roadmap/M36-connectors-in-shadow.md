@@ -103,7 +103,9 @@ order yet, and a ticket whose observations are stale apart; agreement is compute
 bounds each line, records `observed_tickets`, `observed_comments`, `observed_checks`, `observed_branches`, and a PR's
 labels and mergeable state, records each run in `connector_runs`, which `canopy gc --dry-run` counts, raises
 `connector_failed`, and `canopy status` names each source with its last run and the age of its observations;
-`tests/fakes/connector` plays any source. Not yet: the derivation, and canopy's connectors grown to the contract, so
-canopy's own GitHub reader is asked only the PRs, while one is watched. Open for the operator: the tracker query run
-in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that leaves an
-observation stale.
+`tests/fakes/connector` plays any source. `canopy loop` also polls the sources between ticks every
+`connect.every_minutes`, apart from how it paces ticks (operator, 2026-10-19, ahead of M39): a poll records its runs
+with no tick, raises nothing, and ends no wait. Not yet: the derivation, and canopy's connectors grown to the
+contract, so canopy's own GitHub reader is asked only the PRs, while one is watched. Open for the operator: the
+tracker query run in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that
+leaves an observation stale.

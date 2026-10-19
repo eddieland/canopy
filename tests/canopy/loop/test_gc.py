@@ -201,6 +201,28 @@ def test_a_connector_run_goes_outside_the_window_after_journal_days_but_each_sou
     assert (kinds["connector runs"]["count"], kinds["connector runs"]["removable"]) == (4, 1)
 
 
+def test_a_polls_connector_run_is_outside_the_window_once_it_started_before_the_windows_oldest_tick(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    conn = canopy_env.journal()
+    now = datetime.now(UTC)
+    old, newer = earlier(now, 200), earlier(now, 100)
+    tick(conn, old)
+    # Two polls between ticks, made by no tick: one before the window's oldest tick, one after it.
+    for started in (old, db.now()):
+        conn.execute(
+            "INSERT INTO connector_runs (tick_id, source, kind, started_at, ended_at, status, request, recorded, "
+            "refused, missed, stderr) VALUES (NULL, 'github', 'vcs', ?, ?, 'ok', '{}', '{}', '{}', NULL, '')",
+            (started, started),
+        )
+    tick(conn, newer)
+    conn.commit()
+    with mock.patch.object(attention, "HISTORY_TICKS", 1):
+        kinds = dry_run(capsys)
+    # The older poll goes; the newer is inside the window, and is github's newest besides.
+    assert (kinds["connector runs"]["count"], kinds["connector runs"]["removable"]) == (2, 1)
+
+
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
 def test_an_agent_cannot_run_gc(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], env: str) -> None:
     with mock.patch.dict(os.environ, {env: "3"}):

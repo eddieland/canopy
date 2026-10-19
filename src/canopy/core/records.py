@@ -590,12 +590,13 @@ class ObservedCheck(Row):
 
 @dataclass(frozen=True)
 class ConnectorRun(Row):
-    """One run of a source a tick made (DESIGN §30): what it was asked, how it ended, and what it read."""
+    """One run of a source (DESIGN §30): what it was asked, how it ended, and what it read."""
 
     TABLE: ClassVar[str] = "connector_runs"
 
     id: int
-    tick_id: int
+    #: The tick that made it; None for the loop's poll between ticks (DESIGN §6).
+    tick_id: int | None
     source: str
     kind: SourceKind
     started_at: str

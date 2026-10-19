@@ -1,9 +1,10 @@
-"""Each tick's runs of the connectors (DESIGN §30): recorded, raised as `connector_failed`, shown by `canopy status`.
+"""The connectors' runs (DESIGN §30): recorded, raised as `connector_failed`, shown by `canopy status`.
 
-A run is recorded in `connector_runs` whatever it read. One that did not read everything it was asked raises the
-harness's `connector_failed` that tick, about the source and named in its detail; the cause is gone at the first run
-that reads everything. An observation's age is read from its own row, so a subject a run did not read whole keeps the
-age of the read that did.
+A run is recorded in `connector_runs` whatever it read, a tick's or the loop's poll between ticks (DESIGN §6). A tick's
+run that did not read everything it was asked raises the harness's `connector_failed` that tick, named in its detail;
+the cause is gone at the first tick whose run reads everything. A poll raises nothing: the attention list is a tick's,
+and the next tick runs the source again. An observation's age is read from its own row, so a subject a run did not
+read whole keeps the age of the read that did.
 """
 
 from __future__ import annotations
@@ -28,9 +29,9 @@ FAILED_REASON = "connector_failed"
 
 
 def record(
-    conn: sqlite3.Connection, tick_id: int, *, name: str, source: Source, request: Request, observed: Observed
+    conn: sqlite3.Connection, tick_id: int | None, *, name: str, source: Source, request: Request, observed: Observed
 ) -> int:
-    """Record one run of source `name` that tick `tick_id` made.
+    """Record one run of source `name` that tick `tick_id` made, or the loop's poll when `tick_id` is None.
 
     Returns:
         The run's id.

@@ -1,4 +1,4 @@
--- sha256 of 0052_connectors.sql: 237c42e60028f59282990d83a9b5de73277ff9a6f35091257fb232a1b18b69f2
+-- sha256 of 0052_connectors.sql: 29df3f6e3a6df6f8d0242ac3542065352307ff2f3a2aa173cb87e199d518e346
 
 INSERT INTO observed_tickets (key, title, body, state, labels, updated_at, blockers, observed_at)
 VALUES ('OLD-1', 'Fix the build', 'It fails.', 'open', '[{"name": "agent", "added_at": null}]', 'x', '[]', 'x');

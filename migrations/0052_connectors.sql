@@ -67,13 +67,13 @@ CREATE TABLE observed_checks (
     PRIMARY KEY (pr_url, name)
 );
 
--- Each run of a source a tick made. `request` is what it was sent, as JSON; `recorded` and `refused` count its lines of
--- each kind, as a JSON object; `missed` is the harness's words for what it did not read, NULL for an `ok` run. The
--- query's and the review query's results, as JSON lists of keys and URLs in order, are kept when the run read them
--- to the end.
+-- Each run of a source: a tick's, or the loop's poll between ticks, whose `tick_id` is NULL. `request` is what it was
+-- sent, as JSON; `recorded` and `refused` count its lines of each kind, as a JSON object; `missed` is the harness's
+-- words for what it did not read, NULL for an `ok` run. The query's and the review query's results, as JSON lists of
+-- keys and URLs in order, are kept when the run read them to the end.
 CREATE TABLE connector_runs (
     id                   INTEGER PRIMARY KEY,
-    tick_id              INTEGER NOT NULL REFERENCES ticks(id),
+    tick_id              INTEGER REFERENCES ticks(id),
     source               TEXT NOT NULL,
     kind                 TEXT NOT NULL CHECK (kind IN ('tracker', 'vcs')),
     started_at           TEXT NOT NULL,

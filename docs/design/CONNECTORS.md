@@ -29,7 +29,8 @@ Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a comma
 `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing configured. There is no default
 `tracker` source, since the harness never branches on `tracker.provider` (§17); without one, tickets are not observed,
 and the derivation says so. An observation past `connect.max_age_minutes` is stale; the default keeps what a tick
-observed fresh through its dispatches.
+observed fresh through its dispatches. Between ticks, `canopy loop` polls every source every `connect.every_minutes`,
+whatever its pace for ticks (§6, Ticks and polls).
 
 ### The contract
 
@@ -65,18 +66,20 @@ the journal (M37) decides how they reach it. The connector moves no mirror curso
 overseer mirrors as before. Each tick's run of a source is recorded with what it was asked and what it read; §29's
 reads after a run and before a send are validated the same way but are not a tick's runs.
 
-### In the tick
+### In the tick, and between ticks
 
 In §6 step 3, after the reconciles, the tick runs the `tracker` source, then the `vcs` source, which is also §29's
 reconcile read; a tick whose reconcile failed runs neither, and a dry run observes as a live tick does. A source that
 fails, or reads less than it was asked, keeps its previous observations and raises the harness's `connector_failed`
 (§14), naming what was not read, each tick until a run reads everything; the overseer's view of the list leaves it
 out. It is one item about the workspace, its detail naming each failing source, since the attention list has no
-subject for a source. The tick goes on and loses nothing, since the overseer still reads live. The derivation follows.
+subject for a source. The tick goes on and loses nothing, since the overseer still reads live. The derivation
+follows. The loop's polls between ticks run the same sources the same way, record their runs with no tick, and raise
+nothing (§6).
 
 Until `canopy-connect-github` is grown to the contract, it reads only §29's PRs and refuses a request naming none, so a
-tick sends it only the PRs, and runs it only while one is watched: asked more, every run would read less than asked
-and raise `connector_failed`. An operator's own `vcs` source is sent the whole request.
+tick or a poll sends it only the PRs, and runs it only while one is watched: asked more, every run would read less
+than asked and raise `connector_failed`. An operator's own `vcs` source is sent the whole request.
 
 ### The derivation, in shadow
 

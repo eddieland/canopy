@@ -960,7 +960,7 @@ class Connect(Section):
     sources: Annotated[dict[SourceName, Source], Scope.PRIVATE] = {}
     #: An observation older than this is stale (DESIGN §30): `canopy status` marks it so.
     max_age_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
-    #: How often ROADMAP M39's loop runs the connectors between ticks; nothing reads it before M39.
+    #: How often `canopy loop` polls the connectors between ticks, apart from how often it ticks (DESIGN §6).
     every_minutes: Annotated[Minutes, Scope.PRIVATE] = 2
 
     @model_validator(mode="after")

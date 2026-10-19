@@ -22,8 +22,10 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 
-def run(ctx: Context, tick_id: int, log: logs.TickAdapter) -> frozenset[str]:
+def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> frozenset[str]:
     """Run every source that reads, recording each run, and return the PRs the `vcs` source read whole.
+
+    `tick_id` is the tick running them, or None for the loop's poll between ticks (`poll.run`).
 
     Returns:
         The PRs the `vcs` run read whole, which the drafts that wait on them are checked against.
