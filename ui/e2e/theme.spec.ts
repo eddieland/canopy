@@ -155,4 +155,17 @@ test.describe('palettes', () => {
         await page.goto('runs')
         await expect(page.locator('html')).toHaveAttribute('data-palette-at-body', 'solarized')
     })
+
+    test('a pick in one tab reaches the others, on any page', async ({ context }) => {
+        const first = await context.newPage()
+        const second = await context.newPage()
+        await signIn(first)
+        await first.goto('settings')
+        await second.goto('runs')
+        await settled(second)
+
+        await first.getByTestId('palette-light-off-white').click()
+
+        await expect(second.locator('html')).toHaveAttribute('data-light-palette', 'off-white')
+    })
 })

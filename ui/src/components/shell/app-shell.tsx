@@ -17,6 +17,7 @@ import { useBuddy } from '@/lib/buddy'
 import { IN_PAGE } from '@/lib/in-page'
 import { isSearchShortcut } from '@/lib/search'
 import { cn } from '@/lib/utils'
+import { usePalettes } from '@/theme/palette'
 import { useTheme } from '@/theme/use-theme'
 
 import { Buddy } from './buddy'
@@ -61,8 +62,9 @@ export const PAGE_SCROLLER = 'page'
  * cross-faded.
  */
 export function AppShell() {
-    // Follows the system theme and other tabs on every page, the sign-in page included.
+    // Follows the system theme and other tabs on every page, the sign-in page included, and so does each palette.
     useTheme()
+    usePalettes()
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
