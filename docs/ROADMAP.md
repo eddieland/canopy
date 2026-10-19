@@ -1029,10 +1029,10 @@ Humans still authorize everything that lands; canopy still never merges (TRUST_M
 - Tests with the fakes: an `implement` reporting `created` records each valid follow-up with its repository; each
   refused entry (bad key, the parent, a known key, another prefix, an unmapped repository, past `max_follow_ups`, from
   a follow-up's run, from a private run) recorded nowhere, named in the run's note and in `follow_up_unrecorded`, the
-  run's status unchanged; a follow-up dispatched without `--label`; `parent_withdrawn` after the parent's stop or forget; a
-  follow-up's prompt carrying its parent check, and an override without `{{AUTHORIZATION}}` refused; `unknown_repo`
-  for any other repository; `--kind split` refused; the removed keys' errors; the migration carrying over only worked
-  split children; the state block's follow-ups, a snapshot.
+  run's status unchanged; a follow-up dispatched without `--label`; `parent_withdrawn` after the parent's stop or
+  forget; a follow-up's prompt carrying its parent check, and an override without `{{AUTHORIZATION}}` refused;
+  `unknown_repo` for any other repository; `--kind split` refused; the removed keys' errors; the migration carrying
+  over only worked split children; the state block's follow-ups, a snapshot.
 - Open, in the design: the parent's phase once a split request moved its work into follow-ups; journal-only
   follow-ups for a private ticket's worker; whether `policy.max_follow_ups = 0` is enough for an operator who wants the
   old line; whether losing its label withdraws a parent's follow-ups; a bound per ticket rather than per run; how long
