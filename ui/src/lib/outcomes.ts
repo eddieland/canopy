@@ -181,7 +181,23 @@ export function draftsSentText(sent: DraftsSent): string {
                 `Run ${d.run}'s draft ${d.number} may have been posted: the post ended without saying. A read of its ` +
                 'PR settles it; canopy sends it no other time.',
         ),
+        ...sent.staged.map((d) => `Staged run ${d.run}'s draft ${d.number} in a review for you to submit on GitHub.`),
     ].join(' ')
+}
+
+/**
+ * The toast a stage shows: how many drafts wait in the pending review, with where to finish it, `url`'s files page,
+ * where GitHub's own submit is. A check only when every draft is in it.
+ */
+export function draftsStagedToast(sent: DraftsSent, url: string): NewToast {
+    const total = sent.staged.length + sent.already.length + sent.failed.length + sent.unconfirmed.length
+    const n = sent.staged.length
+    const what = n === 1 ? '1 draft' : `${n} drafts`
+    return {
+        title: n === 0 ? 'Staged nothing' : `Staged ${what} in a review on GitHub`,
+        ...(n > 0 && { detail: `${url}/files` }),
+        tone: n === total ? 'done' : 'failed',
+    }
 }
 
 /**

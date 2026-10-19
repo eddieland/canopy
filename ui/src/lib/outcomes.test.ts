@@ -11,6 +11,7 @@ import {
     draftEditedText,
     draftsSentText,
     draftsSentToast,
+    draftsStagedToast,
     editedText,
     failedText,
     forgotText,
@@ -211,17 +212,34 @@ describe('outcomes', () => {
                 already: [draft({ number: 2, status: 'sent', sent_url: null })],
                 failed: [{ draft: draft({ number: 3 }), why: 'the post failed: 502' }],
                 unconfirmed: [draft({ number: 4, status: 'unconfirmed' })],
+                staged: [draft({ number: 5, status: 'staged' })],
             }),
         ).toBe(
             `Sent run 45's draft 1: ${url}. Run 45's draft 2 was sent already. ` +
                 "Run 45's draft 3 was not sent: the post failed: 502. Run 45's draft 4 may have been posted: the " +
-                'post ended without saying. A read of its PR settles it; canopy sends it no other time.',
+                'post ended without saying. A read of its PR settles it; canopy sends it no other time. Staged run ' +
+                "45's draft 5 in a review for you to submit on GitHub.",
         )
+    })
+
+    it('toast a stage: how many drafts wait in the review, and where to finish it', () => {
+        const pr = 'https://github.com/acme/web/pull/88'
+        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
+        const two = [draft({ status: 'staged' }), draft({ number: 2, status: 'staged' })]
+        expect(draftsStagedToast({ ...none, staged: two }, pr)).toEqual({
+            title: 'Staged 2 drafts in a review on GitHub',
+            detail: `${pr}/files`,
+            tone: 'done',
+        })
+        expect(draftsStagedToast({ ...none, failed: [{ draft: draft(), why: 'refused' }] }, pr)).toEqual({
+            title: 'Staged nothing',
+            tone: 'failed',
+        })
     })
 
     it("toast a send: the one draft's fate, or how many of several reached the PR, and where they went", () => {
         const url = 'https://github.com/acme/web/pull/88#pullrequestreview-1'
-        const none = { posted: [], already: [], failed: [], unconfirmed: [] }
+        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
         expect(draftsSentToast({ ...none, posted: [draft({ status: 'sent', sent_url: url })] })).toEqual({
             title: "Sent run 45's draft 1",
             detail: url,

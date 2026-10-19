@@ -64,6 +64,19 @@ export function waiting(threads: PullRequestThreads): Draft[] {
     return [...threads.pr_drafts, ...threads.threads.flatMap((t) => t.drafts)].filter((d) => d.status === 'waiting')
 }
 
+/**
+ * The waiting drafts a stage takes, in the page's order: all but those whose reaction is not on GitHub yet, since a
+ * pending review holds no reaction. Those stay to send.
+ */
+export function stageable(threads: PullRequestThreads): Draft[] {
+    return waiting(threads).filter((d) => d.reaction === null || d.reacted === d.reaction)
+}
+
+/** Every draft for the PR in the review the operator staged, which they submit on GitHub. */
+export function staged(threads: PullRequestThreads): Draft[] {
+    return [...threads.pr_drafts, ...threads.threads.flatMap((t) => t.drafts)].filter((d) => d.status === 'staged')
+}
+
 /** Sorts a PR's threads onto its diff: at their line, under their file, or elsewhere, as a review's findings are. */
 export function placeThreads(threads: PullRequestThreads): Placed<ReviewThread> {
     return place(threads.threads, (t) => ({ file: t.file, line: t.diff_line }), threads.diff !== null)

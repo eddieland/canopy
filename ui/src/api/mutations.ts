@@ -270,6 +270,18 @@ export async function sendDrafts(drafts: Pick<Draft, 'run' | 'number' | 'hash'>[
     )
 }
 
+/**
+ * `canopy draft stage`: the drafts in one pending review on their PR, each named by the hash of the text the page
+ * showed, for the operator to finish and submit on GitHub. Any refusal stages nothing.
+ */
+export async function stageDrafts(drafts: Pick<Draft, 'run' | 'number' | 'hash'>[]): Promise<DraftsSent> {
+    return unwrap(
+        await api.POST('/api/drafts/stage', {
+            body: { drafts: drafts.map(({ run, number, hash }) => ({ run, number, hash })) },
+        }),
+    )
+}
+
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
 export async function pauseLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/pause'))

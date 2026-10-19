@@ -2395,7 +2395,7 @@ class DraftRef(_Model):
 
 
 class DraftSendRequest(_Model):
-    """Drafts to send together, as `canopy draft send` takes them: one PR's go as one comment review."""
+    """Drafts to send or stage together, as `canopy draft send` and `stage` take them: one PR's go as one review."""
 
     drafts: Annotated[list[DraftRef], Field(min_length=1, max_length=30)]
     """The drafts, each with the hash of the text the page showed."""
@@ -2411,7 +2411,7 @@ class DraftFailure(_Model):
 
 
 class DraftsSent(_Model):
-    """What a send did, as `canopy draft send` reports it."""
+    """What a send or a stage did, as `canopy draft send` and `canopy draft stage` report it."""
 
     posted: list[Draft]
     """The drafts posted now."""
@@ -2421,3 +2421,5 @@ class DraftsSent(_Model):
     """The drafts whose post failed, which wait again."""
     unconfirmed: list[Draft]
     """The drafts whose post ended without saying whether it submitted, until a read of the PR settles them."""
+    staged: list[Draft]
+    """The drafts a stage put in a pending review, for the operator to submit on GitHub."""

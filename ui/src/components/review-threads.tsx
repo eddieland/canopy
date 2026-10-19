@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Pencil, Send, Trash2, Undo2 } from 'lucide-react'
+import { GitPullRequestDraft, Pencil, Send, Trash2, Undo2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
-import { dropDraft, editDraft, refreshThreads, sendDrafts } from '@/api/mutations'
+import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
 import type { Draft, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
@@ -34,11 +34,13 @@ import {
     open,
     placeThreads,
     reactionOf,
+    stageable,
+    staged,
     threadWhere,
     waiting,
 } from '@/lib/drafts'
 import type { Placed } from '@/lib/reviews'
-import { draftDroppedText, draftEditedText, draftsSentText, draftsSentToast } from '@/lib/outcomes'
+import { draftDroppedText, draftEditedText, draftsSentText, draftsSentToast, draftsStagedToast } from '@/lib/outcomes'
 import { shortSha } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
@@ -108,8 +110,10 @@ export function ReviewThreads({ url }: { url: string }) {
 
 /**
  * The head of a PR's threads: how workers' comments reach GitHub now, when the reader last read the PR, a warning when
- * its head is past the diff the page shows, every draft with a link to its card, the drafts for the review's body, and
- * a send of every waiting draft. `onFollow` hears a link followed to a draft on a file, by the file's index.
+ * its head is past the diff the page shows, every draft with a link to its card, the drafts for the review's body, a
+ * send of every waiting draft, and a stage of them in a pending review the operator submits on GitHub. While the PR
+ * holds one, neither is offered: it says where to finish it. `onFollow` hears a link followed to a draft on a file,
+ * by the file's index.
  */
 function RepliesPanel({
     threads,
@@ -125,6 +129,8 @@ function RepliesPanel({
     const [said, setSaid] = useState<string | null>(null)
     const toast = useToast()
     const sendable = waiting(threads)
+    const toStage = stageable(threads)
+    const held = staged(threads)
     const send = useMutation({
         mutationFn: () => sendDrafts(sendable),
         onSuccess: (sent) => {
@@ -133,6 +139,17 @@ function RepliesPanel({
             onChange()
         },
     })
+    const stage = useMutation({
+        mutationFn: () => stageDrafts(toStage),
+        onSuccess: (sent) => {
+            setSaid(draftsSentText(sent))
+            toast(draftsStagedToast(sent, threads.url))
+            onChange()
+        },
+    })
+    const busy = send.isPending || stage.isPending
+    // GitHub keeps one pending review a person, so nothing else goes on the PR until that one is submitted or deleted.
+    const offered = sendable.length > 0 && held.length === 0
     const moved = movedHead(threads)
     const count = threads.threads.length
     return (
@@ -192,24 +209,56 @@ function RepliesPanel({
                     ))}
                 </div>
             )}
-            {(sendable.length > 0 || said !== null || send.error !== null) && (
+            {(sendable.length > 0 ||
+                held.length > 0 ||
+                said !== null ||
+                send.error !== null ||
+                stage.error !== null) && (
                 <PanelFooter>
-                    <span className="flex flex-wrap items-center gap-2">
-                        {sendable.length > 0 && (
+                    {held.length > 0 && (
+                        <p className="text-sm" data-testid="staged-review">
+                            {held.length === 1 ? '1 draft waits' : `${held.length} drafts wait`} in the review you
+                            staged. Finish and submit it{' '}
+                            <a
+                                href={`${threads.url}/files`}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="text-accent underline-offset-4 hover:underline"
+                            >
+                                on GitHub
+                            </a>
+                            , or delete it there to send them from here; canopy&apos;s next read of the PR settles them.
+                        </p>
+                    )}
+                    {offered && (
+                        <span className="flex flex-wrap items-center gap-2">
                             <Button
                                 onClick={() => send.mutate()}
-                                disabled={send.isPending}
+                                disabled={busy}
                                 title={`canopy draft send ${sendRefs(sendable)}`}
                             >
                                 <Send />
                                 {send.isPending ? `Sending ${sendable.length}…` : `Send ${sendable.length} waiting`}
                             </Button>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                            As one comment review, in your name: it approves nothing and resolves no thread.
+                            {toStage.length > 0 && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => stage.mutate()}
+                                    disabled={busy}
+                                    title={`canopy draft stage ${sendRefs(toStage)}`}
+                                >
+                                    <GitPullRequestDraft />
+                                    {stage.isPending ? 'Starting the review…' : 'Start a review on GitHub'}
+                                </Button>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                                Send posts one comment review, in your name: it approves nothing and resolves no thread.
+                                A review started on GitHub holds the same words, for you to add to and submit there
+                                {toStage.length < sendable.length && ', without the drafts that add a reaction'}.
+                            </span>
                         </span>
-                    </span>
-                    <Notice error={send.error}>{said}</Notice>
+                    )}
+                    <Notice error={send.error ?? stage.error}>{said}</Notice>
                 </PanelFooter>
             )}
         </Panel>
@@ -434,63 +483,69 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                     added it, and sending again adds no second.
                 </p>
             )}
-            {!editing && (open(draft) || draft.status === 'dropped' || draft.sent_url !== null) && (
-                <span className="mt-2 flex flex-wrap items-center gap-2">
-                    {draft.status === 'waiting' && (
-                        <Button
-                            size="sm"
-                            onClick={() => send.mutate()}
-                            disabled={busy}
-                            title={`canopy draft send run:${draft.run} ${draft.number}@${draft.hash}`}
-                        >
-                            <Send />
-                            {send.isPending ? 'Sending…' : 'Send'}
-                        </Button>
-                    )}
-                    {open(draft) && (
-                        <>
+            {!editing &&
+                (open(draft) || draft.status === 'dropped' || draft.status === 'staged' || draft.sent_url !== null) && (
+                    <span className="mt-2 flex flex-wrap items-center gap-2">
+                        {draft.status === 'waiting' && (
                             <Button
                                 size="sm"
-                                variant="outline"
-                                onClick={() => setEditing(true)}
+                                onClick={() => send.mutate()}
                                 disabled={busy}
-                                title={`canopy draft edit ${ref} --text TEXT${reacts ? ' --react NAME' : ''}`}
+                                title={`canopy draft send run:${draft.run} ${draft.number}@${draft.hash}`}
                             >
-                                <Pencil />
-                                Edit
+                                <Send />
+                                {send.isPending ? 'Sending…' : 'Send'}
                             </Button>
+                        )}
+                        {open(draft) && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEditing(true)}
+                                    disabled={busy}
+                                    title={`canopy draft edit ${ref} --text TEXT${reacts ? ' --react NAME' : ''}`}
+                                >
+                                    <Pencil />
+                                    Edit
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => drop.mutate(false)}
+                                    disabled={busy}
+                                    title={`canopy draft drop ${ref}`}
+                                >
+                                    <Trash2 />
+                                    Drop
+                                </Button>
+                            </>
+                        )}
+                        {draft.status === 'dropped' && (
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => drop.mutate(false)}
+                                onClick={() => drop.mutate(true)}
                                 disabled={busy}
-                                title={`canopy draft drop ${ref}`}
+                                title={`canopy draft drop ${ref} --undo`}
                             >
-                                <Trash2 />
-                                Drop
+                                <Undo2 />
+                                Undo
                             </Button>
-                        </>
-                    )}
-                    {draft.status === 'dropped' && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => drop.mutate(true)}
-                            disabled={busy}
-                            title={`canopy draft drop ${ref} --undo`}
-                        >
-                            <Undo2 />
-                            Undo
-                        </Button>
-                    )}
-                    {draft.sent_url !== null && <LinkOut href={draft.sent_url} label="The reply on its host" />}
-                    {draft.status === 'unchecked' && (
-                        <span className="text-xs text-muted-foreground">
-                            It is sent once canopy has read its thread.
-                        </span>
-                    )}
-                </span>
-            )}
+                        )}
+                        {draft.sent_url !== null && <LinkOut href={draft.sent_url} label="The reply on its host" />}
+                        {draft.status === 'unchecked' && (
+                            <span className="text-xs text-muted-foreground">
+                                It is sent once canopy has read its thread.
+                            </span>
+                        )}
+                        {draft.status === 'staged' && (
+                            <span className="text-xs text-muted-foreground">
+                                It is in the review you staged, for you to submit on GitHub.
+                            </span>
+                        )}
+                    </span>
+                )}
             <Notice error={send.error ?? drop.error} className="mt-1.5">
                 {said}
             </Notice>

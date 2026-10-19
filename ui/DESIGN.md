@@ -1389,8 +1389,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   draft in the order their cards show (a `thread-draft` row: its status chip, `run:N` and its number, its first line
   linking to its card, or its reaction's name for one it sends alone, and where the card sits in muted monospace),
   whose links open the card's file as a review's findings list does, the drafts for the review's body, and in its foot
-  `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, with a muted line
-  saying it approves nothing and resolves no thread. Then the diff (`DiffPanels`), each thread's card
+  `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline
+  `Start a review on GitHub` beside it, which stages them in a pending review instead, with a muted line saying what
+  each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the PR's files
+  on GitHub to finish it. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
@@ -1401,11 +1403,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
   `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.
   A draft's card (`DraftCard`, `surface`, a `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and
-  its number, its status as a chip
-  (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
-  plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
-  a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it
-  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped,
+  its number, its status as a chip (`DRAFT_TONE`: waiting, unconfirmed, and staged in `status-blocked`, refused in
+  `status-failed`, sending as running, the rest plain), the run's stance as a muted word, `your text` once edited, and
+  its hash at the end in muted monospace, the one a send carries; then the harness's reason for a status other than
+  waiting, a `status-blocked` warning when it replaced a draft the operator edited, and its text as `MemoryText`, struck
+  and muted once superseded or dropped,
   left out when the draft sends its reaction alone. A thread's draft that stages a reaction says so in a muted line
   under the text (`draft-reaction`): the emoji, hidden from screen readers, then its name and whether it goes with the
   reply or alone; one a failed send already added says so in `status-blocked` (`draft-reacted`). Its
