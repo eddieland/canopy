@@ -8,7 +8,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunKind, RunStatus
 from canopy.loop import attention
 from canopy.runs import worker
 from tests.canopy.conftest import Ws, seed_pools
@@ -27,7 +27,8 @@ from tests.canopy.helpers import (
     wait_for_run,
     waits,
 )
-from tests.conftest import CanopyEnv, git
+from tests.canopy.scenario_helpers import Scenario, dispatches
+from tests.conftest import git
 
 
 def split(key: str, *args: str) -> list[str]:
@@ -167,13 +168,10 @@ def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws: Ws, 
         assert db.units(conn, "PROJ-12") == []
 
 
-def test_a_workspace_of_one_repository_is_never_split(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
-    conn = canopy_env.journal()
-    with in_tick(conn) as tick_id:
-        assert main(split("PROJ-1", "--request", "1", "--repo", "repo"), runner=InlineRunner()) == 1
-        assert decisions(conn, tick_id) == [
-            ("refused:bad_split", "a split names every repository PROJ-1 covers, at least two; name each with --repo")
-        ]
+def test_a_workspace_of_one_repository_is_never_split(scenario: Scenario) -> None:
+    assert scenario.refuses([*dispatches(kind=RunKind.SPLIT), "--request", "1"]) == [
+        ("refused:bad_split", "a split names every repository PROJ-1 covers, at least two; name each with --repo")
+    ]
 
 
 @pytest.mark.parametrize(
@@ -271,22 +269,19 @@ def test_a_timed_out_split_records_the_children_it_reported(ws: Ws, treehouse_st
         assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
-def test_a_child_is_not_worked_in_a_workspace_of_another_repository(
-    canopy_env: CanopyEnv, treehouse_state: Path
-) -> None:
-    conn = canopy_env.journal()
-    with in_tick(conn, dry_run=True) as tick_id:
-        db.touch_ticket(conn, "PROJ-12", str(canopy_env.root))
+def test_a_child_is_not_worked_in_a_workspace_of_another_repository(scenario: Scenario) -> None:
+    conn = scenario.conn
+    with in_tick(conn, ends_ok=True) as tick_id:
+        db.touch_ticket(conn, "PROJ-12", str(scenario.env.root))
         conn.execute(
             "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status) "
             "VALUES (?, 'PROJ-12', 'split', '', 'x', 'y', 'l', 'done')",
             (tick_id,),
         )
         db.record_split_children(conn, "PROJ-12", 1, {"PROJ-13": "api"})
-        assert main(["dispatch", "PROJ-13", "--repo", "repo", "--label", LABEL, "--kind", "implement"]) == 1
-        assert decisions(conn, tick_id) == [
-            ("refused:unknown_repo", "PROJ-13 was split from PROJ-12 to cover api only; dispatch it with --repo api")
-        ]
+    assert scenario.refuses(dispatches("PROJ-13"), dry_run=True) == [
+        ("refused:unknown_repo", "PROJ-13 was split from PROJ-12 to cover api only; dispatch it with --repo api")
+    ]
 
 
 def test_a_child_is_dispatched_only_in_its_repository(ws: Ws, treehouse_state: Path) -> None:

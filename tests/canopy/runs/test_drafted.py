@@ -14,7 +14,6 @@ from unittest import mock
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import drafts, observe, records, replies, review_diff
 from canopy.core.config import load
 from canopy.core.vocab import DraftKind, DraftStatus, ReviewItem
@@ -26,20 +25,19 @@ from tests.canopy.helpers import (
     KEY,
     all_drafts,
     approving,
-    canopy,
     comment,
     github_has,
-    overseer_does,
     posting,
     present,
     reads,
     run_drafting,
-    state_block,
     thread,
+    waits,
 )
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
+    from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv
 
 PR = DRAFTS_PR
@@ -191,17 +189,16 @@ def test_drafts_on_a_merged_pr_wait_on_nobody(
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_waiting_drafts_are_the_operators_item_alone(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, agent_log: Path
-) -> None:
-    approving(canopy_env)
+def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_state: Path) -> None:
+    scenario.configures("private", trust={"review_replies": "approve"})
     github_has(github_state, comment(501))
-    run_drafting(conn, [thread(501)])
-    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on review")):
-        assert main(["tick"]) == 0
-    assert [(i.ticket_key, i.reason, i.repo) for i in attention.current(conn)] == [(KEY, "drafts_waiting", "repo")]
-    assert "drafts_waiting" not in str(state_block(agent_log))
-    assert attention.for_overseer(conn) == []
+    run_drafting(scenario.conn, [thread(501)])
+    scenario.tick(*waits(KEY, rationale="waiting on review"))
+    assert [(i.ticket_key, i.reason, i.repo) for i in attention.current(scenario.conn)] == [
+        (KEY, "drafts_waiting", "repo")
+    ]
+    assert "drafts_waiting" not in str(scenario.state())
+    assert attention.for_overseer(scenario.conn) == []
 
 
 def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_use(
