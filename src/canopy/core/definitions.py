@@ -4,9 +4,10 @@ canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<
 contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial one.
 Command templates name it with `{definitions_dir}`, and OpenCode reads it through `OPENCODE_CONFIG_DIR`.
 
-Five definitions are rendered from config. `canopy-worker-private`, `canopy-planner`, and `canopy-plan-triage` get the
+Six definitions are rendered from config. `canopy-worker-private`, `canopy-planner`, and `canopy-plan-triage` get the
 tracker's MCP server and the tools of it they may call, its read tools (`render_private`, DESIGN §22, §25). Both workers
 get the rule that lets them push a rebased branch with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8).
+`canopy-reviewer` gets `runtime.review_temperature`, unless that sets none (`render_temperature`).
 `canopy-overseer` gets the overseer's prompt, the operator's override if any, and the tracker's skill if canopy ships
 one, as its body (`render_overseer`): the body is the agent's system prompt, which the provider caches across ticks,
 where the state block, the tick's message, changes every tick (DESIGN §6). The digest covers the rendered text, so a
@@ -30,6 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import prompts, replies
+from canopy.core.config import NO_TEMPERATURE
 from canopy.core.vocab import ReplyMode, RunKind
 from canopy.infra import logs, resources
 
@@ -70,6 +72,9 @@ _REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_
 _REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
+_REVIEWER_FILE = "agents/canopy-reviewer.md"
+#: The line of the shipped reviewer definition its temperature is rendered at.
+_TEMPERATURE_MARKER = "# canopy: temperature\n"
 OVERSEER = "canopy-overseer"
 _OVERSEER_FILE = f"agents/{OVERSEER}.md"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
@@ -139,6 +144,19 @@ def render_replies(text: str, name: str, *, approve: bool, ticket_comments: bool
     return text.replace(_REPLY_TOOLS_MARKER, _REPLY_TOOLS_MARKER + "".join(tools), 1)
 
 
+def render_temperature(text: str, name: str, temperature: float) -> str:
+    """Return definition `name` with `temperature` at its marked line, or as it is if `temperature` sets none.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the temperature at.
+    """
+    if _TEMPERATURE_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_TEMPERATURE_MARKER.strip()!r} to render the temperature at")
+    if temperature == NO_TEMPERATURE:
+        return text
+    return text.replace(_TEMPERATURE_MARKER, f"{_TEMPERATURE_MARKER}temperature: {temperature}\n", 1)
+
+
 def render_overseer(text: str, prompt: str, skill: str | None) -> str:
     """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
 
@@ -158,8 +176,8 @@ def render_overseer(text: str, prompt: str, skill: str | None) -> str:
 def sources(config: Config | None = None) -> dict[str, bytes]:
     """Return the snapshot's files by relative path.
 
-    They are the bundled agents and skills, with the workers' and the overseer's definitions rendered from `config`
-    when it is given.
+    They are the bundled agents and skills, with the workers', the reviewer's, and the overseer's definitions rendered
+    from `config` when it is given.
 
     Raises:
         DefinitionsError: The overseer's prompt cannot be read.
@@ -179,6 +197,9 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
             # A public worker without a ticket's draft posts its ticket comments itself; a private one posts none.
             ticket_comments = rel != _PRIVATE_FILE and not (replied is not None and replied.ticket_drafts)
             found[rel] = render_replies(text, rel, approve=approve, ticket_comments=ticket_comments).encode()
+    if config is not None and _REVIEWER_FILE in found:
+        text = found[_REVIEWER_FILE].decode()
+        found[_REVIEWER_FILE] = render_temperature(text, _REVIEWER_FILE, config.runtime.review_temperature).encode()
     if config is not None and _OVERSEER_FILE in found:
         path = prompts.prompt_path(config, prompts.OVERSEER)
         try:

@@ -6,10 +6,12 @@
 # T6). It starts in a directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads
 # outside that directory are denied, as for a desk's links (the reviewer canary in tests/canopy/test_opencode_canary.py
 # checks it).
-# No `temperature`: the reviewer is meant to run on another model than the worker's (DESIGN §21), and some, such as
-# OpenAI's reasoning models, refuse a request that sets one. The model's own default stands.
+# Its temperature is rendered at the marked line from `runtime.review_temperature`, unless that is -1: the reviewer is
+# meant to run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
+# request that sets one.
 description: canopy reviewer. Adversarial review of one PR at one commit; read-only; posts nothing, never approves.
 mode: primary
+# canopy: temperature
 permission:
   edit: deny
   bash: deny

@@ -58,6 +58,9 @@ plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 # plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage
 #     --format json --title={title} {prompt}'''
 # plan_triage_timeout_minutes = 10
+# The reviewer's temperature (DESIGN §21): -1 sends none, for when review_cmd names a model that refuses one, such as
+# OpenAI's reasoning models.
+# review_temperature = 0.1
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 # Optional: a skill of yours that workers open PRs with, and in no other way, instead of the GitHub MCP (DESIGN §8).
