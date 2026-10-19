@@ -214,9 +214,14 @@ export function AskForChanges({
         }
     }
 
+    const comments = `${open} open ${open === 1 ? 'comment' : 'comments'}`
+    // Once asked, what Ask again sends, not that the open comments are still to go: some went with the first request.
+    const goes = asked
+        ? `Ask again sends the ${comments} again.`
+        : `${comments} ${open === 1 ? 'goes' : 'go'} with Ask for changes.`
     const told = over
         ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some.`
-        : open > 0 && `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with Ask for changes.`
+        : open > 0 && goes
 
     return (
         // `contents`, so its field and button are items of the caller's line, beside its own actions.

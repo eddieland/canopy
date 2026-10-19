@@ -152,7 +152,14 @@ export function PlanChip({ plans }: { plans: TicketPlans }) {
             </span>
         )
     }
-    return planWaits(plans) ? <Chip tone="blocked">waiting on you</Chip> : <Chip>{newest.status}</Chip>
+    if (planWaits(plans)) {
+        return <Chip tone="blocked">waiting on you</Chip>
+    }
+    // A proposed plan the operator asked to change waits on the planner now, not on them: said so, not `proposed`.
+    if (newest.status === 'proposed' && plans.planning === null && plans.changes_asked !== null) {
+        return <Chip>changes asked</Chip>
+    }
+    return <Chip>{newest.status}</Chip>
 }
 
 // What comes next for the plan, in a line beside its actions: a planner or a triage at work, a waiver in force, a

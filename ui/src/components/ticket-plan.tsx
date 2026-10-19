@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useBlocker } from '@tanstack/react-router'
+import { Link, useBlocker } from '@tanstack/react-router'
 import { Check, Save, SkipForward } from 'lucide-react'
 import { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
@@ -18,6 +18,7 @@ import { keys, ticketPlanQuery } from '@/api/queries'
 import type { PlanChanged, PlanFile, PlanSummary, TicketPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
+import { Leaf } from '@/components/leaf'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PlanChip } from '@/components/plan-card'
@@ -208,6 +209,10 @@ function NewestPlan({
     const [seen, setSeen] = useState(plans.threads)
     const [markdown, setMarkdown] = useState(text)
     const [said, setSaid] = useState<string | null>(null)
+    // How many times the operator approved the plan here, the last thing they did: what the foot says then is a
+    // moment of its own, and each approval drops its leaf once.
+    const [approvals, setApprovals] = useState(0)
+    const [approved, setApproved] = useState(false)
     const [failure, setFailure] = useState<unknown>(null)
     const [busy, setBusy] = useState(0)
     // Whether the note on the whole plan holds words, which Approve would leave unsent.
@@ -304,6 +309,7 @@ function NewestPlan({
     function act(work: () => Promise<string>) {
         setFailure(null)
         setSaid(null)
+        setApproved(false)
         enqueue(async () => setSaid(await work()))
     }
 
@@ -329,7 +335,13 @@ function NewestPlan({
             if (dirty && action === 'approve') {
                 await save()
             }
-            return planText(ticketKey, await decidePlan(ticketKey, action))
+            const done = planText(ticketKey, await decidePlan(ticketKey, action))
+            // Only once the journal holds it: the moment never shows for an approval that was refused.
+            if (action === 'approve') {
+                setApproved(true)
+                setApprovals((n) => n + 1)
+            }
+            return done
         })
     }
 
@@ -424,7 +436,9 @@ function NewestPlan({
             actionsNote={actionsNote(status, open)}
             // Kept once the plan is read only, so a decision that ends its editing, Skip's, still says what it did.
             outcome={
-                editable || said !== null || failure !== null ? (
+                approved && said !== null && failure === null ? (
+                    <Approved key={approvals} text={said} />
+                ) : editable || said !== null || failure !== null ? (
                     <Notice error={failure} reserve>
                         {said}
                     </Notice>
@@ -445,6 +459,28 @@ function actionsNote(status: PlanFile['plan']['status'], open: number): string |
         return `Approving ${sends}: the implement reads the plan alone.`
     }
     return undefined
+}
+
+// What approving did, as the moment it is: the one time the operator lets an agent go ahead and write code. It says
+// so in the CLI's words on the accent's tint, as decided proposals do, rises in, and drops a leaf, as a cleared
+// attention item does, since approving clears the plan's item; then the way back to what else needs the operator.
+// It shows only once the approval is in the journal, so it never celebrates one that was refused.
+function Approved({ text }: { text: string }) {
+    return (
+        <div className="stagger">
+            <div
+                data-testid="plan-approved"
+                className="relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-accent/14 px-2.5 py-1.5"
+            >
+                <Leaf className="-top-1 left-1" />
+                <Check aria-hidden className="size-4 shrink-0 text-accent" />
+                <output className="min-w-0 flex-1 text-sm text-accent">{text}</output>
+                <Link to="/attention" className="text-xs font-medium text-accent underline-offset-4 hover:underline">
+                    Back to Attention
+                </Link>
+            </div>
+        </div>
+    )
 }
 
 // A decision asked about in its place in the foot before it is made, as deleting a comment is: Skip, which nothing

@@ -395,7 +395,8 @@ Rules:
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
   and status chip in its header (`PlanChip`: `waiting on you` in `status-blocked` while the plan waits on the
-  operator, as everything that waits on them reads; else its status; with no plan, `needed`, `not needed`, or
+  operator, as everything that waits on them reads; `changes asked` while a proposed plan waits on the planner for
+  the changes the operator asked; else its status; with no plan, `needed`, `not needed`, or
   `waived` while a triage's waiver is in force, its reason on hover, and only then), the run that wrote it and its
   open comments as fields, then a triage's run, its verdict or how it ended, and its reason, model text, when the
   ticket had one; and in its foot `Approve`, the primary, while the plan can be approved, `Ask for a plan`, outlined,
@@ -1127,7 +1128,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   hover. `Skip the plan`, and `Approve` while the note holds words it would leave unsent, ask first in the actions'
   place, as a comment's Delete does: the question, then `Keep`, which takes the focus and Escape gives too, then the
   action. What an action did goes under that line, and stays once the plan turns read only, Skip's, so the foot stays
-  for it. At 820px the foot is two lines at rest. The editor keeps what it
+  for it. An approval, once the journal holds it, is a moment of its own: its words in the accent on the accent's tint
+  at 14%, as decided proposals say so, with a check, rising in, and the leaf a cleared item drops (Fun), since it
+  clears the plan's item, then `Back to Attention`. Once changes are asked, the line says what `Ask again` sends,
+  not that the open comments are still to go. At 820px the foot is two lines at rest. The editor keeps what it
   scrolls into view 128px clear of the foot. A ticket's plan opens on its page, `/tickets/$key/plan`; `/plan-editor`
   is kept as the editor's bench, linked from nowhere: over a sample plan on mock data only, with what the planner would
   read and the plan's Markdown under it, and outside mock, an `Empty` saying a ticket's plan opens on its page. The
