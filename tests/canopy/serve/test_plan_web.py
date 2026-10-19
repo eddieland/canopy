@@ -230,6 +230,25 @@ def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
     assert "   Blue." in prompt
 
 
+def test_the_tickets_list_says_whose_plan_waits_on_the_operator(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+
+    def waits() -> bool:
+        [ticket] = c.get("/api/tickets").json()
+        return bool(ticket["plan_waits"])
+
+    proposed(ctx)
+    assert waits() is True
+    # Changes asked for: the plan waits on its planner now, so a plan review listed before is answered.
+    reply = c.post(f"/api/tickets/{KEY}/replies", json={"body": "Blue.", "submission": "abcdefgh"}, headers=headers)
+    assert reply.status_code == 200
+    assert waits() is False
+    proposed(ctx)
+    assert waits() is True
+    assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers).status_code == 200
+    assert waits() is False
+
+
 def test_the_plan_verbs_refuse_while_a_plan_run_is_running_from_the_web(
     canopy_env: CanopyEnv, git_pool: GitPool, ctx: Context, conn: sqlite3.Connection
 ) -> None:

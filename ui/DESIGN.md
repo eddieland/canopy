@@ -896,7 +896,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
-  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick; Waiting
+  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick, and so
+  does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes asked); Waiting
   on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
   `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost

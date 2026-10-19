@@ -407,6 +407,26 @@ def state_section(
     return section
 
 
+def waits(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
+    """Return whether the ticket's newest plan waits on the operator: proposed, no planner at work, no changes asked.
+
+    A `plan_review` item stays on the attention list until the next tick, so the web UI reads this to tell one the
+    operator has answered since, by approving, skipping, or asking for changes.
+
+    Returns:
+        True while the newest plan waits on the operator's word.
+    """
+    newest = records.fetch_one(
+        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (ticket.key,)
+    )
+    if newest is None or newest.status is not PlanStatus.PROPOSED:
+        return False
+    running = db.running_run_of(conn, ticket.key)
+    if running is not None and running["kind"] == RunKind.PLAN:
+        return False
+    return changes_asked(conn, ticket) is None
+
+
 def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | None:
     """Return when the operator asked for changes no planner has read, or None if they have not.
 

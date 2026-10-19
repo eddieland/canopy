@@ -684,7 +684,8 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     """A ticket row, with `active_at` as `db.recent_tickets` adds it, as the tickets list shows it.
 
     Returns:
-        The ticket, with whether it was started privately, the question it awaits, and its running run, if any.
+        The ticket, with whether it was started privately, the question it awaits, its running run, if any, and
+        whether its plan waits on the operator.
     """
     key = str(row["key"])
     record = conversation.start_of(conn, key)
@@ -696,6 +697,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     if record is None:
         waiting = plans.question(conn, key)
     running = db.running_run_of(conn, key)
+    ticket = db.get_ticket(conn, key)
     return TicketSummary(
         key=key,
         title=ticket_title(row["title"]),
@@ -709,6 +711,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         latest_message_id=db.latest_message_of(conn, conversation.TICKET, key),
         awaiting=int(waiting["id"]) if waiting is not None else None,
         running_run=int(running["id"]) if running is not None else None,
+        plan_waits=ticket is not None and plans.waits(conn, ticket),
     )
 
 
