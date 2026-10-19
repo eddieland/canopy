@@ -20,8 +20,9 @@ const STREAM_LABEL: Record<StreamStatus, string> = {
     closed: 'offline',
 }
 
-// A pill beside the name: `mock`, and the stream's word with its dot.
-const PILL = 'inline-flex h-5 items-center gap-1.5 rounded-full border px-2 leading-none'
+// A pill beside the name: `mock`, and the stream's word with its dot. Its capitals are trimmed to their height, so
+// they center in it rather than sit high on a line box made for lowercase.
+const PILL = 'inline-flex h-5 items-center gap-1.5 rounded-full border px-2 [text-box:trim-both_cap_alphabetic]'
 
 // The stream's pill, in the accent while live, muted while it connects, and in the color of what waits on the operator
 // once it has been down a while.

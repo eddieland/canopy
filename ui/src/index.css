@@ -406,6 +406,12 @@
     background-size: 200% 100%;
     background-clip: text;
     color: transparent;
+    /* It has no capitals or ascenders, so centered on its line its letters sit low: trimmed to its x-height, the row
+    centers what shows, beside the logo's dot and the pills' capitals. The gradient paints only the box, so a padding
+    as deep as the descenders takes it under them, and a margin as deep takes the padding back out of the layout. */
+    text-box: trim-both ex alphabetic;
+    padding-bottom: 0.3em;
+    margin-bottom: -0.3em;
     @media print {
         background: none;
         color: inherit;
