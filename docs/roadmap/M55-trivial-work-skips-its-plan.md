@@ -79,4 +79,7 @@ of its own. Then, 2026-10-19, the overseer prompt's triage row: `needs-plan` whe
 any `plan`, and after a failed triage the plan at once, with no `wait`. Then, 2026-10-19, the reviewer's second
 opinion: the harness raises `not_trivial` every tick about a unit whose PR any `done` review judged `high` while its
 ticket's waiver is in force, naming the review and the triage's reason, with no change to the reviewer's prompt or
-result. Left: the web UI's plan card; the spend page's kind; and the feedback half (M54).
+result. Then, 2026-10-19, the web UI's plan card, which shows a ticket's triage running, its waiver with the run
+and its reason and, until the implement starts, Ask for a plan to undo it, or the triage that left the ticket to be
+planned; and triage runs as a kind of their own in `canopy spend`, `canopy health`, and the spend page, with the plans
+they waived. Left: the feedback half (M54).

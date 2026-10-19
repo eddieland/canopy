@@ -96,6 +96,11 @@ in code. It holds only while the ticket's own setting is unset. No worker hears 
 `trivial` feedback round (ROADMAP M54) follows the rules for feedback without plans (§7, D089), so triage never lets an
 untrusted reviewer's text start a worker.
 
+The ticket's plan card in the web UI shows its triage, running or ended, and a waiver by its run and reason; it offers
+asking for a plan only while that would undo the waiver, before the ticket has a branch. `canopy spend`, the spend page,
+and `canopy health` count triage runs as a kind of their own, with the plans they waived, so their cost reads against
+the planner runs they saved.
+
 **A second opinion after.** Where `review.agent_prs` is on, the reviewer, not told of the waiver, judges each PR's
 impact (§21); one judged `high` raises `not_trivial` until the ticket is done or forgotten or the operator replaces the
 waiver. It stops nothing: the PR's human review is the gate.

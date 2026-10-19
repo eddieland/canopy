@@ -174,7 +174,7 @@ test("a plan review on the attention list shows the plan's card, which approves 
     const approvals: unknown[] = []
     await page.route('**/api/tickets/ABC-105/plan', async (route) => {
         approvals.push(route.request().postDataJSON())
-        await route.fulfill({ json: { action: 'approve', already: false, plan: 2, superseded: null } })
+        await route.fulfill({ json: { action: 'approve', already: false, plan: 2, superseded: null, waived: null } })
     })
     await page.goto('attention')
     const card = page.getByTestId('attention-detail').getByTestId('plan-card')

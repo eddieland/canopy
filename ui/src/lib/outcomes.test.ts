@@ -217,18 +217,30 @@ describe('outcomes', () => {
     })
 
     it('says what a word on a plan did, as `canopy plan` does', () => {
-        expect(planText('PROJ-1', { action: 'approve', plan: 3, superseded: null, already: false })).toBe(
+        expect(planText('PROJ-1', { action: 'approve', plan: 3, superseded: null, already: false, waived: null })).toBe(
             'Plan 3 of PROJ-1 is approved as its file stands now. The next tick can implement it.',
         )
-        expect(planText('PROJ-1', { action: 'skip', plan: null, superseded: 3, already: false })).toBe(
+        expect(planText('PROJ-1', { action: 'skip', plan: null, superseded: 3, already: false, waived: null })).toBe(
             "Plan 3 of PROJ-1 is superseded; its file stays. PROJ-1's plan is skipped: its implement goes ahead " +
                 'without one.',
         )
-        expect(planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: true })).toBe(
-            'PROJ-1 already waits on a plan: the next tick dispatches a planner if none is running.',
+        expect(
+            planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: true, waived: null }),
+        ).toBe('PROJ-1 already waits on a plan: the next tick dispatches a planner if none is running.')
+        expect(
+            planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: false, waived: null }),
+        ).toContain('PROJ-1 is planned first')
+    })
+
+    it("says a word on a plan undid a triage's waiver, or put the operator's skip in its place", () => {
+        const asked = { plan: null, superseded: null, already: false, waived: 7 }
+        expect(planText('PROJ-1', { action: 'request', ...asked })).toBe(
+            "Triage run 7 had waived PROJ-1's plan; it is undone. PROJ-1 is planned first: the next tick dispatches " +
+                'a planner, and nothing is implemented until you approve its plan.',
         )
-        expect(planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: false })).toContain(
-            'PROJ-1 is planned first',
+        expect(planText('PROJ-1', { action: 'skip', ...asked })).toBe(
+            "Triage run 7 had waived PROJ-1's plan; your skip takes its place. PROJ-1's plan is skipped: its " +
+                'implement goes ahead without one.',
         )
     })
 

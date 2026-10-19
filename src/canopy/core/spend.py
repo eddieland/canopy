@@ -1,9 +1,10 @@
 """What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
 
 Reads only. Every cost is what the agent runtime reported (§13), summed by the UTC day a run started on: the overseer
-of each tick, worker and split runs, chore runs, and review runs. A dry run's overseer is kept apart from the live
-ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window
-cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost. And what each kind
+of each tick, worker and split runs, triage runs before a plan (§25), chore runs, and review runs. A dry run's overseer
+is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live
+overseer's. Beside what the window cost, what it got done: the tickets marked done in it, the plans its triage runs
+waived, and what each ticket and PR's own runs cost. And what each kind
 of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started
 cold. And what each kind's tool calls put into its context, by tool: the reads that each later model call reads again.
 """
@@ -18,6 +19,7 @@ from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import contract, db, records
+from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
     import sqlite3
@@ -25,23 +27,31 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
-type Kind = Literal["overseer", "workers", "chores", "reviews"]
+type Kind = Literal["overseer", "workers", "triage", "chores", "reviews"]
 type Done = Literal["merged", "closed"]
 
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
-KINDS: tuple[Kind, ...] = ("overseer", "workers", "chores", "reviews")
+KINDS: tuple[Kind, ...] = ("overseer", "workers", "triage", "chores", "reviews")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
 # The idle ticks the web UI links to: the newest in the window.
 IDLE_TICKS = 20
 
-# Each agent run's table but the ticks', by the kind it counts as; and every one, the overseer's ticks included.
-_TABLES: dict[Kind, str] = {"workers": "runs", "chores": "chore_runs", "reviews": "review_runs"}
-_ALL_TABLES: dict[Kind, str] = {"overseer": "ticks", **_TABLES}
+# Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a triage before a
+# plan (§25) is a row of `runs`, a kind of its own, and every other row there a worker's or a split's. Then every kind,
+# the overseer's ticks included. The tables and conditions are fixed, never input.
+_TRIAGE = f"kind = '{RunKind.NEEDS_PLAN.value}'"
+_TABLES: dict[Kind, tuple[str, str]] = {
+    "workers": ("runs", f"NOT ({_TRIAGE})"),
+    "triage": ("runs", _TRIAGE),
+    "chores": ("chore_runs", "1"),
+    "reviews": ("review_runs", "1"),
+}
+_ALL_TABLES: dict[Kind, tuple[str, str]] = {"overseer": ("ticks", "1"), **_TABLES}
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
 CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
@@ -62,13 +72,14 @@ class Costs:
     idle: float | None = None
     dry_run: float | None = None
     workers: float | None = None
+    triage: float | None = None
     chores: float | None = None
     reviews: float | None = None
 
     @property
     def total(self) -> float | None:
         """Everything, dry runs included, as the web UI's 24 hour and 30 day counters count it; None when none did."""
-        return _sum([self.overseer, self.dry_run, self.workers, self.chores, self.reviews])
+        return _sum([self.overseer, self.dry_run, self.workers, self.triage, self.chores, self.reviews])
 
 
 @dataclass(frozen=True)
@@ -185,7 +196,9 @@ class Breakdown:
 
     The window is `[since, until)`, each a journal time: midnight UTC on its first day, and after its last. What it got
     done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer, chores, and
-    the runs of tickets still open are what it cost to get those done. `tickets` and `pull_requests` list what each
+    the runs of tickets still open are what it cost to get those done. `waived` is how many of the triage runs that
+    started in it waived their ticket's plan (§25), so their cost reads against the planner runs they saved, whether or
+    not the operator undid the waiver since. `tickets` and `pull_requests` list what each
     one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the kinds in
     `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs, whose
     first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters first;
@@ -203,6 +216,7 @@ class Breakdown:
     idle_share: float | None = None
     done: int = 0
     per_done: float | None = None
+    waived: int = 0
     tickets: Sequence[TicketSpend] = ()
     pull_requests: Sequence[PullRequestSpend] = ()
     first_calls: Sequence[FirstCalls] = ()
@@ -233,15 +247,16 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     with db.read_snapshot(conn):
         rows = _tick_rows(conn, since, until)
         by_day: dict[str, dict[str, float | None]] = {}
-        for kind, table in _TABLES.items():
+        for kind, (table, which) in _TABLES.items():
             for day, cost in conn.execute(
                 f"SELECT substr(started_at, 1, 10) AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
-                "WHERE started_at >= ? AND started_at < ? GROUP BY day",
+                f"WHERE {which} AND started_at >= ? AND started_at < ? GROUP BY day",
                 (since, until),
             ):
                 by_day.setdefault(str(day), {})[kind] = cost
         unpriced = _unpriced(conn, since, until, rows)
         done = _done(conn, since, until)
+        waived = _waived(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
         first_calls = _first_calls(conn, since, until)
@@ -269,6 +284,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         idle_share=_idle_share(ticks),
         done=len(done),
         per_done=total / len(done) if done and total is not None else None,
+        waived=waived,
         tickets=tickets,
         pull_requests=pull_requests,
         first_calls=first_calls,
@@ -391,14 +407,26 @@ def _idle_share(ticks: Collection[TickGroup]) -> float | None:
 def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_TickRow]) -> list[Unpriced]:
     ended = [r for r in rows if r.group is not None]
     found = [Unpriced(kind="overseer", runs=sum(r.ticks for r in ended), unpriced=sum(r.unpriced for r in ended))]
-    for kind, table in _TABLES.items():
+    for kind, (table, which) in _TABLES.items():
         runs, unpriced = conn.execute(
             f"SELECT count(*), count(*) - count(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
-            "WHERE started_at >= ? AND started_at < ? AND status != 'running'",
+            f"WHERE {which} AND started_at >= ? AND started_at < ? AND status != 'running'",
             (since, until),
         ).fetchone()
         found.append(Unpriced(kind=kind, runs=int(runs), unpriced=int(unpriced)))
     return found
+
+
+# How many triage runs that started in the window waived their ticket's plan: a waiver is written only when its run
+# closes, from a validated `trivial` verdict, so a run still running has waived nothing yet.
+def _waived(conn: sqlite3.Connection, since: str, until: str) -> int:
+    return int(
+        conn.execute(
+            "SELECT count(*) FROM plan_waivers w JOIN runs r ON r.id = w.run_id "
+            "WHERE r.started_at >= ? AND r.started_at < ?",
+            (since, until),
+        ).fetchone()[0]
+    )
 
 
 # The tickets marked done in the window, each with how and when: its newest `done` decision, as `recently_done` reads
@@ -501,10 +529,12 @@ def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
 def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
     found: list[FirstCalls] = []
     for kind in KINDS:
+        table, which = _ALL_TABLES[kind]
         by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
         for digest, sent, written, started in conn.execute(
-            f"SELECT {_FIRST_CALL} FROM {_ALL_TABLES[kind]} "  # noqa: S608 (a fixed table)
-            "WHERE started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL ORDER BY started_at, id",
+            f"SELECT {_FIRST_CALL} FROM {table} "  # noqa: S608 (a fixed table)
+            f"WHERE {which} AND started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL "
+            "ORDER BY started_at, id",
             (since, until),
         ):
             call = (int(sent), _cold(int(sent), int(written or 0)), str(started))
@@ -529,8 +559,10 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
 def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
     found: list[ToolSpend] = []
     for kind in KINDS:
-        table = _ALL_TABLES[kind]
-        for tool, runs, calls, errors, chars in conn.execute(_TOOLS_SQL.format(table=table), (table, since, until)):
+        table, which = _ALL_TABLES[kind]
+        for tool, runs, calls, errors, chars in conn.execute(
+            _TOOLS_SQL.format(table=table, which=which), (table, since, until)
+        ):
             found.append(
                 ToolSpend(
                     kind=kind,
@@ -547,11 +579,12 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
 
 # One kind's tool calls in a window, from its runs that started in it. The run table leads, through its `_spent` index
 # on `started_at` (migration 0022), and `run_tools` is read by its key's prefix: `CROSS JOIN` keeps SQLite from
-# reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded.
+# reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
+# kind's condition names only the run table's columns, which `run_tools` shares none of.
 _TOOLS_SQL = (
     "SELECT t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars) "
     "FROM {table} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id "
-    "WHERE r.started_at >= ? AND r.started_at < ? GROUP BY t.tool"
+    "WHERE r.started_at >= ? AND r.started_at < ? AND ({which}) GROUP BY t.tool"
 )
 
 
@@ -567,6 +600,7 @@ def _costs(found: Mapping[str, float | None]) -> Costs:
         idle=found.get("idle"),
         dry_run=found.get("dry_run"),
         workers=found.get("workers"),
+        triage=found.get("triage"),
         chores=found.get("chores"),
         reviews=found.get("reviews"),
     )

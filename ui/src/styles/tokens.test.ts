@@ -48,7 +48,15 @@ const TEXT = [
 const BASES = ['background', 'surface', 'surface-raised']
 
 // The spend chart's series: fills on a panel's surface, never text (ui/DESIGN.md, "Tokens").
-const SERIES = ['spend-overseer', 'spend-idle', 'spend-workers', 'spend-chores', 'spend-reviews', 'spend-dry-run']
+const SERIES = [
+    'spend-overseer',
+    'spend-idle',
+    'spend-workers',
+    'spend-triage',
+    'spend-chores',
+    'spend-reviews',
+    'spend-dry-run',
+]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']
 
