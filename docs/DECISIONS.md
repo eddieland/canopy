@@ -336,6 +336,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D085. The version comes from the latest `v*` tag (uv-dynamic-versioning)
 
 - Pushing the tag is the whole release step, so tag and version cannot disagree. Build-time dependency only.
+- Every package canopy ships takes it, the workspace members under `packages/` too; none writes a static version.
 - Rejected: a static version checked against the tag; hatch-vcs (pulls in setuptools).
 - Revisit: if a build that matters runs without tags (shallow clone).
 

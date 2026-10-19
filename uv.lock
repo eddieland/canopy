@@ -113,17 +113,14 @@ dev = [
 
 [[package]]
 name = "canopy-github"
-version = "0.0.1"
 source = { editable = "packages/canopy-github" }
 
 [[package]]
 name = "canopy-notify-slack"
-version = "0.0.1"
 source = { editable = "packages/canopy-notify-slack" }
 
 [[package]]
 name = "canopy-sandbox"
-version = "0.0.1"
 source = { editable = "packages/canopy-sandbox" }
 
 [[package]]
