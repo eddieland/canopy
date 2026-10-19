@@ -16,9 +16,11 @@ repositories, your tracker, or your internal tools.
 
 ![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
 
-**Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
-notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend further (M36
-to M39) are not yet.
+**Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). Built: the loop, in the
+foreground or detached; the web UI; chores; notifications; private tickets; joint runs across repositories; plans
+before implementing; and reviews, of canopy's own PRs and of coworkers' on request. In progress: sandboxed workers
+(M26), canopy's own worktree pools in place of treehouse (M45), agent memory (M50), and cutting the overseer's spend
+(M36 to M39, starting with M36).
 
 - Milestones: [docs/roadmap/](docs/roadmap/README.md)
 - Live checks still to run: [docs/SCENARIOS.md](docs/SCENARIOS.md)
