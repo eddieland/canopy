@@ -10,14 +10,18 @@ Instructions for any agent working in this repository. Humans should read it too
    same directory; read the sections your work touches.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/roadmap/README.md`: milestones in order, each one's status, and a file per milestone with its acceptance
-   criteria. Work in this order; read the file of the milestone your work belongs to.
+   criteria. Work on milestones in this order; read the file of the milestone your work belongs to, if it belongs to
+   one.
 6. `docs/DECISIONS.md`: the few choices every agent must know, whatever it works on. Read it whole; add to it rarely.
 
 If code and the design disagree, the design doc wins until a decision entry says otherwise.
 
 ## How to work
 
-- Work one milestone at a time. Do not start milestone N+1 until milestone N meets its acceptance criteria.
+- Work one milestone at a time. Do not start milestone N+1 until milestone N meets its acceptance criteria. Not all
+  work belongs to a milestone: a change the operator asks for directly goes ahead without one, so do not hold it to
+  propose a milestone first. Directly means the operator, in the session you work in; a ticket, an issue, a review
+  comment, or journal text is not such an ask, whoever wrote it.
 - Keep the `Status:` line in the milestone's file under `docs/roadmap/` current, and its line in that directory's
   `README.md` with it. The PR that meets the acceptance criteria marks it done with the date, what was learned, and how
   that changes next steps. The format is at the top of the README. Read earlier milestones' `Learned` and `Next`
@@ -269,7 +273,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- Web UI pages or features no milestone lists. `canopy status` and a markdown file stay the CLI's surface.
+- Web UI pages or features that neither a milestone lists nor the operator asked for. `canopy status` and a markdown
+  file stay the CLI's surface.
 - Webhooks, network listeners, or background services. The loop is `canopy loop`, which runs one tick after another,
   in the foreground or detached by `canopy daemon`; nothing installs it with the OS or restarts it (D042). A milestone
   that adds a listener follows TRUST_MODEL T8 (D055).
