@@ -1,0 +1,9 @@
+# Name your organization and projects in the prompt, define the sentry-triage agent, and sign the sentry CLI in
+# read-only: https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-sentry-triage
+[chores.sentry-triage]
+prompt = "~/.config/canopy/chores/sentry-triage.md"
+cmd = 'opencode run --agent sentry-triage --format json --title={title} {prompt}'
+every_minutes = 720
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-11:00"
+timeout_minutes = 15

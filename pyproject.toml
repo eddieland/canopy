@@ -87,6 +87,7 @@ packages = ["src/canopy"]
 ".agents/agents" = "canopy/_data/agents"
 ".agents/skills" = "canopy/_data/skills"
 ".agents/operator-skill" = "canopy/_data/operator-skill"
+"examples/chores" = "canopy/_data/chores"
 
 # The built web UI goes in as canopy/_data/ui, built with npm first when it is on PATH (D079).
 [tool.hatch.build.targets.wheel.hooks.custom]

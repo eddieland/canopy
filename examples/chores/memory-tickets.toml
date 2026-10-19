@@ -1,0 +1,12 @@
+# Name your tracker project and repositories in the prompt, define the canopy-memory-tickets agent, and keep this chore
+# out of the sandbox:
+# https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-memory-tickets
+[chores.memory-tickets]
+prompt = "~/.config/canopy/chores/memory-tickets.md"
+cmd = 'opencode run --agent canopy-memory-tickets --format json --title={title} {prompt}'
+cwd = "~"
+every_minutes = 1440
+days = ["mon"]
+hours = "08:00-12:00"
+when = "Skip it when the last run found nothing and no ticket has been marked done since."
+timeout_minutes = 20

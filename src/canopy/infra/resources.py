@@ -1,7 +1,8 @@
-"""Where canopy's own files are: migrations, prompts, agent definitions, skills, the operator's skill, the web UI.
+"""Where canopy's own files are: migrations, prompts, agents, skills, the operator's skill, example chores, the web UI.
 
-In a source checkout they sit at the repository root (`migrations/`, `.agents/`). In an installed wheel they are
-bundled inside the package (`canopy/_data/`, see `[tool.hatch.build.targets.wheel.force-include]` in pyproject.toml).
+In a source checkout they sit at the repository root (`migrations/`, `.agents/`, `examples/chores/`). In an installed
+wheel they are bundled inside the package (`canopy/_data/`, see `[tool.hatch.build.targets.wheel.force-include]` in
+pyproject.toml).
 """
 
 from __future__ import annotations
@@ -44,6 +45,11 @@ def skills_dir() -> Path:
 def operator_skill() -> Path:
     """Return the skill for the operator's own agent sessions, which `canopy skill` prints. Agent runs never load it."""
     return _find("operator-skill", ".agents/operator-skill") / "SKILL.md"
+
+
+def example_chores_dir() -> Path:
+    """Return the directory of example chores: each a prompt, `<name>.md`, and its config table, `<name>.toml`."""
+    return _find("chores", "examples/chores")
 
 
 def ui_dir() -> Path | None:

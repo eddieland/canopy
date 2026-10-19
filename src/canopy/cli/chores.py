@@ -10,13 +10,14 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.chores import execute, history, start, trial
+from canopy.chores import execute, history, install, start, trial
 from canopy.cli.common import CliError, Group, OverseerCommand, open_context, require_tick
-from canopy.cli.params import CHORE, TextType, truncate
+from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, truncate
 from canopy.cli.render import one_line
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import contract, conversation, db
+from canopy.core import contract, conversation, db, workspace
+from canopy.core.config import ConfigError
 from canopy.core.memory_text import visible
 from canopy.infra import logs, procs
 from canopy.loop import attention, tick
@@ -130,6 +131,40 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
     where = "; nothing recorded" if run_id is None else f"; run {run_id}, see `canopy show chore:{name}`"
     click.echo(f"chore try {name}: {outcome.status}{note}{where}")
     return 0 if outcome.status == "ok" else 1
+
+
+@chore_group.command("install")
+@click.argument("name", type=EXAMPLE_CHORE, required=False)
+def cmd_chore_install(name: str | None) -> int:
+    """Set up example chore NAME, one canopy ships, in this workspace; with no NAME, list them.
+
+    The prompt goes in the workspace's .canopy/chore-prompts/ and the [chores.NAME] table in its private config. The
+    command owns both: running it again, as after upgrading canopy, replaces them with the shipped ones, and an edit
+    to either is lost. Answer a chore with `canopy reply chore:NAME` instead, which survives it.
+    """
+    if name is None:
+        for example in install.available():
+            click.echo(example)
+        return 0
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"chore install refused ({r.guard}): {r.reason}") from None
+    try:
+        installed = install.install(workspace.find(Path.cwd()), name)
+    except (install.InstallError, ConfigError) as e:
+        raise CliError(f"chore install: {e}") from None
+    except OSError as e:
+        raise CliError(f"chore install: could not write {e.filename}: {e.strerror}") from None
+    verb = "replaced" if installed.replaced else "wrote"
+    click.echo(f"{verb} {installed.prompt}, and [chores.{name}] in {installed.config_file}")
+    for step in installed.next_steps:
+        click.echo(step)
+    click.echo(
+        f"Then run `canopy chore try {name}` until its findings are the ones you want; the loop runs it once "
+        "capacity.max_chores is above 0."
+    )
+    return 0
 
 
 @chore_group.command("history")

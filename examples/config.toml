@@ -167,7 +167,8 @@ cmd = ""
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.
 # examples/chores/build-health.md is a prompt to start from: it needs only the shipped agent and a GitHub MCP server.
-# Copy it, name your repositories, and run `canopy chore try build-health` until its findings are the ones you want.
+# `canopy chore install build-health` copies it into .canopy/ and writes this table to the private file; name your
+# repositories in the copy, and run `canopy chore try build-health` until its findings are the ones you want.
 # [chores.build-health]
 # prompt = "~/.config/canopy/chores/build-health.md"
 # every_minutes = 120
