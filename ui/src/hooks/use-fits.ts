@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMeasure } from '@/hooks/use-measure'
 
 /**
  * Whether a piece of fun fits the room the layout leaves it, so it can step out rather than squeeze or cover what is
@@ -10,17 +10,5 @@ import { useState } from 'react'
 export function useFits<T>(
     fits: (slot: HTMLElement) => T | false,
 ): [(slot: HTMLElement | null) => () => void, T | false] {
-    const [fit, setFit] = useState<T | false>(false)
-    const ref = (slot: HTMLElement | null) => {
-        if (slot === null) {
-            return () => {}
-        }
-        const observer = new ResizeObserver(() => setFit(fits(slot)))
-        observer.observe(slot)
-        for (const child of slot.children) {
-            observer.observe(child)
-        }
-        return () => observer.disconnect()
-    }
-    return [ref, fit]
+    return useMeasure<T | false>(fits, false, { children: true })
 }
