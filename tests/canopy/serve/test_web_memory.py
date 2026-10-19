@@ -303,6 +303,23 @@ def test_the_overview_names_the_workspaces_repositories_and_a_private_runs_memor
     assert c.post("/api/memory/4/promote", json={"text": "Mine."}, headers=WRITE).json()["private"] is False
 
 
+def test_the_history_lists_the_latest_to_leave_first_and_the_newest_id_on_a_tie(canopy_env: CanopyEnv) -> None:
+    with_memory(canopy_env, ticket_notes="record", proposals="record")
+    ctx = migrated(canopy_env)
+    ctx.conn.executemany(
+        "INSERT INTO memories (scope, key, body, status, author, created_at, invalidated_at) "
+        "VALUES ('lesson', ?, 'Gone.', 'superseded', 'operator', '2026-10-01T00:00:00.000Z', ?)",
+        [
+            ("first", "2026-10-02T00:00:00.000Z"),
+            ("tied", "2026-10-03T00:00:00.000Z"),
+            ("last", "2026-10-03T00:00:00.000Z"),
+        ],
+    )
+    c, _ = signed_in_client(ctx)
+    past = c.get("/api/memory", params={"history": "true"}).json()["past_lessons"]
+    assert [m["key"] for m in past] == ["last", "tied", "first"]
+
+
 def test_the_overview_sends_the_memorys_history_only_when_asked(backend: Backend) -> None:
     c = client(None, backend)
     plain = c.get("/api/memory").json()
@@ -323,3 +340,7 @@ def test_memory_search_finds_what_a_note_says_as_the_cli_does(backend: Backend) 
     found = c.get("/api/memory/search", params={"q": "lockfile"}).json()["entries"]
     assert [(m["id"], m["ticket_key"]) for m in found] == [(3, "ABC-100")]
     assert c.get("/api/memory/search", params={"q": "!!"}).json() == {"entries": []}
+    # With notes, only ticket notes in force: the lesson and the proposal that say the word are left out.
+    billing = c.get("/api/memory/search", params={"q": "billing"}).json()["entries"]
+    assert sorted(m["scope"] for m in billing) == ["lesson", "proposal"]
+    assert c.get("/api/memory/search", params={"q": "billing", "notes": "true"}).json() == {"entries": []}

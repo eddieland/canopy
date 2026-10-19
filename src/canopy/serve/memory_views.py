@@ -81,15 +81,24 @@ def overview(ctx: Context, *, history: bool = False) -> MemoryOverview:
     )
 
 
-def found(ctx: Context, query: str) -> MemoryFound:
+def found(ctx: Context, query: str, *, notes: bool = False) -> MemoryFound:
     """What `canopy memory search QUERY` finds in the operator's shell: every memory that keeps its text.
+
+    With `notes`, only ticket notes in force, so the limit is spent on the notes a page lists.
 
     Returns:
         The memories found, best match first, at most `memory_search.MAX_LIMIT`; none for a query of no word.
     """
     if not memory_search.words(query):
         return MemoryFound(entries=[])
-    hits = memory_search.search(ctx.conn, query, scope=None, limit=memory_search.MAX_LIMIT)
+    hits = memory_search.search(
+        ctx.conn,
+        query,
+        scope=None,
+        kind=MemoryScope.TICKET if notes else None,
+        in_force=notes,
+        limit=memory_search.MAX_LIMIT,
+    )
     return MemoryFound(entries=[entry(ctx, m) for m in hits])
 
 

@@ -130,6 +130,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
+                    // Two columns only while both tiers show a panel: with one off, the other has the width alone.
                     acting &&
                         state.ticket_notes.mode !== 'off' &&
                         '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',

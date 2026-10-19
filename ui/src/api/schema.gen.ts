@@ -7391,6 +7391,8 @@ export interface operations {
     searchMemory: {
         parameters: {
             query: {
+                /** @description Only ticket notes in force, the 50 best of them. */
+                notes?: boolean;
                 /** @description The words to find, any of them, as canopy memory search. */
                 q: string;
             };
