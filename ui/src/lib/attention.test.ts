@@ -10,6 +10,7 @@ import {
     bySeverity,
     commandOf,
     countBySeverity,
+    nextWaiting,
     pullRequestOf,
     severity,
     shownDetail,
@@ -79,6 +80,38 @@ describe('bySeverity', () => {
             item('older-failure', 'worker_failed', '2026-10-08T10:50:00Z'),
         ])
         expect(sorted.map((i) => i.id)).toEqual(['older-failure', 'newer-failure', 'question', 'review', 'finding'])
+    })
+})
+
+// Nothing answered yet.
+const none = () => false
+
+describe('nextWaiting', () => {
+    const T = '2026-10-08T11:00:00Z'
+    const list = [
+        item('broke', 'worker_failed', T),
+        item('plan', 'plan_review', T),
+        item('asked', 'awaiting_reply', T),
+        item('untrusted', 'untrusted_review', T),
+        item('review', 'needs_reviewer', T),
+    ]
+    it('moves on to the next item that waits on the operator, past what does not', () => {
+        expect(nextWaiting(list, 'asked', none)?.id).toBe('untrusted')
+        expect(nextWaiting(list, 'broke', none)?.id).toBe('plan')
+    })
+
+    it('searches on from the top once past the end', () => {
+        expect(nextWaiting(list, 'untrusted', none)?.id).toBe('plan')
+    })
+
+    it('leaves out what the operator answered already, and finds nothing when nothing else waits', () => {
+        expect(nextWaiting(list, 'asked', (i) => i.id === 'untrusted')?.id).toBe('plan')
+        expect(nextWaiting(list, 'asked', (i) => i.id !== 'asked')).toBeNull()
+        expect(nextWaiting([item('asked', 'awaiting_reply', T)], 'asked', none)).toBeNull()
+    })
+
+    it('starts from the top when the item answered is no longer listed', () => {
+        expect(nextWaiting(list, 'gone', none)?.id).toBe('plan')
     })
 })
 

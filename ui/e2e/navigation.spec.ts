@@ -274,17 +274,39 @@ test("a ticket's page puts its reply before its runs and decisions in a narrow w
         .boundingBox()
     const runs = await box('ticket-runs')
     const decisions = await box('ticket-decisions')
-    // What it is and its actions, then the conversation and the reply, then the lists that support them.
-    expect(actions.y).toBeLessThan(conversation.y)
+    // What it is, then the conversation, the reply, and its actions, then the lists that support them.
     expect(reply).not.toBeNull()
-    expect((reply?.y ?? Infinity) + (reply?.height ?? 0)).toBeLessThan(runs.y)
+    expect(conversation.y).toBeLessThan(reply?.y ?? 0)
+    expect((reply?.y ?? Infinity) + (reply?.height ?? 0)).toBeLessThan(actions.y)
+    expect(actions.y).toBeLessThan(runs.y)
     expect(runs.y).toBeLessThan(decisions.y)
 
-    // Wide, the conversation sits beside the rest, its top level with the Work panel's, above the actions in its foot.
+    // Wide, the conversation sits beside the rest, its top level with the Work panel's, the actions in its foot.
     await page.setViewportSize({ width: 1600, height: 900 })
     const wide = await box('ticket-conversation')
     expect(wide.x).toBeGreaterThan((await box('ticket-runs')).x)
     expect(wide.y).toBeLessThan((await box('ticket-actions')).y)
+})
+
+test("a ticket's reply is the first stop after its conversation, and Stop and Forget come after it", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const panel = page.getByTestId('ticket-conversation')
+    const conversation = panel.getByRole('region', { name: 'Conversation' })
+    await conversation.focus()
+    // Through the conversation's own stops, at most a few dozen, until the focus leaves it.
+    for (let stop = 0; stop < 50; stop += 1) {
+        await page.keyboard.press('Tab')
+        if (!(await conversation.evaluate((el) => el.contains(document.activeElement)))) {
+            break
+        }
+    }
+    await expect(panel.getByRole('textbox', { name: 'Reply to message 5' })).toBeFocused()
+    // The send button waits for something to send, so the next stop is the ticket's first verb.
+    await page.keyboard.press('Tab')
+    await expect(page.getByTestId('ticket-actions').getByRole('button').first()).toBeFocused()
 })
 
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({

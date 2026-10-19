@@ -90,6 +90,9 @@ behind waits on nothing, so it is not listed either. Its foot names the version 
 canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a
 narrow window the rail folds to icons; **Open the rail** brings it back.
 
+From the keyboard, the first Tab on any page lands on **Skip to content**, which hides until then. Press Enter and the
+next Tab is the page's own, not the rail's dozen or so stops. Your Tab key has better things to do.
+
 ## Search
 
 Press `/` from anywhere but a text field to jump to the search box, and type. The results open after a short pause,

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { GitPullRequest, MessageSquareReply } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ChevronLeft, GitPullRequest, MessageSquareReply } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
@@ -23,35 +23,30 @@ import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { GrantLimits } from '@/components/grant-limits'
+import { Leaf } from '@/components/leaf'
 import { Notice } from '@/components/notice'
-import { OrderToggle } from '@/components/order-toggle'
 import { PlanCard } from '@/components/plan-card'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton, ThreadScroll } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
-import { ReplyForm } from '@/components/reply-form'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { InlineCode } from '@/components/rich-text'
 import { RunsTable } from '@/components/runs-table'
-import { Chip, Word } from '@/components/status'
-import { TicketActions } from '@/components/ticket-actions'
+import { Chip } from '@/components/status'
+import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
-import { TicketThread } from '@/components/ticket-thread'
 import { TicketLink } from '@/components/ticket-link'
 import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useUntrustedReview } from '@/hooks/use-untrusted-review'
+import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
-import { ask, bySeverity, commandOf, pullRequestOf, severity, shownDetail } from '@/lib/attention'
+import { ask, bySeverity, commandOf, nextWaiting, pullRequestOf, severity, shownDetail } from '@/lib/attention'
 import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
-import { sinceForget } from '@/lib/forgotten'
-import { useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
-import { phaseLabel, phaseWord } from '@/lib/phase'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
 
@@ -81,14 +76,63 @@ const TONE: Record<Severity, Tone> = {
 // over, so the row is folded shut before it goes.
 const LEAVE_MS = 700
 
+// The page's width under which the list and an item take turns rather than sit side by side: Tailwind's `@3xl`, the
+// `@max-3xl:` and `@3xl:` classes below.
+const TURNS_REM = 48
+
+// The ids the page moves the focus to: the button back to the list, and an item's row.
+const BACK = 'attention-back'
+const rowId = (item: string): string => `attention-row-${item}`
+
 function AttentionPage() {
     const { item: wanted } = Route.useSearch()
+    const navigate = Route.useNavigate()
+    const toast = useToast()
     const { data } = useQuery(attentionQuery)
     const tickets = useQuery(ticketsQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
     const rows = useLeavingRows(data, items)
     // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
     const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
+    // Narrow, the item chosen is open in the list's place, as a page of its own, until the operator goes back to the
+    // list, which then shows it chosen: `listFor` is the item they went back from.
+    const [listFor, setListFor] = useState<string | undefined>(undefined)
+    const open = wanted !== undefined && selected?.id === wanted && listFor !== wanted
+    const pane = useRef<HTMLDivElement>(null)
+    const focusOnce = useFocusOnce(wanted)
+
+    function choose(item: string) {
+        setListFor(undefined)
+        // Narrow, the row is gone with the list: the focus goes to the item's first stop, the way back.
+        if (narrow(pane.current)) {
+            focusOnce(item, BACK)
+        }
+    }
+
+    function back() {
+        if (selected !== undefined) {
+            setListFor(selected.id)
+            focusOnce(selected.id, rowId(selected.id))
+        }
+    }
+
+    function isDone(item: AttentionItem): boolean {
+        return answered(item, tickets)
+    }
+
+    // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
+    // list in view; a toast says what the reply did, as the form that said it goes with its item.
+    function moveOn(from: AttentionItem, said: string) {
+        const next = items === undefined || ask(from) !== 'reply' ? null : nextWaiting(items, from.id, isDone)
+        if (next === null) {
+            return
+        }
+        toast({ title: said, tone: 'done' })
+        setListFor(next.id)
+        focusOnce(next.id, rowId(next.id))
+        void navigate({ search: { item: next.id } })
+    }
+
     return (
         <>
             <PageHeader title="Attention">
@@ -99,41 +143,65 @@ function AttentionPage() {
             {items !== undefined && items.length === 0 ? (
                 <EmptyAttention />
             ) : (
-                <div className="flex flex-wrap items-start gap-6">
-                    <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md">
-                        {/* The runs working now are the rail's, on every page, so this column is the list alone. */}
-                        <Panel data-testid="attention-list">
-                            <PanelHeader label="Attention">
-                                <span className="readout text-xs text-muted-foreground">{items?.length}</span>
-                            </PanelHeader>
-                            {items === undefined ? (
-                                <PanelSkeleton className="min-h-40" />
-                            ) : (
-                                <ul className="stagger flex flex-col gap-0.5 p-1.5">
-                                    {rows.map(({ item, leaving }) =>
-                                        leaving ? (
-                                            <Leaving key={item.id} item={item} done={answered(item, tickets)} />
-                                        ) : (
-                                            <Row
-                                                key={item.id}
-                                                item={item}
-                                                selected={item.id === selected?.id}
-                                                done={answered(item, tickets)}
-                                            />
-                                        ),
-                                    )}
-                                </ul>
+                // Side by side from 48rem of the page's width; under it, the list and the item take turns, full width.
+                <div ref={pane} className="@container">
+                    <div className="flex items-start gap-6 @max-3xl:flex-col @max-3xl:items-stretch">
+                        <div
+                            className={cn(
+                                'flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md',
+                                '@max-3xl:max-w-none @max-3xl:flex-none',
+                                open && '@max-3xl:hidden',
                             )}
-                        </Panel>
-                    </div>
-                    <div className="flex min-w-0 flex-[999_1_28rem] flex-col gap-6">
-                        {selected === undefined ? (
-                            <Panel>
-                                <PanelSkeleton rows={1} className="min-h-72" />
+                        >
+                            {/* The runs working now are the rail's, on every page: this column is the list alone. */}
+                            <Panel data-testid="attention-list">
+                                <PanelHeader label="Attention">
+                                    <span className="readout text-xs text-muted-foreground">{items?.length}</span>
+                                </PanelHeader>
+                                {items === undefined ? (
+                                    <PanelSkeleton className="min-h-40" />
+                                ) : (
+                                    <ul className="stagger flex flex-col gap-0.5 p-1.5">
+                                        {rows.map(({ item, leaving }) =>
+                                            leaving ? (
+                                                <Leaving key={item.id} item={item} done={answered(item, tickets)} />
+                                            ) : (
+                                                <Row
+                                                    key={item.id}
+                                                    item={item}
+                                                    selected={item.id === selected?.id}
+                                                    done={answered(item, tickets)}
+                                                    onChoose={choose}
+                                                />
+                                            ),
+                                        )}
+                                    </ul>
+                                )}
                             </Panel>
-                        ) : (
-                            <Detail key={selected.id} item={selected} done={answered(selected, tickets)} />
-                        )}
+                        </div>
+                        <div
+                            className={cn(
+                                'flex min-w-0 flex-[999_1_28rem] flex-col gap-2 @max-3xl:flex-none',
+                                !open && '@max-3xl:hidden',
+                            )}
+                        >
+                            <Button variant="ghost" id={BACK} onClick={back} className="self-start @3xl:hidden">
+                                <ChevronLeft />
+                                Back to the list
+                            </Button>
+                            {selected === undefined ? (
+                                <Panel>
+                                    <PanelSkeleton rows={1} className="min-h-72" />
+                                </Panel>
+                            ) : (
+                                <Detail
+                                    key={selected.id}
+                                    item={selected}
+                                    done={answered(selected, tickets)}
+                                    onReplied={(said) => moveOn(selected, said)}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -170,6 +238,43 @@ function useLeavingRows(data: AttentionItem[] | undefined, items: AttentionItem[
 }
 
 /**
+ * Whether the page is too narrow for the list and an item side by side (`TURNS_REM`), measured as the operator acts,
+ * since where the focus goes then depends on it. Unmeasured, as in a unit test, it is wide.
+ */
+function narrow(pane: HTMLElement | null): boolean {
+    if (pane === null) {
+        return false
+    }
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+    const { width } = pane.getBoundingClientRect()
+    return width > 0 && width < TURNS_REM * rem
+}
+
+/**
+ * Moves the focus once the page shows an item: `focusOnce(item, id)` focuses the element with `id` after the first
+ * render that has `item` chosen and the element on screen, so a row or button the same change brings back is the one
+ * focused, once.
+ */
+function useFocusOnce(wanted: string | undefined): (item: string, id: string) => void {
+    const pending = useRef<{ item: string; id: string } | null>(null)
+    // After every render: the change that brings the element back may be the URL's or the page's own.
+    useEffect(() => {
+        const want = pending.current
+        if (want === null || want.item !== wanted) {
+            return
+        }
+        const target = document.querySelector<HTMLElement>(`#${CSS.escape(want.id)}`)
+        if (target !== null && target.getClientRects().length > 0) {
+            pending.current = null
+            target.focus()
+        }
+    })
+    return (item, id) => {
+        pending.current = { item, id }
+    }
+}
+
+/**
  * A cleared item's row on its way out: the row as it was, fading and folding shut, while one of the empty inbox's
  * leaves drifts off it. It is only for the eye: no link, out of the tab order, hidden from a screen reader, which hears
  * the list's count change instead. Under reduced motion it is not shown at all, and the item is simply gone.
@@ -185,22 +290,29 @@ function Leaving({ item, done }: { item: AttentionItem; done: boolean }) {
                     </div>
                 </div>
             </div>
-            <svg
-                viewBox="0 0 20 20"
-                className="pointer-events-none absolute top-2 right-10 size-5 overflow-visible text-accent"
-            >
-                <ellipse cx="10" cy="10" rx="4.5" ry="2.2" fill="currentColor" className="animate-leaf-off" />
-            </svg>
+            <Leaf className="top-2 right-10" />
         </li>
     )
 }
 
-function Row({ item, selected, done }: { item: AttentionItem; selected: boolean; done: boolean }) {
+function Row({
+    item,
+    selected,
+    done,
+    onChoose,
+}: {
+    item: AttentionItem
+    selected: boolean
+    done: boolean
+    onChoose: (item: string) => void
+}) {
     return (
         <li>
             <Link
                 to="/attention"
                 search={{ item: item.id }}
+                id={rowId(item.id)}
+                onClick={() => onChoose(item.id)}
                 aria-current={selected ? 'page' : undefined}
                 data-testid={`attention-item-${item.id}`}
                 className={cn(
@@ -252,12 +364,13 @@ function Answered() {
 /**
  * The selected item. Its reason picks the first block under its head, what it asks of the operator (`ask`, ui/DESIGN.md
  * "The attention detail"): a broken run's row, the PR's link out, the plan's card, the proposals or lessons memory's
- * items name, or the command to run. A ticket's item then shows a grant for each limit it is stuck at, its
- * conversation, and the reply form, with the ticket's own actions under them, or ahead of them when the reason asks for
- * nothing else; a chore's item its notes and the form for another, and for a finding the button to dismiss it; a PR's
- * item its review limit and its grant, for a PR no ticket owns; an item about none of them, what it says.
+ * items name, or the command to run. A ticket's item then shows its answer: its conversation and the reply form, with
+ * the ticket's own actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's
+ * item its notes and the form for another, and for a finding the button to dismiss it; a PR's item its review limit
+ * and its grant, for a PR no ticket owns; an item about none of them, what it says. `onReplied` hears each reply sent
+ * from it, with what the form said of it.
  */
-function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
+function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean; onReplied: (said: string) => void }) {
     const asks = ask(item)
     const command = asks === 'command' ? commandOf(item) : null
     return (
@@ -269,7 +382,9 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
             )}
             {item.reason === 'lesson_review' && <LessonsDue />}
             {item.reason === 'lesson_wrong' && <LessonsWrong />}
-            {item.ticket_key !== null && <Thread item={item} ticketKey={item.ticket_key} asks={asks} />}
+            {item.ticket_key !== null && (
+                <Thread item={item} ticketKey={item.ticket_key} asks={asks} onReplied={onReplied} />
+            )}
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {item.pr !== null && <PullRequestLimits url={item.pr} />}
             {command !== null && <RunCommand command={command} />}
@@ -464,62 +579,63 @@ function ChoreThread({ name }: { name: string }) {
 }
 
 /**
- * A ticket's item under its head: what its reason asks first (a broken run's row, or the PR's link out), a grant for
- * each limit it is stuck at, its conversation, and the reply form, which is open only where a reply is awaited
- * (`ReplyForm`). The ticket's own actions lead when the reason asks for nothing else, as they foot a ticket page's Work
- * panel; on any other they are a quiet row under the thread, below what the reason asks for.
+ * A ticket's item under its head: what its reason asks first (a broken run's row and any grant it is stuck at, or the
+ * PR's link out), then the ticket's answer (`TicketAnswer`): its conversation, the reply form, which is open only where
+ * a reply is awaited (`ReplyForm`), and the ticket's verbs and any other grant as a quiet row under them. On a reason
+ * that asks for nothing else, the verbs lead instead, as what the item asks for.
  */
-function Thread({ item, ticketKey, asks }: { item: AttentionItem; ticketKey: string; asks: Ask }) {
+function Thread({
+    item,
+    ticketKey,
+    asks,
+    onReplied,
+}: {
+    item: AttentionItem
+    ticketKey: string
+    asks: Ask
+    onReplied: (said: string) => void
+}) {
     const { data, error } = useQuery(ticketQuery(ticketKey))
-    const order = useListOrder('conversation')
-    const untrusted = useUntrustedReview(ticketKey)
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
         return <PanelSkeleton className="min-h-60" />
     }
-    const { ticket, messages } = data
+    const { ticket } = data
     const leads = asks === 'ticket'
-    const actions = (
-        <div className={leads ? 'border-b' : 'border-t'} data-testid="attention-actions">
-            <TicketActions key={ticket.key} ticket={ticket} quiet={!leads} />
-        </div>
-    )
     return (
         <>
             {asks === 'run' && <LatestRun runs={data.runs} />}
+            {/* A run that broke at its limit: another try is what it asks, beside the run that says why. */}
+            {asks === 'run' && (
+                <GrantLimits
+                    key={`limits-${ticket.key}`}
+                    limits={data.limits}
+                    ticketKey={ticket.key}
+                    className="border-b"
+                />
+            )}
             {asks === 'pull-request' && <PullRequestAction item={item} units={data.units} />}
             {asks === 'drafts' && <DraftsAction item={item} ticketKey={ticket.key} drafts={data.drafts} />}
-            {/* What holds it up sits before its conversation, where it is read first (DESIGN.md, the detail
-                skeleton). */}
-            {leads && actions}
-            <GrantLimits
-                key={`limits-${ticket.key}`}
-                limits={data.limits}
-                ticketKey={ticket.key}
-                className="border-b"
+            {leads && <TicketVerbs ticket={ticket} limits={data.limits} place="lead" testId="attention-actions" />}
+            <TicketAnswer
+                detail={data}
+                item
+                leaf={false}
+                onReplied={(_, said) => onReplied(said)}
+                after={
+                    !leads && (
+                        <TicketVerbs
+                            ticket={ticket}
+                            limits={asks === 'run' ? null : data.limits}
+                            place="after"
+                            quiet
+                            testId="attention-actions"
+                        />
+                    )
+                }
             />
-            <PanelHeader label="Conversation">
-                <span className="flex items-center gap-2">
-                    {/* The chip a ticket's page wears by its title: whether its conversation reaches the ticket. */}
-                    <Chip>{ticket.private ? 'private' : 'public'}</Chip>
-                    {messages.length > 1 && <OrderToggle list="conversation" />}
-                    <span className="readout text-xs text-muted-foreground">
-                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {sinceForget(data).length}
-                    </span>
-                </span>
-            </PanelHeader>
-            <ThreadScroll key={ticket.key} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
-                <TicketThread detail={data} order={order} />
-            </ThreadScroll>
-            <ReplyForm
-                key={ticket.key}
-                target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
-                waiting={ticket.awaiting}
-                untrusted={untrusted}
-            />
-            {!leads && actions}
         </>
     )
 }

@@ -134,6 +134,7 @@ export function AppShell() {
                         data-scroll-restoration-id={PAGE_SCROLLER}
                         className={cn('page-scroll grid outline-none', COLUMNS[mode])}
                     >
+                        <SkipToContent />
                         {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds
                         sticks, a column as tall as the window under the header (its 3rem row above), so the footer
                         stays at the window's foot however long the page; the part above it scrolls on its own in a
@@ -160,7 +161,7 @@ export function AppShell() {
                                 </div>
                             </aside>
                         )}
-                        <main className="min-w-0 p-6">
+                        <main id={MAIN} tabIndex={-1} className="min-w-0 p-6 outline-none">
                             <LoopDownBand />
                             <NoticeBanner />
                             <ViewTransition update={{ [IN_PAGE]: 'none', default: 'auto' }}>
@@ -202,6 +203,33 @@ export function AppShell() {
 const COLUMNS: Record<RailMode, string> = {
     full: 'grid-cols-[13rem_minmax(0,1fr)]',
     strip: 'grid-cols-[3.5rem_minmax(0,1fr)]',
+}
+
+// The page's own content, which the skip link moves the focus to.
+const MAIN = 'main'
+
+/**
+ * The first stop the keyboard reaches on every page, from a fresh load or from the header: a link past the rail's
+ * search, nav, and runs to the page itself, unseen until it has the focus (ui/DESIGN.md, "Shape and space"). The
+ * focus moves to the page's `main`, so the next Tab is the page's first stop. It moves by script, not by the link's
+ * `#main`, which the base path would make another page's address.
+ */
+function SkipToContent() {
+    return (
+        <a
+            href={`#${MAIN}`}
+            onClick={(event) => {
+                event.preventDefault()
+                document.querySelector<HTMLElement>(`#${MAIN}`)?.focus()
+            }}
+            className={cn(
+                'sr-only rounded-sm border bg-surface px-3 py-1.5 text-sm font-medium',
+                'focus:not-sr-only focus:fixed focus:top-14 focus:left-4 focus:z-20',
+            )}
+        >
+            Skip to content
+        </a>
+    )
 }
 
 /** What the rail holds, top to bottom, whether beside the page or in the sheet: DESIGN's Shape and space. */

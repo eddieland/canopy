@@ -58,15 +58,20 @@ export type ReplyTarget =
  * waiting gets a `Disclosure` instead, `Show a note for its next worker`, since a box there invites a reply nothing
  * waits on; so does a chore, `Show a note for its next runs`, since nothing ever waits on a note. It opens by itself
  * once a reply is awaited, or a draft is kept, and stays open after.
+ *
+ * `onReplied` hears each reply recorded, after the form has said what it did, with that line: the attention page moves
+ * on to the next item that waits on the operator.
  */
 export function ReplyForm({
     target,
     waiting = null,
     untrusted = false,
+    onReplied,
 }: {
     target: ReplyTarget
     waiting?: number | null
     untrusted?: boolean
+    onReplied?: (replied: Replied, said: string) => void
 }) {
     const client = useQueryClient()
     const sendKey = useSendKey()
@@ -89,11 +94,13 @@ export function ReplyForm({
                 ? replyTicket(target.key, text, submission)
                 : replyChore(target.name, text, submission),
         onSuccess: (replied) => {
-            setSaid(target.kind === 'ticket' ? repliedText(target.key, replied) : notedText(target.name, replied))
+            const line = target.kind === 'ticket' ? repliedText(target.key, replied) : notedText(target.name, replied)
+            setSaid(line)
             setBody('')
             setSubmission(newSubmission())
             keepDraft(stored, { body: '', submission })
             void (target.kind === 'ticket' ? refreshTicket(client, target.key) : refreshChore(client, target.name))
+            onReplied?.(replied, line)
         },
     })
 

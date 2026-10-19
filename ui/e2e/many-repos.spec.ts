@@ -109,7 +109,8 @@ test('a ticket across many repositories keeps its Work panel and reply in reach'
     const units = page.getByRole('region', { name: 'Repositories' })
     await expect(units.getByRole('link', { name: /^acme\/repo-\d+#\d+$/u })).toHaveCount(repos)
     expect(await units.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
-    await expect(page.getByTestId('ticket-actions')).toBeInViewport()
+    // So the conversation under the Work panel, and the answer in it, stays in reach.
+    await expect(page.getByTestId('ticket-conversation')).toBeInViewport()
 })
 
 test('a run holding a slot in many repositories names a few of them in its row', async ({ page }) => {

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
@@ -192,3 +193,123 @@ test("a question's item is answered in its reply, with the ticket's own actions 
     // The runs working now are the rail's, on every page; the attention page keeps no list of its own.
     await expect(page.getByTestId('workers')).toHaveCount(0)
 })
+
+test('from a fresh load, the skip link is the first Tab, and the page is the next', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.keyboard.press('Tab')
+    const skip = page.getByRole('link', { name: 'Skip to content' })
+    await expect(skip).toBeFocused()
+    await expect(skip).toBeInViewport()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('main')).toBeFocused()
+    await page.keyboard.press('Tab')
+    // The second stop is the page's own, past the header and the rail.
+    await expect
+        .poll(() => page.evaluate(() => document.querySelector('main')?.contains(document.activeElement)))
+        .toBe(true)
+})
+
+test("on a question's item, the reply is the first stop after the conversation, and its verbs follow", async ({
+    page,
+}) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' }).click()
+    const detail = page.getByTestId('attention-detail')
+    const conversation = detail.getByRole('region', { name: 'Conversation' })
+    await conversation.focus()
+    await tabOutOf(page, conversation)
+    await expect(detail.getByRole('textbox', { name: 'Reply to message 5' })).toBeFocused()
+    // The send button waits for something to send, so the next stop is the ticket's first verb.
+    await page.keyboard.press('Tab')
+    await expect(detail.getByTestId('attention-actions').getByRole('button').first()).toBeFocused()
+})
+
+test('after a reply, the next item waiting on you is chosen, its row focused, and a toast says what was sent', async ({
+    page,
+}) => {
+    // Recorded as the server records it, without writing to this server's journal.
+    await page.route('**/api/tickets/ABC-102/replies', (route) =>
+        route.fulfill({ json: { message_id: 12, answers: 5, new: true } }),
+    )
+    await page.goto('attention')
+    await settled(page)
+    const list = page.getByTestId('attention-list')
+    await list.getByRole('link').filter({ hasText: 'awaiting reply' }).click()
+    const box = page.getByTestId('attention-detail').getByRole('textbox', { name: 'Reply to message 5' })
+    await box.fill('Blue, to match the toolbar.')
+    await box.press('Enter')
+
+    const next = list.getByRole('link').filter({ hasText: 'drafts waiting' })
+    await expect(next).toBeFocused()
+    await expect(next).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByTestId('attention-detail').getByTestId('attention-drafts')).toBeVisible()
+    await expect(page.getByTestId('toast')).toContainText('Recorded message 12 on ABC-102, answering message 5.')
+})
+
+test.describe('on half a monitor', () => {
+    test.use({ viewport: { width: 820, height: 900 } })
+
+    test('the list fills the width, and an item opens in its place, its reply in reach', async ({ page }) => {
+        // Panels rise into place as a page opens; with motion reduced they rest where they end, so the list's top,
+        // measured once, is where it stays.
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const detail = page.getByTestId('attention-detail')
+        await expect(detail).toBeHidden()
+        const listBox = await list.boundingBox()
+        const counters = await page.getByTestId('counters').boundingBox()
+        if (listBox === null || counters === null) {
+            throw new Error('the list is not drawn')
+        }
+        // As wide as the counters above it, within a pixel.
+        expect(Math.abs(listBox.width - counters.width)).toBeLessThanOrEqual(1)
+
+        await list.getByRole('link').filter({ hasText: 'awaiting reply' }).click()
+        await expect(list).toBeHidden()
+        const back = page.getByRole('button', { name: 'Back to the list' })
+        // The row went with the list, so the focus goes to the item's first stop, where the list began.
+        await expect(back).toBeFocused()
+        const backBox = await back.boundingBox()
+        expect(Math.abs((backBox?.y ?? Infinity) - listBox.y)).toBeLessThanOrEqual(1)
+        // Its reply follows its conversation, with no list to scroll past.
+        const reply = detail.getByRole('textbox', { name: 'Reply to message 5' })
+        await expect(reply).toBeVisible()
+        await detail.getByRole('region', { name: 'Conversation' }).focus()
+        await tabOutOf(page, detail.getByRole('region', { name: 'Conversation' }))
+        await expect(reply).toBeFocused()
+
+        await back.click()
+        await expect(detail).toBeHidden()
+        const row = list.getByRole('link').filter({ hasText: 'awaiting reply' })
+        await expect(row).toBeFocused()
+        await expect(row).toHaveAttribute('aria-current', 'page')
+    })
+
+    test('an item linked to opens in place of the list', async ({ page }) => {
+        await page.goto('attention')
+        await settled(page)
+        const row = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' })
+        const href = await row.getAttribute('href')
+        await page.goto(href ?? 'attention')
+        await settled(page)
+        await expect(page.getByTestId('attention-list')).toBeHidden()
+        await expect(
+            page.getByTestId('attention-detail').getByRole('textbox', { name: 'Reply to message 5' }),
+        ).toBeInViewport()
+    })
+})
+
+/** Presses Tab until the focus leaves `region`, which holds at most a few dozen stops. */
+async function tabOutOf(page: Page, region: Locator): Promise<void> {
+    for (let stop = 0; stop < 50; stop += 1) {
+        await page.keyboard.press('Tab')
+        if (!(await region.evaluate((el) => el.contains(document.activeElement)))) {
+            return
+        }
+    }
+    throw new Error('the focus never left the region')
+}

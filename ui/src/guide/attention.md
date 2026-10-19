@@ -36,6 +36,9 @@ count there: they're news, not blockers.
 Click an item to open it beside the list. The first one open is the worst item about a ticket. The address keeps the
 item you picked, so a link to it opens the same item.
 
+On half a monitor there's no room for both, so they take turns: the list gets the whole width, and the item you click
+opens in its place, with **Back to the list** at the top to return. The list remembers which one you were on.
+
 Under its head, an item leads with whatever its reason asks of you, so the thing to do is the first thing you see:
 
 - **A run that broke** (`worker failed`, `crashed`, `unpushed`, `unknown result`, `attempt limit`): the ticket's latest
@@ -57,7 +60,8 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 
 An item about a ticket then shows the ticket's conversation and, where a reply is awaited, a box to reply in. The
 ticket's own actions (**Start privately**, **Stop**, **Forget**; see [Tickets](tickets#acting-on-a-ticket)) sit quietly
-under it all. On a reason that asks for none of the above, they come first instead.
+under the box, so from the keyboard the reply comes right after the conversation and **Forget** is never one Tab too
+far. On a reason that asks for none of the above, they come first instead.
 
 Memory's items carry what they're about. A `memory proposal` lists the proposals from the done ticket's runs, each with
 **Promote as written** and **Reject**; a `lesson review` lists the lessons due, each with **Renew**; a `lesson wrong`
@@ -99,6 +103,11 @@ What happens next depends on the ticket:
 Either way, the loop reads it at its next tick. Until then your message carries `waiting for the next tick`, and the
 item shows `answered`. Sending a reply wakes the loop, so the next tick is never far off, unless the loop is paused.
 Sending the same reply twice, say after a dropped connection, records it once.
+
+A reply that answers its item moves you on: the next item waiting on you is picked, its row takes the focus, and a
+toast at the bottom says what your reply did. Beside the list, it's already open; on half a monitor you're back on the
+list, and Enter opens it. When nothing else waits, you stay put, which is as close to inbox zero as this page gets
+without the leaves.
 
 ## Chore items
 
