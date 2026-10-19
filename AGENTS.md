@@ -209,6 +209,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an `UPDATE` of one table's times.
   A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, until the
   test says it `finishes()` or `dies()`, rather than a worker left to sleep or a run row with a made-up pid.
+  The operator is played whole too: `scenario.operator("grant", KEY, "fix-ci", code=1)` is a command canopy refuses,
+  and it and a tick give back what canopy printed (`.out`, `.err`; a tick's `.printed`), read from the move rather
+  than from `capsys`.
   A scenario keeps the story as it played, and a failed test's report prints it, a numbered step for each move; a step
   the scenario cannot record stays out of it, so prefer a verb where one fits. A step the verbs do not cover is written
   with the helpers above, in the same test; a verb two tests need goes there.
