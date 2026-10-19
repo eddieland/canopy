@@ -6,7 +6,7 @@ Asked for by the operator (2026-10-14): each tick of the overseer should run fro
 deterministic programs, instead of an agent re-reading the tracker and GitHub every tick. M36 to M39 take that one
 step at a time, and supersede M29 and M30: the probe's facts go into the journal rather than gating on them, and the
 overseer runs only when they leave it something to judge. Sketch only; the design comes first, as a new design file
-(§24).
+(§30).
 
 The shape the four share:
 
@@ -86,4 +86,12 @@ phase row, counted by distinct situation as well as by decision (2026-10-15 F26)
 attributed (the rationale says which side was right), and what the connectors cost (calls and seconds per tick, no
 tokens).
 
-Status: not started.
+Status: in progress. Designed 2026-10-19 (DESIGN §30). The design settles what the sketch left open: one request
+whose keys are each optional, so §29's read is one, each source sent its own kind's; a source writes only the kinds it
+owns; a refused line, like a subject the `end` line did not cover, keeps its subject's old rows; the `vcs` run each tick
+is also §29's reconcile read; the checks that are not CI are `human_checks` per repository in the map, shared, naming
+the exceptions so a missing entry fails toward waiting; the derivation records every row that holds, since §7 has no
+order yet, and a ticket whose observations are stale apart; agreement is computed, never stored; and
+`connect.max_age_minutes` defaults to 30 and `connect.every_minutes` to 2. Open for the operator: the tracker query run
+in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that leaves an
+observation stale.
