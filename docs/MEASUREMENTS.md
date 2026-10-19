@@ -728,3 +728,68 @@ The three largest things worth cutting, by tokens a run saves:
 Smaller: the chore's `bash` (1.3k, F42), which its one command needs; OpenCode's MCP resource tools (0.4k), which a
 definition cannot deny (F42); and, in every agent's list of skills, `customize-opencode` and the tracker skill of the
 provider not in use (0.2k together).
+
+## 2026-10-19: what two runs of one agent share of the cache
+
+Issue #923 proposes moving the fixed text of each run's prompt ahead of the run's own values, so that runs share a
+cached prefix as the overseer's ticks do (M34). This measures what two runs of one agent, started in different
+directories as two workers in two slots are, can share at all. Cited by no milestone yet.
+
+### Setup
+
+- OpenCode 1.19.3 from npm, model `anthropic/claude-opus-5-5`, pointed at 2026-10-17's recorder, as 2026-10-19's
+  first section ran it, with HOME and the XDG directories empty ones of this check's.
+- A snapshot of `definitions.sources()` with no config, so the workers' rules are unrendered; no MCP server. Neither
+  changes where OpenCode puts the cache breakpoints, which is what this measures.
+- `canopy-worker` run twice, once each in two empty directories that are not checkouts, as a slot's path differs from
+  another's. Then again from a copy of the snapshot with a prototype plugin, below.
+- Where the breakpoints go and why, read from OpenCode's source at v1.19.3: `session/llm/request.ts` (`prepare`),
+  `provider/transform.ts` (`applyCaching`), and `session/system.ts` (`environment`).
+
+### What the two requests share
+
+| | without a plugin | with the prototype plugin |
+|---|---|---|
+| System blocks | 1, 2,042 characters | 2: the body, 281; the rest, 1,763 |
+| Cache breakpoints | the system block's end, the last message's end | each system block's end, the last message's end |
+| Tools (8 built-in, 15.7k characters) | equal, no breakpoint of their own | equal, cached with the body |
+| First difference between the two runs | character 463 of the system block, `Working directory:` | the second block's `Working directory:` |
+| Prefix the second run can read from the first's cache | none | the tools and the body |
+
+The prototype, `plugin/cache-split.js` in the snapshot, implements `experimental.chat.system.transform` and splits the
+system string at a marker line appended to the worker's body:
+
+```js
+const MARK = "\n<!-- end of body -->"
+export const CacheSplit = async () => ({
+  "experimental.chat.system.transform": async (_input, output) => {
+    const text = output.system[0]
+    const at = text.indexOf(MARK)
+    if (output.system.length !== 1 || at < 0) return
+    output.system.splice(0, 1, text.slice(0, at), text.slice(at + MARK.length).replace(/^\n/, ""))
+  },
+})
+```
+
+### Findings
+
+- **F47. OpenCode sends one system block, and the tools have no breakpoint.** `prepare` joins the agent's body, the
+  environment, the instructions, the MCP servers' instructions, and the list of skills into one string, and
+  `applyCaching` marks the first two system messages and the last two others. With one system block, the cached prefix
+  ends at the system prompt's end or at the last message, never after the tools alone.
+- **F48. The working directory is in that block, after the body, so runs in different directories share nothing.** Two
+  worker runs in two directories sent equal tools and equal bodies, and system blocks that differ from the
+  `Working directory:` line on. The second run can read none of the first's cache: not its tools (13.8k tokens with
+  GitHub's server, by 2026-10-19's first table), not its body. That holds for every run that starts in a slot or a
+  desk (a worker, a planner, a splitter, a triage) and for every review, whose directory is made per run. The
+  overseer, which starts in the workspace root, and a chore, in its own directory, share across runs as 2026-10-15 F23
+  measured. The block also holds today's date, so every agent's prefix changes once a day.
+- **F49. Moving a run prompt's fixed text ahead of its values saves nothing across slots while F48 holds** (inferred
+  from F47 and F48). The body's only breakpoint is past the working directory, and the message comes after that, so
+  #923's steps 2 and 3 pay off only for runs in the same directory within the cache's lifetime, or once F48 is fixed.
+- **F50. A plugin can give the body a breakpoint of its own.** When `experimental.chat.system.transform` leaves two
+  parts, OpenCode keeps them and marks each. With the prototype, the two runs' first blocks were equal, so the tools
+  and the body are a prefix any run of the agent can read, in any slot; only the environment and the message differ.
+  DESIGN's caveats about a plugin held: the first run after adding it waited on an npm install of
+  `@opencode-ai/plugin` into the snapshot, timing out twice at 400 s before a run in the same directory went through,
+  and the first run in a directory new to OpenCode timed out at 120 s, then went through in under 280 s.
