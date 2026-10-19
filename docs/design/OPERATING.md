@@ -210,6 +210,7 @@ plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --ag
 plan_triage_timeout_minutes = 10
 worker_cmd_prefix = ""  # optional; words before every command a worker run starts, such as a sandbox wrapper (§24)
 worker_cmd_suffix = ""  # optional; words after them
+worker_model = ""       # optional; the provider/model every implement and resume runs on (§13, The worker's model)
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
@@ -342,9 +343,10 @@ agent, which allows everything (D040). `env` in the default templates is the ord
 `notify.cmd` is split the same way, gets its input on stdin, and must not contain `{prompt}`.
 
 `runtime.worker_cmd_prefix` and `worker_cmd_suffix` go before and after each command a worker run starts:
-`worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, all four from one key, so a sandbox wrapper (§24) or a
-model option cannot miss one. Each is split on its own and may name `{definitions_dir}` and `{title}`, but not
-`{prompt}`, which stays the template's to place. Empty, the default, adds nothing. The overseer's, a chore's, the
+`worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, all four from one key, so a sandbox wrapper (§24)
+cannot miss one. Each is split on its own and may name `{definitions_dir}` and `{title}`, but not `{prompt}`, which
+stays the template's to place. Empty, the default, adds nothing. Neither, nor `worker_cmd` or `private_worker_cmd`, may
+pass `--model`: the worker's model is `runtime.worker_model` (§13, The worker's model). The overseer's, a chore's, the
 reviewer's, and a triage's (§25) templates are not wrapped: each takes a different sandbox role, or none.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An overseer override goes into the
@@ -570,9 +572,9 @@ OpenCode is read again before it is built.
 
 ### What OpenCode does with a model
 
-canopy chooses no model yet: a run gets OpenCode's default unless its template passes one (§12). ROADMAP M58 would have
-canopy choose the worker's (The worker's model, below), and rests on what follows, read from OpenCode's source at
-1.19.3 (2026-10-19). A later OpenCode is read again before it is built.
+canopy chooses the worker's model (The worker's model, below); every other run gets OpenCode's default unless its
+template passes one (§12). ROADMAP M58 rests on what follows, read from OpenCode's source at 1.19.3 (2026-10-19). A
+later OpenCode is read again before the rest of it is built.
 
 - **Which model a run uses.** `opencode run` sends its `--model` with the prompt, and the session
   (`packages/opencode/src/session/prompt.ts`) takes that, else the agent's `model:`, else the session's last, else
@@ -621,9 +623,10 @@ canopy choose the worker's (The worker's model, below), and rests on what follow
 
 ### The worker's model (M58)
 
-Designed, not built (ROADMAP M58, REQUIREMENTS R23). Until it lands, a worker runs on OpenCode's default unless its
-template passes a model, and the journal cannot say which (above). This part says what changes in §8, §11, §12, §14,
-and §22.
+Partly built (ROADMAP M58, REQUIREMENTS R23): `runtime.worker_model`, rendered into the definitions, the templates'
+`--model` refused, and the run's `model` in `canopy status`. The override, `canopy models`, dispatch's check against
+OpenCode's list, `canopy show`, the spend split, and the web UI's pages are designed, not built. This part says what
+changes in §8, §11, §12, §14, and §22.
 
 The operator wants to canary a model: run one ticket's workers on another model, and compare what they did and cost,
 before every worker takes it. So canopy chooses the worker's model itself, from a default and an override per ticket
@@ -749,11 +752,12 @@ would run after each (Session titles turned one down, above). It would be a seco
 sandbox, printing the whole session to read two fields from a store a sandboxed worker can write (§24), in a format
 canopy would have to follow (§22 turned it down for transcripts).
 
-**Trust model changes.** Proposed, for M58's PR:
+**Trust model changes.** T5's and T7's are in TRUST_MODEL, and T1's for `runtime.worker_model`; the rest come with
+what they are about:
 
 - T1: the worker's model is the operator's choice alone, from `runtime.worker_model` or `canopy model`, which refuses
   `inside_run`. No dispatch flag, label, or state block field lets an agent choose it, and a model OpenCode does not
-  list refuses the run rather than falling back.
+  list refuses the run rather than falling back. In TRUST_MODEL without the override and dispatch's check yet.
 - T5: a run records the model canopy asked for; the session's record says what served.
 - T7: `runtime.worker_model` is private, as every `runtime` key is.
 - T8: only if the web UI's control is built.

@@ -284,6 +284,57 @@ def _wrapper(value: str) -> str:
     return value
 
 
+#: The longest model id canopy takes, in `runtime.worker_model` (DESIGN §13, The worker's model).
+MAX_MODEL_ID = 200
+# Characters no model id holds: quotes and a backtick, which the definitions and prompts quote it with.
+_MODEL_ID_REFUSED = "\"'`"
+#: The option a covered worker template must not pass: OpenCode's `--model` beats the definition's `model:` (§13).
+MODEL_OPTION = "--model"
+
+
+def model_id(value: str) -> str:
+    """Check that `value` is a `provider/model` id, as OpenCode names a model, and return it.
+
+    It is one line of at most `MAX_MODEL_ID` characters, a provider and a model joined by its first `/`, each non-empty,
+    with no whitespace, control character, quote, or backtick. The model part may hold more slashes.
+
+    Returns:
+        `value`, unchanged.
+
+    Raises:
+        ValueError: `value` is not an id of that shape.
+    """
+    provider, slash, model = value.partition("/")
+    if (
+        not (provider and slash and model)
+        or len(value) > MAX_MODEL_ID
+        or not value.isprintable()
+        or any(c.isspace() or c in _MODEL_ID_REFUSED for c in value)
+    ):
+        raise ValueError(
+            f"must be a provider/model id as `opencode models` prints it: at most {MAX_MODEL_ID} characters, a "
+            "provider and a model joined by '/', with no whitespace, quote, or backtick"
+        )
+    return value
+
+
+def _worker_model(value: str) -> str:
+    # Empty means the runtime's default model, as before canopy chose one.
+    return model_id(value) if value else value
+
+
+def _no_model_option(value: str) -> str:
+    # `runtime.worker_cmd`, `private_worker_cmd`, `worker_cmd_prefix`, or `worker_cmd_suffix`: a `--model` there would
+    # beat the model canopy renders into the worker's definition, while the run's record named another (DESIGN §13).
+    # The short `-m` is not looked for: a wrapper ahead of the runtime may take one of its own.
+    if any(w == MODEL_OPTION or w.startswith(f"{MODEL_OPTION}=") for w in shlex.split(value)):
+        raise ValueError(
+            f"must not pass {MODEL_OPTION}, which would override the model canopy chooses for the worker; set "
+            "runtime.worker_model instead (DESIGN §13)"
+        )
+    return value
+
+
 def _user_path(value: Path) -> Path:
     # A relative path would resolve against the working directory, which is the workspace: its files would stand in
     # for the operator's prompts (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
@@ -299,9 +350,12 @@ Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
 AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
+#: A worker's template, `worker_cmd` or `private_worker_cmd`: an agent template that passes no `--model` (§13).
+WorkerTemplate = Annotated[AgentTemplate, AfterValidator(_no_model_option)]
 NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
 SetupCommand = Annotated[StrictStr, AfterValidator(_setup_command)]
-Wrapper = Annotated[StrictStr, AfterValidator(_wrapper)]
+Wrapper = Annotated[StrictStr, AfterValidator(_wrapper), AfterValidator(_no_model_option)]
+ModelId = Annotated[StrictStr, AfterValidator(_worker_model)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 
 
@@ -600,13 +654,13 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json --thinking "
         "--title={title} {prompt}"
     )
-    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
+    worker_cmd: Annotated[WorkerTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking "
         "--title={title} {prompt}"
     )
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
-    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
+    private_worker_cmd: Annotated[WorkerTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json --thinking "
         "--title={title} {prompt}"
     )
@@ -638,9 +692,13 @@ class Runtime(Section):
         "--title={title} {prompt}"
     )
     # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `split_cmd`,
-    # `plan_cmd`), such as a sandbox wrapper or a model option, so one key covers all four (DESIGN §12).
+    # `plan_cmd`), such as a sandbox wrapper, so one key covers all four (DESIGN §12). Neither passes `--model`.
     worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""
     worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE] = ""
+    #: The model every `implement` and `resume` runs on, a `provider/model` id, rendered into the workers' definitions;
+    #: empty for the runtime's default (DESIGN §13, The worker's model). Private: a model is what the operator's spend
+    #: buys, and its provider is sent the ticket and the code (TRUST_MODEL T7).
+    worker_model: Annotated[ModelId, Scope.PRIVATE] = ""
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45

@@ -6,7 +6,8 @@ Command templates name it with `{definitions_dir}`, and OpenCode reads it throug
 
 Five definitions are rendered from config. `canopy-worker-private`, `canopy-planner`, and `canopy-plan-triage` get the
 tracker's MCP server and the tools of it they may call, its read tools (`render_private`, DESIGN §22, §25). Both workers
-get the rule that lets them push a rebased branch with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8).
+get the rule that lets them push a rebased branch with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8),
+and the model they run on, `runtime.worker_model` or the one a run asked for, as `model:` (`render_model`, DESIGN §13).
 `canopy-overseer` gets the overseer's prompt, the operator's override if any, and the tracker's skill if canopy ships
 one, as its body (`render_overseer`): the body is the agent's system prompt, which the provider caches across ticks,
 where the state block, the tick's message, changes every tick (DESIGN §6). The digest covers the rendered text, so a
@@ -21,6 +22,7 @@ the tracker server's tools (`naming_tools`): a rule merged after canopy's could 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import tempfile
@@ -68,6 +70,8 @@ _REPLY_BASH = ('    "gh pr comment*": deny\n',)
 _REPLY_BASH_ISSUES = ('    "gh issue comment*": deny\n',)
 _REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_to_pending_review*": deny\n')
 _REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
+#: The line of the shipped worker definitions' frontmatter their model is rendered at (DESIGN §13, The worker's model).
+_MODEL_MARKER = "# canopy: model\n"
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
 OVERSEER = "canopy-overseer"
@@ -117,6 +121,22 @@ def render_rebase(text: str, name: str, *, rebase: bool) -> str:
     return text.replace(_REBASE_MARKER, _REBASE_MARKER + "".join(_REBASE_RULES), 1)
 
 
+def render_model(text: str, name: str, model: str) -> str:
+    """Return worker definition `name` running on `model`, a `provider/model` id, as `model:` at its marked line.
+
+    With no model, the empty string, the marked line stays as it is: the runtime's default model, as before canopy chose
+    one. The id is written as a JSON string, which YAML reads as the same string, so no id can add a key.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the model at.
+    """
+    if _MODEL_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_MODEL_MARKER.strip()!r} to render the model at")
+    if not model:
+        return text
+    return text.replace(_MODEL_MARKER, f"{_MODEL_MARKER}model: {json.dumps(model)}\n", 1)
+
+
 def render_replies(text: str, name: str, *, approve: bool, ticket_comments: bool) -> str:
     """Return worker definition `name` denying the GitHub server's comment tools and `gh`'s, if `approve`.
 
@@ -155,11 +175,11 @@ def render_overseer(text: str, prompt: str, skill: str | None) -> str:
     return head + "\n\n".join(part.strip("\n") for part in parts) + "\n"
 
 
-def sources(config: Config | None = None) -> dict[str, bytes]:
+def sources(config: Config | None = None, *, model: str | None = None) -> dict[str, bytes]:
     """Return the snapshot's files by relative path.
 
     They are the bundled agents and skills, with the workers' and the overseer's definitions rendered from `config`
-    when it is given.
+    when it is given. The workers run on `model`, a run's own, or else on `runtime.worker_model`.
 
     Raises:
         DefinitionsError: The overseer's prompt cannot be read.
@@ -174,6 +194,7 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
     for rel in _WORKER_FILES:
         if config is not None and rel in found:
             text = render_rebase(found[rel].decode(), rel, rebase=config.trust.rebase)
+            text = render_model(text, rel, config.runtime.worker_model if model is None else model)
             replied = replies.render(config, RunKind.RESUME, private=rel == _PRIVATE_FILE)
             approve = replied is not None and replied.mode is ReplyMode.APPROVE
             # A public worker without a ticket's draft posts its ticket comments itself; a private one posts none.
@@ -207,9 +228,9 @@ def _tracker_skill(found: Mapping[str, bytes], provider: str) -> str | None:
     return f"The skill `{name}` follows, given here so that you need not load it.\n\n{text.strip()}"
 
 
-def digest(config: Config | None = None) -> str:
+def digest(config: Config | None = None, *, model: str | None = None) -> str:
     """Return a digest of the snapshot's files: their relative paths and contents."""
-    return _digest(sources(config))
+    return _digest(sources(config, model=model))
 
 
 def _digest(files: Mapping[str, bytes]) -> str:
@@ -225,10 +246,11 @@ def agent_names() -> list[str]:
     return sorted(p.stem for p in resources.agents_dir().glob("*.md"))
 
 
-def ensure(state_dir: Path, config: Config | None = None) -> Path:
+def ensure(state_dir: Path, config: Config | None = None, *, model: str | None = None) -> Path:
     """Return the snapshot for the installed canopy and `config`, creating it if missing.
 
-    Safe to call from concurrent processes.
+    Its workers run on `model` when it is given, a worker run's own, and on `runtime.worker_model` otherwise: each
+    model gets a snapshot of its own (DESIGN §13). Safe to call from concurrent processes.
 
     canopy creates a snapshot readable only by the operator. One that is not was put there by something else, such as a
     checkout of a shared workspace (DESIGN §18), and could loosen canopy's agents, so it is refused, never loaded.
@@ -238,7 +260,7 @@ def ensure(state_dir: Path, config: Config | None = None) -> Path:
             cannot be read.
         OSError: the snapshot could not be written, and no other process put one in its place.
     """
-    files = sources(config)
+    files = sources(config, model=model)
     runtime = state_dir / RUNTIME_DIR
     final = runtime / _digest(files)
     if final.is_dir() or final.is_symlink():

@@ -82,6 +82,12 @@ run into an attention item, and listing reaches no provider, so a listed model c
 not the session's record, which `opencode export` would read after every run; that a covered template, prefix, or
 suffix passing `--model` is a config error, so what is recorded is what runs; and that dispatch reads `opencode models`
 at each dispatch with a model set, in the workspace root rather than a repository's clone or slot, and fails closed,
-refusing `model_list_failed` when the read fails as it refuses `model_missing`. Open for the operator: which agents
-beyond the worker and the private worker, the planner among them; the web UI's control; and the commit trailer naming
-the model (issue #275).
+refusing `model_list_failed` when the read fails as it refuses `model_missing`. Built 2026-10-19, the default:
+`runtime.worker_model`, private and checked for shape at config load; rendered as `model:` into `canopy-worker` and
+`canopy-worker-private`, a snapshot per model; a `--model` in `worker_cmd`, `private_worker_cmd`, or the prefix or suffix
+refused as a config error; and `runs.model` (migration 0047), written at dispatch for every `implement` and `resume`,
+which `_run` renders the definitions from and `canopy status` shows beside the kind. TRUST_MODEL T1, T5, and T7 say so.
+Left: the override (`canopy model`), `canopy models` and the fake `opencode models`, dispatch's `model_missing` and
+`model_list_failed`, `canopy show`, the spend split by model, and the web UI's run and ticket pages. Open for the
+operator: which agents beyond the worker and the private worker, the planner among them; the web UI's control; and the
+commit trailer naming the model (issue #275).

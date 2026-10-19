@@ -47,6 +47,9 @@ TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, NEEDS_PLAN)
 # The kinds counted per ticket that `canopy grant` takes: a split creates tickets in the tracker, so only config raises
 # its limit.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
+#: The kinds whose worker runs on the model canopy chooses (DESIGN §13, The worker's model): those of `canopy-worker`
+#: and `canopy-worker-private`, whose definitions it renders the model into.
+MODEL_KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
 DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k is not RETIRED)
 
 

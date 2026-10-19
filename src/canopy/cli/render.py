@@ -19,13 +19,17 @@ SUMMARY_WIDTH = 160
 
 
 def run_kind(row: sqlite3.Row) -> str:
-    """A run's kind as a line shows it: a `resume` with its reasons, `resume (ci, review)` (DESIGN §8).
+    """A run's kind as a line shows it, with a `resume`'s reasons and the model canopy asked its worker for.
+
+    A `resume` names why it ran, `resume (ci, review)` (DESIGN §8), and a run with a model names it, `implement on
+    openai/gpt-5` (§13); a run on the runtime's default names none.
 
     Returns:
-        The kind, followed by its reasons in parentheses when the run has any.
+        The kind, followed by its reasons in parentheses when the run has any, and by its model when it has one.
     """
     reasons = db.reasons_in(row)
-    return f"{row['kind']} ({', '.join(reasons)})" if reasons else str(row["kind"])
+    kind = f"{row['kind']} ({', '.join(reasons)})" if reasons else str(row["kind"])
+    return f"{kind} on {row['model']}" if row["model"] else kind
 
 
 def named(key: object, title: object) -> str:

@@ -203,6 +203,11 @@ Controls:
   which a repository's config cannot loosen (D044). Fetched and searched pages are text anyone can shape, and an agent
   that reaches for them on its own reads them with the operator's credentials in reach. The untrusted text an agent
   reads is then what its task brings: the ticket, the PR and its comments, CI output, and the repository.
+- The worker's model (DESIGN §13, The worker's model) is the operator's choice alone: `runtime.worker_model`, private
+  (T7), which canopy renders into the worker definitions it owns. `canopy dispatch` takes no model, and no label or
+  state block field carries one, so ticket text chooses neither what a run costs nor which provider is sent the ticket
+  and the code. A worker template, prefix, or suffix that passes `--model` is a config error, so no template overrides
+  the model unseen. A model OpenCode does not list fails the run before its first call: OpenCode never falls back.
 
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
@@ -357,6 +362,9 @@ but must be distinguishable:
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
+- A worker run records the model canopy asked for, empty for the runtime's default (DESIGN §13). With a template's
+  `--model` refused, the session's own record, which `opencode export` prints, names that model, or the run failed
+  before its first call.
 - canopy's reviews post nothing (D114), so nothing a reviewer writes appears under the operator's name.
 - A reply the operator sends through canopy (DESIGN §29) carries no marks: it is their own words, posted word for
   word as they last saw it, named by its hash, as one comment review that approves nothing and resolves no thread. The
@@ -469,9 +477,10 @@ branch, cannot change what the harness does. Its shared config is the workspace 
 workspace's private file, `.canopy/config.toml` under its root. A workspace may itself be a repository the operator
 shares with a team, so anyone who can push there can change that file, and a checkout of an unreviewed branch of it
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
-worktree and before any agent starts. If it could set the runtime commands, `notify.cmd`, chores, the review query,
-prompt paths, capacity, queue labels, authorized repliers, or agent memory's tiers, one commit would be enough to run
-commands on operators' machines, raise their spend, or pick who steers their workers.
+worktree and before any agent starts. If it could set the runtime commands, the worker's model, `notify.cmd`, chores,
+the review query, prompt paths, capacity, queue labels, authorized repliers, or agent memory's tiers, one commit would be
+enough to run commands on operators' machines, raise their spend, send their tickets and code to another provider, or
+pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
@@ -527,11 +536,12 @@ undenied in that definition. An operator who works private tickets in a reposito
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can
 also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
-canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
-agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
-agents. Scalar rules canopy sets (the worker's `edit`, `external_directory`, and `task`) cannot be loosened that way,
-since a scalar replaces whatever the repository set; bash rules are defense in depth (T4), with branch protection (§7)
-the boundary for what a worker can push.
+canopy's definitions leave unset. With `runtime.worker_model` empty, its `model` can choose the worker's, as before
+canopy chose one; set, the `model:` canopy renders into the worker's definition beats it (DESIGN §13). The shadowing
+check matches file names and text: an `opencode.json` that builds an agent's name out of JSON escapes or `{file:...}`
+substitution gets past it, and could then add bash rules to canopy's agents. Scalar rules canopy sets (the worker's
+`edit`, `external_directory`, and `task`) cannot be loosened that way, since a scalar replaces whatever the repository
+set; bash rules are defense in depth (T4), with branch protection (§7) the boundary for what a worker can push.
 
 ### T8. Network listeners
 

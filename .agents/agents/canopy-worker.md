@@ -7,6 +7,9 @@
 description: canopy worker. Works one ticket in a leased worktree; pushes a branch, opens a PR, comments.
 mode: primary
 temperature: 0.2
+# canopy renders the run's model at the marked line, `runtime.worker_model`, and none for the runtime's default
+# (DESIGN §13, The worker's model).
+# canopy: model
 permission:
   # Edits inside the worktree, which is the working directory `canopy _run` starts the worker in. Files outside it
   # are refused. A joint run's working directory is its desk, whose links lead to the worktrees it leased (DESIGN

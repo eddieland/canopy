@@ -1,6 +1,7 @@
 """The snapshot agent runs load canopy's agents and skills from, and the guard against shadowing them (D040, D044)."""
 
 import fnmatch
+import json
 import os
 import shutil
 import time
@@ -9,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.core import config, definitions, plans
 from canopy.infra import resources
@@ -206,6 +208,60 @@ def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
     bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
     with pytest.raises(definitions.DefinitionsError, match="no line"):
         definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
+
+
+MODEL_MARKER = "# canopy: model\n"
+WORKERS = ["canopy-worker", definitions.PRIVATE_WORKER]
+
+
+@pytest.mark.parametrize("agent", WORKERS)
+def test_the_workers_model_is_rendered_into_their_frontmatter(
+    canopy_env: CanopyEnv, agent: str, snapshot: SnapshotAssertion
+) -> None:
+    """`runtime.worker_model` is the worker's `model:`, which OpenCode runs it on (DESIGN §13, The worker's model)."""
+    path = f"agents/{agent}.md"
+    unset = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    # None set: no key, so the runtime's default, as before canopy chose a model.
+    assert "\nmodel:" not in unset
+    assert MODEL_MARKER in unset.split("\n---\n", 1)[0]
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"worker_model": "openrouter/anthropic/claude-x"}})
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    assert rendered == unset.replace(MODEL_MARKER, f'{MODEL_MARKER}model: "openrouter/anthropic/claude-x"\n', 1)
+    # The frontmatter up to its permissions, where the model sits among the agent's own settings.
+    assert rendered.split("\npermission:\n", 1)[0] == snapshot
+
+
+def test_only_the_workers_run_on_the_workers_model(canopy_env: CanopyEnv) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"worker_model": "openai/gpt-5"}})
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))
+    with_model = {rel for rel, data in rendered.items() if b'\nmodel: "openai/gpt-5"\n' in data}
+    assert with_model == {f"agents/{agent}.md" for agent in WORKERS}
+    assert not [rel for rel, data in rendered.items() if b"\nmodel:" in data and rel not in with_model]
+
+
+def test_each_model_gets_a_snapshot_of_its_own(canopy_env: CanopyEnv) -> None:
+    """The digest covers the rendered text, so a snapshot a run may be loading is never changed for another (D040)."""
+    default = config.load(canopy_env.root, canopy_env.user_file)
+    unset = definitions.ensure(canopy_env.state_dir, default)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"worker_model": "openai/gpt-5"}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    chosen = definitions.ensure(canopy_env.state_dir, cfg)
+    assert chosen != unset
+    assert chosen.name == definitions.digest(cfg) == definitions.digest(default, model="openai/gpt-5")
+    # A run's own model takes the place of the setting's, and an empty one renders none.
+    other = definitions.ensure(canopy_env.state_dir, cfg, model="anthropic/claude-x")
+    assert len({unset, chosen, other}) == 3
+    assert definitions.ensure(canopy_env.state_dir, cfg, model="") == unset
+    for snapshot, model in ((unset, None), (chosen, "openai/gpt-5"), (other, "anthropic/claude-x")):
+        text = (snapshot / "agents" / "canopy-worker.md").read_text()
+        assert (f"\nmodel: {json.dumps(model)}\n" in text) is (model is not None)
+        assert ("\nmodel:" in text) is (model is not None)
+
+
+def test_a_worker_definition_without_its_model_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="no line '# canopy: model'"):
+        definitions.render_model(bundled.replace(MODEL_MARKER, ""), "canopy-worker", "")
 
 
 def _allowed(rules: Iterable[tuple[str, str]], tool: str) -> bool:

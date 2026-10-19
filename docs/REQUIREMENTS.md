@@ -286,8 +286,10 @@ its size alone is not, since size says little about risk.
 
 ### R23. Canary a model on one ticket
 
-Partial: planned (M58, §13, The worker's model). A run records the model canopy asked for, not the one that served it;
-with a template's `--model` refused, a session runs the model asked for or fails before its first call.
+Partial: the default is built (M58, §13, The worker's model): `runtime.worker_model` sets every worker's model, and each
+run records it, but the override per ticket, the check against OpenCode's models, and the spend split are not. A run
+records the model canopy asked for, not the one that served it; with a template's `--model` refused, a session runs the
+model asked for or fails before its first call.
 Written down 2026-10-19, from issue #418. The operator wants to try a model change on one ticket before
 every worker takes it, by running that ticket's workers on another model and comparing the result. Today a worker's
 model is OpenCode's default unless the operator's command template names one, which then applies to every worker run,

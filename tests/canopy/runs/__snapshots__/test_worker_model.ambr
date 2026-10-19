@@ -1,0 +1,16 @@
+# serializer version: 1
+# name: test_status_names_each_runs_model_beside_its_kind
+  '''
+  Running workers (1/2):
+    PROJ-2  implement on openrouter/anthropic/claude-x  <age>  repo <tmp>/pool/1/repo
+  
+  Recent runs (2):
+    PROJ-1  resume (ci, review) on openrouter/anthropic/claude-x  done  <age> ago  https://example.test/pr/1
+      did it
+      no session reported  log <tmp>/ws/.canopy/runs/2.log
+    PROJ-1  implement  done  <age> ago  https://example.test/pr/1
+      did it
+      no session reported  log <tmp>/ws/.canopy/runs/1.log
+  
+  '''
+# ---

@@ -71,9 +71,13 @@ worker_timeout_minutes = 45
 # setup_timeout_minutes = 30
 # Optional: words before and after every command a worker run starts (worker_cmd, private_worker_cmd, split_cmd, and
 # plan_cmd), with {definitions_dir} and {title} but no {prompt}. One place for a sandbox wrapper (docs/SANDBOX.md), or
-# an option all four take.
+# an option all four take. Neither passes --model: set worker_model, below.
 # worker_cmd_prefix = "canopy-sandbox worker --read {definitions_dir} --"
-# worker_cmd_suffix = "--model provider/model"
+# worker_cmd_suffix = "--variant high"
+# Optional: the model every implement and resume runs on, as `opencode models` names it; empty, the runtime's default
+# (DESIGN §13, The worker's model). canopy writes it into the workers' definitions and records it on each run, so
+# worker_cmd and private_worker_cmd must not pass --model. split_cmd and plan_cmd still choose their own.
+# worker_model = "provider/model"
 
 # Optional, with the workspace's policy.plan = "approve": before a ticket's first plan, a cheaper agent judges whether
 # its work is trivial by your words below, and if so waives the plan (DESIGN §25, Triage before a plan). When unsure,
