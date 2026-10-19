@@ -61,7 +61,8 @@ faster.
 - Local only. No requests to another origin at run time: no CDN fonts, analytics, or remote images.
 - Journal content (tracker comments, agent output) is untrusted and is rendered as text, never as HTML.
 - A running worker's events are known only once it ends; live data arrives over the server's event stream.
-- No pages or features beyond what a ROADMAP milestone lists. Prompting a running session waits on M15.
+- No pages or features beyond what a ROADMAP milestone lists or the operator asks for. Prompting a running session
+  waits on M15.
 - The stack and engineering rules are in `ui/AGENTS.md`. The visual system is `ui/DESIGN.md`, which is normative.
 
 ## Brand Commitments
