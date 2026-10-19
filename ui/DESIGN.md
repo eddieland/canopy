@@ -42,7 +42,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
-| `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
+| `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
@@ -1017,7 +1017,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
   stands in for one, and they stay rare enough to land. An empty fence that names one of the repository's example
   files after its language (```` ```toml examples/config.toml ````, `EMBEDS`) shows that file whole, as it is when the
-  guide is built, so a page never keeps a copy of one. A new page is a file there and a line in its group in
+  guide is built, so a page never keeps a copy of one. A code block is colored as a diff's code is (A review), in the
+  language its fence names, by Shiki's name or a file's extension (```` ```toml ````, ```` ```sh ````; `fenceLanguage`):
+  plain until its grammar has loaded, then the same characters colored, and plain for good in a language canopy does
+  not map (```` ```text ````). A new page is a file there and a line in its group in
   `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
   about that one.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the

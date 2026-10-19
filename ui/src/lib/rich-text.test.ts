@@ -50,10 +50,18 @@ describe('parse', () => {
     it('keeps a fenced block verbatim, and an unclosed fence runs to the end', () => {
         expect(parse('Ran:\n```sh\nmake  check\n- not a list\n```\nafter')).toEqual([
             { kind: 'paragraph', lines: [[text('Ran:')]] },
-            { kind: 'code', lines: ['make  check', '- not a list'] },
+            { kind: 'code', lines: ['make  check', '- not a list'], lang: 'sh' },
             { kind: 'paragraph', lines: [[text('after')]] },
         ])
         expect(parse('```\n**not strong**')).toEqual([{ kind: 'code', lines: ['**not strong**'] }])
+    })
+
+    it("names a fenced block's language by the first word after its fence, and none for a bare fence", () => {
+        expect(parse('```toml examples/config.toml\na = 1\n```')).toEqual([
+            { kind: 'code', lines: ['a = 1'], lang: 'toml' },
+        ])
+        expect(parse('~~~ python\nx\n~~~')).toEqual([{ kind: 'code', lines: ['x'], lang: 'python' }])
+        expect(parse('```\nx\n```')[0]).not.toHaveProperty('lang')
     })
 
     it('reads a heading as one line', () => {

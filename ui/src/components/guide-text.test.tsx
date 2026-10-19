@@ -49,6 +49,26 @@ describe('GuideText', () => {
         expect(web.getAttribute('target')).toBe('_blank')
         expect(web.getAttribute('rel')).toBe('noreferrer noopener')
     })
+
+    it('colors a code block by the language its fence names, its characters as written', async () => {
+        const lines = ['# The policy', '[policy]', 'max_resume_attempts = 2']
+        const { container } = await renderRouted(
+            <GuideText blocks={[{ kind: 'code', lines, lang: 'toml' }]} page="config-files" />,
+        )
+
+        // Once the grammar has read it, the comment is a piece of its own.
+        expect(await screen.findByText('# The policy')).toBeTruthy()
+        expect(container.textContent).toBe(lines.join('\n'))
+    })
+
+    it('leaves a code block in no language canopy highlights as written', async () => {
+        const lines = ['lorem ipsum --dolor', 'amet']
+        const { container } = await renderRouted(
+            <GuideText blocks={[{ kind: 'code', lines, lang: 'text' }]} page="overview" />,
+        )
+
+        expect(container.textContent).toBe(lines.join('\n'))
+    })
 })
 
 describe('GuideLines', () => {
