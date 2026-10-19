@@ -1,5 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { tipOf } from '@/test-utils'
 
 import { Counter } from './counter'
 
@@ -45,12 +47,14 @@ describe('Counter', () => {
         expect(screen.getByTestId('counter-running').textContent).toBe('Running2')
     })
 
-    it('keeps its whole line on hover when the line is text', () => {
+    it('keeps its whole line in a tip when the line is text and cut to fit', () => {
+        vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300)
+        vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
         render(
             <Counter label="Worktrees" value={5} tone="plain">
                 2 pools unread: api, web
             </Counter>,
         )
-        expect(screen.getByTitle('2 pools unread: api, web')).toBeDefined()
+        expect(tipOf(screen.getByText('2 pools unread: api, web'))).toBe('2 pools unread: api, web')
     })
 })

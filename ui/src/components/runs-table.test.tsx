@@ -6,7 +6,7 @@ import { mockRuns } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { byTicket } from '@/lib/run-state'
-import { renderRouted } from '@/test-utils'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { RunsTable, TicketRunsTable } from './runs-table'
 
@@ -49,13 +49,13 @@ describe('RunsTable', () => {
         expect(screen.getByRole('link', { name: 'run:41' })).toBeDefined()
     })
 
-    it('says a running run’s latest tool call, and a status in words with the CLI’s spelling on hover', async () => {
+    it('says a running run’s latest tool call, and a status in words with the CLI’s spelling in its tip', async () => {
         await renderRuns([RUNNING, run({ id: 43, status: 'worker_failed', state: 'failed', activity: null })])
         const running = within(screen.getByTestId('run-41'))
         expect(running.getByText('bash')).toBeDefined()
         expect(running.getByText('npm test -- login')).toBeDefined()
         const failed = within(screen.getByTestId('run-43'))
-        expect(failed.getByText('worker failed').title).toBe('worker_failed')
+        expect(tipOf(failed.getByText('worker failed'))).toBe('worker_failed')
         expect(failed.queryByTestId('run-doing')).toBeNull()
     })
 
@@ -65,7 +65,7 @@ describe('RunsTable', () => {
         expect(screen.getByRole('link', { name: 'acme/api#12' })).toBeDefined()
     })
 
-    it('names up to four worktrees, and counts the rest past three, every one on hover', async () => {
+    it('names up to four worktrees, and counts the rest past three, every one in a tip', async () => {
         const four = ['w/1', 'w/2', 'w/3', 'w/4']
         const { unmount } = await renderRuns([run({ worktrees: four })])
         for (const path of four) {
@@ -78,7 +78,7 @@ describe('RunsTable', () => {
         expect(screen.getByText('w/3')).toBeDefined()
         expect(screen.queryByText('w/4')).toBeNull()
         const more = screen.getByText('+2 more worktrees')
-        expect(more.title).toBe('the worktrees it holds:\nw/1\nw/2\nw/3\nw/4\nw/5')
+        expect(tipOf(more)).toBe('the worktrees it holds:\nw/1\nw/2\nw/3\nw/4\nw/5')
     })
 })
 

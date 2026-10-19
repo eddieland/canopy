@@ -133,7 +133,8 @@ test('a run holding a slot in many repositories names a few of them in its row',
     await expect(row).not.toContainText('.treehouse/repo-3-abc/1/repo-3')
     const more = row.getByTestId('run-worktrees-more')
     await expect(more).toHaveText('+9 more worktrees')
-    await expect(more).toHaveAttribute('title', /repo-11-abc\/1\/repo-11$/u)
+    await more.focus()
+    await expect(page.getByRole('tooltip')).toHaveText(/repo-11-abc\/1\/repo-11$/u)
 })
 
 /**

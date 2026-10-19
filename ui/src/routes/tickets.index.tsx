@@ -15,6 +15,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketState } from '@/components/ticket-state'
 import { TicketTitle } from '@/components/ticket-title'
+import { Tip } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import {
@@ -186,10 +187,10 @@ function Row({ ticket }: { ticket: TicketSummary }) {
         <ListRow kind="ticket" data-testid={`ticket-${ticket.key}`}>
             <TicketState ticket={ticket} />
             <TicketLink ticketKey={ticket.key} className="truncate" />
-            {/* Cut to fit, the whole on hover in the CLI's spelling. */}
-            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket)}>
-                {phaseLabel(ticket)}
-            </span>
+            {/* Cut to fit, the whole in its tip in the CLI's spelling. */}
+            <Tip fact={phaseWord(ticket)} mono>
+                <span className="truncate font-mono text-xs text-muted-foreground">{phaseLabel(ticket)}</span>
+            </Tip>
             <span className="flex">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>

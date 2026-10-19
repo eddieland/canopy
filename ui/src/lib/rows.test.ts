@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { ROW_COLUMNS, ROW_TIERS, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
+import { fitColumn, ROW_COLUMNS, ROW_TIERS, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
 import type { RowKind, RowTier } from './rows'
 
 const FREE = 'minmax(8rem,1fr)'
+// The free column, at the usual floor or one of its kind's own.
+const ANY_FREE = /^minmax\([\d.]+rem,1fr\)$/u
 const KINDS = Object.keys(ROW_COLUMNS) as RowKind[]
 
 describe('rowTemplate', () => {
@@ -18,7 +20,7 @@ describe('rowTemplate', () => {
 
     it('gives every kind exactly one free column, so its fixed ones line up row to row', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
-            expect(columns.filter(([, width]) => width === FREE)).toHaveLength(1)
+            expect(columns.filter(([, width]) => ANY_FREE.test(width))).toHaveLength(1)
         }
     })
 
@@ -71,6 +73,31 @@ describe('rowTiers', () => {
         expect(tick.has('id')).toBe(false)
     })
 
+    it("keeps a run's age in a list at half a monitor, letting its cost and chips go first", () => {
+        // A list in an 820px window is about 44rem wide: at least @2xl, under @3xl.
+        const run = rowTiers('run')
+        expect(run.get('cost')).toBe('4xl')
+        expect(run.get('kind')).toBe('3xl')
+        expect(['sm', 'md', 'lg', 'xl', '2xl']).toContain(run.get('age'))
+    })
+
+    it("lets a PR's phase go before its title is cut to a word, and fits its PR column to the list", () => {
+        const pr = rowTiers('pull-request')
+        expect(pr.get('phase')).toBe('4xl')
+        expect(pr.has('title')).toBe(false)
+        expect(rowTemplate('pull-request', '4xl')).toContain('[pr] var(--pr-width,11rem) [phase]')
+    })
+
+    it("lets what holds a slot go before its branch is cut, and keeps the slot's age", () => {
+        const worktree = rowTiers('worktree')
+        expect(worktree.get('holder')).toBe('3xl')
+        expect(worktree.has('branch')).toBe(false)
+        expect(['sm', 'md', 'lg', 'xl', '2xl']).toContain(worktree.get('age'))
+        expect(rowTemplate('worktree', '2xl')).toBe(
+            '[state] 5rem [slot] 3.5rem [holder branch] minmax(12rem,1fr) [age] 6rem [end]',
+        )
+    })
+
     it('fits every column a list shows at a tier in that tier, the free one at its floor', () => {
         // A kind with an `auto` column cannot be summed, so none of its columns may give way.
         const giving = KINDS.filter((kind) => rowTiers(kind).size > 0)
@@ -93,8 +120,21 @@ describe('rowTiers', () => {
         for (const columns of kinds) {
             const orders = columns.flatMap(([, , order]) => (order === undefined ? [] : [order]))
             expect(new Set(orders).size).toBe(orders.length)
-            expect(columns.filter(([, width, order]) => width === FREE && order !== undefined)).toEqual([])
+            expect(columns.filter(([, width, order]) => ANY_FREE.test(width) && order !== undefined)).toEqual([])
         }
+    })
+})
+
+describe('fitColumn', () => {
+    it("sets a column as wide as the list's longest name in monospace, and what sits beside it", () => {
+        // `acme/web#95`, 11 characters at 0.45rem, and a 1.25rem icon: 6.2rem, up to the next quarter.
+        expect(fitColumn('pr', ['acme/api#7', 'acme/web#95'], 1.25)).toEqual({ '--pr-width': '6.25rem' })
+    })
+
+    it('never sets it wider than the column at its most, which a longer name is cut to', () => {
+        expect(fitColumn('pr', ['a-long-organization/a-long-repository#12345'], 1.25)).toEqual({
+            '--pr-width': '11rem',
+        })
     })
 })
 

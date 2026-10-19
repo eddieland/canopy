@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { keys } from '@/api/queries'
 import type { Decision } from '@/api/types'
-import { renderRouted } from '@/test-utils'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { Decisions } from './decisions'
 
@@ -55,7 +55,7 @@ describe('Decisions', () => {
         expect(row(2).getByText('(web)', { exact: false })).toBeDefined()
         // A PR that is the subject is named once, not again beside the action.
         expect(row(3).getAllByRole('link', { name: 'acme/web#88' })).toHaveLength(1)
-        expect(row(4).getByTitle('repo web').textContent).toBe('repo web')
+        expect(row(4).getByText('repo web')).toBeDefined()
         expect(row(4).queryByRole('link')).toBeNull()
     })
 
@@ -74,10 +74,10 @@ describe('Decisions', () => {
         expect(row(1).getByRole('link', { name: 'acme/web#88' })).toBeDefined()
     })
 
-    it("reads the action as words with the CLI's spelling on hover, and the rationale as written", async () => {
+    it("reads the action as words with the CLI's spelling in its tip, and the rationale as written", async () => {
         const rationale = 'Needs a **reviewer**: <img src=x> [see](javascript:alert(1))'
         await renderDecisions([decision({ action: 'attention:needs_reviewer', rationale })])
-        expect(row(1).getByTitle('attention:needs_reviewer').textContent).toBe('attention: needs reviewer')
+        expect(tipOf(row(1).getByText('attention: needs reviewer'))).toBe('attention:needs_reviewer')
         expect(row(1).getByText(/^Needs a/u).textContent).toBe(
             'Needs a reviewer: <img src=x> [see](javascript:alert(1))',
         )

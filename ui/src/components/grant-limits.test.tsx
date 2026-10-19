@@ -52,9 +52,11 @@ function renderLimits(limits: Limit[], ticketKey: string | null = 'ABC-1', ownPr
     return { ...result, rerenderWith: (shown: Limit[]) => result.rerender(ui(shown)) }
 }
 
-// Each row shown: its label and its count, without the button.
+// Each row shown: its label and its count, without the button and the command under it.
 function rows(): string[] {
-    return screen.getAllByRole('listitem').map((row) => row.textContent.replace('Allow one more', ''))
+    return screen
+        .getAllByRole('listitem')
+        .map((row) => row.textContent.replace('Allow one more', '').replace(/canopy grant .*$/u, ''))
 }
 
 describe('GrantLimits', () => {
@@ -69,10 +71,10 @@ describe('GrantLimits', () => {
         expect(rows()).toEqual(['implement in web3 of 3 runs', 'resume in web2 of 2 runs, 1 granted'])
     })
 
-    it('names the CLI command for the same grant on hover', () => {
+    it('names the CLI command for the same grant under its button, in the text', () => {
         renderLimits([IMPLEMENT, { ...IMPLEMENT, kind: 'resume', repo: null }, REVIEW])
-        const titles = screen.getAllByRole('button', { name: 'Allow one more' }).map((button) => button.title)
-        expect(titles).toEqual([
+        const commands = screen.getAllByRole('listitem').map((row) => /canopy grant .*$/u.exec(row.textContent)?.[0])
+        expect(commands).toEqual([
             'canopy grant ABC-1 implement --repo web',
             'canopy grant ABC-1 resume',
             `canopy grant ${PR} review`,

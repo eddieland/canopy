@@ -54,6 +54,11 @@ session, lives at the rail's foot.
 A list of more than one row has a toggle for its order, newest or oldest first, and this browser remembers your choice
 for each list.
 
+Where a list has no room for a fact, it keeps it in a tip: a title cut to fit, whole; an age's exact local time; a
+word as the CLI spells it, `needs_human` for `needs human`. A tip opens when you hover, when Tab lands on what it is
+about, and when you tap that on a touch screen. Tab stops only where a tip has something to say, so a title that
+fits costs you no keystroke.
+
 ## The header
 
 The bar across the top of every page. From the left:

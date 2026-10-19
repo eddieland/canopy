@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 
 import type { RunState } from '@/api/types'
+import { Tip } from '@/components/tip'
+import { useCut } from '@/hooks/use-cut'
 import { RUN_DOT } from '@/lib/run-state'
 import type { Tone } from '@/lib/tone'
 import { cn } from '@/lib/utils'
@@ -33,8 +35,9 @@ export function RunDot({ state, className }: { state: RunState; className?: stri
 
 /**
  * A small bordered label: a reason, a kind, private or public. Pass a word from the journal as `word`: it reads with
- * spaces for underscores, and keeps its spelling, the one the CLI prints, on hover. Its `tone` is plain, or the status
- * color of the state it marks. A chip given room to shrink (`min-w-0 shrink`) cuts its word to fit.
+ * spaces for underscores, and keeps its spelling, the one the CLI prints, in a `Tip`. Its `tone` is plain, or the
+ * status color of the state it marks. A chip given room to shrink (`min-w-0 shrink`) cuts its word to fit, and its
+ * tip then holds the word whole.
  */
 export function Chip({
     className,
@@ -47,31 +50,40 @@ export function Chip({
     word?: string
     children?: ReactNode
 }) {
+    const [cutRef, cut] = useCut()
     const text = word === undefined ? undefined : readable(word)
+    const fact = word !== undefined && (word !== text || cut) ? word : null
     return (
-        <span
-            title={word !== undefined && word !== text ? word : undefined}
-            className={cn(
-                'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
-                TONE[tone],
-                className,
-            )}
-        >
-            {text === undefined ? children : <span className="truncate">{text}</span>}
-        </span>
+        <Tip fact={fact} mono>
+            <span
+                className={cn(
+                    'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
+                    TONE[tone],
+                    className,
+                )}
+            >
+                {text === undefined ? (
+                    children
+                ) : (
+                    <span ref={cutRef} className="truncate">
+                        {text}
+                    </span>
+                )}
+            </span>
+        </Tip>
     )
 }
 
 /**
  * A word from the journal in running text, not a chip: a phase, a status. It reads as words, as a chip's does
- * (`ci_failing` reads `ci failing`), with the CLI's spelling on hover. `text` stands in for a word already made
+ * (`ci_failing` reads `ci failing`), with the CLI's spelling in a `Tip`. `text` stands in for a word already made
  * readable, such as a phase with what qualifies it.
  */
 export function Word({ word, text, className }: { word: string; text?: string; className?: string }) {
     const shown = text ?? readable(word)
     return (
-        <span title={word === shown ? undefined : word} className={className}>
-            {shown}
-        </span>
+        <Tip fact={word === shown ? null : word} mono>
+            <span className={className}>{shown}</span>
+        </Tip>
     )
 }

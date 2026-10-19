@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { grantLimit, refreshLimits } from '@/api/mutations'
 import type { Limit } from '@/api/types'
+import { Copyable } from '@/components/copy-button'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { limitCount, limitLabel, stuck } from '@/lib/limits'
@@ -12,7 +13,8 @@ import { cn } from '@/lib/utils'
 
 /**
  * `canopy grant` on what is stuck at a limit (DESIGN §22): a row for each of `limits` whose runs have reached it, a
- * ticket's unit's runs of one kind or a PR's review runs, with a button that allows one more. Every run still counts,
+ * ticket's unit's runs of one kind or a PR's review runs, with a button that allows one more, and under it the CLI's
+ * command for the same grant, with a button that copies it, so it can be typed there too. Every run still counts,
  * and the grant dispatches nothing: the next tick decides. Nothing at all while nothing is at its limit and nothing
  * was granted here. `ticketKey` is the ticket the units are of; a PR's own page has none. On a PR's page, `ownPr` is
  * the PR, which its review limit then leaves unnamed.
@@ -64,7 +66,6 @@ export function GrantLimits({
                                 <Button
                                     variant="outline"
                                     className="ml-auto"
-                                    title={command(ticketKey, limit)}
                                     onClick={() => grant.mutate(limit)}
                                     disabled={grant.isPending}
                                     data-testid={`grant-${limitLabel(limit)}`}
@@ -72,6 +73,11 @@ export function GrantLimits({
                                     <Plus />
                                     Allow one more
                                 </Button>
+                                <Copyable
+                                    text={command(ticketKey, limit)}
+                                    label="command"
+                                    className="basis-full font-mono text-xs text-muted-foreground"
+                                />
                             </li>
                         ))}
                     </ul>
@@ -82,7 +88,7 @@ export function GrantLimits({
     )
 }
 
-/** The CLI's command for the same grant, shown on hover so it can be found or typed there. */
+/** The CLI's command for the same grant, shown under its button so it can be found or typed there. */
 function command(ticketKey: string | null, limit: Limit): string {
     if (limit.kind === 'review') {
         return `canopy grant ${limit.pr_url ?? 'URL'} review`

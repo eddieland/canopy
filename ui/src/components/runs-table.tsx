@@ -14,6 +14,7 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -107,9 +108,9 @@ function EarlierRow({ run }: { run: Run }) {
             <RunLink id={run.id} />
             <span />
             <RunChips run={run} />
-            <span className="truncate text-sm text-muted-foreground" title={said || undefined}>
+            <Clipped text={said} className="text-sm text-muted-foreground">
                 <LinkedText text={said} />
-            </span>
+            </Clipped>
             <RunReadouts run={run} />
         </ListRow>
     )
@@ -162,7 +163,7 @@ function RunBody({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr?: st
 }
 
 /**
- * The worktrees a run holds, one per repository it works in: the first three, then how many more, every one on hover.
+ * The worktrees a run holds, one per repository it works in: the first three, then how many more, every one in a tip.
  * A ticket across many repositories holds a slot in each, and its run's page lists them all. One more is named rather
  * than counted, since `+1 more` would take the room its path does.
  */
@@ -177,13 +178,11 @@ function RunWorktrees({ paths }: { paths: string[] }) {
                 </span>
             ))}
             {more > 0 && (
-                <span
-                    className="text-muted-foreground"
-                    title={`the worktrees it holds:\n${paths.join('\n')}`}
-                    data-testid="run-worktrees-more"
-                >
-                    +{more} more {more === 1 ? 'worktree' : 'worktrees'}
-                </span>
+                <Tip fact={`the worktrees it holds:\n${paths.join('\n')}`} mono>
+                    <span className="text-muted-foreground" data-testid="run-worktrees-more">
+                        +{more} more {more === 1 ? 'worktree' : 'worktrees'}
+                    </span>
+                </Tip>
             )}
         </>
     )

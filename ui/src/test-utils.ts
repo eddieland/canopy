@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
-import { render } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
@@ -24,6 +24,16 @@ export async function renderRouted(
         createElement(QueryClientProvider, { client }, createElement(RouterProvider, { router: router as AnyRouter })),
     )
     return { ...result, router }
+}
+
+/**
+ * What the `Tip` on `element` says: the stop for the keyboard that holds it is given the focus, as Tab gives it, which
+ * opens the tip, and the tip's text is read as a screen reader would, by its role. Null when no tip opens.
+ */
+export function tipOf(element: HTMLElement): string | null {
+    const stop = element.closest<HTMLElement>('[tabindex]') ?? element
+    act(() => stop.focus())
+    return screen.queryByRole('tooltip')?.textContent ?? null
 }
 
 /** Stubs matchMedia so `(prefers-color-scheme: dark)` matches when `dark`, and lets a test flip it later. */

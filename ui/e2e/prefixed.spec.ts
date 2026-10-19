@@ -327,7 +327,8 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
     await expect(limits).toContainText('resume in web')
     await expect(limits).toContainText('1 of 1 runs')
     const grant = limits.getByTestId('grant-resume in web')
-    await expect(grant).toHaveAttribute('title', 'canopy grant ABC-100 resume --repo web')
+    // The CLI's command for the same grant is in the text, under the button.
+    await expect(limits).toContainText('canopy grant ABC-100 resume --repo web')
     await grant.click()
     await expect(limits.getByRole('status')).toHaveText(
         'ABC-100 in web has had 1 resume runs, and may now have 2. The next tick decides whether to dispatch it.',

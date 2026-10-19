@@ -83,8 +83,9 @@ reply before **Stop** or **Forget**. Hover over each to see its command.
 ## Allowing one more run
 
 A ticket that has used every attempt of a kind shows a red **At its limit** block, with a row for each kind of run
-that's out of tries, such as "resume in web: 6 of 6 runs", and **Allow one more**. This is `canopy grant KEY KIND`.
-One click is one more run; for several at once, use `canopy grant` with `--runs N`.
+that's out of tries, such as "resume in web: 6 of 6 runs", and **Allow one more**. Under the button is the command
+that does the same, such as `canopy grant ABC-102 resume --repo web`, with a button that copies it. One click is one
+more run; for several at once, run that command with `--runs N`.
 
 A grant dispatches nothing by itself. It raises the limit, and the next tick decides whether to use it. If the last
 two resumes for the same red check failed the same way, read their transcripts before you buy a third.

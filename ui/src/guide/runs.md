@@ -9,7 +9,7 @@ and what it cost; the worktrees page is the pools they work in.
 with earlier runs shows **Show N earlier runs** under it. Each row has the run's state, its id (`run:39`), its ticket
 and kind, with a resume's reasons beside it (`resume (ci, review)`), what it cost, and how long it ran or how long
 since it ended. Under it are the run's summary, its PRs, the worktrees it holds, and, while it runs, its latest tool
-call.
+call. In a narrow window, such as half a monitor, the cost goes first and then the kind; how long stays.
 
 The chips filter by the latest run's state: `running`, `waiting on you` (the worker stopped to ask something),
 `failed`, `stopped`, and `done`. A cost of `–` means the runtime reported none, which is not the same as free.
@@ -91,7 +91,8 @@ a private ticket's run at once. [Tickets](tickets#acting-on-a-ticket) covers it.
 
 [Worktrees](/worktrees) shows every slot in canopy's pools, a pool per repository: what holds each slot, what it has
 checked out, and what processes run in it. The line under the title says how many pools and slots there are, and how
-long ago they were read. The counters add them up: slots working, held (and by what), needing a look, and free.
+long ago they were read. In a narrow window, what holds a slot goes before its branch is cut: the branch names the
+ticket anyway. The counters add them up: slots working, held (and by what), needing a look, and free.
 Needing a look counts dirty slots, broken ones, and any pool that couldn't be read at all.
 
 A slot is:
@@ -100,14 +101,15 @@ A slot is:
 - `held`: something else holds it, such as your own shell or a pool sync.
 - `dirty`: nobody holds it, but it has changes nobody committed.
 - `idle`: free for the next run.
-- `broken`: the pool can't vouch for it; hover for the pool's own word, such as `damaged` or `unverified`.
+- `broken`: the pool can't vouch for it; hover over it, or Tab to it, for the pool's own word, such as `damaged` or
+  `unverified`.
 
 The chips filter by state. A slot held by no running run is marked as such: the next tick returns it. A pool larger
 than its declared size says so, and `canopy workspace sync` removes the idle slots over it.
 
 A dirty slot is the one to look at. The pool never reuses it and counts it as busy, so it quietly shrinks the pool until
 someone deals with it, and once the rest are busy the next lease is refused. Nothing in canopy cleans it for you,
-since those changes might be the only copy of someone's afternoon: open the slot (its path is on its number), keep
+since those changes might be the only copy of someone's afternoon: open the slot (its path is in its number's tip), keep
 what you need, and discard the rest.
 
 A slot held by `quarantined: worktree seeding failed` needs a look too. A lease went to copy your seed files into it,

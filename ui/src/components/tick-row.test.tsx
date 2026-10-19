@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Tick } from '@/api/types'
 import { RUN_TOKENS_TITLE } from '@/lib/transcript'
-import { renderRouted } from '@/test-utils'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { TickRow } from './tick-row'
 
@@ -46,9 +46,9 @@ describe('TickRow', () => {
         expect(screen.queryByText('dry run')).toBeNull()
     })
 
-    it("reads its status with the CLI's spelling on hover, counts one decision as one, marks a dry run", async () => {
+    it("reads its status with the CLI's spelling in its tip, counts one decision as one, marks a dry run", async () => {
         await renderRow({ status: 'overseer_failed', decisions: 1, dry_run: true })
-        expect(screen.getByTitle('overseer_failed').textContent).toBe('overseer failed')
+        expect(tipOf(screen.getByText('overseer failed'))).toBe('overseer_failed')
         expect(screen.getByText('1 decision')).toBeDefined()
         expect(screen.getByText('dry run')).toBeDefined()
     })

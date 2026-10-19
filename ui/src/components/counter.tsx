@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { RollingNumber } from '@/components/rolling-number'
+import { Clipped } from '@/components/tip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -58,14 +59,11 @@ export function Counter({
             <span className="readout h-8 text-3xl leading-8 font-medium">
                 {value === undefined ? <Skeleton className="h-7 w-12" /> : <RollingNumber value={String(value)} />}
             </span>
-            {/* Cut to fit, so a line that grows with the workspace (pools unread) is whole on hover. */}
+            {/* Cut to fit, so a line that grows with the workspace (pools unread) is whole in its tip. */}
             {children === undefined ? null : (
-                <span
-                    className="truncate text-xs text-muted-foreground"
-                    title={typeof children === 'string' ? children : undefined}
-                >
+                <Clipped text={typeof children === 'string' ? children : ''} className="text-xs text-muted-foreground">
                     {children}
-                </span>
+                </Clipped>
             )}
         </div>
     )
