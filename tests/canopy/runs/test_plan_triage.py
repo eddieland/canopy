@@ -1,4 +1,4 @@
-"""Triage before a plan (DESIGN §25, ROADMAP M55): a `triage-plan` run, and the waiver its `trivial` verdict writes.
+"""Triage before a plan (DESIGN §25, ROADMAP M55): a `needs-plan` run, and the waiver its `trivial` verdict writes.
 
 A triage leases no slot: it reads each repository's primary clone through a link in its desk, writes nothing, and
 judges by the operator's words for trivial whether the ticket needs a plan. Only a validated `done` `trivial` result
@@ -42,7 +42,7 @@ from tests.conftest import CanopyEnv, GitPool
 
 TRIVIAL = "A typo in docs or comments; one config value changed."
 REASON = "The ticket fixes one misspelled word in a comment."
-TRIAGE = ("--label", LABEL, "--kind", "triage-plan")
+TRIAGE = ("--label", LABEL, "--kind", "needs-plan")
 IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 PLAN = ("--label", LABEL, "--kind", "plan")
 TEXT = "# Plan for PROJ-1\n\n## Steps\n\nFix the word.\n"
@@ -76,8 +76,8 @@ def test_a_trivial_verdict_waives_the_plan_and_the_implement_follows_unplanned(
 ) -> None:
     triage_on(canopy_env)
     where = ["python3", "-c", "import os; print(os.path.realpath('repo'))"]
-    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial"), where))
-    assert (ran.kind, ran.status, ran.branch) == (RunKind.TRIAGE_PLAN, RunStatus.DONE, "")
+    ran = scenario.run(dispatches(kind=RunKind.NEEDS_PLAN), worker=triage_reports(verdict("trivial"), where))
+    assert (ran.kind, ran.status, ran.branch) == (RunKind.NEEDS_PLAN, RunStatus.DONE, "")
 
     # It ran its own agent in a desk linking the primary clone, leased nothing, and left nothing behind.
     desk = canopy_env.root / "desks" / KEY
@@ -287,7 +287,7 @@ def test_a_primary_clone_that_shadows_canopys_agents_stops_the_triage(
 
 def test_asking_for_a_plan_undoes_a_waiver(scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool) -> None:
     triage_on(canopy_env)
-    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial")))
+    ran = scenario.run(dispatches(kind=RunKind.NEEDS_PLAN), worker=triage_reports(verdict("trivial")))
     shown = scenario.operator("show", KEY).out
     assert f"Plan: waived 0s ago by triage run:{ran.id}, which judged it trivial:\n  {REASON}\n" in shown
     assert f"`canopy plan {KEY}` asks for a plan instead, until its implement starts" in shown
@@ -303,14 +303,14 @@ def test_asking_for_a_plan_undoes_a_waiver(scenario: Scenario, canopy_env: Canop
 
 def test_forgetting_a_ticket_ends_its_waiver(scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool) -> None:
     triage_on(canopy_env)
-    scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial")))
+    scenario.run(dispatches(kind=RunKind.NEEDS_PLAN), worker=triage_reports(verdict("trivial")))
     scenario.operator("forget", KEY)
     ticket = present(db.get_ticket(scenario.conn, KEY))
     assert plans.waiver(scenario.conn, ticket) is None
     # Planned again, as a forgotten ticket under "approve" is, and never triaged again.
     [(action, _)] = scenario.refuses(dispatches())
     assert action == "refused:unplanned"
-    [(action, _)] = scenario.refuses(dispatches(kind=RunKind.TRIAGE_PLAN))
+    [(action, _)] = scenario.refuses(dispatches(kind=RunKind.NEEDS_PLAN))
     assert action == "refused:triaged"
 
 
@@ -329,7 +329,7 @@ def test_the_state_block_says_when_a_triage_is_due_and_which_waived_the_plan(
         "blocked": False,
         "triage_due": True,
     }
-    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN), worker=triage_reports(verdict("trivial")))
+    ran = scenario.run(dispatches(kind=RunKind.NEEDS_PLAN), worker=triage_reports(verdict("trivial")))
     scenario.tick(*waits(KEY), dry_run=True)
     plan = scenario.ticket_state()["plan"]
     assert (plan["needed"], plan["triage_due"], plan["waived"]) == (False, False, ran.id)
@@ -342,7 +342,7 @@ def test_a_dry_run_triages_nothing(canopy_env: CanopyEnv, treehouse_state: Path,
         assert main(["dispatch", KEY, "--repo", "repo", *TRIAGE], runner=runner) == 0
         assert runner.spawned == []
         assert decisions(conn, tick_id) == [
-            ("dispatch:triage-plan", f"dry run: not dispatched; would triage {KEY}'s plan over repo; label {LABEL}")
+            ("dispatch:needs-plan", f"dry run: not dispatched; would triage {KEY}'s plan over repo; label {LABEL}")
         ]
 
 
@@ -352,9 +352,12 @@ def test_a_private_tickets_triage_reads_its_conversation_and_no_worker_reads_its
     triage_on(canopy_env)
     scenario.operator("start", KEY)
     scenario.operator("reply", KEY, "Only the comment in the README.")
-    ran = scenario.run(dispatches(kind=RunKind.TRIAGE_PLAN, label=None), worker=triage_reports(verdict("trivial")))
+    ran = scenario.run(dispatches(kind=RunKind.NEEDS_PLAN, label=None), worker=triage_reports(verdict("trivial")))
     assert ran.row["private"] == 1
+    # The same prompt a public ticket's triage reads, its conversation as the operator's messages, and no label check.
+    assert ran.prompt.startswith("# canopy triage: plan\n")
     assert "there is no label to check" in ran.prompt
+    assert "## Messages from the operator\n\n" in ran.prompt
     assert "Only the comment in the README." in ran.prompt
     [triage] = agent_runs(agent_log)
     assert "canopy-plan-triage" in triage["argv"]

@@ -88,7 +88,7 @@ class RunKind(StrEnum):
     PLAN = "plan"
     # Judges, before a ticket's first plan, whether its work is trivial enough to need none (DESIGN §25, Triage before a
     # plan): it leases no slot, reads the primary clones, writes nothing, and runs once per ticket.
-    TRIAGE_PLAN = "triage-plan"
+    NEEDS_PLAN = "needs-plan"
 
 
 class ResumeReason(StrEnum):

@@ -28,10 +28,10 @@ The tracker is {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDE
 skip any of its steps that write to the ticket. Read the ticket and its comments, then the code the work would touch in
 each repository, enough to see how far the change reaches: which files, which callers, which tests.
 
-Answer `trivial` only when the work, as the ticket and the code show it, plainly fits the operator's words above. When
-you are unsure, answer `plan`. A plan nobody needed costs a run and a read; a plan wrongly waived leaves a worker to
-guess at a change that wanted one. Size is not the measure: a long change that repeats one edit can be trivial, and a
-one-line change can reach everything.
+Answer `trivial` only when the work, as the ticket, the operator's messages, and the code show it, plainly fits the
+operator's words above. When you are unsure, answer `plan`. A plan nobody needed costs a run and a read; a plan wrongly
+waived leaves a worker to guess at a change that wanted one. Size is not the measure: a long change that repeats one
+edit can be trivial, and a one-line change can reach everything.
 
 ## Messages from the operator
 

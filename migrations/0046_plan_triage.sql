@@ -1,5 +1,5 @@
 -- Triage before a plan (DESIGN §25, ROADMAP M55). `run_reads` holds the repositories a run that leases no slot reads,
--- by name, as dispatch named them: a `triage-plan` run reads each one's primary clone through a link in its desk, and
+-- by name, as dispatch named them: a `needs-plan` run reads each one's primary clone through a link in its desk, and
 -- `run_slots` holds only leases. `plan_waivers` holds each plan a triage waived: the triage run, and the reason its
 -- validated `done` `trivial` result gave, written by `_run` in the transaction that closes the run, never by an agent
 -- and by no command. A waiver is in force while its ticket's own plan setting is unset and no forget came after its

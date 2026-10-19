@@ -428,7 +428,7 @@ class PlanWaiver(Row):
 
     id: int
     ticket_key: str
-    #: The `triage-plan` run whose result waived it.
+    #: The `needs-plan` run whose result waived it.
     run_id: int
     #: The triage's one-sentence reason, model text written from the ticket, shown to the operator and no worker.
     reason: str

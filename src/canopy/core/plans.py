@@ -6,7 +6,7 @@ by: the plan's status, the file's hash as written, and the hash the operator app
 that is not superseded, its current plan, waiting (`proposed`) or `approved`.
 
 Whether a ticket needs a plan is its own setting, set only by the operator (`ask`, `skip`), or with none
-`policy.plan` (`needed`), unless a triage waived it (`waiver`, M55): a `triage-plan` run's validated `trivial` verdict,
+`policy.plan` (`needed`), unless a triage waived it (`waiver`, M55): a `needs-plan` run's validated `trivial` verdict,
 recorded as a journal fact in force while the ticket's setting is unset and no forget came after it. The operator's
 verbs here, asking for a plan, skipping it, and approving one, are every channel's: each refuses inside one of canopy's
 own runs, and holds the dispatch lock, so a dispatch reads a ticket's plans either before the verb or after it.
@@ -154,7 +154,7 @@ def triage_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tuple[
     """
     if policy.plan_triage != "on":
         return "triage_off", 'policy.plan_triage is not "on": dispatch plan for a ticket that needs one'
-    triaged = _first_run(conn, key, RunKind.TRIAGE_PLAN)
+    triaged = _first_run(conn, key, RunKind.NEEDS_PLAN)
     if triaged is not None:
         return "triaged", f"{key} had triage run {triaged}; a ticket is triaged once, however that ended"
     ticket = db.get_ticket(conn, key)

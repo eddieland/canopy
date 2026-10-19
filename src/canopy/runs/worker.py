@@ -263,7 +263,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         try:
             kind = RunKind(run["kind"])
             # A triage leases none: it reads the primary clones (DESIGN §25).
-            if not slots and kind is not RunKind.TRIAGE_PLAN:
+            if not slots and kind is not RunKind.NEEDS_PLAN:
                 raise _SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
             outcome = _doer(kind)(ctx, run, slots, out, log)
@@ -333,7 +333,7 @@ def _doer(kind: RunKind) -> _Doer:
             return _split
         case RunKind.PLAN:
             return _plan
-        case RunKind.TRIAGE_PLAN:
+        case RunKind.NEEDS_PLAN:
             return _triage
         case RunKind.IMPLEMENT | RunKind.FIX_CI | RunKind.RESUME:
             return _work
@@ -461,7 +461,7 @@ def _run_agent(
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     tools = ctx.config.tracker.tools()
-    if (run["private"] or run["kind"] in (policy.PLAN, policy.TRIAGE_PLAN)) and tools is not None:
+    if (run["private"] or run["kind"] in (policy.PLAN, policy.NEEDS_PLAN)) and tools is not None:
         naming = [found for place in places for found in definitions.naming_tools(place, tools.server)]
         if naming:
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))

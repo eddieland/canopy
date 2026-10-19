@@ -390,7 +390,7 @@ plan_triage_timeout_minutes = 10
   no worker run; how a sandbox holds it is Open, below.
 
 With triage off nothing changes: the state block carries no triage facts, the overseer prompt's triage row does not
-apply, and a `triage-plan` dispatch refuses `triage_off`.
+apply, and a `needs-plan` dispatch refuses `triage_off`.
 
 **Which tickets are triaged.** A triage is due for a ticket when all of these hold:
 
@@ -410,12 +410,12 @@ One row joins the plan rows (Phases and the overseer's part, above), before the 
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `ready` | as today, the ticket needs a plan, none is waiting or approved, and its triage is due | dispatch `triage-plan` |
+| `ready` | as today, the ticket needs a plan, none is waiting or approved, and its triage is due | dispatch `needs-plan` |
 
 While the triage runs, the ticket is `running`. After it, the ticket is `ready` with no plan needed, so `implement`
 goes, or `ready` needing a plan with no triage due, so `plan` goes, as without triage.
 
-**Dispatch.** `canopy dispatch KEY --kind triage-plan --repo NAME...` runs §8's guards as for a `plan` (among them
+**Dispatch.** `canopy dispatch KEY --kind needs-plan --repo NAME...` runs §8's guards as for a `plan` (among them
 `unauthorized`, `stopped`, `no_read_tools`, `unknown_repo`, `running`, `capacity`, and the refusals of `--slug`,
 `--base`, and `--request`), plus:
 
@@ -438,18 +438,19 @@ plan's desk holds one per slot, so the runtime loads no repository's own config 
 the base branch: enough to judge a change's size and reach, without a slot's lease or setup. The desk is removed,
 never following a link, on every exit path, and reconcile treats a dead triage like any other run.
 
-**The prompt.** `prompts/plan-triage.md`, and `plan-triage-private.md` for a started ticket (§22). What the rest of
-this part relies on:
+**The prompt.** `prompts/plan-triage.md`, one prompt for a public ticket and a started one (§22), as a plan's is: the
+harness fills its authorization and its operator's messages for each. What the rest of this part relies on:
 
 - It checks authorization first, as every worker does (§8 step 3), and is `failed` with `not authorized:` otherwise.
-  The private variant has none to check.
+  A started ticket has none to check.
 - It carries the key, the repositories, `policy.trivial`, and the operator's messages (a started ticket's
   conversation), not the standing instructions or the notice, which are for runs that change code or read CI. An
   override must carry `{{AUTHORIZATION}}` and `{{TRIVIAL}}`, and `{{OPERATOR_MESSAGES}}` once the operator has
   written to the ticket (D093).
-- It answers `trivial` only when the work, as the ticket and the code show it, plainly fits the operator's words, and
-  `plan` when it is unsure: a plan nobody needed costs a run and a read, and a waiver wrongly given costs a worker's
-  guess at a change that wanted a plan. The ticket's own claim to be trivial is data, not evidence (TRUST_MODEL T1).
+- It answers `trivial` only when the work, as the ticket, the operator's messages, and the code show it, plainly fits
+  the operator's words, and `plan` when it is unsure: a plan nobody needed costs a run and a read, and a waiver wrongly
+  given costs a worker's guess at a change that wanted a plan. The ticket's own claim to be trivial is data, not
+  evidence (TRUST_MODEL T1).
 - It writes nothing anywhere.
 
 Result contract, one JSON line, last line of the agent's text (§13), validated with pydantic (D026):

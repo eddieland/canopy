@@ -33,10 +33,10 @@ WORKER_PRIVATE: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement-private.md",
     RunKind.RESUME: "worker-resume-private.md",
 }
-#: A triage's prompts, a public ticket's and a started one's (DESIGN §25, Triage before a plan). Not worker prompts: a
-#: triage changes no code and reads no CI, so neither carries the standing instructions or the notice.
+#: A triage's prompt, one for a public ticket and a started one alike, as a plan's (DESIGN §25, Triage before a plan).
+#: Not a worker prompt: a triage changes no code and reads no CI, so it carries neither the standing instructions nor
+#: the notice.
 TRIAGE = "plan-triage.md"
-TRIAGE_PRIVATE = "plan-triage-private.md"
 #: Placeholders a triage's prompt must use: its own authorization check, which names the queue labels on a public
 #: ticket (D051), and the operator's words for what is trivial, without which it judges by its own.
 REQUIRED_TRIAGE = ("AUTHORIZATION", "TRIVIAL")
@@ -395,17 +395,17 @@ def render_worker(
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)
 
 
-def render_triage(config: Config, values: Mapping[str, str], *, private: bool, required: Sequence[str] = ()) -> str:
-    """Return a triage's prompt (DESIGN §25), a started ticket's if `private`, with every `{{NAME}}` from `values`.
+def render_triage(config: Config, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
+    """Return a triage's prompt (DESIGN §25) with every `{{NAME}}` from `values`.
 
-    It must carry `REQUIRED_TRIAGE` and `required`: `{{OPERATOR_MESSAGES}}` once the operator has written to the
-    ticket (D093).
+    One prompt serves a public ticket and a started one, as a plan's does: `values` gives each its own authorization
+    and operator's messages. It must carry `REQUIRED_TRIAGE` and `required`: `{{OPERATOR_MESSAGES}}` once the operator
+    has written to the ticket (D093).
 
     Returns:
         The rendered prompt.
     """
-    name = TRIAGE_PRIVATE if private else TRIAGE
-    return render(config, name, values, required=(*REQUIRED_TRIAGE, *required))
+    return render(config, TRIAGE, values, required=(*REQUIRED_TRIAGE, *required))
 
 
 def render_reviewer(config: Config, values: Mapping[str, str], *, notice: str | None = None) -> str:

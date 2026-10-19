@@ -270,7 +270,7 @@ Controls in code, not prompts:
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
   an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
   asks for, and only the operator's channels ask for, skip, or approve a plan.
-- Triage: one `triage-plan` run per ticket, before its first plan, never reset and never granted (`triaged`), with its
+- Triage: one `needs-plan` run per ticket, before its first plan, never reset and never granted (`triaged`), with its
   own `runtime.plan_triage_timeout_minutes`, and counted within `capacity.max_workers` though it leases no slot. A
   triage that ends any way but `done` is not run again, and raises no attention item, since the plan follows at once.
   A waiver is written only by `_run` from a validated result, never by an agent or a command, and `unplanned` stays a

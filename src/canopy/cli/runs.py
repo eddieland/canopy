@@ -237,7 +237,7 @@ def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[st
         return f"split {key} into {', '.join(repos)}"
     if kind == policy.PLAN:
         return f"plan {key} over {', '.join(repos)}"
-    if kind == policy.TRIAGE_PLAN:
+    if kind == policy.NEEDS_PLAN:
         return f"triage {key}'s plan over {', '.join(repos)}"
     return f"{branch} on {base}" if base is not None else branch
 

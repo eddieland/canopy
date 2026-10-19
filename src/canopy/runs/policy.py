@@ -39,11 +39,11 @@ KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
 RETIRED = RunKind.FIX_CI
 SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
-TRIAGE_PLAN = RunKind.TRIAGE_PLAN
+NEEDS_PLAN = RunKind.NEEDS_PLAN
 #: A ticket's triages: one, before its first plan, never reset or granted (DESIGN §25, Triage before a plan).
 TRIAGES_PER_TICKET = 1
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
-TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, TRIAGE_PLAN)
+TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, NEEDS_PLAN)
 # The kinds counted per ticket that `canopy grant` takes: a split creates tickets in the tracker, so only config raises
 # its limit.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
@@ -71,7 +71,7 @@ def _limit(config: Config, kind: RunKind) -> int:
             return p.max_split_attempts
         case RunKind.PLAN:
             return p.max_plan_attempts
-        case RunKind.TRIAGE_PLAN:
+        case RunKind.NEEDS_PLAN:
             return TRIAGES_PER_TICKET
         case _:
             assert_never(kind)

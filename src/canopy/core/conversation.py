@@ -883,7 +883,7 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     rows = conn.execute(
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
         "AND (run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)) ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), RunKind.TRIAGE_PLAN, PROMPT_MESSAGES),
+        (TICKET, key, db.forgotten_message_id(conn, key), RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
     ).fetchall()
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
 
@@ -898,7 +898,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
     a question are each at most 2000 characters (`worker.MAX_TEXT`), so the section is bounded.
     """
     blocks: list[str] = []
-    for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS, skip_kind=RunKind.TRIAGE_PLAN):
+    for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS, skip_kind=RunKind.NEEDS_PLAN):
         ended = f" at {run['ended_at']}" if run["ended_at"] else ""
         lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
         for m in db.run_messages(conn, int(run["id"])):

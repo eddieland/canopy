@@ -176,7 +176,7 @@ def start(
             cursors=cursors,
         )
         attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
-        if kind == policy.TRIAGE_PLAN:
+        if kind == policy.NEEDS_PLAN:
             # It leases no slot: it reads the primary clones (DESIGN §25).
             return _spawn_triage(ctx, tick_id=tick_id, key=key, plan=plan, attempt=attempt, limit=limit)
         leases = _lease_all(ctx, key, plan.repos)
@@ -291,7 +291,7 @@ def in_desk(kind: str, repos: Sized) -> bool:
     Returns:
         True for a run over several repositories, and for every plan and triage.
     """
-    return len(repos) > 1 or kind in (policy.PLAN, policy.TRIAGE_PLAN)
+    return len(repos) > 1 or kind in (policy.PLAN, policy.NEEDS_PLAN)
 
 
 def valid_slug(value: str) -> bool:
@@ -413,7 +413,7 @@ def _plan(
     # Before the split check below: a plan or a triage for a split's parent is its own refusal.
     if kind == policy.PLAN:
         _check_plan(ctx, key, slug=slug, base=base)
-    elif kind == policy.TRIAGE_PLAN:
+    elif kind == policy.NEEDS_PLAN:
         _check_triage(ctx, key, slug=slug, base=base)
     split_into = db.children_of(ctx.conn, key)
     if split_into:
@@ -423,7 +423,7 @@ def _plan(
         _check_split(ctx, key, names, slug=slug, base=base)
         return Plan(branch="", base=None, label=configured, repos=names)
     _check_child_repo(ctx, key, names)
-    if kind in (policy.PLAN, policy.TRIAGE_PLAN):
+    if kind in (policy.PLAN, policy.NEEDS_PLAN):
         return Plan(branch="", base=None, label=configured, repos=names, private=private or starts, starts=starts)
     _check_planned(ctx, key, kind)
     branch = _branch(ctx, key, kind, slug, names)
@@ -1001,7 +1001,8 @@ def _spawn_triage(ctx: Context, *, tick_id: int, key: str, plan: Plan, attempt: 
         "REPOSITORIES": _triage_repositories_note(ctx, plan.repos, desk),
         "AUTHORIZATION": prompts.triage_authorization(key, cfg.tracker.labels, private=plan.private),
         "TRIVIAL": cfg.policy.trivial,
-        # A private ticket's conversation holds the operator's messages; a triage's own report is never in it.
+        # One prompt for public and private tickets, as a plan's: a private one's conversation holds the operator's
+        # messages, and a triage's own report is never in it.
         "OPERATOR_MESSAGES": (
             conversation.prompt_conversation(ctx.conn, key)
             if plan.private
@@ -1013,19 +1014,19 @@ def _spawn_triage(ctx: Context, *, tick_id: int, key: str, plan: Plan, attempt: 
     }
     required = prompts.REQUIRED_OPERATOR if conversation.has_operator_messages(ctx.conn, key) else ()
     try:
-        prompt = prompts.render_triage(cfg, values, private=plan.private, required=required)
+        prompt = prompts.render_triage(cfg, values, required=required)
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
     run_id = db.insert_run(
         ctx.conn,
         tick_id=tick_id,
         key=key,
-        kind=policy.TRIAGE_PLAN,
+        kind=policy.NEEDS_PLAN,
         branch="",
         slots=(),
         runs_dir=runs_dir(ctx),
         works_units=False,
-        started=outbox.run_started(cfg, key=key, kind=policy.TRIAGE_PLAN, branch="", attempt=attempt, limit=limit),
+        started=outbox.run_started(cfg, key=key, kind=policy.NEEDS_PLAN, branch="", attempt=attempt, limit=limit),
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
         reads=plan.repos,

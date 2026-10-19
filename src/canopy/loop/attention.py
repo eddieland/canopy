@@ -284,7 +284,7 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):
         reason = run_reason(RunStatus(run["status"]))
-        if reason is None or key in done or key in stopped or run["kind"] == RunKind.TRIAGE_PLAN:
+        if reason is None or key in done or key in stopped or run["kind"] == RunKind.NEEDS_PLAN:
             continue
         items.append(RunItem(key, reason, _detail(run)))
     return items
