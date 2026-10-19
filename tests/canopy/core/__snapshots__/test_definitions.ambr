@@ -1,0 +1,38 @@
+# serializer version: 1
+# name: test_the_workers_model_is_rendered_into_their_frontmatter[canopy-worker-private]
+  '''
+  ---
+  # OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
+  # Rules follow D021: the last matching rule wins, so each catch-all "*" comes before its exceptions. `ask` is
+  # auto-rejected under `opencode run`; `deny` is enforced. Bash compound commands are checked command by command.
+  # These permissions are defense in depth, not the boundary (TRUST_MODEL T4). Branch protection governs where pushes can
+  # land (TRUST_MODEL T1), and `canopy _run` verifies what was pushed.
+  # canopy-worker for a private ticket (DESIGN §22): the same rules, and none of the tracker's tools but the reads.
+  # canopy renders this file into its definitions directory with the tracker's MCP server and tools from the operator's
+  # config (`tracker.mcp_server`, `tracker.read_tools`), at the marked line below. As shipped it names none.
+  description: canopy private worker. Works one private ticket; pushes a branch, opens a PR, never writes to the ticket.
+  mode: primary
+  temperature: 0.2
+  # canopy renders the run's model at the marked line, `runtime.worker_model`, and none for the runtime's default
+  # (DESIGN §13, The worker's model).
+  # canopy: model
+  model: "openrouter/anthropic/claude-x"
+  '''
+# ---
+# name: test_the_workers_model_is_rendered_into_their_frontmatter[canopy-worker]
+  '''
+  ---
+  # OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
+  # Rules follow D021: the last matching rule wins, so each catch-all "*" comes before its exceptions. `ask` is
+  # auto-rejected under `opencode run`; `deny` is enforced. Bash compound commands are checked command by command.
+  # These permissions are defense in depth, not the boundary (TRUST_MODEL T4). Branch protection governs where pushes can
+  # land (TRUST_MODEL T1), and `canopy _run` verifies what was pushed.
+  description: canopy worker. Works one ticket in a leased worktree; pushes a branch, opens a PR, comments.
+  mode: primary
+  temperature: 0.2
+  # canopy renders the run's model at the marked line, `runtime.worker_model`, and none for the runtime's default
+  # (DESIGN §13, The worker's model).
+  # canopy: model
+  model: "openrouter/anthropic/claude-x"
+  '''
+# ---

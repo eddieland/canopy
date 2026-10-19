@@ -563,7 +563,8 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    `resume` for a ticket with an approved plan then gets its copy, `.canopy-plan.md`, checked against the approved
    hash (§25, The worker's copy); step 6 removes it, and step 5 notes a pushed branch that holds it.
 3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), between `worker_cmd_prefix` and `worker_cmd_suffix`
-   (§12), timeout `worker_timeout_minutes`, with `CANOPY_RUN_ID` and `CANOPY_GIT_OBJECTS` set, and cwd the slot, or for
+   (§12), its definitions rendered for the model dispatch recorded on the run (§13, The worker's model), timeout
+   `worker_timeout_minutes`, with `CANOPY_RUN_ID` and `CANOPY_GIT_OBJECTS` set, and cwd the slot, or for
    a joint run the desk (§18), which `_run` makes now with one link per slot. The worker leads its own process group,
    and its pid is recorded. Its output goes to the run log as it prints it. While it runs, `_run` records on the run
    what its events (§13) report so far: its session, its spend, and its latest tool call, so a running run shows more

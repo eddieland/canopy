@@ -684,6 +684,7 @@ def insert_run(
     reasons: Sequence[str] = (),
     rendered: Callable[[int], None] | None = None,
     reads: Sequence[str] = (),
+    model: str = "",
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -696,6 +697,7 @@ def insert_run(
     `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
     `reads` are the repositories a run that leases no slot reads, a triage's, by name (DESIGN §25).
+    `model` is the model canopy asks the run's worker to run on, empty for the runtime's default (DESIGN §13).
 
     Returns:
         The new run's id.
@@ -704,9 +706,9 @@ def insert_run(
         if check is not None:
             check()
         cur = conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, private, plan_id) "
-            "VALUES (?, ?, ?, ?, ?, '', ?, ?)",
-            (tick_id, key, kind, branch, now(), int(private), plan_id),
+            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, private, plan_id, model) "
+            "VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)",
+            (tick_id, key, kind, branch, now(), int(private), plan_id, model),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))

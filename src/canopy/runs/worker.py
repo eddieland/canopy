@@ -466,7 +466,9 @@ def _run_agent(
         if naming:
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    # A worker runs on the model its dispatch recorded (DESIGN §13); other kinds load the snapshot the overseer does.
+    model = str(run["model"]) if run["kind"] in policy.MODEL_KINDS else None
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, model=model)
     command = ctx.config.runtime.worker_template(template) if wrap else template
     argv = render_command(command, prompt, snapshot, title)
     if desked:

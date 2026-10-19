@@ -974,6 +974,8 @@ def _spawn(
         plan_id=followed[0] if followed is not None else None,
         reasons=tuple(r for r in ResumeReason if r in reasons),
         rendered=functools.partial(_record_rendered, ctx, remembered, replied),
+        # Fixed here, so the run keeps it whatever is set after; `_run` renders the definitions it loads from it.
+        model=cfg.runtime.worker_model if kind in policy.MODEL_KINDS else "",
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)

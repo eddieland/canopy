@@ -340,9 +340,9 @@ def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> No
 
 
 def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
-    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--model 'a b'")
+    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--variant 'a b'")
     argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement")
-    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--model", "a b"]
+    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--variant", "a b"]
     assert config.Runtime().worker_template("agent {prompt}") == "agent {prompt}"
 
 
@@ -356,6 +356,61 @@ def test_a_worker_prefix_or_suffix_places_no_prompt(canopy_env: CanopyEnv, key: 
     )
     with pytest.raises(ConfigError, match=re.escape(f"runtime.{key}: Value error, {error}")):
         load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("value", ["openai/gpt-5", "openrouter/anthropic/claude-x", "opencode/a.b-c_d:free"])
+def test_the_workers_model_takes_a_provider_and_model_id(canopy_env: CanopyEnv, value: str) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).runtime.worker_model == ""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"worker_model": value}})
+    assert load(canopy_env.root, canopy_env.user_file).runtime.worker_model == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        *("gpt-5", "/gpt-5", "openai/", "open ai/gpt-5", "openai/gpt-5\nx", 'openai/"gpt"', "openai/'gpt'"),
+        *("openai/`x`", "openai/gpt\t5", "openai/gpt\x075", "openai/" + "x" * 194),
+    ],
+)
+def test_the_workers_model_refuses_an_id_of_another_shape(canopy_env: CanopyEnv, value: str) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"worker_model": value}})
+    with pytest.raises(ConfigError, match=re.escape("runtime.worker_model: Value error, must be a provider/model id")):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_the_workspace_file_cannot_choose_the_workers_model(canopy_env: CanopyEnv) -> None:
+    # The model is what the operator's spend buys, and its provider reads the ticket and the code (TRUST_MODEL T7).
+    canopy_env.append_shared('\n[runtime]\nworker_model = "openai/gpt-5"\n')
+    with pytest.raises(ConfigError, match=r"runtime\.worker_model is private and cannot be set in the workspace file"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("key", ["worker_cmd", "private_worker_cmd", "worker_cmd_prefix", "worker_cmd_suffix"])
+@pytest.mark.parametrize("option", ["--model openai/gpt-5", "--model=openai/gpt-5", "'--model' x"])
+def test_a_worker_template_that_passes_a_model_is_refused(canopy_env: CanopyEnv, key: str, option: str) -> None:
+    """A template's `--model` beats the definition's, so the run's record would name a model it did not run on."""
+    words = f"{config.DEFINITIONS_ENV_PREFIX}agent run {option} {{prompt}}" if key.endswith("_cmd") else option
+    canopy_env.configure(canopy_env.user_file, {"runtime": {key: words}})
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert f"runtime.{key}: Value error, must not pass --model" in str(e.value)
+    assert "set runtime.worker_model instead" in str(e.value)
+
+
+@pytest.mark.parametrize(
+    ("key", "words"),
+    [
+        # Not covered: the planner's and the splitter's models are still their templates' (DESIGN §13).
+        ("split_cmd", f"{config.DEFINITIONS_ENV_PREFIX}agent run --model openai/gpt-5 {{prompt}}"),
+        ("plan_cmd", f"{config.DEFINITIONS_ENV_PREFIX}agent run --model openai/gpt-5 {{prompt}}"),
+        # A wrapper ahead of the runtime may take a `-m` of its own, and `--models` is another option.
+        ("worker_cmd_prefix", "wrap -m 2 --models x --"),
+        ("worker_cmd", f"{config.DEFINITIONS_ENV_PREFIX}agent run --title=--model {{prompt}}"),
+    ],
+)
+def test_other_templates_and_options_may_name_a_model(canopy_env: CanopyEnv, key: str, words: str) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {key: words}})
+    assert getattr(load(canopy_env.root, canopy_env.user_file).runtime, key) == words
 
 
 @pytest.mark.parametrize("key", ["overseer_cmd", "worker_cmd"])

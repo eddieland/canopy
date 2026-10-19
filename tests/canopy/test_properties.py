@@ -1,5 +1,6 @@
 """Property tests for the validators that stand between agent-written text and paths, argv, and prompts."""
 
+import json
 import re
 import string
 from collections.abc import Callable
@@ -23,7 +24,7 @@ from canopy.cli.params import (
     TextType,
     valid_key,
 )
-from canopy.core import config
+from canopy.core import config, definitions
 from canopy.infra.procs import SubprocessRunner
 from canopy.runs import dispatch
 from canopy.setup import init
@@ -197,6 +198,8 @@ def test_every_config_key_declares_a_scope() -> None:
         "runtime.chore_cmd",
         "capacity.max_chores",
         "chores",
+        # The model is what the operator's spend buys, and its provider reads the ticket and the code (DESIGN §13).
+        "runtime.worker_model",
     }
 
 
@@ -230,6 +233,23 @@ def test_branch_names_are_plain_git_branches(prefix: str, key: str, slug: str) -
     result = SubprocessRunner().run(["git", "check-ref-format", "--branch", branch])
     assert result.ok, (branch, result.stderr)
     assert result.stdout.strip() == branch
+
+
+@given(st.text(max_size=12), st.sampled_from(["", "/", "//"]), st.text(max_size=12))
+def test_an_accepted_model_renders_as_one_key_holding_it(provider: str, slash: str, model: str) -> None:
+    # The id is rendered into a worker's frontmatter (DESIGN §13): it must stay one value of one key there.
+    value = provider + slash + model
+    try:
+        config.model_id(value)
+    except ValueError:
+        return
+    marker = "# canopy: model\n"
+    rendered = definitions.render_model(f"---\n{marker}permission:\n---\n", "x", value)
+    [line] = [line for line in rendered.splitlines() if line.startswith("model: ")]
+    assert rendered == f"---\n{marker}{line}\npermission:\n---\n"
+    assert json.loads(line.removeprefix("model: ")) == value
+    assert "/" in value
+    assert not any(c.isspace() or c in "\"'`" for c in value)
 
 
 @given(near(dispatch.SLUG_RE))
