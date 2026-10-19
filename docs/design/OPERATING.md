@@ -560,6 +560,57 @@ OpenCode is read again before it is built.
   `env -u` before `sandbox-exec`), and no shipped template has `credentials`. So a variable canopy sets for a run
   reaches a sandboxed agent unchanged.
 
+### What OpenCode does with a model
+
+canopy chooses no model yet: a run gets OpenCode's default unless its template passes one (§12). ROADMAP M58 would have
+canopy choose the worker's, and rests on what follows, read from OpenCode's source at 1.19.3 (2026-10-19). A later
+OpenCode is read again before it is built.
+
+- **Which model a run uses.** `opencode run` sends its `--model` with the prompt, and the session
+  (`packages/opencode/src/session/prompt.ts`) takes that, else the agent's `model:`, else the session's last, else
+  the default (`Provider.defaultModel`, `provider/provider.ts`): config's `model`, else the model the operator last
+  picked in OpenCode's own TUI (`model.json` in its state directory) while it is still listed, else the first of the
+  first provider by OpenCode's own ranking. So a template's `--model` beats the definition's `model:`, and the
+  definition beats a repository's `model`; with neither, the default moves when the operator picks another model in
+  the TUI. A definition's frontmatter is read as its config (`config/agent.ts`), and `OPENCODE_CONFIG_DIR` merges
+  last. A subagent takes its own agent's `model:`, else its caller's (`tool/task.ts`), and compaction likewise
+  (`session/compaction.ts`), so one session can hold more than one model.
+- **A model OpenCode does not list.** Nothing checks an agent's model when it loads. The session looks it up before
+  the first call, and one the list does not hold publishes `Model not found: provider/model.`, with suggestions, as a
+  session error, which `--format json` prints as an `error` event; the run exits 1 having called no model. OpenCode
+  never falls back to another.
+- **What `opencode models` prints.** One `provider/model` per line, sorted, OpenCode's own providers first
+  (`cli/cmd/models.ts`). The model part may hold more slashes, so the provider is what comes before the first.
+  `--verbose` adds each model's JSON after its line. `opencode models PROVIDER` prints one provider's, and exits 1 with
+  `Provider not found` for one not listed. It reads the same provider list a run looks its model up in, so a model it
+  lists is one a run started in the same directory and environment accepts, and one it does not is refused.
+- **Which providers.** The catalog is models.dev's. The list keeps the catalog's providers that have a key in the
+  environment (a variable the catalog names), a key or login stored by `opencode auth`, or an entry in config, and
+  OpenCode's own `opencode` provider, whose free models need no key, so the list is never empty. Config's
+  `enabled_providers` and `disabled_providers`, a provider's `whitelist` and `blacklist`, and the catalog's
+  `deprecated` status (and `alpha`, unless experimental models are on) take models out, and a provider left with none
+  is not listed. `opencode models` loads its directory's config as a run does, so a repository's `opencode.json` can
+  change the list for its own worktrees.
+- **A provider that cannot be reached.** Listing calls no provider for most: a key is listed whether or not it works,
+  and a provider that is down is listed all the same. A few ask their provider for its models while listing, each with
+  a timeout of its own, and on failure list the catalog's (GitHub Copilot with a login, 5 seconds) or none (Modal, 3
+  seconds); GitLab and DigitalOcean do the same when configured. The command still exits 0. So the list says what
+  OpenCode will try, not what will answer: a provider that is down or a key that is wrong fails the run when it calls.
+- **Network.** The catalog is read from OpenCode's cache (`models.json`), else from the copy built into the binary
+  (`packages/core/src/models-dev.ts`), so the list needs no network. Each start also refreshes the cache from
+  models.opencode.ai in the background once it is five minutes old, with a 10-second timeout and failures only logged;
+  the command exits without waiting for it, and `OPENCODE_DISABLE_MODELS_FETCH` turns it off. `--refresh` fetches
+  first and prints `Models cache refreshed` even when the fetch failed. The command starts an instance as a run does,
+  plugins included, so it waits on the plugin installs a run waits on (above).
+- **What names the model a call went to.** No `--format json` event does. The events are `step_start`,
+  `step_finish`, `text`, `reasoning`, `tool_use`, and `error` (`cli/cmd/run.ts`); a step's part carries only its ids
+  and snapshot, and at its finish the reason, cost, and tokens (`packages/schema/src/v1/session.ts`), as issue #275
+  found. Every part names its `messageID`, and the session stores each assistant message with its `providerID` and
+  `modelID`, and each user message with the model it asked for; `opencode export <session>` prints them all, looked up
+  by id in OpenCode's database. That is the model OpenCode sent the call to, by OpenCode's name for it: nothing keeps a
+  model the provider reports back. Without `--format json`, `opencode run` writes `> <agent> · <model>` to stderr at
+  the first reply, without the provider.
+
 ### The operator's skill
 
 `canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI and the
