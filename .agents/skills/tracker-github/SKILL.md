@@ -48,11 +48,13 @@ child's label cannot be checked, and the ticket is not split.
 
 ## Creating tickets
 
-Only a split worker creates issues. Create each child in the same repository as the parent issue, with no labels and no
-assignees. Refer to the parent in the body as `Part of #N`, never with a closing keyword. Order children with GitHub's
-issue dependencies ("blocked by") if the server exposes them, otherwise with a line `Blocked by #N` in the later child's
-body. Do not make children sub-issues of the parent: sub-issues are not blockers, and nothing in the loop reads them.
-The child's key is `GH-<number>` of the issue created.
+A split worker creates its children, and an `implement` or `resume` worker the follow-ups its prompt allows (DESIGN
+§18); no other agent creates issues. Create each with the issue write tool (`issue_write` with method `create`) in the
+same repository as the parent issue, with no labels and no assignees. Refer to the parent in the body on a line of its
+own, `Part of #N`, never with a closing keyword. Order the new issues with GitHub's issue dependencies ("blocked by")
+if the server exposes them, otherwise with a line `Blocked by #N` in the later issue's body. Do not make them
+sub-issues of the parent: sub-issues are not blockers, and nothing in the loop reads them. The new issue's key is
+`GH-<number>` of the issue created.
 
 ## Comments and ordering
 

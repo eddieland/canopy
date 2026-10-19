@@ -7,9 +7,10 @@ from importlib.metadata import version
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import agent_output, db
+from canopy.core import db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
+from canopy.runtime.report import Usage
 from tests.canopy.helpers import agent_runs, canopy, in_tick, waits
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
@@ -155,9 +156,7 @@ def test_decisions_prints_a_ticks_plan(scenario: Scenario) -> None:
 def test_decisions_and_status_print_what_a_tick_cost(scenario: Scenario) -> None:
     conn = scenario.conn
     tick_id = db.start_tick(conn, dry_run=False)
-    usage = agent_output.Usage(
-        0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0, peak_context=26_000
-    )
+    usage = Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0, peak_context=26_000)
     db.set_tick_report(conn, tick_id, "ses_o1", usage)
     db.finish_tick(conn, tick_id, TickStatus.OK, "0 decisions: none")
 

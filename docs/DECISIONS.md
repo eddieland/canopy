@@ -83,10 +83,14 @@ such as a shipped migration, may still cite one, and git history has its text.
   permissions. A prompt cannot relax a guard.
 - Revisit: if prompt behavior proves unstable; then move one rule at a time into code.
 
-## D009. The runtime is a command template, not an adapter
+## D009. The runtime is a command template, and only `canopy.runtime` knows it
 
-- `runtime.*_cmd` are templates with `{prompt}` (rendered per D023), so another runtime is a config change.
-- Revisit: when a second runtime needs different invocation or result parsing.
+- `runtime.*_cmd` are templates with `{prompt}` (rendered per D023): how a run starts is config, not code.
+- What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in the
+  `runtime` package alone, below `core`; `test_layers.py` fails on a string naming it anywhere else. A new runtime, or
+  a new major version such as OpenCode 2, is a change to that package and the default templates.
+- Rejected: an adapter interface over several runtimes at once (AGENTS.md, Do not build).
+- Revisit: when two runtimes must run side by side.
 
 ## D010. Everything runs as the operator
 
@@ -329,7 +333,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D084. Workers set labels through the tracker's MCP edit tool and deny dangerous MCP tools by name
 
-- Merge, review, close, transition, create, delete, fork, and workflow tools are denied; `test_definitions.py` checks.
+- Merge, review, close, transition, delete, fork, and workflow tools are denied. Both workers create follow-ups
+  (D123): the public one's create tools are not denied, and the private one's are allowed by name after its tracker
+  wildcard. `test_definitions.py` checks.
 - Rejected: `gh --add-label` (GitHub-only); allowing GitHub's `issue_write` by default (it also closes issues).
 - Revisit: when GitHub's server gains a label-only tool.
 
@@ -463,3 +469,13 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: anyone can try the latest UI, at no cost on Vercel's free plan; the fixtures hold nothing of the operator's.
 - Rejected: a static build over a mock written again in TypeScript (a second mock that drifts from the API).
 - Revisit: if the demo should show anything but fixtures, which T8 would then govern as a listener.
+
+## D123. Workers may file follow-up tickets, which authorize nothing
+
+- An `implement` or `resume` worker, public or private, may create tickets for work outside its own and report them;
+  canopy records them and asks the operator (`follow_up_filed`), and works one only once a human labels or starts it,
+  as any ticket (DESIGN §18, TRUST_MODEL T1). Settled by the operator (2026-10-19): workers notice and ask, humans
+  authorize.
+- Rejected: working a follow-up under its parent's label (a worker would authorize work for itself); a `canopy` verb
+  that records one (anything with a shell could).
+- Revisit: if asking about each follow-up proves noise the operator wants gone; then bound them per ticket.

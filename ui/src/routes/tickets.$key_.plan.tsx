@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import { ticketPlansQuery, ticketQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
+import { ChangesAsked } from '@/components/plan-card'
 import { PlanState, TicketPlan } from '@/components/ticket-plan'
 import { planRef } from '@/lib/refs'
 
@@ -58,6 +59,7 @@ function PlanPage() {
     return (
         <>
             {header}
+            <ChangesAsked plans={data} />
             {data.needed || data.plans.length > 0 ? (
                 <TicketPlan key={key} ticketKey={key} plans={data} />
             ) : (

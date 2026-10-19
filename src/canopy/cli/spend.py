@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Any
 import click
 
 from canopy.cli.common import open_context
-from canopy.core import agent_output, spend
+from canopy.core import spend
+from canopy.runtime.report import count_text
 
 if TYPE_CHECKING:
     from canopy.core.spend import Breakdown, Costs
@@ -172,8 +173,8 @@ def _tools(found: Breakdown) -> list[str]:
             t.kind,
             str(t.calls),
             str(t.errors),
-            agent_output.count_text(t.result_chars),
-            agent_output.count_text(t.est_tokens),
+            count_text(t.result_chars),
+            count_text(t.est_tokens),
         )
         for t in found.tools[:_TOOLS]
     )

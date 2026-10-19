@@ -1,7 +1,9 @@
 """The package layers of DESIGN §5 (D041), checked on every import in `src/canopy`, `TYPE_CHECKING` ones included;
-and the tests' two rules of the same kind: a test module imports from no other, and sits parallel to what it tests."""
+the runtime confined to its package (D009); and the tests' two rules of the same kind: a test module imports from no
+other, and sits parallel to what it tests."""
 
 import ast
+import re
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
@@ -18,6 +20,7 @@ LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"loop"}),
     frozenset({"runs", "setup", "chores", "notify", "reviews", "serve", "memory"}),
     frozenset({"core"}),
+    frozenset({"runtime"}),
     frozenset({"infra"}),
 )
 # Third-party packages only one canopy package may import.
@@ -25,6 +28,14 @@ CONFINED = {"anyio": "serve", "click": "cli", "fastapi": "serve", "starlette": "
 # Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink and the GitHub
 # programs hold secrets and open connections, which the harness never does (DESIGN §20, §29).
 SEPARATE = frozenset({"canopy_github", "canopy_notify_slack"})
+# The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
+RUNTIME = "runtime"
+RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
+# Modules outside it allowed to name the runtime, with why: none knows how it behaves.
+NAMES_RUNTIME = {
+    # The web UI's demo: its made-up runs print what the runtime prints, which the runtime package reads.
+    "serve/mock.py",
+}
 
 
 def layer_of(package: str) -> int:
@@ -107,6 +118,55 @@ if TYPE_CHECKING:
         "imports canopy_notify_slack, a separate program canopy runs only as a command",
         "canopy.runs imports canopy.loop.tick, which is not in a lower layer",
     ]
+
+
+def test_only_the_runtime_package_names_the_runtime() -> None:
+    """No string outside `canopy.runtime` names OpenCode: not its commands, variables, files, or events (D009).
+
+    A docstring or comment may still say why code is so; what the code acts on comes from the runtime package.
+    """
+    found = [
+        v
+        for path in modules()
+        if package_of(path) != RUNTIME and path.relative_to(PACKAGE).as_posix() not in NAMES_RUNTIME
+        for v in naming_runtime(path, path.read_text())
+    ]
+    assert not found, "\n".join(found)
+
+
+def naming_runtime(path: Path, source: str) -> list[str]:
+    """Each string in `source`, the text of the module at `path`, that names the runtime, its docstrings left out."""
+    tree = ast.parse(source, filename=str(path))
+    docstrings: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                docstrings.add(id(first.value))
+    where = path.relative_to(PACKAGE.parent)
+    return [
+        f"{where}:{node.lineno}: names the runtime, which only canopy.{RUNTIME} may: {node.value[:60]!r}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+        and RUNTIME_NAME.search(node.value)
+    ]
+
+
+def test_the_check_catches_a_string_that_names_the_runtime() -> None:
+    source = '''
+"""Runs agents with OpenCode."""
+
+ENV = "OPENCODE_CONFIG_DIR"
+
+
+def run(command: str) -> str:
+    """Run `opencode run`."""
+    return f"env {ENV}=x opencode {command}"
+'''
+    found = naming_runtime(PACKAGE / "runs" / "example.py", source)
+    assert [v.split(": ", 1)[0] for v in found] == ["canopy/runs/example.py:4", "canopy/runs/example.py:9"]
 
 
 def test_no_test_module_imports_another() -> None:

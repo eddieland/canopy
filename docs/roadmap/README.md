@@ -96,6 +96,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 - [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): in progress.
+- [M60. Personas](M60-personas.md): not started.
 
 ## Deferred, with the trigger that would unblock each
 
@@ -106,7 +107,8 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
-  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
+  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4), all of
+  it in `canopy.runtime` (D009).
 - Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
   §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
   change.

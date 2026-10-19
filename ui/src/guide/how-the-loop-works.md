@@ -58,6 +58,15 @@ lunch, the next tick knows, whatever canopy last wrote down.
 A ticket is **public** when its queue label brings it in, `agent-ready-` and your name by default. Its conversation
 lives on the tracker, where workers write their reports and questions, and canopy keeps a copy.
 
+A worker may file **follow-up** tickets: a TODO its change leaves, a bug it tripped over and didn't fix. Each one is
+created in the ticket's project, linked to it, with no labels and nobody assigned, and that is all it is: a request.
+canopy works none of them until you say so, the usual way, with your queue label or `canopy start`. Until then the
+[attention list](attention) carries a `follow_up_filed` item on the parent naming each one, and it stays there until
+you label or start each, or the parent is done. Closing one in the tracker is a fine answer too; canopy just won't hear
+it until the parent is done. At most five a run (`policy.max_follow_ups`; 0 turns them
+off), and a follow-up files none of its own. A private ticket's worker files them too, the one thing it writes to the
+tracker, so anyone on the tracker can read them.
+
 A ticket is **private** when you start it in canopy, from [Tickets](tickets#starting-a-ticket) or with
 `canopy start KEY`. It needs no label, and its conversation stays in canopy: workers read the ticket and write nothing
 to it. That's how you deliver a ticket a client filed without them reading the agent's working notes.

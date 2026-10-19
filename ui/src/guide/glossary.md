@@ -81,6 +81,12 @@ are data: canopy reads them and acts on none of them.
 Every message on a ticket: the workers' reports and questions, your replies, and, on a public ticket, the tracker's
 comments, copied in. See [Attention](attention#replying).
 
+### Follow-up
+
+A ticket a worker filed for work it found outside its own, linked to its ticket as the parent. It authorizes nothing:
+canopy asks you about it on the attention list, and works it only once you label it or start it. See
+[How the loop works](how-the-loop-works#public-and-private-tickets).
+
 ### Phase
 
 Where a ticket or a PR stands, as the overseer worked it out from live state this tick. A ticket is `ready`,

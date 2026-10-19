@@ -2,7 +2,8 @@
 
 Sets up the branch in each slot, runs the operator's `setup_cmd` there, makes the desk of a joint run, runs
 `worker_cmd` with a timeout, parses the result line, verifies the branch is pushed in each slot, removes the desk,
-returns every slot, and closes the `runs` row. The slots are returned on every exit path this process can see: normal,
+returns every slot, and closes the `runs` row, recording the follow-up tickets its result names that pass their checks
+(DESIGN §18). The slots are returned on every exit path this process can see: normal,
 exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next
 tick.
 
@@ -34,12 +35,12 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 from pydantic import BaseModel, ConfigDict, StrictStr, model_validator
 
 from canopy.core import (
-    agent_output,
     contract,
     conversation,
     db,
     definitions,
     drafts,
+    follow_ups,
     hostgit,
     memory,
     outbox,
@@ -47,13 +48,14 @@ from canopy.core import (
     pools,
     replies,
     review_diff,
-    transcript,
 )
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PoolKind, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, drafted, policy, tidy
+from canopy.runtime import events, project_config
+from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -216,12 +218,19 @@ class Outcome:
     drafts: drafts.Fields | None = None
     #: A triage's reason for waiving the ticket's plan, from its validated `trivial` verdict (DESIGN §25).
     waiver: str | None = None
+    #: The follow-up tickets the worker reported, checked: those to record, and those refused (DESIGN §18).
+    follow_ups: follow_ups.Checked | None = None
 
     def result_json(self) -> str:
-        """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
+        """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
+
+        A refused follow-up is kept with it, by key, for the attention item it raises (DESIGN §18).
+        """
         data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
+        if self.follow_ups is not None:
+            data |= self.follow_ups.stored()
         return json.dumps(data)
 
 
@@ -310,13 +319,19 @@ def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: l
 def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
-    That is its memory (§28), drafts (§29), and a triage's waiver (§25), so a run reconcile closed first writes none.
+    That is its memory (§28), drafts (§29), a triage's waiver (§25), and the follow-ups it filed (§18), so a run
+    reconcile closed first writes none.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
     if outcome.waiver is not None:
         plans.record_waiver(ctx.conn, str(run["ticket_key"]), run_id, outcome.waiver)
+    if outcome.follow_ups is not None and outcome.follow_ups.recorded:
+        key = str(run["ticket_key"])
+        recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
+        log = logs.for_tick(int(run["tick_id"]))
+        log.info("follow-ups recorded", extra={"run_id": run_id, "ticket": key, "follow_ups": recorded})
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -457,14 +472,14 @@ def _run_agent(
     # are the primary clones it reads, as they stand.
     desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if desked else []
     places = [path for _, path in trees] + desk_parents
-    shadowing = [found for place in places for found in definitions.shadowing(place)]
+    shadowing = [found for place in places for found in project_config.shadowing(place)]
     if shadowing:
-        raise _SetupError(definitions.shadowing_message(shadowing))
+        raise _SetupError(project_config.shadowing_message(shadowing))
     tools = ctx.config.tracker.tools()
     if (run["private"] or run["kind"] in (policy.PLAN, policy.NEEDS_PLAN)) and tools is not None:
-        naming = [found for place in places for found in definitions.naming_tools(place, tools.server)]
+        naming = [found for place in places for found in project_config.naming_tools(place, tools.server)]
         if naming:
-            raise _SetupError(definitions.naming_tools_message(tools.server, naming))
+            raise _SetupError(project_config.naming_tools_message(tools.server, naming))
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     command = ctx.config.runtime.worker_template(template) if wrap else template
@@ -501,7 +516,7 @@ def _run_agent(
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = agent_output.read(result.stdout)
+    output = events.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
@@ -524,29 +539,20 @@ class _Progress:
         self.run_id = run_id
         self.out = out
         self.log = log
-        self.tally = agent_output.Tally()
+        self.watch = Watch()
 
     def __call__(self, line: str) -> None:
         self.out.write(line)
         self.out.flush()
-        event = agent_output.parse_event(line)
-        if event is None:
-            return
-        seen = self.tally.session_id
-        self.tally.add(event)
-        session = self.tally.session_id
-        if session is None:
-            return
-        usage = self.tally.usage if event["type"] == "step_finish" else None
-        did = transcript.did(event)
-        if session == seen and usage is None and did is None:
+        change = self.watch.read(line)
+        if change is None:
             return
         try:
-            db.set_run_progress(self.ctx.conn, self.run_id, session, usage=usage, did=did)
+            db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
         except sqlite3.Error as e:
             self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
-        if seen is None:
-            self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": session})
+        if change.started:
+            self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": change.session_id})
 
 
 def _split(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
@@ -755,6 +761,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # Memory's fields are read only from a valid result line, and never stored with the result (DESIGN §28).
     remembered = memory.parse(text) if parsed is not None else None
     drafted = drafts.parse(text) if parsed is not None else None
+    # So are the tickets it filed, recorded whatever its status, a timeout's included: they exist in the tracker, and
+    # a side output must not cost the run its PRs (DESIGN §18).
+    filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
+    filed_note = filed.note() if filed is not None else ""
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -768,7 +778,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if rewritten:
         # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
         notes = [f"{s.git.where}the worker rewrote {path}; nothing was checked or pushed" for s, path in rewritten]
-        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes), memory=remembered, drafts=drafted)
+        # A run that tampered with its slot records no follow-up: what it reported is named, and needs a label (§18).
+        filed = filed.refusing("the run rewrote its slot's git") if filed is not None else None
+        note = "; ".join(n for n in [*notes, filed.note() if filed is not None else ""] if n)
+        return Outcome(RunStatus.CRASHED, parsed, note, memory=remembered, drafts=drafted, follow_ups=filed)
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -786,8 +799,23 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    notes = "; ".join(n for n in [note, *committed] if n)
-    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted)
+    notes = "; ".join(n for n in [note, *committed, filed_note] if n)
+    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted, follow_ups=filed)
+
+
+def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow_ups.Checked:
+    """Check the tickets a worker reported it created against the journal, the workspace, and the policy (§18).
+
+    Returns:
+        The entries to record when the run is closed, and those refused.
+    """
+    return follow_ups.check(
+        ctx.conn,
+        created,
+        parent=str(run["ticket_key"]),
+        repos={r.name for r in ctx.workspace.repos},
+        limit=ctx.config.policy.max_follow_ups,
+    )
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:

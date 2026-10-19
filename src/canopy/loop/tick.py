@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
-    agent_output,
     chore_view,
     conversation,
     db,
     definitions,
     drafts,
+    follow_ups,
     notice,
     plans,
     pools,
@@ -33,12 +33,14 @@ from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import drafted, policy, reconcile
+from canopy.runtime import events, project_config
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from canopy.core import records
     from canopy.core.context import Context
+    from canopy.runtime.report import Usage
 
 TICK_ID_ENV = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
@@ -70,7 +72,7 @@ class Outcome:
     tick_id: int | None
     status: OutcomeStatus
     summary: str
-    usage: agent_output.Usage | None = None  # what the overseer cost, when the runtime reported it
+    usage: Usage | None = None  # what the overseer cost, when the runtime reported it
 
 
 def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str | None = None) -> Outcome:
@@ -240,7 +242,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
     if abandoned:
         log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
 
-    def finish(status: TickStatus, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
+    def finish(status: TickStatus, summary: str, usage: Usage | None = None) -> Outcome:
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
@@ -334,6 +336,9 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             f"{attention.ACTION_PREFIX}awaiting_reply",
             attention.awaiting_detail(waiting),
         )
+    # The tickets runs filed, which wait on the operator's label or start, and those the journal could not record (§18).
+    for item in follow_ups.items(ctx.conn):
+        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         action = f"{attention.ACTION_PREFIX}{remembered.reason}"
         db.record_decision(ctx.conn, tick_id, remembered.ticket_key, action, remembered.detail)
@@ -380,7 +385,7 @@ def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
 
 def _run_overseer(
     ctx: Context, tick_id: int, block: str, title: str, *, dry_run: bool, log: logs.TickAdapter
-) -> tuple[str | None, agent_output.Usage | None]:
+) -> tuple[str | None, Usage | None]:
     """Run `overseer_cmd` with the state block `block` as its `{prompt}`, and `title` as its `{title}`.
 
     Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
@@ -392,9 +397,9 @@ def _run_overseer(
         Why it failed, None on success, and what it cost if the runtime reported it.
     """
     # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
-    shadowing = definitions.shadowing(ctx.repo_root)
+    shadowing = project_config.shadowing(ctx.repo_root)
     if shadowing:
-        failure = definitions.shadowing_message(shadowing)
+        failure = project_config.shadowing_message(shadowing)
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure, None
     try:
@@ -426,7 +431,7 @@ def _run_overseer(
             return str(e), None
         out.write(f"\n--- stderr ---\n{result.stderr}")
 
-    output = agent_output.read(result.stdout)
+    output = events.read(result.stdout)
     db.set_tick_report(
         ctx.conn, tick_id, output.session_id, output.usage, digest=definitions_dir.name, tools=output.tools
     )
