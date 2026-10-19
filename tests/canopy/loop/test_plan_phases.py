@@ -7,8 +7,6 @@ sinks a plan waits, without its text.
 
 import json
 
-import pytest
-
 from canopy.core import db, plans
 from canopy.core.vocab import Phase, PlanStatus, RunKind, RunStatus
 from canopy.loop import attention
@@ -20,8 +18,6 @@ from tests.canopy.helpers import (
     approve_policy,
     planner_does,
     present,
-    seen,
-    state_block,
     waits,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, raises, sets_phase
@@ -41,7 +37,7 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(
     scenario: Scenario, canopy_env: CanopyEnv
 ) -> None:
     approve_policy(canopy_env)
-    seen(scenario.conn, canopy_env)
+    scenario.seen()
     ticked = scenario.tick(PLAN, sets_phase(KEY, Phase.READY), dry_run=True)
     assert plan_of(scenario) == {
         "needed": True,
@@ -56,8 +52,8 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(
     ]
 
 
-def test_a_ticket_plans_do_not_touch_has_no_plan_in_the_state_block(scenario: Scenario, canopy_env: CanopyEnv) -> None:
-    seen(scenario.conn, canopy_env)
+def test_a_ticket_plans_do_not_touch_has_no_plan_in_the_state_block(scenario: Scenario) -> None:
+    scenario.seen()
     scenario.tick(*waits(KEY), dry_run=True)
     assert "plan" not in scenario.ticket_state()
 
@@ -82,7 +78,7 @@ def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(
     assert ticket.phase == "plan_proposed"
     assert any(i.reason == "plan_review" for i in attention.current(scenario.conn))
     # The plan's text never reaches the overseer.
-    assert "Add the button." not in json.dumps(state_block(scenario.agent_log))
+    assert "Add the button." not in json.dumps(scenario.state())
 
     # A reply after the plan asks for changes; the next planner reads it and the plan it replaces.
     scenario.operator("reply", KEY, "Make it blue.")
@@ -111,7 +107,7 @@ def test_an_approval_after_a_reply_wins(scenario: Scenario, canopy_env: CanopyEn
 
 
 def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
 ) -> None:
     approve_policy(canopy_env)
     blocked = {"status": "blocked", "summary": "unclear", "question": QUESTION}
@@ -126,9 +122,7 @@ def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(
     [item] = [i for i in attention.current(scenario.conn) if i.reason == "awaiting_reply"]
     assert item.ticket_key == KEY
     assert f"answer with `canopy reply {KEY}`" in item.detail
-    capsys.readouterr()
-    scenario.operator("show", KEY)
-    assert f"waits on your answer: canopy reply {KEY}" in capsys.readouterr().out
+    assert f"waits on your answer: canopy reply {KEY}" in scenario.operator("show", KEY).out
 
     # The operator's answer ends the wait; the next plan reads it.
     scenario.operator("reply", KEY, "Blue.")

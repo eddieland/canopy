@@ -24,8 +24,9 @@ export interface Series {
 }
 
 /**
- * The series bottom up. Idle ticks first, on the baseline, so their spend compares across days; the rest of the
- * overseer's on it, a deeper shade of the same hue; then the runs the overseer started, then dry runs.
+ * The series bottom up. Idle ticks first, on the baseline under the rest of the overseer's, a deeper shade of the same
+ * hue, so the two read as one; then the runs the overseer started, then dry runs. Idle spend is a sliver beside a
+ * worker's, so its trend across days is read from the table, not the bars.
  */
 export const SERIES: readonly Series[] = [
     { key: 'idle', label: 'idle ticks', fill: 'bg-spend-idle' },
@@ -72,6 +73,12 @@ export function chartTop(days: SpendDay[]): number {
     return Math.max(0, ...days.map((day) => day.costs.total ?? 0))
 }
 
+/** Where the dearest day is in the window, the latest of any equal, so its total is said over its bar; -1 for none. */
+export function dearestDay(days: SpendDay[]): number {
+    const top = chartTop(days)
+    return top === 0 ? -1 : days.findLastIndex((day) => day.costs.total === top)
+}
+
 /** A day's bar on hover: its date, its total, and each series it has, in the chart's order. */
 export function dayHint(day: SpendDay): string {
     const parts = SERIES.map((series) => [series.label, seriesCost(day.costs, series.key)] as const)
@@ -89,14 +96,6 @@ export function dayLabel(day: string): string {
         day: 'numeric',
         timeZone: 'UTC',
     })
-}
-
-/**
- * Whether the axis names the day at `index` of `count`: every day of a week, and of a month every fifth back from
- * the last, so today is always named and the labels never crowd.
- */
-export function axisNames(index: number, count: number): boolean {
-    return count <= SPEND_WINDOWS[0] || (count - 1 - index) % 5 === 0
 }
 
 /** A share, 0 to 1, as a whole percent: `41%`, or a dash when there is none. */

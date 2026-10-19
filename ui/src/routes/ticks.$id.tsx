@@ -123,7 +123,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         <Decisions decisions={ordered('tick-decisions', decisionsOrder, decisions)} />
                     )}
                 </Panel>
-                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} />
+                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} page="tick" />
                 <TickOutputPanel id={tick.id} path={output} />
             </div>
         </>

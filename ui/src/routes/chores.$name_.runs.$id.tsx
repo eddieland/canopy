@@ -99,7 +99,12 @@ function Loaded({ name, id }: { name: string; id: number }) {
                         </ul>
                     </ListPanel>
                 )}
-                <TranscriptPanel transcript={transcript} running={data.run.state === 'running'} view={view} />
+                <TranscriptPanel
+                    transcript={transcript}
+                    running={data.run.state === 'running'}
+                    page="chore-run"
+                    view={view}
+                />
             </div>
         </>
     )

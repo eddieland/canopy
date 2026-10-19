@@ -216,7 +216,8 @@ test("a transcript's chart names what grew each call's context, and shows the la
     const largest = context.getByTestId('context-largest')
     await expect(largest).toHaveText('largest additionbashnpm test -- search≈4.2k into call 3')
 
-    // At first the chart picks the call it grew, and lists what grew it, largest first, each its share by characters.
+    // Opened, the chart picks the call it grew, and lists what grew it, largest first, each its share by characters.
+    await context.getByRole('button', { name: 'Show chart' }).click()
     const calls = context.getByRole('radiogroup', { name: 'Model calls' })
     await expect(calls.getByRole('radio')).toHaveCount(3)
     await expect(calls.getByRole('radio', { name: 'call 3: 30.2k sent, +4.3k on the call before' })).toBeChecked()
@@ -249,12 +250,62 @@ test("a transcript's chart names what grew each call's context, and shows the la
     await expect(transcript.locator('details[open]')).toHaveCount(1)
 })
 
-test("a session of one model call has its context's line, and no bars", async ({ page }) => {
+test("a transcript's context chart folds to its line, which still shows the largest addition's row", async ({
+    page,
+}) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const context = transcript.getByTestId('transcript-context')
+    const calls = context.getByRole('radiogroup', { name: 'Model calls' })
+    // Closed on arrival: the transcript's rows start under its header, its counts, and the chart's one line.
+    await expect(context.getByRole('button', { name: 'Show chart' })).toHaveAttribute('aria-expanded', 'false')
+    await expect(calls).toHaveCount(0)
+    const top = await transcript.boundingBox()
+    const first = await transcript.getByTestId('transcript-entries').locator('li').first().boundingBox()
+    expect((first?.y ?? Infinity) - (top?.y ?? 0)).toBeLessThanOrEqual(100)
+
+    // The largest addition shows its row with the chart closed: opened, scrolled to, focused.
+    await context.getByTestId('context-largest').getByRole('button').click()
+    const run = transcript.getByTestId('transcript-tool').filter({ hasText: 'npm test -- search' })
+    await expect(run.locator('details')).toHaveAttribute('open', '')
+    await expect(run.locator('summary')).toBeFocused()
+    await expect(run.locator('summary')).toBeInViewport()
+    await expect(calls).toHaveCount(0)
+
+    // Opened, it stays open on a run's page across a reload, and a tick's page keeps its own choice.
+    await context.getByRole('button', { name: 'Show chart' }).click()
+    await expect(calls.getByRole('radio')).toHaveCount(3)
+    await page.reload()
+    await settled(page)
+    await expect(calls.getByRole('radio')).toHaveCount(3)
+    await expect(context.getByRole('button', { name: 'Hide chart' })).toHaveAttribute('aria-expanded', 'true')
     await page.goto('ticks/2')
     await settled(page)
-    const context = page.getByTestId('transcript-context')
-    await expect(context).toContainText('call 1, 9.3k sent: ≈84 canopy’s prompt, ≈9.2k the runtime’s own')
-    await expect(context.getByRole('radio')).toHaveCount(0)
+    await expect(page.getByTestId('transcript-context')).toContainText('peak 9.3k at call 1')
+})
+
+test("a session of one model call has its context's line alone, and no By call", async ({ page }) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const context = transcript.getByTestId('transcript-context')
+    await expect(context).toHaveText('contextpeak 9.3k at call 1')
+    await expect(context.getByText('peak 9.3k at call 1')).toHaveAttribute(
+        'title',
+        /^9\d{3} tokens: ≈84 canopy’s prompt, ≈9\.2k the runtime’s own/u,
+    )
+    await expect(context.getByRole('button')).toHaveCount(0)
+    await expect(transcript.getByRole('button', { name: 'By call' })).toHaveCount(0)
+
+    // A runtime error printed under a second call the runtime counted no tokens for draws no bars either.
+    await page.goto('runs/40')
+    await settled(page)
+    const run = page.getByTestId('transcript')
+    await expect(run).toContainText('1 model call')
+    await expect(run.getByTestId('transcript-context')).toHaveText('contextpeak 5.4k at call 1')
+    await expect(run.getByTestId('transcript-context').getByRole('radio')).toHaveCount(0)
+    await expect(run.getByRole('button', { name: 'By call' })).toHaveCount(0)
 })
 
 test("a tick's page shows its overseer's session under its decisions", async ({ page }) => {

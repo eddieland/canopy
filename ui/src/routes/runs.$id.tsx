@@ -80,7 +80,7 @@ function Loaded({ id }: { id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} view={view} />
+                <TranscriptPanel transcript={transcript} running={data.state === 'running'} page="run" view={view} />
                 <RunOutputPanel id={data.id} />
                 <RunMemoryPanel id={data.id} />
             </div>

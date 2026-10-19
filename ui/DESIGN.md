@@ -543,6 +543,31 @@ side.
   `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
   of its rows.
 
+## Charts
+
+What every chart follows (`src/lib/chart.ts`), so a new one needs no rules of its own; each chart's entry under
+Patterns names what is its own.
+
+- **Bars from zero**, in fill tokens of their own (Tokens), never a state's color. The plot's top is the peak and a
+  quarter more (`HEADROOM`), so the tallest bar stops short of the edge, and the peak's value sits over its bar as a
+  `readout`: the scale reads without hovering. Over the first or last bar it is flush with the bar's outer edge, since
+  it is wider than a narrow bar and would overhang the chart's padding.
+- **A bar's width is capped**, the row centered, so a sparse window draws narrow bars rather than slabs.
+- **Stacked segments are 2px apart**, the surface between them, and any segment with a value is 2px tall at least, so a
+  sliver still shows; the top segment's corners are rounded.
+- **The axis** names its marks by one helper, `axisStep`: every mark of a short axis, every fifth of a long one, back
+  from the last, so the latest is always named, and fewer where names that often would touch. A name is centered under
+  its bar and may be wider than it; it is never cut to fit.
+- **The legend**'s words are `muted-foreground` beside a swatch of the fill.
+- **A value is on hover**, with its unit: `$1.50`, `30.2k sent`.
+- **No data is `Empty`**, saying what there was none of: never an empty plot under a legend.
+- **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
+  to see.
+
+The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
+reader, so no table repeats them; a call's added part is 1px at least, since it is one of two segments and never a
+sliver beside four others; and its axis names short call numbers without measuring, every one up to twelve.
+
 ## Patterns
 
 - **Lists are rows in a panel** (`ListRow`), divided by hairlines, and every row reads in one order: its **state**,
@@ -657,12 +682,18 @@ side.
   Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
-- **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
-  overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
+- **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
+  order, each segment its series' share of the day, the whole as tall as the day's share of the chart's top. Idle
+  overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the two read as
+  one; at real costs it is a sliver beside a worker's, so its trend across days is read from the table, not the bars.
+  A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column gone missing.
   A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`, and scrolls past a week (`PanelScroll`). A week names
-  every day on the axis; 30 days every fifth, back from today. The window is a segmented control (`ToggleGroup`) in
-  the totals' panel header, kept in `?days=`.
+  holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one before, and
+  scrolls past a week (`PanelScroll`), sideways when the pane is too narrow for its columns. A week names every day on
+  the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in place of
+  the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent nothing,
+  and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
+  header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
@@ -790,7 +821,8 @@ side.
   colored JSON too (`markedTokens`). A tool call whose input or output holds it opens to it, until All open is turned on
   or off; a model call is numbers alone and is never kept. Escape or the clear button empties it, and a search nothing
   matches says so in place of the rows. A By call `Toggle` in the header, as Pretty is, groups the rows by the model
-  call they came from (`byCall` in `src/lib/transcript.ts`), hiding the search, which is the rows' in order: each call a
+  call they came from (`byCall` in `src/lib/transcript.ts`), once the counts name two model calls (one call grouped
+  is the rows in order again), hiding the search, which is the rows' in order: each call a
   `Collapsible` row, its number, what it did (its first text, then its tools by name, `read ×2`), an `unfinished` chip
   when the session ended first, its reason as above, its tokens `in · out`, and its cost. It opens to an input and an
   output section, each a `panel-label` with its tokens: the first call's input is the prompt canopy kept, in a block,
@@ -816,22 +848,29 @@ side.
   transition behind the field (`inPage`, `src/lib/in-page.ts`), which the outlet does not cross-fade (Motion, above).
   All open opens the rows drawn. A row shown from the chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
-  the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
-  call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
-  with its tokens and the call it grew, and the legend. Under it a bar per call, as tall as what it was sent (input,
-  cache read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the
-  call carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
+  the rows, in either view, once a model call has its tokens. Its line, in the counts' band as their second line: a
+  `context` label, the peak (`peak 30.2k at call 3`), the largest single addition as a button in the accent (the tool
+  and its summary, or `text` and its start) with its tokens and the call it grew, and at its end `Show chart`, a
+  `Disclosure` that opens the chart under it. The chart is closed until opened, since a transcript is opened to read
+  what the agent did far more often than to ask why its context grew; each kind of page (a run's, a chore run's, a
+  tick's) keeps it open or closed across reloads, as Pretty is kept (`src/lib/context-chart-open.ts`), so the rows
+  start under the header, the counts, and one line. Open, a bar per call, as tall as what it was sent (input, cache
+  read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the call
+  carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
   segment's corners rounded. The first call's is the runtime's own overhead and canopy's prompt, the prompt's tokens
   its characters over four; a call the runtime counted none of has no bar. The bars are a `ToggleGroup`'s items, each
   named for its call, size, and step on hover and to a screen reader; the axis under them names each call, every
-  fifth back from the last past twelve. The call picked, at first the one the largest addition grew, sits raised, and
-  a line under the chart says what grew it: the step on the call before, then what that call printed (its text, and
-  its tool calls, each input and output), largest first, each its share of the step by its characters (`≈4.2k`, the
-  characters on hover), at most five and then how many more. The first call's line splits it into the prompt and the
-  runtime's own; a call smaller than the one before says so and names nothing. Each entry named is a button that shows
-  its row: it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle,
-  focuses it, and sets it on the accent's tint at 14%. A session of one call has the line alone: one bar says nothing
-  the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
+  fifth back from the last past twelve, with the legend at its end. The call picked, at first the one the largest
+  addition grew, sits raised, and a line under the chart says what grew it: the step on the call before, then what
+  that call printed (its text, and its tool calls, each input and output), largest first, each its share of the step
+  by its characters (`≈4.2k`, the characters on hover), at most five and then how many more. The first call's line
+  splits it into the prompt and the runtime's own; a call smaller than the one before says so and names nothing. Each
+  entry named is a button that shows its row, as the line's largest addition is, open or closed: it turns By call and
+  the search off, opens the row if it is a tool call, scrolls it to the window's middle, focuses it, and sets it on the
+  accent's tint at 14%. A session with fewer than two calls the runtime counted tokens for has the line alone, with no
+  `Disclosure`: one bar says nothing the line does not, and a call that printed only an error has no bar to add. The
+  one call's split into the prompt and the runtime's own is on the peak's hover. By call, each call's line has its
+  step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
   tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
   naming the file (a tick's its path, with its copy button, the one place the page names it; a run's says `the run's
@@ -1047,8 +1086,9 @@ side.
     exception (`OrderToggle`): it names the order in force (`newest first`), the arrow saying it flips.
   - A **disclosure**, what opens a part of the page under it, is a `Disclosure` (`src/components/disclosure.tsx`) on
     its `Collapsible`: a ghost `xs` button, a chevron that turns down while open, and what it does in words,
-    `Show <what>` closed and `Hide <what>` open (`Show output`, `Show 2 earlier runs`, `Show 37 slots, #4 to #40`,
-    `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no taller than a line (`-my-1`).
+    `Show <what>` closed and `Hide <what>` open (`Show output`, `Show chart`, `Show 2 earlier runs`,
+    `Show 37 slots, #4 to #40`, `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no
+    taller than a line (`-my-1`).
     A row that opens to its own body, a transcript's tool call or model call, is the row itself, a chevron at its end.
   - Two of either are one: a pair that does and undoes (Open all, Close all) is one `Toggle` (All open).
   - A panel header's modes sit together, after what the panel is about: a transcript's session id, a hairline rule,

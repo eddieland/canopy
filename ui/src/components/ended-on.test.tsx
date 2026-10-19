@@ -50,7 +50,7 @@ function Page({ status, shown }: { status: string; shown: Transcript | undefined
             <Fields>
                 <EndedOnField status={status} transcript={shown} onShow={view.show} />
             </Fields>
-            <TranscriptPanel transcript={shown} running={false} view={view} />
+            <TranscriptPanel transcript={shown} running={false} page="run" view={view} />
         </>
     )
 }

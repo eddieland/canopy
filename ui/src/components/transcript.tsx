@@ -25,6 +25,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Toggle } from '@/components/ui/toggle'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import type { TranscriptView } from '@/hooks/use-transcript-view'
+import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-open'
+import type { TranscriptPage } from '@/lib/context-chart-open'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
 import { rowLineFrom } from '@/lib/rows'
@@ -62,7 +64,9 @@ const NO_CALLS: readonly Call[] = []
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
- * printed them. Above them, a chart of each model call's context and what grew it, whose entries show their rows. By
+ * printed them. Above them, a line naming the session's peak context and largest addition, which opens to a chart
+ * of each model call's context and what grew it, whose entries show their rows; `page` is the kind of page it sits
+ * on, each of which keeps the chart open or closed (src/lib/context-chart-open.ts). With two model calls or more, By
  * call, the same entries are grouped by the model call they came from, each opening to what it was sent and what it
  * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
  * input or output holds it. A long transcript draws a page of its rows, or of its calls By call, and a fold after them
@@ -75,10 +79,12 @@ const NO_CALLS: readonly Call[] = []
 export function TranscriptPanel({
     transcript,
     running,
+    page,
     view,
 }: {
     transcript: Transcript | undefined
     running: boolean
+    page: TranscriptPage
     view?: TranscriptView
 }) {
     const own = useTranscriptView()
@@ -87,7 +93,10 @@ export function TranscriptPanel({
     const counts = tally(entries)
     const calls = byCall(entries)
     const shape = contextShape(entries, transcript?.prompt ?? null)
-    const callView = grouped && calls.calls.length > 0
+    const chartOpen = useContextChartOpen(page)
+    // One model call grouped is the events in order again.
+    const groups = counts.calls > 1
+    const callView = grouped && groups
     // The search is the events' in order: By call keeps its own, whole.
     const query = callView ? null : findQueryOf(found)
     const words = query === null ? [] : [query]
@@ -152,13 +161,13 @@ export function TranscriptPanel({
                             {why.short}
                         </span>
                     )}
-                    {transcript?.session_id && (entries.length > 1 || calls.calls.length > 0 || tools) && (
+                    {transcript?.session_id && (entries.length > 1 || groups || tools) && (
                         // The session is what the transcript is; the modes after the rule are how it is shown.
                         <span aria-hidden className="hidden h-4 w-px bg-border @lg:inline" />
                     )}
                     <span className="flex items-center gap-1">
                         {entries.length > 1 && <OrderToggle list="transcript" />}
-                        {calls.calls.length > 0 && (
+                        {groups && (
                             <Toggle
                                 size="xs"
                                 pressed={grouped}
@@ -187,7 +196,13 @@ export function TranscriptPanel({
                 <PanelSkeleton />
             ) : entries.length === 0 ? null : (
                 <>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-1.5">
+                    <div
+                        className={cn(
+                            'flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 pt-1.5',
+                            // The context chart's line reads as the counts' second, in the same band.
+                            shape.peak === null ? 'border-b pb-1.5' : 'pb-1',
+                        )}
+                    >
                         <p className="flex flex-wrap gap-x-4 font-mono text-xs text-muted-foreground">
                             <span>
                                 {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
@@ -222,7 +237,12 @@ export function TranscriptPanel({
                             />
                         )}
                     </div>
-                    <ContextChart shape={shape} onShow={show} />
+                    <ContextChart
+                        shape={shape}
+                        onShow={show}
+                        open={chartOpen}
+                        onOpenChange={(open) => setContextChartOpen(page, open)}
+                    />
                     {callView ? (
                         <ol className="divide-y" data-testid="transcript-calls">
                             {ordered('transcript', order, [
