@@ -188,5 +188,3 @@ CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
 # One of the example chores canopy ships, which `canopy chore install` sets up.
 EXAMPLE_CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
 PR_URL = PrUrlType()
-# A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
-COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")

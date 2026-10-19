@@ -86,7 +86,7 @@ template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy
 
 | Template | Used for |
 | --- | --- |
-| `worker.json` | `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd` |
+| `worker.json` | `worker_cmd`, `private_worker_cmd`, and `plan_cmd` |
 | `setup.json` | `setup_cmd` |
 | `chore.json` | `chore_cmd` and each chore's own `cmd` |
 | `review.json` | `review_cmd` |
@@ -167,8 +167,8 @@ gh auth setup-git    # or any credential helper
 
 In `~/.config/canopy/config.toml`, never a workspace file (TRUST_MODEL T7), put `canopy-sandbox`, its role, and `--`
 before each command. `--read {definitions_dir}` lets the agent read canopy's agent definitions (D040).
-`worker_cmd_prefix` goes before all four commands a worker run starts, `worker_cmd`, `private_worker_cmd`,
-`split_cmd`, and `plan_cmd`; `canopy init` prints its line.
+`worker_cmd_prefix` goes before all three commands a worker run starts, `worker_cmd`, `private_worker_cmd`, and
+`plan_cmd`; `canopy init` prints its line.
 
 ```toml
 [runtime]

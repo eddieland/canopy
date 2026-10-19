@@ -551,8 +551,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket canopy has no record of,
-            `running` while a run works it, `split` for a ticket a split made children of, `already_forgotten` for
-            one with nothing new since its last forget.
+            `running` while a run works it, `already_forgotten` for one with nothing new since its last forget.
     """
     check_verb(ref, "forget")
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
@@ -565,13 +564,6 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
                 "running",
                 f"run {running['id']} ({running['kind']}) is working {ref}; wait for it to end, or on a started "
                 f"ticket end it with `canopy stop {ref} --now`",
-            )
-        children = db.children_of(conn, ref.id)
-        if children:
-            raise Refused(
-                "split",
-                f"a split made {', '.join(children)} from {ref}; they are tickets of their own, and forgetting {ref} "
-                "would not undo them",
             )
         if not db.worked_since_forget(conn, ticket):
             raise Refused(

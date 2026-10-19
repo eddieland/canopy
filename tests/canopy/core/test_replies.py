@@ -72,7 +72,6 @@ def test_under_approve_a_prompt_must_carry_drafts_but_a_private_implements(canop
     assert present(replies.render(cfg, RunKind.IMPLEMENT, private=True)).required == ()
 
 
-@pytest.mark.parametrize("kind", [RunKind.SPLIT, RunKind.PLAN])
-def test_a_kind_that_comments_nowhere_has_no_part(canopy_env: CanopyEnv, kind: RunKind) -> None:
+def test_a_kind_that_comments_nowhere_has_no_part(canopy_env: CanopyEnv) -> None:
     approving(canopy_env)
-    assert replies.render(load(canopy_env.root, canopy_env.user_file), kind, private=False) is None
+    assert replies.render(load(canopy_env.root, canopy_env.user_file), RunKind.PLAN, private=False) is None

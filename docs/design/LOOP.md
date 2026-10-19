@@ -134,7 +134,6 @@ escapes it (§20).
 | `merged` | every unit's PR merged, and no other repository left to change (§18) | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label, or an operator message newer than the message cursor | dispatch `resume` pointing at the reply; the worker removes the label |
-| `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
 
 A PR's checks are its head commit's check runs and commit statuses. GitHub runs no checks on a PR that conflicts with
 its base, so `conflicted` comes before every CI and review phase; the `resume` attempt limit bounds its repeats (D030).
@@ -185,7 +184,7 @@ clears the done mark (§22).
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch` starts a run of one kind, `implement`, `resume`, `split`, or `plan`, for a ticket, naming the queue
+`canopy dispatch` starts a run of one kind, `implement`, `resume`, or `plan`, for a ticket, naming the queue
 label the ticket was found by and one or more of its units, its work in one repository each (§18); several make a joint
 run. A `plan` writes the ticket's plan before its first `implement`, with guards of its own (§25).
 
@@ -221,7 +220,7 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 2. Record each slot's git links, check out the branch or base at a detached HEAD, never a local branch, since a pool's
    slots share branch refs (D109), and put an approved plan in place (§25).
 3. Run the worker in the slot, or a joint run's desk (§18), until its timeout, recording its session and spend.
-4. Parse the result contract (§13); missing or invalid is `unknown`. A split (§18) checks out and pushes nothing.
+4. Parse the result contract (§13); missing or invalid is `unknown`. A plan (§25) pushes nothing.
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with
    `trust.rebase`, leasing what origin held at step 2). A failed push or commits on no pushed branch is `unpushed`.
@@ -248,8 +247,8 @@ follow-up tickets it filed, each with its repository or null, which authorize no
   with `trust.rebase`, a lease is the one force the worker's definition allows (TRUST_MODEL T1).
 - Keep the runtime's attribution trailer on commits or add canopy's, unless the operator turned it off (TRUST_MODEL T5).
 - Mark every comment and reply it posts with the configured marks (D069), or draft it for approval (§29). Everything
-  posts as the operator (D010), so only the marks keep a worker's comment from reading as review feedback, an
-  authorized reply, or a split request; they only take authority away, so they need no protection.
+  posts as the operator (D010), so only the marks keep a worker's comment from reading as review feedback or an
+  authorized reply; they only take authority away, so they need no protection.
 - Open each PR through the GitHub MCP, or only with the operator's PR skill when one is set (a missing one fails the
   run; branch protection governs what it pushes, TRUST_MODEL T1). Link every PR on the ticket.
 - On `blocked`: post the question and add `needs_human_label`; a private ticket's worker posts nothing (§22).
@@ -301,7 +300,7 @@ Three steps, all the operator's, in the order they run:
 2. **`post_create` hooks**, in the user-level treehouse config, run on the base when a slot is made or reused. A
    failing hook does not fail the lease. canopy's own pool backend (§18) runs none.
 3. **`runtime.setup_cmd`**, private, runs in each slot of a worker run after its branch is checked out (§8 `_run` step
-   2), and fails the run when it fails. Splits and reviews run none: their agents have no shell.
+   2), and fails the run when it fails. Plans and reviews run none: their agents have no shell.
 
 `setup_cmd` runs the branch's code on the operator's machine, outside the agent runtime's permissions, so it is wrapped
 as the worker is (§24, TRUST_MODEL T4). A broken setup crashes every run it meets, each spending an attempt (D030).

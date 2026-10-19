@@ -137,9 +137,7 @@ def test_forgetting_clears_the_attention_item_of_the_latest_run(scenario: Scenar
     assert [i for i in attention.listed(context(scenario.env)) if i.reason == "worker_failed"] == []
 
 
-def test_forget_refuses_an_unknown_ticket_a_running_run_a_split_parent_and_other_kinds(
-    scenario: Scenario, git_pool: GitPool
-) -> None:
+def test_forget_refuses_an_unknown_ticket_a_running_run_and_other_kinds(scenario: Scenario, git_pool: GitPool) -> None:
     conn = scenario.conn
     refused = scenario.operator("forget", KEY, code=1)
     assert f"forget refused (unknown): canopy has no record of {KEY}" in refused.err
@@ -149,8 +147,6 @@ def test_forget_refuses_an_unknown_ticket_a_running_run_a_split_parent_and_other
     assert f"forget refused (running): run {working.id} (implement) is working {KEY}" in refused.err
 
     working.finishes()
-    db.record_split_children(conn, KEY, working.id, {"PROJ-2": "repo"})
-    assert "forget refused (split): a split made PROJ-2 from PROJ-1" in scenario.operator("forget", KEY, code=1).err
     ticket = present(db.get_ticket(conn, KEY))
     assert (ticket.branch, ticket.forgotten_at) == (OLD, None)
 

@@ -14,7 +14,7 @@ first, in §25.
   own, `runtime.plan_triage_timeout_minutes` (10).
 - **When it runs.** Only for a plan the policy asks for: a ticket whose own setting says `plan` (`canopy plan KEY`, or
   `start --plan`) is planned whatever triage would say, since that is the operator's word for that ticket. Before the
-  first `plan` of such a ticket, with no branch, no plan run, and no triage run yet, and not a split's parent, the
+  first `plan` of such a ticket, with no branch, no plan run, and no triage run yet, the
   overseer dispatches a `needs-plan` run, once per ticket: a second is refused `triaged` however the first ended, and
   one not due `bad_triage`. Under M54, before a feedback plan too, once per round of feedback.
 - **The run.** A read-only run with a verdict, as M25's `triage-ci` is (DESIGN §23): it leases no slot, reads the ticket

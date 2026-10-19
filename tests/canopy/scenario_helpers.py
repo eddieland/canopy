@@ -188,8 +188,8 @@ TOLD_LINES = 2
 HOLD_TIMEOUT = 60
 
 #: The roles a held run's agent may play, each scripted by its own `FAKE_<ROLE>_*` variables: a worker, a private
-#: ticket's, a planner, a splitter, and a reviewer. The overseer is never held.
-HELD_ROLES = ("WORKER", "WORKER_PRIVATE", "PLANNER", "SPLITTER", "REVIEWER")
+#: ticket's, a planner, and a reviewer. The overseer is never held.
+HELD_ROLES = ("WORKER", "WORKER_PRIVATE", "PLANNER", "REVIEWER")
 
 #: The command a held agent runs first, with the gates' directory: it says it is at work, in `<run id>.working`, its run
 #: id as CANOPY_RUN_ID names it (`7`, or `review-7` for a review), then waits for `<run id>.open` before it goes on to
@@ -881,13 +881,11 @@ def dispatches(
     cursors: Mapping[str, str] | None = None,
     context: str | None = None,
     review_run: int | None = None,
-    request: str | None = None,
 ) -> list[str]:
     """The overseer dispatches a run of `key` in `repo`, by default an `implement` under the test operator's label.
 
-    `repo` is one repository, or several for a joint run or a split, in `ws_scenario`'s workspace of two. Pass
-    `label=None` for a ticket the operator started, which needs none, and `request` for a split, the comment asking for
-    it.
+    `repo` is one repository, or several for a joint run, in `ws_scenario`'s workspace of two. Pass `label=None` for a
+    ticket the operator started, which needs none.
     """
     repos = [repo] if isinstance(repo, str) else list(repo)
     flags = [arg for name in repos for arg in ("--repo", name)] + ["--kind", str(kind)]
@@ -897,7 +895,7 @@ def dispatches(
         flags += ["--reason", str(reason)]
     for name, value in (cursors or {}).items():
         flags += ["--cursor", f"{name}={value}"]
-    flags += _option("--context", context) + _option("--request", request)
+    flags += _option("--context", context)
     return canopy("dispatch", key, *flags)
 
 

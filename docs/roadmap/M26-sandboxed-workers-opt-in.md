@@ -21,7 +21,7 @@ canopy, not built after an incident.
   ships with canopy, as the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the
   templates, installs the `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
 - `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: `canopy sandbox setup` and what it cannot install, the
-  prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
+  prefixes for `worker_cmd`, `private_worker_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
   remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
   `worker_cmd` and writes nothing.
 - The canary (HOST_ISOLATION §6), `tests/canopy_sandbox/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`:

@@ -77,8 +77,8 @@ reply before **Stop** or **Forget**. Hover over each to see its command.
   saying when you forgot it and which branch and PRs it dropped, with **Show N earlier messages** for when you want
   the history back. Forget a ticket three times and you get three of those lines, one per attempt, which is also a
   hint worth reading. Closing its PRs and deleting its branch on origin is yours to do, and until you do, the
-  overseer will find them again and the ticket can't start over. canopy refuses while a run is on it, for a ticket a
-  split made children from, and when nothing has happened since you last forgot it.
+  overseer will find them again and the ticket can't start over. canopy refuses while a run is on it, and when nothing
+  has happened since you last forgot it.
 
 ## Allowing one more run
 

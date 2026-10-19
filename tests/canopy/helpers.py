@@ -579,14 +579,6 @@ def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iter
 
 
 @contextmanager
-def splitter_reports(report: object, *commands: list[str]) -> Iterator[None]:
-    """Until the block ends, the fake splitter prints `report`, verbatim if it is a string, after running `commands` if
-    given."""
-    with scripted("SPLITTER", reported(report, commands)):
-        yield
-
-
-@contextmanager
 def chore_reports(report: object, *commands: list[str], **behavior: Unpack[Behavior]) -> Iterator[None]:
     """Until the block ends, the fake chore prints `report`, verbatim if it is a string, after running `commands` if
     given."""

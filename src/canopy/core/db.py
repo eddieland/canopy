@@ -45,7 +45,7 @@ CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
-# The tables of detached runs (DESIGN §6): workers' and splits', chores', and reviews'. Each has the same lifecycle,
+# The tables of detached runs (DESIGN §6): workers', chores', and reviews'. Each has the same lifecycle,
 # written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
 # report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs"]
@@ -645,7 +645,7 @@ def finish_run(
 ) -> bool:
     """Close a running run in `table`, recording `event` with it. Returns False if it was already closed.
 
-    A worker or split run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
+    A worker run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
     also ends its PR's open review request, as `reviewed`, in the same transaction (DESIGN §21): the request asked for
     one review, and this is it.
 
@@ -705,10 +705,10 @@ def insert_run(
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
     Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
-    run's branch. A run that does not work in units, a split, leaves the ticket's branch and units as they are: it
-    pushes nothing (DESIGN §18). `started` builds the `run.started` event from the run's id, recorded in the same
-    transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check` runs
-    first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
+    run's branch. A run that does not work in units, a plan or a triage, leaves the ticket's branch and units as they
+    are: it pushes nothing (DESIGN §25). `started` builds the `run.started` event from the run's id, recorded in the
+    same transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check`
+    runs first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
     `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
     `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
@@ -823,7 +823,7 @@ def finish_ticket_run(
     event: Callable[[int | None], Event | None] | None = None,
     then: Callable[[], object] | None = None,
 ) -> bool:
-    """Close a running worker or split run, with the messages it reports and its event, as `finish_run` closes any run.
+    """Close a running worker run, with the messages it reports and its event, as `finish_run` closes any run.
 
     `messages` are the run's `(kind, body)` messages about its ticket (DESIGN §22), recorded in order. `event` builds
     the `run.ended` event from the id of the last of them, or None if there are none. `then` writes what else the run
@@ -1009,7 +1009,7 @@ def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, in
 def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
     """What every agent run that started at or after `since` cost; None when none of them reported one (§13).
 
-    Worker and split runs, chore runs, review runs, and each tick's overseer: every table an agent run records on.
+    Worker runs, chore runs, review runs, and each tick's overseer: every table an agent run records on.
 
     Returns:
         The total cost in US dollars, or None when no such run reported one.
@@ -1399,45 +1399,11 @@ def _newest(conn: sqlite3.Connection, sql: str, limit: int) -> list[str]:
     return list(seen)
 
 
-# Split children
-
-
-def record_split_children(conn: sqlite3.Connection, parent: str, run_id: int, children: Mapping[str, str]) -> None:
-    """Record the children a split run created, each child key with the repository it covers, in one transaction."""
-    with transaction(conn):
-        conn.executemany(
-            "INSERT INTO split_children (child_key, parent_key, repo, run_id) VALUES (?, ?, ?, ?)",
-            [(child, parent, repo, run_id) for child, repo in children.items()],
-        )
-
-
-def split_child(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
-    """Return `key`'s row in `split_children` if a split created it, else None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM split_children WHERE child_key = ?", (key,)).fetchone()
-    return row
-
-
-def children_of(conn: sqlite3.Connection, parent: str) -> list[str]:
-    """Return the keys of the children a split of `parent` created, sorted."""
-    rows = conn.execute("SELECT child_key FROM split_children WHERE parent_key = ? ORDER BY child_key", (parent,))
-    return [str(r[0]) for r in rows]
-
-
-def open_split_children(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return the children of every split whose parent or child is not marked done, with their split run's end."""
-    return conn.execute(
-        "SELECT c.child_key, c.parent_key, c.repo, c.run_id, r.ended_at FROM split_children c "
-        "JOIN runs r ON r.id = c.run_id "
-        "LEFT JOIN tickets p ON p.key = c.parent_key LEFT JOIN tickets t ON t.key = c.child_key "
-        "WHERE coalesce(p.done, 0) = 0 OR coalesce(t.done, 0) = 0 ORDER BY c.parent_key, c.child_key"
-    ).fetchall()
-
-
 # Follow-up tickets (DESIGN §18)
 
 
 def known_ticket(conn: sqlite3.Connection, key: str) -> bool:
-    """Whether the journal knows `key` as a ticket: a `tickets` row, a run, a follow-up record, or a split's child.
+    """Whether the journal knows `key` as a ticket: a `tickets` row, a run, a follow-up record, or an old split's child.
 
     Returns:
         True if any of them names `key`.

@@ -20,7 +20,7 @@ showed the derivation getting right: a rule moves into code only with that evide
   state block names them and the capacity they take, so the overseer dispatches its human-waiting tickets first and
   its `ready` tickets only into what remains, and a `ready` dispatch past that is refused `reserved`.
 - The attention list from observations: `green_unreviewed`, `approved`, `untrusted_review`, `attempt_limit`,
-  `split_unlabeled`, `split_self_labeled`, `review_failed`, and `review_limit` are the harness's, open while their
+  `review_failed`, and `review_limit` are the harness's, open while their
   cause holds in the journal, like the run reasons (§14). No re-recording rule, which M28's prompt fix (the
   overseer's open items in its state block) works around and this removes, so an item cannot flap (2026-10-13 F17)
   or go because the overseer left it out on partial data. This is the fix for issue #219, an outage tick that closed

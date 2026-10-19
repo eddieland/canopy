@@ -203,7 +203,7 @@ def test_init_suggests_a_sandbox_prefix_and_writes_none(
         before.replace("\n[runtime]\n", f"\n[runtime]\nworker_cmd_prefix = {json.dumps(suggested)}\n")
     )
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
-    for template in (runtime.worker_cmd, runtime.private_worker_cmd, runtime.split_cmd, runtime.plan_cmd):
+    for template in (runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
         assert shlex.split(runtime.worker_template(template)) == [*SANDBOX_PREFIX, *shlex.split(template)]
 
 

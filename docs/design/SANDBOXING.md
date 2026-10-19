@@ -30,7 +30,7 @@ on macOS a process that calls `setsid` escapes, as it would unsandboxed.
 
 ### What is wrapped
 
-The `worker` role wraps `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`; `setup` wraps
+The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `setup` wraps
 `runtime.setup_cmd`, which runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a
 chore's `cmd` (§19); `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). Unwrapped: the
 overseer, which acts through `canopy` and needs the journal, lock, and config the policy denies; `plan_triage_cmd`,

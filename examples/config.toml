@@ -50,9 +50,6 @@ worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 # Chores run this unless they set their own `cmd` (DESIGN §19).
 chore_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json
     --title={title} {prompt}'''
-# The splitter creates one ticket per repository when an authorized replier asks for a split (DESIGN §18).
-split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
-    --title={title} {prompt}'''
 # The planner writes a ticket's plan before its first implement, reading only (DESIGN §25).
 plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --title={title} {prompt}'''
@@ -74,12 +71,12 @@ worker_timeout_minutes = 45
 # pr_skill = "acme-open-pr"
 # Optional: run in each slot once the run's branch is checked out, before the worker, with CANOPY_REPO naming the
 # repository; a failure or timeout ends the run crashed (DESIGN §9). It runs the branch's code on this machine. No
-# shell runs it: write `sh -c '...'` for one. Splits and reviews run none.
+# shell runs it: write `sh -c '...'` for one. Plans and reviews run none.
 # setup_cmd = "sh -c 'pnpm install --frozen-lockfile'"
 # setup_timeout_minutes = 30
-# Optional: words before and after every command a worker run starts (worker_cmd, private_worker_cmd, split_cmd, and
-# plan_cmd), with {definitions_dir} and {title} but no {prompt}. One place for a sandbox wrapper (docs/SANDBOX.md), or
-# an option all four take.
+# Optional: words before and after every command a worker run starts (worker_cmd, private_worker_cmd, and plan_cmd),
+# with {definitions_dir} and {title} but no {prompt}. One place for a sandbox wrapper (docs/SANDBOX.md), or an option
+# all three take.
 # worker_cmd_prefix = "canopy-sandbox worker --read {definitions_dir} --"
 # worker_cmd_suffix = "--model provider/model"
 
