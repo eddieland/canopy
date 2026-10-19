@@ -175,12 +175,20 @@ test('the memory page shows its history on asking: the proposal promotion used u
     await settled(page)
     const proposals = page.getByTestId('memory-proposals')
     await expect(proposals.getByTestId('memory-past-decided')).toHaveCount(0)
+    // A ticket's notes opened before stay open: the page keeps what it showed while the history is read.
+    const notes = page.getByTestId('memory-notes')
+    await notes.getByTestId('memory-ticket-ABC-100').getByRole('button', { name: 'Show 2 notes' }).click()
+    await expect(notes.getByTestId('memory-3')).toBeVisible()
     await proposals.getByRole('link', { name: 'history' }).click()
     await expect(page).toHaveURL(/[?&]history=true/u)
     // The mock's lesson 8 was promoted from proposal 7, which promoting superseded.
     const decided = proposals.getByTestId('memory-past-decided')
     await expect(decided.getByTestId('memory-7').getByTestId('memory-stand')).toHaveText('superseded')
     await expect(page.getByTestId('memory-lessons').getByText('no lesson replaced or forgotten yet')).toBeVisible()
+    await expect(notes.getByTestId('memory-3')).toBeVisible()
+    await proposals.getByRole('link', { name: 'history' }).click()
+    await expect(decided).toHaveCount(0)
+    await expect(notes.getByTestId('memory-3')).toBeVisible()
 })
 
 test('the memory page finds a note by what it says, as canopy memory search does', async ({ page }) => {

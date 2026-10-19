@@ -241,7 +241,8 @@ Rules:
   filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
   `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip in the Proposals and Lessons
   headers (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories no longer pending or in
-  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs. Each list
+  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs; turning it
+  on or off keeps the panels and the rows opened on them, the sections holding a row's skeleton until read. Each list
   scrolls in its panel but the proposals, which hold 20 at most and so grow with their rows. A row in force that its
   digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
   keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's

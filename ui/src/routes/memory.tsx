@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { History } from 'lucide-react'
 import { useState } from 'react'
@@ -75,9 +75,19 @@ export const Route = createFileRoute('/memory')({
 
 function MemoryPage() {
     const { history } = Route.useSearch()
-    // One read or the other: the history adds the past to what the page always reads.
-    const now = useQuery({ ...memoryQuery, enabled: history !== true })
-    const withPast = useQuery({ ...memoryHistoryQuery, enabled: history === true })
+    const client = useQueryClient()
+    // One read or the other: the history adds the past to what the page always reads. Each shows the other's while it
+    // is read, so turning the history on or off keeps the page, and the rows opened on it, where they are.
+    const now = useQuery({
+        ...memoryQuery,
+        enabled: history !== true,
+        placeholderData: () => client.getQueryData(memoryHistoryQuery.queryKey),
+    })
+    const withPast = useQuery({
+        ...memoryHistoryQuery,
+        enabled: history === true,
+        placeholderData: () => client.getQueryData(memoryQuery.queryKey),
+    })
     const query = history === true ? withPast : now
     const { data } = query
     return (
@@ -97,13 +107,17 @@ function MemoryPage() {
                     </Empty>
                 </Panel>
             ) : (
-                <Tiers overview={data} state={data.state} />
+                <Tiers overview={data} state={data.state} pastRead={!withPast.isPlaceholderData} />
             )}
         </>
     )
 }
 
-function Tiers({ overview, state }: { overview: MemoryOverview; state: MemoryState }) {
+/**
+ * Every tier that is on, under the filter. `pastRead` is false while the history is still read, with what the page read
+ * without it shown in its place: the past sections then hold a skeleton rather than say there is none.
+ */
+function Tiers({ overview, state, pastRead }: { overview: MemoryOverview; state: MemoryState; pastRead: boolean }) {
     const { tickets, proposals, lessons, lessons_digest: digest } = overview
     const acting = state.lessons.mode !== 'off'
     const modes = { ticket_notes: state.ticket_notes.mode, lessons: state.lessons.mode }
@@ -117,6 +131,10 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
     const pastProposals = overview.past_proposals.filter((m) => memoryShown(m, unshown, now, modes))
     const pastLessons = overview.past_lessons.filter((m) => memoryShown(m, unshown, now, modes))
     const history = search.history === true
+    // A panel's past: not shown without the history, null while it is read.
+    function pastOf(entries: MemoryEntry[]): MemoryEntry[] | null | undefined {
+        return history ? (pastRead ? entries : null) : undefined
+    }
     // What notes say is searched on the server, as `canopy memory search`: the page holds their tickets' counts only.
     const searched = useQuery({ ...memorySearchQuery(filter.q ?? ''), enabled: filter.q !== undefined })
     const notesFound =
@@ -144,7 +162,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                             total={proposals.length}
                             filter={filter}
                             acting={acting}
-                            past={history ? pastProposals : undefined}
+                            past={pastOf(pastProposals)}
                         />
                         <Lessons
                             lessons={shownLessons}
@@ -154,7 +172,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                             tier={state.lessons}
                             acting={acting}
                             modes={modes}
-                            past={history ? pastLessons : undefined}
+                            past={pastOf(pastLessons)}
                         />
                     </div>
                 )}
@@ -190,7 +208,7 @@ function Proposals({
     total: number
     filter: MemoryFilter
     acting: boolean
-    past: MemoryEntry[] | undefined
+    past: MemoryEntry[] | null | undefined
 }) {
     const order = useListOrder('memory-proposals')
     const filtered = filter.q !== undefined || filter.repo !== undefined
@@ -262,7 +280,7 @@ function Lessons({
     tier: MemoryTier
     acting: boolean
     modes: TierModes
-    past: MemoryEntry[] | undefined
+    past: MemoryEntry[] | null | undefined
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const below = new Map(
@@ -313,7 +331,8 @@ function Lessons({
 
 /**
  * A panel's history, under what is pending or in force, while `?history=true`: its latest memories no longer either,
- * each under the standing and reason the journal gives it, with no verbs, since nothing is left to decide.
+ * each under the standing and reason the journal gives it, with no verbs, since nothing is left to decide; a row's
+ * skeleton while `entries` is null, still being read.
  */
 function Past({
     label,
@@ -322,14 +341,16 @@ function Past({
     none,
 }: {
     label: string
-    entries: MemoryEntry[]
+    entries: MemoryEntry[] | null
     ticket?: boolean
     none: string
 }) {
     return (
         <section aria-label={label} className="border-t" data-testid={`memory-past-${label.toLowerCase()}`}>
             <h3 className="px-3 pt-2 panel-label">{label}</h3>
-            {entries.length === 0 ? (
+            {entries === null ? (
+                <PanelSkeleton rows={1} />
+            ) : entries.length === 0 ? (
                 <Empty>{none}</Empty>
             ) : (
                 <PanelScroll label={label}>
