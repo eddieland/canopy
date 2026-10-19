@@ -140,8 +140,8 @@ an exposure stated in TRUST_MODEL T7's residual.
 ## 13. Agent runtime
 
 OpenCode. The harness depends on one capability: run a named agent non-interactively in a given cwd with a prompt and
-read its stdout, `opencode run --agent <name>`. MCP connectivity, OAuth, and tool permissions are the runtime's job.
-The runtime is swappable by editing the command templates. No interface.
+read its stdout. MCP connectivity, OAuth, and tool permissions are the runtime's job. The runtime is swappable by
+editing the command templates (§12). No interface.
 
 Agent definitions ship in `agents/`:
 
@@ -159,142 +159,83 @@ None has web tools: every definition denies `webfetch`, `websearch`, and `codese
 
 ### What a run prints
 
-Every agent's output is read the same way: its text is stdout, or, under `--format json`, the text of its `text`
-events, so a template may switch formats without changing a prompt. A JSON result contract (§8, §18, §19, §21) is the
-last line of the text that starts with `{`; lines after it that do not are passed over, since a runtime or plugin may
-print a notice after the agent's last word. A last object that does not validate is no result: canopy never falls back
-to an earlier one, which may be an example the agent quoted or a result it took back. The overseer's done token is a
-plain line anywhere in its final message (§6).
+Every agent's output is read the same way, whether the template asks for plain text or JSON events. A JSON result
+contract (§8, §18, §19, §21) is the last line of the text that starts with `{`; lines after it that do not are passed
+over, since a runtime or plugin may print after the agent's last word. A last object that does not validate is no
+result: canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
+The overseer's done token is a plain line anywhere in its final message (§6).
 
-From the events the harness also reads, each validated (D026), the session id (with which the operator opens the
-transcript in OpenCode), the cost, the peak context, the first call's size and cache write, and the tool calls by tool.
-A call whose figures do not validate makes the run report no cost rather than too little. These are recorded on the
-tick or run (§11) with the digest of the definitions it loaded, so a prompt or definition change splits runs into
-before and after. A template that asks for no events records no cost, and its runs are missing from the spend. Wherever
-canopy prints tokens it leaves out cache reads, which grow with the square of a session's length and say nothing about
-the run; the peak context says how large it got.
+From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the
+tool calls by tool, and records them on the tick or run (§11) with the digest of the definitions it loaded, so a prompt
+or definition change splits runs into before and after. Figures that do not validate make the run report no cost
+rather than too little, and a template that asks for no events records no cost.
 
-### Session titles
-
-Every template may name `{title}`, and the defaults pass it to `opencode run --title`, so OpenCode's session list names
-each session as canopy does: a worker run by ticket, kind, and title; a tick by its id, what woke it, and what it faces
-as it starts; a chore or review by its name or PR. canopy names sessions rather than reading OpenCode's titles back,
-which would take an OpenCode-only command after every run. Every title starts with a letter or digit, so it is never
-read as an option.
+The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
+what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.
 
 ### Where the runtime finds canopy's definitions
 
-canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents, and templates name it with `{definitions_dir}` (§12). Two definitions are rendered from config, so a change
-to their inputs makes a new snapshot:
+canopy snapshots its bundled agents and skills into the state directory, named for a digest of their contents, and the
+templates point the runtime at it (§12). The snapshot is written whole, never changed, and readable only by the
+operator, so overlapping runs never load a partial set; one that is a symlink, someone else's, or open to others is
+refused, failing the tick or making the run `crashed` (D040). Two definitions are rendered from config, so a change to
+their inputs makes a new snapshot:
 
-- `canopy-worker-private` gets the tracker's MCP server and the tools of it a private worker may call (§22).
+- `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
 - `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, then the shipped
   `tracker-<provider>` skill if any. The body is the system prompt the provider caches across ticks; a tick's message
-  is its state block alone (§6). An override canopy cannot read refuses the snapshot, failing the tick and every run
-  started from it: a run without its definitions would run without the prompt.
+  is its state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather
+  than running without the prompt.
 
-A snapshot is written whole, never changed, and readable only by the operator, so overlapping runs never load a partial
-set; one that is a symlink, someone else's, or open to others is refused, failing the tick or making the run `crashed`
-(D040).
-
-Nothing is installed into repositories. OpenCode merges `OPENCODE_CONFIG_DIR` after the repository's config, so a
-repository's definition of a canopy agent would be merged into canopy's and could loosen its rules (D044). Before
-starting an agent, the harness checks the OpenCode config in the agent's start directory and refuses if it defines one
-of canopy's agents: the overseer's refusal fails the tick, and a worker's is a `crashed` run whose slot is returned.
-`canopy init` warns about the same files. A private run (§22) is also refused where that config names any tool of the
-tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
+Nothing is installed into repositories. OpenCode merges canopy's definitions after the repository's config, so a
+repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where
+the config in its start directory defines one of canopy's agents: the overseer's refusal fails the tick, and a
+worker's is a `crashed` run whose slot is returned. A private run (§22) is also refused where that config names any
+tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none of these off. A `$HOME` skill that workers use must be a single `SKILL.md`, since the worker cannot read
-files beside it outside the worktree. A repository can also define its own agents under other names, MCP servers, and
-permissions (TRUST_MODEL T7). When workers must open PRs differently, `runtime.pr_skill` names the skill and the prompt
-says to use it (§8); prefer that to a prompt override.
+turns none off. A repository can also define its own agents under other names, MCP servers, and permissions
+(TRUST_MODEL T7). `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
 ### What OpenCode does with a plugin
 
 canopy ships no plugin. One in the snapshot would rest on this, read from OpenCode's source at 1.19.3 (2026-10-19) and
 read again before one is built: OpenCode loads plugins from every config directory, the snapshot's last, so a
 repository's run first; a hook that throws fails the tool call after the tool has run; an MCP tool's result is
-truncated after the hook, keeping the head. With any plugin configured, OpenCode waits before each session on an npm
-install into every writable config directory it loads, so a snapshot that ships a plugin must be unwritable. A
-variable canopy sets for a run reaches a sandboxed agent unchanged.
+truncated after the hook, keeping the head. With any plugin configured, OpenCode waits on an npm install into every
+writable config directory it loads, so a snapshot that ships a plugin must be unwritable. A variable canopy sets for a
+run reaches a sandboxed agent unchanged.
 
 ### Each agent's model
 
 Designed, not built (REQUIREMENTS R23). Until it lands, an agent runs on OpenCode's default unless its template passes a
 model, and the journal cannot say which.
 
-The operator wants to canary a model: run one ticket's workers on another model and compare what they did and cost,
-before every worker takes it. And each agent's model is a choice of its own: the reviewer on another model than the
-worker's (§21), the triage on a cheaper one than the planner's (§25). So canopy chooses every agent's model, checks it
-against what OpenCode lists before a run starts, and records it on the run.
+The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
+and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
+promises:
 
-It rests on OpenCode, read from its source at 1.19.3 (2026-10-19): a template's `--model` beats a definition's
-`model:`, which beats a repository's config and OpenCode's default; a model OpenCode does not list fails the run before
-its first call, never falling back; `opencode models` prints, offline, the list a run looks its model up in, though a
-listed model can still fail when called; and no `--format json` event names the model a call went to.
+- **The operator alone chooses.** A run's model is its ticket's override for its agent, else that agent's default in
+  `[runtime.models]`, else the runtime's default, fixed when the run starts. `runtime.models` is private (T7): a model
+  is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
+  operator's `canopy model`, refused inside an agent run (T1); the overseer, a dispatch, and ticket text choose none.
+- **What is recorded is what runs.** canopy writes the model into the agent's rendered definition, so each set of
+  models gets its own snapshot (D040). A template's model option would override it unseen, so any `runtime` template,
+  prefix, or suffix that passes one is a config error. Each run, review, chore run, and tick records the model asked
+  for, and `canopy spend` breaks cost down by it.
+- **No silent fallback.** Before a run starts, canopy checks its model against the list OpenCode would look it up in.
+  An unlisted model, or a list that cannot be read, refuses the run with an attention item, spending no attempt and
+  leasing no slot, so the work resumes once the model is back. It never falls back to the default, since a canary's run
+  on a model nobody chose would read as the canary's.
 
-**Which model.** Each agent has a name: `worker` (public and private alike, so a canary compares a ticket's runs),
-`planner`, `splitter`, `plan_triage`, `reviewer`, `overseer`, and `chore`. A run's model is its ticket's override for
-its agent, else the agent's default in `[runtime.models]`, else the runtime's default; the overseer and chores work on
-no ticket, so only the default reaches them. It is fixed when the run starts. `[runtime.models]` is private, as every
-`runtime` key is: a model is what the operator's spend buys, and its provider is sent the ticket and the code
-(TRUST_MODEL T7).
-
-**The definition, not the template.** canopy writes each agent's model as `model:` in its rendered definition, so each
-set of models gets its own immutable snapshot (D040), which a repository cannot change past the shadowing check. A
-template's `--model` would silently override that while the run's record named another, so a `--model` word in any
-`runtime` template, prefix, or suffix is a config error naming the `runtime.models` key to set instead.
-
-**A run's start.** Each dispatch once the journal-only guards pass, each review and chore, and each tick before its
-overseer reads `opencode models` in the workspace root, where the overseer's OpenCode already runs. Two guards join §8
-step 1's: `model_missing`, the list does not hold the run's model, and `model_list_failed`, it could not be read. A
-refusal records an attention item, spends no attempt, and leases no slot, so the work resumes by itself once the model
-is back; a tick whose overseer's model is refused starts no overseer and raises a harness item, as
-`canopy_unavailable` does (§6). Neither falls back to the default, since a canary's run on a model nobody chose would
-read as the canary's, and a failed read fails closed. A dry run refuses alike (D036). Rejected: reading the list in the
-repository's clone, which would run its plugins outside any sandbox (§24), or in the leased slot, which costs the lease
-the check exists to save.
-
-**The override.** `canopy model KEY provider/model [--agent NAME]` sets a ticket's override, and `--clear` removes it.
-It covers every run of that agent for the ticket until cleared, so a canary stays on one model across its `implement`
-and every `resume`. It refuses `inside_run`, so no agent chooses a model (TRUST_MODEL T1), and refuses a model the list
-does not hold or cannot read. It may precede the ticket's first sighting without making it a candidate, leaves a
-running run's model alone, and outlasts `canopy forget` (§22). The web UI sets it through the same function (T8).
-`canopy dispatch` takes no model, and the state block carries none: a model is not the overseer's to weigh.
-
-**Recorded on the run.** Each run, review, chore run, and tick records the model canopy asked for, empty for the
-runtime's default, and `canopy spend` breaks cost down by model. With `--model` refused in templates and no fallback,
-the session served that model or failed, except for a subagent whose definition names its own. Rejected:
-`opencode export` after every run to read what served, a second runtime process outside any sandbox, reading a store a
-sandboxed worker can write (§24).
-
-**Trust model changes**, proposed for the PR that builds it: T1, every agent's model is the operator's choice alone,
-and an unlisted model refuses the run; T5, a run records the model asked for; T7, `runtime.models` is private; T8, the
-web UI's writes gain the override and its reads the model list.
-
-Rejected:
-
-- A model chosen by the overseer, a dispatch flag, or a ticket's labels: ticket text would choose the spend and the
-  provider (T1).
-- canopy adding `--model` to the templates: the templates are the operator's, the definitions canopy's (D040).
-- A list of models shipped with canopy, or read at config load: models come and go, and every command loads config.
-- One model, or one override, for all of a ticket's agents: a canary of the worker's would move its review with it.
-- Two models side by side on one ticket: one worker per ticket stays.
+The PR that builds it proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or ticket labels
+(T1); a list of models shipped with canopy; one override for all of a ticket's agents.
 
 ### The operator's skill
 
-`canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI, how to
-read the journal read-only, and how to look into what canopy did. `canopy skill --install [DIR]` saves it, by default
-under `~/.agents/skills`; canopy installs it only when asked. It is not in the definitions snapshot, tells an agent
-started by canopy to follow its prompt instead, and grants nothing: the overseer's and worker's bash rules apply.
-
-### Shell completion
-
-`canopy completion SHELL` prints a completion script for bash, zsh, or fish. It completes commands, options, and the
-workspace's repository and chore names, but not ticket keys, which would open the journal on every Tab, nor the
-commands only the overseer runs.
+`canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the
+journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing. Shell completion
+leaves out ticket keys, which would open the journal on every Tab, and the commands only the overseer runs.
 
 ## 14. Attention list
 
