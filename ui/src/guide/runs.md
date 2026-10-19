@@ -61,8 +61,8 @@ crashed before its first event, has an empty transcript and its whole story here
 where the errors live.
 
 Under that, while agent memory is on, **Memory** counts what the run wrote and read (`wrote 2 · read none`), each
-tier's mode on hover. **Show memory** opens the notes themselves; [Memory](memory#on-a-ticket-and-a-run) says what they
-mean.
+tier's mode on hover. **Show memory** opens the memories themselves, sorted by kind;
+[Memory](memory#on-a-ticket-and-a-run) says what they mean.
 
 ## Context
 

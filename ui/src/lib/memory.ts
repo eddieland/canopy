@@ -19,13 +19,15 @@ export interface MemorySegment {
 /**
  * What a worker wrote, cut where a hidden character is, each named by its code point as the CLI names it: what was
  * written to the journal by hand, past the bounds, shows whole. Never Markdown or a link: a link in a note would be a
- * worker's link the operator reads as canopy's (unlike other journal text, D113).
+ * worker's link the operator reads as canopy's (unlike other journal text, D113). With `lines`, for text that may hold
+ * paragraphs (a draft, a review comment), line feeds and tabs are kept, as `check_text` keeps them for a draft, and a
+ * CRLF is one line feed, as GitHub sends a comment written in its editor.
  */
-export function memorySegments(text: string): MemorySegment[] {
+export function memorySegments(text: string, { lines = false }: { lines?: boolean } = {}): MemorySegment[] {
     const segments: MemorySegment[] = []
     let plain = ''
-    for (const char of text) {
-        if (!HIDDEN.test(char)) {
+    for (const char of lines ? text.replaceAll('\r\n', '\n') : text) {
+        if (!HIDDEN.test(char) || (lines && (char === '\n' || char === '\t'))) {
             plain += char
             continue
         }
@@ -138,6 +140,28 @@ export function lapsesText(expiresAt: string, now: number): string {
 export function leftText(expiresAt: string, now: number): string {
     const left = Date.parse(expiresAt) - now
     return left <= 0 ? 'lapsing' : `${age(new Date(now - left).toISOString(), now)} left`
+}
+
+/** A kind of memory: a ticket's note, a worker's proposal, or the operator's lesson. */
+export type MemoryKind = MemoryEntry['scope']
+
+/** Each kind of memory, in the order a run's memory lists them, with its name and what it is for. */
+export const MEMORY_KINDS: readonly { kind: MemoryKind; name: string; what: string }[] = [
+    { kind: 'ticket', name: 'ticket notes', what: "for its ticket's runs alone" },
+    { kind: 'proposal', name: 'proposals', what: 'lessons a worker proposed, yours to promote or reject' },
+    { kind: 'lesson', name: 'lessons', what: 'yours, read by runs on every ticket' },
+]
+
+/** `entries` by kind, in `MEMORY_KINDS`' order, each kind's in the order given, leaving out a kind with none. */
+export function byKind<T extends Pick<MemoryEntry, 'scope'>>(
+    entries: readonly T[],
+): { kind: MemoryKind; name: string; what: string; entries: T[] }[] {
+    return MEMORY_KINDS.map(({ kind, name, what }) => ({
+        kind,
+        name,
+        what,
+        entries: entries.filter((e) => e.scope === kind),
+    })).filter((k) => k.entries.length > 0)
 }
 
 /** What a run read, when it read nothing: nothing was served while recording, which is not an empty digest. */

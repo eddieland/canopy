@@ -4,6 +4,7 @@ import type {
     AttentionItem,
     ChoreSummary,
     Draft,
+    PlanTriage,
     PullRequestThreads,
     ReviewThread,
     Run,
@@ -220,6 +221,20 @@ export function pullRequestThreads(fields: Partial<PullRequestThreads> = {}): Pu
         threads: [reviewThread()],
         pr_drafts: [],
         unplaced: [],
+        ...fields,
+    }
+}
+
+/** A ticket's triage before its plan, by default one whose `trivial` verdict waived the plan before its implement. */
+export function triage(fields: Partial<PlanTriage> = {}): PlanTriage {
+    return {
+        run_id: 7,
+        status: 'done',
+        verdict: 'trivial',
+        reason: 'It fixes one misspelled word in a comment, which policy.trivial names.',
+        waived: true,
+        undoable: true,
+        at: '2026-10-08T11:50:00Z',
         ...fields,
     }
 }

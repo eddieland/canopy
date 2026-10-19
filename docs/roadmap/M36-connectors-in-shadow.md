@@ -55,6 +55,11 @@ This milestone adds the connectors and the derivation without changing what the 
   subject the `end` line did not cover keeps its old rows and their age. Comments go into `messages` as mirrored
   comments do now, with the workers' marks read in code (D069). `connector_runs` records each run: when, status, counts,
   the tail of stderr.
+- Retention (#424, DESIGN §26's journal rule): the PR that creates `connector_runs` and `derivations` adds them to
+  `canopy gc --dry-run`'s report, counted with what a pass would remove, and to the deletes of M47's third stage, so
+  they go with the harness's attention rows past the attention list's window and `retention.journal_days`, keeping
+  each source's newest run and the newest that recorded the query's result. If that stage is built first, the PR that
+  creates the tables also deletes them in its pass. `decisions` and `messages` stay whole.
 - Config, private (TRUST_MODEL T7): `[connect.sources.<name>]` with `cmd` (argv, no shell, as a sink's), `kind`
   (`tracker` or `vcs`), and `timeout_minutes`, one per kind at most, nested as sinks are (§20). Beside the table, the
   scalars later milestones read, defined here so the model needs no special case: `connect.max_age_minutes` (M37)
@@ -78,7 +83,8 @@ This milestone adds the connectors and the derivation without changing what the 
   read short or named short. TRUST_MODEL T1.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
-  case per row of the phase table, each a snapshot test (syrupy) as the state block's are.
+  case per row of the phase table, each a snapshot test (syrupy) as the state block's are; once the pass deletes them,
+  rows on both sides of the window, a source's newest run kept past it.
 
 Accept: written with the design, before work starts. Live, once built: a day of `canopy loop` with both connectors
 against the real queue, and a MEASUREMENTS section giving the agreement between the derivation and the overseer per
@@ -92,6 +98,6 @@ owns; a refused line, like a subject the `end` line did not cover, keeps its sub
 is also §29's reconcile read; the checks that are not CI are `human_checks` per repository in the map, shared, naming
 the exceptions so a missing entry fails toward waiting; the derivation records every row that holds, since §7 has no
 order yet, and a ticket whose observations are stale apart; agreement is computed, never stored; and
-`connect.max_age_minutes` defaults to 30 and `connect.every_minutes` to 2. Open for the operator: the tracker query run
-in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that leaves an
-observation stale.
+`connect.max_age_minutes` defaults to 30 and `connect.every_minutes` to 2; and the two per-tick tables are pruned by
+§26's pass under its journal rule (#424). Open for the operator: the tracker query run in code (Proposed 2026-10-15),
+and whether one failed run raises `connector_failed` or only one that leaves an observation stale.

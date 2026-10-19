@@ -40,9 +40,9 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
-| `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
+| `spend-overseer`, `-idle`, `-workers`, `-triage`, `-chores`, `-reviews`, `-dry-run` | Spend chart series, as fills. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
-| `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
+| `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
@@ -341,7 +341,8 @@ Rules:
   (`code`) never breaks across lines. Prose inside a panel keeps the same measure, `max-w-3xl`, however wide the
   panel: Settings' explanations, the sentence under Spend's totals, as the guide's article and a plan do.
 - **One heading ladder**: a page has one `h1`, its `PageHeader`'s title; every panel's label is an `h2`; what heads a
-  part of a panel (a run's memory's `Wrote` and `Read`) is an `h3` in `panel-label` type; and a plan's own headings
+  part of a panel (a run's memory's `Wrote` and `Read`) is an `h3` in `panel-label` type, and a part of that an `h4`
+  (each kind of memory under them, a chip naming it); and a plan's own headings
   start under its panel's, its `#` an `h3` (`PlanHeading` in `src/lib/plan-schema.ts`, styled by its `data-level`).
   No level is skipped, so a screen reader's list of headings is the page's outline; `e2e/headings.spec.ts` holds every
   route to it. A list of links named by its region (the guide's sidebar groups) is not a heading.
@@ -392,10 +393,12 @@ Rules:
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
   and status chip in its header (`PlanChip`: `waiting on you` in `status-blocked` while the plan waits on the
-  operator, as everything that waits on them reads; else its status; with no plan, `needed` or `not needed`, its
-  reason on hover, and only then), the run that wrote it and its open comments as fields, and in its foot `Approve`,
-  the primary, while the plan can be approved, then `Open plan`, outlined, and a line on what comes next or what
-  approving leaves out. A ticket whose plan waits on the operator (proposed, no planner running) leads with the card,
+  operator, as everything that waits on them reads; else its status; with no plan, `needed`, `not needed`, or
+  `waived` while a triage's waiver is in force, its reason on hover, and only then), the run that wrote it and its
+  open comments as fields, then a triage's run, its verdict or how it ended, and its reason, model text, when the
+  ticket had one; and in its foot `Approve`, the primary, while the plan can be approved, `Ask for a plan`, outlined,
+  while a waiver can still be undone, then `Open plan`, outlined, and a line on what comes next or what approving
+  leaves out. A ticket whose plan waits on the operator (proposed, no planner running) leads with the card,
   above its Work panel, since the plan is what they came to answer; otherwise the card follows the lists. Where it sits
   is settled as the page opens, so a plan approved meanwhile leaves its card where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
@@ -869,13 +872,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   while its page shows it, a leaf drifts off the conversation's header, as a cleared row drops one in the list (Fun):
   the reward is for the item clearing, wherever it was answered. The attention page's answer drops none, its row
   dropping its own.
-- **The reply form is open only where a reply is awaited** (`ReplyForm`): a question waiting, an untrusted review
-  waiting on the go-ahead, and any private ticket, whose workers hear the operator only there. A public ticket with
-  nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a reply nothing
-  waits on, and a chore's note form always does, `Show a note for its next runs`, since nothing ever waits on a note;
-  it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
-  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On
-  a public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
+- **The reply form is always open** (`ReplyForm`), on every ticket and every chore, never folded under a `Disclosure`: a
+  note for the next worker is as likely as an answer to a question, and a click to reach the box hides where the
+  operator writes. Its label names the message it answers while a question waits, and its placeholder speaks of an
+  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On a
+  public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
   canopy, never on the ticket.`, as the ticket's `public` chip says on hover and to a screen reader, where its comments
   stay on the tracker.
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
@@ -907,8 +908,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
   (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, after the chore's findings and runs and before
-  its spend, with a note form folded under its `Disclosure` (`ChoreNotes`). With no notes the panel is its header and
-  that one line, and the form's placeholder says what the empty list would have: its runs follow its prompt file
+  its spend, with the note form open under them (`ChoreNotes`). With no notes the panel is its header and the form,
+  and the form's placeholder says what the empty list would have: its runs follow its prompt file
   alone. A note no run of the chore has started since carries `waiting for the next run` in `status-running`
   (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
@@ -1035,7 +1036,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
   stands in for one, and they stay rare enough to land. An empty fence that names one of the repository's example
   files after its language (```` ```toml examples/config.toml ````, `EMBEDS`) shows that file whole, as it is when the
-  guide is built, so a page never keeps a copy of one. A new page is a file there and a line in its group in
+  guide is built, so a page never keeps a copy of one. A code block is colored as a diff's code is (A review), in the
+  language its fence names, by Shiki's name or a file's extension (```` ```toml ````, ```` ```sh ````; `fenceLanguage`):
+  plain until its grammar has loaded, then the same characters colored, and plain for good in a language canopy does
+  not map (```` ```text ````). A new page is a file there and a line in its group in
   `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
   about that one.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
@@ -1190,6 +1194,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   above) takes its form with it, so its toast says what it did, and its item's row and conversation keep it.
   `main.tsx` renders the one `Toaster`, around the router, so a toast
   outlives the page it came from.
+- **The note of what changed while away** is the one toast no action shows (`useAwayNote`, `src/lib/away.ts`).
+  Shown again after it was hidden 10 minutes or more, the tab says in one line what changed meanwhile: what newly
+  blocks work first (`blocking`, as the tab's count), then the items cleared, the PRs opened, and the runs ended
+  (`Since 14:05: 1 new item needs you, 3 items cleared, 2 PRs opened`), each count of none left out, and nothing at
+  all when every count is none. A `History` in the accent, no line under it, and 8 seconds before it closes, since it
+  is read on coming back rather than seen as a click lands. Every count is read after the return, never told from
+  what the tab held: the attention list as the stream sends it again, against the one the tab held as it was hidden,
+  and the runs counted over the whole journal (`GET /api/runs/since`), not the runs list's recent few. With no fresh
+  list within 30 seconds, as while the loop is down, it says nothing. A tab never hidden, as on a second monitor,
+  never shows it.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:
@@ -1352,8 +1366,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
-  `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain
-  and every hidden character named, never Markdown or a link. A draft's card (`DraftCard`, `surface`, a
+  `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
+  its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
+  same. A draft's card (`DraftCard`, `surface`, a
   `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and its number, its status as a chip
   (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
   plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one

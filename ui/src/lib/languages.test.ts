@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DiffFile } from '@/api/types'
-import { highlightLanguage, languageOf } from '@/lib/languages'
+import { fenceLanguage, highlightLanguage, languageOf } from '@/lib/languages'
 import { DIFF_BUDGET } from '@/lib/review-folds'
 
 describe('languageOf', () => {
@@ -27,6 +27,22 @@ describe('languageOf', () => {
         // A dotfile's name is not an extension, and a directory's dot is not the file's.
         expect(languageOf('.env')).toBeUndefined()
         expect(languageOf('.github/CODEOWNERS')).toBeUndefined()
+    })
+})
+
+describe('fenceLanguage', () => {
+    it("reads a fence's language by Shiki's name or a file's extension, whatever its case", () => {
+        expect(fenceLanguage('toml')).toBe('toml')
+        expect(fenceLanguage('Python')).toBe('python')
+        expect(fenceLanguage('sh')).toBe('shellscript')
+        expect(fenceLanguage('yml')).toBe('yaml')
+    })
+
+    it('names no language for a fence canopy does not highlight, or a name every object has', () => {
+        expect(fenceLanguage('text')).toBeUndefined()
+        expect(fenceLanguage('')).toBeUndefined()
+        expect(fenceLanguage('constructor')).toBeUndefined()
+        expect(fenceLanguage('__proto__')).toBeUndefined()
     })
 })
 

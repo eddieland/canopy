@@ -909,7 +909,7 @@ def _committed_copy(slot: _Slot, branch: str) -> str:
     """Return a harness note when the branch pushed from `slot` holds the plan's copy at its root, else "".
 
     Ignored is not untrackable: a worker can add the copy by name. canopy reports it and does not rewrite the branch
-    (DESIGN §25, The worker's copy).
+    (DESIGN §25, Workers follow the plan).
     """
     remote = _remote_head(slot.git, branch)
     if not remote:

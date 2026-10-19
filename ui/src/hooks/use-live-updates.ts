@@ -19,6 +19,7 @@ export function useLiveUpdates(enabled: boolean): StreamState {
         enabled,
         parse: parseStreamEvent,
         onEvent: (event) => applyStreamEvent(client, event),
+        ending: (event) => event.type === 'stream.ending',
         onReconnect: () => {
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.meta })

@@ -7,6 +7,7 @@ import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { useAwayNote } from '@/hooks/use-away-note'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
 import { StreamContext } from '@/hooks/use-loop-down'
@@ -43,8 +44,9 @@ export const PAGE_SCROLLER = 'page'
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
  * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
- * all the lightswitch rave while Settings' light switch is on, and the tab's icon (`Favicon`). Signed out, the
- * sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * all the lightswitch rave while Settings' light switch is on, and the tab's icon (`Favicon`). Coming back to the tab
+ * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
+ * route: every API route but the session's needs a session (DESIGN §22).
  *
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
@@ -64,6 +66,7 @@ export function AppShell() {
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
+    useAwayNote(signedIn)
     const buddy = useBuddy()
     const mode = useRailMode()
     const [railOpen, setRailOpen] = useState(false)

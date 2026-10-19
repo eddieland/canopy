@@ -1,10 +1,10 @@
-// A diff's code as tokens a page can color by what each piece is: a keyword, a string, a constant, a function's or
-// type's name, a comment, or anything else. Shiki tokenizes it with the file's language's TextMate grammar, as an
-// editor would, one side of a hunk at a time: the new side (its context and added lines) and, when it removes any,
-// the old (its context and deleted lines), so a string or comment that spans lines is read whole. A hunk starts
-// wherever git cut it, so a grammar starts there too: a hunk opened inside a long comment reads it as code. The tokens
-// of a line joined are its text, or the line has none and stays plain. The result is data that a component renders as
-// React text, never HTML. Only this module imports Shiki, and only on demand (`src/hooks/use-highlight.ts`).
+// Code as tokens a page can color by what each piece is: a keyword, a string, a constant, a function's or type's name,
+// a comment, or anything else. Shiki tokenizes it with its language's TextMate grammar, as an editor would: a guide's
+// code block whole, and a diff one side of a hunk at a time: the new side (its context and added lines) and, when it
+// removes any, the old (its context and deleted lines), so a string or comment that spans lines is read whole. A hunk
+// starts wherever git cut it, so a grammar starts there too: a hunk opened inside a long comment reads it as code. The
+// tokens of a line joined are its text, or the line has none and stays plain. The result is data that a component
+// renders as React text, never HTML. Only this module imports Shiki, and only on demand (`src/hooks/use-highlight.ts`).
 //
 // A side is read `CHUNK` lines at a time, each chunk starting in the grammar state the last one ended in, so it reads
 // as if whole; and the page runs between chunks once the highlighter has worked for `SLICE_MS`. A diff at the server's
@@ -86,12 +86,26 @@ export async function highlightHunks(
     return result
 }
 
+/**
+ * The tokens of each of `lines`, read whole in `language`, as a guide's code block holds them. A line Shiki could not
+ * account for exactly is undefined, and stays plain.
+ */
+export async function highlightLines(
+    language: Language,
+    lines: readonly string[],
+): Promise<(CodeToken[] | undefined)[]> {
+    const shiki = await highlighter()
+    await shiki.loadLanguage(loaderOf(language))
+    const tokens = await tokenizeLines(shiki, language, lines)
+    return lines.map((line, i) => exactly(line, tokens[i]))
+}
+
 /** What Shiki's color for a token says it is: `text` for a color the theme gives nothing in particular. */
 export function kindOf(color: string | undefined): CodeKind {
     return (color === undefined ? undefined : KINDS[color]) ?? 'text'
 }
 
-// One highlighter for the page, made the first time a diff is highlighted. Each language loads into it once.
+// One highlighter for the page, made the first time code is highlighted. Each language loads into it once.
 let shared: Promise<HighlighterCore> | undefined
 
 function highlighter(): Promise<HighlighterCore> {

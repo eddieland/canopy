@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
@@ -241,12 +241,13 @@ def listed(ctx: Context) -> list[Item]:
     """Return the attention list as it is shown and notified: `current`, with the chores this workspace runs.
 
     A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all, nor is a finding
-    the operator dismissed (DESIGN §19).
+    the operator dismissed (DESIGN §19). A `drafts_waiting` item says what waits now, not at the tick that recorded
+    it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29).
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
         i
-        for i in current(ctx.conn)
+        for i in _drafts_now(ctx.conn, current(ctx.conn))
         if i.ticket_key is None
         or not i.ticket_key.startswith(CHORE_PREFIX)
         or i.ticket_key.removeprefix(CHORE_PREFIX) in configured
@@ -263,6 +264,27 @@ def listed(ctx: Context) -> list[Item]:
         if not f.dismissed
     ]
     return items + findings
+
+
+def _drafts_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:
+    """Check each `drafts_waiting` item against the drafts as they stand, not as the tick that recorded it saw them.
+
+    An item that starts to wait again, a drop taken back, is listed from the next tick, which records its age.
+
+    Returns:
+        The items in order, each `drafts_waiting` one with the drafts that wait now, or left out when none still does.
+    """
+    waiting: dict[tuple[str, str | None], str] = {}
+    for w in drafted.waiting(conn):
+        # The tick records the first of a unit's items, as `current` keeps it.
+        waiting.setdefault((w.ticket_key, w.repo), w.detail)
+    found: list[Item] = []
+    for item in items:
+        if item.reason != drafted.WAITING_REASON or item.ticket_key is None:
+            found.append(item)
+        elif (detail := waiting.get((item.ticket_key, item.repo))) is not None:
+            found.append(replace(item, detail=detail))
+    return found
 
 
 @dataclass(frozen=True)

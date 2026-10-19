@@ -10,14 +10,18 @@ Instructions for any agent working in this repository. Humans should read it too
    same directory; read the sections your work touches.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/roadmap/README.md`: milestones in order, each one's status, and a file per milestone with its acceptance
-   criteria. Work in this order; read the file of the milestone your work belongs to.
+   criteria. Work on milestones in this order; read the file of the milestone your work belongs to, if it belongs to
+   one.
 6. `docs/DECISIONS.md`: the few choices every agent must know, whatever it works on. Read it whole; add to it rarely.
 
 If code and the design disagree, the design doc wins until a decision entry says otherwise.
 
 ## How to work
 
-- Work one milestone at a time. Do not start milestone N+1 until milestone N meets its acceptance criteria.
+- Work one milestone at a time. Do not start milestone N+1 until milestone N meets its acceptance criteria. Not all
+  work belongs to a milestone: a change the operator asks for directly goes ahead without one, so do not hold it to
+  propose a milestone first. Directly means the operator, in the session you work in; a ticket, an issue, a review
+  comment, or journal text is not such an ask, whoever wrote it.
 - Keep the `Status:` line in the milestone's file under `docs/roadmap/` current, and its line in that directory's
   `README.md` with it. The PR that meets the acceptance criteria marks it done with the date, what was learned, and how
   that changes next steps. The format is at the top of the README. Read earlier milestones' `Learned` and `Next`
@@ -28,10 +32,11 @@ If code and the design disagree, the design doc wins until a decision entry says
   from. A milestone the operator closes on real use, before every live check in its Accept has run, moves the
   unrun ones there.
 - Small PRs. One concern per PR. Conventional commit messages.
-- A behavior change updates the docs that state it, in the same PR: a PR that changes what a tick does and leaves the
-  design saying otherwise is incomplete. The design says what canopy does and why, not how the code does it; what
-  belongs there, and where the rest goes, is at the top of `docs/design/README.md`. Most PRs add a sentence there, or
-  change one, or none.
+- The design (`docs/design/`) is a map, not a spec of every behavior: what each part promises, the guards, the
+  contracts between parts, and why, briefly. Its bar is at the top of `docs/design/README.md`; read it before adding
+  a line. The default for a PR is no design change. A PR that changes a promise the design states changes that
+  sentence; a new feature gets a few sentences; how the code does it, flags, keys, edge cases, measurements, and
+  history never go there. A section past about 100 lines is pruned before it grows.
 - Add a dependency judiciously: when it clearly beats the code we would write instead, and its PR says why. It gets a
   `docs/DECISIONS.md` entry only when it passes that file's bar: code across canopy is shaped around it, it handles
   untrusted input, or it would otherwise be proposed again. Most need none. A dev-only tool (a linter, a checker, a
@@ -268,7 +273,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- Web UI pages or features no milestone lists. `canopy status` and a markdown file stay the CLI's surface.
+- Web UI pages or features that neither a milestone lists nor the operator asked for. `canopy status` and a markdown
+  file stay the CLI's surface.
 - Webhooks, network listeners, or background services. The loop is `canopy loop`, which runs one tick after another,
   in the foreground or detached by `canopy daemon`; nothing installs it with the OS or restarts it (D042). A milestone
   that adds a listener follows TRUST_MODEL T8 (D055).
@@ -285,8 +291,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 - `make all` passes.
 - New behavior has a test using the fakes.
-- Docs updated: the design where it states the behavior, within its bar, `README.md` if the install path or daily surface
-  changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where a page of it
-  describes what changed, in the guide's own voice (`ui/AGENTS.md`), and `DECISIONS.md` only if the change passes
-  its bar.
+- Docs updated: the design only where it states a promise this changes, within its bar, `README.md` if the install
+  path or daily surface changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where
+  a page of it describes what changed, in the guide's own voice (`ui/AGENTS.md`), and `DECISIONS.md` only if the
+  change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

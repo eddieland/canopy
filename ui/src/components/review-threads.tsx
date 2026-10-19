@@ -211,7 +211,7 @@ export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChang
                             {c.created_at !== null && <Age at={c.created_at} variant="ago" />}
                             {c.url !== null && <LinkOut href={c.url} label="The comment on its host" />}
                         </span>
-                        <MemoryText text={c.body} />
+                        <MemoryText text={c.body} lines />
                     </li>
                 ))}
             </ol>
@@ -301,6 +301,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
             ) : (
                 <MemoryText
                     text={draft.text}
+                    lines
                     className={cn(
                         'mt-1.5 block',
                         (draft.status === 'superseded' || draft.status === 'dropped') &&

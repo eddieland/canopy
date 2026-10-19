@@ -355,9 +355,8 @@ test('the chores page lists each chore as canopy status does, and a chore page w
     await expect(page.getByTestId('chore-run-2')).toContainText('1 finding')
     await expect(page.getByTestId('chore-run-2')).toContainText('session ses_chore2')
     await expect(page.getByTestId('chore-notes').getByTestId('message-8')).toContainText("docs site's lockfile")
-    // Nothing waits on a note, so its form waits to be asked for.
-    await expect(page.getByRole('form', { name: 'Note' })).toHaveCount(0)
-    await page.getByRole('button', { name: 'Show a note for its next runs' }).click()
+    // Nothing waits on a note, but its form is open all the same, so one is never a click away.
+    await expect(page.getByRole('button', { name: 'Show a note for its next runs' })).toHaveCount(0)
     await expect(page.getByRole('form', { name: 'Note' })).toBeVisible()
 
     // While a run works, the description still says how the last one ended; a chore with no window or condition
@@ -366,7 +365,7 @@ test('the chores page lists each chore as canopy status does, and a chore page w
     await settled(page)
     await expect(page.locator('main header p')).toHaveText('running for 40m · last ok 2h ago')
     await expect(page.getByTestId('chore-schedule').getByRole('term')).toHaveText(['at most'])
-    await expect(page.getByTestId('chore-notes').getByRole('textbox')).toHaveCount(0)
+    await expect(page.getByTestId('chore-notes').getByRole('textbox', { name: 'Note' })).toBeVisible()
 })
 
 test("a chore's page puts its open findings and runs first, and wide, in the wide column", async ({ page }) => {

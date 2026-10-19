@@ -8,11 +8,29 @@ cheapest code review you'll ever do, because there's no code yet.
 
 A ticket needs a plan when `policy.plan` is `approve` in your config, or when you asked for one with `canopy plan KEY`
 or `canopy start KEY --plan`. `canopy plan KEY --skip` waives it for one ticket. Until a plan is written, the ticket's
-**Plan** card says `needed` or `not needed`, and hovering it says which of those applies.
+**Plan** card says `needed` or `not needed` (or `waived`, below), and hovering it says which of those applies.
 
 The next tick then dispatches a `plan` run. It writes the plan as a Markdown file, and the ticket's phase becomes
 `plan proposed`, which puts a `plan review` item on your attention list. Until you approve, the overseer can't start an
 implement: the guard is `unplanned`, and no prompt gets around it.
+
+## Triage: skipping the plan for trivial work
+
+A typo fix doesn't need a plan, and approving one is a minute you won't get back. With `policy.plan_triage = "on"` in
+your own config, and `policy.trivial` saying in plain words what you count as trivial, a ticket that needs a plan only
+because `policy.plan` says so gets a **triage** first: a cheaper run that reads the ticket and the code and answers
+`trivial` or `plan`. Only a clean `trivial` waives the plan, and the implement goes ahead without one. Anything else, a
+`plan` verdict, a failure, a timeout, is planned as usual. A ticket you asked a plan for yourself is never triaged.
+
+The ticket's **Plan** card shows the triage: its run, what it judged (`running`, `trivial`, `needs a plan`, or how it
+failed), when, and its one-sentence reason under **triage said**. While a waiver is in force, the card's chip says
+`waived`, and hovering it says so: triage waived it, not you. Until the implement starts, **Ask for a plan** undoes the
+waiver, as `canopy plan KEY` does, and the next tick dispatches a planner. After that the work is underway, and a plan
+would describe code already written.
+
+The reason is the triage's own words, written from the ticket, so read it the way you'd read a pull request's
+description from a stranger. If the reviewer later judges a waived ticket's PR high impact, `not trivial` lands on your
+attention list.
 
 ## Reading a plan
 

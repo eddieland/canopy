@@ -1,6 +1,7 @@
 """What agent runs cost, by what they bought (DESIGN §11, ROADMAP M33): `canopy spend` over a journal by hand."""
 
 import json
+import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, spend
+from canopy.core import db, plans, spend
 from canopy.core.agent_output import ToolUse, Usage
 from tests.canopy.helpers import earlier
 from tests.conftest import CanopyEnv, Journals
@@ -169,6 +170,7 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
     assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced] == [
         ("overseer", 8, 1),
         ("workers", 2, 1),  # the running fix-ci is not counted yet
+        ("triage", 0, 0),
         ("chores", 2, 1),
         ("reviews", 1, 0),
     ]
@@ -204,10 +206,11 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     out = capsys.readouterr().out.splitlines()
     start = spend.window_start(now, 3).strftime("%Y-%m-%d")
     assert out[0] == f"Spend over 3 days, since {start} UTC, as the runtime reported it."
-    assert out[2].split() == ["day", "overseer", "idle", "workers", "chores", "reviews", "dry", "run", "total"]
+    header = ["day", "overseer", "idle", "workers", "triage", "chores", "reviews", "dry", "run", "total"]
+    assert out[2].split() == header
     days = [(spend.window_start(now, 3) + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
-    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "$0.75", "$1.50", "$0.30", "$7.05"]
+    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
     words = [line.split() for line in out]
     assert ["idle", "3", "$0.50"] in words
     assert ["not", "idle", "2", "$1.50"] in words
@@ -358,6 +361,49 @@ def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
     assert words[first + 10] == ["and", "2", "more;", "--json", "lists", "every", "one"]
 
 
+def triage(
+    conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None, status: str = "done"
+) -> int:
+    """A triage before a plan (DESIGN §25): a `runs` row of kind `needs-plan`, with no branch."""
+    cursor = conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path, cost_usd) "
+        "VALUES (?, ?, 'needs-plan', '', ?, ?, 'l', ?)",
+        (tick_id, key, started, status, cost),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def test_triage_runs_are_a_kind_of_their_own_beside_the_plans_they_waived(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    now = noon_today()
+    conn = canopy_env.journal()
+    t = tick(conn, earlier(now, 0), 1.0)
+    for key in ("A-1", "A-2", "A-3", "A-4"):
+        ticket(conn, key)
+    run(conn, t, "A-1", earlier(now, 0), 2.0, None)
+    plans.record_waiver(conn, "A-1", triage(conn, t, "A-1", earlier(now, 0, 1), 0.05), "One word.")
+    triage(conn, t, "A-2", earlier(now, 0, 1), 0.04)  # judged it needs its plan
+    triage(conn, t, "A-3", earlier(now, 0, 1), None, status="failed")
+    # A waiver from before the window is not the window's, however long its ticket took.
+    plans.record_waiver(conn, "A-4", triage(conn, t, "A-4", earlier(now, 3), 0.05), "One value.")
+
+    found = spend.breakdown(conn, now, 1)
+    assert (found.totals.workers, found.totals.triage) == (2.0, pytest.approx(0.09))
+    assert found.totals.total == pytest.approx(3.09)  # each dollar once, in its own kind
+    assert found.waived == 1
+    assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced][1:3] == [("workers", 1, 0), ("triage", 3, 1)]
+    # A ticket's own runs are all of them, its triage included.
+    assert [(s.key, s.runs, s.cost_usd) for s in found.tickets if s.key == "A-1"] == [("A-1", 2, pytest.approx(2.05))]
+
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[3].split()[3:5] == ["$2.00", "$0.09"]  # workers, then triage
+    assert "Triage waived 1 plan, each a planner run saved." in out
+    assert out[-1] == "No cost reported: 1 of 3 triage runs."
+
+
 def first_call(sent: int, written: int) -> Usage:
     """What a run reported whose first model call was sent `sent` tokens and wrote `written` of them to the cache."""
     return Usage(0.1, 0, 0, 0, sent - written, written, peak_context=sent, first_call=sent, first_cache_write=written)
@@ -478,14 +524,18 @@ def test_canopy_spend_prints_the_tools_that_returned_the_most(
     }
 
 
-@pytest.mark.parametrize("table", ["ticks", "runs", "chore_runs", "review_runs"])
-def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, table: str) -> None:
+@pytest.mark.parametrize("kind", spend.KINDS)
+def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, kind: spend.Kind) -> None:
     """The run table leads, by its `started_at` index, so the window's cost is its own runs', not the whole history's.
 
-    A journal in a test is too small for a slow plan to show in its time, so the plan is what is held.
+    A journal in a test is too small for a slow plan to show in its time, so the plan is what is held. Workers and
+    triages share `runs`, told apart by kind, which the index does not cover: each run in the window is read for it.
     """
     conn = journals.open(tmp_path / "canopy.db")
-    sql = spend._TOOLS_SQL.format(table=table)  # noqa: SLF001 (the query the plan is of)
+    table, which = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
+    sql = spend._TOOLS_SQL.format(table=table, which=which)  # noqa: SLF001
     plan = [str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {sql}", (table, earlier(NOW, 7), earlier(NOW, 0)))]
-    assert plan[0].startswith(f"SEARCH r USING COVERING INDEX {table}_spent (started_at>? AND started_at<?)"), plan
+    assert re.match(rf"SEARCH r USING (COVERING )?INDEX {table}_spent \(started_at>\? AND started_at<\?\)", plan[0]), (
+        plan
+    )
     assert plan[1].startswith("SEARCH t USING PRIMARY KEY (run_table=? AND run_id=?)"), plan

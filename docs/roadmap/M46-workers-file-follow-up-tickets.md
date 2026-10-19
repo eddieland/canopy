@@ -52,7 +52,7 @@ Humans still authorize everything that lands; canopy still never merges (TRUST_M
   forget; a follow-up's prompt carrying its parent check, and an override without `{{AUTHORIZATION}}` refused;
   `unknown_repo` for any other repository; `--kind split` refused; the removed keys' errors; the migration carrying
   over only worked split children; the state block's follow-ups, a snapshot.
-- Open, in the design: the parent's phase once a split request moved its work into follow-ups; journal-only
+- Open: the parent's phase once a split request moved its work into follow-ups; journal-only
   follow-ups for a private ticket's worker; whether `policy.max_follow_ups = 0` is enough for an operator who wants the
   old line; whether losing its label withdraws a parent's follow-ups; a bound per ticket rather than per run; how long
   `follow_up_unrecorded` stands; and whether a follow-up is a draft under `trust.review_replies = "approve"`.
@@ -66,4 +66,4 @@ Status: in progress. Designed 2026-10-19 (DESIGN §18, Follow-up tickets). The d
 (public `implement` and `resume`, not a follow-up's own), that `_run` refuses a bad entry alone rather than the run,
 that a `--label` on a follow-up dispatches it as any labeled ticket, that `forget` withdraws a parent's follow-ups
 rather than refusing, that split children carry over as follow-ups, and the attention item past the bounds; the
-sketch's three open points and four more wait on the operator, listed there.
+sketch's three open points and four more wait on the operator, listed above.

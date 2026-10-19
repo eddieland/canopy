@@ -27,13 +27,13 @@ export interface Item<I = Inline> {
 
 /**
  * One block of agent-written text: a paragraph, a heading (`level` is its count of `#`), a list, or a code block's
- * lines as written.
+ * lines as written, with `lang`, the first word after its opening fence, when it has one.
  */
 export type Block<I = Inline> =
     | { kind: 'paragraph'; lines: Line<I>[] }
     | { kind: 'heading'; level: number; line: Line<I> }
     | { kind: 'list'; ordered: boolean; start: number; items: Item<I>[] }
-    | { kind: 'code'; lines: string[] }
+    | { kind: 'code'; lines: string[]; lang?: string }
 
 const FENCE = /^\s*(`{3,}|~{3,})/u
 const HEADING = /^(#{1,6})\s+(.*)$/u
@@ -59,13 +59,14 @@ export function parseWith<I>(text: string, read: (line: string) => Line<I>): Blo
         const fence = FENCE.exec(line)
         if (fence) {
             const marker = fence[1] ?? '```'
+            const lang = line.trimStart().slice(marker.length).trim().split(/\s/u)[0] ?? ''
             const body: string[] = []
             i += 1
             while (i < lines.length && !(lines[i] ?? '').trimStart().startsWith(marker)) {
                 body.push(lines[i] ?? '')
                 i += 1
             }
-            blocks.push({ kind: 'code', lines: body })
+            blocks.push(lang === '' ? { kind: 'code', lines: body } : { kind: 'code', lines: body, lang })
             i += 1
             continue
         }

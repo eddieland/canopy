@@ -1026,6 +1026,11 @@ def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def ended_run_results(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return every ended run's end and stored result, for counting what ended and the PRs results name."""
+    return conn.execute("SELECT ended_at, result_json FROM runs WHERE ended_at IS NOT NULL").fetchall()
+
+
 def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int, *, skip_kind: str | None = None) -> list[sqlite3.Row]:
     """Return a ticket's latest `limit` ended runs since any forget, oldest first: id, kind, status, and end.
 

@@ -3,6 +3,7 @@ import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { DiffFile, DiffLine, ReviewDiff } from '@/api/types'
+import { CodeTokens } from '@/components/code-tokens'
 import { Disclosure } from '@/components/disclosure'
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
@@ -22,7 +23,7 @@ import {
 import { useHighlight } from '@/hooks/use-highlight'
 import { fileType, fileTypes, fileTypesLabel, hiddenFilesText } from '@/lib/file-types'
 import type { FileType } from '@/lib/file-types'
-import type { CodeKind, CodeToken } from '@/lib/highlight'
+import type { CodeToken } from '@/lib/highlight'
 import {
     fileFoldedText,
     foldedText,
@@ -42,15 +43,6 @@ import { cn } from '@/lib/utils'
 const LINE_TINT: Record<DiffLine['kind'], string> = { add: 'bg-diff-add/12', del: 'bg-diff-del/12', ctx: '' }
 const LINE_MARK: Record<DiffLine['kind'], string> = { add: 'text-diff-add', del: 'text-diff-del', ctx: '' }
 const MARK: Record<DiffLine['kind'], string> = { add: '+', del: '-', ctx: ' ' }
-// A piece of code's color by what it is (ui/DESIGN.md, "A review"): the syntax tokens agent output's JSON wears, and
-// comments muted. Anything else stays the line's own color.
-const CODE_CLASS: Record<Exclude<CodeKind, 'text'>, string> = {
-    keyword: 'text-syntax-literal',
-    string: 'text-syntax-string',
-    constant: 'text-syntax-number',
-    function: 'text-syntax-key',
-    comment: 'text-muted-foreground',
-}
 
 /** A file of a diff the operator just asked to see, by following a link to a card on it, a new object each time. */
 export interface Wanted {
@@ -384,22 +376,9 @@ function Line({ line, tokens }: { line: DiffLine; tokens: CodeToken[] | undefine
                 {MARK[line.kind]}
             </td>
             <td className="pr-3 whitespace-pre" data-highlighted={tokens !== undefined || undefined}>
-                {tokens === undefined ? line.text : <Code tokens={tokens} />}
+                {tokens === undefined ? line.text : <CodeTokens tokens={tokens} />}
             </td>
         </tr>
-    )
-}
-
-function Code({ tokens }: { tokens: CodeToken[] }) {
-    // A line's tokens never reorder, so their index is their key.
-    return tokens.map((token, i) =>
-        token.kind === 'text' ? (
-            token.text
-        ) : (
-            <span key={i} className={CODE_CLASS[token.kind]}>
-                {token.text}
-            </span>
-        ),
     )
 }
 

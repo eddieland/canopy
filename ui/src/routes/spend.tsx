@@ -44,13 +44,19 @@ interface SpendSearch {
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     "What agent runs cost each UTC day, as the runtime reported it: the overseer, idle ticks' part of it apart, and " +
-    "the workers, chores, and reviews it started; beside it, the tickets the loop marked done and what each ticket's " +
-    "and PR's own runs cost; and which tools put the most into the runs' context. As canopy spend --days N prints it."
+    'the workers, plan triages, chores, and reviews it started; beside it, the tickets the loop marked done, the ' +
+    "plans triage waived, and what each ticket's and PR's own runs cost; and which tools put the most into the " +
+    "runs' context. As canopy spend --days N prints it."
 
 // What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
     "The window's whole spend, the overseer's and chores' included, over the tickets marked done in it: what getting " +
     'them done cost, the runs of tickets still open included'
+
+// What the plans triage waived count, on hover.
+const WAIVED_HINT =
+    "The window's triage runs that judged their ticket trivial and waived its plan: each a planner run, and a read " +
+    'of its plan, saved. Read it against plan triage'
 
 // What a tool's returned characters and its estimated tokens count, on hover.
 const RETURNED_HINT =
@@ -66,13 +72,14 @@ const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
 const KIND_LABEL = {
     overseer: 'overseer runs',
     workers: 'worker and split runs',
+    triage: 'triage runs',
     chores: 'chore runs',
     reviews: 'review runs',
 } as const
 
 // The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
 // columns read.
-const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'chores', 'reviews', 'dry_run'] as const
+const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'triage', 'chores', 'reviews', 'dry_run'] as const
 
 // The by-day chart's axis names every day of up to a week, and every fifth past that, back from today.
 const AXIS_ALL = SPEND_WINDOWS[0]
@@ -224,9 +231,9 @@ function SpendPage() {
 }
 
 /**
- * The window's total, each kind's, and what it got done: the tickets marked done, and the whole spend over them. Then
- * idle ticks' share of the overseer's, when the overseer spent something, and the runs that reported no cost, when a
- * run ended.
+ * The window's total, each kind's, and what it got done: the tickets marked done, the whole spend over them, and the
+ * plans triage waived, so its spend reads against the planner runs it saved. Then idle ticks' share of the overseer's,
+ * when the overseer spent something, and the runs that reported no cost, when a run ended.
  */
 function Totals({ found }: { found: SpendBreakdown }) {
     const { totals } = found
@@ -250,7 +257,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-4 @3xl:grid-cols-7">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-4 @3xl:grid-cols-8">
                 {cells.map(({ label, hint, usd, testId }) => (
                     <div key={testId} className="flex flex-col gap-0.5">
                         <dt className="panel-label" title={hint}>
@@ -262,7 +269,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     </div>
                 ))}
             </dl>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-4 @3xl:grid-cols-7">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-4 @3xl:grid-cols-8">
                 <div className="flex flex-col gap-0.5">
                     <dt
                         className="panel-label"
@@ -280,6 +287,14 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     </dt>
                     <dd className="readout text-xl text-foreground" data-testid="spend-per-done">
                         <Cost usd={found.per_done} />
+                    </dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                    <dt className="panel-label" title={WAIVED_HINT}>
+                        plans waived
+                    </dt>
+                    <dd className="readout text-xl text-foreground" data-testid="spend-waived">
+                        {found.waived}
                     </dd>
                 </div>
             </dl>

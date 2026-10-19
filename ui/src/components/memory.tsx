@@ -24,6 +24,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { Clipped } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
+    byKind,
     lapsesText,
     leftOutText,
     leftText,
@@ -146,6 +147,35 @@ export function MemoryRows({
             ))}
         </ul>
     )
+}
+
+/**
+ * What a run wrote or read, as its page lists it, grouped by kind: ticket notes, then proposals, then lessons, each
+ * under a heading that names the kind, counts it, and says what it is for, since a row alone does not say whether it
+ * is a note for one ticket or a lesson every run reads. `ownRun`, `cited`, and `modes` are `MemoryRows`'.
+ */
+export function MemoryKinds({
+    entries,
+    ownRun,
+    cited,
+    modes,
+}: {
+    entries: MemoryEntry[]
+    ownRun: number
+    cited?: Pick<RunMemory, 'used' | 'wrong'>
+    modes: TierModes | undefined
+}) {
+    return byKind(entries).map((group) => (
+        <section key={group.kind} aria-label={group.name} data-testid={`memory-kind-${group.kind}`}>
+            <h4 className="flex flex-wrap items-center gap-x-2 px-3 pt-2 text-xs text-muted-foreground">
+                <Chip>{group.name}</Chip>{' '}
+                <span>
+                    <span className="readout">{group.entries.length}</span> · {group.what}
+                </span>
+            </h4>
+            <MemoryRows entries={group.entries} ownRun={ownRun} cited={cited} modes={modes} />
+        </section>
+    ))
 }
 
 /**

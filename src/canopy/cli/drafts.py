@@ -20,6 +20,7 @@ from canopy.core import conversation, drafts, drafts_manage, records, replies
 from canopy.core.memory_text import visible
 from canopy.core.vocab import DraftKind, DraftStatus, ReviewItem
 from canopy.infra import logs
+from canopy.loop import attention
 
 if TYPE_CHECKING:
     import sqlite3
@@ -134,6 +135,7 @@ def cmd_drop(click_ctx: click.Context, run_ref: str, numbers: tuple[int, ...], *
         found = drafts_manage.drop(ctx.conn, run_id, numbers, undo=undo)
     except conversation.Refused as r:
         raise CliError(f"drop refused ({r.guard}): {r.reason}") from None
+    attention.write(ctx, logs.for_tick(None))
     for draft in found:
         click.echo(f"Run {run_id}'s draft {draft.number} is {draft.status}.")
     return 0
@@ -159,9 +161,11 @@ def cmd_send(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) ->
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        sent = drafts_manage.send(ctx.conn, ctx.config, ctx.runner, named, channel=CLI, log=logs.for_tick(None))
+        log = logs.for_tick(None)
+        sent = drafts_manage.send(ctx.conn, ctx.config, ctx.runner, named, channel=CLI, log=log)
     except conversation.Refused as r:
         raise CliError(f"send refused ({r.guard}): {r.reason}") from None
+    attention.write(ctx, log)
     for draft in sent.posted:
         click.echo(f"Sent run {run_id}'s draft {draft.number}: {draft.sent_url or draft.pr_url or draft.issue_url}")
     for draft in sent.already:
@@ -216,5 +220,5 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
         ):
             click.echo(f"  > {c.author} at {c.created_at}: {visible(' '.join(c.body.split()))}")
     click.echo(f"  hash {drafts_manage.hash_of(text.body)}{edited}:")
-    for line in visible(text.body).split("\n") if "\n" in text.body else [visible(text.body)]:
-        click.echo(f"    {line}")
+    for line in text.body.split("\n"):
+        click.echo(f"    {visible(line)}")

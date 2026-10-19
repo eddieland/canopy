@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+    byKind,
     dueForReview,
     editRepoChoices,
     hasVersions,
@@ -41,6 +42,15 @@ describe('visibleText', () => {
             { text: 'b', hidden: false },
         ])
         expect(memorySegments('')).toEqual([])
+    })
+
+    it('keeps line breaks and tabs in text that may hold paragraphs, and names every other hidden character', () => {
+        expect(memorySegments('one\r\n\ttwo\rthree\u2028', { lines: true })).toEqual([
+            { text: 'one\n\ttwo', hidden: false },
+            { text: '<U+000D>', hidden: true },
+            { text: 'three', hidden: false },
+            { text: '<U+2028>', hidden: true },
+        ])
     })
 })
 
@@ -174,5 +184,21 @@ describe('leftText', () => {
         const now = Date.parse('2026-10-08T12:00:00Z')
         expect(leftText('2026-10-12T13:00:00Z', now)).toBe('4d left')
         expect(leftText('2026-10-08T12:00:00Z', now)).toBe('lapsing')
+    })
+})
+
+describe('byKind', () => {
+    it('groups memories by kind, notes then proposals then lessons, leaving out a kind with none', () => {
+        const entries = [
+            { id: 1, scope: 'lesson' as const },
+            { id: 2, scope: 'ticket' as const },
+            { id: 3, scope: 'lesson' as const },
+            { id: 4, scope: 'ticket' as const },
+        ]
+        expect(byKind(entries).map((k) => [k.name, k.entries.map((e) => e.id)])).toEqual([
+            ['ticket notes', [2, 4]],
+            ['lessons', [1, 3]],
+        ])
+        expect(byKind([])).toEqual([])
     })
 })

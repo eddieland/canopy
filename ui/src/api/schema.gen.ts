@@ -927,6 +927,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/since": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count what the runs did since a moment
+         * @description How many runs ended since `since`, and how many PRs they opened, over the whole journal.
+         */
+        get: operations["getRunsSince"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search": {
         parameters: {
             query?: never;
@@ -3185,6 +3205,11 @@ export type components = {
              * @description The plan a request or a skip superseded, if the ticket had one.
              */
             superseded: number | null;
+            /**
+             * Waived
+             * @description The triage run whose waiver a request undid, or a skip replaced with the operator's own (DESIGN §25).
+             */
+            waived: number | null;
         };
         /**
          * PlanCommentRequest
@@ -3437,6 +3462,54 @@ export type components = {
              * @description Up to 32 characters after it, the nearest first.
              */
             suffix: string;
+        };
+        /**
+         * PlanTriage
+         * @description A ticket's triage before its plan (DESIGN §25, Triage before a plan): its run, how it ended, and its verdict.
+         */
+        PlanTriage: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it ended, or when it started while it runs.
+             */
+            at: string;
+            /**
+             * Reason
+             * @description Its one-sentence reason, or the harness's note for a run that judged nothing, on one line: model text written
+             *     from the ticket, untrusted, which no worker reads.
+             */
+            reason: string | null;
+            /**
+             * Run Id
+             * @description The `needs-plan` run. A ticket is triaged at most once.
+             */
+            run_id: number;
+            /**
+             * Status
+             * @description The run's status: running while it reads; done when it judged; else failed, timeout, unknown, crashed, or
+             *     stopped, and the ticket is planned as if triage were off.
+             */
+            status: string;
+            /**
+             * Undoable
+             * @description Whether asking for a plan still undoes the waiver in force: its implement has not started, so the ticket has no
+             *     branch. Once it has, asking is refused `bad_plan`.
+             * @default false
+             */
+            undoable: boolean;
+            /**
+             * Verdict
+             * @description What a run that ended `done` judged; none while it runs or for one that ended any other way.
+             */
+            verdict: ("trivial" | "plan") | null;
+            /**
+             * Waived
+             * @description Whether its waiver is in force, so the ticket's implement goes ahead unplanned: false once the operator asked
+             *     for a plan or skipped it themselves, or forgot the ticket.
+             * @default false
+             */
+            waived: boolean;
         };
         /**
          * Pool
@@ -4275,6 +4348,22 @@ export type components = {
             ticket_notes: components["schemas"]["MemoryModeName"];
         };
         /**
+         * RunsSince
+         * @description What the runs did since a moment: the page's note on returning to a tab left hidden (ui/DESIGN.md).
+         */
+        RunsSince: {
+            /**
+             * Ended
+             * @description How many runs ended since then, whatever their status.
+             */
+            ended: number;
+            /**
+             * Prs Opened
+             * @description How many PRs a run that ended since then named first: named by none of the runs that ended before.
+             */
+            prs_opened: number;
+        };
+        /**
          * @description A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the operator's.
          * @enum {string}
          */
@@ -4478,9 +4567,16 @@ export type components = {
             totals: components["schemas"]["SpendCosts"];
             /**
              * Unpriced
-             * @description A row per kind of run, in a fixed order: overseer, workers, chores, reviews.
+             * @description A row per kind of run, in a fixed order: overseer, workers, triage, chores, reviews.
              */
             unpriced: components["schemas"]["SpendUnpriced"][];
+            /**
+             * Waived
+             * @description How many triage runs that started in the window waived their ticket's plan (DESIGN §25): the planner runs
+             *     triage saved, to read against what it cost.
+             * @default 0
+             */
+            waived: number;
             /**
              * Woken
              * @description The loop's live ticks by what woke them, the most common first.
@@ -4523,6 +4619,11 @@ export type components = {
              */
             total: number | null;
             /**
+             * Triage
+             * @description Triage runs, which judge whether a ticket needs its plan (`needs-plan`, DESIGN §25).
+             */
+            triage: number | null;
+            /**
              * Workers
              * @description Worker and split runs.
              */
@@ -4553,10 +4654,10 @@ export type components = {
          */
         SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
         /**
-         * @description A kind of agent run: each tick's overseer, worker and split runs, chore runs, review runs.
+         * @description A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan (`needs-plan`, DESIGN §25), chore runs, review runs.
          * @enum {string}
          */
-        SpendKind: "overseer" | "workers" | "chores" | "reviews";
+        SpendKind: "overseer" | "workers" | "triage" | "chores" | "reviews";
         /**
          * SpendPullRequest
          * @description What the runs that pushed to one PR and the review runs of it, started in the window, cost.
@@ -4829,10 +4930,21 @@ export type components = {
             now: boolean;
         };
         /**
+         * StreamEnding
+         * @description The server ends this stream now, its `stream_seconds` up: the page opens another at once, missing nothing.
+         */
+        StreamEnding: {
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "stream.ending";
+        };
+        /**
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
         /**
          * Thread
          * @description A PR's review thread as last read, where it sits on the diff, and the drafts that answer it.
@@ -5246,6 +5358,11 @@ export type components = {
              * @description The operator's comments, oldest first: a thread is the ticket's, not one plan's, so it carries to the next.
              */
             threads: components["schemas"]["PlanThreadView"][];
+            /**
+             * @description Its triage before a plan (DESIGN §25), if it has had one: running, the waiver it gave, or the one that left it
+             *     to be planned. `needed` stays the policy's word; a waiver in force means it waits on no plan all the same.
+             */
+            triage: components["schemas"]["PlanTriage"] | null;
         };
         /**
          * TicketSummary
@@ -9192,6 +9309,83 @@ export interface operations {
             };
             /** @description No such run. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getRunsSince: {
+        parameters: {
+            query: {
+                /** @description The moment to count from, as an ISO 8601 time with its offset. */
+                since: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunsSince"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

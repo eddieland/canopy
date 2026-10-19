@@ -10,9 +10,9 @@ import { ordered, useListOrder } from '@/lib/list-order'
 const UNREAD = 'No run of this chore has read it yet. Its next run does, as an instruction.'
 
 /**
- * A chore's notes from the operator, the latest ten its next run reads, oldest first, and the form for another, folded
- * until asked for, since nothing waits on a note (DESIGN §19). A note is about this week's findings: it stays until ten
- * newer ones push it out, and a later one wins. With none, the panel is its header and the fold, whose box says so.
+ * A chore's notes from the operator, the latest ten its next run reads, oldest first, and the form for another
+ * (DESIGN §19). A note is about this week's findings: it stays until ten newer ones push it out, and a later one wins.
+ * With none, the panel is its header and the form, whose box says so.
  */
 export function ChoreNotes({ detail }: { detail: ChoreDetail }) {
     const { chore, notes } = detail

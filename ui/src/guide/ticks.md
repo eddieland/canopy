@@ -47,8 +47,11 @@ opens at its end, where the errors are, since that's usually why you're reading 
 [Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **7 days** or **30 days**. The
 line under the title is the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for what the
 page holds. The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent, then the
-workers, chores, reviews, and dry runs. Beside them are the tickets the loop marked done in that window, and what each
-cost on average, the overseer and chores included.
+workers, plan triage, chores, reviews, and dry runs. Beside them are the tickets the loop marked done in that window,
+what each cost on average, the overseer and chores included, and **plans waived**: how many of the window's triage
+runs judged their ticket trivial and skipped its plan. Hold that against **plan triage**: if triage costs more than the
+planner runs it saved, it is a hobby, not a saving. With triage off, both stay at nothing (see
+[Plans](plans#triage-skipping-the-plan-for-trivial-work)).
 
 Each split has one name everywhere on the page, in the totals, the chart's legend, and the table: **overseer** is all
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went

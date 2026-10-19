@@ -1,6 +1,6 @@
-// The language a diff's file is written in, by its name, for the syntax highlighter (`src/lib/highlight.ts`). Each
-// language's grammar is its own chunk, loaded the first time a diff shows a file in it, so a page with no diff, or a
-// diff in languages no one opens, never downloads one.
+// The language a diff's file is written in, by its name, or a guide's code block, by its fence, for the syntax
+// highlighter (`src/lib/highlight.ts`). Each language's grammar is its own chunk, loaded the first time a page shows
+// code in it, so a page with no code, or code in languages no one opens, never downloads one.
 
 import type { LanguageRegistration } from 'shiki/core'
 
@@ -10,7 +10,7 @@ import { DIFF_BUDGET, lineCount } from '@/lib/review-folds'
 /** A grammar's loader: a Shiki language module, imported on demand. */
 type Loader = () => Promise<{ default: LanguageRegistration[] }>
 
-// The grammars a diff can be highlighted in, by Shiki's name for each. Written out so the bundler sees each import.
+// The grammars code can be highlighted in, by Shiki's name for each. Written out so the bundler sees each import.
 const LOADERS = {
     c: () => import('shiki/langs/c.mjs'),
     css: () => import('shiki/langs/css.mjs'),
@@ -38,7 +38,7 @@ const LOADERS = {
     yaml: () => import('shiki/langs/yaml.mjs'),
 } satisfies Record<string, Loader>
 
-/** A language a diff can be highlighted in, by Shiki's name for it. */
+/** A language code can be highlighted in, by Shiki's name for it. */
 export type Language = keyof typeof LOADERS
 
 // A file's extension, lowercased, to its language.
@@ -107,6 +107,18 @@ export function languageOf(path: string): Language | undefined {
 }
 
 /**
+ * The language a code block's fence names, as Shiki names it (`toml`) or as a file's extension does (`sh`), whatever
+ * its case, or undefined when it names none canopy highlights (`text`).
+ */
+export function fenceLanguage(name: string): Language | undefined {
+    const lower = name.toLowerCase()
+    if (isLanguage(lower)) {
+        return lower
+    }
+    return Object.hasOwn(BY_EXTENSION, lower) ? BY_EXTENSION[lower] : undefined
+}
+
+/**
  * The language to highlight `file` in: its language, unless its hunks hold more lines than the page draws of a diff at
  * first (`DIFF_BUDGET`). A file that long is mostly folded away, and reading it costs the page seconds of work for
  * lines no one may open, so it stays plain, as a line too long for the grammar does; its grammar never loads.
@@ -118,4 +130,9 @@ export function highlightLanguage(file: DiffFile): Language | undefined {
 /** The loader of `language`'s grammar, which Shiki's `loadLanguage` takes as it is. */
 export function loaderOf(language: Language): Loader {
     return LOADERS[language]
+}
+
+// Whether `name` is Shiki's name for a grammar canopy loads; a name an object has of its own (`constructor`) is not.
+function isLanguage(name: string): name is Language {
+    return Object.hasOwn(LOADERS, name)
 }
