@@ -467,10 +467,10 @@ replies, where here the plan follows at once. `canopy health` (§11) lists it wi
 `plan_triage_cmd` that never works shows there.
 
 **The waiver.** A `done` `trivial` result records a waiver: a journal fact naming the ticket, the triage run, its
-reason, and when, written by the run from its validated result and by no command. The overseer cannot write one, so
-the plan gate stays a guard in code: `unplanned` passes an `implement` only for a ticket with an approved plan, none
-needed, or a waiver in force. A waiver is not the operator's `--skip`, and is in force only while the ticket's own
-setting is unset:
+reason, and when, written by the harness when it validates the finished run's result, never by the agent and by no
+command. The overseer cannot write one, so the plan gate stays a guard in code: `unplanned` passes an `implement`
+only for a ticket with an approved plan, none needed, or a waiver in force. A waiver is not the operator's `--skip`,
+and is in force only while the ticket's own setting is unset:
 
 - `canopy plan KEY`, or asking for a plan from the web UI, undoes it: the ticket's setting becomes `plan`, so the next
   tick dispatches `plan`. Once the first `implement` gives the ticket a branch, asking refuses `bad_plan`, as it does
@@ -516,10 +516,15 @@ with them. What this part fixes for it:
 - T1: a triage verdict, an agent's judgment that ticket text can steer, lifts the plan gate, but only where the
   operator turned triage on and only for a plan the policy asked for. The operator's own `plan` setting stands, and on
   feedback D089's gate. The reviewer's impact and the PR's review are the backstop. Residual, accepted by the
-  operator: a ticket's text can talk a triage into `trivial`, and its work then goes to a PR unplanned.
+  operator: a ticket's text can talk a triage into `trivial`, and its work then goes to a PR unplanned. A second
+  residual, for the operator to accept with M55's PR: a primary clone may lag the base branch, so a `trivial` verdict
+  can rest on code that has since changed, and where `review.agent_prs` is off only the PR's review catches that.
 - T3: one triage per ticket, never reset and never granted; its timeout; `capacity.max_workers`. A waiver is written
   only from a validated result, and `unplanned` stays a guard in code.
-- T6: the triage writes nothing: no edits, no shell, and only the tracker's read tools.
+- T6: the triage writes nothing: no edits, no shell, and only the tracker's read tools. Until a sandbox role holds
+  it (Open, below), that is all that holds it: with M26's sandbox on, `plan_triage_cmd` still runs outside any OS
+  sandbox, reading ticket text anyone can write and the primary clones, so its definition's tool denials are its only
+  bound. The operator who sandboxes workers should know a triage is not sandboxed until that role exists.
 - T7: `policy.plan_triage`, `policy.trivial`, and `runtime.plan_triage_*` are private.
 
 Rejected:
