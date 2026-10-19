@@ -33,6 +33,21 @@ describe('Tip', () => {
         expect(screen.queryByRole('tooltip')).toBeNull()
     })
 
+    it('stays open through the scroll its focus causes in a scrolling panel', () => {
+        render(
+            <div data-testid="panel">
+                <Tip fact="Oct 8, 10:30">
+                    <time>3m ago</time>
+                </Tip>
+            </div>,
+        )
+        expect(tipOf(screen.getByText('3m ago'))).toBe('Oct 8, 10:30')
+        fireEvent.scroll(screen.getByTestId('panel'))
+        expect(screen.queryByRole('tooltip')?.textContent).toBe('Oct 8, 10:30')
+        fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+        expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+
     it('toggles on a tap, which a touch screen has in place of hover and focus', () => {
         render(
             <Tip fact="ci_failing">

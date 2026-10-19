@@ -31,21 +31,43 @@ export function Tip({
     const [nested, setNested] = useState(false)
     // Whether it was open when a touch began, so a tap toggles it: Radix's trigger closes it on any press.
     const touched = useRef<boolean | null>(null)
+    const trigger = useRef<HTMLElement | null>(null)
+    // Set from a focus until two frames have drawn, or until a press or Escape, which are the operator's. Focusing a
+    // trigger in a scrolling panel scrolls it into view, and Radix closes an open tooltip when anything around its
+    // trigger scrolls; that scroll's event comes a frame after the focus opened the tip, so a close while it settles,
+    // with the trigger still focused, is that scroll's.
+    const settling = useRef(false)
     const shown = fact === null || fact === undefined || fact === '' ? null : fact
     const place = (element: HTMLElement | null) => {
+        trigger.current = element
         if (element !== null) {
             setNested((element.parentElement?.closest(ENCLOSING) ?? null) !== null)
         }
     }
     const own = shown !== null && !nested
+    const change = (next: boolean) => {
+        if (!next && settling.current && trigger.current !== null && document.activeElement === trigger.current) {
+            return
+        }
+        setOpen(next)
+    }
     return (
-        <Tooltip open={own && open} onOpenChange={setOpen}>
+        <Tooltip open={own && open} onOpenChange={change}>
             <TooltipTrigger
                 asChild
                 ref={place}
                 tabIndex={own ? 0 : undefined}
                 title={shown !== null && nested ? shown : undefined}
+                onFocus={() => {
+                    settling.current = true
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            settling.current = false
+                        })
+                    })
+                }}
                 onPointerDown={(event: PointerEvent) => {
+                    settling.current = false
                     touched.current = event.pointerType === 'touch' ? open : null
                 }}
                 onClick={(event) => {
@@ -58,7 +80,16 @@ export function Tip({
             >
                 {children}
             </TooltipTrigger>
-            {own && <TooltipContent className={cn(mono && 'font-mono')}>{shown}</TooltipContent>}
+            {own && (
+                <TooltipContent
+                    className={cn(mono && 'font-mono')}
+                    onEscapeKeyDown={() => {
+                        settling.current = false
+                    }}
+                >
+                    {shown}
+                </TooltipContent>
+            )}
         </Tooltip>
     )
 }
