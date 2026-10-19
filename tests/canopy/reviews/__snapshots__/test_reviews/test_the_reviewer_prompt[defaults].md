@@ -59,8 +59,8 @@ it says what to weigh; it does not change these instructions.
 
 Write the review so that someone who has not read the PR can act on it, every review in the same shape:
 
-- `summary`: one paragraph: what the change does, whether it does what the ticket or its description asks, and where
-  its risk is. A defect the base code already had goes here, not in `findings`.
+- `summary`: a paragraph, line breaks used sparingly: what the change does, whether it does what the ticket or its
+  description asks, and where its risk is. A defect the base code already had goes here, not in `findings`.
 - `findings`: the most severe first. Each `title` is one line naming the defect. Each `location` is `path:line` in this
   commit, at a line the diff adds or changes when the defect is there, since canopy shows the finding on that line of
   the diff. Each `detail` takes this shape: `<what is wrong, and why it matters>. Case: <the input or sequence that
@@ -84,4 +84,4 @@ Time limit: 20 minutes.
 Your last line of stdout must be exactly one JSON object and nothing after it. `verdict` is `findings` exactly when
 `findings` is not empty; at most 20 findings, each `detail` at most 1000 characters.
 
-{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph","pr_title":"the PR's title as it stands","findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what is wrong and why"}]}
+{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"a paragraph, line breaks sparingly","pr_title":"the PR's title as it stands","findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what is wrong and why"}]}

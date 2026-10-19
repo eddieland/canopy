@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { clickIn, plan, select, settled, signIn } from './helpers.ts'
+import { clickAtEnd, clickIn, plan, select, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -65,8 +65,7 @@ test('selecting text and pressing Comment adds a thread on it, highlighted in th
 
 test('a comment stays on its passage while the plan is edited above it', async ({ page }) => {
     const doc = plan(page)
-    await doc.getByRole('heading', { level: 3 }).click()
-    await page.keyboard.press('End')
+    await clickAtEnd(doc.getByRole('heading', { level: 3 }))
     await page.keyboard.type(', streamed')
     await expect(doc.getByRole('heading', { level: 3 })).toHaveText('Export reports as CSV, streamed')
     await expect(doc.locator('[data-thread=sample-1]')).toHaveText("streams the report's rows as they are read")
@@ -155,8 +154,7 @@ test('the style menu shows each style as the plan sets it, and leaves the cursor
 })
 
 test('the table menu inserts a table where none is, and only there', async ({ page }) => {
-    await clickIn(plan(page).locator('blockquote p'))
-    await page.keyboard.press('End')
+    await clickAtEnd(plan(page).locator('blockquote p'))
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
     await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Table' }).click()
@@ -219,8 +217,7 @@ test('each comment sits beside its passage, and moves with it as the plan is edi
     const card = comments(page).filter({ hasText: 'proxy in front' })
     const passage = plan(page).locator('[data-thread=sample-1]')
     await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
-    await plan(page).getByRole('heading', { level: 3 }).click()
-    await page.keyboard.press('End')
+    await clickAtEnd(plan(page).getByRole('heading', { level: 3 }))
     await page.keyboard.press('Enter')
     await page.keyboard.type('A paragraph that moves every passage under it down.')
     await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
@@ -349,8 +346,7 @@ test.describe('in a narrow window', () => {
 })
 
 test('Markdown pasted into the plan becomes the headings, lists, and marks it writes', async ({ page }) => {
-    await clickIn(plan(page).locator('blockquote p'))
-    await page.keyboard.press('End')
+    await clickAtEnd(plan(page).locator('blockquote p'))
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
     await paste(page, '## Rollout\n\n- **ship** behind a flag\n- remove the flag')
@@ -381,8 +377,7 @@ test('inline Markdown pasted into a sentence stays in it, and prose or a Shift p
 })
 
 test('Markdown pasted into a code block stays code, as its characters', async ({ page }) => {
-    await clickIn(plan(page).locator('blockquote p'))
-    await page.keyboard.press('End')
+    await clickAtEnd(plan(page).locator('blockquote p'))
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
     await page.getByRole('button', { name: 'Code block', exact: true }).click()

@@ -168,7 +168,16 @@ function pieces(text: string, pattern: RegExp): Line {
     return line
 }
 
-/** How many lines `blocks` take, before wrapping: a list item's or a code block's each count. */
+/**
+ * About how many characters a line of a list's row holds before it wraps. A longer line counts as the lines it would
+ * wrap to, so one long paragraph folds as several short lines do.
+ */
+export const WRAP = 100
+
+/**
+ * How many lines `blocks` take: a list item's or a code block's each count, and a line of text longer than `WRAP` as
+ * the lines it wraps to. A code block scrolls rather than wraps.
+ */
 export function lineCount(blocks: Block[]): number {
     return blocks.reduce((sum, block) => sum + linesOf(block), 0)
 }
@@ -176,18 +185,27 @@ export function lineCount(blocks: Block[]): number {
 function linesOf(block: Block): number {
     switch (block.kind) {
         case 'paragraph': {
-            return block.lines.length
+            return wrapped(block.lines)
         }
         case 'heading': {
             return 1
         }
         case 'list': {
-            return block.items.reduce((sum, item) => sum + item.lines.length, 0)
+            return block.items.reduce((sum, item) => sum + wrapped(item.lines), 0)
         }
         case 'code': {
             return Math.max(1, block.lines.length)
         }
     }
+}
+
+function wrapped(lines: Line[]): number {
+    return lines.reduce((sum, line) => sum + wraps(line), 0)
+}
+
+function wraps(line: Line): number {
+    const length = line.reduce((sum, piece) => sum + piece.text.length, 0)
+    return Math.max(1, Math.ceil(length / WRAP))
 }
 
 /**
@@ -205,9 +223,8 @@ export function clamp(blocks: Block[], max: number): { blocks: Block[]; hidden: 
         if (room <= 0) {
             break
         }
-        const cut = cutBlock(block, room)
-        shown.push(cut)
-        room -= linesOf(cut)
+        shown.push(cutBlock(block, room))
+        room -= linesOf(block)
     }
     return { blocks: shown, hidden: total - max }
 }
@@ -215,7 +232,7 @@ export function clamp(blocks: Block[], max: number): { blocks: Block[]; hidden: 
 function cutBlock(block: Block, room: number): Block {
     switch (block.kind) {
         case 'paragraph': {
-            return { ...block, lines: block.lines.slice(0, room) }
+            return { ...block, lines: cutLines(block.lines, room) }
         }
         case 'heading': {
             return block
@@ -230,10 +247,49 @@ function cutBlock(block: Block, room: number): Block {
                 if (left <= 0) {
                     break
                 }
-                items.push({ ...item, lines: item.lines.slice(0, left) })
-                left -= item.lines.length
+                items.push({ ...item, lines: cutLines(item.lines, left) })
+                left -= wrapped(item.lines)
             }
             return { ...block, items }
         }
     }
+}
+
+function cutLines(lines: Line[], room: number): Line[] {
+    const kept: Line[] = []
+    let left = room
+    for (const line of lines) {
+        if (left <= 0) {
+            break
+        }
+        kept.push(wraps(line) <= left ? line : cutLine(line, left * WRAP))
+        left -= wraps(line)
+    }
+    return kept
+}
+
+/**
+ * The first `chars` characters of `line`, an ellipsis among them, cut where a word ends: a piece cut mid-word, a URL
+ * that would link somewhere else or a code span, is left out from there.
+ */
+function cutLine(line: Line, chars: number): Line {
+    const kept: Line = []
+    let left = chars - 1
+    for (const piece of line) {
+        if (piece.text.length <= left) {
+            kept.push(piece)
+            left -= piece.text.length
+            continue
+        }
+        if (piece.kind !== 'code') {
+            const end = piece.text.slice(0, left + 1).search(/\s\S*$/u)
+            const head = piece.text.slice(0, Math.max(0, end)).trimEnd()
+            if (head !== '') {
+                kept.push({ ...piece, text: head })
+            }
+        }
+        break
+    }
+    kept.push({ kind: 'text', text: '…' })
+    return kept
 }

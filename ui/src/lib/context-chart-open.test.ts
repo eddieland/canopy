@@ -26,9 +26,9 @@ describe('parseOpen', () => {
 
 describe('withOpen', () => {
     it("opens or closes one kind's and leaves the others as they were", () => {
-        expect(withOpen(['tick'], 'run', true)).toBe('["run","tick"]')
-        expect(withOpen(['run', 'tick'], 'run', false)).toBe('["tick"]')
-        expect(withOpen(['run'], 'run', true)).toBe('["run"]')
+        expect(withOpen(['tick'], 'run', true)).toEqual(['run', 'tick'])
+        expect(withOpen(['run', 'tick'], 'run', false)).toEqual(['tick'])
+        expect(withOpen(['run'], 'run', true)).toEqual(['run'])
     })
 })
 

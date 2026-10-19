@@ -1,7 +1,6 @@
-import { useSyncExternalStore } from 'react'
-
 import { TICKER_TOPICS } from '@/lib/headlines'
 import type { TickerTopic } from '@/lib/headlines'
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
  * The header ticker's settings (src/components/shell/ticker.tsx): whether it shows, how fast a headline crawls, how
@@ -85,65 +84,14 @@ export function parseSettings(raw: string | null): TickerSettings {
     }
 }
 
-function read(): TickerSettings {
-    try {
-        return parseSettings(globalThis.localStorage.getItem(STORAGE_KEY))
-    } catch {
-        // Storage can be unavailable (privacy modes).
-        return DEFAULTS
-    }
-}
-
-let snapshot = read()
-const listeners = new Set<() => void>()
-
-function announce(next: TickerSettings): void {
-    const same = next.hidden.join() === snapshot.hidden.join()
-    if (next.on === snapshot.on && next.speed === snapshot.speed && next.gap === snapshot.gap && same) {
-        return
-    }
-    snapshot = next
-    for (const listener of listeners) {
-        listener()
-    }
-}
-
-function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) {
-        announce(read())
-    }
-}
-
-function subscribe(listener: () => void): () => void {
-    listeners.add(listener)
-    if (listeners.size === 1) {
-        globalThis.addEventListener('storage', onStorage)
-        announce(read())
-    }
-    return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-            globalThis.removeEventListener('storage', onStorage)
-        }
-    }
-}
-
-function getSnapshot(): TickerSettings {
-    return snapshot
-}
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseSettings, serialize: JSON.stringify })
 
 /** The ticker's settings. Re-renders on a change from this tab or another. */
 export function useTickerSettings(): TickerSettings {
-    return useSyncExternalStore(subscribe, getSnapshot)
+    return useStoredSetting(setting)
 }
 
 /** Stores a change to any of the settings and applies it now. */
 export function setTickerSettings(change: Partial<TickerSettings>): void {
-    const next = { ...snapshot, ...change }
-    try {
-        globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
-        // Not persisted, but still applied for this page.
-    }
-    announce(next)
+    setting.set({ ...setting.get(), ...change })
 }
