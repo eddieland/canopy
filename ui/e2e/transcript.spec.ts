@@ -250,6 +250,40 @@ test("a transcript's chart names what grew each call's context, and shows the la
     await expect(transcript.locator('details[open]')).toHaveCount(1)
 })
 
+/** The middle of an element's box across the page, or NaN for one not drawn, which no comparison passes. */
+function center(box: { x: number; width: number } | null): number {
+    return box === null ? Number.NaN : box.x + box.width / 2
+}
+
+test("a short session's context bars stand centered in their track, each call's number under its bar", async ({
+    page,
+}) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const context = page.getByTestId('transcript-context')
+    await context.getByRole('button', { name: 'Show chart' }).click()
+    const plot = context.getByTestId('context-plot')
+    await expect(plot.getByRole('radio')).toHaveCount(3)
+    const track = await plot.boundingBox()
+    const first = await context.getByTestId('context-call-1').boundingBox()
+    const last = await context.getByTestId('context-call-3').boundingBox()
+    // Three bars, not a clump at the track's left: the row's middle is the track's.
+    const row = { x: first?.x ?? 0, width: (last?.x ?? 0) + (last?.width ?? 0) - (first?.x ?? 0) }
+    expect(Math.abs(center(row) - center(track))).toBeLessThanOrEqual(1)
+    // Each call's number is centered under its bar, the legend beside the axis taking none of its track.
+    const offsets = await Promise.all(
+        [1, 2, 3].map(async (n) => {
+            const bar = await context.getByTestId(`context-call-${n}`).boundingBox()
+            const name = await context.getByTestId(`context-axis-${n}`).boundingBox()
+            return Math.abs(center(name) - center(bar))
+        }),
+    )
+    expect(
+        offsets.every((offset) => offset <= 1),
+        `offsets: ${offsets.join(', ')}`,
+    ).toBe(true)
+})
+
 test("a transcript's context chart folds to its line, which still shows the largest addition's row", async ({
     page,
 }) => {

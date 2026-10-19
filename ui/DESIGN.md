@@ -938,13 +938,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   what the agent did far more often than to ask why its context grew; each kind of page (a run's, a chore run's, a
   tick's) keeps it open or closed across reloads, as Pretty is kept (`src/lib/context-chart-open.ts`), so the rows
   start under the header, the counts, and one line. Open, a bar per call, as tall as what it was sent (input, cache
-  read, and cache write), 32px at most, from one baseline, the peak's at 80% with its size over it: what the call
+  read, and cache write), 32px wide at most and the row centered, as Charts says, so a short session's bars stand
+  mid-panel rather than clumped at its left, from one baseline, the peak's at 80% with its size over it: what the call
   carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
   segment's corners rounded. The first call's is the runtime's own overhead and canopy's prompt, the prompt's tokens
   its characters over four; a call the runtime counted none of has no bar. The bars are a `ToggleGroup`'s items, each
-  named for its call, size, and step on hover and to a screen reader; the axis under them names each call, every
-  fifth back from the last past twelve, with the legend at its end, one word each, `carried` and `added`, what the
-  first call's two parts are on their hover. The call picked, at first the one the largest addition grew, sits raised,
+  named for its call, size, and step on hover and to a screen reader; the axis under them, in the bars' track, names
+  each call, every fifth back from the last past twelve. The legend, one word each, `carried` and `added`, what the
+  first call's two parts are on their hover, sits at the axis's height in a column of its own beside the track, so a
+  number stays under its bar at any count. The call picked, at first the one the largest addition grew, sits raised,
   and a line under the chart, one readout with its call in `foreground`, says what grew it: the step on the call
   before, then what that call printed (its text, and its tool calls, each input and output), largest first, each its
   share of the step by its characters (`≈4.2k`, the characters on hover), at most five and then how many more. The
