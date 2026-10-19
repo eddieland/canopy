@@ -118,6 +118,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   where `in` is a substring test. A parameter stays concrete when the function mutates, stores, or returns it, or hands
   it to `json.dumps` or `isinstance`; a click command's parameters stay the tuple click passes. No linter checks this,
   so review does.
+- A frozen dataclass holds no mutable collection: a sequence field is a `tuple`, a set a `frozenset`, and a mapping is
+  typed `Mapping`, so what holds one cannot change it. A class that keeps state it changes is not frozen.
+  `tests/canopy/test_frozen.py` fails on a `list`, `dict`, or `set` field.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
   Nothing else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if

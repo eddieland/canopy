@@ -61,7 +61,7 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
     )
     found = transcript.read(path, SESSION)
     assert found is not None
-    assert found.entries == [
+    assert found.entries == (
         Text(AT, "The tests first.", reasoning=True, call=1),
         Text(AT, "Running the tests.", call=1),
         ToolCall(
@@ -77,7 +77,7 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
         ToolCall(AT, "read", "error", None, '{\n  "filePath": "/x"\n}', "no such file", None, call=1),
         Step(AT, "tool-calls", 0.25, Tokens(100, 20, 3, 400, 50), call=1),
         Error(AT, "APIError", "", call=1),
-    ]
+    )
     assert (found.truncated, found.unreadable) == (False, 0)
 
 
@@ -122,7 +122,7 @@ def test_reasoning_with_no_text_is_left_out(tmp_path: Path) -> None:
     )
     found = transcript.read(path, SESSION)
     assert found is not None
-    assert found.entries == [Text(AT, "done")]
+    assert found.entries == (Text(AT, "done"),)
     assert found.unreadable == 0
 
 
@@ -136,7 +136,7 @@ def test_an_event_that_does_not_validate_is_counted_and_left_out(tmp_path: Path)
     )
     found = transcript.read(path, SESSION)
     assert found is not None
-    assert found.entries == [Text(AT, "fine")]
+    assert found.entries == (Text(AT, "fine"),)
     assert found.unreadable == 3
 
 
@@ -160,7 +160,7 @@ def test_a_bad_timestamp_is_no_time(tmp_path: Path) -> None:
     path = log(tmp_path, event("text", {"type": "text", "text": "when?"}, ms=-1))
     found = transcript.read(path, SESSION)
     assert found is not None
-    assert found.entries == [Text(None, "when?")]
+    assert found.entries == (Text(None, "when?"),)
 
 
 def test_entries_past_the_bounds_are_left_out_and_say_so(tmp_path: Path) -> None:

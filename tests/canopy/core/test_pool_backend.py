@@ -132,7 +132,7 @@ def test_under_canopy_reconcile_still_returns_a_stale_treehouse_lease(
     with in_tick(conn):
         reconciled = reconcile.run(context(ws, canopy_env, conn), log)
     assert [s["status"] for s in fake_pool(treehouse_state, ws, "api")] == ["available"]
-    assert reconciled.leased == {"api": [], "web": []}
+    assert reconciled.leased == {"api": (), "web": ()}
 
 
 def test_under_canopy_reconcile_returns_a_stale_canopy_lease_and_runs_no_shadow(ws: Ws, canopy_env: CanopyEnv) -> None:

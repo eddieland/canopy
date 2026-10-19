@@ -593,7 +593,7 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
 
 
 def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None:
-    gone = notify_journal.Diff([], [("chore:deps", "lodash")], ["fp"], [("chore:deps", "lodash", None)], [True])
+    gone = notify_journal.Diff((), (("chore:deps", "lodash"),), ("fp",), (("chore:deps", "lodash", None),), (True,))
     sent = message.Message("log", "/r", Path("/r/attention.md"), gone, 0)
     assert "- chore:deps lodash (dismissed)\n" in sent.text()
     [resolved] = json.loads(sent.json())["attention"]["resolved"]

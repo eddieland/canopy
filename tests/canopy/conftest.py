@@ -6,7 +6,7 @@ import contextlib
 import json
 import os
 import sqlite3
-from collections.abc import Generator, Iterator
+from collections.abc import Generator, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -133,7 +133,7 @@ class Ws:
     """A workspace of two repositories, `api` and `web`, each cloned from a bare origin under tmp_path."""
 
     root: Path
-    origins: dict[str, Path]
+    origins: Mapping[str, Path]
     state_dir: Path
     journals: Journals
 

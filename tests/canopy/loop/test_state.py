@@ -242,7 +242,7 @@ def rendered(
             tick_id=tick_id,
             dry_run=dry_run,
             now=NOW,
-            reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
+            reconciled=reconcile.Reconciled(capacity, {"repo": tuple(leased)}),
             query_due=query_due,
         )
     head, rest = block.split("```json\n", 1)

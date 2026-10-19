@@ -30,7 +30,7 @@ class Thread:
     """A comment on a passage of the ticket's plan, with its replies, oldest first."""
 
     thread: records.PlanThread
-    replies: list[records.PlanReply]
+    replies: tuple[records.PlanReply, ...]
 
 
 def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
@@ -48,7 +48,7 @@ def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
         "SELECT r.* FROM plan_replies r JOIN plan_threads t ON t.id = r.thread_id WHERE t.ticket_key = ? ORDER BY r.id",
         (key,),
     )
-    return [Thread(t, [r for r in replies if r.thread_id == t.id]) for t in found]
+    return [Thread(t, tuple(r for r in replies if r.thread_id == t.id)) for t in found]
 
 
 def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: str, body: str) -> Thread:
@@ -75,7 +75,7 @@ def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: 
             "RETURNING *",
             (key, quote, prefix, suffix, text, db.now()),
         )
-    return Thread(thread, [])
+    return Thread(thread, ())
 
 
 def reply(conn: sqlite3.Connection, key: str, thread_id: int, body: str) -> records.PlanReply:

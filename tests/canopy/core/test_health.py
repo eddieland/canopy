@@ -98,7 +98,7 @@ def test_runs_are_by_kind_sort_and_status_with_their_cost(tmp_path: Path, journa
     found = health.report(conn, NOW, 7)
     assert (found.since, found.until, found.days) == ("2026-10-02T00:00:00.000Z", "2026-10-09T00:00:00.000Z", 7)
     # Nothing before the window, and nothing still running.
-    assert found.outcomes == [
+    assert found.outcomes == (
         health.Outcome("overseer", "dry run", "ok", failed=False, runs=1, cost_usd=0.1),
         health.Outcome("overseer", "live", "ok", failed=False, runs=2, cost_usd=1.5),
         health.Outcome("overseer", "live", "overseer_failed", failed=True, runs=1, cost_usd=0.25),
@@ -110,7 +110,7 @@ def test_runs_are_by_kind_sort_and_status_with_their_cost(tmp_path: Path, journa
         health.Outcome("chores", "deps", "failed", failed=True, runs=1, cost_usd=None),
         health.Outcome("chores", "deps", "ok", failed=False, runs=1, cost_usd=None),
         health.Outcome("reviews", "review", "crashed", failed=True, runs=1, cost_usd=None),
-    ]
+    )
 
 
 def test_failures_are_the_newest_first_with_a_note_on_one_line(tmp_path: Path, journals: Journals) -> None:
@@ -147,17 +147,17 @@ def test_refusals_are_by_guard_the_most_first(tmp_path: Path, journals: Journals
     journal_of_failures(conn, NOW)
     found = health.report(conn, NOW, 7)
     first = found.failures[-1].id
-    assert found.refusals == [
+    assert found.refusals == (
         health.Refusal("capacity", decisions=3, ticks=2, last_tick=first + 1),
         health.Refusal("cooldown", decisions=1, ticks=1, last_tick=first),
-    ]
+    )
 
 
 def test_an_empty_window_has_nothing(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_failures(conn, NOW)
     found = health.report(conn, NOW - timedelta(days=30), 1)
-    assert (found.outcomes, found.failures, found.refusals) == ([], [], [])
+    assert (found.outcomes, found.failures, found.refusals) == ((), (), ())
 
 
 def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

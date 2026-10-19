@@ -8,7 +8,7 @@ from __future__ import annotations
 import operator
 import sqlite3
 from collections.abc import Collection, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from canopy.core import db
@@ -102,12 +102,12 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
 class Diff:
     """What changed for one sink since its last delivery: new items, and items it was told of that are gone."""
 
-    added: list[Item]
-    resolved: list[tuple[str, str]]  # (subject, reason)
-    resolved_fingerprints: list[str]
-    resolved_items: list[tuple[str | None, str, str | None]]  # (ticket key, reason, repo)
+    added: tuple[Item, ...]
+    resolved: tuple[tuple[str, str], ...]  # (subject, reason)
+    resolved_fingerprints: tuple[str, ...]
+    resolved_items: tuple[tuple[str | None, str, str | None], ...]  # (ticket key, reason, repo)
     # Whether each resolved item left because the operator dismissed it rather than because its cause is gone.
-    resolved_dismissed: list[bool] = field(default_factory=list[bool])
+    resolved_dismissed: tuple[bool, ...] = ()
 
     def __bool__(self) -> bool:
         """Whether anything changed.
@@ -150,11 +150,11 @@ def diff(conn: sqlite3.Connection, sink_name: str, items: Sequence[Item], dismis
     )
     gone = [g for g in gone if g[2] not in now_open]
     return Diff(
-        added,
-        [(g[0], g[1]) for g in gone],
-        [g[2] for g in gone],
-        [g[3] for g in gone],
-        [g[2] in dismissed for g in gone],
+        tuple(added),
+        tuple((g[0], g[1]) for g in gone),
+        tuple(g[2] for g in gone),
+        tuple(g[3] for g in gone),
+        tuple(g[2] in dismissed for g in gone),
     )
 
 

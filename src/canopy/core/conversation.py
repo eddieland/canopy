@@ -528,7 +528,7 @@ class Forgot:
     """What `forget` cleared: the ticket's branch and its units' PRs, as the journal had them."""
 
     branch: str | None
-    prs: list[str]
+    prs: tuple[str, ...]
 
 
 def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: Path) -> Forgot:
@@ -576,7 +576,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
         db.forget_ticket(conn, ref.id, channel=channel, branch=ticket.branch, prs=prs)
         # Its notes are about work that is gone, as its earlier runs' reports are (DESIGN §28, Retention).
         memory.end_ticket_notes(conn, ref.id, "forgotten work")
-    return Forgot(branch=ticket.branch, prs=prs)
+    return Forgot(branch=ticket.branch, prs=tuple(prs))
 
 
 # The overseer's mirror of tracker comments

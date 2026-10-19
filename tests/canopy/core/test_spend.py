@@ -180,7 +180,7 @@ def test_an_empty_journal_lists_each_day_with_nothing_spent(canopy_env: CanopyEn
     assert found.totals == spend.Costs()
     assert found.idle_share is None
     assert [g.ticks for g in found.ticks] == [0] * len(spend.GROUPS)
-    assert found.woken == []
+    assert found.woken == ()
 
 
 def test_idle_ticks_are_the_newest_live_idle_ones_in_the_window(canopy_env: CanopyEnv) -> None:
@@ -312,18 +312,18 @@ def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Pat
     assert [d.done for d in found.per_day] == [0, 0, 0, 0, 0, 2, 1]
     assert found.totals.total == pytest.approx(9.5)
     assert found.per_done == pytest.approx(9.5 / 3)  # the window's whole spend, the overseer's included
-    assert found.tickets == [
+    assert found.tickets == (
         spend.TicketSpend("A-1", "Merged", 1, 1, 3.25, "merged", earlier(NOW, 1)),
         spend.TicketSpend("A-2", "Closed in the tracker", 1, 0, 1.0, "closed", earlier(NOW, 1)),
         spend.TicketSpend("A-3", None, 1, 0, 0.5),
         spend.TicketSpend("A-4", None, 1, 0, None),  # done before the window: not done in it
         spend.TicketSpend("A-5", None, 0, 0, None, "merged", earlier(NOW, 0)),
-    ]
-    assert found.pull_requests == [
+    )
+    assert found.pull_requests == (
         spend.PullRequestSpend(web, "A-1", "merged", runs=1, reviews=1, cost_usd=3.25),
         spend.PullRequestSpend(api, "A-1", None, runs=1, reviews=0, cost_usd=3.0),
         spend.PullRequestSpend(other, None, None, runs=0, reviews=1, cost_usd=0.75),
-    ]
+    )
 
 
 def test_a_ticket_forgotten_or_reopened_since_it_was_done_is_not_done(tmp_path: Path, journals: Journals) -> None:
@@ -335,7 +335,7 @@ def test_a_ticket_forgotten_or_reopened_since_it_was_done_is_not_done(tmp_path: 
     decide(conn, t, "A-2", earlier(NOW, 1), "done", "every PR merged")
     conn.execute("UPDATE tickets SET forgotten_at = ? WHERE key = 'A-1'", (earlier(NOW, 0),))
     found = spend.breakdown(conn, NOW, 7)
-    assert (found.done, found.per_done, found.tickets) == (0, None, [])
+    assert (found.done, found.per_done, found.tickets) == (0, None, ())
 
 
 def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
@@ -382,11 +382,11 @@ def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
     db.set_run_report(conn, "runs", run_id, "s", first_call(30_000, 1_000), digest="new")
 
     found = spend.breakdown(conn, NOW, 1)
-    assert found.first_calls == [
+    assert found.first_calls == (
         spend.FirstCalls("overseer", "old", 3, 51_000, 1 / 3, earlier(NOW, 0, 5), earlier(NOW, 0, 3)),
         spend.FirstCalls("overseer", "new", 3, 61_000, 1 / 3, earlier(NOW, 0, 2), earlier(NOW, 0, 0.5)),
         spend.FirstCalls("workers", "new", 1, 30_000, 0.0, earlier(NOW, 0, 1), earlier(NOW, 0, 1)),
-    ]
+    )
 
 
 def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -433,15 +433,15 @@ def test_tools_are_by_kind_and_tool_the_most_returned_first(tmp_path: Path, jour
     conn = journals.open(tmp_path / "canopy.db")
     tools_journal(conn, NOW)
     found = spend.breakdown(conn, NOW, 1)
-    assert found.tools == [
+    assert found.tools == (
         # Both ticks' reads, the dry run's among them; not the tick before the window.
         spend.ToolSpend("overseer", "github_pull_request_read", 2, 6, 0, 80_000, 20_000),
         spend.ToolSpend("workers", "bash", 1, 30, 4, 20_000, 5_000),
         spend.ToolSpend("overseer", "bash", 1, 2, 1, 900, 225),  # a tie goes to the kinds' order
         spend.ToolSpend("reviews", "bash", 1, 1, 0, 900, 225),
         spend.ToolSpend("chores", "read", 1, 1, 0, 10, 2),
-    ]
-    assert spend.breakdown(conn, NOW - timedelta(days=30), 1).tools == []
+    )
+    assert spend.breakdown(conn, NOW - timedelta(days=30), 1).tools == ()
 
 
 def test_canopy_spend_prints_the_tools_that_returned_the_most(

@@ -403,7 +403,7 @@ BEHAVIOR_SETTINGS = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass
 class Script(AbstractContextManager[None]):
     """What the fake agent in one role does, as tests/fakes/agent reads it: until a block on it ends, the fake does it.
 

@@ -74,7 +74,7 @@ class ChoreState:
 
     name: str
     chore: Chore
-    runs: list[records.ChoreRun]
+    runs: tuple[records.ChoreRun, ...]
     older: Callable[[int], list[records.ChoreRun]]
     dismissals: Mapping[str, str]
     starts: FindingStarts | None = None
@@ -262,7 +262,7 @@ def state_of(conn: sqlite3.Connection, name: str, chore: Chore, *, starts: Findi
         return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
     runs = db.chore_runs(conn, name, _HISTORY_RUNS)
-    return ChoreState(name, chore, runs, older, db.dismissals(conn, name), starts)
+    return ChoreState(name, chore, tuple(runs), older, db.dismissals(conn, name), starts)
 
 
 def open_findings(

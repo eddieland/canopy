@@ -54,7 +54,7 @@ class Prepared:
     body: str
     context: str | None
     cwd: Path
-    argv: list[str]
+    argv: tuple[str, ...]
 
 
 def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
@@ -81,7 +81,7 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         cwd, argv, _ = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
         raise TrialError(str(e)) from e
-    return Prepared(name, chore, body, context, cwd, argv)
+    return Prepared(name, chore, body, context, cwd, tuple(argv))
 
 
 def record(ctx: Context, prepared: Prepared) -> Recorded:

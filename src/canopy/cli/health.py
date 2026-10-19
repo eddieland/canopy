@@ -14,6 +14,8 @@ from canopy.cli.spend import cost_text
 from canopy.core import health, spend
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core.health import Failure, Health
 
 _KIND_WIDTH = 10
@@ -79,7 +81,7 @@ def _line(kind: str, what: str, status: str, runs: str, spent: str) -> str:
 
 
 # The newest failures, each with what `canopy decisions` or `canopy show` takes to read it whole.
-def _failures(failures: list[Failure]) -> list[str]:
+def _failures(failures: Sequence[Failure]) -> list[str]:
     if not failures:
         return ["No tick or run failed."]
     lines = ["Newest failures (! above):"]

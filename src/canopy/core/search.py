@@ -56,8 +56,8 @@ class Found:
     """A search's words, its hits in source order and newest first within each, and the sources that had more."""
 
     words: tuple[str, ...]
-    hits: list[Hit]
-    more: list[Source]
+    hits: tuple[Hit, ...]
+    more: tuple[Source, ...]
 
 
 def words(query: str) -> tuple[str, ...]:
@@ -93,7 +93,7 @@ def search(conn: sqlite3.Connection, query: str) -> Found:
         if len(rows) > PER_SOURCE:
             more.append(source)
         hits.extend(hit(row, snippet(str(row["text"]), terms)) for row in rows[:PER_SOURCE])
-    return Found(words=terms, hits=hits, more=more)
+    return Found(words=terms, hits=tuple(hits), more=tuple(more))
 
 
 def snippet(text: str, terms: Iterable[str]) -> str:
