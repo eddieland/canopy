@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import type { Plugin } from 'vite'
 
 // The FastAPI server the dev server proxies to: `npm run dev:api` starts it with mock data.
@@ -71,6 +71,8 @@ export default defineConfig({
         host: '127.0.0.1',
         port: 5173,
         strictPort: true,
+        // The guide shows the repository's example config files whole (src/lib/guide.ts), from outside ui/.
+        fs: { allow: [searchForWorkspaceRoot(process.cwd()), fileURLToPath(new URL('../examples', import.meta.url))] },
         // /api includes the SSE stream, which the proxy streams as it arrives, and /api-docs, the docs page's files.
         proxy: { '/api': { target: api, changeOrigin: true } },
     },

@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 import react from '@vitejs/plugin-react'
+import { searchForWorkspaceRoot } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 /**
@@ -12,6 +13,10 @@ export default defineConfig({
     plugins: [react({ compiler: true })],
     resolve: {
         alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    },
+    // The guide shows the repository's example config files whole (src/lib/guide.ts), from outside ui/.
+    server: {
+        fs: { allow: [searchForWorkspaceRoot(process.cwd()), fileURLToPath(new URL('../examples', import.meta.url))] },
     },
     test: {
         environment: 'happy-dom',

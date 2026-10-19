@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
     anchor,
+    EMBEDS,
     GUIDE,
     GUIDE_GROUPS,
     guideFor,
@@ -32,6 +33,19 @@ describe('the guide', () => {
 
     it('has no link that goes nowhere: each is read as a link, and every heading it names is there', () => {
         expect(GUIDE.flatMap((page) => linkProblems(page))).toEqual([])
+    })
+
+    it('shows each example file whole, as a code block of its lines, and the rest of the page after it', () => {
+        const code = guidePage('config-files')?.body.flatMap((block) => (block.kind === 'code' ? [block.lines] : []))
+        const files = Object.values(EMBEDS).map((file) => file.replace(/\n$/u, '').split('\n'))
+        expect(code).toEqual(files)
+        expect(guidePage('config-files')?.body.at(-1)?.kind).toBe('paragraph')
+    })
+
+    it('leaves a fence naming no example file as written', () => {
+        expect(
+            GUIDE.flatMap((page) => page.body).filter((block) => block.kind === 'code' && block.lines.length === 0),
+        ).toEqual([])
     })
 })
 
