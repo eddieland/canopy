@@ -52,11 +52,11 @@ def overview(
 
 @router.get("/memory/search", operation_id="searchMemory", summary="Search agent memory")
 def search(
-    q: Annotated[str, Query(max_length=200, description="The words to find, any of them, as canopy memory search.")],
+    q: Annotated[str, Query(max_length=200, description="The words to find: any of them, or with every, all.")],
     backend: BackendDep,
     *,
     notes: Annotated[bool, Query(description="Only ticket notes in force, the 50 best of them.")] = False,
-    every: Annotated[bool, Query(description="Only what holds every word, as the memory page's filter keeps.")] = False,
+    every: Annotated[bool, Query(description="Only what holds every word, each a whole word, endings aside.")] = False,
 ) -> MemoryFound:
     """`canopy memory search Q` in the operator's shell: every memory that keeps its text, best match first, at most 50.
 

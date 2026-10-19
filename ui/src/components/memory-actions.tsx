@@ -57,7 +57,8 @@ export function MemorySaid({ said, className }: { said: string | null; className
  * since the form says what the click would not before the save: a private ticket's run's, whose words may hold what the
  * operator kept off the tracker, and one whose key a lesson in force has, which the promote replaces. Their first
  * button opens the form, and where there is no form the line says to promote them from the memory page. It reads the
- * lessons in force to tell (`memoryQuery`, which the memory page has already read), and promotes nothing until then.
+ * lessons in force to tell (`memoryQuery`, which the memory page has already read), and promotes nothing until then;
+ * when that read fails, the line says so and to promote it from the memory page.
  */
 export function ProposalActions({
     proposal,
@@ -85,7 +86,7 @@ export function ProposalActions({
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const pending = promote.isPending || reject.isPending
-    const { data } = useQuery(memoryQuery)
+    const { data, isError } = useQuery(memoryQuery)
     const replaced = data === undefined ? undefined : inForceUnder(data.lessons, proposal.key)
     const viaForm = proposal.private || replaced !== undefined
     // What the button that opens the form says on hover, read only while `viaForm`.
@@ -111,6 +112,11 @@ export function ProposalActions({
                     ) : proposal.private ? (
                         <span className="text-xs text-muted-foreground" data-testid="promote-private-elsewhere">
                             private: promote it from the memory page, where the form warns first
+                        </span>
+                    ) : data === undefined && isError ? (
+                        // A disabled button shows no title, so a failed read says why in the line.
+                        <span className="text-xs text-muted-foreground" data-testid="promote-unread">
+                            the lessons in force could not be read: promote it from the memory page
                         </span>
                     ) : replaced === undefined ? (
                         <Button

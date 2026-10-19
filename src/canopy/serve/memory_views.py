@@ -85,7 +85,8 @@ def found(ctx: Context, query: str, *, notes: bool = False, every: bool = False)
     """What `canopy memory search QUERY` finds in the operator's shell: every memory that keeps its text.
 
     With `notes`, only ticket notes in force, so the limit is spent on the notes a page lists; with `every`, only those
-    that hold every word, as the memory page's filter keeps its rows.
+    that hold every word, as the memory page's filter keeps its rows, though each as a whole word, where the filter's
+    may be part of one.
 
     Returns:
         The memories found, best match first, at most `memory_search.MAX_LIMIT`; none for a query of no word.
