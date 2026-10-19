@@ -6,7 +6,8 @@ one: every channel (`canopy start URL --review`, `canopy stop URL`, and the web 
 refuses inside canopy's own ticks and runs. The overseer names the PR's repository when it runs the review, as it does
 for `review.query`'s matches. The harness ends a request when a review of its PR ends `done` (`db.finish_run`),
 or when `canopy review run` refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed
-first, or is in none of the workspace's repositories (`end`). At most one request per PR is open.
+first, or is in none of the workspace's repositories (`end`). At most one request per PR is open. A request may carry
+the operator's notes, which the reviewer's prompt carries (`reviews.start`).
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ UNKNOWN_REPO = "unknown_repo"
 STOPPED = "stopped"
 # The reasons the overseer may give `canopy review end`: what it read on the PR, never the operator's own.
 OVERSEER_REASONS = (MERGED, CLOSED, UNKNOWN_REPO)
+#: The most characters a request's notes may hold, after stripping: the operator's bound on what they write (§22).
+MAX_NOTES = conversation.MAX_OPERATOR
 
 
 def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:
@@ -89,21 +92,29 @@ class Requested:
     already: bool
 
 
-def request(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, channel: str) -> Requested:
-    """Ask for the PR `ref` names to be reviewed at its head, through `channel`. Operator only.
+def request(
+    conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, channel: str, notes: str | None = None
+) -> Requested:
+    """Ask for the PR `ref` names to be reviewed at its head, through `channel`, with `notes`. Operator only.
+
+    `notes` is what the operator wants the reviewer to know, stripped; blank is none. On a request already open, notes
+    replace its own, and none leaves them as they were. A review already running keeps the prompt it started with.
 
     Returns:
         The PR's open request, and whether one was already open.
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `reviews_off` when `capacity.max_reviews` is 0;
-            `bad_pr` for a subject that is not a PR's plain https:// URL; `loop_pr` for a PR a ticket's run pushed to,
-            which `review.agent_prs` covers.
+            `bad_notes` for notes over `MAX_NOTES` characters; `bad_pr` for a subject that is not a PR's plain https://
+            URL; `loop_pr` for a PR a ticket's run pushed to, which `review.agent_prs` covers.
         RuntimeError: the request was not there to read back once written.
     """
     conversation.check_operator()
     if config.capacity.max_reviews <= 0:
         raise conversation.Refused("reviews_off", "capacity.max_reviews is 0, so no review can run")
+    said = (notes or "").strip() or None
+    if said is not None and len(said) > MAX_NOTES:
+        raise conversation.Refused("bad_notes", f"the notes are {len(said)} characters; the most is {MAX_NOTES}")
     url = _pr_url(ref)
     if conn.execute("SELECT 1 FROM ticket_units WHERE pr_url = ?", (url,)).fetchone() is not None:
         raise conversation.Refused(
@@ -112,10 +123,14 @@ def request(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, 
         )
     with db.transaction(conn):
         found = open_request(conn, url)
+        if found is not None and said is not None:
+            conn.execute("UPDATE review_requests SET notes = ? WHERE id = ?", (said, found.id))
+            found = open_request(conn, url)
         if found is not None:
             return Requested(request=found, already=True)
         conn.execute(
-            "INSERT INTO review_requests (pr_url, created_at, channel) VALUES (?, ?, ?)", (url, db.now(), channel)
+            "INSERT INTO review_requests (pr_url, created_at, channel, notes) VALUES (?, ?, ?, ?)",
+            (url, db.now(), channel, said),
         )
         made = open_request(conn, url)
     if made is None:
