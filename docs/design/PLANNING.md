@@ -355,10 +355,9 @@ The schema is in `migrations/`.
 ### Triage before a plan (M55)
 
 Partly built (ROADMAP M55, REQUIREMENTS R22). Built: the configuration, the run and its prompt, dispatch's guards,
-the waiver, and what the state block and `canopy show` say of them. Not yet: the overseer prompt's row, so the
-overseer still dispatches `plan` where a triage is due; the ticket's plan card in the web UI; the reviewer's second
-opinion; the spend page's kind; and feedback rounds. Until each lands, §8, §12, §14, and §21 describe canopy as it
-is there. This part says what changes in each.
+the waiver, what the state block and `canopy show` say of them, and the overseer prompt's row. Not yet: the ticket's
+plan card in the web UI; the reviewer's second opinion; the spend page's kind; and feedback rounds. Until each lands,
+§8, §12, §14, and §21 describe canopy as it is there. This part says what changes in each.
 
 With plans on, a typo fix or a one-line config change still costs a planner run, and the operator's reading and
 approval of a plan nobody needed. A **triage** is a cheaper run that reads the ticket and the code first and judges, by
