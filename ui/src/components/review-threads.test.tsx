@@ -1,9 +1,12 @@
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import { draft, pullRequestThreads, reviewThread } from '@/api/mocks'
+import { ToastContext } from '@/hooks/use-toast'
+import type { NewToast } from '@/lib/toasts'
 import { renderRouted } from '@/test-utils'
 
 import { DraftCard, ReviewThreads, ThreadCard } from './review-threads'
@@ -12,9 +15,11 @@ const PR = 'https://github.com/acme/web/pull/88'
 
 // Every request sent, by its method and path, with its body, and what the server stand-in answers each.
 let sent: { method: string; path: string; body: unknown }[] = []
-let answer: (path: string) => Response
+let answer: (path: string) => Response | Promise<Response>
 // What the cards call once a verb is done, to read again what shows them.
 const changed = vi.fn<() => void>()
+// Every toast the cards showed.
+let toasts: NewToast[] = []
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -27,6 +32,7 @@ const server: Middleware = {
 
 beforeEach(() => {
     sent = []
+    toasts = []
     changed.mockClear()
     answer = () => Response.json(pullRequestThreads())
     api.use(server)
@@ -36,6 +42,19 @@ afterEach(() => {
     api.eject(server)
     cleanup()
 })
+
+// The node, under a toast stand-in that keeps what each toast said.
+function toasting(node: ReactNode) {
+    return (
+        <ToastContext
+            value={(toast) => {
+                toasts.push(toast)
+            }}
+        >
+            {node}
+        </ToastContext>
+    )
+}
 
 function writes() {
     return sent.filter((s) => s.method === 'POST')
@@ -93,16 +112,27 @@ describe('DraftCard', () => {
     })
 
     it('sends the draft named by the hash of the text shown, and says what the send did', async () => {
-        answer = () =>
+        let post: ((response: Response) => void) | undefined
+        const posted = new Promise<Response>((resolve) => {
+            post = resolve
+        })
+        answer = () => posted
+        await renderRouted(toasting(<DraftCard draft={draft()} onChange={changed} />))
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+        // Until the post returns, the button says it is sending.
+        const sending = await screen.findByRole<HTMLButtonElement>('button', { name: 'Sending…' })
+        expect(sending.disabled).toBe(true)
+        expect(toasts).toEqual([])
+        post?.(
             Response.json({
                 posted: [draft({ status: 'sent', sent_url: `${PR}#discussion_r9` })],
                 already: [],
                 failed: [],
                 unconfirmed: [],
-            })
-        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+            }),
+        )
         expect((await screen.findByRole('status')).textContent).toBe(`Sent run 45's draft 1: ${PR}#discussion_r9.`)
+        expect(toasts).toEqual([{ title: "Sent run 45's draft 1", detail: `${PR}#discussion_r9`, tone: 'done' }])
         expect(changed).toHaveBeenCalledOnce()
         expect(writes()).toEqual([
             {
@@ -116,9 +146,11 @@ describe('DraftCard', () => {
     it('names the guard of a refused send, as the CLI does', async () => {
         answer = () =>
             Response.json({ detail: { guard: 'stale', reason: "run 45's draft 1 changed since" } }, { status: 409 })
-        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
+        await renderRouted(toasting(<DraftCard draft={draft()} onChange={changed} />))
         fireEvent.click(screen.getByRole('button', { name: 'Send' }))
         expect((await screen.findByRole('alert')).textContent).toBe("refused (stale): run 45's draft 1 changed since")
+        // A refusal is the card's alone, never a toast.
+        expect(toasts).toEqual([])
     })
 
     it("edits the text as plain text, within the bound, and saves it as the operator's", async () => {
@@ -177,9 +209,10 @@ describe('ReviewThreads', () => {
             path === '/api/drafts/send'
                 ? Response.json({ posted: [draft({ status: 'sent' })], already: [], failed: [], unconfirmed: [] })
                 : Response.json(threads)
-        await renderRouted(<ReviewThreads url={PR} />)
+        await renderRouted(toasting(<ReviewThreads url={PR} />))
         fireEvent.click(await screen.findByRole('button', { name: 'Send 2 waiting' }))
         await screen.findByRole('status')
+        expect(toasts).toEqual([{ title: "Sent run 45's draft 1", tone: 'done' }])
         expect(writes()).toEqual([
             {
                 method: 'POST',

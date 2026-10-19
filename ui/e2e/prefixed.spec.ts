@@ -366,6 +366,7 @@ test("a run's drafted reply is edited and sent from the PR's page, as canopy dra
     await expect(reply.getByRole('status')).toHaveText(
         /^Sent run 45's draft 1: https:\/\/github\.com\/acme\/web\/pull\/88#discussion_r\d+\.$/u,
     )
+    await expect(page.getByTestId('toast')).toContainText("Sent run 45's draft 1")
     await expect(reply).toHaveAttribute('data-status', 'sent')
     await expect(reply.getByRole('button')).toHaveCount(0)
     await expect(reply.getByRole('link', { name: 'The reply on its host' })).toBeVisible()
