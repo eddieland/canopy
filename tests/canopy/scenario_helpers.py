@@ -37,6 +37,17 @@ it, and `time_passes` moves every time the journal recorded into the past, so a 
         scenario.time_passes(hours=1)
         scenario.run(fix, worker=pushes())
 
+The config is part of the story too: `configures` sets keys in the user file, by default, or in the workspace file or
+the private one, merged into what the file holds, so a key lands in its own table whatever came last in the file, and
+the story says what the next command reads:
+
+    def test_a_limit_of_one_stops_the_second_resume(scenario: Scenario, git_pool: GitPool) -> None:
+        scenario.configures(policy={"max_resume_attempts": 1})
+        scenario.run(worker=pushes())
+        scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]), worker=pushes())
+        [(action, _), _] = scenario.refuses(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]))
+        assert action == "refused:attempt_limit"
+
 A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
 it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
 `finishes`, doing what its script says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker
@@ -100,7 +111,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, redire
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Unpack
+from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
@@ -137,6 +148,10 @@ from tests.conftest import CanopyEnv
 #: What a worker does: one of the `*_does` helpers' blocks, or `pushes`, `asks`, or `fails`. A `Script` among them,
 #: `worker_does`'s and those three, is played by each ticket's run as made for that ticket (`Script.for_ticket`).
 type Worker = AbstractContextManager[None]
+
+#: Which of the workspace's config files a test sets keys in (DESIGN §12): the operator's user file, the workspace
+#: file, or the workspace's private file.
+type ConfigFile = Literal["user", "workspace", "private"]
 
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
@@ -474,6 +489,25 @@ class Scenario:
         self.story.append("\n".join([f"the operator runs {command}, which exits {exited}", *printed.told()]))
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
         return printed
+
+    def configures(self, file: ConfigFile = "user", /, **tables: Mapping[str, object]) -> None:
+        """Set the keys of each table in `tables`, named as in TOML, in the config `file`; the next command reads them.
+
+        A key set takes the place of the one there, and every other key stays, whatever table it is in, so a test sets
+        only what its story is about: `configures(policy={"max_resume_attempts": 2})`, or a table inside another as a
+        mapping inside one, `configures(notify={"sinks": {"slack": {"cmd": "true"}}})`.
+        """
+        assert tables, "configures sets at least one table's keys"
+        match file:
+            case "user":
+                path = self.env.user_file
+            case "workspace":
+                path = self.env.shared_file
+            case "private":
+                path = self.env.private_file
+            case _:
+                assert_never(file)
+        self.story.append(f"the {file} file sets {', '.join(self.env.configure(path, tables))}")
 
     def seen(self, *keys: str) -> None:
         """Record `keys`, KEY if none, as tickets an earlier tick saw, so the overseer owes each a decision."""
