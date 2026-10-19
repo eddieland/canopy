@@ -209,3 +209,20 @@ test('the memory page finds a note by what it says, as canopy memory search does
     await expect(found).toHaveCount(0)
     await expect(count).toHaveText('0 of 2 tickets · 0 notes found')
 })
+
+test.describe('copying from the memory page', () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('the memory page shows purge, which stays in the shell, and copies its command', async ({ page }) => {
+        await page.goto('memory')
+        await settled(page)
+        const purge = page.getByTestId('memory-purge')
+        await expect(purge).toContainText('from your shell alone')
+        await expect(purge).toContainText('--ticket KEY')
+        // No button purges: the one there copies the verb, for the shell to name what it deletes.
+        await expect(page.getByRole('button', { name: /purge/iu })).toHaveAccessibleName('Copy purge command')
+        await purge.getByRole('button', { name: 'Copy purge command' }).click()
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('canopy memory purge')
+        await expect(purge.getByRole('button', { name: 'Copied purge command' })).toBeVisible()
+    })
+})

@@ -13,7 +13,7 @@ import type {
     RunState,
 } from '@/api/types'
 import { Age } from '@/components/age'
-import { CopyButton } from '@/components/copy-button'
+import { Copyable, CopyButton } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { VersionForget } from '@/components/memory-actions'
 import { MemoryText } from '@/components/memory-text'
@@ -37,6 +37,9 @@ import { memoryRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+
+// What `MemoryPurge` copies: the verb alone, since what it purges is the operator's to name in the shell.
+const PURGE_COMMAND = 'canopy memory purge'
 
 // A proposal this close to lapsing undecided says so in the color of what waits on the operator.
 const LAPSING_SOON_MS = 2 * 24 * 60 * 60 * 1000
@@ -494,5 +497,27 @@ export function ProposalFacts({ proposal }: { proposal: MemoryProposal }) {
                 </span>
             )}
         </>
+    )
+}
+
+/**
+ * `canopy memory purge`, the one memory verb the page does not have, with a button that copies it and the options that
+ * name what it deletes. It stays the CLI's (DESIGN §28): a verb over many memories at once is not a click. What is
+ * copied is the verb alone, which run as it is asks for one of them, so a paste never purges what no one named.
+ */
+export function MemoryPurge() {
+    return (
+        <p
+            className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground"
+            data-testid="memory-purge"
+        >
+            <span>Purge deletes the text of many memories at once, from your shell alone:</span>
+            <Copyable text={PURGE_COMMAND} label="purge command" className="font-mono text-foreground" />
+            <span>
+                with <code className="font-mono">--ticket KEY</code> for what a ticket&apos;s runs wrote,{' '}
+                <code className="font-mono">--run ID</code> for a run&apos;s, or{' '}
+                <code className="font-mono">--all</code> for every memory, your lessons included.
+            </span>
+        </p>
     )
 }

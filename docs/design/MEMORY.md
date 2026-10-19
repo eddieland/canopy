@@ -243,7 +243,8 @@ The form reads the lessons in force and the workspace's repositories from the me
 than every ticket's memory carrying them: a ticket's page reads them only when the operator promotes from it. Forget
 cannot be undone, so it carries the memory's
 ref typed out (`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge`
-stays the CLI's: a verb over many memories at once is not a click. The verbs show where the memories do: Promote,
+stays the CLI's: a verb over many memories at once is not a click, so the memory page shows its command, to copy, and
+not a button. The verbs show where the memories do: Promote,
 Reject, and Forget on each proposal, Renew, Edit, and Forget on each lesson, and Promote and Forget on each of a
 ticket's notes that keeps its text, on the memory page and, done or invalidated ones too, on its ticket's page; a
 memory with more than one version says which it is and opens its versions under it, read only then, with Forget on

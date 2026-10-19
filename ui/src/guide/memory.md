@@ -212,7 +212,8 @@ leaked secret out of a lesson, the version before still has it. Open the lesson'
 has its own Forget, or run `canopy memory history ID`; `canopy memory forget` names the versions that keep their words.
 `canopy memory purge`, in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`,
 everything. Neither leaves a word of what it deleted in the search index or the journal's free pages. That's the
-point, if what you're deleting is a leaked secret.
+point, if what you're deleting is a leaked secret. The memory page keeps purge at its foot with a copy button, which
+copies the verb alone: pasted as is, it asks what to purge rather than guessing.
 
 ## Search
 
