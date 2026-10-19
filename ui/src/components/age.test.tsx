@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
+import { tipOf } from '@/test-utils'
 
 import { Age } from './age'
 
@@ -33,8 +34,8 @@ describe('Age', () => {
         expect(screen.getByRole('time').getAttribute('datetime')).toBe('2026-10-08T11:55:00Z')
     })
 
-    it('gives the local time on hover', () => {
+    it("gives the local time in its tip, on hover and on the keyboard's focus", () => {
         render(<Age at="2026-10-08T11:57:00Z" />)
-        expect(screen.getByRole('time').title).toBe(localTime('2026-10-08T11:57:00Z', DEFAULT_CLOCK))
+        expect(tipOf(screen.getByRole('time'))).toBe(localTime('2026-10-08T11:57:00Z', DEFAULT_CLOCK))
     })
 })

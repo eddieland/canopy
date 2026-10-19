@@ -47,7 +47,8 @@ reports findings, and a chore is recurring work no ticket asked for. [Pull reque
 Every ticket has a phase, and so does each of its PRs: where it stands, as the overseer last worked it out. A ticket
 is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another ticket), `plan proposed`, or `split`. A PR
 goes through phases such as `ci running`, `ci red`, `review pending`, `review findings`, `changes requested`,
-`green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one for the CLI's spelling.
+`green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one, or Tab to it, for the
+CLI's spelling.
 
 The overseer derives a phase from live state every tick and never takes the journal's word for it. If a PR merged at
 lunch, the next tick knows, whatever canopy last wrote down.

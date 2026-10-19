@@ -8,7 +8,8 @@ a PR, so this is the only place, besides `canopy review show`, you'll read them.
 [Pull requests](/pull-requests) lists the loop's own PRs, every PR canopy reviewed, and every PR you asked it to
 review, most recent activity first. Each row shows where the PR stands (a run working it, or its latest review's
 verdict), the PR as `org/repo#123`, its phase, its ticket and title, and how long since anything happened. The name
-opens canopy's page for the PR; the small icon beside it opens the PR itself.
+opens canopy's page for the PR; the small icon beside it opens the PR itself. The PR column is only as wide as the
+longest name in the list, and in a narrow window the phase goes first, then the age, so the title keeps the room.
 
 The title is the PR's own, as the worker that opened it or canopy's last review of it read it, so it says what the PR
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
@@ -20,8 +21,8 @@ A PR canopy only reviews says so there too. Below that, it gathers what canopy k
 what it has cost, its coworkers' review threads when canopy has read them (below), canopy's reviews of it, the runs
 that pushed to it, and the decisions that named it. A list with nothing in it shows its header and a `0`, and nothing
 else: an empty list doesn't need a paragraph. A PR with no ticket has no Runs at all, since runs belong to a ticket.
-When a PR has used every review it's allowed, its page shows **At its limit**, with **Allow one more**, as
-`canopy grant URL review`. The limit is `policy.max_reviews_per_pr`, three by default.
+When a PR has used every review it's allowed, its page shows **At its limit**, with **Allow one more**, and under
+it the same as a command, `canopy grant URL review`. The limit is `policy.max_reviews_per_pr`, three by default.
 
 ## Replying to your coworkers' reviews
 
@@ -44,7 +45,10 @@ Each waiting draft has three buttons:
 - **Drop** means nobody sends it. **Undo** takes that back.
 
 **Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
-review, so your coworker gets one notification rather than a burst. canopy never approves, requests changes, or
+review, so your coworker gets one notification rather than a burst. The button reads **Sending…** while the post is on
+its way, and once it lands a toast at the bottom of the window says what went and where it went, so you're not
+left wondering whether that click took. If anything didn't make it, the toast wears a cross and the line under the card
+says why. canopy never approves, requests changes, or
 resolves a thread: whether the conversation is over stays the reviewer's call.
 
 canopy is careful about what it posts. A send carries the hash of the text you saw, so if the draft changed in another

@@ -1,4 +1,5 @@
 import { useClock } from '@/lib/clock'
+import { Tip } from '@/components/tip'
 import { age, localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -33,8 +34,9 @@ interface Span {
 type AgeProps = Since | Span
 
 /**
- * An age as a readout, in the CLI's largest whole unit, with the local time on hover: `3m`, `3m ago`, or for something
- * that runs `for 3m` and once it ended `ended 3m ago`. The words sit muted beside the fixed-width number.
+ * An age as a readout, in the CLI's largest whole unit, with the local time in a `Tip`, on hover and on the keyboard's
+ * focus: `3m`, `3m ago`, or for something that runs `for 3m` and once it ended `ended 3m ago`. The words sit muted
+ * beside the fixed-width number.
  */
 export function Age(props: AgeProps) {
     const clock = useClock()
@@ -42,15 +44,13 @@ export function Age(props: AgeProps) {
     const at = props.variant === 'span' ? (props.ended ?? props.started) : props.at
     const [before, after] = words(props)
     return (
-        <time
-            dateTime={at}
-            title={localTime(at, clock)}
-            className={cn('text-xs whitespace-nowrap text-muted-foreground', props.className)}
-        >
-            {before}
-            <span className="readout">{age(at, now)}</span>
-            {after}
-        </time>
+        <Tip fact={localTime(at, clock)}>
+            <time dateTime={at} className={cn('text-xs whitespace-nowrap text-muted-foreground', props.className)}>
+                {before}
+                <span className="readout">{age(at, now)}</span>
+                {after}
+            </time>
+        </Tip>
     )
 }
 

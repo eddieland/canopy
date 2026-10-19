@@ -23,6 +23,7 @@ import type {
 } from '@/api/types'
 import { currentClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
+import type { NewToast } from '@/lib/toasts'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py), and what
 // one that failed says in canopy's words rather than the browser's.
@@ -181,6 +182,51 @@ export function draftsSentText(sent: DraftsSent): string {
                 'PR settles it; canopy sends it no other time.',
         ),
     ].join(' ')
+}
+
+/**
+ * The toast a send shows, so a click on Send is acknowledged past the card's own line, which leaves with its attention
+ * item at the next tick: what became of the one draft, or how many of several reached the PR, with where they went
+ * when that is one place. A check only when every draft is on the PR; a cross when any is not, or may not be.
+ */
+export function draftsSentToast(sent: DraftsSent): NewToast {
+    const done = [...sent.posted, ...sent.already]
+    const total = done.length + sent.failed.length + sent.unconfirmed.length
+    const urls = new Set(done.flatMap((d) => (d.sent_url === null ? [] : [d.sent_url])))
+    const [url] = urls
+    return {
+        title: total === 1 ? oneSent(sent) : manySent(done.length, total),
+        ...(urls.size === 1 && url !== undefined && { detail: url }),
+        tone: done.length === total ? 'done' : 'failed',
+    }
+}
+
+// What became of the one draft a send took, in the words `draftsSentText` starts its sentence with.
+function oneSent(sent: DraftsSent): string {
+    const [posted] = sent.posted
+    const [already] = sent.already
+    const [failed] = sent.failed
+    const [unconfirmed] = sent.unconfirmed
+    if (posted !== undefined) {
+        return `Sent run ${posted.run}'s draft ${posted.number}`
+    }
+    if (already !== undefined) {
+        return `Run ${already.run}'s draft ${already.number} was sent already`
+    }
+    if (failed !== undefined) {
+        return `Run ${failed.draft.run}'s draft ${failed.draft.number} was not sent`
+    }
+    return unconfirmed === undefined
+        ? 'Sent nothing'
+        : `Run ${unconfirmed.run}'s draft ${unconfirmed.number} may have been posted`
+}
+
+// How many of several drafts a send put on the PR.
+function manySent(done: number, total: number): string {
+    if (done === total) {
+        return `Sent ${total} drafts`
+    }
+    return done === 0 ? `${total} drafts not sent` : `Sent ${done} of ${total} drafts`
 }
 
 // Where a sent draft went, after a colon, or nothing when the post named no URL.

@@ -21,6 +21,7 @@ import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Clipped } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
     byKind,
@@ -234,9 +235,7 @@ function MemoryRow({
                 <span className="flex min-w-0">
                     {entry.repo !== null && <Chip className="min-w-0 shrink" word={entry.repo} />}
                 </span>
-                <span className="truncate font-mono text-xs" title={entry.key}>
-                    {entry.key}
-                </span>
+                <Clipped text={entry.key} className="font-mono text-xs" />
                 <span
                     className="truncate text-right text-xs text-muted-foreground"
                     title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at, clock)}`}

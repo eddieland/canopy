@@ -7,7 +7,6 @@
 # exactly those tools, never in a repository's `.opencode/`.
 description: canopy chore. Recurring read-only check the operator defines; reports findings, changes nothing.
 mode: primary
-temperature: 0.1
 permission:
   edit: deny
   # The one command it may run reads its own chore's earlier runs back (DESIGN §19, History); `canopy chore history`
