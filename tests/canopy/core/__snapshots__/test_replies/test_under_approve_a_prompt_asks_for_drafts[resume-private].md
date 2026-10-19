@@ -120,8 +120,7 @@ it. If a repository you changed has no PR yet, open one against its base branch 
 the title. Open each PR through the GitHub MCP. Post no comment or reply on a PR: put your reply to each review comment you addressed in a `thread` draft
 (Result, below), briefly, for the operator to send as their own. Change nothing on a PR but the edit to its body below, when one is needed. Time limit 45 minutes.
 
-Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, and `gh run view` are allowed; do not try another, `gh api`
-among them. Read GitHub through the GitHub MCP server instead.
+Do not run `gh api`; it is refused.
 
 Each shell command starts in /pool/1/repo, whatever an earlier one changed directory to, and a `cd` is checked against
 where its command starts, even after another `cd` in the same command: `cd app && cd ../lib` is refused as leaving
