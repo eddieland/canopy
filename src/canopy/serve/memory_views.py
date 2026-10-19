@@ -9,11 +9,12 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, memory, memory_manage
-from canopy.core.vocab import MemoryCited, MemoryMode
+from canopy.core import db, memory, memory_manage, memory_search
+from canopy.core.vocab import MemoryCited, MemoryMode, MemoryScope
 from canopy.serve.schema import (
     MemoryDigest,
     MemoryEntry,
+    MemoryFound,
     MemoryModeName,
     MemoryOrigin,
     MemoryOverview,
@@ -54,10 +55,11 @@ def state(ctx: Context) -> MemoryState | None:
     )
 
 
-def overview(ctx: Context) -> MemoryOverview:
+def overview(ctx: Context, *, history: bool = False) -> MemoryOverview:
     """Every tier's memory: the tickets with notes in force, the proposals waiting, the lessons, and what they serve.
 
     The notes are counted by ticket, not sent: a busy workspace holds thousands, and a ticket's own read lists them.
+    With `history`, the latest proposals and lessons no longer pending or in force too.
 
     Returns:
         The overview, with no digest of the lessons while proposals are off.
@@ -74,7 +76,30 @@ def overview(ctx: Context) -> MemoryOverview:
         lessons=[entry(ctx, m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
         lessons_digest=digest,
         repos=[r.name for r in ctx.ws.repos],
+        past_proposals=[entry(ctx, m) for m in memory.past(ctx.conn, MemoryScope.PROPOSAL)] if history else [],
+        past_lessons=[entry(ctx, m) for m in memory.past(ctx.conn, MemoryScope.LESSON)] if history else [],
     )
+
+
+def found(ctx: Context, query: str, *, notes: bool = False) -> MemoryFound:
+    """What `canopy memory search QUERY` finds in the operator's shell: every memory that keeps its text.
+
+    With `notes`, only ticket notes in force, so the limit is spent on the notes a page lists.
+
+    Returns:
+        The memories found, best match first, at most `memory_search.MAX_LIMIT`; none for a query of no word.
+    """
+    if not memory_search.words(query):
+        return MemoryFound(entries=[])
+    hits = memory_search.search(
+        ctx.conn,
+        query,
+        scope=None,
+        kind=MemoryScope.TICKET if notes else None,
+        in_force=notes,
+        limit=memory_search.MAX_LIMIT,
+    )
+    return MemoryFound(entries=[entry(ctx, m) for m in hits])
 
 
 def ticket_memory(ctx: Context, key: str) -> TicketMemory | None:

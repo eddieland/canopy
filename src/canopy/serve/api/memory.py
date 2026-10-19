@@ -6,7 +6,9 @@ the CLI's, in the operator's shell.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 
 from canopy.core import conversation, db, memory_manage
 from canopy.infra import logs
@@ -16,6 +18,7 @@ from canopy.serve.api.refs import REFUSED, WEB, MemoryId, RefusedError, RunId, T
 from canopy.serve.schema import (
     MemoryForgetRequest,
     MemoryForgotten,
+    MemoryFound,
     MemoryOverview,
     MemoryPromoted,
     MemoryRejected,
@@ -31,10 +34,35 @@ _log = logs.for_tick(None)
 
 
 @router.get("/memory", operation_id="getMemory", summary="Get agent memory")
-def overview(backend: BackendDep) -> MemoryOverview:
-    """Each tier's mode, every ticket's notes in force, the proposals waiting, and the lessons and what they serve."""
+def overview(
+    backend: BackendDep,
+    *,
+    history: Annotated[
+        bool, Query(description="Also send the latest proposals and lessons no longer pending or in force.")
+    ] = False,
+) -> MemoryOverview:
+    """Each tier's mode, every ticket's notes in force, the proposals waiting, and the lessons and what they serve.
+
+    With `history`, the latest proposals and lessons no longer pending or in force too, as `past_proposals` and
+    `past_lessons`.
+    """
     with backend.open() as ctx:
-        return memory_views.overview(ctx)
+        return memory_views.overview(ctx, history=history)
+
+
+@router.get("/memory/search", operation_id="searchMemory", summary="Search agent memory")
+def search(
+    q: Annotated[str, Query(max_length=200, description="The words to find, any of them, as canopy memory search.")],
+    backend: BackendDep,
+    *,
+    notes: Annotated[bool, Query(description="Only ticket notes in force, the 50 best of them.")] = False,
+) -> MemoryFound:
+    """`canopy memory search Q` in the operator's shell: every memory that keeps its text, best match first, at most 50.
+
+    It reads only, as the overview does.
+    """
+    with backend.open() as ctx:
+        return memory_views.found(ctx, q, notes=notes)
 
 
 @router.get(

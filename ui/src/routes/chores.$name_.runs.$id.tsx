@@ -9,6 +9,7 @@ import { CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
+import { ListPanel } from '@/components/list-panel'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
@@ -88,17 +89,15 @@ function Loaded({ name, id }: { name: string; id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
+                {/* Left out with none: the description counts them (`no findings`), so a `0` would say it twice. */}
                 {data.findings.length > 0 && (
-                    <Panel data-testid="chore-run-findings">
-                        <PanelHeader label="Findings">
-                            <span className="readout text-xs text-muted-foreground">{data.findings.length}</span>
-                        </PanelHeader>
+                    <ListPanel label="Findings" count={data.findings.length} data-testid="chore-run-findings">
                         <ul className="divide-y">
                             {data.findings.map((finding) => (
                                 <ChoreFindingRow key={finding.id} finding={finding} />
                             ))}
                         </ul>
-                    </Panel>
+                    </ListPanel>
                 )}
                 <TranscriptPanel transcript={transcript} running={data.run.state === 'running'} view={view} />
             </div>

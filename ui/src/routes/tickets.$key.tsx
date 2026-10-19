@@ -225,8 +225,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
 }
 
 /**
- * The ticket's notes (DESIGN §28), under the band that says what reads them; none while ticket notes are off. While
- * proposals are on, each note that keeps its text is promoted to a lesson from its row, done or invalidated ones too.
+ * The ticket's notes (DESIGN §28), under the band that says what reads them; none while ticket notes are off. Each
+ * note that keeps its text is forgotten from its row, and while proposals are on, promoted to a lesson, done or
+ * invalidated ones too.
  */
 function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
     const memory = useQuery(loopQuery).data?.memory
@@ -239,8 +240,13 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
         return null
     }
     const promoting = memory !== undefined && memory !== null && memory.lessons.mode !== 'off'
+    // Forget whenever ticket notes are on, so a note holding what should not be kept goes from where it shows; Promote
+    // only while lessons are on, since it makes a lesson.
     const below = new Map(
-        promoting ? (data?.notes ?? []).map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={setSaid} />]) : [],
+        (data?.notes ?? []).map((n) => [
+            n.id,
+            <NoteActions key={n.id} note={n} promote={promoting} onSaid={setSaid} />,
+        ]),
     )
     return (
         <Panel data-testid="ticket-memory">

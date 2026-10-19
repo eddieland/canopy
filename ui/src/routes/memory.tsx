@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { History } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { memoryQuery, ticketMemoryQuery } from '@/api/queries'
+import { memoryHistoryQuery, memoryQuery, memorySearchQuery, ticketMemoryQuery } from '@/api/queries'
 import type {
     MemoryDigest,
     MemoryEntry,
@@ -48,6 +49,7 @@ interface MemorySearch {
     q?: string | undefined
     repo?: string | undefined
     show?: MemoryShow | undefined
+    history?: true | undefined
 }
 
 /**
@@ -57,7 +59,8 @@ interface MemorySearch {
  * rejected, and a lesson renewed or forgotten, from its row, as `canopy memory` does, while `memory.proposals` is on
  * (ROADMAP M52). What every run is served of the lessons is folded under them, since it is the prompt's, not a queue.
  * `?q=` keeps what holds every word, `?repo=` the proposals and lessons for a repository's runs, and `?show=` the
- * lessons that stand so, over what the page already read.
+ * lessons that stand so, over what the page already read; `?history=true` reads and lists the latest proposals and
+ * lessons no longer pending or in force too.
  */
 export const Route = createFileRoute('/memory')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
@@ -65,12 +68,17 @@ export const Route = createFileRoute('/memory')({
         q: memoryQueryOf(search['q']),
         repo: memoryRepoOf(search['repo']),
         show: memoryShowOf(search['show']),
+        history: search['history'] === true ? true : undefined,
     }),
     component: MemoryPage,
 })
 
 function MemoryPage() {
-    const query = useQuery(memoryQuery)
+    const { history } = Route.useSearch()
+    // One read or the other: the history adds the past to what the page always reads.
+    const now = useQuery({ ...memoryQuery, enabled: history !== true })
+    const withPast = useQuery({ ...memoryHistoryQuery, enabled: history === true })
+    const query = history === true ? withPast : now
     const { data } = query
     return (
         <>
@@ -105,6 +113,16 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
     const shownProposals = proposals.filter((p) => memoryShown(p.entry, { ...filter, show: undefined }, now, modes))
     const shownLessons = lessons.filter((m) => memoryShown(m, filter, now, modes))
     const shownTickets = tickets.filter((t) => ticketNotesShown(t, filter.q))
+    const unshown = { ...filter, show: undefined }
+    const pastProposals = overview.past_proposals.filter((m) => memoryShown(m, unshown, now, modes))
+    const pastLessons = overview.past_lessons.filter((m) => memoryShown(m, unshown, now, modes))
+    const history = search.history === true
+    // What notes say is searched on the server, as `canopy memory search`: the page holds their tickets' counts only.
+    const searched = useQuery({ ...memorySearchQuery(filter.q ?? ''), enabled: filter.q !== undefined })
+    const notesFound =
+        filter.q === undefined
+            ? undefined
+            : (searched.data?.entries ?? []).filter((m) => m.scope === 'ticket' && m.status === 'active')
     return (
         <>
             <FilterBar repos={overview.repos} />
@@ -112,29 +130,45 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
-                    '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
+                    // Two columns only while both tiers show a panel: with one off, the other has the width alone.
+                    acting &&
+                        state.ticket_notes.mode !== 'off' &&
+                        '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
                 )}
             >
-                <div className="flex flex-col gap-6">
-                    <Proposals proposals={shownProposals} total={proposals.length} filter={filter} acting={acting} />
-                    <Lessons
-                        lessons={shownLessons}
-                        total={lessons.length}
+                {/* A tier that is off shows no panel: the page holds what is on (DESIGN §28). */}
+                {acting && (
+                    <div className="flex flex-col gap-6">
+                        <Proposals
+                            proposals={shownProposals}
+                            total={proposals.length}
+                            filter={filter}
+                            acting={acting}
+                            past={history ? pastProposals : undefined}
+                        />
+                        <Lessons
+                            lessons={shownLessons}
+                            total={lessons.length}
+                            filter={filter}
+                            digest={digest}
+                            tier={state.lessons}
+                            acting={acting}
+                            modes={modes}
+                            past={history ? pastLessons : undefined}
+                        />
+                    </div>
+                )}
+                {state.ticket_notes.mode !== 'off' && (
+                    <TicketNotesPanel
+                        tickets={shownTickets}
+                        total={tickets.length}
                         filter={filter}
-                        digest={digest}
-                        tier={state.lessons}
-                        acting={acting}
+                        tier={state.ticket_notes}
+                        promote={acting}
                         modes={modes}
+                        found={notesFound}
                     />
-                </div>
-                <TicketNotesPanel
-                    tickets={shownTickets}
-                    total={tickets.length}
-                    filter={filter}
-                    tier={state.ticket_notes}
-                    acting={acting}
-                    modes={modes}
-                />
+                )}
             </div>
         </>
     )
@@ -150,11 +184,13 @@ function Proposals({
     total,
     filter,
     acting,
+    past,
 }: {
     proposals: MemoryProposal[]
     total: number
     filter: MemoryFilter
     acting: boolean
+    past: MemoryEntry[] | undefined
 }) {
     const order = useListOrder('memory-proposals')
     const filtered = filter.q !== undefined || filter.repo !== undefined
@@ -169,6 +205,7 @@ function Proposals({
         <Panel data-testid="memory-proposals">
             <PanelHeader label="Proposals">
                 <span className="flex items-center gap-x-3">
+                    <HistoryToggle />
                     {proposals.length > 1 && <OrderToggle list="memory-proposals" />}
                     <span
                         className={cn('readout text-xs', total > 0 ? 'text-status-blocked' : 'text-muted-foreground')}
@@ -190,16 +227,16 @@ function Proposals({
                     {said === null ? 'no proposals wait on you now' : 'all decided: no proposal waits on you'}
                 </Empty>
             ) : (
-                <PanelScroll label="Proposals">
-                    <MemoryRows
-                        entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
-                        ticket
-                        facts={facts}
-                        below={below}
-                        lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
-                    />
-                </PanelScroll>
+                // At most 20 wait at once (MAX_PENDING), so the list grows with them rather than scroll in its panel.
+                <MemoryRows
+                    entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
+                    ticket
+                    facts={facts}
+                    below={below}
+                    lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
+                />
             )}
+            {past !== undefined && <Past label="Decided" entries={past} ticket none="no proposal decided yet" />}
         </Panel>
     )
 }
@@ -216,6 +253,7 @@ function Lessons({
     tier,
     acting,
     modes,
+    past,
 }: {
     lessons: MemoryEntry[]
     total: number
@@ -224,6 +262,7 @@ function Lessons({
     tier: MemoryTier
     acting: boolean
     modes: TierModes
+    past: MemoryEntry[] | undefined
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const below = new Map(
@@ -233,6 +272,7 @@ function Lessons({
         <Panel data-testid="memory-lessons">
             <PanelHeader label="Lessons">
                 <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                    <HistoryToggle />
                     {modes.lessons === 'use' && (
                         <nav aria-label="Filter lessons by where they stand" className="flex items-center gap-1">
                             <FilterLink change={{ show: undefined }} selected={filter.show === undefined}>
@@ -262,11 +302,67 @@ function Lessons({
             ) : (
                 <PanelScroll label="Lessons">
                     {/* The proposals' columns, the ticket's left empty, so key and text line up down the page. */}
-                    <MemoryRows entries={lessons} ticket digest={digest} below={below} modes={modes} />
+                    <MemoryRows entries={lessons} across digest={digest} below={below} modes={modes} />
                 </PanelScroll>
             )}
+            {past !== undefined && <Past label="Retired" entries={past} none="no lesson replaced or forgotten yet" />}
             {digest !== null && <ServedDigest digest={digest} />}
         </Panel>
+    )
+}
+
+/**
+ * A panel's history, under what is pending or in force, while `?history=true`: its latest memories no longer either,
+ * each under the standing and reason the journal gives it, with no verbs, since nothing is left to decide.
+ */
+function Past({
+    label,
+    entries,
+    ticket = false,
+    none,
+}: {
+    label: string
+    entries: MemoryEntry[]
+    ticket?: boolean
+    none: string
+}) {
+    return (
+        <section aria-label={label} className="border-t" data-testid={`memory-past-${label.toLowerCase()}`}>
+            <h3 className="px-3 pt-2 panel-label">{label}</h3>
+            {entries.length === 0 ? (
+                <Empty>{none}</Empty>
+            ) : (
+                <PanelScroll label={label}>
+                    <MemoryRows entries={entries} ticket={ticket} across={!ticket} />
+                </PanelScroll>
+            )}
+        </section>
+    )
+}
+
+/**
+ * The toggle that shows each panel's history, kept in `?history=true`, as a filter chip is: on, the page reads the
+ * latest memories no longer pending or in force, and lists them under the rest.
+ */
+function HistoryToggle() {
+    const search = Route.useSearch()
+    const on = search.history === true
+    return (
+        <Link
+            to="/memory"
+            search={{ ...search, history: on ? undefined : true }}
+            aria-pressed={on}
+            data-selected={on}
+            title={on ? 'Hide what is no longer pending or in force' : 'Show what is no longer pending or in force'}
+            className={cn(
+                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
+                'hover:bg-surface-raised hover:text-foreground',
+                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
+            )}
+        >
+            <History aria-hidden className="size-3.5" />
+            history
+        </Link>
     )
 }
 
@@ -286,23 +382,26 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
 
 /**
  * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
- * notes they hold beside them, since a row opens to several. While `acting`, each opened note is promoted or
- * forgotten from its row, and what that did is said under the band.
+ * notes they hold beside them, since a row opens to several. Each opened note is forgotten from its row, and, while
+ * lessons are on (`promote`), promoted; what that did is said under the band. While the filter has words, `found` is
+ * the notes in force whose key or text holds one, as `canopy memory search` finds them, listed under the tickets.
  */
 function TicketNotesPanel({
     tickets,
     total,
     filter,
     tier,
-    acting,
+    promote,
     modes,
+    found,
 }: {
     tickets: TicketNotes[]
     total: number
     filter: MemoryFilter
     tier: MemoryTier
-    acting: boolean
+    promote: boolean
     modes: TierModes
+    found: MemoryEntry[] | undefined
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const notes = tickets.reduce((sum, t) => sum + t.count, 0)
@@ -310,32 +409,69 @@ function TicketNotesPanel({
     const notesWord = notes === 1 ? 'note' : 'notes'
     const shown = shownCount(tickets.length, total, filter.q !== undefined)
     const ticketsCount = `${shown} ${ticketsWord} · ${notes} ${notesWord}`
+    const order = useListOrder('memory-tickets')
+    const filteredOut = tickets.length === 0 && total > 0
+    const notesFound = found !== undefined && found.length > 0
     return (
         <Panel data-testid="memory-notes">
             <PanelHeader label="Ticket notes">
-                <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
-                    {ticketsCount}
+                <span className="flex items-center gap-x-3">
+                    {tickets.length > 1 && <OrderToggle list="memory-tickets" />}
+                    <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
+                        {ticketsCount}
+                    </span>
                 </span>
             </PanelHeader>
             <MemoryBand tier={tier} name="ticket notes" />
             <MemorySaid said={said} className="border-b px-3 py-2" />
-            {tickets.length === 0 && total > 0 ? (
-                <Empty>no ticket with notes has “{filter.q?.trim()}” in its key or title</Empty>
+            {filter.repo !== undefined && (
+                <p className="border-b px-3 py-2 text-xs text-muted-foreground" data-testid="memory-notes-every-repo">
+                    Not narrowed by repository: a ticket&apos;s notes are read by its own runs, in any repository.
+                </p>
+            )}
+            {filteredOut ? (
+                // The notes found below may still hold the words; only when none does is the panel empty.
+                notesFound ? null : (
+                    <Empty>
+                        no note says “{filter.q?.trim()}”, and no ticket with notes has it in its key or title
+                    </Empty>
+                )
             ) : tickets.length === 0 ? (
                 <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Ticket notes">
                     <ul className="divide-y">
-                        {tickets.map((t) => (
+                        {ordered('memory-tickets', order, tickets).map((t) => (
                             <TicketNotesRow
                                 key={t.ticket_key}
                                 notes={t}
-                                onSaid={acting ? setSaid : undefined}
+                                onSaid={setSaid}
+                                promote={promote}
                                 modes={modes}
                             />
                         ))}
                     </ul>
                 </PanelScroll>
+            )}
+            {notesFound && (
+                <section aria-label="Notes that say it" className="border-t" data-testid="memory-notes-found">
+                    <h3 className="px-3 pt-2 panel-label">Notes that say it</h3>
+                    <PanelScroll label="Notes that say it">
+                        <MemoryRows
+                            entries={found}
+                            ticket
+                            below={
+                                new Map(
+                                    found.map((n) => [
+                                        n.id,
+                                        <NoteActions key={n.id} note={n} promote={promote} onSaid={setSaid} />,
+                                    ]),
+                                )
+                            }
+                            modes={modes}
+                        />
+                    </PanelScroll>
+                </section>
             )}
         </Panel>
     )
@@ -435,10 +571,12 @@ function filterWords(filter: MemoryFilter): string {
 function TicketNotesRow({
     notes,
     onSaid,
+    promote,
     modes,
 }: {
     notes: TicketNotes
-    onSaid: ((said: string) => void) | undefined
+    onSaid: (said: string) => void
+    promote: boolean
     modes: TierModes
 }) {
     const [open, setOpen] = useState(false)
@@ -455,7 +593,7 @@ function TicketNotesRow({
                 <span className="truncate text-right text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
                 <Age at={notes.latest_at} variant="ago" className="text-right" />
                 <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t bg-surface-raised/40', rowLineFrom('key'))}>
-                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} modes={modes} />
+                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} promote={promote} modes={modes} />
                 </CollapsibleContent>
             </ListRow>
         </Collapsible>
@@ -463,16 +601,18 @@ function TicketNotesRow({
 }
 
 /**
- * A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt, and with
- * `onSaid`, each with its verbs, Promote and Forget.
+ * A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt, each with
+ * Forget, and with `promote`, while lessons are on, Promote.
  */
 function OpenNotes({
     ticketKey,
     onSaid,
+    promote,
     modes,
 }: {
     ticketKey: string
-    onSaid: ((said: string) => void) | undefined
+    onSaid: (said: string) => void
+    promote: boolean
     modes: TierModes
 }) {
     const { data } = useQuery(ticketMemoryQuery(ticketKey))
@@ -484,7 +624,7 @@ function OpenNotes({
         return <Empty>no notes in force now: its page lists the ones before</Empty>
     }
     const below = new Map(
-        onSaid === undefined ? [] : inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={onSaid} />]),
+        inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} promote={promote} onSaid={onSaid} />]),
     )
-    return <MemoryRows entries={inForce} digest={data.digest} below={below} modes={modes} />
+    return <MemoryRows entries={inForce} across digest={data.digest} below={below} modes={modes} />
 }

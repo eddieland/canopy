@@ -78,6 +78,18 @@ export async function settled(page: Page): Promise<void> {
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
 }
 
+/** The narrowest window the whole rail takes its place in (`src/hooks/use-rail-mode.ts`); narrower, it is a strip. */
+export const FULL_RAIL = 1024
+
+/**
+ * Sets the window `width` wide and waits for the rail to take its shape there, a strip under FULL_RAIL and whole from
+ * it, so what is measured next is in the pane the rail leaves.
+ */
+export async function windowWidth(page: Page, width: number): Promise<void> {
+    await page.setViewportSize({ width, height: page.viewportSize()?.height ?? 900 })
+    await expect(page.getByTestId('rail-strip')).toHaveCount(width < FULL_RAIL ? 1 : 0)
+}
+
 /** Screenshots the whole page as `name`, the header and the rail included. */
 export async function screenshotWhole(page: Page, name: string): Promise<void> {
     await growToPage(page)

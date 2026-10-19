@@ -365,6 +365,31 @@ export const memoryQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/memory', { signal })),
 })
 
+/**
+ * Every tier of agent memory with its history: the latest proposals and lessons no longer pending or in force too.
+ * Under the memory key, so what reads memory again reads this too.
+ */
+export const memoryHistoryQuery = queryOptions({
+    queryKey: [...keys.memory, 'history'] as const,
+    queryFn: async ({ signal }) =>
+        unwrap(await api.GET('/api/memory', { params: { query: { history: true } }, signal })),
+})
+
+/**
+ * What `canopy memory search` finds as the operator (DESIGN §28, Search) among the ticket notes in force, whose key or
+ * text holds any of `q`'s words, best match first: the page lists only those, so its 50 are never spent on lessons.
+ * Under the memory key, so what reads memory again reads this too; the last result stays while the next is read, so
+ * the list does not blink as the operator types.
+ */
+export function memorySearchQuery(q: string) {
+    return queryOptions({
+        queryKey: [...keys.memory, 'search', q] as const,
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/memory/search', { params: { query: { q, notes: true } }, signal })),
+        placeholderData: (previous) => previous,
+    })
+}
+
 /** A ticket's notes, and what its next run would be served (DESIGN §28). */
 export function ticketMemoryQuery(key: string) {
     return queryOptions({

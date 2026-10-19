@@ -127,10 +127,13 @@ test('the memory page narrows every panel by words, a repository, and a lesson�
     await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('0 of 2')
     await expect(proposals.getByText('no proposals with “billing”')).toBeVisible()
     await expect(lessons.getByTestId('memory-8')).toBeVisible()
-    await expect(notes.getByText('no ticket with notes has “billing” in its key or title')).toBeVisible()
+    await expect(
+        notes.getByText('no note says “billing”, and no ticket with notes has it in its key or title'),
+    ).toBeVisible()
 
     await page.getByRole('navigation', { name: 'Filter by repository' }).getByRole('link', { name: 'api' }).click()
     await expect(page).toHaveURL(/[?&]repo=api/u)
+    await expect(notes.getByTestId('memory-notes-every-repo')).toBeVisible()
     await expect(lessons.getByText('no lessons with “billing” for api')).toBeVisible()
 
     // Back to everything: the chips and the field undo it.
@@ -145,4 +148,43 @@ test('the memory page narrows every panel by words, a repository, and a lesson�
     await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-5')
     await proposals.getByTestId('order-memory-proposals').click()
     await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-6')
+})
+
+test('opened notes line up with the lessons, and the tickets with notes flip', async ({ page }) => {
+    await page.goto('memory')
+    await settled(page)
+    const notes = page.getByTestId('memory-notes')
+    await notes.getByTestId('memory-ticket-ABC-100').getByRole('button', { name: 'Show 2 notes' }).click()
+    const noteKey = notes.getByTestId('memory-3').getByText('ci-cache', { exact: true })
+    const lessonKey = page.getByTestId('memory-8').getByText('billing-client', { exact: true })
+    const [a, b] = [await noteKey.boundingBox(), await lessonKey.boundingBox()]
+    expect(Math.abs((a?.x ?? 0) - (b?.x ?? 1))).toBeLessThan(1)
+
+    const rows = notes.getByTestId(/^memory-ticket-/u)
+    await expect(rows.first()).toHaveAttribute('data-testid', 'memory-ticket-ABC-102')
+    await notes.getByTestId('order-memory-tickets').click()
+    await expect(rows.first()).toHaveAttribute('data-testid', 'memory-ticket-ABC-100')
+})
+
+test('the memory page shows its history on asking: the proposal promotion used up', async ({ page }) => {
+    await page.goto('memory')
+    await settled(page)
+    const proposals = page.getByTestId('memory-proposals')
+    await expect(proposals.getByTestId('memory-past-decided')).toHaveCount(0)
+    await proposals.getByRole('link', { name: 'history' }).click()
+    await expect(page).toHaveURL(/[?&]history=true/u)
+    // The mock's lesson 8 was promoted from proposal 7, which promoting superseded.
+    const decided = proposals.getByTestId('memory-past-decided')
+    await expect(decided.getByTestId('memory-7').getByTestId('memory-stand')).toHaveText('superseded')
+    await expect(page.getByTestId('memory-lessons').getByText('no lesson replaced or forgotten yet')).toBeVisible()
+})
+
+test('the memory page finds a note by what it says, as canopy memory search does', async ({ page }) => {
+    await page.goto('memory')
+    await settled(page)
+    await page.getByRole('searchbox', { name: 'Filter memory by key, text, ticket, or repository' }).fill('lockfile')
+    // Neither ticket's key nor title holds the word; ABC-100's note ci-cache does.
+    const found = page.getByTestId('memory-notes-found')
+    await expect(found.getByTestId('memory-3')).toContainText('ci-cache')
+    await expect(found.getByTestId('memory-3').getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
 })
