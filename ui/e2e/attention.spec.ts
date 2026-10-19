@@ -73,6 +73,13 @@ test("replies a run drafted lead to the PR's page, where each waits on its threa
     await expect(page.getByTestId('pr-drafts').getByTestId('draft')).toHaveCount(1)
     await expect(page.getByTestId('draft').and(page.locator('[data-status=waiting]'))).toHaveCount(3)
     await expect(page.getByRole('button', { name: 'Send 3 waiting' })).toBeVisible()
+    // The head lists every draft, and each one's link lands on its card.
+    const list = page.getByTestId('draft-list')
+    await expect(list.getByRole('listitem')).toHaveCount(3)
+    await list.getByRole('link', { name: /^ABC-099 asks for 250 ms/u }).click()
+    await expect(page).toHaveURL(/#draft-\d+-2$/u)
+    const card = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' }).getByTestId('draft')
+    await expect(card).toBeInViewport()
 })
 
 test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {
