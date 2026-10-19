@@ -13,7 +13,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, memory
 from canopy.core import memory_search as search
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import MemoryScope, RunKind, RunStatus
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
@@ -193,6 +193,18 @@ def test_a_word_in_a_key_ranks_above_one_in_a_text(conn: sqlite3.Connection) -> 
     in_key = written(conn, "Retry it once.", key="flaky-login")
     found = search.search(conn, "flaky", scope=None)
     assert [m.id for m in found] == [in_key, in_text]
+
+
+def test_a_search_for_notes_in_force_spends_its_limit_on_them_alone(conn: sqlite3.Connection) -> None:
+    # Sixty lessons that say the word, each ranking above the note by its key, then the note in force and one replaced.
+    for i in range(60):
+        written(conn, "The lockfile pins it.", key=f"lockfile-{i}", scope="lesson", ticket=None)
+    note = written(conn, "A bumped lockfile installs from a stale cache.")
+    written(conn, "The lockfile was stale.", key="old", status="superseded")
+    everything = search.search(conn, "lockfile", scope=None, limit=search.MAX_LIMIT)
+    assert note not in [m.id for m in everything]
+    found = search.search(conn, "lockfile", scope=None, kind=MemoryScope.TICKET, in_force=True)
+    assert [m.id for m in found] == [note]
 
 
 @pytest.mark.parametrize("query", ['cache" OR (body*', "NEAR(cache)", "-cache", "cache:*"])

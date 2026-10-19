@@ -54,13 +54,15 @@ def overview(
 def search(
     q: Annotated[str, Query(max_length=200, description="The words to find, any of them, as canopy memory search.")],
     backend: BackendDep,
+    *,
+    notes: Annotated[bool, Query(description="Only ticket notes in force, the 50 best of them.")] = False,
 ) -> MemoryFound:
     """`canopy memory search Q` in the operator's shell: every memory that keeps its text, best match first, at most 50.
 
     It reads only, as the overview does.
     """
     with backend.open() as ctx:
-        return memory_views.found(ctx, q)
+        return memory_views.found(ctx, q, notes=notes)
 
 
 @router.get(

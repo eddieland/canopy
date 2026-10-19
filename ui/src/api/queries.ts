@@ -376,15 +376,16 @@ export const memoryHistoryQuery = queryOptions({
 })
 
 /**
- * What `canopy memory search` finds as the operator (DESIGN §28, Search): every memory that keeps its text whose key or
- * text holds any of `q`'s words, best match first. Under the memory key, so what reads memory again reads this too; the
- * last result stays while the next is read, so the list does not blink as the operator types.
+ * What `canopy memory search` finds as the operator (DESIGN §28, Search) among the ticket notes in force, whose key or
+ * text holds any of `q`'s words, best match first: the page lists only those, so its 50 are never spent on lessons.
+ * Under the memory key, so what reads memory again reads this too; the last result stays while the next is read, so
+ * the list does not blink as the operator types.
  */
 export function memorySearchQuery(q: string) {
     return queryOptions({
         queryKey: [...keys.memory, 'search', q] as const,
         queryFn: async ({ signal }) =>
-            unwrap(await api.GET('/api/memory/search', { params: { query: { q } }, signal })),
+            unwrap(await api.GET('/api/memory/search', { params: { query: { q, notes: true } }, signal })),
         placeholderData: (previous) => previous,
     })
 }
