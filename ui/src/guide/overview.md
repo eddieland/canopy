@@ -119,7 +119,7 @@ refuses, the UI names it exactly as the CLI prints it, as `refused (guard): reas
 wherever you meet it. Hover over a button to see the command it stands for.
 
 The loop reads a reply at its next tick, not the moment you send it, and the conversation marks the reply as waiting
-until then. Patience is a virtue; here it's also the architecture.
+until then, and as `seen` after. Patience is a virtue; here it's also the architecture.
 
 Everything else only reads the journal and changes nothing. Pages update as the loop writes, over a single stream,
 so there's no need to reload. The worktrees are the one exception: reading them asks every pool, so that page rereads
