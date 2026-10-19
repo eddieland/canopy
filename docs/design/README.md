@@ -86,6 +86,9 @@ not go in the middle of the sequence.
 - [Review replies](REVIEW_REPLIES.md): replies to coworkers' review comments that workers draft and the operator
   sends.
   - [29. Review replies the operator sends (M53)](REVIEW_REPLIES.md#29-review-replies-the-operator-sends-m53)
+- [Connectors](CONNECTORS.md): the programs that read the tracker and GitHub into the journal, and the phases canopy
+  derives from them beside the overseer's.
+  - [30. Connectors (M36)](CONNECTORS.md#30-connectors-m36)
 
 ## 1. Problem
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import statistics
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Literal
 
@@ -21,7 +21,7 @@ from canopy.core import contract, db, records
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Mapping
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
@@ -195,18 +195,18 @@ class Breakdown:
     since: str
     until: str
     days: int
-    per_day: list[Day]
+    per_day: Sequence[Day]
     totals: Costs
-    ticks: list[TickGroup]
-    woken: list[Woken]
-    unpriced: list[Unpriced]
+    ticks: Sequence[TickGroup]
+    woken: Sequence[Woken]
+    unpriced: Sequence[Unpriced]
     idle_share: float | None = None
     done: int = 0
     per_done: float | None = None
-    tickets: list[TicketSpend] = field(default_factory=list[TicketSpend])
-    pull_requests: list[PullRequestSpend] = field(default_factory=list[PullRequestSpend])
-    first_calls: list[FirstCalls] = field(default_factory=list[FirstCalls])
-    tools: list[ToolSpend] = field(default_factory=list[ToolSpend])
+    tickets: Sequence[TicketSpend] = ()
+    pull_requests: Sequence[PullRequestSpend] = ()
+    first_calls: Sequence[FirstCalls] = ()
+    tools: Sequence[ToolSpend] = ()
 
 
 def window_start(now: datetime, days: int) -> datetime:

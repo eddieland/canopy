@@ -81,7 +81,7 @@ function SettingsPage() {
             <Panel>
                 <PanelHeader label="Theme" />
                 <div className="flex items-center justify-between gap-4 p-3">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="max-w-3xl text-sm text-muted-foreground">
                         Follows the system unless you pick one. Syncs across tabs.
                     </p>
                     {/* Switched on click, not on a value change, so the transition grows from the item pressed. */}
@@ -123,7 +123,7 @@ function FunPanel() {
                 <LightSwitch />
             </PanelHeader>
             <div className="flex items-center justify-between gap-4 border-b p-3">
-                <p id="fun-items" className="text-sm text-muted-foreground">
+                <p id="fun-items" className="max-w-3xl text-sm text-muted-foreground">
                     The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, has a tip
                     for every page; none of them help. Each sits out a window with no room for it.
                 </p>
@@ -149,7 +149,7 @@ function FunPanel() {
                 </fieldset>
             </div>
             <div className="flex items-center justify-between gap-4 border-b p-3">
-                <p className="text-sm text-muted-foreground">
+                <p className="max-w-3xl text-sm text-muted-foreground">
                     How fast the ticker&apos;s headlines crawl, one at a time.
                 </p>
                 <ToggleGroup
@@ -172,7 +172,7 @@ function FunPanel() {
                 </ToggleGroup>
             </div>
             <div className="flex items-center justify-between gap-4 border-b p-3">
-                <label htmlFor="ticker-gap" className="text-sm text-muted-foreground">
+                <label htmlFor="ticker-gap" className="max-w-3xl text-sm text-muted-foreground">
                     Seconds the ticker stays empty between one headline and the next.
                 </label>
                 <span className="inline-flex items-center gap-2">
@@ -204,7 +204,7 @@ function FunPanel() {
                 </span>
             </div>
             <div className="flex items-center justify-between gap-4 p-3">
-                <p id="ticker-topics" className="text-sm text-muted-foreground">
+                <p id="ticker-topics" className="max-w-3xl text-sm text-muted-foreground">
                     Which headlines the ticker shows. Tips about canopy are mixed in with the jokes.
                 </p>
                 <fieldset aria-labelledby="ticker-topics" className="flex shrink-0 items-center gap-4">
@@ -264,7 +264,7 @@ function HatShop() {
         <Collapsible asChild open={open} onOpenChange={setOpen}>
             <div className="border-t" data-testid="hats">
                 <div className="flex items-center justify-between gap-4 p-3">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="max-w-3xl text-sm text-muted-foreground">
                         Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while
                         it is on. All sales are final.
                     </p>
@@ -363,7 +363,7 @@ function SendKeyPanel() {
         <Panel>
             <PanelHeader label="Replies" />
             <div className="flex items-center justify-between gap-4 p-3">
-                <p className="text-sm text-muted-foreground">
+                <p className="max-w-3xl text-sm text-muted-foreground">
                     Which key sends a reply or a note. Shift+Enter always makes a new line. Ctrl+Enter is ⌘+Enter on a
                     Mac.
                 </p>
@@ -416,7 +416,7 @@ function NoticePanel() {
                     mutation.mutate()
                 }}
             >
-                <p className="text-sm text-muted-foreground">
+                <p className="max-w-3xl text-sm text-muted-foreground">
                     Tell every run dispatched from now on about something passing outside the work, such as a CI outage,
                     as <code className="font-mono text-xs">canopy notice</code> does. Workers, reviews, and chores hear
                     it, and the overseer holds a failed check it explains. It lapses on its own; setting another
@@ -471,7 +471,7 @@ function ConfigPanel() {
             <PanelHeader label="Config" />
             <div className="flex items-center justify-between gap-4 p-3">
                 <div className="flex flex-col gap-1">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="max-w-3xl text-sm text-muted-foreground">
                         The loop reads the workspace file and your{' '}
                         <code className="font-mono text-xs">config.toml</code> when it starts. Reload reads them again,
                         as <code className="font-mono text-xs">kill -HUP</code> does; a running tick finishes first. A
@@ -518,7 +518,7 @@ function SessionPanel() {
             <PanelHeader label="Session" />
             <div className="flex items-center justify-between gap-4 p-3">
                 <div className="flex flex-col gap-1">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="max-w-3xl text-sm text-muted-foreground">
                         Signed in with the listener secret for 30 days. To sign every browser out, run{' '}
                         <code className="font-mono text-xs">canopy secret --rotate</code> and restart the loop.
                     </p>

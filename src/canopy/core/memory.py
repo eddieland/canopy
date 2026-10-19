@@ -707,6 +707,70 @@ def get(conn: sqlite3.Connection, memory_id: int) -> records.Memory | None:
     return records.fetch_one(conn, records.Memory, "SELECT * FROM memories WHERE id = ?", (memory_id,))
 
 
+def history(conn: sqlite3.Connection, memory_id: int) -> list[records.Memory]:
+    """Return every version of memory `memory_id`, newest first: the ones it superseded, it, and the ones after it.
+
+    A note under a key a later note reused, and a lesson the operator edited or promoted another over, is one version;
+    each supersedes the one before it, so the versions are the chain through `supersedes` both ways. A memory that
+    never superseded one and was never superseded is its only version. One that left force, as a forgotten lesson does,
+    ends its chain: a later memory under its key starts another.
+
+    Returns:
+        The versions, the newest first; [] for an id no memory has.
+    """
+    # UNION, not UNION ALL, so a cycle written into the journal by hand ends the walk rather than looping.
+    return records.fetch_all(
+        conn,
+        records.Memory,
+        "WITH RECURSIVE back(id) AS (SELECT id FROM memories WHERE id = ? "
+        "UNION SELECT m.supersedes FROM memories m JOIN back b ON m.id = b.id WHERE m.supersedes IS NOT NULL), "
+        "ahead(id) AS (SELECT id FROM memories WHERE id = ? "
+        "UNION SELECT m.id FROM memories m JOIN ahead a ON m.supersedes = a.id) "
+        "SELECT * FROM memories WHERE id IN (SELECT id FROM back UNION SELECT id FROM ahead) ORDER BY id DESC",
+        (memory_id, memory_id),
+    )
+
+
+def version(conn: sqlite3.Connection, found: records.Memory) -> int:
+    """Return which version of its memory `found` is: 1 for one that superseded none, one more for each before it."""
+    if found.supersedes is None:
+        return 1
+    row = conn.execute(
+        "WITH RECURSIVE back(id) AS (SELECT ? "
+        "UNION SELECT m.supersedes FROM memories m JOIN back b ON m.id = b.id WHERE m.supersedes IS NOT NULL) "
+        "SELECT count(*) FROM back",
+        (found.id,),
+    ).fetchone()
+    return int(row[0])
+
+
+def edited(found: records.Memory) -> bool:
+    """Tell a lesson the operator edited from the one before it from one they promoted over it.
+
+    An edit makes the new version from the old and supersedes it, so both point at it; a promote makes it from a
+    proposal or a note, and supersedes a lesson, which is never the same row.
+
+    Returns:
+        True for a lesson made by an edit; False for one promoted, and for any memory but a lesson.
+    """
+    return found.promoted_from is not None and found.promoted_from == found.supersedes
+
+
+def origin(conn: sqlite3.Connection, lesson: records.Memory) -> records.Memory | None:
+    """Return the proposal or note a lesson was promoted from, past every version of it the operator edited.
+
+    Returns:
+        The memory, or None for one promoted from nothing, or from a memory no longer in the journal.
+    """
+    found = lesson
+    while found.promoted_from is not None:
+        source = get(conn, found.promoted_from)
+        if source is None or source.scope is not MemoryScope.LESSON:
+            return source
+        found = source
+    return None
+
+
 def written_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
     """Return what run `run_id` wrote, in the order it wrote it."""
     return records.fetch_all(conn, records.Memory, "SELECT * FROM memories WHERE run_id = ? ORDER BY id", (run_id,))

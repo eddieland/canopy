@@ -170,6 +170,23 @@ export function repoChoices(source: Pick<MemoryEntry, 'repo'>, repos: readonly s
     return [source.repo, ...repos.filter((r) => r !== source.repo)]
 }
 
+/**
+ * The repositories an edit may serve its lesson to, as `canopy memory edit` takes them: every one, as `--every-repo`
+ * does, then the lesson's own, even once the workspace map has dropped it, then the workspace's others.
+ */
+export function editRepoChoices(lesson: Pick<MemoryEntry, 'repo'>, repos: readonly string[]): (string | null)[] {
+    return [null, ...repoChoices(lesson, repos).filter((r) => r !== null)]
+}
+
+/**
+ * Whether a memory has versions besides itself (`canopy memory history`): one that replaced another, or a lesson or a
+ * note that a later one under its key replaced. A proposal promoted is superseded too, but what it made is a lesson,
+ * not a version of it.
+ */
+export function hasVersions(entry: Pick<MemoryEntry, 'version' | 'status' | 'scope'>): boolean {
+    return entry.version > 1 || (entry.status === 'superseded' && entry.scope !== 'proposal')
+}
+
 /** The lessons whose review date has come, the longest overdue first, as a `lesson_review` item names them. */
 export function dueForReview<T extends Pick<MemoryEntry, 'id' | 'review_at'>>(lessons: readonly T[], now: number): T[] {
     return lessons

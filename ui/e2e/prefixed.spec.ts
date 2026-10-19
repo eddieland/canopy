@@ -461,7 +461,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     // Where the plan stands: its chip in the Plan panel's header, and the rest in the page's description.
     const panel = page.getByTestId('ticket-plan')
     const state = page.locator('header', { has: page.getByRole('heading', { level: 1 }) })
-    await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
+    await expect(plan(page).getByRole('heading', { level: 3 })).toHaveText('Schedule report exports')
 
     // An edit is marked unsaved until ⌘S (Ctrl+S) saves it, as a document's is.
     await plan(page).getByText('Exports to anything but CSV.').click()
@@ -492,7 +492,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(ask.getByRole('button', { name: 'Ask again' })).toBeVisible()
 
     // An edit, saved and approved in one: the approval takes the file as saved.
-    await plan(page).getByRole('heading', { level: 1 }).click()
+    await plan(page).getByRole('heading', { level: 3 }).click()
     await page.keyboard.press('End')
     await page.keyboard.type(', weekly too')
     await actions.getByRole('button', { name: 'Save and approve' }).click()
@@ -585,4 +585,45 @@ test("a ticket's note is promoted from its page for one repository, and the less
         `Memory ${id} (lesson export-encoding) is forgotten: its text is deleted.`,
     )
     await expect(lesson).toHaveCount(0)
+})
+
+test('a lesson is edited from the memory page, and its versions keep the old words until forgotten', async ({
+    page,
+}) => {
+    await page.goto('memory')
+    const lessons = page.getByTestId('memory-lessons')
+    const lesson = lessons.getByTestId('memory-8')
+    await lesson.hover()
+    await lesson.getByRole('button', { name: 'Edit' }).click()
+    const form = lesson.getByRole('form', { name: 'Edit memory:8' })
+    await expect(form.getByRole('radio', { name: 'web' })).toHaveAttribute('aria-checked', 'true')
+    await form.getByLabel('The lesson, in your words').fill('Billing goes through src/billing/client.ts, v2 included.')
+    await form.getByRole('radio', { name: 'every repository' }).click()
+    await form.getByRole('button', { name: 'Edit memory:8' }).click()
+    const said = lessons.getByRole('status')
+    await expect(said).toContainText('Lesson 8 is edited into lesson')
+    await expect(said).toContainText('version 2')
+    await expect(said).toContainText('Lesson 8 stays in its history.')
+    const id = /into lesson (?<id>\d+)/u.exec((await said.textContent()) ?? '')?.groups?.['id']
+    expect(id).toBeDefined()
+    await expect(lesson).toHaveCount(0)
+
+    const edited = lessons.getByTestId(`memory-${id}`)
+    await expect(edited).toContainText('version 2')
+    await expect(edited).toContainText('edited from memory:8')
+    await expect(edited).toContainText('from proposal memory:7')
+    await edited.getByRole('button', { name: 'Show versions' }).click()
+    const versions = edited.getByRole('list', { name: 'Versions, newest first' })
+    const old = versions.getByTestId('memory-version-8')
+    await expect(old).toContainText('superseded')
+    await expect(old).toContainText('Billing goes through src/billing/client.ts alone; the v1 endpoints are gone.')
+
+    // The old words leave the journal from where they show, and the version in force keeps its own.
+    await old.getByRole('button', { name: 'Forget' }).click()
+    const challenge = old.getByRole('form', { name: 'Forget memory:8' })
+    await challenge.getByLabel('Type memory:8 to confirm').fill('memory:8')
+    await challenge.getByRole('button', { name: 'Forget memory:8' }).click()
+    await expect(said).toHaveText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
+    await expect(old).toContainText('text deleted')
+    await expect(edited).toContainText('Billing goes through src/billing/client.ts, v2 included.')
 })

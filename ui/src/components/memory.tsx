@@ -1,5 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { memoryVersionsQuery } from '@/api/queries'
 import type {
     MemoryDigest,
     MemoryEntry,
@@ -11,15 +14,19 @@ import type {
 } from '@/api/types'
 import { Age } from '@/components/age'
 import { CopyButton } from '@/components/copy-button'
+import { Disclosure } from '@/components/disclosure'
+import { VersionForget } from '@/components/memory-actions'
+import { MemoryText } from '@/components/memory-text'
 import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import {
     lapsesText,
     leftOutText,
     leftText,
-    memorySegments,
+    hasVersions,
     memoryStand,
     reviewText,
     tierMode,
@@ -58,30 +65,6 @@ const STAND_TITLE: Record<MemoryStand, string> = {
 }
 
 /**
- * What a worker wrote, or the operator for a lesson, as plain text (DESIGN §28): never Markdown or a link, and every
- * character that hides text named by its code point (`<U+200B>`), set apart so it is seen, as the CLI shows it.
- */
-export function MemoryText({ text, className }: { text: string; className?: string }) {
-    return (
-        <span className={cn('break-words whitespace-pre-wrap', className)}>
-            {memorySegments(text).map((segment, i) =>
-                segment.hidden ? (
-                    <span
-                        key={i}
-                        title="A character that hides text, which a model still reads"
-                        className="rounded-xs border border-status-failed/40 bg-status-failed/10 font-mono text-2xs"
-                    >
-                        {segment.text}
-                    </span>
-                ) : (
-                    <span key={i}>{segment.text}</span>
-                ),
-            )}
-        </span>
-    )
-}
-
-/**
  * A tier's band, heading its panel: its mode in words and what reads it, in words and never by color alone, so recorded
  * memory is never taken for memory in use. A tier in use wears the running tone: runs act on what it holds.
  */
@@ -107,6 +90,9 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
  * run whose page it is said of each, so a row it relied on or found wrong says so; `modes` is each tier's mode now, so
  * a memory in force under a tier that only records reads `recorded`, never `active`; `lapses` is when each proposal
  * lapses undecided, by its id, which its standing then says in place of `pending`, since every proposal is pending.
+ * A memory with more than one version, a lesson edited or a note under a key a later run reused, says which it is and
+ * opens its versions under it; with `onVersionSaid`, each version out of force that keeps its text has Forget, which
+ * says what it did there.
  */
 export function MemoryRows({
     entries,
@@ -119,6 +105,7 @@ export function MemoryRows({
     cited,
     modes,
     lapses,
+    onVersionSaid,
 }: {
     entries: MemoryEntry[]
     ticket?: boolean
@@ -130,108 +117,232 @@ export function MemoryRows({
     cited?: Pick<RunMemory, 'used' | 'wrong'>
     modes?: TierModes | undefined
     lapses?: ReadonlyMap<number, string>
+    onVersionSaid?: (said: string) => void
 }) {
     const now = useNow()
     const served = new Set(digest?.ids)
     return (
         <ul className="divide-y" data-testid="memory-rows">
-            {entries.map((entry) => {
-                const byRun = entry.run_id !== null && entry.run_id !== ownRun
-                return (
-                    <ListRow
-                        key={entry.id}
-                        kind={ticket || across ? 'memory-across' : 'memory'}
-                        // Relative, so a quiet lesson's verbs can show over its end (`LessonActions`).
-                        className="group/copy relative"
-                        data-testid={`memory-${entry.id}`}
-                    >
-                        <MemoryStanding
-                            entry={entry}
-                            now={now}
-                            mode={modes && tierMode(entry.scope, modes)}
-                            lapses={lapses?.get(entry.id)}
-                        />
-                        {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
-                        <span className="flex min-w-0 items-center gap-0.5">
-                            <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
-                            <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
-                        </span>
-                        {(ticket || across) && (
-                            <span className="min-w-0">
-                                {ticket && entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
-                            </span>
-                        )}
-                        <span className="flex min-w-0">
-                            {entry.repo !== null && <Chip className="min-w-0 shrink" word={entry.repo} />}
-                        </span>
-                        <span className="truncate font-mono text-xs" title={entry.key}>
-                            {entry.key}
-                        </span>
-                        <span
-                            className="truncate text-right text-xs text-muted-foreground"
-                            title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at)}`}
-                        >
-                            {usedText(entry)}
-                        </span>
-                        <Age at={entry.created_at} variant="ago" className="text-right" />
-                        <RowLine from="key" className="text-sm">
-                            {entry.text === null ? (
-                                <span className="text-muted-foreground">text deleted</span>
-                            ) : (
-                                <MemoryText text={entry.text} />
-                            )}
-                        </RowLine>
-                        <RowLine
-                            from="key"
-                            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
-                        >
-                            {/* The commit it was written against, on the run's hover, so the line stays one line. */}
-                            {byRun && entry.run_id !== null && (
-                                <span title={entry.head === null ? undefined : `written at ${entry.head}`}>
-                                    by <RunLink id={entry.run_id} />
-                                </span>
-                            )}
-                            {facts?.get(entry.id)}
-                            {!byRun && entry.head !== null && <span className="font-mono">at {entry.head}</span>}
-                            {entry.origin !== null && <Origin origin={entry.origin} />}
-                            {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
-                            {cited?.wrong.includes(entry.id) === true && (
-                                <span className="text-status-failed">this run found it wrong</span>
-                            )}
-                            <UsedIn entry={entry} ownRun={ownRun} />
-                            {digest && entry.status === 'active' && !served.has(entry.id) && (
-                                <span>{leftOutText(digest.served)}</span>
-                            )}
-                            {entry.why !== null && <span>{entry.why}</span>}
-                            {entry.review_at !== null && entry.status === 'active' && (
-                                <span
-                                    className={cn(
-                                        Date.parse(entry.review_at) <= now &&
-                                            (modes === undefined || modes.lessons === 'use') &&
-                                            'text-status-blocked',
-                                    )}
-                                    title={`at ${localTime(entry.review_at)}`}
-                                >
-                                    {reviewText(entry.review_at, now)}
-                                </span>
-                            )}
-                            {entry.wrong_run_id !== null && (
-                                <span className="text-status-failed">
-                                    reported wrong by <RunLink id={entry.wrong_run_id} />
-                                    {entry.wrong_at !== null && (
-                                        <>
-                                            {' '}
-                                            <Age at={entry.wrong_at} variant="ago" className="text-status-failed" />
-                                        </>
-                                    )}
-                                </span>
-                            )}
-                        </RowLine>
-                        {below?.get(entry.id)}
-                    </ListRow>
-                )
-            })}
+            {entries.map((entry) => (
+                <MemoryRow
+                    key={entry.id}
+                    entry={entry}
+                    now={now}
+                    ticket={ticket}
+                    across={across}
+                    facts={facts?.get(entry.id)}
+                    below={below?.get(entry.id)}
+                    ownRun={ownRun}
+                    leftOut={digest && entry.status === 'active' && !served.has(entry.id) ? digest.served : undefined}
+                    cited={cited}
+                    modes={modes}
+                    lapses={lapses?.get(entry.id)}
+                    onVersionSaid={onVersionSaid}
+                />
+            ))}
         </ul>
+    )
+}
+
+/**
+ * One memory's row in `MemoryRows`, a `Collapsible` whose content is its versions, read only once opened. `leftOut`
+ * is whether its digest's cap leaves it out, `served` or recording, and undefined when it does not.
+ */
+function MemoryRow({
+    entry,
+    now,
+    ticket,
+    across,
+    facts,
+    below,
+    ownRun,
+    leftOut,
+    cited,
+    modes,
+    lapses,
+    onVersionSaid,
+}: {
+    entry: MemoryEntry
+    now: number
+    ticket: boolean
+    across: boolean
+    facts: ReactNode
+    below: ReactNode
+    ownRun: number | undefined
+    leftOut: boolean | undefined
+    cited: Pick<RunMemory, 'used' | 'wrong'> | undefined
+    modes: TierModes | undefined
+    lapses: string | undefined
+    onVersionSaid: ((said: string) => void) | undefined
+}) {
+    const [open, setOpen] = useState(false)
+    const byRun = entry.run_id !== null && entry.run_id !== ownRun
+    return (
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <ListRow
+                kind={ticket || across ? 'memory-across' : 'memory'}
+                // Relative, so a quiet lesson's verbs can show over its end (`LessonActions`).
+                className="group/copy relative"
+                data-testid={`memory-${entry.id}`}
+            >
+                <MemoryStanding entry={entry} now={now} mode={modes && tierMode(entry.scope, modes)} lapses={lapses} />
+                {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
+                <span className="flex min-w-0 items-center gap-0.5">
+                    <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
+                    <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
+                </span>
+                {(ticket || across) && (
+                    <span className="min-w-0">
+                        {ticket && entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
+                    </span>
+                )}
+                <span className="flex min-w-0">
+                    {entry.repo !== null && <Chip className="min-w-0 shrink" word={entry.repo} />}
+                </span>
+                <span className="truncate font-mono text-xs" title={entry.key}>
+                    {entry.key}
+                </span>
+                <span
+                    className="truncate text-right text-xs text-muted-foreground"
+                    title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at)}`}
+                >
+                    {usedText(entry)}
+                </span>
+                <Age at={entry.created_at} variant="ago" className="text-right" />
+                <RowLine from="key" className="text-sm">
+                    {entry.text === null ? (
+                        <span className="text-muted-foreground">text deleted</span>
+                    ) : (
+                        <MemoryText text={entry.text} />
+                    )}
+                </RowLine>
+                <RowLine
+                    from="key"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+                >
+                    {/* The commit it was written against, on the run's hover, so the line stays one line. */}
+                    {byRun && entry.run_id !== null && (
+                        <span title={entry.head === null ? undefined : `written at ${entry.head}`}>
+                            by <RunLink id={entry.run_id} />
+                        </span>
+                    )}
+                    {facts}
+                    {!byRun && entry.head !== null && <span className="font-mono">at {entry.head}</span>}
+                    {entry.version > 1 && <span>version {entry.version}</span>}
+                    {entry.edited && entry.promoted_from !== null && (
+                        <span>edited from {memoryRef(entry.promoted_from)}</span>
+                    )}
+                    {entry.origin !== null && <Origin origin={entry.origin} />}
+                    {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
+                    {cited?.wrong.includes(entry.id) === true && (
+                        <span className="text-status-failed">this run found it wrong</span>
+                    )}
+                    <UsedIn entry={entry} ownRun={ownRun} />
+                    {leftOut !== undefined && <span>{leftOutText(leftOut)}</span>}
+                    {entry.why !== null && <span>{entry.why}</span>}
+                    {entry.review_at !== null && entry.status === 'active' && (
+                        <span
+                            className={cn(
+                                Date.parse(entry.review_at) <= now &&
+                                    (modes === undefined || modes.lessons === 'use') &&
+                                    'text-status-blocked',
+                            )}
+                            title={`at ${localTime(entry.review_at)}`}
+                        >
+                            {reviewText(entry.review_at, now)}
+                        </span>
+                    )}
+                    {entry.wrong_run_id !== null && (
+                        <span className="text-status-failed">
+                            reported wrong by <RunLink id={entry.wrong_run_id} />
+                            {entry.wrong_at !== null && (
+                                <>
+                                    {' '}
+                                    <Age at={entry.wrong_at} variant="ago" className="text-status-failed" />
+                                </>
+                            )}
+                        </span>
+                    )}
+                </RowLine>
+                {below}
+                {hasVersions(entry) && (
+                    <>
+                        <RowLine from="key">
+                            {/* No taller than a line of text, in line with the text above it. */}
+                            <Disclosure open={open} what="versions" className="-my-1 -ml-2" />
+                        </RowLine>
+                        <CollapsibleContent asChild>
+                            <RowLine from="key">
+                                <MemoryVersions id={entry.id} onSaid={onVersionSaid} />
+                            </RowLine>
+                        </CollapsibleContent>
+                    </>
+                )}
+            </ListRow>
+        </Collapsible>
+    )
+}
+
+/**
+ * Every version of a memory, newest first (`canopy memory history`): which it is, its ref, where it stands, its
+ * repository, how it was made, and when, then its words, plain. Those out of force are muted: no run reads them.
+ * With `onSaid`, a version out of force that keeps its text has Forget, which says there what it did.
+ */
+function MemoryVersions({ id, onSaid }: { id: number; onSaid: ((said: string) => void) | undefined }) {
+    const { data, error } = useQuery(memoryVersionsQuery(id))
+    if (data === undefined) {
+        return (
+            <p className="min-h-4 text-xs text-muted-foreground">
+                {error === null ? 'Reading its versions.' : `Its versions could not be read: ${error.message}`}
+            </p>
+        )
+    }
+    return (
+        <ol aria-label="Versions, newest first" className="flex flex-col gap-2 border-l pl-3">
+            {data.versions.map((version) => (
+                <li
+                    key={version.id}
+                    className={cn('flex flex-col gap-0.5', version.status !== 'active' && 'text-muted-foreground')}
+                    data-testid={`memory-version-${version.id}`}
+                >
+                    <span className="flex flex-wrap items-center gap-x-2 text-xs">
+                        <span className="readout">v{version.version}</span>
+                        <span className="readout">{memoryRef(version.id)}</span>
+                        <span className="font-mono" title={version.why ?? undefined}>
+                            {version.status}
+                        </span>
+                        {version.repo !== null && <Chip word={version.repo} />}
+                        <VersionMade version={version} />
+                        <Age at={version.created_at} variant="ago" />
+                        {version.id === id && <span>this row</span>}
+                    </span>
+                    <span className="text-sm">
+                        {version.text === null ? 'text deleted' : <MemoryText text={version.text} />}
+                    </span>
+                    {onSaid !== undefined && version.status !== 'active' && version.text !== null && (
+                        <VersionForget version={version} onSaid={onSaid} />
+                    )}
+                </li>
+            ))}
+        </ol>
+    )
+}
+
+/** How a version was made, as the CLI's history says it: a lesson edited or promoted, a note by its run. */
+function VersionMade({ version }: { version: MemoryEntry }) {
+    if (version.edited) {
+        return <span>edited</span>
+    }
+    if (version.scope === 'lesson') {
+        return <span>promoted</span>
+    }
+    if (version.run_id === null) {
+        return null
+    }
+    return (
+        <span>
+            by <RunLink id={version.run_id} />
+        </span>
     )
 }
 

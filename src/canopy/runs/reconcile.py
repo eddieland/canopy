@@ -47,7 +47,7 @@ class Reconciled:
     """What reconcile leaves: the capacity, and each cloned repository's leased slots, by repository name."""
 
     capacity: Capacity
-    leased: dict[str, list[pools.Slot]] = field(default_factory=dict[str, list[pools.Slot]])
+    leased: Mapping[str, Sequence[pools.Slot]] = field(default_factory=dict[str, list[pools.Slot]])
 
 
 def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:

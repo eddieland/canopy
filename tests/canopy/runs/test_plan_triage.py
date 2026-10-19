@@ -6,12 +6,14 @@ waives the plan; anything else leaves the ticket to be planned at once, with no 
 """
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
 from canopy.core import db, plans
@@ -400,6 +402,26 @@ def test_a_private_tickets_triage_reads_its_conversation_and_no_worker_reads_its
     implement = scenario.run(dispatches(label=None), worker=pushes())
     assert "Only the comment in the README." in implement.prompt
     assert REASON not in implement.prompt
+
+
+@pytest.mark.parametrize("private", [False, True], ids=["public", "private"])
+def test_the_triage_prompt(
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool, markdown_snapshot: SnapshotAssertion, *, private: bool
+) -> None:
+    """The triage's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
+
+    A public ticket's, with its label check and no operator's messages, and a started one's, with no label to check and
+    its conversation as the operator's messages.
+    """
+    triage_on(canopy_env)
+    if private:
+        scenario.operator("start", KEY)
+        scenario.operator("reply", KEY, "Only the comment in the README.")
+    label = None if private else LABEL
+    ran = scenario.run(dispatches(kind=RunKind.NEEDS_PLAN, label=label), worker=triage_reports(verdict("plan")))
+    # A message's time is when the test wrote it.
+    prompt = re.sub(r"\d{4}-\d\d-\d\dT[\d:.]+Z", "<time>", ran.prompt.replace(str(canopy_env.root), "/workspace"))
+    assert prompt == markdown_snapshot
 
 
 def test_a_triage_is_never_wrapped_as_a_worker_run(

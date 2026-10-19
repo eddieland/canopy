@@ -450,12 +450,22 @@ harness fills its authorization and its operator's messages for each. What the r
   the operator's words, and `plan` when it is unsure: a plan nobody needed costs a run and a read, and a waiver wrongly
   given costs a worker's guess at a change that wanted a plan. The ticket's own claim to be trivial is data, not
   evidence (TRUST_MODEL T1).
+- It answers `trivial` only once it can name the change: the files it edits, what changes in each, and the test that
+  covers it. It treats as unsure what usually wants a plan, unless the operator's words name that kind of work: a
+  requirement left open or more than one reasonable way to do it, a change to what other code or people rely on (an
+  interface, a schema, a config format, stored data, permissions), something new rather than a correction, work in more
+  than one repository, or a change no test covers that one should. The list is the usual reasons an agent plans before
+  coding, so triage and the operator judge a waiver by the same signs.
+- Its reason comes before its verdict in the result line, so the verdict follows from it, in one of two shapes: for
+  `trivial`, the operator's words it fits and what changes in which files; for `plan`, the sign that needs a plan and
+  what shows it. The operator reads every waiver's reason the same way, and the reviewer's second opinion, when one
+  disagrees, has a claim to check.
 - It writes nothing anywhere.
 
 Result contract, one JSON line, last line of the agent's text (§13), validated with pydantic (D026):
 
 ```json
-{"status":"done|failed","verdict":"trivial|plan","reason":"one sentence"}
+{"status":"done|failed","reason":"one sentence","verdict":"trivial|plan"}
 ```
 
 - `done` has a verdict and a reason. `failed` means it could not judge, and the reason says why. The reason is one

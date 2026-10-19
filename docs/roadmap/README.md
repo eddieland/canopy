@@ -72,7 +72,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M33. Spend by what it bought](M33-spend-by-what-it-bought.md): done 2026-10-14.
 - [M34. A cacheable overseer prompt](M34-a-cacheable-overseer-prompt.md): done 2026-10-15.
 - [M35. Temporary notices to workers](M35-temporary-notices-to-workers.md): done 2026-10-15.
-- [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): not started.
+- [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): in progress.
 - [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): not started.
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): not started.
 - [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): not started.
@@ -95,6 +95,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M56. Fixing CI is part of resume](M56-fixing-ci-is-part-of-resume.md): in progress.
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 - [M58. canopy chooses the worker's model](M58-canopy-chooses-the-workers-model.md): in progress.
+- [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 
