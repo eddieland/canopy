@@ -588,7 +588,8 @@ What plans add to TRUST_MODEL, with the overseer prompt, `worker-plan.md`, and t
 - Whether M38 makes the plan gate the harness's decision rather than the overseer's.
 - Whether `canopy forget` keeps the ticket's own plan setting, as it keeps the start record.
 - Whether a committed copy of the plan should raise an attention item, not only a note on the run.
-- Whether canopy should prune old plan files, as issue #424 asks of M36's per-tick tables.
+- Whether canopy should prune old plan files, which §26's pass leaves alone, as it prunes run files and M36's per-tick
+  rows (§30).
 - Whether a repository that tracks a `.canopy-plan.md` of its own at its root needs another name for the copy: the copy
   would write over it in the worktree, and push verification would report it as the worker's.
 - Whether the planner should answer each thread in its result, by thread id, rather than only through the new plan.
