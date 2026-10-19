@@ -123,9 +123,11 @@ function Ticket({ detail }: { detail: TicketDetail }) {
         <>
             <PageHeader
                 chips={
-                    // What public or private means is the chip's, on hover: the description is the ticket's state.
+                    // What public or private means is the chip's, on hover and to a screen reader: the description is
+                    // the ticket's state.
                     <span title={accessHint(ticket)} className="inline-flex">
                         <Chip>{ticket.private ? 'private' : 'public'}</Chip>
+                        <span className="sr-only">{accessHint(ticket)}</span>
                     </span>
                 }
                 title={ticket.key}

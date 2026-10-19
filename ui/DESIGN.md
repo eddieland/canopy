@@ -761,7 +761,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
   untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On
   a public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
-  canopy, never on the ticket.`, as the ticket's `public` chip says on hover, where its comments stay on the tracker.
+  canopy, never on the ticket.`, as the ticket's `public` chip says on hover and to a screen reader, where its comments
+  stay on the tracker.
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
   its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
   (`ticketDescription`).

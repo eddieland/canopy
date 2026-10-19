@@ -25,10 +25,12 @@ test("a public ticket's page says where a reply goes one way: its chip on hover 
 }) => {
     await page.goto('tickets/ABC-105')
     await settled(page)
-    // The description is the ticket's state; what public means is the chip's, on hover.
+    // The description is the ticket's state; what public means is the chip's, on hover and to a screen reader.
     await expect(page.locator('main header p')).toHaveText(/^plan waiting on you · active \d+\w+ ago$/u)
-    const chip = page.locator('main header [title]').filter({ hasText: /^public$/u })
-    await expect(chip).toHaveAttribute('title', /comments stay on the tracker; a reply you send here stays in canopy/u)
+    const chip = page.locator('main header [title]').filter({ hasText: /^public/u })
+    const hint = /comments stay on the tracker; a reply you send here stays in canopy/u
+    await expect(chip).toHaveAttribute('title', hint)
+    await expect(chip).toContainText(hint)
     await page.getByRole('button', { name: 'Show a note for its next worker' }).click()
     await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveAttribute(
         'placeholder',
