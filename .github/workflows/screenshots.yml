@@ -78,6 +78,26 @@ jobs:
           printf 'Taking screenshots in %s\n' "${specs[@]}"
           npm run test:e2e -- --update-snapshots="$UPDATE" "${specs[@]}"
 
+      # Recompresses the images this run wrote with oxipng, losslessly: the same pixels, about a fifth smaller, so each
+      # regeneration adds less to the history. Only those images, so the rest keep their bytes. A pinned release,
+      # checked against its digest; Ubuntu packages none.
+      - name: Optimize the images written
+        env:
+          OXIPNG_VERSION: 10.0.0
+          OXIPNG_SHA256: ed61396908e17dd8971decfebd7c64c0b8bc0a8107f9a7e29661f9335ce8158c
+        run: |
+          mapfile -t pngs < <(git ls-files --modified --others --exclude-standard -- 'ui/e2e/*-snapshots/*.png')
+          if [ "${#pngs[@]}" -eq 0 ]; then
+            echo "No image written; nothing to optimize."
+            exit 0
+          fi
+          name="oxipng-${OXIPNG_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o "$RUNNER_TEMP/oxipng.tar.gz" \
+            "https://github.com/shssoichiro/oxipng/releases/download/v${OXIPNG_VERSION}/${name}.tar.gz"
+          echo "${OXIPNG_SHA256}  ${RUNNER_TEMP}/oxipng.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/oxipng.tar.gz" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/$name/oxipng" --quiet --opt 4 --strip safe "${pngs[@]}"
+
       - name: Keep the baselines
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
