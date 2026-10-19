@@ -242,6 +242,7 @@ def _spend_costs(costs: spending.Costs) -> SpendCosts:
         dry_run=costs.dry_run,
         workers=costs.workers,
         triage=costs.triage,
+        plans=costs.plans,
         chores=costs.chores,
         reviews=costs.reviews,
         total=costs.total,

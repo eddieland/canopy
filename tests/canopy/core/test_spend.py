@@ -171,6 +171,7 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
         ("overseer", 8, 1),
         ("workers", 2, 1),  # the running fix-ci is not counted yet
         ("triage", 0, 0),
+        ("plans", 0, 0),
         ("chores", 2, 1),
         ("reviews", 1, 0),
     ]
@@ -206,11 +207,11 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     out = capsys.readouterr().out.splitlines()
     start = spend.window_start(now, 3).strftime("%Y-%m-%d")
     assert out[0] == f"Spend over 3 days, since {start} UTC, as the runtime reported it."
-    header = ["day", "overseer", "idle", "workers", "triage", "chores", "reviews", "dry", "run", "total"]
+    header = ["day", "overseer", "idle", "workers", "triage", "plans", "chores", "reviews", "dry", "run", "total"]
     assert out[2].split() == header
     days = [(spend.window_start(now, 3) + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
-    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
+    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
     words = [line.split() for line in out]
     assert ["idle", "3", "$0.50"] in words
     assert ["not", "idle", "2", "$1.50"] in words
@@ -365,16 +366,28 @@ def triage(
     conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None, status: str = "done"
 ) -> int:
     """A triage before a plan (DESIGN §25): a `runs` row of kind `needs-plan`, with no branch."""
+    return branchless(conn, "needs-plan", tick_id, key, started, cost, status)
+
+
+def plan_run(conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None) -> int:
+    """A plan run (DESIGN §25): a `runs` row of kind `plan`, with no branch."""
+    return branchless(conn, "plan", tick_id, key, started, cost, "done")
+
+
+def branchless(
+    conn: sqlite3.Connection, kind: str, tick_id: int, key: str, started: str, cost: float | None, status: str
+) -> int:
+    """A `runs` row of a kind that works on no branch."""
     cursor = conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path, cost_usd) "
-        "VALUES (?, ?, 'needs-plan', '', ?, ?, 'l', ?)",
-        (tick_id, key, started, status, cost),
+        "VALUES (?, ?, ?, '', ?, ?, 'l', ?)",
+        (tick_id, key, kind, started, status, cost),
     )
     assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
-def test_triage_runs_are_a_kind_of_their_own_beside_the_plans_they_waived(
+def test_triage_and_plan_runs_are_kinds_of_their_own_beside_the_plans_triage_waived(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
     now = noon_today()
@@ -385,21 +398,29 @@ def test_triage_runs_are_a_kind_of_their_own_beside_the_plans_they_waived(
     run(conn, t, "A-1", earlier(now, 0), 2.0, None)
     plans.record_waiver(conn, "A-1", triage(conn, t, "A-1", earlier(now, 0, 1), 0.05), "One word.")
     triage(conn, t, "A-2", earlier(now, 0, 1), 0.04)  # judged it needs its plan
+    plan_run(conn, t, "A-2", earlier(now, 0, 1), 0.5)
     triage(conn, t, "A-3", earlier(now, 0, 1), None, status="failed")
     # A waiver from before the window is not the window's, however long its ticket took.
     plans.record_waiver(conn, "A-4", triage(conn, t, "A-4", earlier(now, 3), 0.05), "One value.")
 
     found = spend.breakdown(conn, now, 1)
-    assert (found.totals.workers, found.totals.triage) == (2.0, pytest.approx(0.09))
-    assert found.totals.total == pytest.approx(3.09)  # each dollar once, in its own kind
+    assert (found.totals.workers, found.totals.triage, found.totals.plans) == (2.0, pytest.approx(0.09), 0.5)
+    assert found.totals.total == pytest.approx(3.59)  # each dollar once, in its own kind
     assert found.waived == 1
-    assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced][1:3] == [("workers", 1, 0), ("triage", 3, 1)]
-    # A ticket's own runs are all of them, its triage included.
-    assert [(s.key, s.runs, s.cost_usd) for s in found.tickets if s.key == "A-1"] == [("A-1", 2, pytest.approx(2.05))]
+    assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced][1:4] == [
+        ("workers", 1, 0),
+        ("triage", 3, 1),
+        ("plans", 1, 0),
+    ]
+    # A ticket's own runs are all of them, its triage and its plan included.
+    assert [(s.key, s.runs, s.cost_usd) for s in found.tickets if s.key in {"A-1", "A-2"}] == [
+        ("A-1", 2, pytest.approx(2.05)),
+        ("A-2", 2, pytest.approx(0.54)),
+    ]
 
     assert main(["spend", "--days", "1"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[3].split()[3:5] == ["$2.00", "$0.09"]  # workers, then triage
+    assert out[3].split()[3:6] == ["$2.00", "$0.09", "$0.50"]  # workers, then triage, then plans
     assert "Triage waived 1 plan, each a planner run saved." in out
     assert out[-1] == "No cost reported: 1 of 3 triage runs."
 

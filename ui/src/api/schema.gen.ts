@@ -4596,7 +4596,7 @@ export type components = {
             totals: components["schemas"]["SpendCosts"];
             /**
              * Unpriced
-             * @description A row per kind of run, in a fixed order: overseer, workers, triage, chores, reviews.
+             * @description A row per kind of run, in a fixed order: overseer, workers, triage, plans, chores, reviews.
              */
             unpriced: components["schemas"]["SpendUnpriced"][];
             /**
@@ -4637,6 +4637,11 @@ export type components = {
              * @description The live ticks' overseers.
              */
             overseer: number | null;
+            /**
+             * Plans
+             * @description Plan runs, which write a ticket's plan (`plan`, DESIGN §25): what a waived plan would have cost.
+             */
+            plans: number | null;
             /**
              * Reviews
              * @description Review runs.
@@ -4683,10 +4688,10 @@ export type components = {
          */
         SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
         /**
-         * @description A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan (`needs-plan`, DESIGN §25), chore runs, review runs.
+         * @description A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan (`needs-plan`, DESIGN §25), plan runs (`plan`, §25), chore runs, review runs.
          * @enum {string}
          */
-        SpendKind: "overseer" | "workers" | "triage" | "chores" | "reviews";
+        SpendKind: "overseer" | "workers" | "triage" | "plans" | "chores" | "reviews";
         /**
          * SpendPullRequest
          * @description What the runs that pushed to one PR and the review runs of it, started in the window, cost.

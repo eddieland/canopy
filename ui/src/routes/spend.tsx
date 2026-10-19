@@ -44,8 +44,8 @@ interface SpendSearch {
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     "What agent runs cost each UTC day, as the runtime reported it: the overseer, idle ticks' part of it apart, and " +
-    'the workers, plan triages, chores, and reviews it started; beside it, the tickets the loop marked done, the ' +
-    "plans triage waived, and what each ticket's and PR's own runs cost; and which tools put the most into the " +
+    'the workers, plan triages, plans, chores, and reviews it started; beside it, the tickets the loop marked done, ' +
+    "the plans triage waived, and what each ticket's and PR's own runs cost; and which tools put the most into the " +
     "runs' context. As canopy spend --days N prints it."
 
 // What the window's spend per ticket done counts, on hover.
@@ -56,7 +56,7 @@ const PER_DONE_HINT =
 // What the plans triage waived count, on hover.
 const WAIVED_HINT =
     "The window's triage runs that judged their ticket trivial and waived its plan: each a planner run, and a read " +
-    'of its plan, saved. Read it against plan triage'
+    'of its plan, saved. Read it against plan triage, and against what plans cost'
 
 // What a tool's returned characters and its estimated tokens count, on hover.
 const RETURNED_HINT =
@@ -73,13 +73,14 @@ const KIND_LABEL = {
     overseer: 'overseer runs',
     workers: 'worker and split runs',
     triage: 'triage runs',
+    plans: 'plan runs',
     chores: 'chore runs',
     reviews: 'review runs',
 } as const
 
 // The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
 // columns read.
-const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'triage', 'chores', 'reviews', 'dry_run'] as const
+const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'triage', 'plans', 'chores', 'reviews', 'dry_run'] as const
 
 // The by-day chart's axis names every day of up to a week, and every fifth past that, back from today.
 const AXIS_ALL = SPEND_WINDOWS[0]
@@ -257,7 +258,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-4 @3xl:grid-cols-8">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-4 @3xl:grid-cols-9">
                 {cells.map(({ label, hint, usd, testId }) => (
                     <div key={testId} className="flex flex-col gap-0.5">
                         <dt className="panel-label" title={hint}>
@@ -269,7 +270,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     </div>
                 ))}
             </dl>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-4 @3xl:grid-cols-8">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-4 @3xl:grid-cols-9">
                 <div className="flex flex-col gap-0.5">
                     <dt
                         className="panel-label"

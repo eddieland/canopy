@@ -26,6 +26,7 @@ KIND_LABELS: dict[spend.Kind, str] = {
     "overseer": "overseer runs",
     "workers": "worker and split runs",
     "triage": "triage runs",
+    "plans": "plan runs",
     "chores": "chore runs",
     "reviews": "review runs",
 }
@@ -35,6 +36,7 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("idle", "idle"),
     ("workers", "workers"),
     ("triage", "triage"),
+    ("plans", "plans"),
     ("chores", "chores"),
     ("reviews", "reviews"),
     ("dry run", "dry_run"),
@@ -64,10 +66,11 @@ _TOOL_WIDTH = 32
 def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     """Print what agent runs cost per day, by kind, and the ticks by what they bought, beside what got done.
 
-    The overseer, workers and splits, triages before a plan, chores, and reviews, as the agent runtime reported each;
-    dry runs apart from the live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done,
-    the spend for each, the plans triage waived, and the costliest tickets, and the tools whose calls put the most
-    into context; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions snapshot.
+    The overseer, workers and splits, triages before a plan, plan runs, chores, and reviews, as the agent runtime
+    reported each; dry runs apart from the live ticks, and idle ticks' share of the overseer's spend. Then the tickets
+    marked done, the spend for each, the plans triage waived, and the costliest tickets, and the tools whose calls put
+    the most into context; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions
+    snapshot.
     """
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
