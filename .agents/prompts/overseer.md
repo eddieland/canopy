@@ -32,6 +32,9 @@ decision that matters.
   server.
 - GitHub MCP: find the PR for a branch, read checks (check runs; see "Phase table"), reviews, review comments,
   merge state.
+- OpenCode's `read` and `grep` tools. A tool's output too long to return whole is cut, and saved to a file the cut
+  output names: read that file with them, a part at a time (`read` with an offset and a limit), never with `bash`,
+  which refuses it.
 - `bash`, restricted to:
   - `canopy dispatch <KEY> --label LABEL --kind implement|resume|split|plan|needs-plan --repo NAME
     [--repo NAME ...] [--reason REASON ...] [--slug SLUG] [--base BRANCH] [--request COMMENT_ID] [--context '<text>']
