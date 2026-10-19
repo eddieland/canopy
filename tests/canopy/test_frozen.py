@@ -1,9 +1,10 @@
 """Each frozen dataclass in canopy, its programs, and its tests holds no mutable collection (AGENTS.md).
 
 A frozen dataclass is a value: nothing changes it once made. A `list`, `dict`, or `set` field would let anything that
-reads it change it anyway, so a field is typed by what its readers need, `Sequence` or `Mapping`, and the type checker
-refuses a change through it. A class that keeps state it changes, such as a stack of open blocks, is not frozen. The
-test reads the annotations, as the type checker does, so a field typed `Sequence` that holds a list passes.
+reads it change it anyway, so a field is typed by what its readers need, `Sequence`, `Mapping`, or `Set` (imported as
+`AbstractSet` or not), and the type checker refuses a change through it. A class that keeps state it changes, such as a
+stack of open blocks, is not frozen. The test reads the annotations, as the type checker does, so a field typed
+`Sequence` that holds a list passes.
 """
 
 import ast
@@ -51,6 +52,9 @@ class Value:
     by_key: Mapping[str, tuple[int, ...]]
     nested: tuple[dict[str, int], ...]
     later: Callable[[int], list[str]]
+    keys: Set[str]
+    others: AbstractSet[str]
+    raw: set[str]
 
 @dataclasses.dataclass
 class State:
@@ -61,7 +65,7 @@ class State:
         for _, node in _frozen_fields(ast.parse(source))
         if any(name in MUTABLE for name in _named(node.annotation))
     ]
-    assert flagged == ["names", "nested"]
+    assert flagged == ["names", "nested", "raw"]
 
 
 def _frozen_fields(tree: ast.Module) -> Iterator[tuple[str, ast.AnnAssign]]:
