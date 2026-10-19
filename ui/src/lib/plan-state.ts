@@ -37,8 +37,8 @@ export function planNeededWhy(plans: TicketPlans): string {
         case null: {
             if (plans.triage?.waived === true) {
                 return (
-                    `Triage run ${plans.triage.run_id} judged it trivial by your policy.trivial, so its implement ` +
-                    'goes ahead without a plan. You did not skip it: canopy plan asks for one instead.'
+                    `Triage run ${plans.triage.run_id} judged it trivial, so its implement goes ahead ` +
+                    'without a plan. You did not skip it: canopy plan asks for one instead.'
                 )
             }
             return plans.policy === 'approve'

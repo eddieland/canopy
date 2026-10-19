@@ -279,10 +279,10 @@ makes the plan stale, and canopy plans again, once the PR has gone quiet rather 
 Partial: the triage run and the waiver it writes are built (M55, §25, Triage before a plan), but the overseer does
 not dispatch a triage yet, and the reviewer's call-out is planned; skipping a feedback plan waits on M54's design.
 Written down 2026-10-17. With plans on (R18, R21), an obvious change still costs a planner run and the
-operator's approval. As an option, a smaller, cheaper agent should judge a change trivial, by the operator's own words
-for what that means, and let it go ahead unplanned, without asking the operator first. When it is unsure, or fails,
-the work is planned as before. A waived change canopy's own reviewer judges high impact is called out to the operator;
-its size alone is not, since size says little about risk.
+operator's approval. As an option, a smaller, cheaper agent should judge a change trivial, without the operator having
+to say what that means (2026-10-19), and let it go ahead unplanned, without asking the operator first. When it is
+unsure, or fails, the work is planned as before. A waived change canopy's own reviewer judges high impact is called
+out to the operator; its size alone is not, since size says little about risk.
 
 ### R23. Canary a model on one ticket
 

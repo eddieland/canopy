@@ -519,7 +519,7 @@ true, these come before the phase table's `ready` row, in order:
   `needs_human`; record `wait`. The harness already put the question on the attention list (`awaiting_reply`), on a
   public ticket too, and you never comment on the ticket about it.
 - `plan.triage_due` is true, and the ticket is otherwise `ready`: the operator turned triage on, so the ticket first
-  gets one cheaper run that judges, by the operator's own words for trivial, whether it needs a plan at all. Dispatch
+  gets one cheaper run that judges whether its work is trivial enough to need no plan at all. Dispatch
   `canopy dispatch <KEY> --label <label> --kind needs-plan --repo <name> [--repo <name> ...]`, naming every repository
   the ticket will touch, as for a plan, with the usual `--context` and no `--slug`, `--base`, or `--cursor` (a private
   ticket's takes no `--label`): the triage reads the operator's messages itself, and the run after it reads them too.

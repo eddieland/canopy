@@ -78,9 +78,10 @@ overwrites unseen one made elsewhere. Only the web channel writes threads and ed
 ### Triage before a plan
 
 REQUIREMENTS R22. With plans on, a typo fix still costs a planner run and the operator's reading. A **triage** is a
-cheaper run that judges from the ticket and the code, by the operator's own words for what is trivial, whether the work
-needs a plan. If trivial, the plan is waived; otherwise, or if anything goes wrong, the ticket is planned. Triage's keys
-are private, unlike the rest of `policy.*`, since triage loosens the operator's plan gate (T7).
+cheaper run that judges from the ticket and the code whether the work is trivial enough to need no plan, by its prompt's
+own measure or, where the operator gave them, the operator's words for it. If trivial, the plan is waived; otherwise,
+or if anything goes wrong, the ticket is planned. Triage's keys are private, unlike the rest of `policy.*`, since
+triage loosens the operator's plan gate (T7).
 
 A triage is due only when the ticket needs a plan by `policy.plan` alone (a ticket the operator marked is always
 planned) and has had no branch, plan run, or triage, so it is triaged at most once, never reset or granted (D030). It
