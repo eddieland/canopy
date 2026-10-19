@@ -1,9 +1,9 @@
 # M54. Plans before feedback runs
 
-REQUIREMENTS R21, DESIGN §7, §21, and §25, TRUST_MODEL T1, T3, T7, and T8, D089. Needs M44, M53, and M56. Asked for by
-the operator (2026-10-17): plan each `resume` before it runs, so that the operator accepts planned fixes rather than
-first sorting the feedback into trusted and untrusted reviewers' (D089), and plan again as new feedback or a new CI
-state reaches the PR before they accept. Sketch only; the design comes first, in §25 beside M44's plans.
+REQUIREMENTS R21, DESIGN §7, §21, §25, and §32, TRUST_MODEL T1, T3, T7, and T8, D089. Needs M44, M53, and M56.
+Asked for by the operator (2026-10-17): plan each `resume` before it runs, so that the operator accepts planned fixes
+rather than first sorting the feedback into trusted and untrusted reviewers' (D089), and plan again as new feedback or
+a new CI state reaches the PR before they accept. The design is DESIGN §32, beside M44's plans in §25.
 
 - **The setting.** `policy.feedback_plan`, `"off"` or `"approve"`. Private, unlike `policy.plan`: it is stricter for a
   trusted reviewer's feedback, which waits for the operator, and looser for anyone else's, which starts a read-only
@@ -68,4 +68,15 @@ each leave review comments; one feedback plan covers both; a new comment and a r
 make one new plan after the quiet period; the operator approves it with one item unticked; the `resume` that follows
 addresses exactly the ticked items.
 
-Status: not started.
+Status: in progress. Designed 2026-10-19 (DESIGN §32, Plans before feedback runs, beside §25's plans). The design
+settles what the sketch left open: a blocker that merged is an item too, so every `resume` but `pushed_no_pr`'s has
+items to plan; the PR's review items reach the planner as the `vcs` source observed them, with each check's conclusion
+at the head, in a desk holding the unit's slot at that head, so a review item's id the source did not observe is
+refused, and an item no plan covers goes to the next plan; `unplanned` and `plan_changed` refuse the `resume` in code,
+and one approval goes ahead once, spent by the `resume` that starts; a reply on a waiting plan asks for changes, as on a
+ticket's plan; a waiting plan makes the unit `plan_proposed`, and the state block says whether it is stale and its quiet
+period has passed; a re-plan inside the quiet period is refused in code; and with triage on, a round is triaged once,
+before its first plan, which is M55's feedback half. Open for the operator: whether a `resume` the operator's own
+message asks for waits on a plan; whether `ask` asks the reviewer or the operator; how the planner reads a failed
+check's log; whether a round's first plan waits out the quiet period; and whether the `resume` of a plan that changes
+nothing is held to pushing nothing in code.

@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the voice a planner, a reviewer, or a worker writes in, and who
 chooses it. Sections are numbered across the whole design; the [README](README.md) has the map. Previous:
-[Connectors](CONNECTORS.md).
+[Connectors](CONNECTORS.md). Next: [Feedback plans](FEEDBACK_PLANS.md).
 
 ## 31. Personas
 

@@ -269,15 +269,15 @@ ship a program that writes to GitHub (C7).
 
 ### R21. Plan each round of PR feedback, and approve the plan rather than sort the reviewers
 
-Gap (M54). Written down 2026-10-17. Before a `resume` runs, canopy should plan it, and the operator accepts the planned
-fixes, item by item if they like, instead of first deciding whose feedback is trusted (R13). The plan covers what is new
-on the PR, from anyone, with the PR's CI state. Until the operator accepts, new feedback, a new push, or a change in CI
-makes the plan stale, and canopy plans again, once the PR has gone quiet rather than on every comment.
+Planned (M54, §32). Written down 2026-10-17. Before a `resume` runs, canopy should plan it, and the operator accepts
+the planned fixes, item by item if they like, instead of first deciding whose feedback is trusted (R13). The plan covers
+what is new on the PR, from anyone, with the PR's CI state. Until the operator accepts, new feedback, a new push, or a
+change in CI makes the plan stale, and canopy plans again, once the PR has gone quiet rather than on every comment.
 
 ### R22. Skip the plan for trivial work
 
 Partial: the triage run and the waiver it writes are built (M55, §25, Triage before a plan), but the overseer does
-not dispatch a triage yet, and the reviewer's call-out is planned; skipping a feedback plan waits on M54's design.
+not dispatch a triage yet, and the reviewer's call-out is planned; skipping a feedback plan is planned (M54, §32).
 Written down 2026-10-17. With plans on (R18, R21), an obvious change still costs a planner run and the
 operator's approval. As an option, a smaller, cheaper agent should judge a change trivial, without the operator having
 to say what that means (2026-10-19), and let it go ahead unplanned, without asking the operator first. When it is

@@ -95,14 +95,10 @@ triage. It reads only, holds no slot, and writes nothing, as the planner with no
 
 Only `done` with `trivial` waives the plan; any other end fails closed, with the triage spent and nothing retried. The
 waiver is written by the harness from the validated result, never by an agent or a command, so `unplanned` stays a guard
-in code. It holds only while the ticket's own setting is unset. No worker hears of it, nor the triage's reason. A
-`trivial` feedback round (ROADMAP M54) follows the rules for feedback without plans (§7, D089), so triage never lets an
-untrusted reviewer's text start a worker.
-
-The ticket's plan card in the web UI shows its triage, running or ended, and a waiver by its run and reason; it offers
-asking for a plan only while that would undo the waiver, before the ticket has a branch. `canopy spend`, the spend page,
-and `canopy health` count triage runs and plan runs each as a kind of their own, with the plans triage waived, so its
-cost reads against what the planner runs it saved would have cost.
+in code. It holds only while the ticket's own setting is unset. No worker hears of it, nor the triage's reason. A round
+of PR feedback is triaged before its feedback plan, and a `trivial` one follows the rules for feedback without plans
+(§32), so triage never lets an untrusted reviewer's text start a worker. Spend counts triage runs and plan runs each as
+a kind of their own, with the plans triage waived, so its cost reads against the planner runs it saved.
 
 **A second opinion after.** Where `review.agent_prs` is on, the reviewer, not told of the waiver, judges each PR's
 impact (§21); one judged `high` raises `not_trivial` until the ticket is done or forgotten or the operator replaces the
