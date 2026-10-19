@@ -7,6 +7,7 @@ import type {
     DraftsSent,
     Forgot,
     Granted,
+    MemoryEdited,
     MemoryForgotten,
     MemoryPromoted,
     MemoryRenewed,
@@ -285,7 +286,25 @@ export function promotedText(promoted: MemoryPromoted): string {
  */
 export const PRIVATE_WORDS =
     "Warning: its text is from a private ticket's run, and may hold what you kept off the tracker. If it is not fit " +
-    'for every worker, forget the lesson and promote it again in your own words.'
+    'for every worker, edit it into your own words, then forget the version the edit replaces: its history keeps ' +
+    'the old words.'
+
+/**
+ * What an edit made, as `canopy memory edit` says it: the lesson's new version and its review date, that the old one
+ * stays in its history, and whether runs read it now or it is recorded and served to none.
+ */
+export function editedText(edited: MemoryEdited): string {
+    const { lesson, replaced } = edited
+    const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
+    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at)}`
+    const head =
+        `Lesson ${replaced.id} is edited into lesson ${lesson.id} (\`${lesson.key}\`)${where}, version ` +
+        `${lesson.version}${due}. Lesson ${replaced.id} stays in its history.`
+    const served = edited.served
+        ? ' Every run dispatched from now on reads the new version.'
+        : ' It is recorded, not served: memory.proposals is record, so no run reads it until it is use.'
+    return `${head}${served}`
+}
 
 /** What a reject did, as `canopy memory reject` says it. */
 export function rejectedText(id: number): string {

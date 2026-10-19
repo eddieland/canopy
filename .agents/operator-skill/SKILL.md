@@ -61,6 +61,8 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports; `renew` keeps one. |
+| `canopy memory edit ID --text T` | Writes a lesson anew (`--repo R`, `--every-repo`); the old version stays in its history. |
+| `canopy memory history ID` | Every version of a lesson or a note, newest first, each with how it was made. |
 | `canopy memory search WORDS` | Every memory with its text, best match first; `--ticket KEY` for one ticket's. |
 | `canopy draft list [KEY\|URL]` | The comments workers drafted for you under `trust.review_replies = "approve"`, with hashes. |
 | `canopy draft send run:ID N@HASH...` | Posts those drafts as your own words, one comment review a PR; `edit`, `drop`, `settle`. |
@@ -321,8 +323,10 @@ When the operator asks what workers remember, why a worker believed something, o
 4. A proposal from a private ticket's run may hold what the operator kept off the tracker; `canopy memory proposals`
    warns of one. Say so before suggesting it be promoted in its own words.
 5. Then suggest the operator's next step: `canopy memory promote ID [--text T] [--repo R]` or `reject ID` for a
-   proposal (`promote` takes a note too), `renew ID` to keep a lesson due for review, or graduating it into a
-   repository's AGENTS.md through a ticket and a PR, and `forget ID` or `purge` to delete text that is wrong or leaked.
+   proposal (`promote` takes a note too), `renew ID` to keep a lesson due for review, `edit ID --text T` to put one
+   right, or graduating it into a repository's AGENTS.md through a ticket and a PR, and `forget ID` or `purge` to
+   delete text that is wrong or leaked. An edit keeps the old version's words, so a leaked secret also needs `forget`
+   of each version `canopy memory history ID` lists with it.
    These are the operator's commands, and they refuse inside any canopy run; run one only when asked.
 
 ## Getting a ticket worked
