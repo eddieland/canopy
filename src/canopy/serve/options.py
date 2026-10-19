@@ -31,6 +31,9 @@ class ServeOptions(BaseModel):
     mock_event_seconds: float | None = Field(default=3.0, gt=0)
     #: The built UI (index.html and assets/). None serves a page saying it is not built.
     ui_dir: Path | None = None
+    #: Seconds an event stream stays open before the server ends it and the browser opens another; None, for as long
+    #: as the page does. For a host that cuts a long request (demo.py).
+    stream_seconds: float | None = Field(default=None, gt=0)
     #: Public names the Host and Origin checks allow too, for the demo a host such as Vercel runs (demo.py). Mock data
     #: only (D122): the operator's journal is never served under a public name.
     public_hosts: frozenset[str] = frozenset()

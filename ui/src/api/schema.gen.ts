@@ -4829,10 +4829,21 @@ export type components = {
             now: boolean;
         };
         /**
+         * StreamEnding
+         * @description The server ends this stream now, its `stream_seconds` up: the page opens another at once, missing nothing.
+         */
+        StreamEnding: {
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "stream.ending";
+        };
+        /**
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
         /**
          * Thread
          * @description A PR's review thread as last read, where it sits on the diff, and the drafts that answer it.

@@ -24,7 +24,10 @@ def browser(tmp_path: Path) -> TestClient:
     ui = tmp_path / "dist"
     ui.mkdir()
     (ui / "index.html").write_text("<!doctype html><html><head></head><body></body></html>")
-    with mock.patch.object(demo, "ui_dir", autospec=True, return_value=ui):
+    with (
+        mock.patch.object(demo, "ui_dir", autospec=True, return_value=ui),
+        mock.patch.object(demo, "STREAM_SECONDS", 0.2),
+    ):
         app = demo.create(VERCEL, tmp_path / "demo")
     return TestClient(app, base_url=f"https://{DEMO}")
 
@@ -36,6 +39,14 @@ def test_the_demo_signs_every_visitor_in_and_takes_their_writes(browser: TestCli
     reply = {"body": "Looks good.", "submission": "abcdefgh"}
     response = browser.post("/api/tickets/ABC-102/replies", json=reply, headers={"origin": f"https://{DEMO}"})
     assert response.is_success, response.text
+
+
+def test_the_demo_ends_each_event_stream_on_its_own(browser: TestClient) -> None:
+    # TestClient reads a stream to its end, so an endless one would hang here.
+    response = browser.get("/api/events")
+    assert response.status_code == 200
+    assert "runs.updated" in response.text
+    assert response.text.rstrip().endswith('data: {"type":"stream.ending"}')
 
 
 def test_the_demo_refuses_a_host_or_origin_vercel_did_not_name(browser: TestClient) -> None:

@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
     from fastapi import FastAPI
 
+#: How long the demo keeps an event stream open: under the shortest limit Vercel sets on a request, so the stream ends
+#: on its own rather than being cut.
+STREAM_SECONDS = 60.0
 #: The variables naming the demo's public host names: Vercel's own, for this deployment, its branch, and the
 #: project's production domain, and `CANOPY_DEMO_HOSTS` for any other domain, comma-separated.
 HOST_VARIABLES = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL", "CANOPY_DEMO_HOSTS")
@@ -36,7 +39,9 @@ def create(environ: Mapping[str, str], directory: Path) -> FastAPI:
     Returns:
         The app, which serves the UI bundled with canopy and the API over the mock journal.
     """
-    options = ServeOptions(mock=True, public_hosts=public_hosts(environ), ui_dir=ui_dir())
+    options = ServeOptions(
+        mock=True, public_hosts=public_hosts(environ), ui_dir=ui_dir(), stream_seconds=STREAM_SECONDS
+    )
     sessions = Sessions(None, port=options.port, base_path=options.base_path, hosts=options.hosts)
     return create_app(options, mock.seed(directory), sessions)
 

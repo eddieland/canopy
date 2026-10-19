@@ -2115,6 +2115,13 @@ class LoopUpdated(_Model):
     """Agent memory's tiers; None while both are off."""
 
 
+class StreamEnding(_Model):
+    """The server ends this stream now, its `stream_seconds` up: the page opens another at once, missing nothing."""
+
+    type: Literal["stream.ending"] = "stream.ending"
+    """What the event is."""
+
+
 class StreamEvent(
     RootModel[
         Annotated[
@@ -2125,7 +2132,8 @@ class StreamEvent(
             | ChoresUpdated
             | SpendUpdated
             | TickUpdated
-            | LoopUpdated,
+            | LoopUpdated
+            | StreamEnding,
             Field(discriminator="type"),
         ]
     ]

@@ -267,6 +267,7 @@ describe('parseStreamEvent', () => {
             type: 'ticket.changed',
             key: 'ABC-1',
         })
+        expect(parseStreamEvent('{"type":"stream.ending"}')).toEqual({ type: 'stream.ending' })
         expect(parseStreamEvent('not json')).toBeNull()
         expect(parseStreamEvent('{"type":"lease.updated","lease":{}}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated"}')).toBeNull()

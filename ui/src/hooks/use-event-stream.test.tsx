@@ -72,6 +72,26 @@ describe('useEventStream', () => {
         expect(latest().closed).toBe(true)
     })
 
+    it('opens another at once when the server says it is ending the stream, and reports no drop', () => {
+        const onEvent = vi.fn<(event: string) => void>()
+        const onReconnect = vi.fn<() => void>()
+        const { result } = renderHook(() =>
+            useEventStream('/api/events', { parse: (d) => d, onEvent, onReconnect, ending: (e) => e === 'bye' }),
+        )
+        act(() => latest().open())
+        const first = latest()
+
+        act(() => first.send('bye'))
+        expect(first.closed).toBe(true)
+        expect(FakeEventSource.instances).toHaveLength(2)
+        expect(onEvent).not.toHaveBeenCalled()
+        expect(result.current).toEqual({ status: 'open', downSince: null })
+
+        act(() => latest().open())
+        expect(result.current).toEqual({ status: 'open', downSince: null })
+        expect(onReconnect).toHaveBeenCalledOnce()
+    })
+
     it('opens nothing when disabled', () => {
         const { result } = renderHook(() =>
             useEventStream('/api/events', { parse: (d) => d, onEvent: () => {}, enabled: false }),
