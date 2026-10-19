@@ -265,10 +265,12 @@ Rules:
   if that read fails, a muted line says so and to promote it from the memory page), then, apart from both
   at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on
   the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
-  is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing
+  is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision, then a muted ghost `Edit`
+  (on the memory page alone, not an attention item); a lesson that asks nothing
   shows its line only while its row is hovered or holds the focus, as a row's copy button does, over the row's end on
   `bg-surface`, so at rest it takes no room and nothing moves when it shows, and always, in the row's flow, on a touch
-  screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
+  screen, and in the flow too while the row's versions are open, which are then its end; each ends its line with a
+  ghost `Forget`, muted at rest, the rarest verb and one that cannot
   be undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A memory's
   row leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and `due`
   (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or `invalid`
@@ -295,7 +297,15 @@ Rules:
   decided from the attention list or the CLI), which reads memory again, so its row may leave, and is said under the
   list too; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal` item
   lists its proposals with `Promote as written`, which saves at once, but for those two, and `Reject`; a
-  `lesson_review`, its lessons due with `Renew` alone.
+  `lesson_review`, its lessons due with `Renew` alone. **Edit** opens its form in place of the lesson's line, the
+  promote form's fields (`LessonFields`), its repositories `every repository` first, then the lesson's own, then the
+  rest; a muted line saying the version it replaces stays in the lesson's versions; and `Edit memory:8` with a ghost
+  `Cancel`, disabled until the words or the repository change. A memory with more than one version says `version 2`
+  on its line of where it came from, and a lesson edited `edited from memory:8`; under that, `Show versions`, a
+  `Disclosure`, opens its versions, read only then: a list with a hairline at its left edge, newest first, each a
+  line of `v2`, its ref, its status word, its repository's chip, how it was made, its age, and `this row` on the row's
+  own, then its words as `MemoryText`, muted once out of force, with a ghost `Forget` under each out of force that
+  keeps its text wherever the row has verbs.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never

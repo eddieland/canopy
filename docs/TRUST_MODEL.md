@@ -160,12 +160,14 @@ Controls:
   propose them, with `memory.proposals` not off: a proposal is stored pending, bounded as a note is, at most 3 a run and
   20 waiting, and reaches no prompt at any mode. Only `canopy memory promote`, in the operator's shell, makes one, or
   a ticket's note, a lesson, in the operator's name and words, and it refuses when `CANOPY_TICK_ID` or
-  `CANOPY_RUN_ID` is set, as `notice` does; so do `reject` and `renew`. A lesson reaches workers only at `use`, framed
-  as the operator's words that the prompt's obligations come before; reviews, chores, splits, and the overseer hear
-  none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the operator. The proposals
-  list, and `promote` of a proposal or a note in its own words, warn on one from a private ticket's run, whose text
-  may hold what the operator kept off the tracker. Residual, D076's: until workers are sandboxed (M26), a steered
-  worker's bash runs as the operator and could insert a `lesson` row into the journal, as it could a `notices` row.
+  `CANOPY_RUN_ID` is set, as `notice` does; so do `reject`, `renew`, and `edit`, which writes a lesson anew in the
+  operator's words and keeps the version it replaces, served to no run, as its history. A lesson reaches workers only
+  at `use`, framed as the operator's words that the prompt's obligations come before; reviews, chores, splits, and the
+  overseer hear none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the
+  operator. The proposals list, and `promote` of a proposal or a note in its own words, warn on one from a private
+  ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers are
+  sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal, as it
+  could a `notices` row.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -601,8 +603,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
-  proposal, renew a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
-  `reject`, `renew`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
+  proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
+  `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
   `drop`, and `send` do (DESIGN §29), ask the loop to read its config files again as SIGHUP does, and ask it for a
   tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a

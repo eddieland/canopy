@@ -15,6 +15,7 @@ from canopy.serve.schema import (
     MemoryDigest,
     MemoryEntry,
     MemoryFound,
+    MemoryHistory,
     MemoryModeName,
     MemoryOrigin,
     MemoryOverview,
@@ -146,12 +147,24 @@ def run_memory(ctx: Context, run_id: int) -> RunMemory | None:
     )
 
 
+def history(ctx: Context, memory_id: int) -> MemoryHistory | None:
+    """Every version of a lesson or a note, or None if no memory has the id.
+
+    Returns:
+        The versions, the newest first.
+    """
+    versions = memory.history(ctx.conn, memory_id)
+    if not versions:
+        return None
+    return MemoryHistory(versions=[entry(ctx, m) for m in versions])
+
+
 def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
     """A memory as the API sends it.
 
     Returns:
         Its fields, its times as datetimes, the latest runs that relied on it, whether a private ticket's run wrote
-        it, and for a lesson what it was promoted from.
+        it, for a lesson what it was promoted from, and which version of its memory it is.
     """
     return MemoryEntry(
         id=m.id,
@@ -172,13 +185,15 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
         wrong_at=_time(m.wrong_at),
         wrong_run_id=m.wrong_run_id,
         promoted_from=m.promoted_from,
-        origin=_origin(ctx, m.promoted_from),
+        origin=_origin(ctx, m),
+        version=memory.version(ctx.conn, m),
+        edited=memory.edited(m),
         private=memory_manage.from_private_run(ctx.conn, m),
     )
 
 
-def _origin(ctx: Context, source_id: int | None) -> MemoryOrigin | None:
-    source = memory.get(ctx.conn, source_id) if source_id is not None else None
+def _origin(ctx: Context, m: records.Memory) -> MemoryOrigin | None:
+    source = memory.origin(ctx.conn, m)
     if source is None:
         return None
     return MemoryOrigin(id=source.id, scope=source.scope.value, ticket_key=source.ticket_key, run_id=source.run_id)

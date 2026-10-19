@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
     dueForReview,
+    editRepoChoices,
+    hasVersions,
     memoryStand,
     reviewText,
     lapsesText,
@@ -85,6 +87,24 @@ describe('repoChoices', () => {
         expect(repoChoices({ repo: 'web' }, ['api', 'web'])).toEqual(['web', 'api'])
         // Kept though the workspace map dropped it: promoting as written leaves the proposal's repository as it is.
         expect(repoChoices({ repo: 'gone' }, ['api'])).toEqual(['gone', 'api'])
+    })
+})
+
+describe('editRepoChoices', () => {
+    it("offers every repository first, as --every-repo, then the lesson's own, then the others", () => {
+        expect(editRepoChoices({ repo: 'web' }, ['api', 'web'])).toEqual([null, 'web', 'api'])
+        expect(editRepoChoices({ repo: null }, ['api', 'web'])).toEqual([null, 'api', 'web'])
+        expect(editRepoChoices({ repo: 'gone' }, ['api'])).toEqual([null, 'gone', 'api'])
+    })
+})
+
+describe('hasVersions', () => {
+    it('is a memory that replaced one, or a lesson or a note a later one replaced, never a promoted proposal', () => {
+        expect(hasVersions({ version: 2, status: 'active', scope: 'lesson' })).toBe(true)
+        expect(hasVersions({ version: 1, status: 'superseded', scope: 'ticket' })).toBe(true)
+        expect(hasVersions({ version: 1, status: 'superseded', scope: 'proposal' })).toBe(false)
+        expect(hasVersions({ version: 1, status: 'active', scope: 'lesson' })).toBe(false)
+        expect(hasVersions({ version: 1, status: 'invalid', scope: 'lesson' })).toBe(false)
     })
 })
 
