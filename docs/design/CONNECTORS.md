@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the programs that read the tracker and GitHub into the journal,
 and what canopy derives from what they read. Sections are numbered across the whole design; the [README](README.md)
-has the map. Previous: [Review replies](REVIEW_REPLIES.md).
+has the map. Previous: [Review replies](REVIEW_REPLIES.md). Next: [Personas](PERSONAS.md).
 
 ## 30. Connectors
 

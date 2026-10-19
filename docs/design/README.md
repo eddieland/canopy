@@ -94,6 +94,8 @@ not go in the middle of the sequence.
 - [Connectors](CONNECTORS.md): the programs that read the tracker and GitHub into the journal, and the phases canopy
   derives from them beside the overseer's.
   - [30. Connectors](CONNECTORS.md#30-connectors)
+- [Personas](PERSONAS.md): the voice a planner, a reviewer, or a worker writes in, and who chooses it.
+  - [31. Personas](PERSONAS.md#31-personas)
 
 ## 1. Problem
 
