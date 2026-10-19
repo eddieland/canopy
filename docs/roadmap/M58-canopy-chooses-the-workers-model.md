@@ -56,7 +56,8 @@ Designed in §13, beside where the runtime finds canopy's definitions.
   the web UI's control is built.
 - Tests with the fakes: a fake `opencode models`; `runtime.worker_model` renders `model:` into the covered definitions
   and none when empty, a snapshot, with a digest of its own per model; an override reaching every covered kind of the
-  ticket's runs until cleared; `canopy model` refusing a model not listed, and `inside_run`; a dispatch whose model has
+  ticket's runs until cleared; `canopy model KEY` printing the next run's model and where it comes from; `canopy model`
+  refusing a model not listed, and `inside_run`; a dispatch whose model has
   gone refused `model_missing` with its attention item and no fallback; a failed or timed-out list read refused
   `model_list_failed`; a covered template, prefix, or suffix passing `--model` a config error; the run's
   `model` in `canopy status`, a snapshot, and in the spend split by model.

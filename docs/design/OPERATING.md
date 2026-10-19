@@ -706,7 +706,8 @@ falls back either, so the check changes how a gone model fails, not whether: an 
 than a run that leases, sets up, and fails before its first call. A failed read fails closed for the same reason. A run
 let through unchecked would still ask for its model, and so fall back to nothing either, but on an OpenCode that cannot
 list its models it would most likely fail, spend an attempt, and wait for a reply (§14), where a refusal is retried
-next tick at no cost. A dry run reads the list and refuses alike (D036).
+next tick at no cost. A dry run reads the list and refuses alike (D036): the read is a guard's, which starts no agent,
+leases nothing, and changes nothing the next live tick reads.
 
 `canopy dispatch` takes no model, and the state block carries none: a model is not the overseer's to weigh.
 
