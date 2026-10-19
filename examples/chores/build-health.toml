@@ -1,0 +1,9 @@
+# Name your repositories in the prompt. It runs under the shipped canopy-chore agent with a GitHub MCP server's read
+# tools: https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#writing-a-good-chore
+[chores.build-health]
+prompt = "~/.config/canopy/chores/build-health.md"
+every_minutes = 120
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-18:00"
+when = "Skip it when the last run found nothing."
+timeout_minutes = 20

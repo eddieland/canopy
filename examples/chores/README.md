@@ -4,6 +4,13 @@ What engineers may want to use chores for, with worked examples. `build-health.m
 `canopy-health.md`, `canopy-efficiency.md`, and `memory-tickets.md` in this directory are the prompts that ship; the
 rest are ideas to write your own from. The rules are in DESIGN §19.
 
+`canopy chore install <name>` sets up one of the five in the workspace you run it in. It copies the prompt to
+`~/.config/canopy/chores/<name>.md` and writes the `[chores.<name>]` table from `<name>.toml` here to the workspace's
+private config, `cwd` set to the workspace root where the chore reads canopy's journal, then prints what is left to do,
+such as an agent to define. The command owns both: running it again, as after an upgrade, replaces them with the
+shipped ones, so an edit to either is lost. Steer an installed chore with `canopy reply` notes, which survive it, or
+copy it under a name of your own. `canopy chore install` alone lists the examples.
+
 ## What a chore is
 
 A chore is a recurring, read-only check you define once and the overseer runs when it is due. It works on no ticket,
@@ -287,7 +294,7 @@ timeout_minutes = 20
 
 ### The loop for getting it right
 
-1. Write the prompt and the `[chores.<name>]` table.
+1. Write the prompt and the `[chores.<name>]` table, or `canopy chore install` an example to start from.
 2. Run `canopy chore try <name>` until the findings are the ones you want. It ignores `every_minutes` and works with
    `max_chores = 0`. Each try is a real run: its findings replace the chore's open ones, and
    `canopy show chore:<name>` lists it. Add `--no-record` to record nothing, so a draft cannot clear findings you
