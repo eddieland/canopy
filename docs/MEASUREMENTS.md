@@ -628,3 +628,103 @@ for key, n in rows.items():
 ```
 
 `start` is -1 when the body is not in the system prompt: OpenCode has moved it, and the split needs reading again.
+
+## 2026-10-19: what each agent's first request holds, again
+
+SCENARIOS S40, re-run after changes under `agents/` since 2026-10-17: the overseer's prompt grew, the chore may run one
+`canopy` command, both workers deny GitHub's reply tools under `trust.review_replies = "approve"`, and
+`canopy-plan-triage` is new. The method is 2026-10-17's, so the two compare row by row; this one also measures the cut
+that section's F37 inferred. Cited by no milestone yet.
+
+### Setup
+
+- OpenCode 1.19.3 from npm, on 2026-10-17's model, its Anthropic provider's base URL pointed at
+  2026-10-17's recorder, unchanged. One `opencode run --agent NAME --format json --thinking --title=probe "Say ok."`
+  per agent `.agents/agents/` ships, as canopy's default templates run it, with `OPENCODE_CONFIG_DIR` set to the
+  snapshot, in a directory that is not a git checkout, and HOME and the XDG directories empty ones of this check's. Each
+  run sent one request, and nothing needed working around offline.
+- The snapshot a dry tick against the fakes rendered, in a workspace `canopy init --provider jira` made, on defaults:
+  `trust.review_replies` is `approve` and `trust.rebase` is off. The overseer's body is `overseer.md` and the
+  `tracker-jira` skill after it.
+- One MCP server: GitHub's, v2.0.2 (still its latest), built with `go install` from its Go module, over stdio, on its
+  default toolsets, with a placeholder token, which it lists its tools with. Not Atlassian's, as on 2026-10-17: every
+  table here lacks the tracker's tools and instructions, so it measures canopy's definitions and OpenCode, not the
+  operator's machine.
+- Sizes are characters of what the request sent, each tool as compact JSON, split by 2026-10-17's `split.py`, which
+  found each body at the start of the system prompt. Tokens are characters / 4, not a provider's count. The system
+  prompt holds this machine's paths (the working directory, each skill's location), 85 to 151 characters each.
+- `opencode debug agent NAME` again prints the body, the permission rules, and which built-in tools the agent keeps, but
+  no schema and no MCP tool; `opencode debug skill` lists the skills with their text, and `debug v2` the provider
+  catalog. `opencode debug --help` names no command that lists tools, so the recorder is still needed.
+
+### What the first request holds
+
+Thousands of tokens, as characters / 4; a tool row's count of tools in brackets. The last row is the change in the
+prefix since 2026-10-17.
+
+| | overseer | worker | worker-private | reviewer | chore | splitter | planner | plan-triage |
+|---|---|---|---|---|---|---|---|---|
+| OpenCode's own system prompt | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Body: canopy's text | 16.5 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| Body: the `tracker-jira` skill | 0.9 | | | | | | | |
+| OpenCode: model line and `<env>` | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| GitHub server's instructions | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 |
+| OpenCode: list of skills | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 |
+| **System prompt** | **18.3** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** |
+| Built-in tools | 3.2 (6) | 3.9 (8) | 3.9 (8) | 1.2 (4) | 2.5 (5) | 1.8 (5) | 1.9 (6) | 1.2 (4) |
+| OpenCode's MCP resource tools | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) |
+| GitHub server's tools | 13.1 (46) | 9.5 (33) | 9.2 (32) | 7.0 (25) | 7.3 (26) | 7.2 (25) | 6.9 (24) | 6.9 (24) |
+| **Tools** | **16.6 (55)** | **13.8 (44)** | **13.5 (43)** | **8.6 (32)** | **10.2 (34)** | **9.4 (33)** | **9.2 (33)** | **8.4 (31)** |
+| **Prefix** | **35.0** | **14.8** | **14.5** | **9.6** | **11.2** | **10.4** | **10.2** | **9.4** |
+| Since 2026-10-17 | +2.6 | −0.3 | −0.6 | 0 | +1.3 | 0 | 0 | new |
+
+The built-in tools, in characters: `bash` 5,275, `task` 3,856, `todowrite` 2,686, `edit` 1,958, `read` 1,734,
+`webfetch` 1,293, `grep` 1,183, `glob` 1,114, `write` 1,026, `skill` 676. Each agent keeps the ones it kept on
+2026-10-17, but the chore, which adds `bash`; the triage agent keeps the reviewer's four, `read`, `grep`, `glob`, and
+`skill`. GitHub's tools are 2026-10-17's 46, 52.4k characters in all. The list of skills names three: OpenCode's
+built-in `customize-opencode` (517 characters), `tracker-github`, and `tracker-jira`.
+
+### Findings
+
+- **F41. The overseer's prompt is all of its growth.** 66.2k characters, from 56k on 2026-10-17 (F38): 16.5k tokens,
+  2.5k more, and 47% of its prefix. Its tools did not change.
+- **F42. A tool denied outright is still not sent, and one allowed for a pattern is sent whole.** An agent with no
+  permission rules was sent ten built-in tools: `bash`, `edit`, `glob`, `grep`, `read`, `skill`, `task`, `todowrite`,
+  `webfetch`, and `write`, 20.8k characters. Of the overseer's denials, `edit: deny` kept `edit` and `write` out,
+  `task: deny` kept `task`, and `webfetch: deny` kept `webfetch`; `websearch` and `codesearch` are not sent without
+  their denials either. A copy of the overseer that denied OpenCode's three MCP resource tools by name still sent them,
+  as on 2026-10-17 (F35). The chore is now sent all of `bash`, 1.3k tokens and 12% of its prefix, to run
+  `canopy chore history`; that is its whole growth.
+- **F43. The workers' reply denials remove what they name.** Under `approve`, the default, the worker is not sent
+  `add_reply_to_pull_request_comment`, and the private worker not `add_issue_comment` either, so the two requests now
+  differ by one tool.
+- **F44. Allowing the overseer only the GitHub reads it uses cuts its prefix by 36%.** Measured on a copy of the
+  overseer whose definition added `"github_*": deny`, then allowed `pull_request_read`, `list_pull_requests`,
+  `search_pull_requests`, and `list_branches` (the reads seen on 2026-10-13 and 2026-10-15 F28), and denied `skill` and
+  `todowrite`: 89,463 characters instead of 139,881, 22.4k tokens instead of 35.0k. GitHub's tools went from 46 to 4
+  (52.4k characters to 6.8k), and the list of skills left the system prompt along with the `skill` tool. This is
+  2026-10-17 F37's inferred allowlist, now measured on the larger prompt. It suits a workspace whose tracker is not
+  GitHub: with GitHub Issues as the tracker, the overseer reads tickets through the same server and keeps its issue
+  reads. And the prompt says to load the tracker's skill where canopy ships none, so `skill: deny` fits only the
+  providers canopy ships a skill for (inferred, from the prompt).
+- **F45. 2026-10-17 F36 still holds, and the splitter has two more.** The overseer is sent all 20 of GitHub's tools that
+  write, `merge_pull_request`, `push_files`, and `create_or_update_file` among them; the reviewer and the chore are sent
+  `request_copilot_review`. The splitter, which may create tickets and comment on one, is sent `create_repository`,
+  which none of its patterns matches, and `sub_issue_write`, which `tracker-github` tells it not to use. → a change
+  under `agents/`.
+- **F46. GitHub's tools that no prompt names are still on every run** (inferred, as 2026-10-17 F40, whose 15 tools no
+  prompt has named since): 11 to 15 on each agent, 7.7k to 10.7k characters (1.9k to 2.7k tokens). GitHub's server
+  v2.0.2 takes `--toolsets` and `--exclude-tools`, so the operator's config can drop them for every agent at once.
+
+The three largest things worth cutting, by tokens a run saves:
+
+1. **The overseer's GitHub tools it never calls, with `skill` and `todowrite`** (F44, F45): 12.6k tokens a tick,
+   measured, and it closes F36 for the overseer. A change under `agents/`, so it needs the operator's approval.
+2. **The overseer's prompt** (F41): 16.5k tokens, the largest single part, and 2.5k more than two days earlier. Cutting
+   it is prompt work, judged by `canopy tick --dry-run`'s decisions, not by this check.
+3. **GitHub's tools no prompt names** (F46): 1.9k to 2.7k tokens on every run of every agent, by the GitHub server's
+   flags in the operator's config, or by each definition's patterns.
+
+Smaller: the chore's `bash` (1.3k, F42), which its one command needs; OpenCode's MCP resource tools (0.4k), which a
+definition cannot deny (F42); and, in every agent's list of skills, `customize-opencode` and the tracker skill of the
+provider not in use (0.2k together).
