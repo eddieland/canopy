@@ -20,7 +20,11 @@ permission:
   webfetch: deny
   websearch: deny
   codesearch: deny
-  external_directory: deny
+  # Nothing outside the working directory but where OpenCode saves a tool output too long to return whole, for the
+  # agent to read as the cut output says. OpenCode allows that on its own too; this does not rely on it.
+  external_directory:
+    "*": deny
+    "~/.local/share/opencode/tool-output/*": allow
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense

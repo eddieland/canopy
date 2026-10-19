@@ -13,7 +13,11 @@ permission:
   edit: deny
   # A path outside the workspace would otherwise `ask`, which ends the run and loses every decision not yet recorded.
   # `deny` refuses the one call and the overseer goes on.
-  external_directory: deny
+  # Nothing outside the working directory but where OpenCode saves a tool output too long to return whole, for the
+  # agent to read as the cut output says. OpenCode allows that on its own too; this does not rely on it.
+  external_directory:
+    "*": deny
+    "~/.local/share/opencode/tool-output/*": allow
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny
