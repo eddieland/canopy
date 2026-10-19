@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.core import config, definitions, plans
 from canopy.infra import resources
@@ -596,6 +597,15 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
     (overrides / "overseer.md").write_bytes(b"\xff\xfe not UTF-8")
     with pytest.raises(definitions.DefinitionsError, match="cannot read the overseer prompt"):
         definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+
+
+@pytest.mark.parametrize("agent", runtime_definitions.agent_names())
+def test_each_agent_definition_as_rendered(
+    canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, agent: str
+) -> None:
+    # What each agent runs on, as a run loads it: its rules, and the overseer's whole prompt and tracker skill.
+    files = definitions.sources(config.load(canopy_env.root))
+    assert files[f"agents/{agent}.md"].decode() == markdown_snapshot
 
 
 @pytest.mark.parametrize(
