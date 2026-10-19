@@ -327,7 +327,10 @@ export function searchQuery(q: string) {
     })
 }
 
-/** canopy's latest review runs, newest first. Marked stale with the ticks: a review ends between two of them. */
+/**
+ * canopy's latest review runs, newest first. The stream sends the list again whenever a review starts, ends, or its
+ * cost moves; the ticks mark it and each review's page stale too, as a tick can make a review's PR the loop's own.
+ */
 export const reviewsQuery = queryOptions({
     queryKey: keys.reviews,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/reviews', { signal })),

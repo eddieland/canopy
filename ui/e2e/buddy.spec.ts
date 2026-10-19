@@ -3,7 +3,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { NOW, screenshotWhole, settled, signIn, spentInAll, storeTheme, THEMES } from './helpers.ts'
 
-// Tall enough that the rail has room for Sprig and its bubble under the mock's three working runs.
+// Tall enough that the rail has room for Sprig and its bubble under the mock's four working rows.
 test.use({ viewport: { width: 1280, height: 1200 } })
 
 /** The longest Sprig waits before offering a tip unasked, in seconds (`WAIT_SECONDS` in buddy.tsx). */
@@ -225,7 +225,7 @@ test.describe('turned on', () => {
     test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 854 })
+        await page.setViewportSize({ width: 1280, height: 902 })
         await page.goto('attention')
         await settled(page)
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
@@ -249,7 +249,7 @@ test.describe('turned on', () => {
 
     test('a tight rail lets the tips Sprig would offer unasked pass, and a roomy one shows them', async ({ page }) => {
         await page.clock.install()
-        await page.setViewportSize({ width: 1280, height: 854 })
+        await page.setViewportSize({ width: 1280, height: 902 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')

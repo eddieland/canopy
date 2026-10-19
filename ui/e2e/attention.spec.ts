@@ -191,7 +191,7 @@ test("a question's item is answered in its reply, with the ticket's own actions 
     const actions = await detail.getByTestId('attention-actions').boundingBox()
     const reply = await detail.getByRole('textbox', { name: /^Reply/u }).boundingBox()
     expect(actions !== null && reply !== null && reply.y < actions.y).toBe(true)
-    // The runs working now are the rail's, on every page; the attention page keeps no list of its own.
+    // What is working now is the rail's, on every page; the attention page keeps no list of its own.
     await expect(page.getByTestId('workers')).toHaveCount(0)
 })
 

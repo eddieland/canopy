@@ -89,12 +89,13 @@ sooner. You set one on [Settings](settings#notice-to-workers).
 
 ## The rail
 
-The strip beside the nav, on every page. From the top: a search box over the whole journal (below), the runs working
-right now, running first and then the ones waiting on you, and what the last 24 hours and the last 30 days cost, each
-a link to the spend page. A ticket you stopped drops out of the working runs once its run ends; a question it left
-behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to
-canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a
-narrow window the rail folds to icons; **Open the rail** brings it back.
+The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything
+working right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working**
+lists every agent on the clock: worker runs by their ticket, reviews by their PR, and chore runs by their chore, with
+the runs waiting on you after them. Each row opens its run's page. A ticket you stopped drops out once its run ends; a
+question it left behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving,
+which links to canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and
+**Settings**. On a narrow window the rail folds to icons; **Open the rail** brings it back.
 
 From the keyboard, the first Tab on any page lands on **Skip to content**, which hides until then. Press Enter and the
 next Tab is the page's own, not the rail's dozen or so stops. Your Tab key has better things to do.

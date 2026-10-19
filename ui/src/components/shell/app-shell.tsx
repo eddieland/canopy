@@ -42,7 +42,7 @@ import { NoticeBanner } from './worker-notice'
 export const PAGE_SCROLLER = 'page'
 
 /**
- * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
+ * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, the
  * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
  * all the lightswitch rave while Settings' light switch is on, and the tab's icon (`Favicon`). Coming back to the tab
  * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
@@ -192,7 +192,7 @@ export function AppShell() {
                     >
                         <SheetTitle className="sr-only">Rail</SheetTitle>
                         <SheetDescription className="sr-only">
-                            Search, the pages, the runs working now, and the spend
+                            Search, the pages, what is working now, and the spend
                         </SheetDescription>
                         <RailColumn buddy={buddy === 'on'} />
                     </SheetContent>
@@ -263,7 +263,7 @@ function RailButton() {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Open the rail"
-                title="Search, the runs working now, and the spend"
+                title="Search, what is working now, and the spend"
                 data-testid="rail-open"
             >
                 <Menu aria-hidden />

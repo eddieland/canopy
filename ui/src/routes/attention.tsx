@@ -153,7 +153,7 @@ function AttentionPage() {
                                 open && '@max-3xl:hidden',
                             )}
                         >
-                            {/* The runs working now are the rail's, on every page: this column is the list alone. */}
+                            {/* What is working now is the rail's, on every page: this column is the list alone. */}
                             <Panel data-testid="attention-list">
                                 <PanelHeader label="Attention">
                                     <span className="readout text-xs text-muted-foreground">{items?.length}</span>

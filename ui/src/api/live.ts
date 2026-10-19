@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { keys } from './queries'
-import type { ChoreRun, ChoreRunDetail, LastTick, Run, StreamEvent, Tick } from './types'
+import type { ChoreRun, ChoreRunDetail, LastTick, ReviewDetail, ReviewSummary, Run, StreamEvent, Tick } from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
@@ -9,8 +9,9 @@ import type { ChoreRun, ChoreRunDetail, LastTick, Run, StreamEvent, Tick } from 
  * ticket shown whenever the latest tick does. The worktrees are not on the stream: a run starting or ending, or
  * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A run's
  * transcript is read again when its status, latest tool call, or cost moves, as its worker prints; a chore run's when
- * its status does, and a tick's when the tick changes, the only times their logs can. The loop's pause arrives whole,
- * as a list does. Unknown event types are ignored, so the server can add some.
+ * its status does, and a tick's when the tick changes, the only times their logs can. A review's page is read again
+ * when its row in the reviews list moves. The loop's pause arrives whole, as a list does. Unknown event types are
+ * ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -72,6 +73,23 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             }
             break
         }
+        case 'reviews.updated': {
+            const before = client.getQueryData<ReviewSummary[]>(keys.reviews)
+            client.setQueryData(keys.reviews, event.reviews)
+            if (before !== undefined && reviewStatuses(before) !== reviewStatuses(event.reviews)) {
+                // A review that started or ended: a PR's latest review, and the spend page's counts of runs.
+                void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
+                void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
+            }
+            // A review's page is read again when its row moves: it ended, with its findings, or its cost went up.
+            for (const review of event.reviews) {
+                const shown = client.getQueryData<ReviewDetail>(keys.review(review.id))
+                if (shown !== undefined && reviewLogged(shown.review) !== reviewLogged(review)) {
+                    void client.invalidateQueries({ queryKey: keys.review(review.id), exact: true })
+                }
+            }
+            break
+        }
         case 'ticket.changed': {
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             // A run of the ticket started or ended: the runs a PR's page shows, and the PRs list's run working now.
@@ -95,8 +113,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             ) {
                 void client.invalidateQueries({ queryKey: keys.tickTranscript(event.tick.id) })
             }
-            // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions. A
-            // review run ends between two ticks, so the reviews go with them.
+            // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions. A tick
+            // can make a review's PR the loop's own, which a review's page says, so the reviews go with them.
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
@@ -131,6 +149,16 @@ function logged(run: Run): string {
     return `${run.status}:${run.activity?.at ?? ''}:${run.cost_usd ?? ''}`
 }
 
+/** Each review run's state, as one comparable string: a review starting or ending changes it. */
+function reviewStatuses(reviews: ReviewSummary[]): string {
+    return reviews.map((review) => `${review.id}:${review.state}`).join(',')
+}
+
+/** What of a review run's row moves as it works and ends: its status, and its cost at each model call's end. */
+function reviewLogged(review: ReviewSummary): string {
+    return `${review.status}:${review.cost_usd ?? ''}`
+}
+
 /** What moves as a running chore run's log grows: its status, and its cost at each model call's end. */
 function choreLogged(run: ChoreRun): string {
     return `${run.status}:${run.cost_usd ?? ''}`
@@ -155,6 +183,7 @@ const LISTS: Record<string, string> = {
     'runs.updated': 'runs',
     'tickets.updated': 'tickets',
     'chores.updated': 'chores',
+    'reviews.updated': 'reviews',
 }
 
 /** Parses an SSE `data` payload into a StreamEvent, or null when it is not one this UI knows. */

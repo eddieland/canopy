@@ -6,6 +6,7 @@ import type {
     Draft,
     PlanTriage,
     PullRequestThreads,
+    ReviewSummary,
     ReviewThread,
     Run,
     SearchHit,
@@ -94,6 +95,27 @@ export const mockTickets: TicketSummary[] = [
         latest_message_id: 5,
         awaiting: 5,
         running_run: null,
+    },
+]
+
+/** One review of a PR, running: it has reported nothing yet. */
+export const mockReviews: ReviewSummary[] = [
+    {
+        id: 5,
+        pr_url: 'https://github.com/acme/web/pull/91',
+        sha: '9b1d4e7c2a30',
+        ticket_key: 'ABC-103',
+        repo: 'web',
+        status: 'running',
+        state: 'running',
+        verdict: null,
+        impact: null,
+        findings: 0,
+        worst: null,
+        worst_count: 0,
+        started_at: '2026-10-08T12:01:00Z',
+        ended_at: null,
+        cost_usd: 0.04,
     },
 ]
 
