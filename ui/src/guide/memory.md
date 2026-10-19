@@ -152,7 +152,8 @@ A lesson never lapses on its own: it's your word, and only you retire it. Each c
 promoted it or a run last used it. Then you renew it, with **Renew** under it on the memory page or `canopy memory renew
 ID`, move it into a repository's AGENTS.md or a skill through a ticket and a PR you merge, or forget it. Renewing also
 clears a run's report that it's wrong. Renew stays quiet on a lesson that isn't due, and stands out once one is due or
-reported wrong.
+reported wrong. A lesson that needs nothing shows its buttons only when you point at its row, so a long list isn't a
+wall of buttons.
 
 Three attention items keep you honest, all yours and never the overseer's, and none while lessons are off:
 

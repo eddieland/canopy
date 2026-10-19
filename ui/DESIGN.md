@@ -234,26 +234,28 @@ Rules:
   repository, or a ticket's key or title; a lesson for every repository is kept under any repository's chip. While
   lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A filtered
   count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an `OrderToggle`,
-  oldest first by default, which is the nearest to lapsing. Each list scrolls in its panel, and a row in force that its
-  digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
-  keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's
-  buttons are, and only while lessons are on: under a proposal an outline `Promote as written`, which saves at once,
-  since most proposals need no edit, and a muted ghost `Edit and promote`, which opens the form, then, apart from both
-  at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on
-  the memory page as on its ticket's, and `Renew` under a lesson, outlined once it is `due` or `wrong` and a muted ghost
-  before, since only then does it ask for a decision; each ends its line with a ghost `Forget`, muted at rest, the
-  rarest verb and one that cannot be undone, and in `status-failed` while its row is hovered or it has the focus, but on
-  an attention item. A memory's row leads with its standing, a dot and its word in a run state's color (`memoryStand`):
-  `wrong` (failed) and `due` (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done),
-  `superseded` or `invalid` (stopped), and `recorded` (stopped) for one in force under a tier that only records, which
-  no run reads, so a row never reads as in force under a `recording` band; then its ref, its ticket in a list across
-  tickets, its repository's chip, each in a fixed column, the key in the free column, and its use only once a run relied
-  on it. Under the text, one line says where it came from, the commit on the run's hover, a proposal's run's end,
-  ticket, and `private` chip (`ProposalFacts`) among it. In a list of proposals, where every row is pending, the
-  standing says the time left in its place (`3d left`, muted, in `status-blocked` in the last two days, `lapsing` once
-  past). On the memory page the Lessons take the Proposals' columns, the ticket's empty, so key and text line up down
-  the page, and a ticket's opened notes sit on `surface-raised` at 40%, so they read as its own. A ticket's row on the
-  memory page carries its title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover), since
+  oldest first by default, which is the nearest to lapsing. Each list scrolls in its panel but the proposals, which hold
+  20 at most and so grow with their rows, and a row in force that its digest's cap leaves out says so in its second
+  line, in the same words for served and recording that the digest's label keeps apart. The verbs on memory
+  (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's buttons are, and only while lessons
+  are on: under a proposal an outline `Promote as written`, which saves at once, since most proposals need no edit, and
+  a muted ghost `Edit and promote`, which opens the form, then, apart from both at the line's end, a ghost `Reject`,
+  which cannot be undone, `Promote` under a ticket's note that keeps its text, on the memory page as on its ticket's,
+  and `Renew` under a lesson, outlined once it is `due` or `wrong` and a muted ghost before, since only then does it ask
+  for a decision; a lesson that asks nothing keeps its line's room but shows it only while its row is hovered or holds
+  the focus, as a row's copy button does, and always on a touch screen; each ends its line with a ghost `Forget`, muted
+  at rest, the rarest verb and one that cannot be undone, and in `status-failed` while its row is hovered or it has the
+  focus, but on an attention item. A memory's row leads with its standing, a dot and its word in a run state's color
+  (`memoryStand`): `wrong` (failed) and `due` (blocked) for a lesson that calls for the operator, `pending` (blocked),
+  `active` (done), `superseded` or `invalid` (stopped), and `recorded` (stopped) for one in force under a tier that only
+  records, which no run reads, so a row never reads as in force under a `recording` band; then its ref, its ticket in a
+  list across tickets, its repository's chip, each in a fixed column, the key in the free column, and its use only once
+  a run relied on it. Under the text, one line says where it came from, the commit on the run's hover, a proposal's
+  run's end, ticket, and `private` chip (`ProposalFacts`) among it. In a list of proposals, where every row is pending,
+  the standing says the time left in its place (`3d left`, muted, in `status-blocked` in the last two days, `lapsing`
+  once past). On the memory page the Lessons take the Proposals' columns, the ticket's empty, so key and text line up
+  down the page, and a ticket's opened notes sit on `surface-raised` at 40%, so they read as its own. A ticket's row on
+  the memory page carries its title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover), since
   Forget asks for it typed. A lesson names what it was promoted from, as the CLI does, and when a run reported it wrong.
   **Edit and promote** (or `Promote` under a note) opens its form in place of that line, on the surface with a hairline:
   the lesson's words in a field, starting as the source's own, with their count against the bound in the readout at its
