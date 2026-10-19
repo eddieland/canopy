@@ -233,18 +233,60 @@ def _allowed(rules: Iterable[tuple[str, str]], tool: str) -> bool:
         "github_add_comment_to_pending_review",
         "github_close_issue",
         "github_close_pull_request",
-        "github_create_issue",
+        "github_sub_issue_write",
         "github_create_branch",
         "github_push_files",
         "github_delete_file",
         "github_fork_repository",
         "atlassian_transitionJiraIssue",
-        "atlassian_createJiraIssue",
     ],
 )
 @pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_deny_dangerous_mcp_tools(agent: str, tool: str) -> None:
     assert not _allowed(_rules(agent), tool)
+
+
+@pytest.mark.parametrize("tool", ["github_create_issue", "atlassian_createJiraIssue"])
+def test_the_public_worker_may_create_follow_up_tickets(tool: str) -> None:
+    # A public worker files follow-ups in its ticket's project (DESIGN §18, TRUST_MODEL T6). The private worker's
+    # definition, as shipped, names no tracker's tools: canopy renders them from config, below.
+    assert _allowed(_rules("canopy-worker"), tool)
+    assert not _allowed(_rules(agents.PRIVATE_WORKER), tool)
+
+
+@pytest.mark.parametrize(
+    ("provider", "tool", "allowed"),
+    [
+        ("github", "github_issue_write", True),
+        ("github", "github_issue_read", True),
+        ("github", "github_add_issue_comment", False),
+        ("github", "github_sub_issue_write", False),
+        ("github", "github_someWriteToolNoPatternNames", False),
+        ("jira", "atlassian_createJiraIssue", True),
+        ("jira", "atlassian_getJiraIssue", True),
+        ("jira", "atlassian_editJiraIssue", False),
+        ("jira", "atlassian_addCommentToJiraIssue", False),
+        ("jira", "atlassian_transitionJiraIssue", False),
+        ("jira", "atlassian_someWriteToolNoPatternNames", False),
+    ],
+)
+def test_the_private_worker_may_create_follow_ups_and_write_nothing_else_to_the_tracker(
+    provider: str, tool: str, *, allowed: bool
+) -> None:
+    # Its follow-ups are the one thing it writes there (DESIGN §18, §22): the create tools are allowed by name, whole,
+    # after the server's wildcard deny; every other write of the server stays denied by it.
+    bundled = (resources.agents_dir() / f"{agents.PRIVATE_WORKER}.md").read_text()
+    rendered = opencode_definitions.render_private(bundled, config.DEFAULT_TRACKER_TOOLS[provider])
+    assert _allowed(_rules_in(rendered), tool) is allowed
+
+
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
+def test_the_planner_and_triage_get_no_create_tool(agent: str) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    rendered = opencode_definitions.render_private(
+        bundled, config.DEFAULT_TRACKER_TOOLS["github"], f"agents/{agent}.md"
+    )
+    assert not _allowed(_rules_in(rendered), "github_issue_write")
 
 
 @pytest.mark.parametrize(

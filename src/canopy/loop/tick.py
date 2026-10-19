@@ -17,6 +17,7 @@ from canopy.core import (
     db,
     definitions,
     drafts,
+    follow_ups,
     notice,
     plans,
     pools,
@@ -335,6 +336,9 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             f"{attention.ACTION_PREFIX}awaiting_reply",
             attention.awaiting_detail(waiting),
         )
+    # The tickets runs filed, which wait on the operator's label or start, and those the journal could not record (§18).
+    for item in follow_ups.items(ctx.conn):
+        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         action = f"{attention.ACTION_PREFIX}{remembered.reason}"
         db.record_decision(ctx.conn, tick_id, remembered.ticket_key, action, remembered.detail)

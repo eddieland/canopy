@@ -177,9 +177,19 @@ Controls:
   random and fresh each tick, so no comment can be written to end it early and run what follows (D081).
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
-- The loop may create tickets, but never decides to, and never authorizes them. A split run (DESIGN §18) starts only
-  from an authorized replier's comment asking for it: the dispatch must name that comment, and the splitter reads it
-  again and creates nothing unless its author is an authorized replier. It creates at most one child ticket per
+- The loop may create tickets, but they authorize nothing: a human's queue label on a ticket, or the operator's start
+  of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
+  may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
+  run's validated result names, only for a key new to the journal and, as far as the key's text shows it, in the
+  parent's project, and asks the operator about it (`follow_up_filed`); nothing dispatches it until it carries a queue
+  label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
+  reported key's text only (D003), so a worker can record a ticket it did not file, one a stranger filed in the same
+  project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the attention
+  item names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it
+  reaches, as it always could; every label check is agent judgment, and review of every PR is the backstop.
+- A split run (DESIGN §18), until follow-ups replace it, starts only from an authorized replier's comment asking for
+  it: the dispatch must name that comment, and the splitter reads it again and creates nothing unless its author is an
+  authorized replier. It creates at most one child ticket per
   repository, with no labels and no assignee; a child starts only when a human adds a queue label to it, and only a
   label added after the split run ended counts. The overseer reads that from the tracker's label history and records
   `split_self_labeled` instead of dispatching a child labeled earlier; without label history it does not split. The
@@ -273,6 +283,11 @@ Controls in code, not prompts:
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
   an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
   asks for, and only the operator's channels ask for, skip, or approve a plan.
+- Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
+  repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
+  run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.
+  None of them starts a run: each waits for a human's label or start, so the bounds only keep the operator's list
+  short.
 - Triage: one `needs-plan` run per ticket, before its first plan, never reset and never granted (`triaged`), with its
   own `runtime.plan_triage_timeout_minutes`, and counted within `capacity.max_workers` though it leases no slot. A
   triage that ends any way but `done` is not run again, and raises no attention item, since the plan follows at once.
@@ -381,7 +396,11 @@ Controls:
 
 - Worker MCP write scope is comments and PRs on the ticket it was dispatched for and the repositories of the units its
   run covers: one repository, or each repository of a joint run (DESIGN §18). Prompts name those repositories and forbid
-  writing elsewhere; permissions should match where the runtime allows.
+  writing elsewhere; permissions should match where the runtime allows. A worker may also create follow-up tickets in
+  its ticket's project, linked to its ticket, with no labels or assignee (DESIGN §18), which authorize nothing: the
+  public worker's definition does not deny the tracker's create tools, and the private worker's allows them by name,
+  whole. A ticket's body is text the worker wrote, so a steered worker can publish what it read in one, as it can in a
+  comment.
 - The splitter's write scope is creating tickets in the parent's project, linking them, and one comment on the parent.
   It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
@@ -411,12 +430,16 @@ Controls:
   whatever the setting. canopy posts what the operator sent through `canopy-post-github` (T2), never through an agent.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
-  `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
+  `tracker.read_tools`, and the provider's tools that create a ticket (`issue_write` on GitHub, `createJiraIssue` on
+  Jira), are allowed by name, so a write tool missing from both lists fails closed; the tracker CLIs canopy
   knows (`gh`, `acli`, `jira`) are denied in its bash rules but for `gh pr view`, `gh pr checks`, `gh pr diff`, and
   `gh run view`, which read a PR and its CI and never the ticket; and other MCP tools are denied by name as for
   `canopy-worker` (D084). A run is refused where the worktree's OpenCode config names any of that server's tools,
   since a repository rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and
-  its report and question go to the journal, not the tracker. The journal holds the operator's replies and the
+  to the tracker nothing but the follow-ups it files, and its report and question go to the journal, not the tracker.
+  An operator's own OpenCode config cannot deny a create tool canopy's definition allows, since the definition is
+  merged after it (D044); `policy.max_follow_ups = 0` has workers file none, and the MCP server's own tool selection,
+  where it has one, is what takes the tool away. The journal holds the operator's replies and the
   workers' reports, under the operator-only state directory (T2).
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
@@ -466,7 +489,11 @@ which a tracker's VCS integration may link to the ticket.
 An operator message on a public ticket (D089, D093) is kept off the ticket only by the worker's prompt: a public worker
 can comment on the ticket and its PRs, so one that disregards the prompt, or is steered by what it read, can repeat the
 message there, and its work shows what the message asked for. Text the ticket's readers must never see belongs on a
-private ticket, whose worker cannot write to it.
+private ticket, whose worker writes nothing to it. Residual: a private worker can create tickets, so a steered or
+careless one can put what it read, the operator's messages included, into a follow-up's title or body, which the
+tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`, also
+edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same exposure
+the public worker has had, now on private tickets too.
 
 ### T7. Hostile shared config
 

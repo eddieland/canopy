@@ -13,7 +13,7 @@ import pytest
 from canopy.core import prompts, replies
 from canopy.core.config import load
 from canopy.core.vocab import ReplyMode, RunKind
-from tests.canopy.helpers import PROMPT_VALUES, present
+from tests.canopy.helpers import PRIVATE_PROMPT_VALUES, PROMPT_VALUES, present
 
 if TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
@@ -49,7 +49,8 @@ def test_under_approve_a_prompt_asks_for_drafts(
     assert rendered.mode is ReplyMode.APPROVE
     # A private ticket's worker writes nothing to the ticket, so it is never asked for a ticket's draft.
     assert rendered.ticket_drafts is (tracker_posts and not private)
-    values = {**PROMPT_VALUES, "CONVERSATION": "No messages yet.", **rendered.values}
+    base = PRIVATE_PROMPT_VALUES if private else PROMPT_VALUES
+    values = {**base, "CONVERSATION": "No messages yet.", **rendered.values}
     text = prompts.render_worker(cfg, kind, values, private=private, required=rendered.required)
     assert text == markdown_snapshot
 

@@ -38,6 +38,7 @@ What the loop needs from a tracker, as capabilities, each used by the role in pa
 | Add and remove a label (worker) | `needs_human_label` |
 | Read blocker relations (overseer, optional) | ordering, stacking |
 | When a label was added (overseer, optional) | `human_replied` |
+| Create a ticket linked to a parent (worker, optional) | follow-ups |
 
 "Label" means the tracker's tagging primitive, whatever it is called. Without blocker relations, tickets are treated as
 unblocked. Without label history, the worker's question comment is the reference point for `human_replied`. If a tracker
@@ -149,11 +150,16 @@ unlabeled child per repository, so a human authorizes each by labeling it after 
 
 ### Follow-up tickets
 
-Designed for ROADMAP M46, which holds the details, not built; it replaces Splitting. A worker that finds work outside
-its ticket files it as a follow-up, worked under its ticket's authorization, since that work lands only through a PR a
-human reviews and merges (TRUST_MODEL §6). canopy records the follow-ups a public `implement` or `resume` run reports,
-bounded per run, checking only each key's text (D003), so a worker can record a ticket it did not file: an accepted
-gap, backed by review of every PR. A refused entry never changes the run's status. TRUST_MODEL T1, T3, and T6 change.
+ROADMAP M46, which holds the details; built but for removing Splitting, above, which it replaces. A worker that finds
+work outside its ticket may file it as a follow-up, linked to its ticket, with no label: a request, which authorizes
+nothing (TRUST_MODEL T1, D123). The operator decided (2026-10-19) that workers notice and ask, and humans authorize:
+a follow-up is worked only once a human labels it or starts it, as any ticket. canopy records the follow-ups an
+`implement` or `resume` run, public or private, reports in its result's `created` (§8), at most
+`policy.max_follow_ups` per run, and none from a follow-up's own run or from a run that rewrote its slot's git,
+checking only each key's text (D003). It then asks the operator: `follow_up_filed` (§14), about the parent, names each
+recorded follow-up not yet dispatched, started, or done. A refused entry never changes the run's status; it raises
+`follow_up_unrecorded`. Rejected: working a follow-up under its parent's label, since a worker would then authorize
+work for itself.
 
 ### Open
 

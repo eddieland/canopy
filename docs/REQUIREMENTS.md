@@ -1,7 +1,7 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17 on
-2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17, R23 on 2026-10-19), and where canopy
+2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17, R23 and R24 on 2026-10-19), and where canopy
 stands on each. The design (`design/`) is how canopy meets them; this file is what it must meet. Where the two
 disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
 doc stays normative until then (AGENTS.md).
@@ -296,6 +296,15 @@ sets, and an override per ticket that only the operator can set, never the overs
 models OpenCode has. Each run should record the model it was given, and the one that served it where OpenCode says so,
 and spend should split by model, so that the canary can be compared.
 
+### R24. Personas for planning, reviews, and implementation
+
+Planned (M60, §31). Written down 2026-10-19. The operator wants to give planning, reviews, or implementation a flair of
+its own by choosing a persona for the planner, the reviewer, or the workers: a short file of voice and emphasis, chosen
+by the operator alone, by default for each agent and per ticket. A default persona holds canopy's standard personality,
+taken out of the shipped prompts, so a chosen one replaces that voice rather than competing with it. A persona changes
+how an agent writes and what it weighs, never a guard, a contract, or a model. canopy ships a few, and the operator
+adds or shadows them in private config. Each run records which persona it had, so personas can be compared.
+
 ## Nice to have
 
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
@@ -307,8 +316,9 @@ and spend should split by model, so that the canary can be compared.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
   request: an authorized replier's comment asks for the split. The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
-  ROADMAP M46 replaces it, designed in §18 (Follow-up tickets): an `implement` or `resume` worker files follow-up
-  tickets, worked under its ticket's authorization within bounds in code, and a split is a run doing that on request.
+  ROADMAP M46 replaces it (§18, Follow-up tickets): an `implement` or `resume` worker files follow-up tickets, which
+  authorize nothing, and canopy asks the operator to label or start each, built; a split becomes a run doing that on
+  request, not yet.
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).

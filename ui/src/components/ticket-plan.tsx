@@ -124,8 +124,8 @@ function emptyText(plans: TicketPlans): string {
 
 /**
  * The plan's state in a sentence or two, its page's description: the run that wrote it, its approval, what changed in
- * its file since, and what comes next. Its status and age are its panel's header; with no plan, its panel says what
- * comes, and this says nothing.
+ * its file since, and what comes next. Its status and age are its panel's header, and changes asked are the band under
+ * the page's header (`ChangesAsked`); with no plan, its panel says what comes, and this says nothing.
  */
 export function PlanState({ plans }: { plans: TicketPlans }) {
     const newest = plans.newest
@@ -138,16 +138,6 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
     const next: [string, ReactNode][] = []
     if (plans.planning !== null) {
         next.push(['planning', `Run ${plans.planning} is writing a new plan.`])
-    }
-    // No planner reads a request for a ticket that needs no plan: the sentence that says so stands instead.
-    if (plans.planning === null && plans.changes_asked !== null && !needless) {
-        next.push([
-            'asked',
-            <Fragment key="asked">
-                You asked for changes <Age at={plans.changes_asked} variant="ago" className="text-sm" />: the next tick
-                asks the planner for a new plan.
-            </Fragment>,
-        ])
     }
     if (planWaits(plans)) {
         next.push(['waits', 'It waits on you: read it, comment, then approve it or ask for changes.'])

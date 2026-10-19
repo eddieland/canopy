@@ -181,6 +181,55 @@ def triage_authorization(key: str, labels: Sequence[str], *, private: bool) -> s
     )
 
 
+def follow_ups(
+    key: str, limit: int, repos: Sequence[str], *, needs_human: str, labels: Sequence[str], private: bool = False
+) -> str:
+    """Return a worker's `{{FOLLOW_UPS}}` when it may file follow-up tickets (DESIGN §18): what one is, and how.
+
+    A follow-up is a request: it authorizes nothing, and canopy works it only once the operator labels or starts it.
+    A private ticket's worker files them too, the one thing it writes to the tracker: its version says that a follow-up
+    is public all the same, and that it lists them in its summary, since it comments nowhere.
+
+    Returns:
+        The instructions, the bound, the repositories a follow-up may name, and the result field that reports them.
+    """
+    names = ", ".join(f"`{r}`" for r in repos)
+    queue = ", ".join(f"`{label}`" for label in labels)
+    if private:
+        listed = (
+            "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to "
+            f"{key} or to any other ticket, though the tool that creates tickets may be able to. A follow-up is read "
+            f"by everyone who reads the tracker, while {key}'s conversation stays private: its title and body describe "
+            "the work in your own words, and carry nothing from the operator's messages, the conversation, or the "
+            "plan. Your summary lists the follow-ups you filed."
+        )
+    else:
+        listed = f"Your comment on {key} lists the follow-ups you filed."
+    return (
+        "You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your "
+        "change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's "
+        f"own work yourself, never as a follow-up. File at most {limit}, and none for work that is already a ticket."
+        "\n\n"
+        f"Create each in {key}'s project through the tracker, linked to {key} as its parent the way the tracker skill "
+        f"says, with no assignee and no labels: never one of {queue}, and never `{needs_human}`. Its body says what it "
+        "covers, as a description of the work rather than instructions to an agent, and, when one repository "
+        f"applies, names it on a line of its own, `canopy-repo: <name>`, one of {names}. A follow-up that must land "
+        f"after another ticket, this one included, gets the tracker's blocker relation. {listed}\n\n"
+        "A follow-up is a request, not work you start: canopy asks the operator about each one, and works it only once "
+        "they label it or start it, as any ticket. Name every ticket you created in your result line's object, also "
+        'when you report `blocked` or `failed`: `"created":{"<key>":"<repository or null>"}`, each with the repository '
+        "its body names, or null when it names none. Leave the field out when you created none."
+    )
+
+
+def no_follow_ups(why: str) -> str:
+    """Return a worker's `{{FOLLOW_UPS}}` when it may file none (DESIGN §18), saying `why`."""
+    return (
+        f"File no tickets in the tracker: {why}. Say in your summary what you found that is outside this ticket, for "
+        "the operator to file."
+    )
+
+
 def trusted_reviewers(reviewers: Sequence[str]) -> str:
     """Return the worker's list of trusted reviewers (DESIGN §7, D089), naming canopy's own reviewer in words."""
     names = [

@@ -22,8 +22,10 @@ The items come in four groups, in this order, and within a group the one open lo
    the overseer couldn't run canopy at all.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
    (`untrusted review`), and a plan to approve (`plan review`).
-3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, or
-   a lesson a worker proposed for [memory](memory).
+3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
+   lesson a worker proposed for [memory](memory), or the follow-up tickets a ticket's workers filed (`follow up
+   filed`), which canopy works only once you label or start each; the item leaves as you do, or when its ticket is
+   done.
 4. **Findings**: what your chores found.
 
 The counters above the list say how many runs are going, how many tickets wait on you and how long the oldest question

@@ -20,8 +20,8 @@ neither the ticket nor the code settles, do not guess: abort and ask, as under "
 
 The operator started {{KEY}} in canopy, which authorized this run; there is no label to check. Its conversation stays
 with the operator: never comment on the ticket, label it, edit it, or change its state in any way, through any tool or
-command. Your tracker tools can only read. Your report to the operator is your result line's `summary`, and your
-question to them its `question`.
+command. Your tracker tools only read, but for creating the follow-up tickets below. Your report to the operator is your
+result line's `summary`, and your question to them its `question`.
 
 ## Conversation with the operator
 
@@ -136,6 +136,10 @@ leaves out a change to behavior this run made that a reviewer must know of. Othe
 restyle it, summarize this run, or list what you addressed. When you must, change only the sentences that are wrong or
 missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
 body you wrote.
+
+## Follow-up tickets
+
+{{FOLLOW_UPS}}
 
 ## Result
 

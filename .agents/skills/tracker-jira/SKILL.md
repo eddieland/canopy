@@ -46,10 +46,12 @@ split child's label cannot be checked, and the ticket is not split.
 
 ## Creating tickets
 
-Only a split worker creates issues. Create each child in the parent's project, with the parent's issue type unless that
-type cannot be created, with an empty `labels` field and no assignee. Link it to the parent with a "relates to" link,
-not as a subtask. Order children with "Blocks" links: the earlier child blocks the later one. The child's key is the key
-Jira returns for the created issue.
+A split worker creates its children, and an `implement` or `resume` worker the follow-ups its prompt allows (DESIGN
+§18); no other agent creates issues. Create each in the parent's project, with the parent's issue type unless that type
+cannot be created, with an empty `labels` field and no assignee. Link it to the parent with a "relates to" link, not as
+a subtask; a private ticket's worker, which has the create tool and no link tool, names the parent in the body instead,
+on a line of its own, `Part of <parent key>`. Order the new issues with "Blocks" links: the earlier one blocks the later
+one. The new issue's key is the key Jira returns for the created issue.
 
 ## Comments and ordering
 

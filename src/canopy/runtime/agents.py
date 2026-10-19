@@ -33,6 +33,8 @@ class McpTools:
 
     server: str
     allowed: Sequence[str]
+    #: The tools that create a ticket, which a private worker may call to file its follow-ups (DESIGN §18, §22).
+    create: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
