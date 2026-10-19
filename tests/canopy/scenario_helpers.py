@@ -977,7 +977,7 @@ def fails(summary: str = "could not build") -> Script:
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
 
 
-def drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
+def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
     """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`, sending `entries` as its
     drafts, whatever they hold, so a test can send ones canopy refuses."""
     return pushes(prs={"repo": pr}, drafts=entries)

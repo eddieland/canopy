@@ -228,7 +228,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   read from the move rather than from `capsys`. So is one of the overseer's commands outside a tick it runs:
   `scenario.overseer("ticket", "set", KEY, "--phase", "approved", code=2)`, in a tick of its own, or in one shared
   with the others inside `with scenario.ticking():`. A key the story drops is set to None,
-  `configures(notify={"sinks": {"slack": None}})`, and a worker that sends drafts is `drafts([...])`.
+  `configures(notify={"sinks": {"slack": None}})`, and a worker that sends drafts `sends_drafts([...])`.
   A story in the workspace of two repositories, `api` and `web`, is told the same way through `ws_scenario`, whose
   pools are seeded: each dispatch names its repositories, `dispatches(repo=("api", "web"))`, and a joint run's worker
   `pushes(repos=("api", "web"))` in each.
