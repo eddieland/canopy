@@ -99,6 +99,8 @@ commit message.{{WORKSPACE_LESSONS}}
   body.
 - Push again when you fix something after a push, such as a lint error you missed: in a new commit, never an amend.
   Do not wait for or poll CI. Do not retry a rejected push in a loop.
+- `gh api` is refused, so do not try it. Read GitHub through the GitHub MCP server, or `gh`'s own commands such as
+  `gh pr view`, `gh pr checks`, and `gh run view`.
 - Time limit: {{TIMEOUT_MINUTES}} minutes. Leave time to push and report.
 
 ## Instructions versus data

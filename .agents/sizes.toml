@@ -12,11 +12,11 @@
 "prompts/overseer.md" = 66181
 "prompts/plan-triage.md" = 4480
 "prompts/reviewer.md" = 5571
-"prompts/worker-implement-private.md" = 6344
-"prompts/worker-implement.md" = 7047
+"prompts/worker-implement-private.md" = 6529
+"prompts/worker-implement.md" = 7213
 "prompts/worker-plan.md" = 8481
-"prompts/worker-resume-private.md" = 8448
-"prompts/worker-resume.md" = 9438
+"prompts/worker-resume-private.md" = 8630
+"prompts/worker-resume.md" = 9601
 "prompts/worker-split.md" = 4960
 "skills/tracker-github/SKILL.md" = 4318
 "skills/tracker-jira/SKILL.md" = 3476
