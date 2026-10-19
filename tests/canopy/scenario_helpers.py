@@ -603,8 +603,14 @@ def fails(summary: str = "could not build") -> Worker:
 
 def _printing(command: Callable[[], int]) -> tuple[int, Printed]:
     out, err = io.StringIO(), io.StringIO()
-    with redirect_stdout(out), redirect_stderr(err):
-        exited = command()
+    try:
+        with redirect_stdout(out), redirect_stderr(err):
+            exited = command()
+    except BaseException:
+        # A command that raises makes no move to tell; what it printed goes to the test's own output, for its report.
+        sys.stdout.write(out.getvalue())
+        sys.stderr.write(err.getvalue())
+        raise
     return exited, Printed(out.getvalue(), err.getvalue())
 
 

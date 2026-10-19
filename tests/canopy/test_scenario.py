@@ -1,11 +1,14 @@
 """The scenario DSL's own story: what a `Scenario` records of each move, for a failed test's report."""
 
+import sys
 from datetime import timedelta
+from unittest import mock
 
 import pytest
 
 from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
+from tests.canopy import scenario_helpers
 from tests.canopy.helpers import waits
 from tests.canopy.scenario_helpers import Printed, Scenario, dispatches, pushes, raises
 from tests.conftest import GitPool
@@ -96,3 +99,20 @@ def test_a_step_keeps_the_first_lines_a_command_printed_and_every_line_of_its_er
 def test_a_tick_gives_back_what_it_printed(scenario: Scenario) -> None:
     ticked = scenario.tick(dry_run=True)
     assert ticked.printed.out.startswith(f"tick {ticked.tick.id}: ok: dry run")
+
+
+def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
+    scenario: Scenario, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def crashes(*args: str) -> int:
+        sys.stdout.write(f"{args[0]}: half done\n")
+        sys.stderr.write("then this\n")
+        raise RuntimeError("a bug in canopy")
+
+    with (
+        mock.patch.object(scenario_helpers, "operator", autospec=True, side_effect=crashes),
+        pytest.raises(RuntimeError, match="a bug in canopy"),
+    ):
+        scenario.operator("pause")
+    assert capsys.readouterr() == ("pause: half done\n", "then this\n")
+    assert scenario.story == []
