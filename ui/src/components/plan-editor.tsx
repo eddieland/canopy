@@ -103,6 +103,7 @@ export function PlanEditor({
     status,
     onAskForChanges,
     asked = false,
+    onNoteChange,
     actions,
     actionsNote,
     outcome,
@@ -126,11 +127,16 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
+    /** Called with the note on the whole plan, which goes with Ask for changes, as the operator writes it. */
+    onNoteChange?: (note: string) => void
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
     /** What the caller says of those, in words, on the line under them: what they will do. */
     actionsNote?: ReactNode
-    /** What the caller's last action did, or why it was refused, at the foot's end (`Notice`). */
+    /**
+     * What the caller's last action did, or why it was refused, at the foot's end (`Notice`). Given, the foot stays
+     * when the plan is read only, so an action that ends its editing, such as Skip, still says what it did.
+     */
     outcome?: ReactNode
     /**
      * The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`); with
@@ -460,26 +466,30 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {editable && (actions !== undefined || onAskForChanges !== undefined) && (
+                    {((editable && (actions !== undefined || onAskForChanges !== undefined)) ||
+                        outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
                         <PanelFooter sticky data-testid="plan-bar">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {actions}
-                                {onAskForChanges !== undefined && (
-                                    <AskForChanges
-                                        threads={threads}
-                                        starts={starts}
-                                        edited={edited || changed}
-                                        asked={asked}
-                                        onAsk={onAskForChanges}
-                                        note={actionsNote}
-                                    />
-                                )}
-                                {onAskForChanges === undefined && actionsNote !== undefined && (
-                                    <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
-                                )}
-                            </div>
+                            {editable && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {actions}
+                                    {onAskForChanges !== undefined && (
+                                        <AskForChanges
+                                            threads={threads}
+                                            starts={starts}
+                                            edited={edited || changed}
+                                            asked={asked}
+                                            onAsk={onAskForChanges}
+                                            note={actionsNote}
+                                            onNoteChange={onNoteChange}
+                                        />
+                                    )}
+                                    {onAskForChanges === undefined && actionsNote !== undefined && (
+                                        <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
+                                    )}
+                                </div>
+                            )}
                             {outcome}
                         </PanelFooter>
                     )}

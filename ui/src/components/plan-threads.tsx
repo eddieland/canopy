@@ -179,6 +179,7 @@ export function AskForChanges({
     asked = false,
     note: said,
     onAsk,
+    onNoteChange,
 }: {
     /** The plan's threads. */
     threads: PlanThread[]
@@ -192,8 +193,14 @@ export function AskForChanges({
     note?: ReactNode
     /** Sends the message. */
     onAsk: (message: string) => void
+    /** Called with the note on the whole plan as it changes, so the caller's own actions can say what it leaves. */
+    onNoteChange?: ((note: string) => void) | undefined
 }) {
-    const [note, setNote] = useState('')
+    const [note, setNoteState] = useState('')
+    function setNote(next: string) {
+        setNoteState(next)
+        onNoteChange?.(next)
+    }
     usePending(note.trim() !== '')
     const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length
