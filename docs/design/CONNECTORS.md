@@ -18,6 +18,10 @@ world. Authority stays with the source (§4 principle 1, §22): an observation s
 what is true now. Nothing yet reads an observation to decide anything but the derivation, which only the operator and
 the measurement read.
 
+Built so far: each tick runs the sources, validates and bounds what they print, records it and each run, raises
+`connector_failed`, and `canopy status` names each source with its last run and the age of its observations. Not yet:
+the derivation, and canopy's connectors grown to this contract.
+
 ### Sources
 
 There is at most one source of each kind, `tracker` and `vcs`, each a command run with no shell (§20) under a timeout.
@@ -50,9 +54,16 @@ cut would change what it says, such as an id or a state, refuses the line instea
 not whole this run, whatever `end` says, so a line canopy could not read never looks like a review or a check gone. A
 run with no `end` line records nothing: without it, canopy cannot tell what is missing from what is not there. A
 subject read whole has its observations replaced in one transaction, so what is gone from the source is gone from the
-journal; a subject not read whole keeps its old rows and their age. Comments go into the conversation as mirrored
-comments do (§22), once each, the workers' marks (D069) read in code; the connector moves no mirror cursor and records
-no decision, so the overseer mirrors as before.
+journal; a subject not read whole keeps its old rows and their age. A refused line whose subject canopy cannot read
+leaves no subject of its kind whole; a line that is not JSON is skipped, as an unknown kind is.
+
+Comments are kept apart from the conversation, in their own observations, once each and cut and marked as a mirrored
+comment is (§22), the workers' marks (D069) read in code. The conversation is what a private worker's prompt carries
+(§8), so a comment written there would reach a worker without the overseer mirroring it, under none of the mirror's
+bounds; while this section is in shadow they stay apart (operator, 2026-10-19), and the step that has the overseer read
+the journal (M37) decides how they reach it. The connector moves no mirror cursor and records no decision, so the
+overseer mirrors as before. Each tick's run of a source is recorded with what it was asked and what it read; §29's
+reads after a run and before a send are validated the same way but are not a tick's runs.
 
 ### In the tick
 
@@ -60,7 +71,12 @@ In §6 step 3, after the reconciles, the tick runs the `tracker` source, then th
 reconcile read; a tick whose reconcile failed runs neither, and a dry run observes as a live tick does. A source that
 fails, or reads less than it was asked, keeps its previous observations and raises the harness's `connector_failed`
 (§14), naming what was not read, each tick until a run reads everything; the overseer's view of the list leaves it
-out. The tick goes on and loses nothing, since the overseer still reads live. The derivation follows.
+out. It is one item about the workspace, its detail naming each failing source, since the attention list has no
+subject for a source. The tick goes on and loses nothing, since the overseer still reads live. The derivation follows.
+
+Until `canopy-connect-github` is grown to the contract, it reads only §29's PRs and refuses a request naming none, so a
+tick sends it only the PRs, and runs it only while one is watched: asked more, every run would read less than asked
+and raise `connector_failed`. An operator's own `vcs` source is sent the whole request.
 
 ### The derivation, in shadow
 

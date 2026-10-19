@@ -52,9 +52,9 @@ This milestone adds the connectors and the derivation without changing what the 
   first page of 100 before its `end` line covers that PR.
 - The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_branches`, `observed_checks`,
   `observed_reviews`), each row keyed by the source's id and replaced on each observation with its `observed_at`; a
-  subject the `end` line did not cover keeps its old rows and their age. Comments go into `messages` as mirrored
-  comments do now, with the workers' marks read in code (D069). `connector_runs` records each run: when, status, counts,
-  the tail of stderr.
+  subject the `end` line did not cover keeps its old rows and their age. Comments go into `observed_comments`, apart
+  from `messages`, so no worker's prompt carries one the overseer did not mirror (DESIGN §30), with the workers'
+  marks read in code (D069). `connector_runs` records each run: when, status, counts, the tail of stderr.
 - Retention (#424, DESIGN §26's journal rule): the PR that creates `connector_runs` and `derivations` adds them to
   `canopy gc --dry-run`'s report, counted with what a pass would remove, and to the deletes of M47's third stage, so
   they go with the harness's attention rows past the attention list's window and `retention.journal_days`, keeping
@@ -99,5 +99,11 @@ is also §29's reconcile read; the checks that are not CI are `human_checks` per
 the exceptions so a missing entry fails toward waiting; the derivation records every row that holds, since §7 has no
 order yet, and a ticket whose observations are stale apart; agreement is computed, never stored; and
 `connect.max_age_minutes` defaults to 30 and `connect.every_minutes` to 2; and the two per-tick tables are pruned by
-§26's pass under its journal rule (#424). Open for the operator: the tracker query run in code (Proposed 2026-10-15),
-and whether one failed run raises `connector_failed` or only one that leaves an observation stale.
+§26's pass under its journal rule (#424). Built (2026-10-19): each tick runs the sources after reconcile, validates and
+bounds each line, records `observed_tickets`, `observed_comments`, `observed_checks`, `observed_branches`, and a PR's
+labels and mergeable state, records each run in `connector_runs`, which `canopy gc --dry-run` counts, raises
+`connector_failed`, and `canopy status` names each source with its last run and the age of its observations;
+`tests/fakes/connector` plays any source. Not yet: the derivation, and canopy's connectors grown to the contract, so
+canopy's own GitHub reader is asked only the PRs, while one is watched. Open for the operator: the tracker query run
+in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that leaves an
+observation stale.
