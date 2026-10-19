@@ -209,9 +209,10 @@ def test_no_triage_is_due_without_a_plan_the_policy_asks_for(
     assert dispatch_refused(conn, *TRIAGE) == [
         ("refused:bad_triage", f'policy.plan is not "approve", so {KEY} needs no plan to triage')
     ]
-    approve_policy(canopy_env)
+    # A ticket planned before plans were turned on is not triaged after.
     with planner_does(plan=TEXT):
         planned = dispatch_and_run(conn, *PLAN)
+    approve_policy(canopy_env)
     assert dispatch_refused(conn, *TRIAGE) == [
         ("refused:bad_triage", f"{KEY} had plan run {planned['id']}; a ticket with a plan is not triaged")
     ]
@@ -221,6 +222,37 @@ def test_no_triage_is_due_without_a_plan_the_policy_asks_for(
     assert dispatch_refused(conn, *TRIAGE, key="PROJ-2") == [
         ("refused:bad_triage", "PROJ-2 already has work on agent/PROJ-2-work; a started ticket is not triaged")
     ]
+
+
+def test_a_ticket_due_a_triage_is_not_planned_until_it_has_had_one(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    triage_on(canopy_env)
+    # Its implement's refusal points the overseer at the triage, and a plan dispatched anyway is refused.
+    due = f"{KEY} needs a plan before its implement, and it has no plan approved; dispatch `needs-plan`, as its triage"
+    assert dispatch_refused(conn, *IMPLEMENT) == [("refused:unplanned", f"{due} is due")]
+    assert dispatch_refused(conn, *PLAN) == [
+        ("refused:untriaged", f"{KEY} is due a triage before its plan; dispatch `needs-plan` first")
+    ]
+    # Once the triage has run and left the plan needed, the plan follows.
+    with triage_reports(verdict("plan")):
+        dispatch_and_run(conn, *TRIAGE)
+    assert dispatch_refused(conn, *IMPLEMENT) == [UNPLANNED]
+    with planner_does(plan=TEXT):
+        planned = dispatch_and_run(conn, *PLAN)
+    assert planned["status"] == RunStatus.DONE
+
+
+def test_the_operators_own_plan_skips_a_due_triage(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    triage_on(canopy_env)
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
+    assert operator("plan", KEY) == 0
+    with planner_does(plan=TEXT):
+        planned = dispatch_and_run(conn, *PLAN)
+    assert planned["status"] == RunStatus.DONE
+    assert conn.execute("SELECT count(*) FROM runs WHERE kind = ?", (RunKind.NEEDS_PLAN,)).fetchone()[0] == 0
 
 
 def test_a_split_ticket_is_not_triaged(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
