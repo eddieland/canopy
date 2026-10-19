@@ -34,6 +34,11 @@ export interface EventStreamOptions<T> {
     onEvent: (event: T) => void
     /** Called when the stream opens again after a drop: events may have been missed, so refetch what they feed. */
     onReconnect?: () => void
+    /**
+     * Whether a parsed message says the server is ending the stream on purpose. The hook then opens another at once,
+     * reporting no drop, and the message never reaches `onEvent`.
+     */
+    ending?: (event: T) => boolean
     /** Whether to connect at all. Off closes the stream. Defaults to on. */
     enabled?: boolean
 }
@@ -42,7 +47,8 @@ export interface EventStreamOptions<T> {
  * Subscribes to a server-sent event stream for as long as the component is mounted, reports where it is and since when
  * it has been down, and tells the caller when it is back after a drop so it can catch up. EventSource reconnects on
  * its own; when it has not within RETRY_FIRST_MS, this closes it and opens a new one, and it opens a new one at once
- * when the device is back online, or when the page is shown again after HIDDEN_MS or with the stream down.
+ * when the device is back online, when the page is shown again after HIDDEN_MS or with the stream down, or when the
+ * server says it is ending the stream (`ending`).
  *
  * For Query data, pair it with setQueryData in `onEvent` (see useLiveUpdates), never with polling.
  */
@@ -50,11 +56,17 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
     const { enabled = true } = options
     // Keyed by URL, so a new URL reads as 'connecting' without a state reset inside the effect.
     const [reported, setReported] = useState<({ url: string } & StreamState) | null>(null)
-    const onMessage = useEffectEvent((data: string) => {
+    // Returns whether the message says the server is ending the stream.
+    const onMessage = useEffectEvent((data: string): boolean => {
         const event = options.parse(data)
-        if (event !== null) {
-            options.onEvent(event)
+        if (event === null) {
+            return false
         }
+        if (options.ending?.(event) === true) {
+            return true
+        }
+        options.onEvent(event)
+        return false
     })
     const onReconnect = useEffectEvent(() => options.onReconnect?.())
 
@@ -95,7 +107,14 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
                 }
                 dropped = false
             })
-            current.addEventListener('message', (message: MessageEvent<string>) => onMessage(message.data))
+            current.addEventListener('message', (message: MessageEvent<string>) => {
+                if (onMessage(message.data)) {
+                    // Opened again before the server closes this one, so it never reads as down; the catch-up still
+                    // runs, for anything sent between the two.
+                    dropped = true
+                    connect()
+                }
+            })
             current.addEventListener('error', () => {
                 dropped = true
                 down()

@@ -55,6 +55,14 @@ describe('useLiveUpdates', () => {
         expect(client.getQueryData(keys.tickets)).toEqual(mockTickets)
     })
 
+    it('opens the next stream at once when the server ends one on purpose', () => {
+        const { result } = live(new QueryClient())
+        act(() => latest().open())
+        act(() => latest().send('{"type":"stream.ending"}'))
+        expect(FakeEventSource.instances).toHaveLength(2)
+        expect(result.current.status).toBe('open')
+    })
+
     it("after a drop, reads the server's meta and the tickets shown again, not the lists the stream resends", () => {
         const client = new QueryClient()
         client.setQueryData(keys.meta, {})

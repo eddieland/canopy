@@ -111,6 +111,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             client.setQueryData(keys.loop, { paused: event.paused, notice: event.notice, memory: event.memory })
             break
         }
+        case 'stream.ending': {
+            // The stream itself, not the data: useLiveUpdates hands it to useEventStream, which opens another.
+            break
+        }
     }
 }
 
@@ -188,6 +192,9 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         return typeof paused === 'object' && typeof notice === 'object' && typeof memory === 'object'
             ? (value as StreamEvent)
             : null
+    }
+    if (type === 'stream.ending') {
+        return value as StreamEvent
     }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend

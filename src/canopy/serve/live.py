@@ -37,6 +37,7 @@ from canopy.serve.schema import (
     RunsUpdated,
     Spend,
     SpendUpdated,
+    StreamEnding,
     StreamEvent,
     TicketChanged,
     TicketSummary,
@@ -70,18 +71,25 @@ class Stream:
         self._read = False
         self._closed = False
 
-    async def events(self, *, poll_seconds: float = POLL_SECONDS) -> AsyncIterator[StreamEvent]:
-        """Yield every list, the spend, the latest tick, and the pause at once, then whatever changes, until the end.
+    async def events(
+        self, *, poll_seconds: float = POLL_SECONDS, lifetime: float | None = None
+    ) -> AsyncIterator[StreamEvent]:
+        """Yield every list, the spend, the latest tick, and the pause at once, then whatever changes.
+
+        It goes on until the client leaves, or, with a `lifetime`, until that many seconds have passed: then it says
+        so last, so the page opens another stream at once rather than showing this one down.
 
         Yields:
             Each event as the stream's thread reads it.
         """
         loop = asyncio.get_running_loop()
-        while True:
+        end = None if lifetime is None else loop.time() + lifetime
+        while end is None or loop.time() < end:
             self._read = True
             for event in await loop.run_in_executor(self._thread, self._reader.read):
                 yield event
             await asyncio.sleep(poll_seconds)
+        yield StreamEvent(StreamEnding())
 
     def close(self) -> None:
         """Close the connection on the stream's own thread, and let the thread end. Closing it again does nothing."""

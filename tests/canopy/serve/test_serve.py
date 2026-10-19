@@ -41,6 +41,7 @@ from canopy.serve.schema import (
     LoopUpdated,
     RunsUpdated,
     SpendUpdated,
+    StreamEnding,
     StreamEvent,
     TicketChanged,
     TicketSummary,
@@ -555,6 +556,20 @@ def test_a_grant_on_the_mock_reports_the_limit_of_its_own_transaction(
             granted = backend.grant(ctx, conversation.parse_ref(ref), kind, repo)
         assert tried == ["locked"]
         assert (granted.repo, granted.runs, granted.limit) == (repo, present(before).runs, present(before).limit + 1)
+
+
+def test_a_stream_with_a_lifetime_ends_on_its_own_after_its_first_events(ui: Path, backend: Backend) -> None:
+    # TestClient reads a stream to its end, so an endless one would hang here.
+    response = client(ui, backend, stream_seconds=0.3).get("/api/events")
+    assert response.status_code == 200
+    events = [
+        StreamEvent.model_validate_json(line.removeprefix("data: "))
+        for line in response.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert {type(e.root) for e in events} >= {AttentionUpdated, RunsUpdated, TicketsUpdated}
+    assert isinstance(events[-1].root, StreamEnding)
+    assert not any(isinstance(e.root, StreamEnding) for e in events[:-1])
 
 
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:

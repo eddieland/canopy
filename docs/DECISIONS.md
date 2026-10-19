@@ -453,3 +453,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: Prism (its grammars register on a global, and are rougher than an editor's), highlight.js (returns
   HTML), Lezer (no TOML, shell, or SQL without CodeMirror).
 - Revisit: if its core grows past what the page should load, or diffs need grammars it does not have.
+
+## D122. The web UI's public demo serves mock data only
+
+- `canopy.serve.demo` serves the fixtures (`serve/mock.py`) under public host names with no listener secret, on a host
+  that runs the app itself (Vercel, `vercel_app.py`). `ServeOptions` refuses `public_hosts` without `mock`, so the
+  loop's server never takes one (TRUST_MODEL T8).
+- Why: anyone can try the latest UI, at no cost on Vercel's free plan; the fixtures hold nothing of the operator's.
+- Rejected: a static build over a mock written again in TypeScript (a second mock that drifts from the API).
+- Revisit: if the demo should show anything but fixtures, which T8 would then govern as a listener.

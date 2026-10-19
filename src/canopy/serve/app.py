@@ -57,7 +57,7 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     app.include_router(api.router, prefix=f"{base}/api")
     app.add_exception_handler(sqlite3.OperationalError, refs.journal_busy)
     spa = SinglePageApp(options.ui_dir, base_path=base)
-    deps.bind(app, backend, sessions, spa)
+    deps.bind(app, options, backend, sessions, spa)
     if base:
 
         @app.get(base, include_in_schema=False)
