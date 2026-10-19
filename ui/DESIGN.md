@@ -161,8 +161,8 @@ Rules:
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
   breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
   inside the pane, is its own width's (Primitives). The UI is made for the operator's window, about 1720px wide
-  (`PRODUCT.md`), where its screenshots are taken. Down to about 820px it holds up, the rail a strip; a phone's does
-  not.
+  (`PRODUCT.md`), where its screenshots are taken. Down to about 820px it holds up, the rail a strip, and two
+  screenshots hold how it looks there: the ticket page and the tickets list. A phone's window it does not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
