@@ -12,7 +12,7 @@ export const SPEND_WINDOWS = [7, 30] as const
 export type SpendWindowDays = (typeof SPEND_WINDOWS)[number]
 
 /** A series of the by-day chart: a part of a day's spend no other series counts. */
-export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'triage' | 'chores' | 'reviews' | 'dry_run'
+export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'triage' | 'plans' | 'chores' | 'reviews' | 'dry_run'
 
 /**
  * One series: what it counts, its name, what that name means on hover, and its fill, written out so Tailwind finds
@@ -32,8 +32,8 @@ export interface Series {
 /**
  * The series bottom up. Idle ticks first, on the baseline under the rest of the overseer's, a deeper shade of the same
  * hue, so the two read as one: together they are the overseer's bar, and idle ticks a part of it. Then the runs the
- * overseer started, a triage before a plan among them, then dry runs. Idle spend is a sliver beside a worker's, so its
- * trend across days is read from the table, not the bars.
+ * overseer started, a triage before a plan and the plan among them, then dry runs. Idle spend is a sliver beside a
+ * worker's, so its trend across days is read from the table, not the bars.
  */
 export const SERIES: readonly Series[] = [
     {
@@ -59,6 +59,12 @@ export const SERIES: readonly Series[] = [
         label: 'plan triage',
         hint: 'The triage runs, needs-plan, that judged whether a ticket needed its plan, on runtime.plan_triage_cmd',
         fill: 'bg-spend-triage',
+    },
+    {
+        key: 'plans',
+        label: 'plans',
+        hint: "The plan runs that wrote tickets' plans: what a plan triage waived would have cost",
+        fill: 'bg-spend-plans',
     },
     { key: 'chores', label: 'chores', hint: 'The chores canopy ran', fill: 'bg-spend-chores' },
     { key: 'reviews', label: 'reviews', hint: "canopy's reviews of PRs", fill: 'bg-spend-reviews' },
