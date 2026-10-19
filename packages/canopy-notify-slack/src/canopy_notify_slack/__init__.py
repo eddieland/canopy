@@ -300,7 +300,7 @@ _MAX_CONTEXT = 10
 _DIGEST_LISTED = 10
 _URL = re.compile(r"https?://[^\s|]+")
 # A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
-# can put a label of its own in it.
+# can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
 _PAGE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 _MAX_PAGE = 2000
 _STATUS_EMOJI = {

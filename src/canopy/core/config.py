@@ -803,7 +803,7 @@ def check_base_path(value: str) -> str:
 #: The longest `serve.url`: the links built on it must fit in a notification.
 MAX_UI_URL = 200
 # A URL's own characters, so a link built on it needs no escaping in a notification's markup: no space, `|`, `<`, `>`,
-# quote, or backslash.
+# quote, or backslash. The Slack sink checks each link against the same class (`_PAGE` in `canopy_notify_slack`).
 _UI_URL_RE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 
 
@@ -840,7 +840,8 @@ class Serve(Section):
     port: Annotated[StrictInt, Scope.PRIVATE, Field(ge=1, le=65535)] = 8765
     base_path: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(check_base_path)] = ""
     # Where notifications' links open the UI, in place of the address it is served at: an SSH forward's port, or a
-    # proxy's address. It moves only the links; the server still listens on `bind`, and still checks the Host header.
+    # proxy's address. It replaces that whole address, so it includes `base_path` if the UI is served under one. It
+    # moves only the links; the server still listens on `bind`, and still checks the Host header.
     url: Annotated[Annotated[StrictStr, AfterValidator(_ui_url)] | None, Scope.PRIVATE] = None
 
 

@@ -153,7 +153,8 @@ cmd = ""
 # Optional: the web UI `canopy loop` serves (DESIGN §22). While it serves one, a json sink's messages link to its pages.
 # [serve]
 # port = 8765
-# url = "http://localhost:9000/"                # where those links open it, such as an SSH forward's port
+# url = "http://localhost:9000/"                # where those links open it, such as an SSH forward's port;
+#                                               # it replaces the whole address, so add base_path if you set one
 
 # Optional: the programs canopy reads GitHub with and posts your approved replies through (DESIGN §29). Unset, the
 # vcs source is canopy's own, which use the token `gh` holds for each PR's host. A tracker source with a post_cmd
