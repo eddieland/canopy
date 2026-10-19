@@ -509,16 +509,36 @@ def test_nothing_else_is_sent_or_staged_on_a_pr_while_it_holds_a_staged_review(
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_tickets_draft_or_a_reaction_not_yet_added_is_not_staged(scenario: Scenario, github_state: Path) -> None:
+def test_a_tickets_draft_is_not_staged(scenario: Scenario, github_state: Path) -> None:
     conn = scenario.conn
     ticket = {"on": "ticket", "url": ISSUE, "text": "Which base should this target?"}
-    run_id = drafted_run(scenario, github_state, [ticket, thread(501)], TRACKER_POSTS)
+    run_id = drafted_run(scenario, github_state, [ticket], TRACKER_POSTS)
     refused = scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), code=1)
     assert "stage refused (not_pr)" in refused.err
-    scenario.operator("draft", "edit", f"run:{run_id}", "2", "--react", "+1")
-    refused = scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 2), code=1)
-    assert "stage refused (reaction)" in refused.err
     assert reads(github_state, "post") == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_stage_adds_its_reactions_at_once_and_sends_a_reaction_alone(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501), thread(502)])
+    scenario.operator("draft", "edit", f"run:{run_id}", "1", "--react", "+1")
+    scenario.operator("draft", "edit", f"run:{run_id}", "2", "--text", "", "--react", "heart")
+    staged = scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), hashed(conn, run_id, 2))
+    [posted] = reads(github_state, "post")
+    assert posted["replies"] == [
+        {"comment": 501, "text": "Renamed.", "reaction": "+1"},
+        {"comment": 502, "reaction": "heart"},
+    ]
+    reactions = {(r["comment"], r["reaction"]) for r in state_of(github_state)["reactions"]}
+    assert reactions == {(501, "+1"), (502, "heart")}
+    reply, alone = all_drafts(conn)
+    assert (reply.status, reply.reacted) == (DraftStatus.STAGED, "+1")
+    assert (alone.status, alone.reacted) == (DraftStatus.SENT, "heart")
+    assert alone.pending_review_id is None
+    assert reply.pending_review_id is not None
+    assert f"Run {run_id}'s draft 1 put +1 on comment 501 now, not in the review" in staged.out
+    assert f"Run {run_id}'s draft 2 put heart on comment 502 now" in staged.out
 
 
 @pytest.mark.usefixtures("git_pool")

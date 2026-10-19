@@ -5,12 +5,11 @@ On stdin, one JSON object: one PR's drafts, `{"pr": URL, "delete_pending": ID | 
 review, each reply's text added to the thread of the review comment it names, the body as the review's, submitted as
 `COMMENT`; or one ticket's, `{"issue": URL, "ticket": KEY, "body": TEXT}`, posted as one comment on that issue, which
 must be numbered as the key is. A PR's drafts with `"submit": false` are staged instead: the pending review is opened
-with the body as its own and each reply added, and left for the operator to submit on GitHub. A staged review holds no
-reaction, since GitHub has no pending one. `delete_pending` names a pending review an earlier post left, which is
-deleted first, and only if it is still pending, on that PR, and the poster's own. A reply's `reaction`, one of `+1`,
-`-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the comment it names before the review
-is opened; a reply with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no
-review.
+with the body as its own and each reply added, and left for the operator to submit on GitHub. `delete_pending` names
+a pending review an earlier post left, which is deleted first, and only if it is still pending, on that PR, and the
+poster's own. A reply's `reaction`, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is
+added to the comment it names before the review is opened, staged or not, since GitHub has no pending reaction; a reply
+with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no review.
 
 On stdout, one JSON line each: `as`, the login it posts as; for a PR, `reaction` for each reaction added (the comment,
 the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once it
@@ -267,8 +266,6 @@ def parse_request(request: Mapping[str, object]) -> Review | IssueComment:
     submit = request.get("submit", True)
     if not isinstance(submit, bool):
         raise InputError("submit must be true or false")
-    if not submit and any(r.reaction is not None for r in replies):
-        raise InputError("a staged review holds no reaction: GitHub has no pending one")
     return Review(
         pr=pr,
         delete_pending=pending,

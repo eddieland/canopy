@@ -577,6 +577,26 @@ def test_staged_drafts_are_left_in_a_pending_review_for_the_operator_to_submit(g
     assert "Submit" not in fake.ops()
 
 
+def test_a_staged_reviews_reactions_are_added_at_once_and_one_alone_stages_no_reply(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    request = {
+        "pr": PR,
+        "submit": False,
+        "replies": [{"comment": 501, "text": "Renamed.", "reaction": "+1"}, {"comment": 503, "reaction": "heart"}],
+    }
+    code, lines, _ = send(url, request)
+    assert code == 0
+    threads = fake.pulls["acme", "api", 7].threads
+    assert threads[0].comments[0].reactions == [("me", "THUMBS_UP")]
+    assert threads[1].comments[1].reactions == [("me", "HEART")]
+    review = fake.pulls["acme", "api", 7].reviews[-1]
+    assert review.state == "PENDING"
+    assert [c.body for c in threads[0].comments if c.review == review.id] == ["Renamed."]
+    assert not [c for c in threads[1].comments if c.review == review.id]
+    assert [line["kind"] for line in lines] == ["as", "reaction", "reaction", "pending", "comment", "end"]
+    assert lines[-1] == {"kind": "end", "submitted": False, "staged": True}
+
+
 def test_a_staged_reply_that_fails_deletes_the_pending_review(github: tuple[Fake, str]) -> None:
     fake, url = github
     fake.fail["Reply"] = "refuse"
@@ -794,10 +814,6 @@ def test_an_issue_comment_that_may_have_posted_prints_no_end(github: tuple[Fake,
         ({"pr": PR, "body": "x" * 65537}, "longer than GitHub's"),
         ({"pr": PR, "body": "x", "delete_pending": 3}, "delete_pending must be"),
         ({"pr": PR, "body": "x", "submit": "no"}, "submit must be true or false"),
-        (
-            {"pr": PR, "submit": False, "replies": [{"comment": 501, "text": "x", "reaction": "+1"}]},
-            "a staged review holds no reaction",
-        ),
     ],
 )
 def test_the_poster_refuses_what_it_cannot_use(github: tuple[Fake, str], request_: object, message: str) -> None:

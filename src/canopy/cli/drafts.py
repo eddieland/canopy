@@ -219,9 +219,9 @@ def cmd_send(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) ->
 def cmd_stage(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) -> int:
     """Start a review on GitHub holding drafts of run:ID, for you to finish and submit there, each N@HASH as for send.
 
-    The drafts for one PR go into one pending review, which only you see until you submit it. A reaction is added only
-    by a send, so a draft that adds one is refused. Each read of the PR after you submit or delete the review settles
-    its drafts: sent, or waiting on you again.
+    The drafts for one PR go into one pending review, which only you see until you submit it. GitHub has no pending
+    reaction, so the drafts' reactions are added at once, and a draft that is a reaction alone is sent. Each read of
+    the PR after you submit or delete the review settles its drafts: sent, or waiting on you again.
     """
     run_id = _run_ref(run_ref)
     named = _wanted(run_id, wanted)
@@ -236,6 +236,12 @@ def cmd_stage(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) -
     for pr in dict.fromkeys(d.pr_url for d in staged.staged):
         numbers = ", ".join(str(d.number) for d in staged.staged if d.pr_url == pr)
         click.echo(f"Staged run {run_id}'s drafts {numbers} in a review on {pr}; finish it at {pr}/files")
+    for draft in (*staged.posted, *staged.staged):
+        if draft.reacted is not None:
+            click.echo(
+                f"Run {run_id}'s draft {draft.number} put {draft.reacted} on comment {draft.comment_id} now, not in "
+                "the review: GitHub has no pending reaction."
+            )
     for draft in staged.already:
         click.echo(f"Run {run_id}'s draft {draft.number} was sent already: {draft.sent_url}")
     for draft, why in staged.failed:

@@ -73,11 +73,12 @@ operator sent through canopy as neither review feedback nor a go-ahead, and the 
 The harness raises `drafts_waiting` (§14), the operator's alone, for each unit or ticket with a draft to send, until
 each is sent, dropped, or superseded, or the PR closes. It says when the threads could not be read, and holds nothing.
 
-In place of a send, after the same checks, the operator may stage a PR's drafts: canopy opens one pending review
-holding them, with no reaction, which GitHub cannot keep pending, and never submits it; the operator does, on GitHub. A
-whole read settles a staged draft: sent once its review is submitted, dropped if its reply was taken out first, waiting
-again if the review is gone. Its reply's id is the operator's from the start, so the loop never reads their words as
-feedback. While a PR holds one, canopy posts nothing else on it.
+In place of a send, after the same checks, the operator may stage a PR's drafts: canopy opens one pending review holding
+them, and never submits it; the operator does, on GitHub. GitHub cannot keep a reaction pending, so a stage adds its
+reactions at once, says so, and sends a reaction alone. A whole read settles a staged draft: sent once its review is
+submitted, dropped if its reply was taken out first, waiting again if the review is gone. Its reply's id is the
+operator's from the start, so the loop never reads their words as feedback. While a PR holds one, canopy posts nothing
+else on it.
 
 ### Reactions
 

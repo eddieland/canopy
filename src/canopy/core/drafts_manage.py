@@ -11,7 +11,9 @@ a whole read of its PR, or the operator for a ticket's, settles it.
 
 Staging is sending without the submit: one PR's drafts go into a pending review, left on GitHub for the operator to
 finish there, and stay `staged` until a whole read finds that review submitted, when they are sent, or gone, when they
-wait again. While a PR holds one, nothing else is sent or staged on it, since GitHub keeps one pending review a person.
+wait again. GitHub has no pending reaction, so a stage adds its reactions at once, as a send does, and a draft that is a
+reaction alone is sent. While a PR holds a staged review, nothing else is sent or staged on it, since GitHub keeps one
+pending review a person.
 """
 
 from __future__ import annotations
@@ -234,16 +236,15 @@ def stage(
 ) -> Sent:
     """Stage drafts in a pending review on each one's PR, for the operator to finish and submit there themselves.
 
-    Every check a send makes runs first, and each draft must be a PR's whose reaction, if any, is on GitHub already:
-    GitHub has no pending reaction. Each PR's drafts go into one review, its own comment as the review's body, and
-    are `staged` until a whole read of the PR settles them.
+    Every check a send makes runs first, and each draft must be a PR's. Each PR's drafts go into one review, its own
+    comment as the review's body, and are `staged` until a whole read of the PR settles them. Their reactions are
+    added at once, since GitHub has no pending one, and a draft that is a reaction alone is sent.
 
     Returns:
-        What was staged, already posted, failed, or left unconfirmed.
+        What was staged, sent (a reaction alone), already posted, failed, or left unconfirmed.
 
     Raises:
-        Refused: As `send` does; (`not_pr`) a ticket's draft, which has no review; (`reaction`) a reaction not yet
-            added, which only a send adds.
+        Refused: As `send` does; (`not_pr`) a ticket's draft, which has no review.
     """
     return _deliver(conn, config, runner, wanted, channel=channel, log=log, submit=False)
 
@@ -268,8 +269,9 @@ def _deliver(
             outcome.already.append(draft)
             continue
         _check_sendable(conn, draft, w.hash)
-        if not submit:
-            _check_stageable(conn, draft)
+        if not submit and draft.kind is DraftKind.TICKET:
+            where = f"run {draft.run_id}'s draft {draft.number}"
+            raise conversation.Refused("not_pr", f"{where} is a ticket's comment, which no review holds; send it")
         chosen[draft.id] = draft
         seen[draft.id] = w.hash
     if not chosen:
@@ -316,23 +318,6 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
 
 # What the operator does with a review they staged, which a refusal for it says.
 _FINISH = "submit or delete it on GitHub, and the next read of the PR settles it"
-
-
-def _check_stageable(conn: sqlite3.Connection, draft: records.Draft) -> None:
-    """Refuse a draft a pending review cannot hold: a ticket's, or a reaction not yet on GitHub.
-
-    Raises:
-        Refused: (`not_pr`) or (`reaction`).
-    """
-    where = f"run {draft.run_id}'s draft {draft.number}"
-    if draft.kind is DraftKind.TICKET:
-        raise conversation.Refused("not_pr", f"{where} is a ticket's comment, which no review holds; send it")
-    reaction = drafts.text_of(conn, draft.id).reaction
-    if reaction is not None and draft.reacted != reaction:
-        raise conversation.Refused(
-            "reaction",
-            f"{where} adds {reaction}, and GitHub has no pending reaction; send it, or take the reaction off",
-        )
 
 
 def _check_none_staged(conn: sqlite3.Connection, prs: Iterable[str]) -> None:
@@ -534,9 +519,15 @@ def _post(
     if end is not None and end.get("submitted") is True:
         _posted(conn, group, lines, outcome)
     elif end is not None and end.get("staged") is True:
+        # A reaction alone went at once, so it is sent; the rest wait in the review.
+        alone = [d for d in group if d.kind is DraftKind.THREAD and not versions[d.id].body]
+        held = [d for d in group if d not in alone]
         # A staged review, or a reply in it, that a read cannot find by its id is not one canopy can settle as staged.
-        if pending is not None and _int(pending.get("id")) is not None and _replies_known(group, lines):
-            _staged(conn, group, lines, pending, outcome)
+        if pending is not None and _int(pending.get("id")) is not None and _replies_known(held, lines):
+            # Before `_staged`, since `_posted` clears the PR's pending review, which is the staged one.
+            if alone:
+                _posted(conn, alone, lines, outcome)
+            _staged(conn, held, lines, pending, outcome)
         else:
             _unconfirmed(conn, group, pending, outcome)
     elif end is not None:
