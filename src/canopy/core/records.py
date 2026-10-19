@@ -38,6 +38,7 @@ from canopy.core.vocab import (
     PlanStatus,
     PoolKind,
     PrState,
+    Reaction,
     ReplyMode,
     ResumeReason,
     ReviewItem,
@@ -526,6 +527,9 @@ class Draft(Row):
     sent_review_id: int | None
     sent_url: str | None
     sent_channel: str | None
+    #: The reaction a send added on GitHub, which stays there even when the send's review then failed.
+    reacted: Reaction | None
+    reacted_at: str | None
 
 
 @dataclass(frozen=True)
@@ -536,10 +540,13 @@ class DraftVersion(Row):
 
     draft_id: int
     version: int
+    #: The text; empty when the version sends its reaction alone.
     body: str
     author: DraftAuthor
     channel: str | None
     created_at: str
+    #: The reaction it stages on the review comment its thread's draft names, if any.
+    reaction: Reaction | None
 
 
 @dataclass(frozen=True)

@@ -281,14 +281,29 @@ def _post(stdin: str) -> str:
     lines: list[dict[str, object]] = [{"kind": "as", "login": "op"}]
     pr = request.get("pr")
     if isinstance(pr, str):
-        review = 4_102_000_000 + made
-        lines.append({"kind": "pending", "review": f"PRR_mock{review}", "id": review})
-        replies = request.get("replies")
-        for reply in replies if isinstance(replies, list) else []:
-            answered = reply.get("comment") if isinstance(reply, dict) else None
-            posted = 2_469_000_000 + (answered if isinstance(answered, int) else 0) % 1_000_000
-            lines.append({"kind": "comment", "comment": answered, "id": posted, "url": f"{pr}#discussion_r{posted}"})
-        lines.append({"kind": "review", "id": review, "url": f"{pr}#pullrequestreview-{review}"})
+        raw = request.get("replies")
+        replies: list[dict[str, object]] = [r for r in raw if isinstance(r, dict)] if isinstance(raw, list) else []
+        # Reactions first, as the real poster adds them, and a PR's drafts that are all reactions open no review.
+        lines.extend(
+            {
+                "kind": "reaction",
+                "comment": r.get("comment"),
+                "reaction": r["reaction"],
+                "url": f"{pr}#discussion_r{r.get('comment')}",
+            }
+            for r in replies
+            if "reaction" in r
+        )
+        texts = [r for r in replies if "text" in r]
+        if texts or request.get("body") is not None:
+            review = 4_102_000_000 + made
+            lines.append({"kind": "pending", "review": f"PRR_mock{review}", "id": review})
+            for reply in texts:
+                answered = reply.get("comment")
+                posted = 2_469_000_000 + (answered if isinstance(answered, int) else 0) % 1_000_000
+                url = f"{pr}#discussion_r{posted}"
+                lines.append({"kind": "comment", "comment": answered, "id": posted, "url": url})
+            lines.append({"kind": "review", "id": review, "url": f"{pr}#pullrequestreview-{review}"})
     else:
         posted = 2_470_000_000 + made
         lines.append({"kind": "comment", "id": posted, "url": f"{request.get('issue')}#issuecomment-{posted}"})

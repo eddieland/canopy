@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
-from canopy.core import contract, conversation, drafts_manage
+from canopy.core import contract, conversation, drafts, drafts_manage
 from canopy.infra import logs
 from canopy.serve import threads
 from canopy.serve.api.deps import BackendDep
@@ -78,7 +78,10 @@ def edit(run_id: RunId, number: DraftNumber, body: DraftEditRequest, backend: Ba
     """
     with backend.open() as ctx:
         try:
-            drafts_manage.edit(ctx.conn, run_id, number, body.text, channel=WEB)
+            found = drafts_manage.find(ctx.conn, run_id, number)
+            # The page edits the text alone, so the reaction stays as it stands.
+            reaction = drafts.text_of(ctx.conn, found.id).reaction
+            drafts_manage.edit(ctx.conn, run_id, number, body.text, reaction, channel=WEB)
             found = drafts_manage.find(ctx.conn, run_id, number)
         except conversation.Refused as r:
             raise RefusedError(r) from None

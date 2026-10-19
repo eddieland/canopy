@@ -81,7 +81,8 @@ def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
         "waiting",
         "changed",
     )
-    assert (draft["text"], draft["hash"], draft["edited"]) == ("Renamed.", drafts_manage.hash_of("Renamed."), False)
+    hashed = drafts_manage.hash_of("Renamed.", None)
+    assert (draft["text"], draft["hash"], draft["edited"]) == ("Renamed.", hashed, False)
     assert (second["id"], second["drafts"]) == ("PRRT_2", [])
     assert [(d["number"], d["text"]) for d in found["pr_drafts"]] == [(2, "Fixed the lint job.")]
     assert [(d["number"], d["status"]) for d in found["unplaced"]] == [(3, "refused")]

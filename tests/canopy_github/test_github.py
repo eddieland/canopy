@@ -31,6 +31,7 @@ class Comment:
     bot: bool = False
     review: int | None = None
     at: str = "2026-10-18T10:00:00Z"
+    reactions: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -170,6 +171,18 @@ class Fake:
             for thread in pull.threads:
                 thread.comments = [c for c in thread.comments if c.review != review.id]
             return {"data": {"deletePullRequestReview": {"clientMutationId": None}}}
+        if op == "React":
+            comment = next(
+                c
+                for p in self.pulls.values()
+                for t in p.threads
+                for c in t.comments
+                if f"PRRC_{c.id}" == variables["subject"]
+            )
+            # GitHub keeps one reaction of a kind a person, however often it is asked.
+            if (self.viewer, variables["content"]) not in comment.reactions:
+                comment.reactions.append((self.viewer, variables["content"]))
+            return {"data": {"addReaction": {"reaction": {"content": variables["content"]}}}}
         if op == "Comment":
             self.issue_comments.append((variables["subject"], variables["body"]))
             node = {
@@ -543,6 +556,60 @@ def test_a_body_alone_is_a_review_with_no_replies(github: tuple[Fake, str]) -> N
     assert [line["kind"] for line in lines] == ["as", "pending", "review", "end"]
 
 
+def test_reactions_are_added_before_the_review_and_one_alone_posts_no_reply(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    replies = [{"comment": 501, "text": "Renamed.", "reaction": "+1"}, {"comment": 502, "reaction": "heart"}]
+    code, lines, _ = send(url, {"pr": PR, "replies": replies})
+    assert code == 0
+    assert [op for op in fake.ops() if op in {"React", "AddReview", "Submit"}] == [
+        "React",
+        "React",
+        "AddReview",
+        "Submit",
+    ]
+    first, second = fake.pulls["acme", "api", 7].threads
+    assert first.comments[0].reactions == [("me", "THUMBS_UP")]
+    assert second.comments[0].reactions == [("me", "HEART")]
+    assert [c.body for c in second.comments] == ["Why?", "Because."]
+    assert [line["kind"] for line in lines] == ["as", "reaction", "reaction", "pending", "comment", "review", "end"]
+    assert lines[1] == {"kind": "reaction", "comment": 501, "reaction": "+1", "url": f"{PR}#discussion_r501"}
+    assert lines[4]["comment"] == 501
+
+
+def test_reactions_alone_open_no_review(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    code, lines, _ = send(url, {"pr": PR, "replies": [{"comment": 503, "reaction": "rocket"}]})
+    assert code == 0
+    assert "AddReview" not in fake.ops()
+    assert fake.pulls["acme", "api", 7].threads[1].comments[1].reactions == [("me", "ROCKET")]
+    assert [line["kind"] for line in lines] == ["as", "reaction", "end"]
+    assert lines[-1] == {"kind": "end", "submitted": True}
+
+
+def test_a_refused_reaction_opens_no_review(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["React"] = "refuse"
+    code, lines, err = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed.", "reaction": "eyes"}]})
+    assert code == 1
+    assert "React refused" in err
+    assert "AddReview" not in fake.ops()
+    assert lines == [{"kind": "as", "login": "me"}, {"kind": "end", "submitted": False}]
+
+
+def test_a_review_that_fails_after_its_reactions_names_them(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["Reply"] = "500"
+    code, lines, _ = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed.", "reaction": "+1"}]})
+    assert code == 1
+    assert [line["kind"] for line in lines] == ["as", "reaction", "pending", "end"]
+    assert lines[-1] == {"kind": "end", "submitted": False}
+    # The reaction stays: GitHub adds it once, so sending again adds nothing more.
+    assert fake.pulls["acme", "api", 7].threads[0].comments[0].reactions == [("me", "THUMBS_UP")]
+    del fake.fail["Reply"]
+    assert send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed.", "reaction": "+1"}]})[0] == 0
+    assert fake.pulls["acme", "api", 7].threads[0].comments[0].reactions == [("me", "THUMBS_UP")]
+
+
 def test_a_reply_to_a_comment_the_pr_has_no_thread_for_posts_nothing(github: tuple[Fake, str]) -> None:
     fake, url = github
     code, lines, err = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "a"}, {"comment": 999, "text": "b"}]})
@@ -680,6 +747,8 @@ def test_an_issue_comment_that_may_have_posted_prints_no_end(github: tuple[Fake,
         ({"pr": PR, "body": "  "}, "the body is empty"),
         ({"pr": PR, "replies": [{"comment": 501}]}, "the reply is empty"),
         ({"pr": PR, "replies": [{"text": "x"}]}, "the id of the review comment"),
+        ({"pr": PR, "replies": [{"comment": 501, "reaction": "thumbsup"}]}, "a reply's reaction must be one of +1"),
+        ({"pr": PR, "replies": [{"comment": 501, "text": "", "reaction": "+1"}]}, "the reply is empty"),
         ({"pr": PR, "replies": "x"}, "replies must be a list"),
         ({"pr": PR, "body": "x" * 65537}, "longer than GitHub's"),
         ({"pr": PR, "body": "x", "delete_pending": 3}, "delete_pending must be"),

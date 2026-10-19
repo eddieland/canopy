@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 from canopy.core import contract, db, records
 from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.replies import MAX_DRAFT_CHARS, MAX_DRAFTS, run_replies
-from canopy.core.vocab import DraftAuthor, DraftKind, DraftStance, DraftStatus, ReplyMode
+from canopy.core.vocab import DraftAuthor, DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode
 from canopy.infra import logs
 
 # The longest ticket URL a draft may name; the post command checks the rest.
@@ -138,7 +138,7 @@ def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: Json
     kind = next((k for k in DraftKind if k == on), None)
     if kind is None:
         raise TextRefused("its `on` is not thread, pr, or ticket")
-    text = check_text(entry.get("text"), MAX_DRAFT_CHARS, lines=True)
+    text, reaction = _words(kind, entry)
     pr, comment, stance, issue = _target(writing, kind, entry)
     status = DraftStatus.WAITING if kind is DraftKind.TICKET else DraftStatus.UNCHECKED
     now = db.now()
@@ -161,14 +161,49 @@ def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: Json
         ),
     )
     conn.execute(
-        "INSERT INTO draft_versions (draft_id, version, body, author, created_at) VALUES (?, 1, ?, ?, ?)",
-        (cursor.lastrowid, text, DraftAuthor.WORKER, now),
+        "INSERT INTO draft_versions (draft_id, version, body, author, created_at, reaction) VALUES (?, 1, ?, ?, ?, ?)",
+        (cursor.lastrowid, text, DraftAuthor.WORKER, now, reaction),
     )
     if kind is DraftKind.TICKET:
         # A ticket's draft needs no read, so it supersedes the earlier ones as it is written.
         written = get(conn, int(cursor.lastrowid or 0))
         if written is not None:
             _supersede(conn, written, "kind = 'ticket' AND ticket_key = ?", writing.ticket_key)
+
+
+def _words(kind: DraftKind, entry: Mapping[str, JsonValue]) -> tuple[str, Reaction | None]:
+    """An entry's text and the reaction it stages, which only a thread's draft may, beside its text or alone.
+
+    Returns:
+        The text, empty for a reaction alone, and the reaction, or None.
+
+    Raises:
+        TextRefused: A reaction GitHub does not offer, or one on a draft that is not a thread's; a text canopy would
+            not keep, or none without a reaction.
+    """
+    raw = entry.get("react")
+    if raw is None:
+        return check_words(entry.get("text"), None), None
+    reaction = next((r for r in Reaction if r == raw), None)
+    if reaction is None:
+        raise TextRefused(f"its `react` is not one of {', '.join(Reaction)}")
+    if kind is not DraftKind.THREAD:
+        raise TextRefused("its `react` is on a draft that is not a thread's; only a review comment takes one")
+    return check_words(entry.get("text"), reaction), reaction
+
+
+def check_words(text: object, reaction: Reaction | None) -> str:
+    """Return a draft's text, checked as DESIGN §29 bounds it: empty only beside a reaction, which then goes alone.
+
+    Returns:
+        The text, trimmed, or empty.
+
+    Raises:
+        TextRefused: The text is one canopy would not keep, or there is none and no reaction.
+    """
+    if reaction is not None and text in (None, ""):
+        return ""
+    return check_text(text, MAX_DRAFT_CHARS, lines=True)
 
 
 def _target(
