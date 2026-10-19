@@ -226,7 +226,9 @@ each proposal, Renew and Forget on each lesson, and Promote and Forget on each o
 on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked secret leaves from
 where the operator sees it; and on the attention list, Promote as written and Reject on a `memory_proposal`'s proposals,
 Renew on the lessons a `lesson_review` is about, and the way to the lessons from a `lesson_wrong`. With
-`memory.proposals` off, none shows.
+`memory.proposals` off, only Forget shows, on each of a ticket's notes that keeps its text while ticket notes are on,
+since forgetting a note needs no lesson and a leaked secret should leave from where the operator sees it (operator's
+decision, 2026-10-18); and a tier that is off shows no panel on the memory page.
 
 ### Showing memory
 

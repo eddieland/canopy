@@ -126,7 +126,8 @@ start it again.
 Each proposal on the memory page has **Promote as written**, **Edit and promote**, and, apart at the end of its line,
 **Reject** under it, and each of a ticket's notes has Promote, on the memory page and on the ticket's own. They do what
 `canopy memory promote` and `canopy memory reject` do in your shell, with the same refusals, and both work at `record`
-as at `use`, so you can build up your lessons before any is served. None of them shows while lessons are off.
+as at `use`, so you can build up your lessons before any is served. None of them shows while lessons are off; with
+lessons off, the page shows only Ticket notes, and each note still has Forget.
 
 - **Edit and promote** opens the lesson to be: the proposal's words, which you can rewrite (usually an improvement),
   held to the same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you

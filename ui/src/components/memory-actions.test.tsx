@@ -271,6 +271,11 @@ describe('NoteActions', () => {
         expect(onSaid).toHaveBeenCalledOnce()
     })
 
+    it('offers Forget alone while lessons are off, since Promote makes a lesson', () => {
+        renderIn(<NoteActions note={NOTE} promote={false} onSaid={vi.fn<(said: string) => void>()} />)
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Forget'])
+    })
+
     it('offers nothing on a note whose text is gone', () => {
         renderIn(<NoteActions note={{ ...NOTE, text: null }} onSaid={vi.fn<(said: string) => void>()} />)
         expect(screen.queryAllByRole('button')).toEqual([])

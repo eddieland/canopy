@@ -141,9 +141,11 @@ export function ProposalActions({
 
 /**
  * A ticket's note's verbs, under its row, while it keeps its text: Promote, which opens the form for the lesson, and
- * at the line's end Forget, which cannot be undone and so asks for the note's ref typed.
+ * at the line's end Forget, which cannot be undone and so asks for the note's ref typed. With `promote` false, while
+ * lessons are off, Forget alone: a note holding what should not be kept is forgotten from where it shows, whatever
+ * lessons' mode (DESIGN §28).
  */
-export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
+export function NoteActions({ note, promote = true, onSaid }: Said & { note: MemoryEntry; promote?: boolean }) {
     const [open, setOpen] = useState(false)
     const [confirming, setConfirming] = useState(false)
     if (note.text === null) {
@@ -155,15 +157,17 @@ export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
                 <PromoteForm source={note} onSaid={onSaid} onClose={() => setOpen(false)} />
             ) : (
                 <span className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="xs"
-                        title={`canopy memory promote ${note.id}`}
-                        onClick={() => setOpen(true)}
-                    >
-                        <ArrowUpFromLine />
-                        Promote
-                    </Button>
+                    {promote && (
+                        <Button
+                            variant="outline"
+                            size="xs"
+                            title={`canopy memory promote ${note.id}`}
+                            onClick={() => setOpen(true)}
+                        >
+                            <ArrowUpFromLine />
+                            Promote
+                        </Button>
+                    )}
                     {!confirming && <ForgetButton memory={note} onClick={() => setConfirming(true)} />}
                 </span>
             )}
