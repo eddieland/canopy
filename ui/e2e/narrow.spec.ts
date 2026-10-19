@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 
 import { expectSpendAxisWhole, FULL_RAIL, NOW, ROUTES, settled, signIn, windowWidth } from './helpers.ts'
 
-// Half of a second monitor, where the UI often sits: the rail a strip of icons.
+// About the narrowest window the UI holds up in (DESIGN.md): the rail a strip of icons.
 const HALF = { width: 820, height: 900 }
 
 test.beforeEach(async ({ page }) => {
@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-test.describe('on half a monitor', () => {
+test.describe('in a narrow window', () => {
     test.use({ viewport: HALF })
 
     for (const route of ROUTES) {

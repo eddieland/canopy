@@ -580,11 +580,11 @@ const BLOCKS: { name: BlockName; label: string; keys: string; icon: ReactNode }[
 
 // Each style shows in the menu as the plan sets it (`.plan-doc` in src/index.css), so the menu previews it.
 const STYLES: { name: BlockStyle; label: string; keys: string; preview: string }[] = [
-    { name: 'paragraph', label: 'Text', keys: 'Mod-Alt-0', preview: 'text-sm' },
-    { name: 'h1', label: 'Heading 1', keys: 'Mod-Alt-1', preview: 'text-xl font-semibold tracking-tight' },
-    { name: 'h2', label: 'Heading 2', keys: 'Mod-Alt-2', preview: 'text-base font-semibold' },
-    { name: 'h3', label: 'Heading 3', keys: 'Mod-Alt-3', preview: 'text-sm font-semibold' },
-    { name: 'h4', label: 'Heading 4', keys: 'Mod-Alt-4', preview: 'text-sm font-semibold' },
+    { name: 'paragraph', label: 'Text', keys: 'Mod-Alt-0', preview: 'document-text' },
+    { name: 'h1', label: 'Heading 1', keys: 'Mod-Alt-1', preview: 'document-section' },
+    { name: 'h2', label: 'Heading 2', keys: 'Mod-Alt-2', preview: 'document-section' },
+    { name: 'h3', label: 'Heading 3', keys: 'Mod-Alt-3', preview: 'document-subsection' },
+    { name: 'h4', label: 'Heading 4', keys: 'Mod-Alt-4', preview: 'document-subsection' },
 ]
 
 const UNDO_KEYS = 'Mod-z'

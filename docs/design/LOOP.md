@@ -246,17 +246,23 @@ agent, keep quiet hours, or take webhooks (TRUST_MODEL T8).
 A tick is **idle** when all of these hold, each read from the journal:
 
 - It closed `ok`. Any other status is not idle and resets the count: a failing tick keeps today's pacing.
-- Its decisions are only `wait`, a ticket's `skip`, attention items, and refusals that lift by themselves: `running`,
-  `capacity`, and `chore_capacity` (on a run ending), `cooldown`, `not_due`, and `outside_hours` (at a known time,
-  below), and `attempt_limit` (never). Any dispatch, `done`, `mirror` (a new tracker comment), or other refusal makes
-  it not idle.
-- The attention list after it is the list before it.
-- No ticket or unit changed its phase, branch, a cursor, or `done`, and no ticket was seen for the first time.
+- It dispatched nothing: no worker, review, or chore run (a `dispatch:` decision, so a dry run paces as a live one
+  would). What else it recorded does not count: waits, skips, refusals, `done`, mirrors, attention items, and phases
+  or cursors changed start no work, and the work they lead to is a dispatch, an operator's act, or a gate, each of
+  which this rule or the wait below already sees.
 - Nothing reached the journal after the previous tick read it (§6 step 3): no run, chore run, or review run started or
   ended, and the operator recorded no message, started or stopped no ticket, granted nothing, and set or cleared no
   notice (§8). Something the previous tick could not have seen keeps this one from counting as idle, even when it
   happened while that tick was still running. A previous tick that never read the journal (`reconcile_failed`, or none
   at all) makes this one not idle.
+
+Rejected: idle as a tick that changed nothing, its decisions from an allowlist of quiet ones and the attention list,
+phases, branches, and cursors as they were. Records that repeat on a state that does not change kept the count from
+growing: a merged ticket the tracker still showed was mirrored and marked `done` again each tick, so the loop stayed at
+`base` all night (MEASUREMENTS 2026-10-14 F22), and the operator found other states holding it the same way. Each new
+refusal or record reset the count until it was listed. The cost of counting by dispatch: a change in the world that
+needs no run, such as an approval or a merge, no longer resets the pace, so the change after it can be seen up to
+`loop.idle_max_minutes` late too.
 
 The wait after a tick is then:
 
@@ -284,9 +290,9 @@ What idle pacing cannot see is the world: a teammate's review or a PR's CI going
 to `loop.idle_max_minutes` late. That cap is the trade, and the operator's knob. A sink's digest (§20) can lag as much.
 
 Churn (ROADMAP M28) is a tick that relabels a phase, or adds or drops an attention item, with nothing new to see:
-nothing reached the journal and no gate came due since the tick before read it. A churned tick is not idle, so it
-resets the count (MEASUREMENTS 2026-10-12 F5, 2026-10-13 F17). It is measured before it is fixed: the log lists each
-`ok` tick's churn. It cannot tell a flap from the world or config changing; the `decisions` table can, by the
+nothing reached the journal and no gate came due since the tick before read it (MEASUREMENTS 2026-10-12 F5,
+2026-10-13 F17). A churned tick that dispatched nothing is idle. Churn is measured before it is fixed: the log lists
+each `ok` tick's churn. It cannot tell a flap from the world or config changing; the `decisions` table can, by the
 rationales either side, and prompt changes follow only when it shows a pattern.
 
 For spend (ROADMAP M33; `canopy spend`, §11, and the web UI, §22), the journal records on each tick the loop ran

@@ -37,6 +37,17 @@ it, and `time_passes` moves every time the journal recorded into the past, so a 
         scenario.time_passes(hours=1)
         scenario.run(fix, worker=pushes())
 
+The config is part of the story too: `configures` sets keys in the user file, by default, or in the workspace file or
+the private one, merged into what the file holds, so a key lands in its own table whatever came last in the file, and
+the story says what the next command reads:
+
+    def test_a_limit_of_one_stops_the_second_resume(scenario: Scenario, git_pool: GitPool) -> None:
+        scenario.configures(policy={"max_resume_attempts": 1})
+        scenario.run(worker=pushes())
+        scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]), worker=pushes())
+        [(action, _), _] = scenario.refuses(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]))
+        assert action == "refused:attempt_limit"
+
 A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
 it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
 `finishes`, doing what its script says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker
@@ -100,7 +111,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, redire
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Unpack
+from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
@@ -137,6 +148,10 @@ from tests.conftest import CanopyEnv
 #: What a worker does: one of the `*_does` helpers' blocks, or `pushes`, `asks`, or `fails`. A `Script` among them,
 #: `worker_does`'s and those three, is played by each ticket's run as made for that ticket (`Script.for_ticket`).
 type Worker = AbstractContextManager[None]
+
+#: Which of the workspace's config files a test sets keys in (DESIGN §12): the operator's user file, the workspace
+#: file, or the workspace's private file.
+type ConfigFile = Literal["user", "workspace", "private"]
 
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
@@ -190,6 +205,8 @@ class Ran:
     row: sqlite3.Row
     reasons: tuple[ResumeReason, ...]
     prompt_file: Path
+    #: What its `canopy _run` printed, the run log among it, when the scenario ran it in this process (`Scenario.run`).
+    printed: Printed = Printed("", "")
 
     @property
     def id(self) -> int:
@@ -372,18 +389,21 @@ class Scenario:
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
 
-    def run(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Ran:
+    def run(
+        self, command: list[str] | None = None, *, worker: Worker | None = None, runner: InlineRunner | None = None
+    ) -> Ran:
         """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
         process, its worker doing `worker`, made for the ticket `command` names.
 
-        The overseer is not run, so a run's story can start without a tick's.
+        The overseer is not run, so a run's story can start without a tick's. `runner` runs its processes, one that
+        times a worker out, say, or a plain `InlineRunner` if None.
 
         Returns:
-            The run, closed.
+            The run, closed, with what its `canopy _run` printed.
         """
         command = command or dispatches()
         assert command[:2] == ["canopy", "dispatch"], command
-        runner = InlineRunner()
+        runner = runner or InlineRunner()
         with ExitStack() as stack:
             if worker is not None:
                 stack.enter_context(_made_for(worker, command[2]))
@@ -394,8 +414,8 @@ class Scenario:
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
-                exited = main(["_run", str(run_id)], runner=runner)
-        ran = self.ran(present(db.get_run(self.conn, run_id)))
+                exited, printed = _printing(lambda: main(["_run", str(run_id)], runner=runner))
+        ran = replace(self.ran(present(db.get_run(self.conn, run_id))), printed=printed)
         self.story.append(str(ran) if exited == 0 else f"{ran}, and `canopy _run` exits {exited}")
         assert exited == 0, ran
         return ran
@@ -458,7 +478,8 @@ class Scenario:
         ).fetchall()
         for (table,) in tables:
             for column in self.conn.execute("SELECT name FROM pragma_table_info(?)", (table,)).fetchall():
-                if column[0].endswith(("_at", "_since", "_until")):
+                # An event's, a message's, or a forget's time is its plain `at`.
+                if column[0] == "at" or column[0].endswith(("_at", "_since", "_until")):
                     _shift(self.conn, table, column[0], f"-{seconds} seconds")
 
     def operator(self, *args: str, code: int = 0) -> Printed:
@@ -474,6 +495,25 @@ class Scenario:
         self.story.append("\n".join([f"the operator runs {command}, which exits {exited}", *printed.told()]))
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
         return printed
+
+    def configures(self, file: ConfigFile = "user", /, **tables: Mapping[str, object]) -> None:
+        """Set the keys of each table in `tables`, named as in TOML, in the config `file`; the next command reads them.
+
+        A key set takes the place of the one there, and every other key stays, whatever table it is in, so a test sets
+        only what its story is about: `configures(policy={"max_resume_attempts": 2})`, or a table inside another as a
+        mapping inside one, `configures(notify={"sinks": {"slack": {"cmd": "true"}}})`.
+        """
+        assert tables, "configures sets at least one table's keys"
+        match file:
+            case "user":
+                path = self.env.user_file
+            case "workspace":
+                path = self.env.shared_file
+            case "private":
+                path = self.env.private_file
+            case _:
+                assert_never(file)
+        self.story.append(f"the {file} file sets {', '.join(self.env.configure(path, tables))}")
 
     def seen(self, *keys: str) -> None:
         """Record `keys`, KEY if none, as tickets an earlier tick saw, so the overseer owes each a decision."""
@@ -613,8 +653,9 @@ def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str |
 # What a worker does in its run: each is a block, for `Scenario.tick` and `Scenario.run`.
 
 
-def pushes(branch: str | None = None, message: str | None = None) -> Script:
-    """The worker commits `message`, pushes `branch`, and reports it done with a PR.
+def pushes(branch: str | None = None, message: str | None = None, **reported: object) -> Script:
+    """The worker commits `message`, pushes `branch`, and reports it done with a PR, its result carrying `reported`
+    too: `pushes(notes=[...])`.
 
     What is left out is its ticket's own: the branch an `implement` without a slug pushes, `agent/<KEY>-work`; the
     message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. Made for KEY until a run of
@@ -624,6 +665,7 @@ def pushes(branch: str | None = None, message: str | None = None) -> Script:
     def made(key: str) -> Script:
         pushed = branch or f"agent/{key}-work"
         result = json.loads(WORKER_DONE) | {"branch": pushed, "pr": f"https://example.test/pr/{key.rpartition('-')[2]}"}
+        result |= reported
         return worker_does(*commit_and_push(pushed, message or f"{key}: the change"), result=json.dumps(result))
 
     return replace(made(KEY), per_ticket=made)

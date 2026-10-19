@@ -12,7 +12,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, memory, memory_manage, prompts, records
 from canopy.core.config import load
-from canopy.core.vocab import MemoryScope, MemoryStatus, RunKind
+from canopy.core.vocab import MemoryScope, MemoryStatus, ResumeReason, RunKind
 from canopy.infra import logs, resources
 from canopy.loop import attention
 from canopy.memory import attention as memory_attention
@@ -20,28 +20,24 @@ from canopy.memory import reconcile as memory_reconcile
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
-    LABEL,
     PROMPT_VALUES,
-    WORK,
     context,
-    dispatch_and_run,
     in_run,
     in_tick,
-    last_run,
     memories,
-    overseer_does,
     planner_does,
     present,
-    prompt_of,
-    run_with,
-    state_block,
     with_memory,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 
 if TYPE_CHECKING:
-    from tests.conftest import CanopyEnv
+    from tests.conftest import CanopyEnv, GitPool
 
-FIX_CI = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
+#: The overseer dispatches KEY's implement on its `work` branch.
+WORK = dispatches(slug="work")
+#: The overseer dispatches a resume of KEY to fix CI.
+FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
 LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
 HEADING = "## Lessons from the operator"
 VALUES = {
@@ -53,6 +49,11 @@ VALUES = {
     "CONVERSATION": "No messages yet.",
 }
 PROMPTS = [(str(k), False) for k in prompts.WORKER] + [(str(k), True) for k in prompts.WORKER_PRIVATE]
+
+
+def memory_modes(ticket_notes: str = "off", proposals: str = "off") -> dict[str, str]:
+    """Agent memory's tiers (DESIGN §28), for the workspace's private file."""
+    return {"ticket_notes": ticket_notes, "proposals": proposals}
 
 
 def proposed(
@@ -105,31 +106,29 @@ def promoted(
     return memory_manage.promote(conn, cfg, proposed(conn, text, key=key, repo=repo, ticket=ticket)).lesson
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_with_proposals_off_a_proposal_is_stored_nowhere(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run = run_with(conn, *WORK, proposals=[{"key": "api-tests", "text": LESSON}])
-    assert memories(conn) == []
-    assert '`"proposals":' not in prompt_of(canopy_env, int(run["id"]))
+def test_with_proposals_off_a_proposal_is_stored_nowhere(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=memory_modes(ticket_notes="record"))
+    run = scenario.run(WORK, worker=pushes(proposals=[{"key": "api-tests", "text": LESSON}]))
+    assert memories(scenario.conn) == []
+    assert '`"proposals":' not in run.prompt
 
 
-@pytest.mark.usefixtures("git_pool")
 def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, git_pool: GitPool
 ) -> None:
-    with_memory(canopy_env, proposals="record")
-    first = run_with(conn, *WORK, proposals=[{"key": "api-tests", "text": LESSON, "repo": "repo"}])
+    conn, canopy_env = scenario.conn, scenario.env
+    scenario.configures("private", memory=memory_modes(proposals="record"))
+    first = scenario.run(WORK, worker=pushes(proposals=[{"key": "api-tests", "text": LESSON, "repo": "repo"}]))
     [proposal] = memories(conn)
     assert (proposal.scope, proposal.status, proposal.repo, proposal.run_id) == (
         "proposal",
         MemoryStatus.PENDING,
         "repo",
-        first["id"],
+        first.id,
     )
-    assert '`"proposals":' in prompt_of(canopy_env, int(first["id"]))
-    capsys.readouterr()
-    assert main(["memory", "promote", str(proposal.id)]) == 0
-    assert "It is recorded, not served: memory.proposals is record" in capsys.readouterr().out
+    assert '`"proposals":' in first.prompt
+    promoted = scenario.operator("memory", "promote", str(proposal.id))
+    assert "It is recorded, not served: memory.proposals is record" in promoted.out
     lesson = memories(conn)[-1]
     assert (lesson.scope, lesson.author, lesson.promoted_from, lesson.body) == (
         "lesson",
@@ -138,8 +137,7 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
         LESSON,
     )
     assert memories(conn)[0].status is MemoryStatus.SUPERSEDED
-    run_with(conn, *FIX_CI)
-    text = prompt_of(canopy_env, int(last_run(conn)["id"]))
+    text = scenario.run(FIX_CI, worker=pushes()).prompt
     assert LESSON not in text
     assert HEADING not in text
     # Long past its review date, it raises nothing while no run can read it.
@@ -203,45 +201,44 @@ def test_the_lessons_digest_keeps_those_last_vouched_for_in_key_order(
     assert left_out in digest.text
 
 
-@pytest.mark.usefixtures("git_pool")
 def test_with_notes_in_use_and_lessons_recording_a_cited_lesson_changes_nothing(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    scenario: Scenario, git_pool: GitPool
 ) -> None:
-    with_memory(canopy_env, ticket_notes="use", proposals="record")
-    lesson = promoted(conn, canopy_env)
-    run = run_with(conn, *WORK, memory_used=[lesson.id], memory_wrong=[lesson.id])
-    text = prompt_of(canopy_env, int(run["id"]))
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(ticket_notes="use", proposals="record"))
+    lesson = promoted(conn, scenario.env)
+    text = scenario.run(WORK, worker=pushes(memory_used=[lesson.id], memory_wrong=[lesson.id])).prompt
     assert '`"memory_used":[<id>]`' in text
     assert HEADING not in text
     assert memory.get(conn, lesson.id) == lesson
 
 
-@pytest.mark.usefixtures("git_pool")
 def test_a_plan_hears_lessons_but_what_it_sends_of_memory_changes_nothing(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    scenario: Scenario, git_pool: GitPool
 ) -> None:
-    with_memory(canopy_env, ticket_notes="use", proposals="use")
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(ticket_notes="use", proposals="use"))
     # From another ticket's run: a started ticket is not planned.
-    lesson = promoted(conn, canopy_env, ticket="PROJ-2")
+    lesson = promoted(conn, scenario.env, ticket="PROJ-2")
     sent = {"memory_used": [lesson.id], "memory_wrong": [lesson.id], "proposals": [{"key": "more", "text": "More."}]}
-    with planner_does(plan="# Plan\n\nDo it.\n", result={"status": "done", "summary": "planned it", **sent}):
-        run = dispatch_and_run(conn, "--label", LABEL, "--kind", "plan")
-    assert HEADING in prompt_of(canopy_env, int(run["id"]))
+    planner = planner_does(plan="# Plan\n\nDo it.\n", result={"status": "done", "summary": "planned it", **sent})
+    run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner)
+    assert HEADING in run.prompt
     # Its prompt carries no contract, so it cites and proposes nothing (DESIGN §28, Proposals and lessons).
     assert memory.get(conn, lesson.id) == lesson
     assert [m.id for m in memories(conn) if m.status is MemoryStatus.PENDING] == []
 
 
-@pytest.mark.usefixtures("git_pool")
 def test_a_used_lesson_is_pushed_back_from_review_and_a_wrong_one_raises_lesson_wrong(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, git_pool: GitPool
 ) -> None:
-    with_memory(canopy_env, proposals="use")
+    conn, canopy_env = scenario.conn, scenario.env
+    scenario.configures("private", memory=memory_modes(proposals="use"))
     used = promoted(conn, canopy_env)
     wrong = promoted(conn, canopy_env, "Never run the linter.", key="lint")
     soon = db.format_time(datetime.now(UTC) + timedelta(days=1))
     conn.execute("UPDATE memories SET review_at = ? WHERE scope = 'lesson'", (soon,))
-    run = run_with(conn, *WORK, memory_used=[used.id, wrong.id], memory_wrong=[wrong.id])
+    run = scenario.run(WORK, worker=pushes(memory_used=[used.id, wrong.id], memory_wrong=[wrong.id]))
     after_used, after_wrong = memory.get(conn, used.id), memory.get(conn, wrong.id)
     assert after_used is not None
     assert after_wrong is not None
@@ -250,14 +247,14 @@ def test_a_used_lesson_is_pushed_back_from_review_and_a_wrong_one_raises_lesson_
     # The operator's word: reported wrong, not retired, and not counted as used.
     assert (after_wrong.status, after_wrong.wrong_run_id, after_wrong.use_count) == (
         MemoryStatus.ACTIVE,
-        run["id"],
+        run.id,
         0,
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     [item] = memory_attention.items(conn, cfg)
     assert (item.ticket_key, item.reason) == (None, "lesson_wrong")
-    assert f"lesson {wrong.id} (run {run['id']}) wrong" in item.detail
-    assert main(["memory", "renew", str(wrong.id)]) == 0
+    assert f"lesson {wrong.id} (run {run.id}) wrong" in item.detail
+    scenario.operator("memory", "renew", str(wrong.id))
     assert memory_attention.items(conn, cfg) == []
 
 
@@ -380,22 +377,23 @@ def test_reject_ends_a_proposal(canopy_env: CanopyEnv, conn: sqlite3.Connection)
     assert main(["memory", "promote", str(proposal)]) == 1
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_proposals_past_the_bounds_are_refused(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, proposals="record")
-    promoted(conn, canopy_env)
-    run = run_with(
-        conn,
-        *WORK,
-        proposals=[
-            {"key": "elsewhere", "text": "About a repository this run never leased.", "repo": "web"},
-            {"key": "repeat", "text": LESSON.lower()},
-            {"key": "fine", "text": "Fine."},
-            {"key": "fourth", "text": "Past the cap."},
-        ],
+def test_proposals_past_the_bounds_are_refused(scenario: Scenario, git_pool: GitPool) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="record"))
+    promoted(conn, scenario.env)
+    run = scenario.run(
+        WORK,
+        worker=pushes(
+            proposals=[
+                {"key": "elsewhere", "text": "About a repository this run never leased.", "repo": "web"},
+                {"key": "repeat", "text": LESSON.lower()},
+                {"key": "fine", "text": "Fine."},
+                {"key": "fourth", "text": "Past the cap."},
+            ]
+        ),
     )
     assert [m.key for m in memory.pending_proposals(conn)] == ["fine"]
-    rendered = present(memory.run_memory(conn, int(run["id"])))
+    rendered = present(memory.run_memory(conn, run.id))
     assert [(r.key, r.why) for r in memory.refused_of(rendered)] == [
         ("elsewhere", "its repository is not one the run worked in"),
         ("repeat", f"it repeats lesson {memories(conn)[1].id}"),
@@ -403,14 +401,14 @@ def test_proposals_past_the_bounds_are_refused(canopy_env: CanopyEnv, conn: sqli
     ]
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_the_queue_refuses_the_twenty_first_pending_proposal(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, proposals="record")
+def test_the_queue_refuses_the_twenty_first_pending_proposal(scenario: Scenario, git_pool: GitPool) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="record"))
     for i in range(memory.MAX_PENDING):
         proposed(conn, f"Proposal {i}.", key=f"p{i}")
-    run = run_with(conn, *WORK, proposals=[{"key": "one-more", "text": "The twenty-first."}])
+    run = scenario.run(WORK, worker=pushes(proposals=[{"key": "one-more", "text": "The twenty-first."}]))
     assert len(memory.pending_proposals(conn)) == memory.MAX_PENDING
-    rendered = present(memory.run_memory(conn, int(run["id"])))
+    rendered = present(memory.run_memory(conn, run.id))
     assert [r.why for r in memory.refused_of(rendered)] == ["20 proposals already wait on the operator"]
 
 
@@ -428,22 +426,19 @@ def test_a_proposal_nobody_reviews_expires_after_fourteen_days(canopy_env: Canop
     assert by_id[new].status is MemoryStatus.PENDING
 
 
-@pytest.mark.usefixtures("treehouse_state")
-def test_a_done_tickets_pending_proposals_raise_memory_proposal_for_the_operator_alone(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, agent_log: Path
-) -> None:
-    with_memory(canopy_env, proposals="record")
+def test_a_done_tickets_pending_proposals_raise_memory_proposal_for_the_operator_alone(scenario: Scenario) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="record"))
     ids = [proposed(conn, key="api-tests"), proposed(conn, "Another one.", key="other")]
-    cfg = load(canopy_env.root, canopy_env.user_file)
+    cfg = load(scenario.env.root, scenario.env.user_file)
     assert memory_attention.items(conn, cfg) == []
     db.set_ticket(conn, KEY, "repo", done=True)
     [item] = memory_attention.items(conn, cfg)
     assert (item.ticket_key, item.reason) == (KEY, "memory_proposal")
     assert item.detail.startswith(f"proposals {ids[0]}, {ids[1]} from {KEY}'s runs wait on you")
-    with overseer_does():
-        assert main(["tick"]) == 0
-    assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [(KEY, "memory_proposal")]
-    assert "memory_proposal" not in str(state_block(agent_log))
+    scenario.tick()
+    assert scenario.attention() == [(KEY, "memory_proposal")]
+    assert "memory_proposal" not in str(scenario.state())
     assert attention.for_overseer(conn) == []
 
 

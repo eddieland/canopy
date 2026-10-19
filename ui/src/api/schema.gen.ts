@@ -7391,6 +7391,8 @@ export interface operations {
     searchMemory: {
         parameters: {
             query: {
+                /** @description Only what holds every word, as the memory page's filter keeps. */
+                every?: boolean;
                 /** @description Only ticket notes in force, the 50 best of them. */
                 notes?: boolean;
                 /** @description The words to find, any of them, as canopy memory search. */

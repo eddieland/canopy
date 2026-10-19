@@ -2,7 +2,6 @@
 
 import os
 import sqlite3
-from pathlib import Path
 from unittest import mock
 
 import httpx2
@@ -13,8 +12,9 @@ from canopy.core import conversation, db, review_requests
 from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
-from tests.canopy.helpers import InlineRunner, context, in_tick, operator, overseer_does, present, state_block
+from tests.canopy.helpers import InlineRunner, context, in_tick, operator, present
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review, review_decisions, reviewer_reports, run_inline
+from tests.canopy.scenario_helpers import Scenario
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
@@ -44,18 +44,17 @@ def requests_of(conn: sqlite3.Connection) -> list[tuple[str, str, str | None]]:
 
 
 def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
-    requests_env: CanopyEnv, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    conn = requests_env.journal()
+    conn = scenario.conn
     # Without a request, no `[review]` table means reviews are off.
     with in_tick(conn, ends_ok=True) as tick_id:
         assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
         assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:reviews_off"]
 
-    assert operator("start", PR, "--review") == 0
-    assert f"{PR} is requested for review. The next tick reviews its head, once." in capsys.readouterr().out
-    assert operator("start", PR, "--review") == 0
-    assert "was already requested" in capsys.readouterr().out
+    requested = scenario.operator("start", PR, "--review")
+    assert f"{PR} is requested for review. The next tick reviews its head, once." in requested.out
+    assert "was already requested" in scenario.operator("start", PR, "--review").out
     assert requests_of(conn) == [(PR, "cli", None)]
 
     with reviewer_reports(FINDINGS):
@@ -66,22 +65,21 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
     # With the request ended, reviews are off again.
     assert not review_requests.reviews_on(conn, load(requests_env.root))
 
-    assert operator("show", PR) == 0
-    out = capsys.readouterr().out
+    out = scenario.operator("show", PR).out
     assert "review request: made " in out
     assert "(reviewed)" in out
     assert f"review:{run_id}" in out
 
 
 def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal(
-    requests_env: CanopyEnv, git_pool: GitPool
+    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    conn = requests_env.journal()
-    assert operator("start", PR, "--review") == 0
+    conn = scenario.conn
+    scenario.operator("start", PR, "--review")
     with reviewer_reports(CLEAN):
         run_inline(conn, sha=head(git_pool), pr=PR)
     # Asked for again at a head already reviewed: no new review will end it, so the refusal that names the review does.
-    assert operator("start", PR, "--review") == 0
+    scenario.operator("start", PR, "--review")
     with in_tick(conn, dry_run=True, ends_ok=True):
         assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
     assert requests_of(conn)[-1] == (PR, "cli", None)
@@ -91,9 +89,11 @@ def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal
     assert requests_of(conn) == [(PR, "cli", "reviewed"), (PR, "cli", "reviewed")]
 
 
-def test_a_failed_review_leaves_the_request_open(requests_env: CanopyEnv, git_pool: GitPool) -> None:
-    conn = requests_env.journal()
-    assert operator("start", PR, "--review") == 0
+def test_a_failed_review_leaves_the_request_open(
+    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    conn = scenario.conn
+    scenario.operator("start", PR, "--review")
     with reviewer_reports({"status": "failed", "summary": "Could not read the diff."}):
         run_id = run_inline(conn, sha=head(git_pool), pr=PR)
     run = present(db.get_review_run(conn, run_id))
@@ -102,19 +102,17 @@ def test_a_failed_review_leaves_the_request_open(requests_env: CanopyEnv, git_po
 
 
 def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
-    requests_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    requests_env: CanopyEnv, scenario: Scenario, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    conn = requests_env.journal()
-    assert operator("start", PR, "--review") == 0
-    capsys.readouterr()
-    assert operator("review", "end", "--pr", PR, "--reason", "closed") == 1
-    assert "no tick is running" in capsys.readouterr().err
+    conn = scenario.conn
+    scenario.operator("start", PR, "--review")
+    assert "no tick is running" in scenario.operator("review", "end", "--pr", PR, "--reason", "closed", code=1).err
     with in_tick(conn, dry_run=True, ends_ok=True) as tick_id:
         assert main(["review", "end", "--pr", PR, "--reason", "closed"]) == 0
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [("review:end", "dry run: not ended; closed")]
     assert requests_of(conn) == [(PR, "cli", None)]
     other = f"{PR}0"
-    assert operator("start", other, "--review") == 0
+    scenario.operator("start", other, "--review")
     with in_tick(conn, ends_ok=True):
         # A PR in none of the workspace's repositories cannot be reviewed here.
         assert main(["review", "end", "--pr", other, "--reason", "unknown_repo"]) == 0
@@ -145,8 +143,8 @@ def test_only_the_operator_requests_or_stops_a_review(
     assert requests_of(conn) == [(PR, "cli", None)]
 
 
-def test_a_request_refuses_recording_nothing(requests_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    conn = requests_env.journal()
+def test_a_request_refuses_recording_nothing(requests_env: CanopyEnv, scenario: Scenario) -> None:
+    conn = scenario.conn
     db.set_unit(conn, "PROJ-1", str(requests_env.root), "repo", pr_url=LOOP_PR)
     refusals = [
         ([LOOP_PR, "--review"], "start refused (loop_pr)"),
@@ -155,53 +153,43 @@ def test_a_request_refuses_recording_nothing(requests_env: CanopyEnv, capsys: py
         (["https://github.com/acme/other/issues/3", "--review"], "start refused (bad_ref)"),
     ]
     for args, refusal in refusals:
-        assert operator("start", *args) == 1
-        assert refusal in capsys.readouterr().err
+        assert refusal in scenario.operator("start", *args, code=1).err
     # Without --review, a PR is M14's, so a missing flag never turns a review into work on someone else's branch.
-    assert operator("start", PR) == 1
-    assert "start refused (unsupported)" in capsys.readouterr().err
-    assert operator("start", PR, "--review", "--repo", "repo") == 2
-    assert operator("stop", PR) == 1
-    assert f"stop refused (not_requested): {PR} has no open review request" in capsys.readouterr().err
+    assert "start refused (unsupported)" in scenario.operator("start", PR, code=1).err
+    scenario.operator("start", PR, "--review", "--repo", "repo", code=2)
+    refused = scenario.operator("stop", PR, code=1)
+    assert f"stop refused (not_requested): {PR} has no open review request" in refused.err
 
-    requests_env.append_user("\n[capacity]\nmax_reviews = 0\n")
-    assert operator("start", PR, "--review") == 1
-    assert "start refused (reviews_off)" in capsys.readouterr().err
+    scenario.configures(capacity={"max_reviews": 0})
+    assert "start refused (reviews_off)" in scenario.operator("start", PR, "--review", code=1).err
     assert requests_of(conn) == []
     assert db.starts(conn) == []
 
 
-def test_status_lists_an_open_request_and_stop_ends_it(
-    requests_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+def test_status_lists_an_open_request_and_stop_ends_it(requests_env: CanopyEnv, scenario: Scenario) -> None:
+    scenario.operator("start", PR, "--review")
+    assert f"{PR}  " in scenario.operator("status").out
+    assert "review request is stopped" in scenario.operator("stop", PR).out
+    assert requests_of(scenario.conn) == [(PR, "cli", "stopped")]
+    assert "Review requests" not in scenario.operator("status").out
+
+
+def test_the_state_block_carries_the_open_requests(
+    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    conn = requests_env.journal()
-    assert operator("start", PR, "--review") == 0
-    capsys.readouterr()
-    assert operator("status") == 0
-    assert f"{PR}  " in capsys.readouterr().out
-    assert operator("stop", PR) == 0
-    assert "review request is stopped" in capsys.readouterr().out
-    assert requests_of(conn) == [(PR, "cli", "stopped")]
-    assert operator("status") == 0
-    assert "Review requests" not in capsys.readouterr().out
-
-
-def test_the_state_block_carries_the_open_requests(requests_env: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
-    conn = requests_env.journal()
-    with overseer_does():
-        # No request, no query, and agent_prs off: nothing about reviews reaches the overseer.
-        assert main(["tick", "--dry-run"]) == 0
-        assert "reviews" not in state_block(agent_log)
-        assert operator("start", PR, "--review") == 0
-        with reviewer_reports({"status": "failed", "summary": "Could not read the diff."}):
-            run_id = run_inline(conn, sha=head(git_pool), pr=PR)
-        assert main(["tick", "--dry-run"]) == 0
-    section = state_block(agent_log)["reviews"]
+    # No request, no query, and agent_prs off: nothing about reviews reaches the overseer.
+    scenario.tick(dry_run=True)
+    assert "reviews" not in scenario.state()
+    scenario.operator("start", PR, "--review")
+    with reviewer_reports({"status": "failed", "summary": "Could not read the diff."}):
+        run_id = run_inline(scenario.conn, sha=head(git_pool), pr=PR)
+    scenario.tick(dry_run=True)
+    section = scenario.state()["reviews"]
     assert (section["agent_prs"], section["query"]) == (False, None)
     [requested] = section["requests"]
     assert {k: requested[k] for k in ("url", "review_runs")} == {"url": PR, "review_runs": 1}
     # The overseer matches the PR's URL to a repository by the map's clone URL.
-    assert [r["url"] for r in state_block(agent_log)["repositories"]] == ["https://example.test/acme/repo.git"]
+    assert [r["url"] for r in scenario.state()["repositories"]] == ["https://example.test/acme/repo.git"]
     assert (requested["latest"]["run_id"], requested["latest"]["status"]) == (run_id, "failed")
     assert [p["url"] for p in section["prs"]] == [PR]
 

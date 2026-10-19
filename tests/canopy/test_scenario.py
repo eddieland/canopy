@@ -1,6 +1,7 @@
 """The scenario DSL's own story: what a `Scenario` records of each move, for a failed test's report."""
 
 import sys
+import tomllib
 from datetime import timedelta
 from unittest import mock
 
@@ -9,7 +10,7 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
-from tests.canopy.helpers import waits
+from tests.canopy.helpers import InlineRunner, waits
 from tests.canopy.scenario_helpers import Printed, Scenario, asks, dispatches, fails, pushes, raises
 from tests.conftest import GitPool, git
 
@@ -141,3 +142,50 @@ def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
         scenario.operator("pause")
     assert capsys.readouterr() == ("pause: half done\n", "then this\n")
     assert scenario.story == []
+
+
+def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(policy={"max_resume_attempts": 1})
+    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]})
+    scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
+    scenario.configures("private", notify={"sinks": {"log": {"cmd": "true", "events": ["runs"]}}})
+    # Each key in its own table, though the user file ended on `[paths]`; a key set again takes the place of the old.
+    user = tomllib.loads(scenario.env.user_file.read_text())
+    assert user["policy"] == {"max_resume_attempts": 1, "max_implement_attempts": 3}
+    assert (user["tracker"], user["paths"]) == ({"labels": ["mine"]}, {})
+    assert user["runtime"]["worker_cmd"].endswith("--agent canopy-worker --title={title} {prompt}")
+    tracker = tomllib.loads(scenario.env.shared_file.read_text())["tracker"]
+    assert tracker == {"provider": "jira", "query": "project = PROJ", "needs_human_label": "blocked-on-team"}
+    assert scenario.told().splitlines()[:4] == [
+        "1. the user file sets policy.max_resume_attempts = 1",
+        '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"]',
+        '3. the workspace file sets tracker.needs_human_label = "blocked-on-team"',
+        '4. the private file sets notify.sinks.log.cmd = "true", notify.sinks.log.events = ["runs"]',
+    ]
+
+    # And the next command reads them: one resume, then the limit.
+    resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], label="mine")
+    scenario.run(dispatches(label="mine"), worker=pushes())
+    scenario.run(resume, worker=pushes())
+    [(action, _), _] = scenario.refuses(resume)
+    assert action == "refused:attempt_limit"
+
+
+def test_time_passes_for_every_time_the_journal_recorded(scenario: Scenario) -> None:
+    db.record_event(scenario.conn, db.Event("runs", "run.started", {"ticket": "PROJ-1"}))
+    scenario.operator("start", "PROJ-1")
+    scenario.operator("reply", "PROJ-1", "Use the v2 client.")
+    scenario.tick(*waits("PROJ-1"))
+    times = "SELECT (SELECT at FROM notify_events), (SELECT at FROM messages), (SELECT started_at FROM ticks)"
+    before = [db.parse_time(t) for t in scenario.conn.execute(times).fetchone()]
+    scenario.time_passes(hours=2)
+    after = [db.parse_time(t) for t in scenario.conn.execute(times).fetchone()]
+    # A plain `at` moves with the `_at` columns, so an event or a message stays where it was beside the tick.
+    assert [b - a for a, b in zip(after, before, strict=True)] == [timedelta(hours=2)] * 3
+
+
+def test_a_run_takes_a_runner_of_its_own_and_gives_back_what_it_printed(scenario: Scenario, git_pool: GitPool) -> None:
+    timed_out = scenario.run(runner=InlineRunner(timeout_agent=True))
+    assert timed_out.status == "timeout"
+    assert "run 1: timeout" in timed_out.printed.out
+    assert scenario.story == [str(timed_out)]

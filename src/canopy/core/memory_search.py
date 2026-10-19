@@ -85,13 +85,15 @@ def search(
     ticket: str | None = None,
     kind: MemoryScope | None = None,
     in_force: bool = False,
+    every: bool = False,
     limit: int = DEFAULT_LIMIT,
 ) -> list[records.Memory]:
     """Return the memories whose key or text holds any word of `query`, best match first, at most `limit`.
 
     With `scope`, only what that run reaches; without it, as the operator, every memory with a text, or with `ticket`
     only that ticket's notes and proposals. With `kind`, only memories of that scope, and with `in_force` only those in
-    force, so the limit is spent on what the caller shows, not on what it would drop. Each word is matched as a word,
+    force, so the limit is spent on what the caller shows, not on what it would drop. With `every`, only the memories
+    that hold every word, as the memory page's filter keeps its rows. Each word is matched as a word,
     its English endings aside, never as FTS5's query syntax, so no query a worker writes is an error.
 
     Returns:
@@ -103,7 +105,7 @@ def search(
     found = words(query)
     if not found:
         raise ValueError("a search needs a word of letters or digits")
-    match = " OR ".join(f'"{w}"' for w in found)
+    match = (" AND " if every else " OR ").join(f'"{w}"' for w in found)
     where, params = _reach(scope, ticket)
     # Only the fixed clauses of `_reach` are interpolated; the query and every value are bound parameters.
     return records.fetch_all(

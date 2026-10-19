@@ -57,6 +57,20 @@ The plan is yours to edit directly, like any document: the toolbar has headings,
 blocks, and tables, and Markdown typed as you go (`## `, `- `, `**`) formats itself. Ctrl+S (⌘+S on a Mac) saves, and
 **Save** does the same; the plan's foot says `Unsaved edits` until you do.
 
+Every toolbar button names its shortcut on hover, as your keyboard spells it. On a Mac, read ⌘ for Ctrl and Option
+for Alt:
+
+- **Undo** Ctrl+Z and **Redo** Ctrl+Shift+Z.
+- **Text** Ctrl+Alt+0, and **Heading 1** to **Heading 4** Ctrl+Alt+1 to Ctrl+Alt+4, in the style menu after Redo. A
+  plan has two sizes of heading, as this guide does, so 1 and 2 look alike, and so do 3 and 4. The Markdown keeps
+  them apart.
+- **Bold** Ctrl+B, **Italic** Ctrl+I, **Strikethrough** Ctrl+Shift+S, and **Code** Ctrl+E.
+- **Bulleted list** Ctrl+Shift+8, **Numbered list** Ctrl+Shift+7, **Task list** Ctrl+Shift+9, **Quote** Ctrl+Shift+B,
+  and **Code block** Ctrl+Alt+C.
+- **Comment** Ctrl+Alt+M, with a passage selected.
+
+The **Table** menu has no keys. It inserts a table, and inside one adds or deletes rows and columns, or the table.
+
 Leaving the page with edits not saved or a comment not sent asks first. And if the file changed since you opened it,
 the save is refused rather than overwriting someone else's edit unseen.
 
