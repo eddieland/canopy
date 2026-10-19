@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the replies to coworkers' review comments that workers draft and
 the operator sends. Sections are numbered across the whole design; the [README](README.md) has the map. Previous:
-[Agent memory](MEMORY.md).
+[Agent memory](MEMORY.md). Next: [Connectors](CONNECTORS.md).
 
 ## 29. Review replies the operator sends (M53)
 
