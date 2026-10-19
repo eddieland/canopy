@@ -42,3 +42,12 @@ export function Mark({ live = false, ticking = false, beat }: { live?: boolean; 
         </span>
     )
 }
+
+/** The name beside the logo, in the aurora's colors, which flow through it as the logo's ripple leaves (`beat`). */
+export function Wordmark({ beat }: { beat?: number }) {
+    return (
+        <span key={beat} className="wordmark animate-flow font-mono text-base font-semibold tracking-tight">
+            canopy
+        </span>
+    )
+}

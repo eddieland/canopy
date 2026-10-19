@@ -84,8 +84,8 @@ Rules:
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
   and from the status colors on its own page. Ten nav hues, five statuses, and the accent leave the wheel full, so a
   new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
-  and the header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404)
-  takes the accent.
+  and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
+  section (the 404) takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
@@ -185,7 +185,9 @@ Rules:
   groups with a hairline rule between each: the actions, the readouts, the theme.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
-  it left a hole before `live` whenever the loop was up. `live` in the accent while open, `opening` and `retrying` muted
+  it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
+  of its own, so the name and the readout's small capitals never sit loose side by side. `live` in the accent,
+  its dot breathing with the logo's, while open, `opening` and `retrying` muted
   while it connects or has just dropped, and once it has been down past the first retry's wait (`RETRY_FIRST_MS`, 5s),
   `down · 2m`, an `Age` from the drop, in `status-blocked`, when it dropped on hover. Only `canopy loop` serves the UI
   (D073), so a stream that stays down almost always means the loop stopped, and the page says so rather than look live:
