@@ -35,8 +35,8 @@ and a few more. No prompt talks its way past one, and a refusal names it. See
 
 ### Idle tick
 
-A tick that found nothing new: it decided only waits, skips, and refusals that lift by themselves, and changed nothing.
-The loop waits longer after each one, up to `loop.idle_max_minutes`. See [Ticks and spend](ticks#idle-ticks).
+A tick that started no work: it dispatched no run, and nothing new reached the journal since the tick before. The loop
+waits longer after each one, up to `loop.idle_max_minutes`. See [Ticks and spend](ticks#idle-ticks).
 
 ### Journal
 

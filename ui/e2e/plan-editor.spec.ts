@@ -326,10 +326,10 @@ test.describe('on a wide monitor', () => {
     })
 })
 
-// The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header, its label's line and the
+// The narrowest window the UI holds up in (e2e/narrow.spec.ts): the toolbar's header, its label's line and the
 // toolbar's under it, must still fit there within the 80px the editor keeps clear under it (TOOLBAR_CLEARANCE in
 // src/components/plan-editor.tsx).
-test.describe('on half a monitor', () => {
+test.describe('in a narrow window', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
     test('the stuck toolbar fits in the space the editor keeps clear, and covers no passage it shows', async ({
@@ -705,6 +705,8 @@ test('the shortcut and the bubble over a selection both open a comment on it', a
     await expect(page.getByRole('form', { name: 'Comment' })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('form', { name: 'Comment' })).toBeHidden()
+    // Further down than the window shows, under the sticky foot: in view, as a passage the operator selects is.
+    await plan(page).getByText('template cache').scrollIntoViewIfNeeded()
     await select(page, 'template cache')
     await page.getByTestId('plan-bubble').getByRole('button', { name: 'Comment' }).click()
     await expect(page.getByRole('form', { name: 'Comment' })).toBeVisible()

@@ -6,11 +6,14 @@ import { stuck } from '@/lib/limits'
 import { planWaits } from '@/lib/plan-state'
 import { reviewRef, runRef } from '@/lib/refs'
 import { verdictText } from '@/lib/reviews'
-import { NO_TICKET, readable } from '@/lib/words'
+import { NO_TICKET, readable, runKind } from '@/lib/words'
 
-/** A run's page: how it ended, its kind, and its ticket, as `done · implement · ABC-099`. */
-export function runDescription(run: Pick<Run, 'status' | 'kind' | 'ticket_key'>): string {
-    return line(readable(run.status), readable(run.kind), run.ticket_key)
+/**
+ * A run's page: how it ended and its kind, with a resume's reasons, as `done · implement`. The page follows it with
+ * its ticket's key as a link, `done · implement · ABC-099`, the one place the page names the ticket.
+ */
+export function runDescription(run: Pick<Run, 'status' | 'kind' | 'reasons'>): string {
+    return line(readable(run.status), readable(runKind(run)))
 }
 
 /**

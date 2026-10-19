@@ -10,7 +10,7 @@ import os
 import sqlite3
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -403,6 +403,44 @@ BEHAVIOR_SETTINGS = {
 }
 
 
+@dataclass(frozen=True)
+class Script(AbstractContextManager[None]):
+    """What the fake agent in one role does, as tests/fakes/agent reads it: until a block on it ends, the fake does it.
+
+    A script is data as well as a block, so a scenario can hand it to one ticket's runs (FAKE_<ROLE>_FOR in the fake),
+    and it can be entered again, by one block after another.
+    """
+
+    #: The role, as the fake names it: WORKER, OVERSEER, ...
+    role: str
+    #: What it does, each setting named as the fake names it without the FAKE_<ROLE>_ prefix: COMMANDS, RESULT, EXIT.
+    settings: Mapping[str, str]
+    #: How a run of another ticket plays it, given that ticket's key, when that differs: `pushes` pushes the ticket's
+    #: own branch. None for a script every ticket's run plays the same.
+    per_ticket: Callable[[str], "Script"] | None = field(default=None, compare=False, repr=False)
+    #: The blocks open on it, innermost last.
+    _open: list[ExitStack] = field(default_factory=list, init=False, compare=False, repr=False)
+
+    def for_ticket(self, key: str) -> "Script":
+        """The script as a run of `key` plays it.
+
+        Returns:
+            The script, made for `key` if it is made for a ticket at all.
+        """
+        return self if self.per_ticket is None else self.per_ticket(key)
+
+    def __enter__(self) -> None:
+        """Have the fake in its role read the script's settings, until the block ends."""
+        stack = ExitStack()
+        env = {f"FAKE_{self.role}_{name}": value for name, value in self.settings.items()}
+        stack.enter_context(mock.patch.dict(os.environ, env))
+        self._open.append(stack)
+
+    def __exit__(self, *exc: object) -> None:
+        """Put the environment back as the block found it."""
+        self._open.pop().close()
+
+
 @contextmanager
 def overseer_does(
     *commands: list[str], result: str = TICK_DONE, queried: str | None = None, **behavior: Unpack[Behavior]
@@ -517,11 +555,13 @@ def worker_result(**memory: object) -> str:
     return json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": None}, "summary": "did it", **memory})
 
 
-@contextmanager
-def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unpack[Behavior]) -> Iterator[None]:
-    """Until the block ends, the fake worker runs `commands` and then prints `result`."""
-    with scripted("WORKER", {"COMMANDS": json.dumps(commands), "RESULT": result}, behavior):
-        yield
+def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unpack[Behavior]) -> Script:
+    """Until the block ends, the fake worker runs `commands` and then prints `result`.
+
+    Returns:
+        The worker's script, a block.
+    """
+    return scripted("WORKER", {"COMMANDS": json.dumps(commands), "RESULT": result}, behavior)
 
 
 @contextmanager
@@ -569,17 +609,17 @@ def planner_does(*commands: list[str], plan: str | None, result: Mapping[str, ob
         yield
 
 
-@contextmanager
-def scripted(role: str, settings: Mapping[str, str], behavior: Behavior | None = None) -> Iterator[None]:
+def scripted(role: str, settings: Mapping[str, str], behavior: Behavior | None = None) -> Script:
     """Until the block ends, the fake agent in `role` (OVERSEER, WORKER, ...) reads `settings` and `behavior`.
 
     `settings` are named as the fake names them without the prefix (COMMANDS, RESULT); what neither gives, the fake does
     as it would have. The helpers above are this for one role; use it directly for a role none of them script.
+
+    Returns:
+        The script, a block.
     """
-    env = {f"FAKE_{role}_{name}": value for name, value in settings.items()}
-    env |= {f"FAKE_{role}_{BEHAVIOR_SETTINGS[name]}": str(value) for name, value in (behavior or {}).items()}
-    with mock.patch.dict(os.environ, env):
-        yield
+    named = {BEHAVIOR_SETTINGS[name]: str(value) for name, value in (behavior or {}).items()}
+    return Script(role, {**settings, **named})
 
 
 def blocked_result() -> dict[str, object]:
@@ -611,6 +651,15 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
 def titled_overseer(env: CanopyEnv) -> None:
     """Have the test config's overseer template pass `--title={title}`, as the default templates do."""
     template = "agent run --agent canopy-overseer {prompt}"
+    text = env.user_file.read_text()
+    assert template in text
+    env.write_user(text.replace(template, template.replace(" {prompt}", " --title={title} {prompt}")))
+
+
+def titled_workers(env: CanopyEnv) -> None:
+    """Have the test config's worker template pass `--title={title}`, as the default templates do, so the fake worker
+    knows the ticket each run is of (FAKE_WORKER_FOR in the fake)."""
+    template = "agent run --agent canopy-worker {prompt}"
     text = env.user_file.read_text()
     assert template in text
     env.write_user(text.replace(template, template.replace(" {prompt}", " --title={title} {prompt}")))

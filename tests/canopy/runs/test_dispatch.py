@@ -10,20 +10,10 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from canopy.infra import procs
-from tests.canopy.helpers import (
-    InlineRunner,
-    commit_and_push,
-    decisions,
-    in_tick,
-    lifelock_left,
-    pool,
-    present,
-    slot_of,
-    wait_for_run,
-    worker_does,
-)
+from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, lifelock_left, pool, present, slot_of
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, pool_state
 
 
@@ -86,156 +76,71 @@ def test_dispatch_leases_records_and_spawns(
         assert "Time limit: 45 minutes" in text
 
 
-def test_worker_is_told_the_configured_needs_human_label(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    canopy_env.append_shared('needs_human_label = "blocked-on-team"\n')
-    with in_tick(conn):
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main(args, runner=InlineRunner()) == 0
-        text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
-        assert "Add the label `blocked-on-team` to the ticket" in text
-        assert "needs-human" not in text
+def test_worker_is_told_the_configured_needs_human_label(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
+    text = scenario.run().prompt
+    assert "Add the label `blocked-on-team` to the ticket" in text
+    assert "needs-human" not in text
 
 
-def test_worker_is_told_the_configured_comment_marks(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    canopy_env.append_user('\n[trust]\ncomment_prefix = "[bot]"\ncomment_suffix = "Posted by canopy for alice."\n')
-    with in_tick(conn):
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main(args, runner=InlineRunner()) == 0
-        text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
-        assert "start it with `[bot]` and a space, and end it with `Posted by canopy for alice.`" in text
-        assert (
-            "a comment that starts with `[bot]` and ends with `Posted by canopy for alice.` outside any quote" in text
-        )
-        assert "CANOPY:" not in text
+def test_worker_is_told_the_configured_comment_marks(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(trust={"comment_prefix": "[bot]", "comment_suffix": "Posted by canopy for alice."})
+    text = scenario.run().prompt
+    assert "start it with `[bot]` and a space, and end it with `Posted by canopy for alice.`" in text
+    assert "a comment that starts with `[bot]` and ends with `Posted by canopy for alice.` outside any quote" in text
+    assert "CANOPY:" not in text
 
 
-def test_worker_opens_prs_through_the_mcp_or_the_configured_skill(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    with in_tick(conn):
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main(args, runner=InlineRunner()) == 0
-        assert (
-            "Never target another branch. Open each PR through the GitHub MCP."
-            in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
-        )
+def test_worker_opens_prs_through_the_mcp_or_the_configured_skill(scenario: Scenario, git_pool: GitPool) -> None:
+    assert "Never target another branch. Open each PR through the GitHub MCP." in scenario.run().prompt
 
-        # The operator's own skill replaces the MCP, with no fallback to it.
-        canopy_env.write_user(
-            canopy_env.user_file.read_text().replace("[runtime]\n", "[runtime]\npr_skill = 'acme-pr'\n")
-        )
-        assert main(["dispatch", "PROJ-2", "--repo", "repo", *args[2:]], runner=InlineRunner()) == 0
-        text = (canopy_env.state_dir / "runs" / "2.prompt").read_text()
-        assert "Never target another branch. Open each PR by following the skill `acme-pr`, and in no other way" in text
-        assert "Open each PR through the GitHub MCP" not in text
+    # The operator's own skill replaces the MCP, with no fallback to it.
+    scenario.configures(runtime={"pr_skill": "acme-pr"})
+    text = scenario.run(dispatches("PROJ-2")).prompt
+    assert "Never target another branch. Open each PR by following the skill `acme-pr`, and in no other way" in text
+    assert "Open each PR through the GitHub MCP" not in text
 
 
 def test_an_override_that_ignores_the_pr_skill_is_refused(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
+    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
-    overrides = canopy_env.user_file.parent / "prompts"
+    overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work {{KEY}} for {{LABELS}}; open a PR through the GitHub MCP\n")
-    canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]\n", "[runtime]\npr_skill = 'acme-pr'\n"))
-    with in_tick(conn) as tick_id:
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=InlineRunner(),
-            )
-            == 1
-        )
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "refused:bad_prompt"
-        assert "missing required placeholder {{OPEN_PR}}" in rationale
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
+    scenario.configures(runtime={"pr_skill": "acme-pr"})
+    [(action, rationale)] = scenario.refuses(dispatches())
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{OPEN_PR}}" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
-def test_detached_run_finishes_on_its_own(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    with worker_does(*commit_and_push("agent/PROJ-1-work")), in_tick(conn):
-        assert (
-            main(["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
-        )
-        run = wait_for_run(conn, 1)
-        assert run["status"] == "done", Path(run["log_path"]).read_text()
-        assert git_pool.remote_head("agent/PROJ-1-work") is not None
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
-        log = Path(run["log_path"])
-        assert log.stat().st_mode & 0o777 == 0o600
-        assert "--- worker stdout ---" in log.read_text()
-        assert not lifelock_left(run)
+def test_detached_run_finishes_on_its_own(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
+    [run] = scenario.tick(dispatches(), worker=pushes()).runs
+    assert run.status == "done", Path(run.row["log_path"]).read_text()
+    assert git_pool.remote_head("agent/PROJ-1-work") is not None
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+    log = Path(run.row["log_path"])
+    assert log.stat().st_mode & 0o777 == 0o600
+    assert "--- worker stdout ---" in log.read_text()
+    assert not lifelock_left(run.row)
 
 
 def test_capacity_guard(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-    capsys: pytest.CaptureFixture[str],
+    scenario: Scenario, git_pool: GitPool, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    canopy_env.append_user("\n[capacity]\nmax_workers = 1\n")
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 0
-        )
-        assert (
-            main(
-                ["dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 1
-        )
-        assert "dispatch refused (capacity): 1 of 1 workers are running" in capsys.readouterr().err
-        assert decisions(conn, tick_id)[1] == ("refused:capacity", "1 of 1 workers are running")
-        assert sum(s["status"] == "leased" for s in pool(treehouse_state)) == 1
-        assert len(runner.spawned) == 1
+    scenario.configures(capacity={"max_workers": 1})
+    scenario.starts()
+    capsys.readouterr()
+    assert scenario.refuses(dispatches("PROJ-2")) == [("refused:capacity", "1 of 1 workers are running")]
+    # What `canopy dispatch` printed, which the scenario leaves to the test's own output.
+    assert "dispatch refused (capacity): 1 of 1 workers are running" in capsys.readouterr().err
+    assert sum(s["status"] == "leased" for s in pool(treehouse_state)) == 1
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
 
 
-def test_one_worker_per_ticket(canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection) -> None:
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 0
-        )
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 1
-        )
-        assert decisions(conn, tick_id)[1] == ("refused:running", "run 1 is already working PROJ-1")
+def test_one_worker_per_ticket(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.starts()
+    assert scenario.refuses(dispatches()) == [("refused:running", "run 1 is already working PROJ-1")]
 
 
 @pytest.mark.parametrize("slug", ["Add", "a_b", "-a", "a-", "a--b", "a" * 41, "a/b", "a\n"])
@@ -262,7 +167,7 @@ def test_bad_slugs_are_usage_errors(canopy_env: CanopyEnv, conn: sqlite3.Connect
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
-@pytest.mark.parametrize("kind", ["implement", "resume"])
+@pytest.mark.parametrize("kind", [RunKind.IMPLEMENT, RunKind.RESUME])
 @pytest.mark.parametrize(
     ("label", "reason"),
     [
@@ -271,50 +176,32 @@ def test_bad_slugs_are_usage_errors(canopy_env: CanopyEnv, conn: sqlite3.Connect
     ],
 )
 def test_dispatch_without_a_configured_label_is_unauthorized(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-    label: str | None,
-    reason: str,
-    kind: str,
-    mode: str,
+    scenario: Scenario, treehouse_state: Path, label: str | None, reason: str, kind: RunKind, mode: str
 ) -> None:
     # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D051).
-    db.touch_ticket(conn, "PROJ-1", str(canopy_env.root))
+    conn = scenario.conn
+    db.touch_ticket(conn, "PROJ-1", str(scenario.env.root))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so a resume could
-    with in_tick(conn, dry_run=mode == "dry run") as tick_id:
-        args = [
-            "dispatch",
-            "PROJ-1",
-            "--repo",
-            "repo",
-            "--kind",
-            kind,
-            *(["--reason", "ci"] if kind == "resume" else []),
-        ]
-        args += [] if label is None else ["--label", label]
-        assert main(args, runner=InlineRunner()) == 1
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "refused:unauthorized"
-        assert rationale.startswith(reason)
-        assert "agent-ready-tester" not in rationale  # the refusal never hands the overseer a label to copy
-        assert not treehouse_state.exists()  # refused before leasing
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    reasons = [ResumeReason.CI] if kind == RunKind.RESUME else []
+    [(action, rationale)] = scenario.refuses(
+        dispatches(kind=kind, label=label, reasons=reasons), dry_run=mode == "dry run"
+    )
+    assert action == "refused:unauthorized"
+    assert rationale.startswith(reason)
+    assert "agent-ready-tester" not in rationale  # the refusal never hands the overseer a label to copy
+    assert not treehouse_state.exists()  # refused before leasing
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_unauthorized_is_checked_before_the_other_guards(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
-) -> None:
+def test_unauthorized_is_checked_before_the_other_guards(scenario: Scenario, treehouse_state: Path) -> None:
     # No branch to continue, a slug a resume does not take, and a bad base: the missing label is still what is reported.
-    with in_tick(conn) as tick_id:
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--kind", "resume", "--reason", "ci", "--slug", "again"]
-        args += ["--base", "main"]
-        assert main(args, runner=InlineRunner()) == 1
-        assert [action for action, _ in decisions(conn, tick_id)] == ["refused:unauthorized"]
-        # With the label, the next guard in line refuses instead.
-        assert main([*args, "--label", "agent-ready-tester"], runner=InlineRunner()) == 1
-        assert [action for action, _ in decisions(conn, tick_id)][-1] == "refused:bad_slug"
-        assert not treehouse_state.exists()
+    def resume(label: str | None) -> list[str]:
+        return dispatches(kind=RunKind.RESUME, label=label, reasons=[ResumeReason.CI], slug="again", base="main")
+
+    assert [action for action, _ in scenario.refuses(resume(None))] == ["refused:unauthorized"]
+    # With the label, the next guard in line refuses instead.
+    assert [action for action, _ in scenario.refuses(resume(LABEL))][-1] == "refused:bad_slug"
+    assert not treehouse_state.exists()
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
@@ -338,90 +225,46 @@ def test_label_matches_case_insensitively_and_records_the_configured_spelling(
         assert rationale.endswith("; label agent-ready-tester")
 
 
-def test_stale_worker_prompt_override_is_refused(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
+def test_stale_worker_prompt_override_is_refused(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     # An override written before D051 has no `{{LABELS}}`, so its worker would skip the label check: fail closed.
-    overrides = canopy_env.user_file.parent / "prompts"
+    overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work {{KEY}} on {{BRANCH}}\n")
-    with in_tick(conn) as tick_id:
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=InlineRunner(),
-            )
-            == 1
-        )
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "refused:bad_prompt"
-        assert "missing required placeholder {{LABELS}}" in rationale
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    [(action, rationale)] = scenario.refuses(dispatches())
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{LABELS}}" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_no_slot(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
-    treehouse_state.write_text(pool_state(canopy_env.repo, [], max_trees=0))
-    with in_tick(conn) as tick_id:
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=InlineRunner(),
-            )
-            == 1
-        )
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "refused:no_slot"
-        assert "max_trees" in rationale
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+def test_no_slot(scenario: Scenario, treehouse_state: Path) -> None:
+    treehouse_state.write_text(pool_state(scenario.env.repo, [], max_trees=0))
+    [(action, rationale)] = scenario.refuses(dispatches())
+    assert action == "refused:no_slot"
+    assert "max_trees" in rationale
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_unparseable_lease_is_returned_and_refused(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
-) -> None:
+def test_unparseable_lease_is_returned_and_refused(scenario: Scenario, treehouse_state: Path) -> None:
     # treehouse leased the slot, but its output lacks a field canopy needs: the slot goes back in the same dispatch.
     treehouse_state.write_text(json.dumps({"get_omit": ["base_branch"]}))
-    with in_tick(conn) as tick_id:
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=InlineRunner(),
-            )
-            == 1
-        )
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "refused:no_slot"
-        assert "base_branch" in rationale
-        assert "returned" in rationale
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    [(action, rationale)] = scenario.refuses(dispatches())
+    assert action == "refused:no_slot"
+    assert "base_branch" in rationale
+    assert "returned" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_bad_prompt_override_returns_the_slot(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    overrides = canopy_env.user_file.parent / "prompts"
+def test_bad_prompt_override_returns_the_slot(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
+    overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work {{KEY}} on {{BRNACH}}\n")
-    with in_tick(conn) as tick_id:
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=InlineRunner(),
-            )
-            == 1
-        )
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "refused:bad_prompt"
-        assert "unknown placeholder {{BRNACH}}" in rationale
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    [(action, rationale)] = scenario.refuses(dispatches())
+    assert action == "refused:bad_prompt"
+    assert "unknown placeholder {{BRNACH}}" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
 def test_spawn_failure_returns_the_slot_and_closes_the_run(

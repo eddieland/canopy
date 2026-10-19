@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('a workspace of many pools keeps every slot strip inside the panel, and folds idle slots', async ({ page }) => {
-    // Half a monitor, the narrowest window the UI is made for (DESIGN.md).
+    // About the narrowest window the UI holds up in (DESIGN.md).
     await page.setViewportSize({ width: 820, height: 800 })
     await manyPools(page)
     await page.goto('worktrees')

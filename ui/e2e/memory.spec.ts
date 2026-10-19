@@ -54,6 +54,9 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(
         proposals.getByTestId('memory-6').getByTitle('its run worked a private ticket', { exact: false }),
     ).toHaveText('private')
+    // It is under lesson 8's key too, so it says what it would replace, and only the form promotes it.
+    await expect(proposals.getByTestId('memory-6').getByTestId('proposal-replaces')).toHaveText('replaces memory:8')
+    await expect(proposals.getByTestId('memory-6').getByRole('button', { name: 'Promote as written' })).toHaveCount(0)
 
     const lessons = page.getByTestId('memory-lessons')
     await expect(lessons.getByTestId('memory-band')).toHaveText(
@@ -90,7 +93,12 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await page.goto('runs/40')
     await settled(page)
     const run = page.getByTestId('run-memory')
-    await expect(run).toContainText('ticket notes: in use, lessons: recording')
+    // Folded on arrival: its header counts what it wrote and read, each tier's mode for the run on hover.
+    const said = run.getByTestId('run-memory-said')
+    await expect(said).toContainText('wrote 2 · read 1 · refused 1')
+    await expect(said).toHaveAttribute('title', 'ticket notes: in use, lessons: recording')
+    await expect(run.getByTestId('memory-2')).toHaveCount(0)
+    await run.getByRole('button', { name: 'Show memory' }).click()
     await expect(run.getByTestId('memory-2')).toBeVisible()
     await expect(run.getByTestId('memory-1')).toContainText('this run relied on it')
     await expect(run.getByTestId('memory-1')).not.toContainText('used in')
@@ -100,7 +108,7 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
 
     await page.goto('runs/37')
     await settled(page)
-    await expect(page.getByTestId('run-memory')).toContainText('none, recording only')
+    await expect(page.getByTestId('run-memory-said')).toContainText('read none, recording only')
 
     // Rendered with memory off: no panel at all.
     await page.goto('runs/41')
@@ -119,8 +127,9 @@ test('the memory page narrows every panel by words, a repository, and a lesson�
 
     await page.getByRole('searchbox', { name: 'Filter memory by key, text, ticket, or repository' }).fill('billing')
     await expect(page).toHaveURL(/[?&]q=billing/u)
-    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('0 of 2')
-    await expect(proposals.getByText('no proposals with “billing”')).toBeVisible()
+    // Proposal 6 is under lesson 8's key, `billing-client`, so it holds the word too.
+    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('1 of 2')
+    await expect(proposals.getByTestId('memory-6')).toBeVisible()
     await expect(lessons.getByTestId('memory-8')).toBeVisible()
     await expect(
         notes.getByText('no note says “billing”, and no ticket with notes has it in its key or title'),
@@ -166,12 +175,20 @@ test('the memory page shows its history on asking: the proposal promotion used u
     await settled(page)
     const proposals = page.getByTestId('memory-proposals')
     await expect(proposals.getByTestId('memory-past-decided')).toHaveCount(0)
-    await proposals.getByRole('link', { name: 'history' }).click()
+    // A ticket's notes opened before stay open: the page keeps what it showed while the history is read.
+    const notes = page.getByTestId('memory-notes')
+    await notes.getByTestId('memory-ticket-ABC-100').getByRole('button', { name: 'Show 2 notes' }).click()
+    await expect(notes.getByTestId('memory-3')).toBeVisible()
+    await page.getByTestId('memory-filter').getByRole('link', { name: 'history' }).click()
     await expect(page).toHaveURL(/[?&]history=true/u)
     // The mock's lesson 8 was promoted from proposal 7, which promoting superseded.
     const decided = proposals.getByTestId('memory-past-decided')
     await expect(decided.getByTestId('memory-7').getByTestId('memory-stand')).toHaveText('superseded')
     await expect(page.getByTestId('memory-lessons').getByText('no lesson replaced or forgotten yet')).toBeVisible()
+    await expect(notes.getByTestId('memory-3')).toBeVisible()
+    await page.getByTestId('memory-filter').getByRole('link', { name: 'history' }).click()
+    await expect(decided).toHaveCount(0)
+    await expect(notes.getByTestId('memory-3')).toBeVisible()
 })
 
 test('the memory page finds a note by what it says, as canopy memory search does', async ({ page }) => {
@@ -182,4 +199,13 @@ test('the memory page finds a note by what it says, as canopy memory search does
     const found = page.getByTestId('memory-notes-found')
     await expect(found.getByTestId('memory-3')).toContainText('ci-cache')
     await expect(found.getByTestId('memory-3').getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
+    const count = page.getByTestId('memory-notes-count')
+    await expect(count).toHaveText('0 of 2 tickets · 1 note found')
+
+    // Every word, as the panels' rows hold them: notes say checkout and cache, but none says both.
+    await page
+        .getByRole('searchbox', { name: 'Filter memory by key, text, ticket, or repository' })
+        .fill('checkout cache')
+    await expect(found).toHaveCount(0)
+    await expect(count).toHaveText('0 of 2 tickets · 0 notes found')
 })

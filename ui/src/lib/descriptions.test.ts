@@ -31,12 +31,13 @@ const REVIEW: ReviewSummary = {
 }
 
 describe('runDescription', () => {
-    it('says how the run ended, its kind, and its ticket', () => {
-        expect(runDescription({ status: 'done', kind: 'implement', ticket_key: 'ABC-099' })).toBe(
-            'done · implement · ABC-099',
+    it('says how the run ended and its kind, a resume with its reasons', () => {
+        expect(runDescription({ status: 'done', kind: 'implement', reasons: [] })).toBe('done · implement')
+        expect(runDescription({ status: 'blocked', kind: 'address_review', reasons: [] })).toBe(
+            'blocked · address review',
         )
-        expect(runDescription({ status: 'blocked', kind: 'address_review', ticket_key: 'ABC-102' })).toBe(
-            'blocked · address review · ABC-102',
+        expect(runDescription({ status: 'running', kind: 'resume', reasons: ['ci', 'review'] })).toBe(
+            'running · resume (ci, review)',
         )
     })
 })

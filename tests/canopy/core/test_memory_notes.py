@@ -11,154 +11,141 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, memory, prompts
 from canopy.core.config import load
-from canopy.core.vocab import MemoryMode, MemoryStatus, RunKind
+from canopy.core.vocab import MemoryMode, MemoryStatus, ResumeReason, RunKind
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
     PROMPT_VALUES,
-    WORK,
-    InlineRunner,
-    dispatch_and_run,
-    dispatch_in_tick,
-    dispatch_refused,
     in_run,
     in_tick,
-    last_run,
     memories,
     present,
-    prompt_of,
-    run_with,
     with_memory,
     worker_does,
     worker_result,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 
 if TYPE_CHECKING:
-    from tests.conftest import CanopyEnv
+    from tests.conftest import CanopyEnv, GitPool
 
-FIX_CI = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
+#: The overseer dispatches KEY's implement on its `work` branch.
+WORK = dispatches(slug="work")
+#: The overseer dispatches a resume of KEY to fix CI.
+FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+#: Ticket notes at `record`, in the workspace's private file.
+RECORDING = {"ticket_notes": "record"}
 NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
 CONTRACT = "That JSON object may also carry these fields"
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(conn: sqlite3.Connection) -> None:
-    run = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}], proposals=[{"key": "x", "text": "y"}])
-    assert run["status"] == "done"
+def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(scenario: Scenario, git_pool: GitPool) -> None:
+    conn = scenario.conn
+    sent = pushes(notes=[{"key": "lint", "text": NOTE}], proposals=[{"key": "x", "text": "y"}])
+    run = scenario.run(WORK, worker=sent)
+    assert run.status == "done"
     assert memories(conn) == []
-    assert memory.run_memory(conn, int(run["id"])) is None
-    assert "notes" not in str(run["result_json"])
+    assert memory.run_memory(conn, run.id) is None
+    assert "notes" not in str(run.row["result_json"])
     assert conn.execute("SELECT count(*) FROM memory_reads").fetchone()[0] == 0
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_at_record_a_note_is_stored_and_reaches_no_prompt(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    first = run_with(conn, *WORK, notes=[{"key": "lint", "text": f"  {NOTE} "}])
-    [note] = memories(conn)
+def test_at_record_a_note_is_stored_and_reaches_no_prompt(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    first = scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": f"  {NOTE} "}]))
+    [note] = memories(scenario.conn)
     assert (note.ticket_key, note.key, note.body, note.status) == (KEY, "lint", NOTE, MemoryStatus.ACTIVE)
-    assert (note.run_id, note.tick_id, note.author) == (first["id"], first["tick_id"], "worker")
+    assert (note.run_id, note.tick_id, note.author) == (first.id, first.row["tick_id"], "worker")
     assert note.head is not None
     assert len(note.head) == 12
-    assert "notes" not in str(first["result_json"])
+    assert "notes" not in str(first.row["result_json"])
     # The run's prompt asked for notes, and the next one does too, without serving the one written.
-    assert CONTRACT in prompt_of(canopy_env, int(first["id"]))
-    assert dispatch_in_tick(conn, *FIX_CI).code == 0
-    text = prompt_of(canopy_env, int(last_run(conn)["id"]))
+    assert CONTRACT in first.prompt
+    text = scenario.run(FIX_CI).prompt
     assert CONTRACT in text
     assert NOTE not in text
     assert "## Notes from earlier runs" not in text
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_at_record_a_run_is_journaled_with_its_modes_and_no_ids(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
-) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    second = run_with(conn, *FIX_CI)
-    rendered = present(memory.run_memory(conn, int(second["id"])))
+def test_at_record_a_run_is_journaled_with_its_modes_and_no_ids(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
+    second = scenario.run(FIX_CI, worker=pushes())
+    rendered = present(memory.run_memory(scenario.conn, second.id))
     assert (rendered.ticket_notes, rendered.proposals) == (MemoryMode.RECORD, MemoryMode.OFF)
-    assert memory.read_by(conn, int(second["id"])) == []
+    assert memory.read_by(scenario.conn, second.id) == []
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_at_record_what_only_use_asks_for_changes_nothing(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    [note] = memories(conn)
-    run_with(conn, *FIX_CI, memory_used=[note.id], memory_wrong=[note.id], drop_notes=["lint"])
-    [after] = memories(conn)
+def test_at_record_what_only_use_asks_for_changes_nothing(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
+    [note] = memories(scenario.conn)
+    scenario.run(FIX_CI, worker=pushes(memory_used=[note.id], memory_wrong=[note.id], drop_notes=["lint"]))
+    [after] = memories(scenario.conn)
     assert after == note
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_a_note_under_a_key_supersedes_the_one_before_it(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    run_with(conn, *FIX_CI, notes=[{"key": "lint", "text": "The lint job is fixed on main."}])
-    old, new = memories(conn)
+def test_a_note_under_a_key_supersedes_the_one_before_it(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
+    scenario.run(FIX_CI, worker=pushes(notes=[{"key": "lint", "text": "The lint job is fixed on main."}]))
+    old, new = memories(scenario.conn)
     assert (old.status, old.why) == (MemoryStatus.SUPERSEDED, f"superseded by note {new.id}")
     assert old.body == NOTE
     assert (new.status, new.supersedes, new.body) == (MemoryStatus.ACTIVE, old.id, "The lint job is fixed on main.")
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_notes_from_a_failed_run_are_kept(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, ticket_notes="record")
+def test_notes_from_a_failed_run_are_kept(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
     line = worker_result(notes=[{"key": "dead-end", "text": "Pinning the parser does not help."}])
-    with worker_does(result=line.replace('"done"', '"failed"', 1)):
-        run = dispatch_and_run(conn, *WORK, runner=InlineRunner())
-    assert run["status"] == "failed"
-    assert [n.key for n in memories(conn)] == ["dead-end"]
+    run = scenario.run(WORK, worker=worker_does(result=line.replace('"done"', '"failed"', 1)))
+    assert run.status == "failed"
+    assert [n.key for n in memories(scenario.conn)] == ["dead-end"]
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_a_note_is_its_own_runs_tickets_whatever_the_result_names(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
-) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run_with(conn, *WORK, ticket="OTHER-9", notes=[{"key": "lint", "text": NOTE, "ticket": "OTHER-9"}])
-    assert [n.ticket_key for n in memories(conn)] == [KEY]
+def test_a_note_is_its_own_runs_tickets_whatever_the_result_names(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    scenario.run(WORK, worker=pushes(ticket="OTHER-9", notes=[{"key": "lint", "text": NOTE, "ticket": "OTHER-9"}]))
+    assert [n.ticket_key for n in memories(scenario.conn)] == [KEY]
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_entries_past_the_bounds_are_refused_alone_and_recorded(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
-) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    first = run_with(
-        conn,
-        *WORK,
-        notes=[
-            {"key": "lint", "text": NOTE},
-            {"key": "Not A Slug", "text": "fine text"},
-            {"key": "bidi", "text": "safe \u202eevil"},
-            {"key": "zero-width", "text": "a\u200bb"},
-            {"key": "secret", "text": "use token=ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
-        ],
+def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenario, git_pool: GitPool) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=RECORDING)
+    first = scenario.run(
+        WORK,
+        worker=pushes(
+            notes=[
+                {"key": "lint", "text": NOTE},
+                {"key": "Not A Slug", "text": "fine text"},
+                {"key": "bidi", "text": "safe \u202eevil"},
+                {"key": "zero-width", "text": "a\u200bb"},
+                {"key": "secret", "text": "use token=ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
+            ]
+        ),
     )
-    second = run_with(
-        conn,
-        *FIX_CI,
-        notes=[
-            {"key": "long", "text": "x" * 401},
-            {"key": "repeat", "text": f"  {NOTE.upper()}"},
-            "not an object",
-            {"key": "fourth", "text": "Four."},
-            {"key": "fifth", "text": "Five."},
-            {"key": "sixth", "text": "Past the cap."},
-        ],
+    second = scenario.run(
+        FIX_CI,
+        worker=pushes(
+            notes=[
+                {"key": "long", "text": "x" * 401},
+                {"key": "repeat", "text": f"  {NOTE.upper()}"},
+                "not an object",
+                {"key": "fourth", "text": "Four."},
+                {"key": "fifth", "text": "Five."},
+                {"key": "sixth", "text": "Past the cap."},
+            ]
+        ),
     )
     lint = memories(conn)[0]
     assert [n.key for n in memories(conn)] == ["lint", "fourth", "fifth"]
-    assert refusals(conn, first) == [
+    assert refusals(conn, first.id) == [
         ("notes", None, "its key is not lowercase words joined by hyphens, at most 40 characters"),
         ("notes", "bidi", "its text holds U+202E (RIGHT-TO-LEFT OVERRIDE), a character that hides text"),
         ("notes", "zero-width", "its text holds U+200B (ZERO WIDTH SPACE), a character that hides text"),
         ("notes", "secret", "its text looks like it holds a secret"),
     ]
-    assert refusals(conn, second) == [
+    assert refusals(conn, second.id) == [
         ("notes", "long", "its text is 401 characters, over 400"),
         ("notes", "repeat", f"it repeats note {lint.id}"),
         ("notes", None, "it is not an object with a key and a text"),
@@ -166,18 +153,17 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(
     ]
 
 
-def refusals(conn: sqlite3.Connection, run: sqlite3.Row) -> list[tuple[str, str | None, str]]:
-    rendered = present(memory.run_memory(conn, int(run["id"])))
+def refusals(conn: sqlite3.Connection, run_id: int) -> list[tuple[str, str | None, str]]:
+    rendered = present(memory.run_memory(conn, run_id))
     return [(r.field, r.key, r.why) for r in memory.refused_of(rendered)]
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_notes_that_are_not_a_list_are_refused(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run = run_with(conn, *WORK, notes={"key": "lint", "text": NOTE})
-    rendered = present(memory.run_memory(conn, int(run["id"])))
+def test_notes_that_are_not_a_list_are_refused(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    run = scenario.run(WORK, worker=pushes(notes={"key": "lint", "text": NOTE}))
+    rendered = present(memory.run_memory(scenario.conn, run.id))
     assert [(r.field, r.why) for r in memory.refused_of(rendered)] == [("notes", "`notes` is not a list")]
-    assert memories(conn) == []
+    assert memories(scenario.conn) == []
 
 
 @pytest.mark.parametrize(
@@ -212,35 +198,30 @@ def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
     assert on == off.removesuffix("\n") + contract + "\n"
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_an_override_without_the_contract_serves_until_a_tier_records(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
-) -> None:
-    overrides = canopy_env.user_file.parent / "prompts"
+def test_an_override_without_the_contract_serves_until_a_tier_records(scenario: Scenario, git_pool: GitPool) -> None:
+    overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work on {{KEY}}, labels {{LABELS}}.\n{{DRAFTS}}\n")
-    assert dispatch_in_tick(conn, *WORK).code == 0
     # Ended, so the next dispatch is refused for its prompt alone.
-    conn.execute("UPDATE runs SET status = 'crashed', ended_at = 'x' WHERE status = 'running'")
-    with_memory(canopy_env, ticket_notes="record")
-    [(action, rationale)] = dispatch_refused(conn, *WORK)[-1:]
+    scenario.run(WORK)
+    scenario.configures("private", memory=RECORDING)
+    [(action, rationale)] = scenario.refuses(WORK)[-1:]
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{MEMORY_CONTRACT}}" in rationale
 
 
-@pytest.mark.usefixtures("git_pool")
 @pytest.mark.parametrize("how", ["done", "forget"])
-def test_done_and_forget_invalidate_a_tickets_notes(canopy_env: CanopyEnv, conn: sqlite3.Connection, how: str) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+def test_done_and_forget_invalidate_a_tickets_notes(scenario: Scenario, git_pool: GitPool, how: str) -> None:
+    scenario.configures("private", memory=RECORDING)
+    scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
     if how == "done":
-        with in_tick(conn):
+        with in_tick(scenario.conn):
             assert main(["ticket", "set", KEY, "--done"]) == 0
         why = "ticket done"
     else:
-        assert main(["forget", KEY]) == 0
+        scenario.operator("forget", KEY)
         why = "forgotten work"
-    [note] = memories(conn)
+    [note] = memories(scenario.conn)
     assert (note.status, note.why, note.body) == (MemoryStatus.INVALID, why, NOTE)
     assert note.invalidated_at is not None
 
@@ -260,13 +241,10 @@ def hand_written(conn: sqlite3.Connection, body: str, *, key: str = "hand") -> i
     return int(cur.lastrowid or 0)
 
 
-def test_memory_list_says_the_mode_first_and_shows_what_a_worker_wrote_plainly(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    hand_written(conn, "See [the fix](https://evil.test) \u202eeht\u202c and\u200bthis\x1b[2J.")
-    assert main(["memory", "list"]) == 0
-    out = capsys.readouterr().out
+def test_memory_list_says_the_mode_first_and_shows_what_a_worker_wrote_plainly(scenario: Scenario) -> None:
+    scenario.configures("private", memory=RECORDING)
+    hand_written(scenario.conn, "See [the fix](https://evil.test) \u202eeht\u202c and\u200bthis\x1b[2J.")
+    out = scenario.operator("memory", "list").out
     assert out.startswith(
         "ticket notes: Recording only. Workers write these notes; no run reads them.\n"
         "lessons: Off. Workers propose no lessons, and no run reads them.\n"
@@ -277,32 +255,24 @@ def test_memory_list_says_the_mode_first_and_shows_what_a_worker_wrote_plainly(
     assert "\x1b" not in out
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_memory_list_of_a_run_says_it_read_nothing_while_recording(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}, {"key": "Bad", "text": "x"}])
-    assert main(["memory", "list", "--run", str(run["id"])]) == 0
-    out = capsys.readouterr().out
-    assert f"Run {run['id']} (implement of {KEY}), rendered with ticket notes recording, lessons off." in out
+def test_memory_list_of_a_run_says_it_read_nothing_while_recording(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    run = scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}, {"key": "Bad", "text": "x"}]))
+    out = scenario.operator("memory", "list", "--run", str(run.id)).out
+    assert f"Run {run.id} (implement of {KEY}), rendered with ticket notes recording, lessons off." in out
     assert NOTE in out
     assert "Read: none, recording only" in out
     assert "Refused:\n  notes: its key is not lowercase words joined by hyphens" in out
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_memory_list_prints_the_digest_that_would_be_served(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with_memory(canopy_env, ticket_notes="record")
-    run = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    [note] = memories(conn)
-    assert main(["memory", "list", KEY, "--digest"]) == 0
-    out = capsys.readouterr().out
+def test_memory_list_prints_the_digest_that_would_be_served(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    run = scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
+    [note] = memories(scenario.conn)
+    out = scenario.operator("memory", "list", KEY, "--digest").out
     assert f"{KEY}'s notes, would be served at use:\n\n## Notes from earlier runs\n\n" in out
     assert (
-        f"Note {note.id}, `lint`, from run {run['id']} (`implement`, ended `done`), 1 run before this one, "
+        f"Note {note.id}, `lint`, from run {run.id} (`implement`, ended `done`), 1 run before this one, "
         f"against `{note.head}`:\n> {NOTE}"
     ) in out
 

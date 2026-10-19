@@ -5,24 +5,18 @@ import sqlite3
 from pathlib import Path
 
 from canopy.core import conversation, db
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
-    WORK,
-    InlineRunner,
     commit_and_push,
-    dispatch_and_run,
-    dispatch_in_tick,
     in_tick,
-    last_run,
     operator,
-    prompt_of,
     worker_does,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-LABEL = ("--label", "agent-ready-tester")
 PR = "https://example.test/pr/1"
 NONE = "None: no earlier run of this ticket has ended."
 
@@ -45,23 +39,16 @@ def ended(
     return run_id
 
 
-def test_a_resume_worker_reads_what_the_implement_before_it_reported(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    runner = InlineRunner()
-    with worker_does(*commit_and_push(BRANCH), result=result(RunStatus.DONE, "Added the login form.\nTests pass.")):
-        implement = dispatch_and_run(conn, *WORK, runner=runner)
-    assert NONE in prompt_of(canopy_env, int(implement["id"]))
+def test_a_resume_worker_reads_what_the_implement_before_it_reported(scenario: Scenario, git_pool: GitPool) -> None:
+    reported = result(RunStatus.DONE, "Added the login form.\nTests pass.")
+    implement = scenario.run(dispatches(slug="work"), worker=worker_does(*commit_and_push(BRANCH), result=reported))
+    assert NONE in implement.prompt
 
-    assert dispatch_in_tick(conn, *LABEL, "--kind", "resume", "--reason", "ci", runner=runner).code == 0
-    text = prompt_of(canopy_env, int(last_run(conn)["id"]))
+    resume = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI]))
     assert (
-        f"## Earlier runs\n\nRun {implement['id']}, `implement`, ended `done` at {implement['ended_at']}.\n"
+        f"## Earlier runs\n\nRun {implement.id}, `implement`, ended `done` at {implement.row['ended_at']}.\n"
         f"Its report:\n> Added the login form.\n> Tests pass.\n> {PR}\n\n"
-    ) in text
+    ) in resume.prompt
 
 
 def test_the_latest_runs_are_listed_oldest_first_with_a_blocked_runs_question(

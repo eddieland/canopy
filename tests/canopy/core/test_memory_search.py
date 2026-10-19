@@ -17,21 +17,19 @@ from canopy.core.vocab import MemoryScope, RunKind, RunStatus
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
-    WORK,
-    InlineRunner,
     agent_runs,
     canopy,
     commit_and_push,
-    dispatch_and_run,
     in_run,
     in_tick,
     with_memory,
     worker_does,
     worker_result,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches
 
 if TYPE_CHECKING:
-    from tests.conftest import CanopyEnv
+    from tests.conftest import CanopyEnv, GitPool
 
 OTHER = "PROJ-2"
 
@@ -83,11 +81,11 @@ def searched(run_id: int | str, *words: str) -> int:
         return main(["memory", "search", *words])
 
 
-@pytest.mark.usefixtures("git_pool")
 def test_a_worker_finds_its_tickets_notes_older_ones_included_and_its_lessons_and_nothing_else(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, agent_log: Path
+    scenario: Scenario, git_pool: GitPool
 ) -> None:
-    with_memory(canopy_env, ticket_notes="use", proposals="use")
+    conn = scenario.conn
+    scenario.configures("private", memory={"ticket_notes": "use", "proposals": "use"})
     old = written(conn, "The cache misses on a cold runner.", status="superseded")
     new = written(conn, "Warm the cache with make warm before the tests.")
     wrong = written(conn, "The cache is fine; skip the warm step.", key="wrong-cache", status="invalid")
@@ -97,10 +95,11 @@ def test_a_worker_finds_its_tickets_notes_older_ones_included_and_its_lessons_an
     elsewhere = written(conn, "The web cache is in dist.", key="web-cache", scope="lesson", ticket=None, repo="web")
     # A real slot is under the workspace, `.treehouse/` or `pools/`, where canopy finds its journal; the fake pool's
     # clones are beside it, so the worker searches from the workspace's root, with the run's own CANOPY_RUN_ID.
-    search_cmd = ["sh", "-c", f"cd '{canopy_env.root}' && {' '.join(canopy('memory', 'search', 'cache'))}"]
-    with worker_does(search_cmd, *commit_and_push(BRANCH), result=worker_result()):
-        dispatch_and_run(conn, *WORK, runner=InlineRunner())
-    [worker] = [r for r in agent_runs(agent_log) if "canopy-worker" in cast("list[str]", r["argv"])]
+    search_cmd = ["sh", "-c", f"cd '{scenario.env.root}' && {' '.join(canopy('memory', 'search', 'cache'))}"]
+    scenario.run(
+        dispatches(slug="work"), worker=worker_does(search_cmd, *commit_and_push(BRANCH), result=worker_result())
+    )
+    [worker] = [r for r in agent_runs(scenario.agent_log) if "canopy-worker" in cast("list[str]", r["argv"])]
     [ran, *_] = cast("list[dict[str, object]]", worker["commands"])
     out = str(ran["stdout"])
     assert ran["returncode"] == 0, ran
@@ -205,6 +204,14 @@ def test_a_search_for_notes_in_force_spends_its_limit_on_them_alone(conn: sqlite
     assert note not in [m.id for m in everything]
     found = search.search(conn, "lockfile", scope=None, kind=MemoryScope.TICKET, in_force=True)
     assert [m.id for m in found] == [note]
+
+
+def test_a_search_for_every_word_finds_only_what_holds_them_all(conn: sqlite3.Connection) -> None:
+    both = written(conn, "Warm the cache before the tests.")
+    written(conn, "The cache lives in .cache.", key="cache-dir")
+    written(conn, "Run the tests once.", key="tests")
+    assert len(search.search(conn, "cache tests", scope=None)) == 3
+    assert [m.id for m in search.search(conn, "cache tests", scope=None, every=True)] == [both]
 
 
 @pytest.mark.parametrize("query", ['cache" OR (body*', "NEAR(cache)", "-cache", "cache:*"])

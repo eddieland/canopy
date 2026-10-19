@@ -78,10 +78,12 @@ repository, or in a ticket's key or title. The repository chips keep the proposa
 runs, a lesson for every repository included, since those runs read it too. While lessons are in use, the Lessons header
 has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
 keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. For what notes say, the page
-runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold a word under the
-tickets, so a note is found by what it says, not only by its ticket. The repository chips don't narrow Ticket notes: a
-note is read by its own ticket's runs, whatever the repository. The **history** chip in the Proposals and Lessons
-headers lists what's no longer pending or in force under them: proposals rejected, lapsed, promoted, or forgotten, and
+runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold every word under
+the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. The count in the
+Ticket notes header counts those notes while you search. It stops at the best fifty, and says so; another word narrows
+them faster than scrolling would. The repository chips don't narrow Ticket notes: a
+note is read by its own ticket's runs, whatever the repository. The **history** chip at the end of the filter
+bar lists what's no longer pending or in force under each panel: proposals rejected, lapsed, promoted, or forgotten, and
 lessons replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
@@ -113,10 +115,11 @@ recording. A worker can still find it with `canopy memory search`.
 
 A ticket's page has a **Memory** panel while ticket notes are on: every note its runs wrote, those superseded or
 invalidated included, and the text its next run would be served. A run's page has one too, for a run started while
-either tier was on: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's words,
-not the worker's. A run started while recording read `none, recording only`, which isn't the same as reading an empty
-list. Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported says `this
-run found it wrong`.
+either tier was on, folded to a count in its header (`wrote 2 · read none`), each tier's mode for that run on hover.
+**Show memory** opens it: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's
+words, not the worker's. A run started while recording read `none, recording only`, which isn't the same as reading
+an empty list. Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported
+says `this run found it wrong`.
 
 Going the other way, a memory names the latest runs that relied on it, `used in run:40, run:38`, each opening that
 run's page, so you can check what a note actually steered before you trust it. Past five, or for runs from before
@@ -140,7 +143,9 @@ lessons off, the page shows only Ticket notes, and each note still has Forget.
 - **Promote as written**, the first button, promotes the proposal at once, in its own words and for its own repository,
   as `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form. A proposal from a
   private ticket's run never promotes in one click: its one promote button is **Promote**, in place of both, which opens
-  the form, so you read the warning before you save, not after.
+  the form, so you read the warning before you save, not after. Nor does one whose key a lesson in force already has:
+  it says `replaces memory:N`, and its **Promote** opens the form with that lesson beside yours. Retiring a lesson your
+  runs rely on deserves more than one click, however confident the proposal sounds.
 - It promotes a ticket's note too, done or invalidated, as long as the note still has its text: what a ticket taught
   is often clearest once its PR has merged. The note stays its ticket's.
 - **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.
@@ -166,7 +171,8 @@ Three attention items keep you honest, all yours and never the overseer's, and n
 
 - `memory proposal`, when a ticket is marked done and its runs' proposals are waiting. Its merge has checked the work
   they came from, which makes now a good time to judge them. The item lists them, each with **Promote as written** and
-  **Reject**; to put one in your own words, promote it from the memory page.
+  **Reject**; to put one in your own words, or to promote one that would replace a lesson, or a private ticket's, go to
+  the memory page.
 - `lesson review`, for the lessons due, longest overdue first, each with **Renew**. Only while lessons are in use:
   switching to use brings every overdue lesson up at once, in one item, before any of them is served.
 - `lesson wrong`, for the lessons a run reported wrong since you last renewed them, with the way to the memory page,

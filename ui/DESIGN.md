@@ -110,10 +110,12 @@ Rules:
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
-- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows, and `text-2xs` (11px, defined
-  in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and spend windows, and a
-  `panel-label`. Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no
-  arbitrary sizes (`text-[0.625rem]`).
+- Sizes: `text-xl` page titles and the spend's totals, `text-sm` body, `text-xs` secondary and data-dense rows, and
+  `text-2xs` (11px, defined in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and
+  spend windows, and a `panel-label`. A document, long-form prose (a guide page, a plan), has one step of its own,
+  `text-base`, through its utilities alone (A document, under Primitives), so that is the only place it appears.
+  Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no arbitrary sizes
+  (`text-[0.625rem]`).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
   `sm` size, which sets it; 12px (`size-3`) beside `text-xs` or smaller, in an `xs` or `icon-xs` button and a segmented
   control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box,
@@ -151,15 +153,16 @@ Rules:
   the window's edge. It sits at the foot of the sticky column, so at the window's foot however long the page; in a
   window too short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer
   is Sprig's (Fun, below).
-- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
+- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since a narrow window is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
   atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
   dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
   breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
-  inside the pane, is its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is
-  made for; a phone's is not.
+  inside the pane, is its own width's (Primitives). The UI is made for the operator's window, about 1720px wide
+  (`PRODUCT.md`), where its screenshots are taken. Down to about 820px it holds up, the rail a strip; a phone's does
+  not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -224,22 +227,31 @@ Rules:
   server's sentence on what reads it. What a worker wrote is `MemoryText`: plain text, never `LinkedText`, since a link
   in a note would be a worker's link read as canopy's, with each character that hides text named (`<U+200B>`) on a
   `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled `would be served at use`
-  while recording. A run's page lists what it wrote and read, and reads `none, recording only` for a run that read
-  nothing because its tier was recording. The memory page leads with what waits on the operator: a Proposals panel,
-  counted in `status-blocked` while one waits as the nav counts them, and saying that none reaches a run until promoted;
+  while recording. A run's page has it folded (`FoldPanel`): its header counts what the run wrote and read,
+  `wrote 2 · read none`, each tier's mode for the run on hover and to a screen reader, and `Show memory` opens the
+  rows; it reads `none, recording only` for a run that read nothing because its tier was recording. The memory page
+  leads with what waits on the operator: a Proposals panel, counted in `status-blocked` while one waits as the nav
+  counts them, and saying that none reaches a run until promoted;
   then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
-  notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. Wide, the tickets
-  sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
-  `?repo=`, `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
+  notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. From 120rem,
+  the tickets sit beside the queue in 34rem, where their opened notes' columns fit and the queue still keeps a
+  proposal's verbs on one line; narrower, they stack under it. Over all
+  three, a filter field and a chip for each repository narrow the page (`?q=`, `?repo=`, `src/lib/memory-filter.ts`), as
+  the tickets filters do: a word in a memory's key, text, ticket, or
   repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
-  through `canopy memory search`'s operator search (`GET /api/memory/search`), listed under the tickets as Notes that
-  say it, each with its verbs; while a repository chip is on, Ticket notes says it is not narrowed by one, since a note
+  through `canopy memory search`'s operator search (`GET /api/memory/search`, every word, as the rows above hold them),
+  listed under the tickets as Notes that say it, each with its verbs, counted in the header as `N notes found`, and
+  `50+` with a muted `the best 50` beside the label at the server's cap; while a repository chip is on, Ticket notes
+  says it is not narrowed by one, since a note
   is read by its own ticket's runs in any repository; a lesson for every repository is kept under any repository's chip.
   While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
   filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
-  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip in the Proposals and Lessons
-  headers (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories no longer pending or in
-  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs. Each list
+  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip at the end of the filter
+  bar,
+  one since it acts on every panel (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories
+  no longer pending or in
+  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs; turning it
+  on or off keeps the panels and the rows opened on them, the sections holding a row's skeleton until read. Each list
   scrolls in its panel but the proposals, which hold 20 at most and so grow with their rows. A row in force that its
   digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
   keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's
@@ -247,13 +259,16 @@ Rules:
   since forgetting a note needs no lesson; a tier that is off shows no panel on the memory page, so with lessons off it
   holds Ticket notes alone: under a proposal an outline `Promote as written`, which saves at once, since most proposals
   need no edit, and a muted ghost `Edit and promote`, which opens the form (a private ticket's run's proposal, whose
-  words may hold what the operator kept off the tracker, has `Promote` in place of both, which opens the form and its
-  warning before the save, and on an attention item, which has no form, a muted line saying to promote it from the
-  memory page), then, apart from both at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a
-  ticket's note that keeps its text, on the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
+  words may hold what the operator kept off the tracker, and one whose key a lesson in force has, which it would
+  replace, have `Promote` in place of both, which opens the form and what it says before the save, the latter with a
+  muted `replaces memory:N` beside it, and on an attention item, which has no form, a muted line saying to promote it
+  from the memory page; until the lessons in force are read, `Promote as written` is disabled), then, apart from both
+  at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on
+  the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
   is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing
-  keeps its line's room but shows it only while its row is hovered or holds the focus, as a row's copy button does, and
-  always on a touch screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
+  shows its line only while its row is hovered or holds the focus, as a row's copy button does, over the row's end on
+  `bg-surface`, so at rest it takes no room and nothing moves when it shows, and always, in the row's flow, on a touch
+  screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
   be undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A memory's
   row leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and `due`
   (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or `invalid`
@@ -279,8 +294,8 @@ Rules:
   refusal stays under the row, but one saying the memory changed under it (`not_pending`, `forgotten`, `unknown`,
   decided from the attention list or the CLI), which reads memory again, so its row may leave, and is said under the
   list too; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal` item
-  lists its proposals with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due
-  with `Renew` alone.
+  lists its proposals with `Promote as written`, which saves at once, but for those two, and `Reject`; a
+  `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never
@@ -315,7 +330,9 @@ Rules:
   `review:4 3 findings, 1 major · at its review limit`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`,
   so no two pages of a kind say the same thing there. What every page of its kind shows, the same each time, is its
   `help`, on the title's hover, as the nav's items say what their pages hold. A ticket is named one way in every
-  identity panel that names one (`TicketField`: its key, a run's kind as a chip, its title).
+  identity panel that names one (`TicketField`: its key, then its title). A run's page names its ticket in its
+  description instead, the key a `TicketLink` after its state and kind (a resume's with its reasons,
+  `resume (ci, review)`), since its title is the page's already.
   A tick's page steps to its neighbours from the right of its title's row (`PageHeader`'s `controls`, `TickSteps`):
   two ghost `xs` links, `‹ tick:40` and `tick:42 ›`, through every tick by id, dry runs included, found by query so a
   gap is stepped over. At an end the button stays, disabled, saying on hover there is none, so the pair never shifts;
@@ -323,16 +340,25 @@ Rules:
 - **One home per fact.** What a page says, it says once. Its subject's own name is its title, so the lists under it
   leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
   decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not
-  a field too; whether a ticket is private is its title's chip, not a notice under its actions; a tick's session is
-  its Tick panel's field, not its transcript's header too.
+  a field too; whether a ticket is private is its title's chip, not a notice under its actions. A run's, a tick's, and
+  a chore run's pages put each fact in the same home: the state, a run's kind, and its ticket in the description, so
+  the identity panel's header is its name alone and its fields leave out the ticket; a chore run's chore in the trail,
+  never a field; the session in the transcript's header, never a field; and the paths in the identity panel, but a
+  tick's output, whose path its Output panel names.
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
+  What runs and ends, a run, a tick, a chore run, keeps one order there, the page's answer first: `summary`; then what
+  came of it (a failed run's `ended on`, a running run's `last call`, a run's PRs, a chore run's `harness` note; a
+  chore run's findings are counted in its description and listed under the panel); `when` (`WhenField`), started,
+  ended, and how long it took in one field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it
+  runs); `spent`; then a tick's canopy version; then the paths, a run's branch, worktrees, and log, a chore run's
+  log.
   Then the thread the operator came to answer, with its form: a ticket's conversation and the reply. A page with no
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
-  lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
+  lists: runs, decisions, spend. So in a narrow window a ticket's reply is reached before its runs and
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
   what its reason asks for first (below, "The attention detail"), any limit it is stuck at, then its conversation and
   the reply. An action over a whole list
@@ -432,7 +458,9 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 
 - `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
   move.
-- Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
+- Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels. A panel
+  holds that height only while its read is pending: read, it is as tall as what it holds, and a transcript with no
+  events is its header alone.
 - A skeleton (`PanelSkeleton`) shows only while there is no data at all, and only while the read is pending: once it
   has failed, a Notice takes its place at its height (`PanelLoading`). A refetch or a stream update keeps what is on
   screen.
@@ -465,7 +493,7 @@ side.
   takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The free column
   never gets under 8rem: it holds the row's name, a ticket's title, which never vanishes.
   **A narrow list lets columns go**, in the order its kind gives them (a third entry in `ROW_COLUMNS`, 1 first), so it
-  fits its panel wherever the panel sits: half a monitor, beside a ticket's thread. A column shows from the narrowest
+  fits its panel wherever the panel sits: a narrow window, beside a ticket's thread. A column shows from the narrowest
   of Tailwind's container sizes (`ROW_TIERS`, `@sm` to `@4xl`) with room for it, the columns that go after it, and
   those that never do, the free one at its floor (`rowTiers`). The `Panel` is the container (`@container`), so a list
   goes by its own width, not the window's. The row's template at each size is a custom property, and a column left
@@ -483,6 +511,15 @@ side.
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
   a PR with its other reviews under it), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
+- **A document** is long-form prose set to be read rather than scanned: a guide page (`GuideText`) and a plan
+  (`.plan-doc`). It takes its type from three utilities in `src/index.css` and nothing else, so the guide and a plan
+  read alike: `document-text`, the body, `text-base` on a 1.75rem line, a step up from the app's `text-sm`;
+  `document-section`, a `#` or `##` heading, the page title's `text-xl` semibold; and `document-subsection`, a `###`
+  or `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
+  subsection apart from it by weight alone; the guide's page title is its header's, so its body starts at a section.
+  Code sits a step down, `text-sm`. Its measure is fixed, 48rem at most (`max-w-3xl`) on both surfaces. The plan's
+  style menu previews each style in its utility. What lays a document out, the guide's rules between sections or a
+  plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
@@ -583,7 +620,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   worktree), and `bare` for how long an item has stood open, where its place says so (`3m`: an attention item, an open
   finding, the rail's runs, the oldest question). The header's tick is the one exception: `3m ago` once it ended, so
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
-  keeps on hover, beside its age on a run's, tick's, chore run's, or review's page; a raw ISO string is never shown. A
+  keeps on hover, beside its age on a review's page, and in a run's, tick's, or chore run's `when` field, which sets
+  its end after it, the time alone on the same day, how long it ran (`lasted`, the age's units), and its `span` age;
+  a raw ISO string is never shown. A
   cost is `Cost`: `$0.42` as a readout, its dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent
   as the CLI rounds), or a dash when nothing reported one, `none reported` on hover; never formatted in place, a hat's
   price included.
@@ -653,11 +692,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   hairline at 40% over the same color at 10%, so it holds its edge on a selected row's tint; `plain` in
   `muted-foreground`, else the status color of the state it marks, `failed`, `blocked`, or `running`. No chip is
   colored by classes of its own.
-- **A status in a detail page's header** (a run's, a chore run's, a tick's) is a dot in its state's color
-  and its word in that color. A review's is its page's description alone, since its panel leads with what it found
-  (A review, below). A run's journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's
-  word for its own, kept as it prints it, and both wear `status-done`, as a tick's `skipped` does (`tickState` in
-  `src/lib/ticks.ts`).
+- **A status on a detail page** (a run's, a chore run's, a tick's, a review's) is its description's first word
+  alone; the identity panel's header names the panel and nothing else, so the state is said once. Of the two homes
+  it had, the description was kept, as the smaller change: it is the page's line of state on every detail page, and a
+  review's was already its description alone, since its panel leads with what it found (A review, below). A run's
+  journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's word for its own, kept as it prints
+  it, and in a list's row both wear `status-done`, as a tick's `skipped` does (`tickState` in `src/lib/ticks.ts`).
 - **A run state named in words** (a filter's chip, a counter's line) is the operator's: `blocked`, a run that asked,
   reads `waiting on you` (`RUN_WORD` in `src/lib/run-state.ts`), as the rail, the tickets list, and a question's chip
   say it. The URL keeps `?state=blocked`, and a run's own status in its page's header stays the CLI's word.
@@ -838,7 +878,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   `unknown` has an `ended on` field after its summary (`EndedOnField`, `endedOn` in `src/lib/transcript.ts`): the
   transcript's last runtime error, else its last failed or refused tool call, as its time, its name or tool, and its
   first line in mono `status-failed`, a button that shows its row as the context chart's entries do (below); the page
-  holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read.
+  holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read
+  (`min-h-40`, only then). A transcript with no events, its log gone, its runtime naming no session, or its run yet to
+  print one, is its header alone, the session and then why in a few words as its readout (`log gone`, `no session`,
+  `no events yet`, `no events`), the whole reason on hover.
   A transcript over 100 rows draws the first 100 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By call,
   since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements, and every key typed in its search
   waited on all of them; 100 keeps the page under 10,000 elements even when a search opens every call it draws. After
@@ -875,8 +918,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
   tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
-  naming the file (a run's says `the run's log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in
-  the header, opens it. Open, it is one monospace block, its
+  naming the file (a tick's its path, with its copy button, the one place the page names it; a run's says `the run's
+  log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in the header, opens it. A tick that kept no
+  file has no Output panel: its transcript, read from the same file, says why. Open, it is one monospace block, its
   lines wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
@@ -900,12 +944,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   the accent on an accent stroke, once the pane holds it and the article's whole measure (62.5rem, a container query
   as the plan editor's, so the rail's width counts); short of that the same list folds into a `Guide pages` toggle
   above the page. In the middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead,
-  then the body at `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each
-  heading a `#` link to itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's
-  order. On the right, once the pane holds that too (76.5rem), `On this page`, its `##` headings. So the article never
-  narrows as the window widens: a column comes in only where the article keeps its measure. The sidebar and contents
-  stick as the article scrolls. `/guide` opens the first page. It reads what rich text reads, `##` and `###` headings
-  as real headings, each with its anchor as its id,
+  then the body in a document's type (Primitives) with soft line breaks read as spaces, each `##` a section under a
+  hairline and each heading a `#` link to itself on hover, and at its foot Previous and Next, the pages either side
+  in the sidebar's order. On the right, once the pane holds that too (76.5rem), `On this page`, its `##` headings. So
+  the article never narrows as the window widens: a column comes in only where the article keeps its measure. The
+  sidebar and contents stick as the article scrolls. `/guide` opens the first page. It reads what rich text reads,
+  `##` and `###` headings as real headings, each with its anchor as its id,
   and labelled links in the accent, underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this
   page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
   and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
@@ -936,12 +980,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the comments
   whose passage is gone and the resolved ones follow the last; the cards move with their passages as the plan is edited,
   and with each other as one grows. Under the plan, the comments are rows split by hairlines, as before. The plan is
-  laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to `max-w-3xl`, headings at `text-xl`,
-  `text-base`, and `text-sm` semibold, code as rich text sets it, a table in hairlines with its header row on
-  `surface-raised` at half, a quote muted behind a hairline. What the plan holds as characters (HTML, an image) is muted
-  monospace; a link is underlined in `muted-foreground` with its address on hover, never a link. The toolbar (`Toolbar`,
-  below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the paragraph's style, the marks and the
-  blocks (each on or off, raised while on at the cursor), then `Comment`, enabled while text is selected. Each control's
+  laid out as a document (`.plan-doc` in `src/index.css`), in a document's type (A document, under Primitives), a
+  table in hairlines with its header row on `surface-raised` at half, a quote muted behind a hairline. What the plan
+  holds as characters (HTML, an image) is muted monospace; a link is underlined in `muted-foreground` with its address
+  on hover, never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and
+  redo, the paragraph's style, the marks and the blocks (each on or off, raised while on at the cursor), then
+  `Comment`, enabled while text is selected. Each control's
   tooltip names it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere),
   and declares the same keys as `aria-keyshortcuts`. The paragraph's style is a menu, as a document's is: its button
   names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4, each set as the plan sets it, with its
@@ -991,8 +1035,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
   implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
   hover. What an action did goes under that line. At 820px the foot is two lines at rest. The editor keeps what it
-  scrolls into view 128px clear of the foot. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`,
-  over a sample plan on mock data only, with what the planner would read and the plan's Markdown under it.
+  scrolls into view 128px clear of the foot. A ticket's plan opens on its page, `/tickets/$key/plan`; `/plan-editor`
+  is kept as the editor's bench, linked from nowhere: over a sample plan on mock data only, with what the planner would
+  read and the plan's Markdown under it, and outside mock, an `Empty` saying a ticket's plan opens on its page. The
+  editor's Playwright tests and screenshot run against it, so its behavior is tried without a ticket's state.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
@@ -1092,8 +1138,11 @@ sliver beside four others; and its axis names short call numbers without measuri
     taller than a line (`-my-1`).
     A row that opens to its own body, a transcript's tool call or model call, is the row itself, a chevron at its end.
   - Two of either are one: a pair that does and undoes (Open all, Close all) is one `Toggle` (All open).
-  - A panel header's modes sit together, after what the panel is about: a transcript's session id (but on a tick's
-    page, whose Tick panel names it), a hairline rule, then its order, By call, and All open.
+  - A panel header's modes sit together, after what the panel is about: a transcript's session id, a hairline rule,
+    then its order, By call, and All open.
+  - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
+    header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
+    only once opened. A run's Memory is one.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
