@@ -3028,15 +3028,15 @@ export type components = {
             source: components["schemas"]["MessageSource"];
         };
         /**
-         * @description What a message is (DESIGN §22).
+         * @description What a message is (DESIGN §22): a `note` is canopy's word on what a tick did.
          * @enum {string}
          */
-        MessageKind: "report" | "question" | "reply" | "comment";
+        MessageKind: "report" | "question" | "reply" | "comment" | "note";
         /**
-         * @description Who wrote a message (DESIGN §22).
+         * @description Who wrote a message (DESIGN §22): `canopy` for a tick's note on the operator's messages.
          * @enum {string}
          */
-        MessageSource: "worker" | "operator" | "tracker";
+        MessageSource: "worker" | "operator" | "tracker" | "canopy";
         /**
          * Meta
          * @description The server itself: what it runs and whether its data is real.

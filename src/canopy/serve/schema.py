@@ -24,10 +24,12 @@ type RunState = Annotated[
     ),
 ]
 type MessageSource = Annotated[
-    Literal["worker", "operator", "tracker"], Field(description="Who wrote a message (DESIGN §22).")
+    Literal["worker", "operator", "tracker", "canopy"],
+    Field(description="Who wrote a message (DESIGN §22): `canopy` for a tick's note on the operator's messages."),
 ]
 type MessageKind = Annotated[
-    Literal["report", "question", "reply", "comment"], Field(description="What a message is (DESIGN §22).")
+    Literal["report", "question", "reply", "comment", "note"],
+    Field(description="What a message is (DESIGN §22): a `note` is canopy's word on what a tick did."),
 ]
 type GrantKind = Annotated[
     Literal["implement", "resume"],

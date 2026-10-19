@@ -26,7 +26,8 @@ a `blocked` run's question from the result line (§8), in the transaction that c
 through one function every channel calls, which refuses an empty or overlong body rather than cut it and records a
 retried submission once. Agents never write a message directly. An operator message, or a start, stop, grant, or
 notice (§8), from any channel, ends the loop's wait (§6, D073); a note to a chore does not (§19). A message is
-acknowledged once a tick that read it closes `ok`.
+acknowledged once a tick that read it closes `ok`; the first live one answers it with canopy's own note on the ticket,
+what it decided there and why, so a message is never left unanswered while the loop waits. No agent's prompt has one.
 
 ### Authority stays with the source
 
