@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
-import { ANYWHERE, DEFAULT, nextTip, parseBuddy, RAVE, TIPS, tipsFor } from './buddy'
+import { ANYWHERE, DEFAULT, nextTip, parseBuddy, RAVE, TIPS, tipsFor, typeBurst } from './buddy'
 import type { View } from './buddy'
 
 // The setting is read when the module loads, so each test loads a fresh copy.
@@ -87,6 +87,30 @@ describe('nextTip', () => {
                 }
             }
         }
+    })
+})
+
+describe('typeBurst', () => {
+    const keys = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+
+    it('types three to six keys, none twice, then the space bar', () => {
+        for (const random of [0, 0.3, 0.6, 0.99]) {
+            const burst = typeBurst(keys, ' ', () => random)
+            expect(burst.length).toBeGreaterThanOrEqual(4)
+            expect(burst.length).toBeLessThanOrEqual(7)
+            expect(burst.at(-1)).toBe(' ')
+            expect(new Set(burst).size).toBe(burst.length)
+            expect(burst.slice(0, -1).every((key) => keys.includes(key))).toBe(true)
+        }
+    })
+
+    it('picks its keys at random', () => {
+        expect(typeBurst(keys, ' ', () => 0)).toEqual(['a', 'b', 'c', ' '])
+        expect(typeBurst(keys, ' ', () => 0.99)).toEqual(['i', 'h', 'g', 'f', 'e', 'd', ' '])
+    })
+
+    it('types every key it has when it has fewer than a burst', () => {
+        expect(typeBurst(['a', 'b'], ' ', () => 0.99)).toEqual(['b', 'a', ' '])
     })
 })
 
