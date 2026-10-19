@@ -48,6 +48,17 @@ too:
         failed = scenario.tick(queried=["PROJ-9"], code=1)
         assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-9"
 
+The operator is played whole too: `operator` runs one of their commands and gives back what canopy printed, `out` and
+`err`, as their shell would show them, and a command canopy refuses is a move like any other, the exit it must make
+named as `code=`. A tick's `printed` is what `canopy tick` printed, likewise. Neither reaches the test's own output, so
+a test reads it from the move, not from `capsys`:
+
+    def test_a_grant_needs_a_ticket_canopy_has_seen(scenario: Scenario, git_pool: GitPool) -> None:
+        refused = scenario.operator("grant", "PROJ-1", "resume", code=1)
+        assert "grant refused (unknown)" in refused.err
+        scenario.run(worker=fails())
+        assert "may now have 3." in scenario.operator("grant", "PROJ-1", "implement").out
+
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
 
@@ -62,17 +73,20 @@ attention list as the test left it, so the failure reads in the order the ticket
          PROJ-1 refused:cooldown: a resume for CI alone in PROJ-1 in repo may run again after 2026-10-18T23:00:02Z
     4. 1:00:00 passes
     5. run 3, resume of PROJ-1 for ci: done: did it
+    6. the operator runs canopy grant PROJ-1 resume, which exits 0
+         PROJ-1 in repo has had 2 resume runs, and may now have 7. The next tick decides whether to dispatch it.
     The attention list now: nothing.
 """
 
+import io
 import json
 import os
 import shlex
 import sqlite3
 import sys
 import time
-from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import AbstractContextManager, ExitStack, contextmanager
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -113,6 +127,10 @@ from tests.conftest import CanopyEnv
 #: What a worker does: one of the `*_does` helpers' blocks, or `pushes` or `asks`.
 type Worker = AbstractContextManager[None]
 
+#: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
+#: refusal says why, the story keeps whole.
+TOLD_LINES = 2
+
 #: How long a held worker, or a test waiting on one, waits before it gives up.
 HOLD_TIMEOUT = 60
 
@@ -129,6 +147,29 @@ while not gate.with_suffix(".open").exists():
         sys.exit("held too long")
     time.sleep(0.02)
 """
+
+
+@dataclass(frozen=True)
+class Printed:
+    """What a canopy command printed, as the operator's shell would show it."""
+
+    #: What it printed to stdout.
+    out: str
+    #: What it printed to stderr, where a refusal says why.
+    err: str
+
+    def told(self) -> list[str]:
+        """What it printed, for its step in the story: the first TOLD_LINES lines of stdout, and stderr whole.
+
+        Returns:
+            Each line printed that is not blank, indented, with a line in place of the ones left out.
+        """
+        out = [line for line in self.out.splitlines() if line.strip()]
+        kept = out[:TOLD_LINES]
+        if len(out) > len(kept):
+            kept.append(f"({len(out) - len(kept)} more lines)")
+        kept += [line for line in self.err.splitlines() if line.strip()]
+        return [f"  {line}" for line in kept]
 
 
 @dataclass(frozen=True)
@@ -235,6 +276,8 @@ class Ticked:
     decisions: list[records.Decision]
     #: The runs it started, each waited for until it ended.
     runs: list[Ran]
+    #: What `canopy tick` printed: the line that says how the tick ended, and what went wrong if it failed.
+    printed: Printed
     #: The runs it started and left at work, with `hold=True`.
     working: list[Working] = field(default_factory=list)
 
@@ -244,10 +287,12 @@ class Ticked:
         return [d.action for d in self.decisions]
 
     def __str__(self) -> str:
-        """How the tick ended and what it decided, for a failed step's message."""
+        """How the tick ended, what it decided, and what it printed to stderr, for a failed step's message."""
         lines = [f"{self.tick.status}: {self.tick.summary}"]
         lines += map(_decided, self.decisions)
         lines += [f"  {r}" for r in [*self.runs, *self.working]]
+        # What `canopy tick` printed no longer reaches the test's own output, so what went wrong in it is told here.
+        lines += [f"  {line}" for line in self.printed.err.splitlines() if line.strip()]
         return "\n".join(lines)
 
 
@@ -295,7 +340,7 @@ class Scenario:
                 stack.enter_context(worker)
             if hold:
                 stack.enter_context(self._held())
-            exited = main(argv)
+            exited, printed = _printing(lambda: main(argv))
             tick = last_tick(self.conn)
             started = self.conn.execute("SELECT id FROM runs WHERE tick_id = ? ORDER BY id", (tick.id,)).fetchall()
             # A run is detached from the tick, so the worker's script must last until it ends.
@@ -303,7 +348,7 @@ class Scenario:
             runs = [] if hold else [self.ran(wait_for_run(self.conn, run_id)) for run_id in ids]
         working = [self._at_work(run_id) for run_id in ids] if hold else []
         made = db.decisions_for_tick(self.conn, tick.id)
-        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), made, runs, working)
+        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), made, runs, printed, working)
         self.story.append(f"tick {tick.id}, exits {exited}: {ticked}")
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
@@ -397,11 +442,19 @@ class Scenario:
                 if column[0].endswith(("_at", "_since", "_until")):
                     _shift(self.conn, table, column[0], f"-{seconds} seconds")
 
-    def operator(self, *args: str) -> None:
-        """Run one of the operator's commands, `canopy ARGS`, from their shell; it must succeed."""
-        exited = operator(*args)
-        self.story.append(f"the operator runs {shlex.join(['canopy', *args])}, which exits {exited}")
-        assert exited == 0, args
+    def operator(self, *args: str, code: int = 0) -> Printed:
+        """Run one of the operator's commands, `canopy ARGS`, from their shell; it must exit `code`.
+
+        What it printed is kept from the test's own output, and told in the story instead.
+
+        Returns:
+            What it printed, as the operator would read it.
+        """
+        exited, printed = _printing(lambda: operator(*args))
+        command = shlex.join(["canopy", *args])
+        self.story.append("\n".join([f"the operator runs {command}, which exits {exited}", *printed.told()]))
+        assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
+        return printed
 
     def seen(self, *keys: str) -> None:
         """Record `keys`, KEY if none, as tickets an earlier tick saw, so the overseer owes each a decision."""
@@ -546,6 +599,19 @@ def asks(question: str = QUESTION) -> Worker:
 def fails(summary: str = "could not build") -> Worker:
     """The worker pushes nothing and reports it failed, saying `summary`."""
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
+def _printing(command: Callable[[], int]) -> tuple[int, Printed]:
+    out, err = io.StringIO(), io.StringIO()
+    try:
+        with redirect_stdout(out), redirect_stderr(err):
+            exited = command()
+    except BaseException:
+        # A command that raises makes no move to tell; what it printed goes to the test's own output, for its report.
+        sys.stdout.write(out.getvalue())
+        sys.stderr.write(err.getvalue())
+        raise
+    return exited, Printed(out.getvalue(), err.getvalue())
 
 
 def _named(row: sqlite3.Row, reasons: Sequence[ResumeReason]) -> str:
