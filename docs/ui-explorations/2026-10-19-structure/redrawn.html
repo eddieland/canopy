@@ -1,0 +1,1123 @@
+<!doctype html>
+<!-- Published as a claude.ai artifact; see README.md. Lines are not wrapped. Marks save only there. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>canopy, redrawn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">
+</head>
+<body>
+<style>
+/* Layout: a contact sheet. A list of boards on the left, one board at a time on the right; each direction's mockup is
+   drawn at the operator's 1440px and scaled into its frame, so every board shows the same screens at the same size. */
+:root {
+  --f-bg: #f1f2f4;
+  --f-surface: #ffffff;
+  --f-raised: #e8eaee;
+  --f-line: #d9dce2;
+  --f-fg: #15171c;
+  --f-muted: #5a606c;
+  --f-accent: #3549d0;
+  --f-accent-fg: #ffffff;
+  --f-good: #1d7a4e;
+  --f-warn: #9a5d00;
+  --f-bad: #b3342a;
+  --f-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --f-bg: #0d0e11; --f-surface: #15171b; --f-raised: #1e2127; --f-line: #2a2e36; --f-fg: #eceef2;
+    --f-muted: #9aa0ab; --f-accent: #93a0ff; --f-accent-fg: #0d0e11; --f-good: #5fd39b; --f-warn: #f2b65a;
+    --f-bad: #ff8a80; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --f-bg: #0d0e11; --f-surface: #15171b; --f-raised: #1e2127; --f-line: #2a2e36; --f-fg: #eceef2;
+  --f-muted: #9aa0ab; --f-accent: #93a0ff; --f-accent-fg: #0d0e11; --f-good: #5fd39b; --f-warn: #f2b65a;
+  --f-bad: #ff8a80; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--f-bg); color: var(--f-fg); font-family: var(--f-sans); font-size: 15px; line-height: 1.55; }
+a { color: var(--f-accent); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--f-accent); outline-offset: 2px; }
+
+.shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+.side {
+  position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; height: 100vh; overflow-y: auto;
+  border-right: 1px solid var(--f-line); padding: 24px 14px 24px max(14px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 4px;
+}
+.side .mark { padding: 0 10px 18px; display: flex; flex-direction: column; gap: 2px; }
+.side .mark b { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+.side .mark span { font-family: var(--f-mono); font-size: 11px; color: var(--f-muted); }
+.side .grp { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--f-muted); padding: 16px 10px 6px; }
+.side button {
+  all: unset; cursor: pointer; display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline;
+  padding: 7px 10px; border-radius: 8px; font-size: 14px; color: var(--f-fg);
+}
+.side button:hover { background: var(--f-raised); }
+.side button[aria-current="true"] { background: var(--f-surface); box-shadow: 0 0 0 1px var(--f-line); font-weight: 600; }
+.side button:focus-visible { outline: 2px solid var(--f-accent); }
+.side .n { font-family: var(--f-mono); font-size: 11px; color: var(--f-muted); }
+.side .v { font-family: var(--f-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.v.keep { color: var(--f-good); } .v.maybe { color: var(--f-warn); } .v.drop { color: var(--f-bad); }
+
+main { min-width: 0; padding-block: 36px 80px; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+.board { max-width: 1240px; display: flex; flex-direction: column; gap: 28px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--f-muted); }
+h1 { font-size: 36px; line-height: 1.1; letter-spacing: -0.02em; margin: 6px 0 0; text-wrap: balance; font-weight: 700; }
+h2 { font-size: 21px; line-height: 1.25; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h3 { font-size: 15px; margin: 0; }
+.lede { font-size: 18px; max-width: 68ch; color: var(--f-fg); margin: 12px 0 0; }
+p { margin: 0; max-width: 72ch; }
+.muted { color: var(--f-muted); }
+.prose { display: flex; flex-direction: column; gap: 12px; }
+code, .code { font-family: var(--f-mono); font-size: 0.88em; background: var(--f-raised); padding: 1px 5px; border-radius: 4px; }
+
+.panel { background: var(--f-surface); border: 1px solid var(--f-line); border-radius: 12px; padding: 22px 24px; }
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+ul.tight { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+ul.tight li { max-width: 70ch; }
+
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--f-line); border: 1px solid var(--f-line); border-radius: 12px; overflow: hidden; }
+.stat { background: var(--f-surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stat .k { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--f-muted); }
+.stat .val { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 26px; line-height: 1.1; }
+.stat .val s { color: var(--f-muted); text-decoration: none; font-size: 16px; }
+.stat .d { font-size: 13px; color: var(--f-muted); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tabs button {
+  border: 1px solid var(--f-line); background: var(--f-surface); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  font-size: 14px;
+}
+.tabs button[aria-selected="true"] { background: var(--f-fg); color: var(--f-bg); border-color: var(--f-fg); }
+.tabs .sep { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--f-line); border-radius: 999px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; background: var(--f-surface); }
+.seg button[aria-pressed="true"] { background: var(--f-raised); font-weight: 600; }
+
+.stage-wrap { position: relative; overflow: hidden; border-radius: 12px; border: 1px solid var(--f-line); background: var(--f-raised); }
+.stage { width: 1440px; transform-origin: 0 0; position: absolute; top: 0; left: 0; }
+.stage-cap { font-size: 13px; color: var(--f-muted); margin-top: -16px; }
+
+.shot { border: 1px solid var(--f-line); border-radius: 12px; overflow: hidden; background: #0b0d14; }
+.shot img { display: block; width: 100%; height: auto; }
+.shot-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.notes { display: flex; flex-direction: column; gap: 14px; }
+.obs { display: grid; grid-template-columns: 26px 1fr; gap: 6px; }
+.obs b { font-family: var(--f-mono); font-size: 12px; color: var(--f-muted); font-weight: 500; padding-top: 2px; }
+
+.diag { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.diag .panel { display: flex; flex-direction: column; gap: 8px; }
+.diag .num { font-family: var(--f-mono); font-size: 12px; color: var(--f-muted); }
+
+.recap { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.rc { background: var(--f-surface); border: 1px solid var(--f-line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.rc .sw { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
+.rc .sw i { flex: 1; }
+.rc .tag { font-family: var(--f-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.rc .tag.won { color: var(--f-good); } .rc .tag.kept { color: var(--f-accent); } .rc .tag.out { color: var(--f-muted); }
+.rc .face { font-size: 13px; color: var(--f-muted); }
+
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.facts .panel { padding: 18px 20px; }
+.facts h3 { font-family: var(--f-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--f-muted); font-weight: 500; margin-bottom: 8px; }
+.facts ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--f-line); border-radius: 12px; background: var(--f-surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--f-line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--f-muted); font-weight: 500; background: var(--f-raised); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.k { font-weight: 600; white-space: nowrap; }
+td .gone { color: var(--f-muted); text-decoration: line-through; }
+
+.verdict { display: flex; flex-direction: column; gap: 12px; }
+.verdict .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vbtn { border: 1px solid var(--f-line); background: var(--f-surface); border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
+.vbtn[aria-pressed="true"].keep { background: var(--f-good); color: var(--f-bg); border-color: var(--f-good); }
+.vbtn[aria-pressed="true"].maybe { background: var(--f-warn); color: var(--f-bg); border-color: var(--f-warn); }
+.vbtn[aria-pressed="true"].drop { background: var(--f-bad); color: var(--f-bg); border-color: var(--f-bad); }
+.vbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+textarea.vnote { width: 100%; min-height: 84px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--f-line); background: var(--f-bg); color: var(--f-fg); }
+.vstatus { font-size: 13px; color: var(--f-muted); }
+.pick-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pick { border: 1px solid var(--f-line); border-radius: 10px; padding: 12px 14px; background: var(--f-surface); display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; height: auto; flex-direction: row; overflow-x: auto;
+    border-right: 0; border-bottom: 1px solid var(--f-line); background: var(--f-bg); gap: 4px;
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--f-bg); }
+  .side .mark, .side .grp { display: none; }
+  .side button { display: flex; gap: 6px; white-space: nowrap; }
+  .side button .n { display: none; }
+  main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; }
+  h1 { font-size: 28px; }
+  .cols2, .cols3, .shot-grid, .facts { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- Mockups. Each direction is a class on .mock; data-mode picks its dark or light palette. ---------- */
+.mock { width: 1440px; min-height: 900px; font-size: 14px; line-height: 1.5; background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+.mock * { box-sizing: border-box; }
+.mock .mono { font-family: var(--mono); }
+.mock .fg { color: var(--fg); }
+.mock .mut { color: var(--muted); }
+.mock .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.mock .s-fail { color: var(--fail); } .mock .s-wait { color: var(--wait); } .mock .s-rev { color: var(--rev); }
+.mock .s-run { color: var(--run); } .mock .s-other { color: var(--muted); } .mock .s-done { color: var(--done, var(--muted)); }
+.mock .chip { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
+.mock .chip.s-fail { background: color-mix(in srgb, var(--fail) 14%, transparent); }
+.mock .chip.s-wait { background: color-mix(in srgb, var(--wait) 14%, transparent); }
+.mock .chip.s-rev { background: color-mix(in srgb, var(--rev) 14%, transparent); }
+.mock .chip.s-run { background: color-mix(in srgb, var(--run) 14%, transparent); }
+.mock .chip.s-other { background: var(--raised); }
+.mock p { margin: 0; max-width: none; }
+.mock ul { margin: 0; }
+
+/* D1 · Ops inbox, kept */
+.m1 { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; font-family: var(--sans); }
+.m1[data-mode="dark"] { --bg: #0b0e13; --surface: #11151c; --raised: #1a202a; --line: #232b38; --fg: #e8edf5; --text: #c9d1dd; --muted: #7d8899; --accent: #8ea2ff; --accent-fg: #0b0e13; --run: #3ddc97; --wait: #ffb547; --fail: #ff6b6b; --rev: #4fd1e0; --spend: #c4a7ff; }
+.m1[data-mode="light"] { --bg: #eef0f3; --surface: #ffffff; --raised: #f3f4f7; --line: #dde0e6; --fg: #1c1d22; --text: #2a2c33; --muted: #5d6070; --accent: #3550c8; --accent-fg: #ffffff; --run: #1f8a5b; --wait: #a86400; --fail: #c0392b; --rev: #0f7c8c; --spend: #6d4fc4; }
+.m1 .hdr { display: flex; justify-content: space-between; align-items: stretch; height: 46px; background: var(--surface); border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
+.m1 .brand { display: flex; align-items: center; padding: 0 20px; font-weight: 600; color: var(--fg); border-right: 1px solid var(--line); }
+.m1 .tabsx { display: flex; }
+.m1 .tabsx span { display: flex; align-items: center; gap: 8px; padding: 0 18px; color: var(--muted); }
+.m1 .tabsx span.on { color: var(--fg); background: var(--raised); box-shadow: inset 0 -2px 0 var(--accent); }
+.m1 .tabsx b { color: var(--accent); font-weight: 500; }
+.m1 .live { display: flex; align-items: center; gap: 12px; padding: 0 20px; color: var(--muted); font-size: 12px; }
+.m1 .main { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.m1 .counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.m1 .ctr { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 6px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: baseline; }
+.m1 .ctr .lab { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.m1 .ctr .sub { font-size: 12px; color: var(--muted); }
+.m1 .ctr .val { font-family: var(--mono); font-size: 30px; line-height: 1; color: var(--fg); font-weight: 500; }
+.m1 .split { display: grid; grid-template-columns: 420px 1fr; gap: 16px; align-items: start; }
+.m1 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.m1 .list { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.m1 .lh { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px 6px; }
+.m1 .lh h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--fg); }
+.m1 .lh span, .m1 .sublab { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+.m1 .sublab { padding: 14px 12px 4px; }
+.m1 .item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px; }
+.m1 .item.sel { background: var(--raised); }
+.m1 .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m1 .item .top > span { display: flex; gap: 8px; align-items: center; }
+.m1 .item .t { font-weight: 500; color: var(--fg); }
+.m1 .item .x { font-size: 13px; color: var(--muted); }
+.m1 .wk { display: grid; grid-template-columns: 92px 1fr 52px; gap: 8px; align-items: center; padding: 6px 12px; font-size: 12px; }
+.m1 .wk .k { display: flex; align-items: center; gap: 6px; font-family: var(--mono); color: var(--fg); }
+.m1 .wk .r { font-family: var(--mono); text-align: right; color: var(--muted); }
+.m1 .thread { padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
+.m1 .th { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.m1 .th h2 { margin: 2px 0 0; font-size: 22px; font-weight: 600; color: var(--fg); letter-spacing: 0; }
+.m1 .th .k { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m1 .msg { display: flex; flex-direction: column; gap: 4px; max-width: 660px; }
+.m1 .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.m1 .bub { padding: 12px 14px; border-radius: 4px 12px 12px 12px; background: var(--raised); color: var(--text); }
+.m1 .bub.ask { background: color-mix(in srgb, var(--wait) 13%, transparent); color: var(--fg); }
+.m1 .ev { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m1 .ev .dot { width: 6px; height: 6px; }
+.m1 .field { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 12px 14px; min-height: 80px; color: var(--muted); }
+.m1 .acts { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.m1 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--line); color: var(--fg); font-size: 14px; }
+.m1 .btn.pri { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 500; }
+.m1 .btn.sm { padding: 4px 10px; font-size: 12px; }
+.m1 .ctx { display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
+.m1 .ctx a { color: var(--accent); text-decoration: none; }
+.m1 .two { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.m1 .facts { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.m1 .facts .r { display: grid; grid-template-columns: 96px 1fr; gap: 8px; }
+.m1 .facts .r > span:first-child { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 2px; }
+.m1 .facts hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.m1 .facts h5 { margin: 0; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+.m1 .pagehead { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.m1 .pagehead h1 { margin: 2px 0 0; font-size: 24px; color: var(--fg); font-weight: 600; letter-spacing: 0; }
+.m1 .pagehead .k { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m1 .tr { display: grid; grid-template-columns: 64px 14px 1fr auto auto; gap: 12px; align-items: baseline; padding: 8px 18px; border-top: 1px solid var(--line); font-size: 13px; }
+.m1 .tr .t { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m1 .tr .tool { font-family: var(--mono); font-size: 12px; color: var(--fg); }
+.m1 .tr .arg { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m1 .tr .r { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
+.m1 .tr.model { background: var(--raised); }
+.m1 .sum { padding: 20px 24px; display: grid; grid-template-columns: 1fr 300px; gap: 28px; }
+.m1 .sum ul { padding-left: 18px; margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.m1 .sum code { font-family: var(--mono); font-size: 12px; background: var(--raised); padding: 1px 5px; border-radius: 4px; }
+
+/* D2 · Mailroom */
+.m2 { --sans: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace; font-family: var(--sans); display: grid; grid-template-columns: 228px 404px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 900px; }
+.m2 > * { min-height: 0; overflow: hidden; }
+.m2.info4 { grid-template-columns: 228px 360px minmax(0, 1fr) 300px; }
+.m2[data-mode="dark"] { --bg: #0f0f11; --surface: #17171a; --raised: #222226; --line: #2a2a30; --fg: #f2f2f4; --text: #d4d4d8; --muted: #8d8d97; --accent: #8f90ff; --accent-fg: #0f0f11; --run: #3fcf8e; --wait: #f5b544; --fail: #f87171; --rev: #5ccfe6; }
+.m2[data-mode="light"] { --bg: #f4f4f5; --surface: #ffffff; --raised: #f0f0f3; --line: #e4e4e8; --fg: #18181b; --text: #27272a; --muted: #6b6b76; --accent: #4f46e5; --accent-fg: #ffffff; --run: #15803d; --wait: #a16207; --fail: #b91c1c; --rev: #0e7490; }
+.m2 .sd { padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line); background: var(--bg); }
+.m2 .sd .brand { display: flex; align-items: center; gap: 8px; padding: 2px 10px 16px; font-weight: 600; font-size: 16px; color: var(--fg); }
+.m2 .sd .brand i { width: 18px; height: 18px; border-radius: 6px; background: var(--accent); display: block; }
+.m2 .start { margin: 0 4px 14px; padding: 9px 12px; border-radius: 10px; background: var(--accent); color: var(--accent-fg); font-weight: 500; text-align: center; }
+.m2 .mb { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; border-radius: 8px; color: var(--text); }
+.m2 .mb.on { background: var(--raised); color: var(--fg); font-weight: 500; }
+.m2 .mb .n { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m2 .mb.hot .n { color: var(--accent); font-weight: 500; }
+.m2 .grp { font-size: 11px; color: var(--muted); padding: 18px 10px 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+.m2 .sd .foot { margin-top: auto; padding: 12px 10px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; }
+.m2 .sd .foot .lv { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.m2 .lp { background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.m2 .lh { padding: 18px 18px 10px; display: flex; justify-content: space-between; align-items: baseline; }
+.m2 .lh h2 { margin: 0; font-size: 19px; font-weight: 600; color: var(--fg); letter-spacing: -0.01em; }
+.m2 .lh span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m2 .srch { margin: 0 14px 10px; padding: 8px 12px; border-radius: 8px; background: var(--raised); color: var(--muted); font-size: 13px; }
+.m2 .row { padding: 12px 18px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 3px 10px; }
+.m2 .row.sel { background: var(--raised); }
+.m2 .row .d { grid-row: 1 / 4; margin-top: 6px; }
+.m2 .row .l1 { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); gap: 8px; }
+.m2 .row .l1 .mono { color: var(--text); }
+.m2 .row .l2 { font-weight: 500; color: var(--fg); }
+.m2 .row .l3 { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m2 .tp { display: flex; flex-direction: column; background: var(--surface); min-width: 0; }
+.m2 .tph { padding: 18px 28px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.m2 .tph h2 { margin: 0; font-size: 21px; font-weight: 600; color: var(--fg); letter-spacing: -0.01em; }
+.m2 .tph .k { font-size: 13px; color: var(--muted); margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.m2 .tph .k .mono { color: var(--text); }
+.m2 .btns { display: flex; gap: 8px; flex: none; }
+.m2 .btn { padding: 7px 12px; border-radius: 9px; border: 1px solid var(--line); color: var(--fg); font-size: 13px; background: var(--surface); }
+.m2 .btn.pri { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 500; }
+.m2 .body { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.m2 .sys { align-self: center; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); padding: 4px 12px; border-radius: 999px; background: var(--raised); }
+.m2 .sys .dot { width: 6px; height: 6px; }
+.m2 .msg { display: flex; gap: 10px; max-width: 660px; }
+.m2 .av { width: 30px; height: 30px; border-radius: 50%; background: var(--raised); color: var(--muted); display: grid; place-items: center; font-family: var(--mono); font-size: 11px; flex: none; }
+.m2 .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.m2 .bub { padding: 10px 14px; border-radius: 4px 16px 16px 16px; background: var(--raised); color: var(--text); }
+.m2 .bub.ask { background: color-mix(in srgb, var(--wait) 15%, transparent); color: var(--fg); }
+.m2 .bub.note { background: transparent; border: 1px dashed var(--line); color: var(--muted); font-size: 13px; }
+.m2 .compose { margin: 0 28px 24px; border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 14px; background: var(--bg); }
+.m2 .compose .ph { color: var(--muted); min-height: 40px; }
+.m2 .compose .bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+.m2 .info { border-left: 1px solid var(--line); background: var(--bg); padding: 20px; display: flex; flex-direction: column; gap: 18px; font-size: 13px; overflow: hidden; }
+.m2 .info h5 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+.m2 .info .r { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.m2 .info .r span:first-child { color: var(--muted); }
+.m2 .card2 { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.m2 .att { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.m2 .att .ah { padding: 14px 18px; background: var(--raised); display: flex; justify-content: space-between; align-items: center; }
+.m2 .tl { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; padding: 7px 18px; font-size: 13px; border-top: 1px solid var(--line); align-items: baseline; }
+.m2 .tl .t { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m2 .tl .r { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m2 .tl .tool { font-family: var(--mono); font-size: 12px; }
+.m2 .tl.say { color: var(--fg); }
+
+/* Round four: Mailroom in today's tokens (ui/src/styles/tokens.css, as written there) and IBM Plex, today's radii. */
+.m2.today { --sans: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; }
+.m2.today[data-mode="dark"] { --bg: oklch(0.165 0.024 270); --surface: oklch(0.2 0.03 270); --raised: oklch(0.252 0.038 270); --line: oklch(0.305 0.045 270); --fg: oklch(0.95 0.014 265); --text: oklch(0.88 0.02 266); --muted: oklch(0.71 0.048 266); --accent: oklch(0.76 0.15 278); --accent-fg: oklch(0.165 0.024 270); --run: oklch(0.8 0.18 160); --wait: oklch(0.83 0.16 73); --fail: oklch(0.725 0.17 23); --rev: oklch(0.8 0.13 210); --add: oklch(0.78 0.15 150); --del: oklch(0.72 0.17 20); }
+.m2.today[data-mode="light"] { --bg: oklch(0.948 0.014 275); --surface: oklch(0.995 0.004 275); --raised: oklch(0.962 0.012 275); --line: oklch(0.895 0.022 275); --fg: oklch(0.23 0.028 275); --text: oklch(0.3 0.03 275); --muted: oklch(0.48 0.042 275); --accent: oklch(0.5 0.2 275); --accent-fg: oklch(1 0 0); --run: oklch(0.46 0.105 159); --wait: oklch(0.485 0.11 62); --fail: oklch(0.49 0.19 28); --rev: oklch(0.47 0.08 215); --add: oklch(0.5 0.135 150); --del: oklch(0.535 0.17 20); }
+.m2.today .bub { border-radius: 4px 12px 12px 12px; }
+.m2.today .compose, .m2.today .att { border-radius: 8px; }
+.m2.today .btn, .m2.today .start, .m2.today .srch { border-radius: 8px; }
+.m2.today .card2 { border-radius: 8px; }
+.m2[data-mode="dark"] { --add: #4ade80; --del: #f87171; }
+.m2[data-mode="light"] { --add: #15803d; --del: #b91c1c; }
+.m2 .s-done { color: var(--rev); }
+.m2 .sd .foot .lk span.on { color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.m2 .out { align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; max-width: 620px; gap: 4px; }
+.m2 .out .who { display: flex; gap: 8px; align-items: center; }
+.m2 .draft { padding: 10px 14px; border-radius: 16px 4px 16px 16px; border: 1px dashed var(--accent); color: var(--fg); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.m2.today .draft { border-radius: 12px 4px 12px 12px; }
+.m2 .draft .acts { display: flex; gap: 14px; justify-content: flex-end; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.m2 .fnd { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.m2.today .fnd { border-radius: 8px; }
+.m2 .fnd .fh { display: flex; gap: 10px; align-items: center; padding: 10px 14px; }
+.m2 .fnd .fh .box { width: 14px; height: 14px; border: 1px solid var(--muted); border-radius: 4px; flex: none; display: grid; place-items: center; font-size: 10px; color: var(--accent-fg); }
+.m2 .fnd .fh .box.on { background: var(--accent); border-color: var(--accent); }
+.m2 .fnd .fh .ref { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m2 .fnd .fb { padding: 0 14px 12px 38px; color: var(--text); font-size: 13px; }
+.m2 .dl { display: grid; grid-template-columns: 34px 16px minmax(0, 1fr); font-family: var(--mono); font-size: 12px; padding: 1px 14px; color: var(--muted); }
+.m2 .dl.add { background: color-mix(in srgb, var(--add) 12%, transparent); color: var(--fg); }
+.m2 .dl.add i { color: var(--add); font-style: normal; }
+.m2 .dl.del { background: color-mix(in srgb, var(--del) 12%, transparent); color: var(--fg); }
+.m2 .dl.del i { color: var(--del); font-style: normal; }
+.m2 .diffs { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 0; margin-bottom: 10px; background: var(--bg); }
+.m2 .seg2 { display: flex; gap: 4px; padding: 0 14px 10px; font-size: 13px; }
+.m2 .seg2 span { padding: 4px 10px; border-radius: 8px; color: var(--muted); }
+.m2 .seg2 span.on { background: var(--raised); color: var(--fg); }
+.m2 .lsub { padding: 14px 18px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-top: 1px solid var(--line); }
+.m2 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 40px; }
+.m2 .empty .leaf { width: 44px; height: 44px; border-radius: 0 50% 0 50%; background: color-mix(in srgb, var(--run) 30%, transparent); border: 1.5px solid var(--run); transform: rotate(-12deg); margin-bottom: 8px; }
+.m2 .empty b { font-size: 18px; color: var(--fg); font-weight: 600; }
+.m2 .empty span { color: var(--muted); font-size: 14px; max-width: 260px; }
+.m2 .big { font-size: 18px; color: var(--fg); line-height: 1.45; }
+
+/* D3 · Ledger */
+.m3 { --mono: 'IBM Plex Mono', ui-monospace, monospace; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.m3[data-mode="dark"] { --bg: #121110; --surface: #181715; --raised: #221f1b; --line: #2f2b25; --fg: #efe8d8; --text: #d6cfbf; --muted: #8f8877; --accent: #f0a83a; --accent-fg: #121110; --run: #91d071; --wait: #f0a83a; --fail: #ff7a66; --rev: #7cc4d6; }
+.m3[data-mode="light"] { --bg: #f4f2ee; --surface: #fbfaf8; --raised: #e9e5dc; --line: #d8d2c5; --fg: #1f1d19; --text: #2e2b25; --muted: #6c6658; --accent: #985800; --accent-fg: #ffffff; --run: #2d7a30; --wait: #985800; --fail: #b3261e; --rev: #1d6c7d; }
+.m3 .sl { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; height: 40px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.m3 .sl .l { display: flex; gap: 2px; align-items: center; }
+.m3 .sl .l b { color: var(--fg); margin-right: 18px; font-weight: 600; }
+.m3 .sl .tab { padding: 2px 10px; color: var(--muted); }
+.m3 .sl .tab.on { background: var(--fg); color: var(--bg); }
+.m3 .sl .tab em { font-style: normal; color: var(--accent); }
+.m3 .sl .tab.on em { color: var(--bg); }
+.m3 .sl .r { display: flex; gap: 18px; color: var(--muted); font-size: 12px; }
+.m3 .sl .r .fg { color: var(--fg); }
+.m3 .cols { display: grid; grid-template-columns: 620px minmax(0, 1fr); flex: 1; }
+.m3 .cols > div:first-child { border-right: 1px solid var(--line); }
+.m3 .rule { color: var(--muted); padding: 16px 20px 8px; white-space: pre; overflow: hidden; }
+.m3 .rule b { color: var(--fg); font-weight: 600; }
+.m3 .ln { display: grid; grid-template-columns: 16px 62px 90px minmax(0, 1fr) 36px; gap: 0 10px; padding: 6px 20px; }
+.m3 .ln.sel { background: var(--raised); }
+.m3 .ln .cur { color: var(--accent); }
+.m3 .ln .rs { color: var(--muted); }
+.m3 .ln .ag { color: var(--muted); text-align: right; }
+.m3 .ln .t { grid-column: 4 / 6; color: var(--fg); }
+.m3 .ln .x { grid-column: 4 / 6; color: var(--muted); }
+.m3 .ln .k { color: var(--text); }
+.m3 .wl { display: grid; grid-template-columns: 16px 90px minmax(0, 1fr) 70px 54px; gap: 0 10px; padding: 3px 20px; }
+.m3 .wl .r { text-align: right; color: var(--muted); }
+.m3 .hd { padding: 16px 24px 12px; border-bottom: 1px solid var(--line); }
+.m3 .hd .t { color: var(--fg); font-weight: 600; font-size: 15px; }
+.m3 .kv { display: flex; flex-wrap: wrap; gap: 4px 22px; color: var(--muted); margin-top: 6px; }
+.m3 .kv span b { color: var(--text); font-weight: 400; }
+.m3 .lg { display: grid; grid-template-columns: 58px 84px 70px minmax(0, 1fr); gap: 0 12px; padding: 5px 24px; }
+.m3 .lg .tm { color: var(--muted); }
+.m3 .lg .who { color: var(--muted); }
+.m3 .lg .tg { white-space: nowrap; }
+.m3 .lg .tx { color: var(--text); }
+.m3 .lg.ask { background: color-mix(in srgb, var(--wait) 10%, transparent); }
+.m3 .lg.ask .tx { color: var(--fg); }
+.m3 .lg.msg .tx { color: var(--fg); }
+.m3 .prompt { margin: 14px 24px; border: 1px solid var(--line); padding: 12px 14px; background: var(--surface); }
+.m3 .prompt .p { color: var(--accent); }
+.m3 .prompt .c { display: inline-block; width: 8px; height: 15px; background: var(--accent); vertical-align: -2px; }
+.m3 .prompt .h { color: var(--muted); margin-top: 10px; display: flex; justify-content: space-between; }
+.m3 .bk { color: var(--muted); }
+.m3 .bk b { color: var(--fg); font-weight: 500; }
+.m3 .bk.hot b { color: var(--accent); }
+.m3 .tx2 { display: grid; grid-template-columns: 62px 120px minmax(0, 1fr) 90px 60px; gap: 0 12px; padding: 4px 24px; }
+.m3 .tx2 .r { text-align: right; color: var(--muted); }
+.m3 .tx2.say { color: var(--fg); }
+.m3 .tx2.model { color: var(--muted); }
+
+/* D4 · Briefing */
+.m4 { --serif: 'Newsreader', Georgia, serif; --sans: 'Instrument Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; font-family: var(--sans); }
+.m4[data-mode="dark"] { --bg: #121417; --surface: #191c20; --raised: #22262c; --line: #2c3139; --fg: #f1eee8; --text: #d9d5cc; --muted: #979a9f; --accent: #a9d3ae; --accent-fg: #0f1a12; --run: #7fd4a0; --wait: #f2c46d; --fail: #f08a7e; --rev: #8ec9e0; }
+.m4[data-mode="light"] { --bg: #fbfbf9; --surface: #ffffff; --raised: #f1f1ec; --line: #e2e1da; --fg: #191b1e; --text: #2a2c30; --muted: #64676d; --accent: #2f6b45; --accent-fg: #ffffff; --run: #26734a; --wait: #9a6500; --fail: #b4382b; --rev: #1d6a86; }
+.m4 .tb { display: flex; justify-content: space-between; align-items: center; padding: 16px 56px; border-bottom: 1px solid var(--line); }
+.m4 .tb .wm { font-family: var(--serif); font-style: italic; font-size: 24px; color: var(--fg); margin-right: 36px; }
+.m4 .tb .l { display: flex; align-items: baseline; gap: 24px; font-size: 14px; color: var(--muted); }
+.m4 .tb .l .on { color: var(--fg); text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 6px; }
+.m4 .tb .r { display: flex; gap: 16px; align-items: center; font-size: 13px; color: var(--muted); }
+.m4 .tb .q { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; min-width: 220px; }
+.m4 .page { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 64px; padding: 44px 56px 56px; }
+.m4 .kick { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.m4 h1 { font-family: var(--serif); font-weight: 500; font-size: 46px; line-height: 1.08; color: var(--fg); letter-spacing: -0.015em; margin: 10px 0 12px; max-width: 820px; text-wrap: balance; }
+.m4 .stand { font-family: var(--serif); font-size: 20px; line-height: 1.45; color: var(--muted); max-width: 680px; }
+.m4 .sect { margin-top: 38px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; }
+.m4 .sect > .kick { display: flex; justify-content: space-between; }
+.m4 .ans { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px; }
+.m4 .ans .by { font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.m4 .ans .by .mono { color: var(--text); font-size: 12px; }
+.m4 .qq { font-family: var(--serif); font-size: 27px; line-height: 1.3; color: var(--fg); max-width: 760px; }
+.m4 .ctx { font-family: var(--serif); font-size: 17px; color: var(--muted); max-width: 720px; }
+.m4 .field { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: var(--muted); min-height: 66px; background: var(--bg); }
+.m4 .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.m4 .btn { padding: 9px 16px; border-radius: 9px; border: 1px solid var(--line); color: var(--fg); font-size: 14px; display: inline-block; }
+.m4 .btn.pri { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
+.m4 .ent { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.m4 .ent:last-child { border-bottom: 0; }
+.m4 .ent .st { font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; padding-top: 4px; }
+.m4 .ent .tt { font-family: var(--serif); font-size: 19px; color: var(--fg); line-height: 1.3; }
+.m4 .ent .xx { font-size: 14px; color: var(--muted); margin-top: 3px; }
+.m4 .ent .xx .mono { font-size: 12px; }
+.m4 aside { display: flex; flex-direction: column; gap: 26px; padding-top: 8px; }
+.m4 aside .blk { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.m4 aside .w { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: baseline; font-size: 14px; }
+.m4 aside .w .dot { margin-top: 6px; }
+.m4 aside .w small { display: block; color: var(--muted); font-size: 12px; }
+.m4 aside .big { font-family: var(--serif); font-size: 34px; color: var(--fg); line-height: 1; }
+.m4 aside p { font-size: 14px; color: var(--muted); }
+.m4 .story { display: flex; flex-direction: column; margin-top: 28px; }
+.m4 .sr { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 20px; padding: 10px 0; }
+.m4 .sr .tm { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 5px; text-align: right; }
+.m4 .sr .ev { font-size: 14px; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.m4 .sr .ev .mono { font-size: 12px; color: var(--text); }
+.m4 .sr .say { font-family: var(--serif); font-size: 20px; line-height: 1.45; color: var(--fg); max-width: 720px; }
+.m4 .sr .who { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px; }
+.m4 .sr.ask .say { background: color-mix(in srgb, var(--wait) 12%, transparent); padding: 14px 18px; border-radius: 12px; }
+.m4 .sr.note .say { font-size: 17px; color: var(--muted); font-style: italic; }
+.m4 .fx { display: grid; grid-template-columns: 90px 1fr; gap: 6px 10px; font-size: 14px; }
+.m4 .fx span:nth-child(odd) { color: var(--muted); font-size: 13px; }
+.m4 .fx .mono { font-size: 12px; }
+.m4 .tr { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 16px; padding: 8px 0; align-items: baseline; border-bottom: 1px solid var(--line); }
+.m4 .tr .tm { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m4 .tr .say { font-family: var(--serif); font-size: 18px; color: var(--fg); }
+.m4 .tr .tool { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.m4 .tr .r { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.m4 .bul { font-family: var(--serif); font-size: 18px; color: var(--text); padding-left: 20px; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+</style>
+
+<div class="shell">
+  <nav class="side" id="side" aria-label="Boards"></nav>
+  <main id="main"><div class="board" id="board"></div></main>
+</div>
+
+<script>
+// ---------- Shared mock content: one world, drawn by every direction. Invented for the mockups, after the mock journal. ----------
+const ITEMS = [
+  { key: 'ABC-100', reason: 'worker failed', st: 's-fail', tag: 'ERR ', age: '1h', title: 'Fix the flaky checkout test', text: 'Run 40 (resume) ended failed: the worker exited 1 without a result line. It is at its limit, 1 of 1 resume runs.' },
+  { key: 'ABC-099', reason: 'drafts waiting', st: 's-wait', tag: 'DRFT', age: '52m', title: 'Debounce search input', text: '3 review-reply drafts wait on you, for acme/web#88.' },
+  { key: 'ABC-102', reason: 'awaiting reply', st: 's-wait', tag: 'ASK ', age: '34m', title: 'Export reports as CSV', text: 'Should the export button be red or blue? The design doc says red, the toolbar uses blue.', sel: true },
+  { key: 'api', reason: 'repo missing', st: 's-fail', tag: 'ERR ', age: '3h', title: 'api has no clone', text: 'api is in the workspace map but has no clone; run canopy workspace sync.' },
+  { key: 'ABC-099', reason: 'needs reviewer', st: 's-rev', tag: 'REV ', age: '1h', title: 'Debounce search input', text: 'acme/web#88 waits on a reviewer.' },
+  { key: 'chore:deps', reason: 'finding', st: 's-other', tag: 'FIND', age: '4h', title: 'lodash-advisory', text: 'lodash 4.17.20 has a prototype pollution advisory.' },
+];
+const WORKING = [
+  { key: 'ABC-101', title: 'Sign in with SSO', st: 's-run', doing: 'run 41 · implement', age: '30m', cost: '$0.84' },
+  { key: 'ABC-104', title: 'untitled', st: 's-run', doing: 'run 43 · resume · ci red', age: '25m', cost: '$0.31' },
+  { key: 'ABC-102', title: 'Export reports as CSV', st: 's-wait', doing: 'waiting on you', age: '34m', cost: '$1.07' },
+];
+const REPORT = 'Added the export button and its CSV writer; its color waits on you.';
+const QUESTION = 'Should the export button be red or blue? The design doc says red, the toolbar uses blue.';
+const NOTE = 'The CSV writer needs utf-8-sig for Excel to read accented names; plain utf-8 shows mojibake.';
+const STORY = [
+  { t: '1h 12m', clock: '10:48', kind: 'tick', who: 'overseer', tag: 'tick 1', text: 'Dispatched implement: started privately; implement the export button.' },
+  { t: '1h 11m', clock: '10:49', kind: 'run', who: 'canopy', tag: 'run 42', text: 'run 42 started · implement · worktree web/3' },
+  { t: '34m', clock: '11:26', kind: 'msg', who: 'worker', tag: '#4 report', text: REPORT },
+  { t: '34m', clock: '11:26', kind: 'note', who: 'worker', tag: 'note', text: 'Noted export-encoding: ' + NOTE },
+  { t: '34m', clock: '11:26', kind: 'ask', who: 'worker', tag: '#5 ASK', text: QUESTION },
+  { t: '34m', clock: '11:26', kind: 'run', who: 'canopy', tag: 'run 42', text: 'run 42 ended blocked · 37m · $1.07' },
+  { t: '30m', clock: '11:30', kind: 'tick', who: 'overseer', tag: 'tick 2', text: 'Waits: awaiting the operator’s answer to message 5.' },
+];
+const TRANSCRIPT = [
+  { t: '+0:00', k: 'say', text: 'I’ll read the ticket, then the search box.' },
+  { t: '+0:06', k: 'tool', tool: 'jira_get_issue', arg: 'issue_key=ABC-099', r: '1s' },
+  { t: '+0:24', k: 'tool', tool: 'read', arg: 'src/search/SearchBox.tsx', r: '1s' },
+  { t: '+0:30', k: 'fail', tool: 'read', arg: 'src/search/useSearch.ts · file not found', r: '1s' },
+  { t: '+0:36', k: 'model', tool: 'model call 1', arg: '24.6k in · 3.3k out', r: '$0.82' },
+  { t: '+9:54', k: 'say', text: 'There is no search hook yet. I’ll add one that debounces and aborts the stale request.' },
+  { t: '+10:54', k: 'tool', tool: 'write', arg: 'src/search/useSearch.ts', r: '1s' },
+  { t: '+19:54', k: 'tool', tool: 'bash', arg: 'npm test -- search', r: '14s' },
+  { t: '+20:00', k: 'model', tool: 'model call 2', arg: '25.9k in · 3.9k out', r: '$0.97' },
+  { t: '+26:54', k: 'tool', tool: 'bash', arg: 'git push origin HEAD:refs/heads/agent/ABC-099-search', r: '3s' },
+  { t: '+27:54', k: 'tool', tool: 'github_create_pull_request', arg: 'acme/web · debounce search and cancel stale requests', r: '1s' },
+  { t: '+28:54', k: 'model', tool: 'model call 3', arg: '30.2k in · 2.1k out · stop', r: '$0.52' },
+];
+const RUN_BULLETS = ['<code>useSearch</code> waits 250ms after the last key', 'a new query aborts the one in flight', 'tests cover both, with fake timers', '<code>make check</code> passes'];
+const RUN_BULLETS_PLAIN = ['useSearch waits 250ms after the last key', 'a new query aborts the one in flight', 'tests cover both, with fake timers', 'make check passes'];
+
+// ---------- D1 · Ops inbox, kept ----------
+function d1Header(active) {
+  const tabs = [['Attention', '6'], ['Tickets', ''], ['Runs', ''], ['Settings', '']];
+  return `<header class="hdr"><div style="display:flex"><span class="brand">canopy</span><div class="tabsx">${tabs.map(([t, n]) => `<span class="${t === active ? 'on' : ''}">${t}${n ? ` <b>${n}</b>` : ''}</span>`).join('')}</div></div>
+  <div class="live"><span class="dot s-run"></span>LIVE · TICK 2 · NEXT 0:42<span class="btn sm">Pause</span></div></header>`;
+}
+function d1Inbox() {
+  const ctr = (lab, sub, val, c) => `<div class="ctr" style="--c:var(${c})"><span><span class="lab">${lab}</span><span class="sub">${sub}</span></span><span class="val">${val}</span></div>`;
+  return `${d1Header('Attention')}<div class="main">
+  <div class="counters">${ctr('Running', 'of 3 slots', '2', '--run')}${ctr('Waiting on you', 'oldest 34m', '1', '--wait')}${ctr('Attention', '2 broken · 3 on others', '6', '--fail')}${ctr('Spend 24h', 'overseer + workers', '$11.25', '--spend')}</div>
+  <div class="split">
+    <section class="card list"><div class="lh"><h4>Needs you</h4><span>BY SEVERITY</span></div>
+      ${ITEMS.map(i => `<div class="item ${i.sel ? 'sel' : ''}"><div class="top"><span><span class="chip ${i.st}">${i.reason}</span>${i.key}</span><span>${i.age}</span></div><div class="t">${i.title}</div><div class="x">${i.text}</div></div>`).join('')}
+      <div class="sublab">WORKERS</div>
+      ${WORKING.map(w => `<div class="wk"><span class="k"><span class="dot ${w.st}"></span>${w.key}</span><span class="mut" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.doing}</span><span class="r">${w.cost}</span></div>`).join('')}
+    </section>
+    <article class="card thread">
+      <div class="th"><div><span class="k">ABC-102 · web · private · run 42</span><h2>Export reports as CSV</h2></div><span class="k"><span class="s-wait">● BLOCKED</span> 34m · $1.07</span></div>
+      <div class="msg"><span class="meta">Worker · report · 11:26</span><div class="bub">${REPORT}</div></div>
+      <div class="msg"><span class="meta s-wait">Question · 11:26</span><div class="bub ask">${QUESTION}</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><span class="fg" style="font-weight:500;font-size:13px">Reply</span><div class="field">The next worker reads it as an instruction.</div>
+      <div class="acts"><span class="btn">Stop</span><span class="btn pri">Send reply</span></div></div>
+      <div class="ctx"><span>branch agent/ABC-102-export</span><span>1 note in use</span><span>no PR yet</span><a>Open the ticket →</a></div>
+    </article>
+  </div></div>`;
+}
+function d1Ticket() {
+  const ev = s => {
+    if (s.kind === 'msg' || s.kind === 'ask') return `<div class="msg"><span class="meta ${s.kind === 'ask' ? 's-wait' : ''}">Worker · ${s.kind === 'ask' ? 'question' : 'report'} · ${s.clock}</span><div class="bub ${s.kind === 'ask' ? 'ask' : ''}">${s.text}</div></div>`;
+    return `<div class="ev"><span class="dot ${s.kind === 'run' ? 's-run' : 's-other'}"></span><span>${s.clock}</span><span class="fg">${s.tag}</span><span>${s.text}</span></div>`;
+  };
+  return `${d1Header('Tickets')}<div class="main">
+  <div class="pagehead"><div><span class="k">TICKETS / ABC-102 · web · private, started</span><h1>Export reports as CSV</h1></div><span class="k">jira.example/browse/ABC-102 ↗</span></div>
+  <div class="two">
+    <article class="card thread">${STORY.map(ev).join('')}
+      <div style="display:flex;flex-direction:column;gap:8px"><span class="fg" style="font-weight:500;font-size:13px">Reply to message 5</span><div class="field">The next worker reads it as an instruction.</div><div class="acts"><span class="btn">Stop</span><span class="btn pri">Send reply</span></div></div>
+    </article>
+    <aside class="card facts">
+      <div class="r"><span>Phase</span><span class="s-wait">needs human</span></div>
+      <div class="r"><span>Branch</span><span class="mono">agent/ABC-102-export</span></div>
+      <div class="r"><span>Cost</span><span class="mono">$1.07 · 1 run</span></div>
+      <div class="r"><span>PR</span><span class="mut">none yet</span></div>
+      <hr><h5>Runs</h5>
+      <div class="ev"><span class="dot s-wait"></span><span class="fg">run 42</span><span>implement · blocked · $1.07</span></div>
+      <hr><h5>Notes for its next worker</h5>
+      <div><span class="mono fg" style="font-size:12px">export-encoding</span><div class="mut" style="margin-top:2px">${NOTE}</div></div>
+      <hr><div class="acts"><span class="btn sm">Start privately</span><span class="btn sm s-fail">Forget</span></div>
+    </aside>
+  </div></div>`;
+}
+function d1Run() {
+  return `${d1Header('Runs')}<div class="main">
+  <div class="pagehead"><div><span class="k">RUNS / run 39 · implement · ABC-099</span><h1>Debounce search input</h1></div><span class="k"><span class="s-run">● done</span> · 29m · $2.31</span></div>
+  <section class="card sum"><div><p class="fg">Search now debounces input and cancels stale requests.</p><ul>${RUN_BULLETS.map(b => `<li>${b}</li>`).join('')}</ul><p style="margin-top:6px">Left the result cache as it was: ABC-112 owns it.</p></div>
+    <div class="facts" style="padding:0"><div class="r"><span>PR</span><span class="mono" style="color:var(--accent)">acme/web#88</span></div><div class="r"><span>When</span><span class="mono">Oct 8 10:30 → 10:59</span></div><div class="r"><span>Tokens</span><span class="mono">106.3k · peak 30.2k</span></div><div class="r"><span>Branch</span><span class="mono">agent/ABC-099-search</span></div></div></section>
+  <section class="card"><div class="lh" style="padding:14px 18px"><h4>Transcript</h4><span>7 TOOL CALLS · 1 FAILED · 3 MODEL CALLS</span></div>
+    ${TRANSCRIPT.map(e => e.k === 'say' ? `<div class="tr"><span class="t">${e.t}</span><span></span><span class="fg" style="grid-column:3/6">${e.text}</span></div>`
+      : `<div class="tr ${e.k === 'model' ? 'model' : ''}"><span class="t">${e.t}</span><span class="dot ${e.k === 'fail' ? 's-fail' : e.k === 'model' ? 's-other' : 's-rev'}" style="width:6px;height:6px"></span><span><span class="tool">${e.tool}</span> <span class="arg ${e.k === 'fail' ? 's-fail' : ''}">${e.arg}</span></span><span></span><span class="r">${e.r}</span></div>`).join('')}
+  </section></div>`;
+}
+
+// ---------- D2 · Mailroom ----------
+function d2Side(active, needs = '6') {
+  const boxes = [['Needs you', needs, needs !== '0'], ['Working', '3'], ['Waiting on others', '2'], ['All tickets', '7'], ['Done', '12']];
+  const loop = [['Runs', ''], ['Reviews', '1'], ['Chores', ''], ['Spend', '$11.25']];
+  const mb = ([t, n, hot]) => `<div class="mb ${t === active ? 'on' : ''} ${hot ? 'hot' : ''}"><span>${t}</span><span class="n">${n || ''}</span></div>`;
+  const foot = ['Ticks', 'Worktrees', 'Memory', 'Settings'].map(t => `<span class="${t === active ? 'on' : ''}">${t}</span>`).join(' · ');
+  return `<div class="sd"><div class="brand"><i></i>canopy</div><div class="start">Start a ticket</div>${boxes.map(mb).join('')}<div class="grp">The loop</div>${loop.map(mb).join('')}
+    <div class="foot"><span class="lv"><span class="dot s-run"></span>Live · tick 2 · next 0:42</span><span>2 of 3 slots busy</span><span class="lk">${foot}</span></div></div>`;
+}
+function d2List(title, sub, rows, search = 'Search tickets, runs, notes') {
+  return `<section class="lp"><div class="lh"><h2>${title}</h2><span>${sub}</span></div><div class="srch">${search}</div>${rows}</section>`;
+}
+function d2Rows(items, selIndex) {
+  return items.map((i, n) => `<div class="row ${n === selIndex ? 'sel' : ''}"><span class="dot d ${i.st}"></span><div class="l1"><span><span class="mono">${i.key}</span> · ${i.reason}</span><span>${i.age}</span></div><div class="l2">${i.title}</div><div class="l3">${i.text}</div></div>`).join('');
+}
+const sys = (st, text) => `<div class="sys"><span class="dot ${st}"></span>${text}</div>`;
+const said = (av, who, text, cls = '') => `<div class="msg"><span class="av">${av}</span><div><div class="who">${who}</div><div class="bub ${cls}">${text}</div></div></div>`;
+
+// Round four's new screens.
+function d2Pr() {
+  const draft = (where, kind, text) => `<div class="out"><div class="who">Draft · ${where} · <span class="chip s-other">${kind}</span></div><div class="draft">${text}<div class="acts"><span>Edit</span><span>Drop</span></div></div></div>`;
+  return `${d2Side('Needs you')}${d2List('Needs you', '6 · most severe first', d2Rows(ITEMS, 1))}
+  <section class="tp"><div class="tph"><div><h2>Debounce search input</h2><div class="k"><span class="mono">ABC-099</span>· web ·<span class="chip s-wait">3 drafts wait on you</span>· acme/web#88 · $2.55</div></div>
+    <div class="btns"><span class="btn">Details</span><span class="btn">acme/web#88 ↗</span></div></div>
+    <div class="body" style="gap:12px">
+      ${sys('s-done', '10:59 · run 39 opened acme/web#88 · checks green')}
+      ${said('R', 'canopy review 4 · 11:04', 'Stale requests are aborted now. Two smaller things remain; neither holds the merge on its own. <span style="color:var(--accent)">3 findings, 1 major ›</span>')}
+      ${said('D', 'dana on GitHub · src/search/useSearch.ts:15 · 11:20', 'If the fetch rejects, does the spinner ever stop?')}
+      ${said('L', 'lee on GitHub · the PR · 11:22', 'Should the result cache change here too?')}
+      ${sys('s-run', '11:41 · run 44 · resume: pushed 1 commit, drafted 3 replies')}
+      ${draft('reply to dana on useSearch.ts:15', 'changed', 'It does now: setLoading(false) moved into a finally, and an aborted request skips it.')}
+      ${draft('reply to lee on the PR', 'declined', 'I left the result cache as it was: ABC-112 owns it.')}
+      ${draft('on SearchBox.tsx:6', 'changed', 'Named the delay SEARCH_DEBOUNCE_MS, beside the other timings in src/config.ts.')}
+    </div>
+    <div class="compose"><div class="ph">Each draft is yours to edit or drop. Nothing reaches GitHub until you send.</div><div class="bar"><span>3 drafts · sent as one review comment</span><span class="btn pri">Send 3 replies</span></div></div></section>`;
+}
+function d2Review() {
+  const reviews = [
+    { key: 'review 4', reason: 'acme/web#88', st: 's-wait', age: '1h', title: 'Debounce search input', text: '3 findings, 1 major · ABC-099' },
+    { key: 'review 3', reason: 'acme/api#41', st: 's-other', age: '2h', title: 'Move billing to the v2 API', text: '1 minor finding · ABC-103' },
+    { key: 'review 1', reason: 'acme/web#88', st: 's-fail', age: '3h', title: 'Debounce search input', text: '1 blocking finding, fixed since · ABC-099' },
+  ];
+  const f = (on, n, sev, st, title, ref, diff, body) => `<div class="fnd"><div class="fh"><span class="box ${on ? 'on' : ''}">${on ? '✓' : ''}</span><span class="mono mut">${n}</span><span class="chip ${st}">${sev}</span><span class="fg" style="font-weight:500">${title}</span><span class="ref">${ref}</span></div>${diff}<div class="fb">${body}</div></div>`;
+  const dl = (no, sign, code) => `<div class="dl ${sign === '+' ? 'add' : sign === '-' ? 'del' : ''}"><span>${no}</span><i>${sign}</i><span>${code}</span></div>`;
+  return `${d2Side('Reviews')}${d2List('Reviews', 'newest first', d2Rows(reviews, 0), 'Filter reviews')}
+  <section class="tp"><div class="tph"><div><h2>Debounce search input</h2><div class="k"><span class="mono">review 4</span>· acme/web#88 · 9b2f4c6 against main ·<span class="chip s-run">done</span>· $0.24</div></div>
+    <div class="btns"><span class="btn">Ticket ABC-099</span><span class="btn">PR ↗</span></div></div>
+    <div class="body" style="gap:12px">
+      ${said('R', 'canopy review · 11:04', 'Stale requests are aborted now. Two smaller things remain; neither holds the merge on its own.')}
+      ${f(true, 1, 'major', 's-wait', 'A failed request leaves the spinner on', 'useSearch.ts:15', `<div class="diffs">${dl(13, '+', '.then((found: Result[]) =&gt; {')}${dl(14, '+', '    setResults(found)')}${dl(15, '+', '    setLoading(false)')}${dl(16, '+', '})')}</div>`, 'setLoading(false) runs only after a successful json(). Move it into a finally, and skip it for an aborted request.')}
+      ${f(true, 2, 'minor', 's-other', 'The debounce delay is a bare number', 'SearchBox.tsx:6', `<div class="diffs">${dl(5, '-', 'return &lt;input onChange={(e) =&gt; { setQuery(e.target.value) }} /&gt;')}${dl(6, '+', 'const search = useDebounced(onSearch, 250)')}</div>`, 'Name it, as SEARCH_DEBOUNCE_MS, beside the other timings in src/config.ts.')}
+      ${f(false, 3, 'minor', 's-other', 'No test covers an aborted request', 'not in the diff', '', 'The new hook’s tests check the debounce only.')}
+    </div>
+    <div class="compose"><div class="ph">Tick the findings a worker should address. It leaves the rest alone.</div><div class="bar"><span>2 of 3 ticked · for a worker on ABC-099</span><span class="btn pri">Send to a worker</span></div></div></section>`;
+}
+function d2Memory() {
+  const rows = [
+    { key: 'web-tests', reason: 'proposal', st: 's-wait', age: '13d left', title: 'Run web’s tests with npm test -- --run', text: 'from run 39 on ABC-099 · web' },
+    { key: 'billing-client', reason: 'proposal', st: 's-wait', age: '13d left', title: 'Billing retries go through retry()', text: 'from run 42 on ABC-102 · private · replaces memory 8' },
+  ];
+  const lessons = `<div class="lsub">Lessons · recording only</div><div class="row"><span class="dot d s-other"></span><div class="l1"><span><span class="mono">billing-client</span> · lesson</span><span>2h</span></div><div class="l2">Billing goes through src/billing/client.ts alone</div><div class="l3">review in 89 days</div></div>
+    <div class="lsub">Ticket notes · in use</div><div class="row"><span class="dot d s-run"></span><div class="l1"><span><span class="mono">ABC-102</span> · 1 note</span><span>1h</span></div><div class="l2">export-encoding</div><div class="l3">${NOTE}</div></div>`;
+  return `${d2Side('Memory')}<section class="lp"><div class="lh"><h2>Memory</h2><span>2 to decide</span></div><div class="seg2"><span class="on">To decide 2</span><span>Lessons 1</span><span>Notes 3</span></div>${d2Rows(rows, 0)}${lessons}</section>
+  <section class="tp"><div class="tph"><div><h2>web-tests</h2><div class="k"><span class="mono">memory 5</span>· a worker’s proposal · web ·<span class="chip s-wait">13 days left</span></div></div><div class="btns"><span class="btn">Ticket ABC-099</span><span class="btn">History</span></div></div>
+    <div class="body">
+      ${sys('s-other', 'run 39 · implement · ended done, 1h ago')}
+      ${said('W', 'The worker proposes, for every run in web', '<span class="big">Run web’s tests with <span class="mono">npm test -- --run</span>: plain <span class="mono">npm test</span> watches and never exits.</span>')}
+      ${sys('s-other', 'Lessons are recording only: promoting it records it, and no run reads it yet')}
+    </div>
+    <div class="compose"><div class="ph">Promote it as written, or edit it first. Rejected proposals are kept in History.</div><div class="bar"><span>Forget drops it without a record</span><span style="display:flex;gap:8px"><span class="btn">Reject</span><span class="btn">Edit first</span><span class="btn pri">Promote</span></span></div></div></section>`;
+}
+function d2Chores() {
+  const rows = [
+    { key: 'deps', reason: '1 finding', st: 's-wait', age: '2h', title: 'Dependency advisories', text: 'chore run 2 · done · $0.31' },
+    { key: 'build-health', reason: 'running', st: 's-run', age: 'now', title: 'Build health', text: 'chore run 4 · started 3m ago' },
+  ];
+  return `${d2Side('Chores')}${d2List('Chores', '2 configured', d2Rows(rows, 0), 'Filter chores')}
+  <section class="tp"><div class="tph"><div><h2>Dependency advisories</h2><div class="k"><span class="mono">chore:deps</span>· every repository ·<span class="chip s-wait">1 open finding</span></div></div><div class="btns"><span class="btn">Prompt</span><span class="btn">Try it now</span></div></div>
+    <div class="body">
+      ${sys('s-other', 'yesterday · chore run 1: found nothing · $0.22')}
+      ${sys('s-done', '2h ago · chore run 2 · done · $0.31')}
+      ${said('C', 'deps found, in web', 'lodash 4.17.20 has a prototype pollution advisory. <span style="color:var(--accent)">github.com/advisories/GHSA-35jh-r3h4-6jhm</span>')}
+      ${said('C', 'deps noted, for its next run', 'web pins lodash through an old eslint plugin; bumping lodash alone is refused by npm.', 'note')}
+    </div>
+    <div class="compose"><div class="ph">Start a ticket from the finding, or dismiss it. A dismissed finding stays dismissed until the advisory changes.</div><div class="bar"><span>1 open finding</span><span style="display:flex;gap:8px"><span class="btn">Dismiss</span><span class="btn pri">Start a ticket</span></span></div></div></section>`;
+}
+function d2Clear() {
+  return `${d2Side('Needs you', '0')}<section class="lp"><div class="lh"><h2>Needs you</h2><span>0</span></div><div class="srch">Search tickets, runs, notes</div>
+    <div class="empty"><div class="leaf"></div><b>Nothing needs you.</b><span>Two workers are on it. The next tick is in 42 seconds; this list fills again if one of them asks.</span></div></section>
+  <section class="tp"><div class="tph"><div><h2>While you were away</h2><div class="k">since 11:30 · 4 things happened, none of them yours</div></div></div>
+    <div class="body">
+      ${sys('s-done', '11:58 · run 44 pushed to acme/web#88; checks green')}
+      ${sys('s-done', '12:04 · you sent 3 replies on acme/web#88')}
+      ${sys('s-run', '12:10 · run 45 started on ABC-102 with your answer: “Blue, to match the toolbar.”')}
+      ${sys('s-other', '12:16 · chore build-health found nothing')}
+      ${said('W', 'run 41 · ABC-101 · working 30m', 'Wiring the SSO callback now; tests next.')}
+    </div></section>`;
+}
+function d2Thread(withInfoBtn) {
+  const ev = s => {
+    if (s.kind === 'msg' || s.kind === 'ask') return `<div class="msg"><span class="av">W</span><div><div class="who">Worker · run 42 · ${s.clock}${s.kind === 'ask' ? ' · <span class="s-wait">asks you</span>' : ''}</div><div class="bub ${s.kind === 'ask' ? 'ask' : ''}">${s.text}</div></div></div>`;
+    if (s.kind === 'note') return `<div class="msg"><span class="av">W</span><div><div class="who">Worker noted, for the next run</div><div class="bub note">${NOTE}</div></div></div>`;
+    return `<div class="sys"><span class="dot ${s.kind === 'run' ? 's-run' : 's-other'}"></span>${s.clock} · ${s.tag}: ${s.text.replace(/^run 42 /, '')}</div>`;
+  };
+  return `<section class="tp"><div class="tph"><div><h2>Export reports as CSV</h2><div class="k"><span class="mono">ABC-102</span>· web · private ·<span class="chip s-wait">waiting on you</span>· $1.07</div></div>
+    <div class="btns"><span class="btn">Stop</span><span class="btn">Forget</span><span class="btn">${withInfoBtn ? 'Details' : 'Jira ↗'}</span></div></div>
+    <div class="body">${STORY.map(ev).join('')}</div>
+    <div class="compose"><div class="ph">Reply to the question. The next worker reads it as an instruction.</div><div class="bar"><span>Replying to #5 · privately</span><span class="btn pri">Send</span></div></div></section>`;
+}
+function d2Inbox() {
+  return `${d2Side('Needs you')}<section class="lp"><div class="lh"><h2>Needs you</h2><span>6 · most severe first</span></div><div class="srch">Search tickets, runs, notes</div>
+    ${ITEMS.map(i => `<div class="row ${i.sel ? 'sel' : ''}"><span class="dot d ${i.st}"></span><div class="l1"><span><span class="mono">${i.key}</span> · ${i.reason}</span><span>${i.age}</span></div><div class="l2">${i.title}</div><div class="l3">${i.text}</div></div>`).join('')}
+  </section>${d2Thread(false)}`;
+}
+function d2Ticket() {
+  const tickets = [['ABC-101', 'Sign in with SSO', 's-run', 'working · run 41', '20m'], ['ABC-104', 'untitled', 's-run', 'working · ci red', '25m'], ['ABC-102', 'Export reports as CSV', 's-wait', 'waiting on you', '34m', true], ['ABC-105', 'Schedule report exports', 's-other', 'plan proposed', '38m'], ['ABC-099', 'Debounce search input', 's-rev', 'review pending · acme/web#88', '52m'], ['ABC-100', 'Fix the flaky checkout test', 's-fail', 'ci red · at its limit', '1h'], ['ABC-103', 'Move billing to the v2 API', 's-other', 'stopped', '1h']];
+  return `${d2Side('All tickets')}<section class="lp"><div class="lh"><h2>All tickets</h2><span>7 · recent first</span></div><div class="srch">Filter by key or title</div>
+    ${tickets.map(([k, t, st, s, a, sel]) => `<div class="row ${sel ? 'sel' : ''}"><span class="dot d ${st}"></span><div class="l1"><span class="mono">${k}</span><span>${a}</span></div><div class="l2">${t}</div><div class="l3">${s}</div></div>`).join('')}
+  </section>${d2Thread(true)}
+  <aside class="info"><div><h5>Ticket</h5><div class="r"><span>Phase</span><span class="s-wait">needs human</span></div><div class="r"><span>Branch</span><span class="mono" style="font-size:12px">agent/ABC-102-export</span></div><div class="r"><span>Cost</span><span class="mono">$1.07</span></div><div class="r"><span>PR</span><span class="mut">none yet</span></div><div class="r"><span>Tracker</span><span>Jira ↗</span></div></div>
+    <div><h5>Runs</h5><div class="card2"><div style="display:flex;justify-content:space-between"><span class="mono fg">run 42</span><span class="s-wait">blocked</span></div><span class="mut">implement · 37m · $1.07</span><span style="color:var(--accent)">Open transcript</span></div></div>
+    <div><h5>Notes for its next worker</h5><div class="card2"><span class="mono fg" style="font-size:12px">export-encoding</span><span class="mut">${NOTE}</span></div></div></aside>`;
+}
+function d2Run() {
+  const runs = [['run 43', 'ABC-104 · resume', 's-run', 'running · 25m', ''], ['run 42', 'ABC-102 · implement', 's-wait', 'blocked · $1.07', ''], ['run 41', 'ABC-101 · implement', 's-run', 'running · 30m', ''], ['run 40', 'ABC-100 · resume', 's-fail', 'failed · $0.18', ''], ['run 39', 'ABC-099 · implement', 's-done', 'done · $2.31 · acme/web#88', true], ['run 38', 'ABC-103 · implement', 's-other', 'stopped · $0.62', '']];
+  return `${d2Side('Runs')}<section class="lp"><div class="lh"><h2>Runs</h2><span>newest first</span></div><div class="srch">Filter runs</div>
+    ${runs.map(([k, t, st, s, sel]) => `<div class="row ${sel ? 'sel' : ''}"><span class="dot d ${st}"></span><div class="l1"><span class="mono">${k}</span><span></span></div><div class="l2">${t}</div><div class="l3">${s}</div></div>`).join('')}
+  </section><section class="tp"><div class="tph"><div><h2>Debounce search input</h2><div class="k"><span class="mono">run 39</span>· implement · ABC-099 ·<span class="chip s-run">done</span>· 29m · $2.31</div></div><div class="btns"><span class="btn">Ticket</span><span class="btn">acme/web#88 ↗</span></div></div>
+    <div class="body"><div class="msg" style="max-width:820px"><span class="av">W</span><div><div class="who">Worker’s summary</div><div class="bub">Search now debounces input and cancels stale requests. ${RUN_BULLETS_PLAIN.join('; ')}. Left the result cache as it was: ABC-112 owns it.</div></div></div>
+      <div class="att"><div class="ah"><span class="fg" style="font-weight:500">Transcript</span><span class="mut" style="font-size:12px">7 tool calls · 1 failed · 3 model calls · 106.3k tokens</span></div>
+      ${TRANSCRIPT.map(e => e.k === 'say' ? `<div class="tl say"><span class="t">${e.t}</span><span>${e.text}</span><span></span></div>` : `<div class="tl"><span class="t">${e.t}</span><span><span class="tool ${e.k === 'fail' ? 's-fail' : e.k === 'model' ? 'mut' : 'fg'}">${e.tool}</span> <span class="mut">${e.arg}</span></span><span class="r">${e.r}</span></div>`).join('')}</div></div></section>`;
+}
+
+// ---------- D3 · Ledger ----------
+function d3Bar(active) {
+  const tabs = [['attention', '6'], ['tickets', ''], ['runs', ''], ['log', ''], ['settings', '']];
+  return `<div class="sl"><div class="l"><b>canopy</b>${tabs.map(([t, n]) => `<span class="tab ${t === active ? 'on' : ''}">${t}${n ? ` <em>${n}</em>` : ''}</span>`).join('')}</div>
+  <div class="r"><span><span class="s-run">●</span> live</span><span>tick <span class="fg">2</span> · next <span class="fg">0:42</span></span><span>slots <span class="fg">2/3</span></span><span>24h <span class="fg">$11.25</span></span><span class="bk"><b>[pause]</b></span></div></div>`;
+}
+function d3Log(s) {
+  const tg = { tick: '<span class="mut">TICK</span>', run: '<span class="s-run">RUN </span>', msg: '<span class="fg">MSG </span>', note: '<span class="s-rev">NOTE</span>', ask: '<span class="s-wait">ASK </span>' }[s.kind];
+  const who = s.kind === 'msg' ? 'worker #4' : s.kind === 'ask' ? 'worker #5' : s.who;
+  return `<div class="lg ${s.kind}"><span class="tm">${s.clock}</span><span class="who">${who}</span><span class="tg">[${tg}]</span><span class="tx">${s.text}</span></div>`;
+}
+function d3Prompt() {
+  return `<div class="prompt"><div><span class="p">reply #5 ›</span> <span class="mut">the next worker reads it as an instruction</span> <span class="c"></span></div>
+  <div class="h"><span>private · nothing reaches the ticket</span><span><span class="bk hot"><b>[send ⏎]</b></span>  <span class="bk"><b>[stop]</b></span>  <span class="bk"><b>[forget]</b></span></span></div></div>`;
+}
+function d3Inbox() {
+  return `${d3Bar('attention')}<div class="cols"><div>
+    <div class="rule"><b>needs you</b> ─────────────────────────── 6 · by severity</div>
+    ${ITEMS.map(i => `<div class="ln ${i.sel ? 'sel' : ''}"><span class="cur">${i.sel ? '▸' : ''}</span><span class="${i.st}">[${i.tag}]</span><span class="k">${i.key}</span><span class="rs">${i.reason}</span><span class="ag">${i.age}</span><span></span><span></span><span></span><span class="t">${i.title}</span><span></span><span></span><span></span><span class="x">${i.text}</span></div>`).join('')}
+    <div class="rule"><b>working</b> ──────────────────────────────────── 3</div>
+    ${WORKING.map(w => `<div class="wl"><span class="${w.st}">●</span><span class="fg">${w.key}</span><span class="mut">${w.doing}</span><span class="mut" style="text-align:right">${w.age}</span><span class="r">${w.cost}</span></div>`).join('')}
+  </div><div>
+    <div class="hd"><div class="t">ABC-102  Export reports as CSV</div><div class="kv"><span>web</span><span>private, started</span><span>phase <b class="s-wait">needs human</b></span><span>run <b>42</b> blocked</span><span>cost <b>$1.07</b></span><span>branch <b>agent/ABC-102-export</b></span></div></div>
+    <div style="padding-top:10px">${STORY.map(d3Log).join('')}</div>${d3Prompt()}
+  </div></div>`;
+}
+function d3Ticket() {
+  return `${d3Bar('tickets')}<div>
+    <div class="hd"><div class="mut">tickets / </div><div class="t" style="font-size:18px">ABC-102  Export reports as CSV</div>
+      <div class="kv"><span>repo <b>web</b></span><span>visibility <b>private, started</b></span><span>phase <b class="s-wait">needs human</b></span><span>branch <b>agent/ABC-102-export</b></span><span>pr <b>none</b></span><span>runs <b>1</b></span><span>cost <b>$1.07</b></span><span>tracker <b>jira.example/browse/ABC-102</b></span></div></div>
+    <div class="rule"><b>log</b> ── oldest first ── ticks, runs, messages and notes in one stream</div>
+    ${STORY.map(d3Log).join('')}
+    <div class="rule"><b>notes for its next worker</b> ── 1 in use</div>
+    <div class="lg"><span class="tm">11:26</span><span class="who">run 42</span><span class="tg">[<span class="s-rev">NOTE</span>]</span><span class="tx"><span class="fg">export-encoding</span>  ${NOTE}</span></div>
+    ${d3Prompt()}
+  </div>`;
+}
+function d3Run() {
+  return `${d3Bar('runs')}<div>
+    <div class="hd"><div class="mut">runs / </div><div class="t" style="font-size:18px">run 39  Debounce search input</div>
+      <div class="kv"><span>ticket <b>ABC-099</b></span><span>kind <b>implement</b></span><span>status <b class="s-run">done</b></span><span>when <b>Oct 8 10:30 → 10:59</b></span><span>spent <b>$2.31</b></span><span>tokens <b>106.3k</b> · peak <b>30.2k</b></span><span>pr <b>acme/web#88</b></span></div></div>
+    <div class="rule"><b>summary</b></div>
+    <div style="padding:0 24px 6px" class="fg">Search now debounces input and cancels stale requests.</div>
+    ${RUN_BULLETS_PLAIN.map(b => `<div style="padding:0 24px" class="mut">  - ${b}</div>`).join('')}
+    <div class="rule"><b>transcript</b> ── 7 tool calls · <span class="s-fail">1 failed</span> · 3 model calls</div>
+    ${TRANSCRIPT.map(e => e.k === 'say' ? `<div class="tx2 say"><span class="mut">${e.t}</span><span class="mut">says</span><span style="grid-column:3/6">${e.text}</span></div>`
+      : `<div class="tx2 ${e.k === 'model' ? 'model' : ''}"><span class="mut">${e.t}</span><span class="${e.k === 'fail' ? 's-fail' : e.k === 'model' ? 'mut' : 's-rev'}">${e.k === 'model' ? '──' : e.k === 'fail' ? 'tool ✗' : 'tool'}</span><span><span class="${e.k === 'model' ? 'mut' : 'fg'}">${e.tool}</span> <span class="mut">${e.arg}</span></span><span></span><span class="r">${e.r}</span></div>`).join('')}
+  </div>`;
+}
+
+// ---------- D4 · Briefing ----------
+function d4Bar(active) {
+  return `<div class="tb"><div class="l"><span class="wm">canopy</span>${['Today', 'Tickets', 'Log'].map(t => `<span class="${t === active ? 'on' : ''}">${t}</span>`).join('')}</div>
+  <div class="r"><span class="q">Search everything</span><span><span class="s-run">●</span> Live. Next tick in 42s.</span><span>Settings</span></div></div>`;
+}
+function d4Inbox() {
+  const broke = ITEMS.filter(i => i.st === 's-fail');
+  const others = ITEMS.filter(i => !i.sel && i.st !== 's-fail');
+  const act = { 'ABC-100': 'Allow one more run', api: 'Sync the workspace' };
+  return `${d4Bar('Today')}<div class="page"><div>
+    <span class="kick">Thursday afternoon · tick 2</span>
+    <h1>One question for you, two things broke, and three wait on someone else.</h1>
+    <p class="stand">Two workers are busy on ABC-101 and ABC-104. The loop has spent $11.25 today, most of it on workers.</p>
+    <div class="sect"><span class="kick"><span>Your answer</span><span>1</span></span>
+      <div class="ans"><div class="by"><span class="chip s-wait">asks you</span><span class="mono">ABC-102</span><span>Export reports as CSV · a worker, 34 minutes ago</span></div>
+        <p class="ctx">${REPORT}</p><p class="qq">“${QUESTION}”</p>
+        <div class="field">Your answer. The next worker reads it as an instruction.</div>
+        <div class="row"><span class="mut" style="font-size:13px">Private ticket: nothing reaches Jira.</span><span style="display:flex;gap:8px"><span class="btn">Open the story</span><span class="btn pri">Send</span></span></div></div></div>
+    <div class="sect"><span class="kick"><span>Broke</span><span>2</span></span>
+      ${broke.map(i => `<div class="ent"><span class="st s-fail">${i.reason}</span><div><div class="tt">${i.key === 'api' ? 'The api repository has no clone' : i.title}</div><div class="xx"><span class="mono">${i.key}</span> · ${i.text}</div></div><span class="btn">${act[i.key]}</span></div>`).join('')}</div>
+    <div class="sect"><span class="kick"><span>Waiting on others</span><span>3</span></span>
+      ${others.map(i => `<div class="ent"><span class="st ${i.st}">${i.reason}</span><div><div class="tt">${i.title}</div><div class="xx"><span class="mono">${i.key}</span> · ${i.text}</div></div><span class="mut" style="font-size:13px">${i.age}</span></div>`).join('')}</div>
+  </div>
+  <aside><div class="blk"><span class="kick">Meanwhile</span>${WORKING.slice(0, 2).map(w => `<div class="w"><span class="dot ${w.st}"></span><span>${w.title === 'untitled' ? 'ABC-104, untitled' : w.title}<small>${w.key} · ${w.doing}</small></span><span class="mono mut" style="font-size:12px">${w.age}</span></div>`).join('')}</div>
+    <div class="blk"><span class="kick">Spent today</span><span class="big">$11.25</span><p>Overseer $3.10, workers $6.90, reviews $1.25. About a usual weekday.</p></div>
+    <div class="blk"><span class="kick">Lately</span><p>run 39 opened acme/web#88. review 4 found 3 things, 1 major. A worker proposed 2 lessons.</p></div></aside></div>`;
+}
+function d4Ticket() {
+  const row = s => {
+    if (s.kind === 'msg' || s.kind === 'ask') return `<div class="sr ${s.kind}"><span class="tm">${s.clock}</span><div><div class="who ${s.kind === 'ask' ? 's-wait' : ''}">${s.kind === 'ask' ? 'The worker asks you' : 'The worker reports'}</div><p class="say">${s.text}</p></div></div>`;
+    if (s.kind === 'note') return `<div class="sr note"><span class="tm"></span><div><div class="who">and noted, for whoever comes next</div><p class="say">${NOTE}</p></div></div>`;
+    return `<div class="sr"><span class="tm">${s.clock}</span><div class="ev"><span class="dot ${s.kind === 'run' ? 's-run' : 's-other'}" style="width:6px;height:6px"></span><span class="mono">${s.tag}</span><span>${s.text.replace(/^run 42 /, '')}</span></div></div>`;
+  };
+  return `${d4Bar('Tickets')}<div class="page"><div>
+    <span class="kick">ABC-102 · web · private</span><h1>Export reports as CSV</h1>
+    <p class="stand">Started privately an hour ago. One run so far, which built the button and stopped to ask you about its color. It has waited 34 minutes.</p>
+    <div class="story">${STORY.map(row).join('')}</div>
+    <div class="ans" style="margin-left:104px"><div class="field">Your answer to the color question.</div><div class="row"><span class="btn">Stop</span><span class="btn pri">Send</span></div></div>
+  </div><aside><div class="blk"><span class="kick">The facts</span><div class="fx"><span>Phase</span><span class="s-wait">needs human</span><span>Branch</span><span class="mono">agent/ABC-102-export</span><span>Cost</span><span>$1.07, one run</span><span>PR</span><span class="mut">none yet</span><span>Tracker</span><span>Jira ↗</span></div></div>
+    <div class="blk"><span class="kick">Runs</span><div class="w"><span class="dot s-wait"></span><span>run 42, implement<small>blocked after 37m</small></span><span class="mono mut" style="font-size:12px">$1.07</span></div></div>
+    <div class="blk"><span class="kick">Forget this ticket</span><p>Drops canopy’s record of it. The branch and Jira stay as they are.</p></div></aside></div>`;
+}
+function d4Run() {
+  return `${d4Bar('Log')}<div class="page"><div>
+    <span class="kick">run 39 · implement · ABC-099</span><h1>Debounce search input</h1>
+    <p class="stand">Done in 29 minutes for $2.31. It opened acme/web#88.</p>
+    <div class="sect"><span class="kick">What the worker says it did</span><p class="say" style="font-family:var(--serif);font-size:20px;color:var(--fg);margin-top:10px">Search now debounces input and cancels stale requests.</p>
+      <ul class="bul">${RUN_BULLETS_PLAIN.map(b => `<li>${b}</li>`).join('')}</ul></div>
+    <div class="sect"><span class="kick"><span>How it went</span><span>7 tool calls · 1 failed · 3 model calls</span></span>
+      ${TRANSCRIPT.map(e => e.k === 'say' ? `<div class="tr"><span class="tm">${e.t}</span><span class="say">${e.text}</span><span></span></div>` : `<div class="tr"><span class="tm">${e.t}</span><span class="tool ${e.k === 'fail' ? 's-fail' : e.k === 'model' ? 'mut' : ''}">${e.tool} <span class="mut">${e.arg}</span></span><span class="r">${e.r}</span></div>`).join('')}</div>
+  </div><aside><div class="blk"><span class="kick">The facts</span><div class="fx"><span>When</span><span>Oct 8, 10:30 to 10:59</span><span>Tokens</span><span>106.3k, peak 30.2k</span><span>Branch</span><span class="mono">agent/ABC-099-search</span><span>Log</span><span class="mono">.canopy/runs/39.log</span></div></div>
+    <div class="blk"><span class="kick">Since</span><p>review 4 read the PR and found 3 things, 1 major: a failed request leaves the spinner on.</p></div></aside></div>`;
+}
+
+// ---------- Directions ----------
+const SECTIONS_TODAY = ['Attention', 'Tickets', 'Pull requests', 'Reviews', 'Runs', 'Chores', 'Spend', 'Ticks', 'Worktrees', 'Memory', 'Settings', 'Rail: search, Working, spend, Sprig', 'Header: ticker, aurora, Pause, Tick now'];
+const DIRS = {
+  d1: {
+    n: 1, name: 'Ops inbox, kept', short: 'E, as you picked it',
+    q: 'Is it E you stopped liking, or what grew on top of it?',
+    lede: 'Round two’s favorite, redrawn with today’s content and none of what accreted since. Four tabs, four counters, the list beside the open thread. Same palette and type as today, so this board isolates the amount from the look.',
+    render: { inbox: d1Inbox, ticket: d1Ticket, run: d1Run },
+    keeps: ['IBM Plex, the indigo slate, every status token and its contrast tests', 'The counters and the list beside the thread', 'Monospace readouts for every number'],
+    cuts: ['The rail: search moves to the header, Working moves under the list, spend becomes a counter', 'Section colors, the aurora, the ticker, odometers', 'Uppercase panel labels on every block; a page has one card per idea'],
+    costs: 'Small to medium. Tokens and type stay. The shell and the nav change; seven sections move inside others.',
+    risk: 'It might simply grow back. Nothing in the design stops the next panel.',
+    map: ['Attention tab, the home page', 'Tickets tab; the ticket page is the thread plus a facts column', 'A line in the ticket’s facts, linking out', 'An event in the ticket’s thread; findings open from it', 'Runs tab', 'Runs tab, a “chores” filter; findings land in Attention', 'A counter on Attention; the breakdown in Runs', 'Runs tab, a “ticks” filter', 'Settings › Pools', 'Settings › Memory; proposals land in Attention', 'Settings tab', 'Gone. Search in the header, Working under the list', 'Gone, but Pause and the tick countdown in the header'],
+  },
+  d2: {
+    n: 2, name: 'Mailroom', short: 'a mail client for workers',
+    q: 'Should a ticket be a conversation first and a record second?',
+    lede: 'Round one’s calm inbox taken all the way. Three panes: mailboxes, messages, the open thread with its composer. Runs, ticks and notes become small lines inside the thread, so a ticket reads as one story. The machinery lives in a folder you rarely open.',
+    render: { inbox: d2Inbox, ticket: d2Ticket, run: d2Run },
+    keeps: ['The thread as chat bubbles with a reply box', 'Status as dots and chips; the accent for the action', 'Every write still a CLI verb, with its refusal'],
+    cuts: ['Pages per table: Ticks, Worktrees, Memory and Settings fold into one line at the foot', 'Separate Decisions, Runs and Conversation panels on a ticket', 'Section colors, aurora, ticker, panel labels'],
+    costs: 'Medium. A new shell and a new ticket page that merges three panels into one timeline. Lists keep their queries.',
+    risk: 'A mail client invites you to clear it. If the list rarely reaches zero, it nags instead of calms.',
+    map: ['“Needs you” mailbox', '“Working”, “Waiting on others”, “All tickets”, “Done” mailboxes', 'The ticket’s Details drawer', 'A message in the thread; “Reviews” under The loop', '“Runs” under The loop; a run also opens from its line in the thread', '“Chores” under The loop; findings arrive in Needs you', 'A figure beside Spend; its page under The loop', 'A link in the foot', 'A link in the foot', 'A link in the foot; proposals arrive in Needs you', 'A link in the foot', 'Gone. Working is a mailbox; search tops the list', 'Gone. Live state sits at the foot of the mailboxes'],
+  },
+  d3: {
+    n: 3, name: 'Ledger', short: 'canopy status, grown up',
+    q: 'Would you rather canopy look like the terminal it came from?',
+    lede: 'Round two’s F, revived without the keyboard requirement. All monospace, a status line in place of a header, bracketed tags, and a ticket as a single time-ordered log. One color means “you”: amber marks what waits on you and the prompt you answer at.',
+    render: { inbox: d3Inbox, ticket: d3Ticket, run: d3Run },
+    keeps: ['The density you get from mono and hairlines', 'The journal as the truth: the log is the journal, in order', 'State colors, held to the same contrast rules'],
+    cuts: ['Panels altogether: sections are rules of text, not boxes', 'Ticks, chores and decisions as pages: one “log” tab streams them', 'Bubbles, odometers, section colors, the rail'],
+    costs: 'Medium. A new type system and tone; the lists and data stay. Easy to keep simple, because there is so little chrome to add to.',
+    risk: 'Agent prose in mono is tiring to read at length, and that is most of what you read.',
+    map: ['“attention” tab', '“tickets” tab; a ticket is a header of facts over its log', 'A field in the ticket’s header line', '[REV] lines in the ticket’s log; findings expand under them', '“runs” tab', 'Lines in “log”; findings land in attention', 'The status line', 'Lines in “log”', 'The status line counts slots; details in settings', 'Lines in “log”; proposals land in attention', '“settings” tab', 'Gone. The status line holds live state', 'Gone. The status line is the header'],
+  },
+  d4: {
+    n: 4, name: 'Briefing', short: 'a page that tells you',
+    q: 'What if the first screen said what needs you in a sentence?',
+    lede: 'Round one’s field notes, kept for structure rather than skin. Today is one page: a headline that counts what needs you, your answer first, then what broke, then what waits on others. A ticket is a story with the facts in the margin. Workers’ words are set in a reading face, because reading them is the job.',
+    render: { inbox: d4Inbox, ticket: d4Ticket, run: d4Run },
+    keeps: ['Severity order, now as sections: answer, broke, waiting', 'Mono for ids and numbers only', 'The run summary first, the transcript after'],
+    cuts: ['The list and detail split: the answer box sits in the page', 'Every section of the nav but Today, Tickets and Log', 'Counters as tiles: the numbers are in the sentence'],
+    costs: 'Large. A new page model, a headline written from the attention list, and new type.',
+    risk: 'It reads beautifully with six items and could sprawl with thirty. The headline has to stay true and short.',
+    map: ['Today, the briefing', 'Tickets; a ticket is its story', 'In the story and its facts', 'In the story; findings open from it', 'In the ticket’s story; every run in Log', 'Log; findings land in Today', 'Today’s standfirst and margin; detail in Log', 'Log', 'Log, under machinery', 'Today notes new proposals; the rest in Log', 'A link at the top right', 'Gone. Meanwhile, in Today’s margin', 'Gone. One sentence of live state at the top right'],
+  },
+};
+
+// ---------- Boards ----------
+const BOARDS = [
+  { id: 'overview', label: 'Overview', grp: 'Start' },
+  { id: 'today', label: 'Where we are', grp: 'Start' },
+  { id: 'recap', label: 'Rounds one and two', grp: 'Start' },
+  { id: 'd1', label: 'Ops inbox, kept', grp: 'Round three' },
+  { id: 'd2', label: 'Mailroom', grp: 'Round three' },
+  { id: 'd3', label: 'Ledger', grp: 'Round three' },
+  { id: 'd4', label: 'Briefing', grp: 'Round three' },
+  { id: 'compare', label: 'Compare and pick', grp: 'Decide' },
+  { id: 'r4', label: 'Mailroom, round four', grp: 'Round four' },
+];
+const state = { board: 'overview', screen: 'inbox', mode: 'dark', shot: 'attention', look: 'today' };
+
+const R4_SCREENS = [
+  ['inbox', 'Inbox', d2Inbox, 'The question from ABC-102, answered in its thread.'],
+  ['ticket', 'Ticket', d2Ticket, 'A ticket is its thread; the facts sit in a drawer.'],
+  ['run', 'Run', d2Run, 'A run opens as an attachment of its ticket’s story.'],
+  ['pr', 'PR and drafts', d2Pr, 'A PR’s life lands in its ticket’s thread: canopy’s review, coworkers’ comments, and the replies a worker drafted for you. Drafts look like outgoing mail: yours to edit, drop, or send together.'],
+  ['review', 'Review', d2Review, 'A review reads as a message with its findings attached, each on its diff. Tick what a worker should fix and send.'],
+  ['memory', 'Memory', d2Memory, 'One proposal at a time, with three verbs in the composer. Forget moves to small print, since it is the rare one.'],
+  ['chores', 'Chores', d2Chores, 'A chore is a thread too: its runs as lines, its findings as messages you can turn into a ticket.'],
+  ['clear', 'All clear', d2Clear, 'The empty inbox says so, and the thread pane becomes a digest of what happened without you.'],
+];
+function r4Board() {
+  const scr = R4_SCREENS.find(s => s[0] === state.screen) || R4_SCREENS[0];
+  const cls = `mock m2${state.look === 'today' ? ' today' : ''}${scr[0] === 'ticket' ? ' info4' : ''}`;
+  return `<header><div class="eyebrow">Round four · after your marks</div><h1>Mailroom, round four</h1>
+    <p class="lede">You kept Mailroom and found direction 1 cleaner than today. So this round keeps Mailroom’s layout and tries it two ways: as drawn, and in today’s tokens and IBM Plex. If the second one looks right, the layout is the fix and the palette, type and contrast tests can stay. It also draws five pages round three skipped, to see whether every page fits the thread.</p></header>
+    <div class="tabs" role="tablist" aria-label="Screen">${R4_SCREENS.map(([k, l]) => `<button type="button" role="tab" data-screen="${k}" aria-selected="${scr[0] === k}">${l}</button>`).join('')}</div>
+    <div class="tabs"><span class="seg" role="group" aria-label="Look"><button type="button" data-look="today" aria-pressed="${state.look === 'today'}">Today’s tokens</button><button type="button" data-look="drawn" aria-pressed="${state.look === 'drawn'}">As drawn</button></span>
+      <span class="seg" role="group" aria-label="Mockup theme"><button type="button" data-mode="dark" aria-pressed="${state.mode === 'dark'}">Dark</button><button type="button" data-mode="light" aria-pressed="${state.mode === 'light'}">Light</button></span></div>
+    <div class="stage-wrap"><div class="stage"><div class="${cls}" data-mode="${state.mode}">${scr[2]()}</div></div></div>
+    <p class="stage-cap">${scr[3]} ${state.look === 'today' ? 'Colors are today’s tokens from <code>ui/src/styles/tokens.css</code>, as written there.' : 'Geist and neutral grey, as round three drew it.'}</p>
+    <div class="facts"><div class="panel"><h3>Same as round three</h3><ul><li>Three panes: mailboxes, list, thread</li><li>Machinery in the foot</li><li>No section colors, aurora or ticker</li></ul></div>
+      <div class="panel"><h3>New pages</h3><ul><li>PR replies as drafts in the thread</li><li>Review findings attached to a message</li><li>Memory, chores, and the empty inbox</li></ul></div>
+      <div class="panel"><h3>Today’s tokens keep</h3><p style="font-size:14px">The palette, the status colors and their 4.5:1 tests, IBM Plex, the 8px radius. One added token: body text a step under foreground.</p></div>
+      <div class="panel"><h3>Watch for</h3><p style="font-size:14px">A thread with many events, like ABC-099’s, grows long. It may need runs and ticks folded into one line each.</p></div></div>
+    <div class="panel verdict"><h2>Which look, and does every page fit the thread?</h2>${verdictHtml('r4')}</div>`;
+}
+const verdicts = {};
+let db = null;
+
+function sideHtml() {
+  let html = `<div class="mark"><b>canopy, redrawn</b><span>ui exploration · round 3 · Oct 19</span></div>`;
+  let grp = '';
+  BOARDS.forEach((b, i) => {
+    if (b.grp !== grp) { grp = b.grp; html += `<div class="grp">${grp}</div>`; }
+    const v = verdicts[b.id]?.verdict;
+    const right = v ? `<span class="v ${v}">${v}</span>` : '<span></span>';
+    html += `<button type="button" data-board="${b.id}" aria-current="${state.board === b.id}"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${b.label}</span>${right}</button>`;
+  });
+  return html;
+}
+
+function overview() {
+  return `<header><div class="eyebrow">UI exploration · round three · 2026-10-19</div><h1>canopy, redrawn</h1>
+    <p class="lede">On October 8 we drew one Attention screen six ways and picked E, the ops inbox. Ten days and 341 UI commits later the app does far more, and it has stopped feeling like the thing you picked. This walks the same exercise again, against the app as it is now.</p></header>
+    <div class="cols3">
+      <div class="panel prose"><h3>1 · Where we are</h3><p class="muted">Today’s real screens from the screenshot baselines, what grew and by how much, and a diagnosis of why it feels heavier.</p></div>
+      <div class="panel prose"><h3>2 · Four directions</h3><p class="muted">Each draws the same three screens with the same content: the inbox with ABC-102’s question open, that ticket’s page, and run 39’s transcript. Switch the screen and the theme above each drawing.</p></div>
+      <div class="panel prose"><h3>3 · Compare and pick</h3><p class="muted">The directions side by side, the questions that decide between them, and what to keep whichever way we go. Mark each one keep, maybe or drop; your marks and notes are saved for me to read.</p></div>
+    </div>
+    <div class="panel prose" style="border-color:var(--f-accent)"><h2>New: round four</h2><p>You kept Mailroom and called direction 1 cleaner than today. Round four draws Mailroom in today’s tokens beside the original, on eight screens including a PR’s drafts, a review, memory, chores and the empty inbox.</p><p><button type="button" class="vbtn" data-board="r4">Open round four</button></p></div>
+    <div class="panel prose"><h2>How this round differs</h2>
+      <p>Round one varied only the look. This round varies the amount too, because the complaint now is complexity, not tone. Each direction says which of today’s eleven sections it keeps and where the others go, under “Where things go”.</p>
+      <p class="muted">The content is the mock journal’s world (ABC-099 to ABC-105, acme/web#88, tick 2) with times made consistent. The drawings are 1440px wide and scale to fit. Fonts load from Google Fonts here; the real UI bundles its own.</p></div>`;
+}
+
+const SHOTS = {
+  attention: { label: 'Attention', file: '../../../ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png', notes: ['Three headers before the first item: the trail, the title and its sentence, then three counter tiles.', 'The open item is five stacked blocks: summary, run row, the limit band, an empty conversation, a fold for notes, then actions.', 'The rail repeats Working and spend on every page, beside a page that also shows them.', 'Ten nav items in ten hues, an aurora under the header, and a three-part badge (1 2 3) on Attention.'] },
+  ticket: { label: 'Ticket ABC-102', file: '../../../ui/e2e/screenshots.spec.ts-snapshots/tickets-ABC-102-dark-root-linux.png', notes: ['The conversation, which is what you came to do, is one panel of five, top right.', 'Work, Runs, Decisions and Memory sit at the same weight, under the same uppercase label.', 'The question and the reply box are 900px apart from the run that asked it.', '“Served to its next run” prints a prompt’s text into the page.'] },
+  run: { label: 'Run 39', file: '../../../ui/e2e/screenshots.spec.ts-snapshots/runs-39-dark-root-linux.png', notes: ['The summary block is good: what it did, in its own words, then the facts.', 'The transcript has six controls before its first line: session, order, by call, all open, find, show chart.', 'Output and Memory are folds that read as two more panels.'] },
+  review: { label: 'Review 4', file: '../../../ui/e2e/screenshots.spec.ts-snapshots/reviews-4-dark-root-linux.png', notes: ['Findings on the diff are the right content and read well.', 'A review lives in a section of its own, away from the ticket it is about; the ticket page does not show it.'] },
+  memory: { label: 'Memory', file: '../../../ui/e2e/screenshots.spec.ts-snapshots/memory-dark-root-linux.png', notes: ['Three panels for a feature whose lessons are recording only.', 'Its verbs are a vocabulary to learn: Promote as written, Edit and promote, Promote, Reject, Forget.'] },
+};
+function today() {
+  const s = SHOTS[state.shot];
+  return `<header><div class="eyebrow">01 · Where we are</div><h1>The app today</h1>
+    <p class="lede">E promised “a control room’s at-a-glance state, kept calm enough to read a worker’s words and answer them.” The words are still the first lines of <code>ui/DESIGN.md</code>. Here is what the screens do now.</p></header>
+    <div class="stats">
+      <div class="stat"><span class="k">ui/DESIGN.md</span><span class="val">1,339 <s>lines</s></span><span class="d">111 when E was adopted</span></div>
+      <div class="stat"><span class="k">UI source files</span><span class="val">228</span><span class="d">49 on Oct 8, tests not counted</span></div>
+      <div class="stat"><span class="k">Route files</span><span class="val">25</span><span class="d">8 on Oct 8</span></div>
+      <div class="stat"><span class="k">Nav</span><span class="val">10 <s>+2</s></span><span class="d">E drew 4 tabs</span></div>
+      <div class="stat"><span class="k">UI commits</span><span class="val">341</span><span class="d">since Oct 8, in ten days</span></div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Screenshot">${Object.entries(SHOTS).map(([k, v]) => `<button type="button" role="tab" data-shot="${k}" aria-selected="${k === state.shot}">${v.label}</button>`).join('')}</div>
+    <div class="shot-grid"><div class="shot"><img src="${s.file}" alt="Today's ${s.label} page, dark theme, from the screenshot baselines"></div>
+      <div class="notes">${s.notes.map((n, i) => `<div class="obs"><b>${i + 1}</b><p>${n}</p></div>`).join('')}<p class="muted" style="font-size:13px">From <code>ui/e2e/screenshots.spec.ts-snapshots/</code>, the mock journal, dark.</p></div></div>
+    <h2>Why it feels heavier</h2>
+    <div class="diag">
+      <div class="panel"><span class="num">1</span><h3>Nothing leads</h3><p class="muted">Every block is a panel with the same hairline and uppercase label, so a worker’s question and a session id get the same weight.</p></div>
+      <div class="panel"><span class="num">2</span><h3>The nav follows the journal, not your day</h3><p class="muted">Runs, ticks, worktrees, chores, spend and memory are each a section because each is a table. You work in tickets.</p></div>
+      <div class="panel"><span class="num">3</span><h3>The thing you do is small</h3><p class="muted">Answering is a text box in a corner. Reading a ticket means stitching Conversation, Runs and Decisions back into one story.</p></div>
+      <div class="panel"><span class="num">4</span><h3>Color is spent on identity</h3><p class="muted">Eleven section hues, an aurora and the ticker’s flair compete with the five status colors that carry meaning.</p></div>
+      <div class="panel"><span class="num">5</span><h3>The rules grew one incident at a time</h3><p class="muted">Most of the 1,339 lines are right. Needing that many is a sign the layout fights what it holds, and every new feature gets a panel because a panel is the only shape on offer.</p></div>
+    </div>`;
+}
+
+function recap() {
+  const R = [
+    ['0', 'Instrument panel', 'out', 'set aside', 'Inter + JetBrains Mono', ['#0f1419', '#1b2430', '#5ad1e6', '#e6edf3'], 'The look before E. Felt disconnected: a lab instrument, a name about trees, a job about reading words.'],
+    ['A', 'Terminal ledger', 'kept', 'fed F', 'IBM Plex Mono', ['#141210', '#2a251f', '#f0a83a', '#e9e2d0'], '`canopy status` grown into a page. Numbered tabs, a status line, [ASK] and [ERR] tags.'],
+    ['B', 'Field notes', 'out', 'set aside', 'Newsreader + Instrument Sans', ['#f7f5ef', '#e6e1d4', '#2f6b45', '#1f2420'], 'Editorial, after the name. A headline sentence; the open question as the featured item.'],
+    ['C', 'Control room', 'kept', 'fed E', 'IBM Plex Sans + Mono', ['#0c1118', '#1a2330', '#ff6b6b', '#3ddc97'], 'Big counters with a colored top rule; items sorted by severity.'],
+    ['D', 'Calm inbox', 'kept', 'fed E', 'Geist + Geist Mono', ['#f4f4f5', '#ffffff', '#4f46e5', '#18181b'], 'A mail app. The list beside the open thread; the thread as bubbles with a reply box.'],
+    ['E', 'Ops inbox', 'won', 'adopted', 'IBM Plex Sans + Mono', ['#0b0e13', '#1a202a', '#8ea2ff', '#ffb547'], 'C softened by D. Four tabs, four counters, the list by severity beside the thread.'],
+    ['F', 'Ledger inbox', 'kept', 'runner-up', 'IBM Plex Mono', ['#121110', '#221f1b', '#f0a83a', '#efe8d8'], 'A led. All mono, a timestamped transcript, a > reply prompt.'],
+  ];
+  return `<header><div class="eyebrow">02 · Rounds one and two</div><h1>What we drew on October 8</h1>
+    <p class="lede">Every board drew the same Attention screen, so only the style differed. E won; A, C and D fed it; B and the instrument panel were set aside. The record is in <code>docs/ui-explorations/2026-10-08-style/</code>.</p></header>
+    <div class="recap">${R.map(([l, n, c, tag, face, sw, idea]) => `<div class="rc"><div class="sw">${sw.map(x => `<i style="background:${x}"></i>`).join('')}</div><div style="display:flex;justify-content:space-between;align-items:baseline"><h3>${l} · ${n}</h3><span class="tag ${c}">${tag}</span></div><span class="face">${face}</span><p style="font-size:14px">${idea}</p></div>`).join('')}</div>
+    <div class="cols2"><div class="panel prose"><h2>What you said then</h2><ul class="tight"><li>The current look felt disconnected.</li><li>Keyboard shortcuts are not a priority, and the UI need not match the terminal’s keys.</li><li>E was the favorite. A, C and D were the round-one directions that worked.</li></ul></div>
+    <div class="panel prose"><h2>What E said it would do</h2><ul class="tight"><li>Counters move into the page; spend joins them.</li><li>Attention is one list by severity.</li><li>A list beside a detail view, so a ticket’s thread and reply open next to the list.</li><li>IBM Plex replaces Inter and JetBrains Mono.</li></ul><p class="muted" style="margin-top:8px">All four shipped. The rail, ten nav sections, section colors and the aurora came after.</p></div></div>`;
+}
+
+function dirBoard(id) {
+  const d = DIRS[id];
+  const screens = [['inbox', 'Inbox'], ['ticket', 'Ticket ABC-102'], ['run', 'Run 39'], ['map', 'Where things go']];
+  const isMap = state.screen === 'map';
+  const cls = `mock m${d.n}${id === 'd2' && state.screen === 'ticket' ? ' info4' : ''}`;
+  return `<header><div class="eyebrow">Direction ${d.n} · ${d.short}</div><h1>${d.name}</h1><p class="lede">${d.lede}</p></header>
+    <div class="tabs" role="tablist" aria-label="Screen">${screens.map(([k, l]) => `<button type="button" role="tab" data-screen="${k}" aria-selected="${state.screen === k}">${l}</button>`).join('')}
+      <span class="sep"></span>${isMap ? '' : `<span class="seg" role="group" aria-label="Mockup theme"><button type="button" data-mode="dark" aria-pressed="${state.mode === 'dark'}">Dark</button><button type="button" data-mode="light" aria-pressed="${state.mode === 'light'}">Light</button></span>`}</div>
+    ${isMap ? mapTable(d) : `<div class="stage-wrap"><div class="stage"><div class="${cls}" data-mode="${state.mode}">${d.render[state.screen]()}</div></div></div><p class="stage-cap">Drawn at 1440px and scaled to fit. Static: nothing in the drawing is clickable.</p>`}
+    <div class="facts"><div class="panel"><h3>Keeps</h3><ul>${d.keeps.map(x => `<li>${x}</li>`).join('')}</ul></div><div class="panel"><h3>Cuts</h3><ul>${d.cuts.map(x => `<li>${x}</li>`).join('')}</ul></div><div class="panel"><h3>Costs</h3><p style="font-size:14px">${d.costs}</p></div><div class="panel"><h3>Risk</h3><p style="font-size:14px">${d.risk}</p></div></div>
+    <div class="panel verdict"><h2>${d.q}</h2>${verdictHtml(id)}</div>`;
+}
+function mapTable(d) {
+  return `<div class="tbl-wrap"><table><thead><tr><th>Today</th><th>In ${d.name}</th></tr></thead><tbody>${SECTIONS_TODAY.map((s, i) => `<tr><td class="k">${s}</td><td>${d.map[i]}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function verdictHtml(id) {
+  const v = verdicts[id] || {};
+  const dis = db ? '' : 'disabled';
+  return `<div class="row">${['keep', 'maybe', 'drop'].map(k => `<button type="button" class="vbtn ${k}" data-verdict="${k}" data-for="${id}" aria-pressed="${v.verdict === k}" ${dis}>${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
+    <label for="note-${id}" class="muted" style="font-size:13px">What would you change, keep, or steal from it?</label>
+    <textarea class="vnote" id="note-${id}" data-note="${id}" ${dis} placeholder="A note for the next round">${v.note ? escapeHtml(v.note) : ''}</textarea>
+    <div class="row"><button type="button" class="vbtn" data-save="${id}" ${dis}>Save note</button><span class="vstatus" id="vs-${id}">${db ? (v.updated ? 'Saved.' : 'Marks and notes are saved with this page, for Claude to read.') : 'Saving needs this page open in claude.ai, signed in.'}</span></div>`;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+function compare() {
+  const rows = [
+    ['Nav', '10 sections, Settings and Guide in the rail', '4 tabs', '5 mailboxes, 4 loop folders, a foot', '5 tabs', '3 links and search'],
+    ['Where you answer', 'Attention’s right pane, or the ticket page’s corner', 'Beside the list', 'The thread’s composer', 'A prompt under the log', 'In the page, under the question'],
+    ['A ticket reads as', 'Five panels', 'A thread and a facts column', 'One thread, details in a drawer', 'One log under a header', 'A story with facts in the margin'],
+    ['Identity color', '11 section hues and an aurora', 'None', 'None', 'None; amber means you', 'None'],
+    ['Type', 'IBM Plex Sans and Mono', 'Same', 'Geist and Geist Mono', 'IBM Plex Mono only', 'Newsreader, Instrument Sans, Plex Mono'],
+    ['Fun lives in', 'Ticker, Sprig, the leaf, the rave', 'The counters and the cleared leaf', 'An empty mailbox that says so', 'The status line', 'The headline, when nothing needs you'],
+    ['Cost to get there', '·', 'Small to medium', 'Medium', 'Medium', 'Large'],
+  ];
+  const picks = BOARDS.filter(b => b.id.startsWith('d') || b.id === 'r4').map(b => { const v = verdicts[b.id]; return `<div class="pick"><b>${b.id === 'r4' ? 'Round four · Mailroom' : `${DIRS[b.id].n} · ${DIRS[b.id].name}`}</b><span class="v ${v?.verdict || ''}" style="font-family:var(--f-mono);font-size:12px;text-transform:uppercase">${v?.verdict || 'not marked yet'}</span>${v?.note ? `<span class="muted">${escapeHtml(v.note)}</span>` : ''}</div>`; }).join('');
+  return `<header><div class="eyebrow">Decide</div><h1>Compare and pick</h1><p class="lede">The four side by side, against today. None has to win whole: round two was a blend, and this one can be too.</p></header>
+    <div class="tbl-wrap"><table><thead><tr><th></th><th>Today</th><th>1 · Ops inbox, kept</th><th>2 · Mailroom</th><th>3 · Ledger</th><th>4 · Briefing</th></tr></thead><tbody>${rows.map(r => `<tr><td class="k">${r[0]}</td>${r.slice(1).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="cols2"><div class="panel prose"><h2>Questions that decide it</h2><ul class="tight">
+      <li><b>Is the problem the look or the amount?</b> If direction 1 feels right, it was the amount, and the fix is a cull rather than a redesign.</li>
+      <li><b>Thread or record?</b> Directions 2 and 4 make a ticket one story. Today and direction 1 keep facts beside it.</li>
+      <li><b>How often do you open Ticks, Worktrees, Chores or Memory?</b> Weekly or less, and they can leave the nav in any direction.</li>
+      <li><b>Reading face?</b> Most of what you read is a worker’s prose. Direction 4 is the only one that sets it for reading.</li>
+      <li><b>Still dark first?</b> Every drawing has both themes; the toggle sits above it.</li></ul></div>
+    <div class="panel prose"><h2>Keep whichever way</h2><ul class="tight">
+      <li>Monospace, tabular readouts for every number, id and time.</li>
+      <li>Status colors held to 4.5:1 by <code>tokens.test.ts</code>, in both themes.</li>
+      <li>Every write is a CLI verb, and a refusal names its guard.</li>
+      <li>Untrusted text stays text.</li>
+      <li>A run’s summary first, then its transcript.</li>
+      <li>Review findings drawn on the diff.</li></ul></div></div>
+    <div class="panel prose"><h2>Your marks so far</h2><div class="pick-list">${picks}</div></div>
+    <div class="panel verdict"><h2>Overall</h2>${verdictHtml('overall')}</div>
+    <p class="muted">Next step once you pick: a short record in <code>docs/ui-explorations/2026-10-19-structure/</code> like round one’s, then a plan that cuts before it restyles.</p>`;
+}
+
+// ---------- Rendering and wiring ----------
+function render() {
+  document.getElementById('side').innerHTML = sideHtml();
+  const b = state.board;
+  const html = b === 'overview' ? overview() : b === 'today' ? today() : b === 'recap' ? recap() : b === 'compare' ? compare() : b === 'r4' ? r4Board() : dirBoard(b);
+  document.getElementById('board').innerHTML = html;
+  fit();
+}
+function fit() {
+  document.querySelectorAll('.stage-wrap').forEach(w => {
+    const s = w.firstElementChild;
+    const k = Math.min(1, w.clientWidth / 1440);
+    s.style.transform = `scale(${k})`;
+    w.style.height = Math.ceil(s.offsetHeight * k) + 'px';
+  });
+}
+function go(board) {
+  if (!BOARDS.some(b => b.id === board)) board = 'overview';
+  if (board !== state.board) state.screen = 'inbox';
+  state.board = board;
+  try { history.replaceState(null, '', '#' + board); } catch (e) { /* the frame may refuse it */ }
+  render();
+  window.scrollTo({ top: 0 });
+}
+
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.dataset.board) go(t.dataset.board);
+  else if (t.dataset.screen) { state.screen = t.dataset.screen; render(); }
+  else if (t.dataset.mode) { state.mode = t.dataset.mode; try { localStorage.setItem('redrawn-mode', state.mode); } catch (_) {} render(); }
+  else if (t.dataset.shot) { state.shot = t.dataset.shot; render(); }
+  else if (t.dataset.look) { state.look = t.dataset.look; render(); }
+  else if (t.dataset.verdict) {
+    const id = t.dataset.for;
+    const note = document.getElementById('note-' + id)?.value ?? '';
+    await save(id, { verdict: t.dataset.verdict, note });
+  } else if (t.dataset.save) {
+    const id = t.dataset.save;
+    await save(id, { verdict: verdicts[id]?.verdict ?? null, note: document.getElementById('note-' + id)?.value ?? '' });
+  }
+});
+
+async function save(id, data) {
+  if (!db) return;
+  const status = document.getElementById('vs-' + id);
+  const prev = verdicts[id];
+  verdicts[id] = { ...data, updated: new Date().toISOString() };
+  try {
+    await db.collection('verdicts').doc(id).set(verdicts[id]);
+    render();
+    const s = document.getElementById('vs-' + id); if (s) s.textContent = 'Saved.';
+  } catch (err) {
+    verdicts[id] = prev;
+    if (status) status.textContent = 'Not saved: ' + (err?.message || 'the store refused it') + '.';
+  }
+}
+
+try { const m = localStorage.getItem('redrawn-mode'); if (m === 'light' || m === 'dark') state.mode = m; } catch (_) {}
+state.board = (location.hash || '#r4').slice(1);
+if (!BOARDS.some(b => b.id === state.board)) state.board = 'overview';
+render();
+new ResizeObserver(fit).observe(document.getElementById('main'));
+if (document.fonts?.ready) document.fonts.ready.then(fit);
+window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+
+(async () => {
+  try {
+    db = await window.claude?.use?.('db');
+  } catch (_) { db = null; }
+  if (!db) { return; }
+  db.collection('verdicts').onSnapshot(snap => {
+    snap.docs.forEach(d => { verdicts[d.id] = d.data() || {}; });
+    // Keep a note being typed: re-render only when no note has the focus.
+    if (!document.activeElement?.matches?.('textarea')) render();
+    else document.getElementById('side').innerHTML = sideHtml();
+  }, () => {});
+  if (!document.activeElement?.matches?.('textarea')) render();
+})();
+</script>
+</body>
+</html>

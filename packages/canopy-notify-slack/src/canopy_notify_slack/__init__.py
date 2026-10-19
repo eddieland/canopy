@@ -12,6 +12,8 @@ cannot mention a person or `@channel`, or show one link and point at another.
 
 With `--channel` and `--threads`, what is about one ticket, chore, or review goes in its own thread, a new one each
 day, recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest goes in the channel.
+A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
+question: then it is shown in the channel too.
 
 Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on
 stderr; 2 the secret file, the channel, the threads file, or the message on stdin is not usable, saying which. canopy
@@ -619,6 +621,13 @@ def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tupl
 
 # Threads, with `--threads`
 
+#: What `--broadcast` can show in the channel from a thread's reply, and what each is.
+BROADCASTS: Mapping[str, str] = {
+    "attention": "a new attention item",
+    "plan": "a plan to approve",
+    "blocked": "a run that ended blocked, waiting on an answer",
+}
+
 # A message's `ts`, which names it to reply in its thread.
 _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 
@@ -798,24 +807,28 @@ class Part:
             out["attention"] = {**attention, "added": self.added, "resolved": self.resolved}
         return out
 
-    @property
-    def urgent(self) -> bool:
-        """Whether a reply holds what canopy sends unbatched: a new attention item, a question, a plan to approve.
+    def holds(self, what: AbstractSet[str]) -> bool:
+        """Whether the post holds any of `what`, named as `BROADCASTS` names them.
 
-        The loop's events are urgent too, but go in the channel, never in a thread.
+        Returns:
+            True when it does.
         """
-        return bool(self.added) or any(
-            e.get("kind") == "plan.proposed" or (e.get("kind") == "run.ended" and e.get("status") == "blocked")
+        return ("attention" in what and bool(self.added)) or any(
+            ("plan" in what and e.get("kind") == "plan.proposed")
+            or ("blocked" in what and e.get("kind") == "run.ended" and e.get("status") == "blocked")
             for e in self.events
         )
 
 
-def post_threaded(message: Mapping[str, object], send: Send, threads: Threads) -> tuple[bool, str]:
+def post_threaded(
+    message: Mapping[str, object], send: Send, threads: Threads, broadcast: AbstractSet[str] = frozenset()
+) -> tuple[bool, str]:
     """Post `message` as `split` divides it, recording in `threads` each thread it starts and each post it makes.
 
     What is about a ticket, a chore, or a review's PR goes in its thread for the day; the first post about it that day
-    starts the thread, in the channel. A reply holding something urgent is shown in the channel too. The rest, loop
-    events and the digest among it, is posted in the channel first, with the header.
+    starts the thread, in the channel. A reply stays in its thread, unless it holds one of `broadcast` (`BROADCASTS`
+    names them): then it is shown in the channel too. The rest, loop events and the digest among it, is posted in the
+    channel first, with the header.
 
     Returns:
         Whether Slack accepted every post, and its reply to the last one tried. The first refused post ends the
@@ -834,7 +847,7 @@ def post_threaded(message: Mapping[str, object], send: Send, threads: Threads) -
             render(cut),
             blocks(cut, header=part.thread is None),
             thread_ts=ts,
-            reply_broadcast=ts is not None and part.urgent,
+            reply_broadcast=ts is not None and part.holds(broadcast),
         )
         if not ok:
             return ok, reply
@@ -964,6 +977,14 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
         action="store_true",
         help="with --channel, post each ticket's, chore's, and review's messages in its own thread, a new one each day",
     )
+    parser.add_argument(
+        "--broadcast",
+        action="append",
+        choices=list(BROADCASTS),
+        default=[],
+        help="with --threads, also show in the channel a reply holding this; give it again for another: "
+        + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items()),
+    )
     args = parser.parse_args(argv)
     for given, flag in (
         (args.token_file, "--token-file"),
@@ -974,6 +995,8 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
             parser.error(f"{flag} needs --channel")
     if args.channel is None and args.threads:
         parser.error("--threads needs --channel")
+    if args.broadcast and not args.threads:
+        parser.error("--broadcast needs --threads")
     if args.channel is not None and args.webhook_file is not None:
         parser.error("--webhook-file and --channel are two ways to post; give one")
     send: Callable[[str, list[Block]], tuple[bool, str]]
@@ -1001,7 +1024,7 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
             threads = Threads.load(default_threads_file(), channel, str(parsed.get("repo") or ""))
             # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
             threads.save()
-            ok, reply = post_threaded(parsed, to_channel, threads)
+            ok, reply = post_threaded(parsed, to_channel, threads, frozenset(args.broadcast))
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
         return 2

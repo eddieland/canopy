@@ -325,6 +325,12 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
 
 
+def test_the_reviewer_sets_no_temperature() -> None:
+    # The reviewer runs on a model of the operator's choosing, and some refuse a request that sets one (DESIGN §21).
+    frontmatter = (resources.agents_dir() / "canopy-reviewer.md").read_text().split("---")[1]
+    assert "\ntemperature:" not in frontmatter
+
+
 @pytest.mark.parametrize(
     ("tool", "allowed"),
     [
