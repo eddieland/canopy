@@ -7,6 +7,11 @@ option to `runtime.worker_cmd` or `worker_cmd_suffix` (§12), which every worker
 repeats in their own template, sandboxed ones included, and which nothing records: the journal cannot say which model a
 run used. Designed in §13, beside where the runtime finds canopy's definitions.
 
+In practice (the operator, 2026-10-19): every `runtime` command template carries a model option set by hand, and since
+nothing records it, the operator cannot tell which model did which run, or say whether one model works better than
+another. Recording each run's model, with `canopy spend` split by it, is what answers that; the per-ticket override is
+for the canary after it.
+
 - **Stage 0, a source read.** Of the pinned OpenCode (1.19.3), recorded on the `Status:` line: what `opencode models`
   prints, for which providers, how it fails when a provider cannot be reached, and whether it needs the network; that a
   `model:` key in an agent's frontmatter is the model `opencode run --agent` uses, and which wins when the command line
@@ -92,4 +97,7 @@ at each dispatch with a model set, in the workspace root rather than a repositor
 refusing `model_list_failed` when the read fails as it refuses `model_missing`. The operator settled the two points
 left open (2026-10-19): every agent's model can be set, from `[runtime.models]` and per ticket for the ticket's own
 agents, and the web UI's control is built with it, on the ticket's page. The commit trailer naming the model
-(issue #275) follows from this, not built here.
+(issue #275) follows from this, not built here. Open for the operator: whether a run whose agent has no model set
+records the runtime's default rather than nothing, since until every agent's model is set those runs stay unattributed;
+and whether past runs are attributed from their sessions, whose ids the journal keeps and whose records `opencode
+export` prints.
