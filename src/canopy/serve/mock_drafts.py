@@ -94,7 +94,10 @@ _THREADS = (
         6,
         False,
         -47,
-        "Why 250? Our other inputs debounce at 300.",
+        (
+            "Why 250? Our other inputs debounce at 300.\n\n<details>\n<summary>Where they do</summary>\n\n"
+            "- `src/filters/FilterInput.tsx`\n- `src/nav/JumpTo.tsx`\n</details>"
+        ),
     ),
     ("PRRT_kwDOA3", 2_468_013_644, "alice", "src/search/useSearch.ts", None, True, -46, "nit: `Result` is type-only."),
 )

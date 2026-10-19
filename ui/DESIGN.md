@@ -1371,8 +1371,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
-  same. A draft's card (`DraftCard`, `surface`, a
-  `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and its number, its status as a chip
+  same. A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
+  as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
+  written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
+  `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.
+  A draft's card (`DraftCard`, `surface`, a `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and
+  its number, its status as a chip
   (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
   plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
   a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it
