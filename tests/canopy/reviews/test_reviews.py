@@ -26,6 +26,7 @@ from tests.canopy.helpers import (
     granted_meanwhile,
     in_run,
     in_tick,
+    last_tick,
     lifelock_left,
     messages,
     pool,
@@ -35,22 +36,13 @@ from tests.canopy.helpers import (
     waits,
     with_events,
 )
-from tests.canopy.review_helpers import (
-    CLEAN,
-    FINDINGS,
-    PR,
-    head,
-    review,
-    review_decisions,
-    reviewer_reports,
-    run_inline,
-)
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
+from tests.canopy.review_helpers import CLEAN, FINDINGS, PR, head, review_decisions, reviewer_reports
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool, git
 
 
 @pytest.fixture
-def reviews(canopy_env: CanopyEnv) -> CanopyEnv:
+def reviewing(canopy_env: CanopyEnv) -> CanopyEnv:
     """Reviews on, for the loop's own PRs, with the reviewer command running the fake agent as `canopy-reviewer`.
 
     PROJ-1's unit in `repo` has opened `PR`, as its worker's result records it, so a review may name PROJ-1 for it.
@@ -62,31 +54,36 @@ def reviews(canopy_env: CanopyEnv) -> CanopyEnv:
     return canopy_env
 
 
+def refused_for(scenario: Scenario, command: list[str]) -> list[tuple[str | None, str, str]]:
+    """Refuse the review `command`, a `reviews(...)`, and give back its tick's decisions as (PR, action, rationale)."""
+    scenario.refuses(command)
+    return [(pr, action, why) for _, pr, action, why in review_decisions(scenario.conn, last_tick(scenario.conn).id)]
+
+
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(scenario: Scenario) -> None:
     scenario.tick(dry_run=True)
     assert "reviews" not in scenario.state()
-    with in_tick(scenario.conn) as tick_id:
-        assert main(review(sha="a" * 40), runner=InlineRunner()) == 1
-        assert [d[2] for d in review_decisions(scenario.conn, tick_id)] == ["refused:reviews_off"]
+    [(action, _)] = scenario.refuses(reviews("a" * 40))
+    assert action == "refused:reviews_off"
 
 
-def test_max_reviews_zero_turns_reviews_off(reviews: CanopyEnv, scenario: Scenario) -> None:
+def test_max_reviews_zero_turns_reviews_off(reviewing: CanopyEnv, scenario: Scenario) -> None:
     scenario.configures(capacity={"max_reviews": 0})
     scenario.tick(*waits("PROJ-1"), dry_run=True)
     assert "reviews" not in scenario.state()
 
 
 def test_a_review_runs_outside_the_checkout_at_the_commit(
-    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
+    reviewing: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
 ) -> None:
     """M11 against the fakes: the reviewer reads the checkout at the commit through a link, and the slot goes back."""
-    conn = reviews.journal()
+    conn = reviewing.journal()
     sha = head(git_pool)
     with (
         in_tick(conn) as tick_id,
         reviewer_reports(FINDINGS, ["git", "-C", "checkout", "rev-parse", "HEAD"], ["pwd"]),
     ):
-        assert main(review("--ticket", "PROJ-1", "--context", "Start with src/retry.py", sha=sha)) == 0
+        assert main(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py")[1:]) == 0
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
@@ -98,7 +95,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert (row.pr_url, row.sha, row.ticket_key) == (PR, sha, "PROJ-1")
 
         [reviewer] = agent_runs(agent_log)
-        run_dir = reviews.state_dir / "reviews" / "1"
+        run_dir = reviewing.state_dir / "reviews" / "1"
         assert reviewer["cwd"] == str(run_dir)
         assert reviewer["argv"][:3] == ["run", "--agent", "canopy-reviewer"]
         assert "CANOPY_TICK_ID" not in reviewer["env"]
@@ -121,54 +118,48 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert prompt.rstrip().endswith(result.CONTRACT)
 
 
-def test_a_review_hears_the_notice_in_force(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_a_review_hears_the_notice_in_force(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     # A review reads CI too, so the operator's notice about an outage reaches it (DESIGN §8, §21).
     scenario.operator("notice", "CI is down.")
-    with reviewer_reports(CLEAN):
-        run_id = run_inline(scenario.conn, sha=head(git_pool))
-    prompt = (reviews.state_dir / "reviews" / f"{run_id}.prompt").read_text()
-    assert "## Notice from the operator\n\nCI is down.\n" in prompt
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert "## Notice from the operator\n\nCI is down.\n" in reviewed.prompt
 
 
 @pytest.mark.parametrize("full", [False, True], ids=["defaults", "every-value-set"])
 def test_the_reviewer_prompt(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, markdown_snapshot: SnapshotAssertion, *, full: bool
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, markdown_snapshot: SnapshotAssertion, *, full: bool
 ) -> None:
     """The reviewer's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
 
     One with every value at its default, and one with each set: a ticket, the overseer's context, the operator's rule
     for `low`, and a notice. `git_pool` gives the review a pool to lease from; the run starts and never runs.
     """
-    args: list[str] = []
+    command = reviews("b" * 40)
     if full:
         scenario.configures(review={"low_impact": "A change to docs or tests only."})
         scenario.operator("notice", "CI is down.")
-        args = ["--ticket", "PROJ-1", "--context", "Start with src/retry.py"]
+        command = reviews("b" * 40, ticket="PROJ-1", context="Start with src/retry.py")
     with in_tick(scenario.conn):
-        assert main(review(*args, sha="b" * 40), runner=InlineRunner()) == 0
-    prompt = (reviews.state_dir / "reviews" / "1.prompt").read_text()
-    assert prompt.replace(str(reviews.state_dir), "/state") == markdown_snapshot
+        assert main(command[1:], runner=InlineRunner()) == 0
+    prompt = (reviewing.state_dir / "reviews" / "1.prompt").read_text()
+    assert prompt.replace(str(reviewing.state_dir), "/state") == markdown_snapshot
 
 
 @pytest.mark.parametrize(
-    ("args", "sha", "reason"),
+    ("pr", "sha", "reason"),
     [
-        (["--pr", "http://x.test/pull/1"], "a" * 40, "--pr must be the PR's plain https:// URL"),
-        ([], "abc", "--sha must be the full head commit"),
-        ([], "A" * 40, "--sha must be the full head commit"),
+        ("http://x.test/pull/1", "a" * 40, "--pr must be the PR's plain https:// URL"),
+        (PR, "abc", "--sha must be the full head commit"),
+        (PR, "A" * 40, "--sha must be the full head commit"),
     ],
 )
-def test_bad_pr(reviews: CanopyEnv, args: list[str], sha: str, reason: str) -> None:
-    conn = reviews.journal()
-    with in_tick(conn) as tick_id:
-        command = ["review", "run", *(args or ["--pr", PR]), "--sha", sha, "--repo", "repo"]
-        assert main(command, runner=InlineRunner()) == 1
-        [(_, _, action, rationale)] = review_decisions(conn, tick_id)
-        assert action == "refused:bad_pr"
-        assert rationale.startswith(reason)
+def test_bad_pr(reviewing: CanopyEnv, scenario: Scenario, pr: str, sha: str, reason: str) -> None:
+    [(action, rationale)] = scenario.refuses(reviews(sha, pr))
+    assert action == "refused:bad_pr"
+    assert rationale.startswith(reason)
 
 
-def test_review_guards(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
+def test_review_guards(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     scenario.configures(policy={"max_reviews_per_pr": 2})
     conn = scenario.conn
     sha = head(git_pool)
@@ -176,16 +167,16 @@ def test_review_guards(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
         # Started, never run: it stays running.
-        assert main(review(sha=sha), runner=runner) == 0
-        assert main(review(sha=sha), runner=runner) == 1  # running
-        assert main(review(sha=sha, pr=f"{PR}0"), runner=runner) == 1  # review_capacity: max_reviews is 1
+        assert main(reviews(sha)[1:], runner=runner) == 0
+        assert main(reviews(sha)[1:], runner=runner) == 1  # running
+        assert main(reviews(sha, f"{PR}0")[1:], runner=runner) == 1  # review_capacity: max_reviews is 1
         assert db.finish_run(conn, "review_runs", 1, ReviewRunStatus.DONE, json.dumps(CLEAN))
         assert runner.run(["treehouse", "return", "--force", str(pool(treehouse_state)[0]["path"])]).ok
-        assert main(review(sha=sha), runner=runner) == 1  # reviewed
-        assert main(review(sha=other), runner=runner) == 0
+        assert main(reviews(sha)[1:], runner=runner) == 1  # reviewed
+        assert main(reviews(other)[1:], runner=runner) == 0
         assert db.finish_run(conn, "review_runs", 2, ReviewRunStatus.FAILED, "{}")
         assert runner.run(["treehouse", "return", "--force", str(pool(treehouse_state)[0]["path"])]).ok
-        assert main(review(sha="c" * 40), runner=runner) == 1  # review_limit
+        assert main(reviews("c" * 40)[1:], runner=runner) == 1  # review_limit
         actions = [d[2] for d in review_decisions(conn, tick_id)]
         assert actions == [
             "dispatch:review",
@@ -207,32 +198,30 @@ def test_review_guards(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool
 
 
 def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_still_counts(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
     scenario.configures(policy={"max_reviews_per_pr": 1})
-    conn = scenario.conn
-    with reviewer_reports(CLEAN):
-        run_inline(conn, sha=head(git_pool))
-        run_inline(conn, sha=head(git_pool), pr=f"{PR}0")
-        with in_tick(conn, ends_ok=True) as tick_id:
-            assert main(review(sha="b" * 40), runner=InlineRunner()) == 1
-            assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:review_limit", "attention:review_limit"]
+    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    scenario.review(reviews(head(git_pool), f"{PR}0"), reviewer=reviewer_reports(CLEAN))
+    [(action, _), (raised, _)] = scenario.refuses(reviews("b" * 40))
+    assert (action, raised) == ("refused:review_limit", "attention:review_limit")
 
-        granted = scenario.operator("grant", PR, "review")
-        assert f"{PR} has had 1 review runs, and may now have 2." in granted.out
-        run_id = run_inline(conn, sha="b" * 40)
-    prompt = " ".join((reviews.state_dir / "reviews" / f"{run_id}.prompt").read_text().split())
-    assert "This is review 2 of at most 2 of this PR." in prompt
+    granted = scenario.operator("grant", PR, "review")
+    assert f"{PR} has had 1 review runs, and may now have 2." in granted.out
+    reviewed = scenario.review(reviews("b" * 40), reviewer=reviewer_reports(CLEAN))
+    assert "This is review 2 of at most 2 of this PR." in " ".join(reviewed.prompt.split())
 
     # The granted run counted like any other, and the grant is that PR's only.
-    with in_tick(conn, ends_ok=True) as tick_id:
-        assert main(review(sha="c" * 40), runner=InlineRunner()) == 1
-        assert main(review(sha="c" * 40, pr=f"{PR}0"), runner=InlineRunner()) == 1
-        reasons = [(d[1], d[3]) for d in review_decisions(conn, tick_id) if d[2] == "refused:review_limit"]
-        assert reasons == [
-            (PR, "this PR has had 2 review runs and the limit is 2"),
-            (f"{PR}0", "this PR has had 1 review runs and the limit is 1"),
-        ]
+    assert refused_for(scenario, reviews("c" * 40))[0] == (
+        PR,
+        "refused:review_limit",
+        "this PR has had 2 review runs and the limit is 2",
+    )
+    assert refused_for(scenario, reviews("c" * 40, f"{PR}0"))[0] == (
+        f"{PR}0",
+        "refused:review_limit",
+        "this PR has had 1 review runs and the limit is 1",
+    )
     granted = scenario.operator("grant", PR, "review", "--runs", "2")
     assert "has had 2 review runs, and may now have 4." in granted.out
 
@@ -244,13 +233,11 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
 
 
 def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(
-    reviews: CanopyEnv,
-    git_pool: GitPool,
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    conn = reviews.journal()
-    with reviewer_reports(CLEAN):
-        run_inline(conn, sha=head(git_pool))
-    cfg = load(reviews.root, reviews.user_file)
+    conn = scenario.conn
+    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    cfg = load(reviewing.root, reviewing.user_file)
     other = "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)"
     # No other grant commits between this one and the read of its limit, so two at once never report the same (#341).
     with granted_meanwhile(conn, grants, "limit", other, PR, db.now()) as tried:
@@ -261,14 +248,10 @@ def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_
 
 @pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
 def test_only_the_operator_grants_reviews(
-    reviews: CanopyEnv,
-    git_pool: GitPool,
-    capsys: pytest.CaptureFixture[str],
-    env: str,
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str], env: str
 ) -> None:
-    conn = reviews.journal()
-    with reviewer_reports(CLEAN):
-        run_inline(conn, sha=head(git_pool))
+    conn = scenario.conn
+    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     capsys.readouterr()
     # Inside a tick, as the overseer; or inside a run, as its agent, with no tick named.
     with in_tick(conn, ends_ok=True) if env == "CANOPY_TICK_ID" else in_run(1):
@@ -277,12 +260,11 @@ def test_only_the_operator_grants_reviews(
     assert conn.execute("SELECT count(*) FROM review_grants").fetchone()[0] == 0
 
 
-def test_review_grant_refusals(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_review_grant_refusals(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     conn = scenario.conn
     refused = scenario.operator("grant", PR, "review", code=1)
     assert f"grant refused (unknown): canopy has not reviewed {PR}" in refused.err
-    with reviewer_reports(CLEAN):
-        run_inline(conn, sha=head(git_pool))
+    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     refusals = [
         (["repo#7", "review"], "grant refused (bad_ref): name the PR by its URL"),
         (["PROJ-1", "review"], "grant refused (bad_kind): PROJ-1 is a ticket; `review` takes the PR's URL"),
@@ -296,44 +278,33 @@ def test_review_grant_refusals(reviews: CanopyEnv, scenario: Scenario, git_pool:
 
 
 def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
     scenario.configures(capacity={"max_workers": 1, "max_reviews": 2})
-    conn = scenario.conn
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main(dispatch, runner=runner) == 0
-        assert main(review("--ticket", "PROJ-1", sha=head(git_pool)), runner=runner) == 1
-        assert main(review(sha=head(git_pool), pr=f"{PR}0"), runner=runner) == 1
-        [(_, _, a1, r1), (_, _, a2, r2)] = review_decisions(conn, tick_id)[1:]
-        assert (a1, r1) == ("refused:running", "a worker run for PROJ-1 is running; review its PR once it ends")
-        assert (a2, r2) == ("refused:capacity", "1 of 1 workers and reviews are running")
+    scenario.starts()
+    assert scenario.refuses(reviews(head(git_pool), ticket="PROJ-1")) == [
+        ("refused:running", "a worker run for PROJ-1 is running; review its PR once it ends")
+    ]
+    assert scenario.refuses(reviews(head(git_pool), f"{PR}0")) == [
+        ("refused:capacity", "1 of 1 workers and reviews are running")
+    ]
 
 
-def test_a_running_review_takes_worker_capacity(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_a_running_review_takes_worker_capacity(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures(capacity={"max_workers": 1})
-    conn = scenario.conn
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        assert main(review(sha=head(git_pool)), runner=runner) == 0
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 1
-        )
-        assert review_decisions(conn, tick_id)[-1][2:] == ("refused:capacity", "1 of 1 workers are running")
+    # Started, never run: it stays running, as the verb's review, run to its end, would not.
+    with in_tick(scenario.conn, ends_ok=True):
+        assert main(reviews(head(git_pool))[1:], runner=InlineRunner()) == 0
+    assert scenario.refuses(dispatches()) == [("refused:capacity", "1 of 1 workers are running")]
 
 
-def test_a_dry_run_counts_its_reviews(reviews: CanopyEnv) -> None:
-    conn = reviews.journal()
+def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv) -> None:
+    conn = reviewing.journal()
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
-        assert main(review(sha="a" * 40), runner=runner) == 0
-        assert main(review(sha="a" * 40), runner=runner) == 1
-        assert main(review(sha="a" * 40, pr=f"{PR}0"), runner=runner) == 1
+        assert main(reviews("a" * 40)[1:], runner=runner) == 0
+        assert main(reviews("a" * 40)[1:], runner=runner) == 1
+        assert main(reviews("a" * 40, f"{PR}0")[1:], runner=runner) == 1
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [
             ("dispatch:review", f"dry run: not dispatched; would review {'a' * 40}"),
             ("refused:running", "this dry run already reviewed this PR"),
@@ -354,52 +325,41 @@ def test_a_dry_run_counts_its_reviews(reviews: CanopyEnv) -> None:
     ],
 )
 def test_the_harness_checks_what_it_can_of_a_result(
-    reviews: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    report: dict[str, object],
-    status: str,
-    note: str,
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, report: dict[str, object], status: str, note: str
 ) -> None:
-    conn = reviews.journal()
-    with reviewer_reports(report):
-        run_id = run_inline(conn, sha=head(git_pool))
-        row = present(db.get_review_run(conn, run_id))
-        assert row.status == status
-        assert row.result_json is not None
-        stored = json.loads(row.result_json)
-        assert stored.get("harness", "").startswith(note)
-        if status == "done":
-            assert stored["impact"] == "normal"
+    row = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(report)).row
+    assert row.status == status
+    assert row.result_json is not None
+    stored = json.loads(row.result_json)
+    assert stored.get("harness", "").startswith(note)
+    if status == "done":
+        assert stored["impact"] == "normal"
 
 
 @pytest.mark.parametrize("events", [False, True])
 def test_a_plugin_notice_after_the_result_does_not_hide_it(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, *, events: bool
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, *, events: bool
 ) -> None:
     # A plugin the operator must load prints after the agent's last word; it lands in the text (DESIGN §13).
     if events:
-        with_events(reviews, "canopy-reviewer")
-    conn = reviews.journal()
-    with reviewer_reports(f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations"):
-        row = present(db.get_review_run(conn, run_inline(conn, sha=head(git_pool))))
-        assert row.status == "done"
-        assert json.loads(row.result_json)["verdict"] == "findings"
+        with_events(reviewing, "canopy-reviewer")
+    reviewer = reviewer_reports(f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations")
+    row = scenario.review(reviews(head(git_pool)), reviewer=reviewer).row
+    assert row.status == "done"
+    assert json.loads(row.result_json or "{}")["verdict"] == "findings"
 
 
-def test_a_review_records_the_prs_own_title(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
+def test_a_review_records_the_prs_own_title(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     """A PR canopy only reviews has no ticket's title to show, so the reviewer reports the PR's own (DESIGN §21)."""
-    conn = reviews.journal()
-    with reviewer_reports({**FINDINGS, "pr_title": "Retry the\n  queue"}):
-        run_inline(conn, sha=head(git_pool))
-    with reviewer_reports(CLEAN):  # a result without one, as an older override prints, records none
-        run_inline(conn, sha=head(git_pool), pr=f"{PR}0")
-    titles = {str(r["url"]): r["pr_title"] for r in db.pull_requests(conn, 10)}
+    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports({**FINDINGS, "pr_title": "Retry the\n  queue"}))
+    # A result without one, as an older override prints, records none.
+    scenario.review(reviews(head(git_pool), f"{PR}0"), reviewer=reviewer_reports(CLEAN))
+    titles = {str(r["url"]): r["pr_title"] for r in db.pull_requests(scenario.conn, 10)}
     assert titles == {PR: "Retry the queue", f"{PR}0": None}  # on one line
 
 
 def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
 ) -> None:
     secret = tmp_path / "secret.txt"
     secret.write_text("operator only\n")
@@ -413,21 +373,19 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
     git("push", "--quiet", "origin", "pr-7", cwd=work)
     sha = git("rev-parse", "HEAD", cwd=work)
     git("checkout", "--quiet", "--detach", cwd=work)
-    with reviewer_reports(FINDINGS, ["ls", "checkout/"]):
-        run_id = run_inline(conn := reviews.journal(), sha=sha)
-        row = present(db.get_review_run(conn, run_id))
-        assert row.status == "done", Path(row.log_path).read_text()
-        [reviewer] = agent_runs(agent_log)
-        [listing] = reviewer["commands"]
-        names = listing["stdout"].split()
-        assert "inside" in names
-        assert "outside" not in names
-        assert "up" not in names
+    reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(FINDINGS, ["ls", "checkout/"]))
+    assert reviewed.status == "done", reviewed.printed.out
+    [reviewer] = agent_runs(scenario.agent_log)
+    [listing] = reviewer["commands"]
+    names = listing["stdout"].split()
+    assert "inside" in names
+    assert "outside" not in names
+    assert "up" not in names
 
 
 @pytest.mark.parametrize("phase", ["review_pending", "review_findings"])
-def test_the_review_phases_are_a_units(reviews: CanopyEnv, phase: str) -> None:
-    conn = reviews.journal()
+def test_the_review_phases_are_a_units(reviewing: CanopyEnv, phase: str) -> None:
+    conn = reviewing.journal()
     with in_tick(conn):
         assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--phase", phase]) == 0
         [unit] = db.units(conn, "PROJ-1")
@@ -435,25 +393,23 @@ def test_the_review_phases_are_a_units(reviews: CanopyEnv, phase: str) -> None:
 
 
 def test_a_commit_origin_does_not_have_fails_the_review(
-    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
     """A PR of another repository fails here: its commit cannot be fetched from this one's origin."""
-    conn = reviews.journal()
-    run_id = run_inline(conn, sha="d" * 40)
-    row = present(db.get_review_run(conn, run_id))
+    row = scenario.review(reviews("d" * 40)).row
     assert row.status == "failed"
-    assert json.loads(row.result_json)["harness"].startswith("git fetch failed: ")
-    assert not agent_log.exists()  # the reviewer never ran
+    assert json.loads(row.result_json or "{}")["harness"].startswith("git fetch failed: ")
+    assert not scenario.agent_log.exists()  # the reviewer never ran
     assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
 def test_a_killed_review_is_crashed_on_the_next_tick(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
     conn = scenario.conn
     with reviewer_reports(CLEAN, sleep=60):
         with in_tick(conn, ends_ok=True):
-            assert main(review(sha=head(git_pool))) == 0
+            assert main(reviews(head(git_pool))[1:]) == 0
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
         while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
@@ -463,7 +419,7 @@ def test_a_killed_review_is_crashed_on_the_next_tick(
         assert row.agent_pid is not None, "`_review` never started the reviewer"
         assert row.pid is not None
         pid, agent_pid = row.pid, row.agent_pid
-        run_dir = reviews.state_dir / "reviews" / "1"
+        run_dir = reviewing.state_dir / "reviews" / "1"
         assert (run_dir / "checkout").is_symlink()
         os.kill(pid, signal.SIGKILL)
         while procs.alive(pid) and time.monotonic() < deadline:
@@ -483,21 +439,20 @@ def test_a_killed_review_is_crashed_on_the_next_tick(
 
 
 def test_reconcile_leaves_a_running_reviews_slot_alone(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
     conn = scenario.conn
     with in_tick(conn, ends_ok=True):
-        assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
+        assert main(reviews(head(git_pool))[1:], runner=InlineRunner()) == 0  # claimed by this live process
     scenario.tick(*waits("PROJ-1"))
     assert pool_statuses(treehouse_state) == ["leased", "available"]
     row = present(db.get_review_run(conn, 1))
     assert row.status == "running"
 
 
-def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     conn = scenario.conn
-    with reviewer_reports(FINDINGS):
-        run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
+    scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
     scenario.tick(*waits("PROJ-1"), dry_run=True)
     section = scenario.state()["reviews"]
     assert section["agent_prs"] is True
@@ -521,7 +476,7 @@ def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, scenario: Scenar
         assert "comment" not in latest
 
 
-def test_attention_about_a_pr_without_a_ticket(reviews: CanopyEnv, scenario: Scenario) -> None:
+def test_attention_about_a_pr_without_a_ticket(reviewing: CanopyEnv, scenario: Scenario) -> None:
     scenario.tick(
         canopy("attention", "--pr", PR, "review_failed", "--detail", "review run 3 ended crashed"),
         canopy("attention", "PROJ-1", "review_limit", "--pr", f"{PR}0", "--detail", "3 of 3 reviews"),
@@ -539,9 +494,9 @@ def test_attention_about_a_pr_without_a_ticket(reviews: CanopyEnv, scenario: Sce
 
 
 def test_review_wait_records_a_plain_pr_url_and_refuses_anything_else(
-    reviews: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    reviewing: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    conn = reviews.journal()
+    conn = reviewing.journal()
     with in_tick(conn) as tick_id:
         for bad in ("http://x.test/pull/1", "javascript:alert(1)", f"{PR}/{'x' * 300}"):
             assert main(["review", "wait", "--pr", bad, "--rationale", "draft"]) == 2
@@ -552,64 +507,59 @@ def test_review_wait_records_a_plain_pr_url_and_refuses_anything_else(
 
 
 def test_a_sink_that_takes_reviews_hears_when_one_ends(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
 ) -> None:
     out = tmp_path / "sink.txt"
     scenario.configures(
         notify={"sinks": {"s": {"cmd": f"{sink_script} {out}", "format": "text", "events": ["reviews"]}}}
     )
     scenario.tick(*waits("PROJ-1"))
-    with reviewer_reports(FINDINGS):
-        run_inline(scenario.conn, "--ticket", "PROJ-1", sha=head(git_pool))
+    scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
     scenario.tick(*waits("PROJ-1"))
     [message] = messages(out)
     assert f"< review run 1 of {PR} (PROJ-1) ended done: findings normal (1 findings)\n" in message
 
 
 def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
-    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
-    overrides = reviews.user_file.parent / "prompts"
+    overrides = reviewing.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "reviewer.md").write_text("Review {{PR_URL}}\n")
-    conn = reviews.journal()
-    with in_tick(conn) as tick_id:
-        assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 1
-        [(_, _, action, reason)] = review_decisions(conn, tick_id)
-        assert action == "refused:bad_prompt"
-        assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}")
-        assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
-        assert pool_statuses(treehouse_state) == ["available", "available"]
+    [(action, reason)] = scenario.refuses(reviews(head(git_pool)))
+    assert action == "refused:bad_prompt"
+    assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}")
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
-def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool) -> None:
+def test_a_review_run_records_what_it_cost(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     """With OpenCode's JSON events, as the default `review_cmd` asks for, a review run records its session and cost."""
-    with_events(reviews, "canopy-reviewer")
-    with reviewer_reports(FINDINGS, ["echo", "read it"], session="ses_review"):
-        conn = reviews.journal()
-        run_id = run_inline(conn, sha=head(git_pool))
-    row = present(db.get_review_run(conn, run_id))
-    assert row.status == "done", Path(row.log_path).read_text()  # the result line is read from the text events
+    with_events(reviewing, "canopy-reviewer")
+    reviewer = reviewer_reports(FINDINGS, ["echo", "read it"], session="ses_review")
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer)
+    conn, row, run_id = scenario.conn, reviewed.row, reviewed.id
+    assert row.status == "done", reviewed.printed.out  # the result line is read from the text events
     assert row.session_id == "ses_review"
     usage = present(db.usage_of(row))
     assert usage.cost_usd == 0.25  # two model calls at 0.125
     assert (usage.first_call, usage.first_cache_write) == (5500, 500)
-    assert (reviews.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
+    assert (reviewing.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
     assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
 
 
-def test_a_timed_out_review_records_what_it_reported_before_the_kill(reviews: CanopyEnv, git_pool: GitPool) -> None:
+def test_a_timed_out_review_records_what_it_reported_before_the_kill(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
     tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
     events = [
         {"type": "step_finish", "sessionID": "ses_slow", "part": {"cost": 0.5, "tokens": tokens}},
         {"type": "text", "sessionID": "ses_slow", "part": {"type": "text", "text": "still reading"}},
     ]
     stdout = "".join(json.dumps(e) + "\n" for e in events)
-    conn = reviews.journal()
     runner = InlineRunner(timeout_agent=True, timeout_stdout=stdout)
-    run_id = run_inline(conn, sha=head(git_pool), runner=runner)
-    row = present(db.get_review_run(conn, run_id))
+    row = scenario.review(reviews(head(git_pool)), runner=runner).row
     assert row.status == "timeout"
     assert (row.session_id, row.cost_usd, row.tokens_cache_write) == ("ses_slow", 0.5, 4)
 
@@ -635,12 +585,11 @@ def resume(
 
 
 def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
     """Nothing of a review is on the PR (D114): the worker reads its findings in its prompt."""
-    with reviewer_reports(FINDINGS):
-        sha = head(git_pool)
-        review_id = run_inline(scenario.conn, "--ticket", "PROJ-1", sha=sha)
+    sha = head(git_pool)
+    review_id = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     scenario.run(worker=pushes())
     resumed = scenario.run(resume(review_id, context="Address review run 1"), worker=pushes())
     [(action, rationale)] = decisions(scenario.conn, int(resumed.row["tick_id"]))
@@ -656,21 +605,19 @@ def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
     )
 
 
-def test_a_resume_without_a_review_says_so(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_a_resume_without_a_review_says_so(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes())
     assert "## canopy's review\n\nNone.\n" in scenario.run(resume(), worker=pushes()).prompt
 
 
 def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    conn = scenario.conn
     sha = head(git_pool)
-    with reviewer_reports(FINDINGS):
-        of_ticket = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
-        of_query = run_inline(conn, sha=sha, pr=f"{PR}0")
-        # A commit origin does not have: the run fails, with nothing for a worker.
-        failed = run_inline(conn, "--ticket", "PROJ-1", sha="b" * 40)
+    of_ticket = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
+    of_query = scenario.review(reviews(sha, f"{PR}0"), reviewer=reviewer_reports(FINDINGS)).id
+    # A commit origin does not have: the run fails, with nothing for a worker.
+    failed = scenario.review(reviews("b" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     scenario.run(worker=pushes())
     for command, why in [
         (resume(99), "there is no review run 99"),
@@ -684,11 +631,11 @@ def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
         assert scenario.refuses(command) == [("refused:bad_review", why)]
 
 
-def test_the_operator_reads_reviews_in_canopy(reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
     assert scenario.operator("review", "show").out == "no reviews in the last 14 days\n"
-    with reviewer_reports({**FINDINGS, "summary": "One blocking defect.\x1b[2J"}):
-        sha = head(git_pool)
-        run_id = run_inline(scenario.conn, "--ticket", "PROJ-1", sha=sha)
+    sha = head(git_pool)
+    reviewer = reviewer_reports({**FINDINGS, "summary": "One blocking defect.\x1b[2J"})
+    run_id = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer).id
     [line] = scenario.operator("review", "show").out.splitlines()
     assert line.startswith(f"{run_id}  ")
     assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}")
@@ -711,38 +658,32 @@ def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
 
 
 def test_a_review_keeps_its_commits_diff_for_the_web_ui(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
 ) -> None:
     """The diff against where the commit leaves the pool's base branch, beside the run's log (DESIGN §21)."""
     sha = feature_commit(git_pool, tmp_path)
-    conn = reviews.journal()
-    with reviewer_reports(FINDINGS):
-        run_id = run_inline(conn, sha=sha)
-        row = present(db.get_review_run(conn, run_id))
-        assert (row.status, row.base_branch) == ("done", "main")
-        path = review_diff.path_for(row.log_path)
-        assert path.stat().st_mode & 0o777 == 0o600
-        diff = present(review_diff.read(path))
-        [changed] = diff.files
-        assert changed.path == "retry.py"
-        assert [(ln.kind, ln.new, ln.text) for ln in changed.hunks[0].lines] == [
-            ("add", 1, "while True:"),
-            ("add", 2, "    call()"),
-        ]
+    row = scenario.review(reviews(sha), reviewer=reviewer_reports(FINDINGS)).row
+    assert (row.status, row.base_branch) == ("done", "main")
+    path = review_diff.path_for(row.log_path)
+    assert path.stat().st_mode & 0o777 == 0o600
+    diff = present(review_diff.read(path))
+    [changed] = diff.files
+    assert changed.path == "retry.py"
+    assert [(ln.kind, ln.new, ln.text) for ln in changed.hunks[0].lines] == [
+        ("add", 1, "while True:"),
+        ("add", 2, "    call()"),
+    ]
 
 
 def test_a_review_without_its_base_branch_still_runs(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
 ) -> None:
     """The diff is for the page only: a base origin no longer has leaves the review as it was, without one."""
     sha = feature_commit(git_pool, tmp_path)
     git("update-ref", "-d", "refs/heads/main", cwd=git_pool.origin)
-    conn = reviews.journal()
-    with reviewer_reports(FINDINGS):
-        run_id = run_inline(conn, sha=sha)
-        row = present(db.get_review_run(conn, run_id))
-        assert row.status == "done", Path(row.log_path).read_text()
-        assert not review_diff.path_for(row.log_path).exists()
+    reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(FINDINGS))
+    assert reviewed.status == "done", reviewed.printed.out
+    assert not review_diff.path_for(reviewed.row.log_path).exists()
 
 
 TWO_FINDINGS = {
@@ -755,11 +696,10 @@ TWO_FINDINGS = {
 
 
 def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
 ) -> None:
     conn = scenario.conn
-    with reviewer_reports(TWO_FINDINGS):
-        review_id = run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
+    review_id = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
     ref = f"review:{review_id}"
 
     # Only the operator dismisses, and only a finding the review has.
@@ -809,7 +749,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
 
 
 def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
-    reviews: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`canopy send review:ID N` replies on the review's ticket, naming findings by number only (DESIGN §21).
 
@@ -817,9 +757,9 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     """
     conn = scenario.conn
     sha = head(git_pool)
-    with reviewer_reports(TWO_FINDINGS):
-        review_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
-        query_id = run_inline(conn, sha=sha, pr="https://github.com/acme/api/pull/9")
+    review_id = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
+    query = reviews(sha, "https://github.com/acme/api/pull/9")
+    query_id = scenario.review(query, reviewer=reviewer_reports(TWO_FINDINGS)).id
     ref = f"review:{review_id}"
     scenario.run(worker=pushes())
 
@@ -841,7 +781,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     ]:
         assert f"send refused ({guard})" in scenario.operator("send", *args, code=1).err
     # Back on the PR the review read, its findings go to PROJ-1's worker.
-    db.set_unit(conn, "PROJ-1", str(reviews.root), "repo", pr_url=PR)
+    db.set_unit(conn, "PROJ-1", str(reviewing.root), "repo", pr_url=PR)
     scenario.operator("dismiss", ref, "2", "--undo")
 
     assert f"{ref} findings 1 went to PROJ-1 as message" in scenario.operator("send", ref, "1").out
@@ -863,20 +803,18 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
 
 
 def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
     """A review's purpose is settled as it starts: `own` only for its ticket's unit's PR, else `query` (DESIGN §21)."""
-    conn = reviews.journal()
     other = "https://github.com/acme/api/pull/8"
-    with in_tick(conn) as tick_id:
-        assert main(review("--ticket", "PROJ-1", sha=head(git_pool), pr=other)) == 1
-        assert main(review("--ticket", "PROJ-2", sha=head(git_pool))) == 1
-        assert [(d[2], d[3]) for d in review_decisions(conn, tick_id)] == [
-            ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR"),
-            ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR"),
-        ]
-    with reviewer_reports(FINDINGS):
-        own = run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
-        query = run_inline(conn, sha=head(git_pool), pr=other)
-    purposes = {r["id"]: r["purpose"] for r in conn.execute("SELECT id, purpose FROM review_runs")}
+    sha = head(git_pool)
+    assert scenario.refuses(reviews(sha, other, ticket="PROJ-1")) == [
+        ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR")
+    ]
+    assert scenario.refuses(reviews(sha, ticket="PROJ-2")) == [
+        ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR")
+    ]
+    own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
+    query = scenario.review(reviews(sha, other), reviewer=reviewer_reports(FINDINGS)).id
+    purposes = {r["id"]: r["purpose"] for r in scenario.conn.execute("SELECT id, purpose FROM review_runs")}
     assert purposes == {own: "own", query: "query"}

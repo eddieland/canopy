@@ -12,9 +12,9 @@ from canopy.core import conversation, db, review_requests
 from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
-from tests.canopy.helpers import InlineRunner, context, in_tick, operator, present
-from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review, review_decisions, reviewer_reports, run_inline
-from tests.canopy.scenario_helpers import Scenario
+from tests.canopy.helpers import context, in_tick, operator
+from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
+from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
@@ -48,18 +48,14 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
 ) -> None:
     conn = scenario.conn
     # Without a request, no `[review]` table means reviews are off.
-    with in_tick(conn, ends_ok=True) as tick_id:
-        assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
-        assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:reviews_off"]
+    assert [action for action, _ in scenario.refuses(reviews(head(git_pool), PR))] == ["refused:reviews_off"]
 
     requested = scenario.operator("start", PR, "--review")
     assert f"{PR} is requested for review. The next tick reviews its head, once." in requested.out
     assert "was already requested" in scenario.operator("start", PR, "--review").out
     assert requests_of(conn) == [(PR, "cli", None)]
 
-    with reviewer_reports(FINDINGS):
-        run_id = run_inline(conn, sha=head(git_pool), pr=PR)
-    run = present(db.get_review_run(conn, run_id))
+    run = scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(FINDINGS)).row
     assert (run.status, run.purpose, run.ticket_key) == ("done", "request", None)
     assert requests_of(conn) == [(PR, "cli", "reviewed")]
     # With the request ended, reviews are off again.
@@ -68,7 +64,7 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
     out = scenario.operator("show", PR).out
     assert "review request: made " in out
     assert "(reviewed)" in out
-    assert f"review:{run_id}" in out
+    assert f"review:{run.id}" in out
 
 
 def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal(
@@ -76,29 +72,23 @@ def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", PR, "--review")
-    with reviewer_reports(CLEAN):
-        run_inline(conn, sha=head(git_pool), pr=PR)
+    again = reviews(head(git_pool), PR)
+    scenario.review(again, reviewer=reviewer_reports(CLEAN))
     # Asked for again at a head already reviewed: no new review will end it, so the refusal that names the review does.
     scenario.operator("start", PR, "--review")
-    with in_tick(conn, dry_run=True, ends_ok=True):
-        assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
+    scenario.refuses(again, dry_run=True)
     assert requests_of(conn)[-1] == (PR, "cli", None)
-    with in_tick(conn, ends_ok=True) as tick_id:
-        assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
-        assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:reviewed"]
+    assert [action for action, _ in scenario.refuses(again)] == ["refused:reviewed"]
     assert requests_of(conn) == [(PR, "cli", "reviewed"), (PR, "cli", "reviewed")]
 
 
 def test_a_failed_review_leaves_the_request_open(
     requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    conn = scenario.conn
     scenario.operator("start", PR, "--review")
-    with reviewer_reports({"status": "failed", "summary": "Could not read the diff."}):
-        run_id = run_inline(conn, sha=head(git_pool), pr=PR)
-    run = present(db.get_review_run(conn, run_id))
-    assert run.status == "failed"
-    assert requests_of(conn) == [(PR, "cli", None)]
+    failing = reviewer_reports({"status": "failed", "summary": "Could not read the diff."})
+    assert scenario.review(reviews(head(git_pool), PR), reviewer=failing).status == "failed"
+    assert requests_of(scenario.conn) == [(PR, "cli", None)]
 
 
 def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
@@ -181,8 +171,8 @@ def test_the_state_block_carries_the_open_requests(
     scenario.tick(dry_run=True)
     assert "reviews" not in scenario.state()
     scenario.operator("start", PR, "--review")
-    with reviewer_reports({"status": "failed", "summary": "Could not read the diff."}):
-        run_id = run_inline(scenario.conn, sha=head(git_pool), pr=PR)
+    failing = reviewer_reports({"status": "failed", "summary": "Could not read the diff."})
+    run_id = scenario.review(reviews(head(git_pool), PR), reviewer=failing).id
     scenario.tick(dry_run=True)
     section = scenario.state()["reviews"]
     assert (section["agent_prs"], section["query"]) == (False, None)
