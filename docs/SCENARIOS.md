@@ -352,7 +352,9 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   tracker's server has been in no run yet, and `split.py` gives each server's tools a row of their own. Expect
   OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
   against the latest such section (2026-10-19), a difference only where the change made one. A body the split cannot
-  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`.
+  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`. Record one agent twice more, in two
+  directories, and compare the two requests as 2026-10-19's second section did: expect them to share nothing
+  while OpenCode sends one system block (F48), or the tools and the body once something splits it (F50).
 
 ## Retired
 
