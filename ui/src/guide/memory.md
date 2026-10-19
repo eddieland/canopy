@@ -69,9 +69,9 @@ memory in use never share a label, so you never mistake one for the other.
   date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run is served
   from your lessons, or would be served at use while recording.
 - **Ticket notes** lists the tickets with notes in force, one row each with its title, how many notes it has, and how
-  many a run relied on. Open a row
-  for its notes, each with Promote and Forget. A busy workspace has thousands, so the page reads a ticket's notes only
-  once you ask. On a wide screen this panel sits beside the other two.
+  many a run relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has thousands, so the
+  page reads a ticket's notes only once you ask. It flips between the newest note first and the oldest, and on a wide
+  screen it sits beside the other two.
 
 Above the panels, a filter field narrows all three as you type: a word in a memory's key, its text, its ticket, or its
 repository, or in a ticket's key or title. The repository chips keep the proposals and lessons for that repository's
