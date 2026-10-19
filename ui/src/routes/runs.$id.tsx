@@ -9,7 +9,7 @@ import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
 import { FoldPanel } from '@/components/fold-panel'
-import { MemoryRows } from '@/components/memory'
+import { MemoryKinds } from '@/components/memory'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
@@ -163,8 +163,8 @@ function RunPanel({
 /**
  * What the run wrote and read of agent memory (DESIGN §28), and what it had refused; only for a run rendered while a
  * tier was on. It arrives folded: its header counts what it wrote and read, each tier's mode for the run on hover, and
- * `Show memory` opens the rows. A run rendered while recording read `none, recording only`: nothing was served, which
- * is not an empty digest.
+ * `Show memory` opens the rows, grouped by kind. A run rendered while recording read `none, recording only`: nothing
+ * was served, which is not an empty digest.
  */
 function RunMemoryPanel({ id }: { id: number }) {
     const { data } = useQuery(runMemoryQuery(id))
@@ -198,13 +198,13 @@ function RunMemoryPanel({ id }: { id: number }) {
             {data.wrote.length === 0 ? (
                 <Empty>none</Empty>
             ) : (
-                <MemoryRows entries={data.wrote} ownRun={id} modes={modes} />
+                <MemoryKinds entries={data.wrote} ownRun={id} modes={modes} />
             )}
             <h3 className="border-t px-3 pt-2 panel-label">Read</h3>
             {data.read.length === 0 ? (
                 <Empty>{readNothingText(served)}</Empty>
             ) : (
-                <MemoryRows entries={data.read} ownRun={id} cited={data} modes={modes} />
+                <MemoryKinds entries={data.read} ownRun={id} cited={data} modes={modes} />
             )}
             {data.refused.length > 0 && (
                 <>

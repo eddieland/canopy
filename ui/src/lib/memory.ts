@@ -140,6 +140,28 @@ export function leftText(expiresAt: string, now: number): string {
     return left <= 0 ? 'lapsing' : `${age(new Date(now - left).toISOString(), now)} left`
 }
 
+/** A kind of memory: a ticket's note, a worker's proposal, or the operator's lesson. */
+export type MemoryKind = MemoryEntry['scope']
+
+/** Each kind of memory, in the order a run's memory lists them, with its name and what it is for. */
+export const MEMORY_KINDS: readonly { kind: MemoryKind; name: string; what: string }[] = [
+    { kind: 'ticket', name: 'ticket notes', what: "for its ticket's runs alone" },
+    { kind: 'proposal', name: 'proposals', what: 'lessons a worker proposed, yours to promote or reject' },
+    { kind: 'lesson', name: 'lessons', what: 'yours, read by runs on every ticket' },
+]
+
+/** `entries` by kind, in `MEMORY_KINDS`' order, each kind's in the order given, leaving out a kind with none. */
+export function byKind<T extends Pick<MemoryEntry, 'scope'>>(
+    entries: readonly T[],
+): { kind: MemoryKind; name: string; what: string; entries: T[] }[] {
+    return MEMORY_KINDS.map(({ kind, name, what }) => ({
+        kind,
+        name,
+        what,
+        entries: entries.filter((e) => e.scope === kind),
+    })).filter((k) => k.entries.length > 0)
+}
+
 /** What a run read, when it read nothing: nothing was served while recording, which is not an empty digest. */
 export function readNothingText(served: boolean): string {
     return served ? 'none' : 'none, recording only'

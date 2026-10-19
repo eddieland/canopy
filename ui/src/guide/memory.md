@@ -123,9 +123,11 @@ invalidated included, and the text its next run would be served. It arrives fold
 and with no notes it is its header alone. A run's page has one too, for a run started while
 either tier was on, folded to a count in its header (`wrote 2 · read none`), each tier's mode for that run on hover.
 **Show memory** opens it: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's
-words, not the worker's. A run started while recording read `none, recording only`, which isn't the same as reading
-an empty list. Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported
-says `this run found it wrong`.
+words, not the worker's. What it wrote and what it read are each sorted by kind, ticket notes, then proposals, then
+lessons, each under a label that counts them, so a note meant for one ticket never passes for a lesson every run
+reads. A run started while recording read `none, recording only`, which isn't the same as reading an empty list.
+Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported says
+`this run found it wrong`.
 
 Going the other way, a memory names the latest runs that relied on it, `used in run:40, run:38`, each opening that
 run's page, so you can check what a note actually steered before you trust it. Past five, or for runs from before
