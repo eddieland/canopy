@@ -93,7 +93,8 @@ function details(text: string, pair: Pair): Details {
     const line = (summary?.[1] ?? '')
         .replaceAll(FORMAT, '')
         .replaceAll(/[ \t\n]+/gu, ' ')
-        .trim()
+        // Not trim(), which also drops U+FEFF, U+2028, and U+2029, characters that hide text.
+        .replaceAll(/^ | $/gu, '')
     return {
         kind: 'details',
         summary: line === '' ? 'Details' : line,

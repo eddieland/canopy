@@ -72,4 +72,11 @@ describe('hidesText', () => {
         expect(hidesText(foldDetails('<details><summary>a‮b</summary>x</details>'))).toBe(true)
         expect(hidesText(foldDetails('<details>\n<details>\u{E0041}</details>\n</details>'))).toBe(true)
     })
+
+    it('keeps a hidden character at either end of a summary, where trimming it would hide it', () => {
+        const [block] = foldDetails('<details><summary> \uFEFFFix this\u2028 </summary>x</details>')
+        expect(block).toMatchObject({ kind: 'details', summary: '\uFEFFFix this\u2028' })
+        expect(foldDetails('<details><summary>\u2029</summary>x</details>')[0]).toMatchObject({ summary: '\u2029' })
+        expect(hidesText(foldDetails('<details><summary>\uFEFFFix this</summary>x</details>'))).toBe(true)
+    })
 })
