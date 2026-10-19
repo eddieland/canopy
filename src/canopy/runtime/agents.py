@@ -96,6 +96,8 @@ class McpTools:
 
     server: str
     allowed: Sequence[str]
+    #: The tools that create a ticket, which a private worker may call to file its follow-ups (DESIGN §18, §22).
+    create: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -178,8 +180,9 @@ def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE)
     """Return definition `name`, the private worker's, the planner's, or the triage's, with the tracker's rules.
 
     Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
-    (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run or a plan then
-    (`no_read_tools`, DESIGN §22, §25).
+    (D021). The private worker's also allows the server's create tools, whole, to file follow-ups (DESIGN §18); the
+    planner and the triage write nothing. With no tools known, the marked line stays as it is; dispatch refuses a
+    private run or a plan then (`no_read_tools`, DESIGN §22, §25).
 
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's tools at.
@@ -188,7 +191,8 @@ def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE)
         raise DefinitionsError(f"{name} has no line {_TOOLS_MARKER.strip()!r} to render the tracker's tools at")
     if tools is None:
         return text
-    rules = [f'  "{tools.server}_*": deny\n', *(f'  "{tools.server}_{tool}": allow\n' for tool in tools.allowed)]
+    allowed = (*tools.allowed, *tools.create) if name == _PRIVATE_FILE else tools.allowed
+    rules = [f'  "{tools.server}_*": deny\n', *(f'  "{tools.server}_{tool}": allow\n' for tool in allowed)]
     return text.replace(_TOOLS_MARKER, _TOOLS_MARKER + "".join(rules), 1)
 
 

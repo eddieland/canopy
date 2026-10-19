@@ -307,8 +307,9 @@ and spend should split by model, so that the canary can be compared.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
   request: an authorized replier's comment asks for the split. The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
-  ROADMAP M46 replaces it, designed in §18 (Follow-up tickets): an `implement` or `resume` worker files follow-up
-  tickets, worked under its ticket's authorization within bounds in code, and a split is a run doing that on request.
+  ROADMAP M46 replaces it (§18, Follow-up tickets): an `implement` or `resume` worker files follow-up tickets, which
+  authorize nothing, and canopy asks the operator to label or start each, built; a split becomes a run doing that on
+  request, not yet.
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).

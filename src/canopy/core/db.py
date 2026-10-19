@@ -1433,6 +1433,44 @@ def open_split_children(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+# Follow-up tickets (DESIGN §18)
+
+
+def known_ticket(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether the journal knows `key` as a ticket: a `tickets` row, a run, a follow-up record, or a split's child.
+
+    Returns:
+        True if any of them names `key`.
+    """
+    found = conn.execute(
+        "SELECT 1 FROM tickets WHERE key = ? UNION ALL SELECT 1 FROM runs WHERE ticket_key = ? "
+        "UNION ALL SELECT 1 FROM follow_ups WHERE key = ? UNION ALL SELECT 1 FROM split_children WHERE child_key = ? "
+        "LIMIT 1",
+        (key, key, key, key),
+    ).fetchone()
+    return found is not None
+
+
+def record_follow_up(conn: sqlite3.Connection, key: str, parent: str, run_id: int, repo: str | None) -> bool:
+    """Record `key` as a follow-up of `parent` that run `run_id` reported, inside the caller's transaction.
+
+    Returns:
+        True if it was recorded; False when the journal already knows `key`, which nothing then changes.
+    """
+    if known_ticket(conn, key):
+        return False
+    conn.execute(
+        "INSERT INTO follow_ups (key, parent_key, run_id, repo, at) VALUES (?, ?, ?, ?, ?)",
+        (key, parent, run_id, repo, now()),
+    )
+    return True
+
+
+def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None:
+    """Return `key`'s follow-up record, or None if no run reported it."""
+    return records.fetch_one(conn, records.FollowUp, "SELECT * FROM follow_ups WHERE key = ?", (key,))
+
+
 def has_runs(conn: sqlite3.Connection, key: str) -> bool:
     """Return whether any run was ever dispatched for `key`."""
     return conn.execute("SELECT 1 FROM runs WHERE ticket_key = ? LIMIT 1", (key,)).fetchone() is not None

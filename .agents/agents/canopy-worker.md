@@ -55,11 +55,12 @@ permission:
     "sudo *": deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth, whatever write tools the operator's runtime config grants (D084). The worker comments on its ticket,
-  # edits the ticket's labels, and opens and updates its PRs. Denied: merging, review submissions, closing,
-  # transitions, creating tickets, writing files or branches through the API instead of git, deleting, forking, and
-  # starting other agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them,
-  # and its PR update tool can close the PR; neither has a narrower name to deny, so the prompt keeps them to labels
-  # and the PR's title and body. tests/canopy/core/test_definitions.py checks these rules against real tool names.
+  # edits the ticket's labels, opens and updates its PRs, and creates follow-up tickets linked to its ticket (DESIGN
+  # §18, TRUST_MODEL T6). Denied: merging, review submissions, closing, transitions, sub-issues, writing files or
+  # branches through the API instead of git, deleting, forking, and starting other agents or workflow runs. GitHub's
+  # `issue_write` creates and closes issues as well as labelling them, and its PR update tool can close the PR; neither
+  # has a narrower name to deny, so the prompt keeps them to creating follow-ups, labels, and the PR's title and body.
+  # tests/canopy/core/test_definitions.py checks these rules against real tool names.
   "*merge*": deny
   "*review_write*": deny
   "*pending_review*": deny
@@ -68,8 +69,6 @@ permission:
   "*approve*": deny
   "*close*": deny
   "*transition*": deny
-  "*create_issue*": deny
-  "*createJiraIssue*": deny
   "*sub_issue*": deny
   "*create_branch*": deny
   "*create_or_update_file*": deny
