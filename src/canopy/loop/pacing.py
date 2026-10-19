@@ -1,11 +1,11 @@
 """How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6).
 
-A tick is idle when the journal shows it found nothing new and changed nothing (`idle`). After the n-th idle tick in a
-row the wait is `base * 2^n`, up to the cap and never below `base`; the CI cooldown's end or a chore's `due_at`
-still ahead, or the lapse of the operator's notice to workers, ends it sooner (`gate`). While the loop waits, a run that
-ends after the tick read the journal (`read_at`) wakes it, as the operator's own acts do. With the cap not above
-`base`, idle pacing is off: the wait is `base`, no gate shortens it, and only the operator's acts wake it: a message,
-a start or stop, a grant, or a notice set or cleared.
+A tick is idle when it dispatched nothing and nothing reached the journal after the tick before read it (`idle`).
+After the n-th idle tick in a row the wait is `base * 2^n`, up to the cap and never below `base`; the CI cooldown's end
+or a chore's `due_at` still ahead, or the lapse of the operator's notice to workers, ends it sooner (`gate`). While the
+loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the operator's own acts do. With
+the cap not above `base`, idle pacing is off: the wait is `base`, no gate shortens it, and only the operator's acts
+wake it: a message, a start or stop, a grant, or a notice set or cleared.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from canopy.core import chore_view, db, notice
 from canopy.core.items import subject
 from canopy.core.vocab import TickStatus
-from canopy.loop import attention, duties
+from canopy.loop import attention
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -27,15 +27,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.loop import tick
 
-# Refusals that lift by themselves, so a tick that records only these may be idle: on a run or chore run ending
-# (`running`, `capacity`, `chore_capacity`), at a gate (`cooldown`, `not_due`, `outside_hours`), or never
-# (`attempt_limit`, which an attention item reports).
-QUIET_REFUSALS = frozenset(
-    {"running", "capacity", "chore_capacity", "cooldown", "not_due", "outside_hours", "attempt_limit"}
-)
-# Decisions that change nothing: a wait, a ticket's skip (a tick-wide skip closes the tick `skipped`), and the record
-# that the query ran, which a tick makes whenever it is due.
-_QUIET_ACTIONS = frozenset({"wait", "skip", duties.QUERIED_ACTION})
+#: The prefix of a decision that starts a run: a worker's (`dispatch:<kind>`), a review's, or a chore's. A dry run
+#: records these without starting the run, so `idle` reads the decision, not the run.
+DISPATCH_PREFIX = "dispatch:"
 
 
 @dataclass(frozen=True)
@@ -63,29 +57,27 @@ class Pace:
 
 @dataclass(frozen=True)
 class Before:
-    """What the loop read before a tick, to tell afterwards whether the tick changed anything."""
+    """What the loop read before a tick, to tell afterwards what the tick changed (`churn`)."""
 
     attention: list[attention.Item]
-    tickets: frozenset[tuple[object, ...]]
     phases: dict[tuple[str, str | None], str | None]
 
 
 def before(ctx: Context) -> Before:
-    """Read the attention list and every ticket's and unit's state, before a tick.
+    """Read the attention list and every ticket's and unit's phase, before a tick.
 
     Returns:
-        What `idle` and `churn` compare the journal with after the tick.
+        What `churn` compares the journal with after the tick.
     """
-    return Before(attention.listed(ctx), db.tickets_snapshot(ctx.conn), db.phases(ctx.conn))
+    return Before(attention.listed(ctx), db.phases(ctx.conn))
 
 
-def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
+def idle(ctx: Context, outcome: tick.Outcome) -> bool:
     """Whether the tick that ended with `outcome` was idle, read from the journal (DESIGN §6, Idle pacing).
 
-    It closed `ok`; it decided nothing but waits, skips, attention items, and refusals that lift by themselves; the
-    attention list and every ticket and unit are as `seen` before it; and no run started or ended, and the operator
-    recorded no message, started or stopped no ticket, granted nothing, and set or cleared no notice, after the previous
-    tick read the journal.
+    It closed `ok`, dispatched no run, and no run started or ended, and the operator recorded no message, started or
+    stopped no ticket, granted nothing, and set or cleared no notice, after the previous tick read the journal. What it
+    recorded besides (waits, refusals, `done`, mirrors, attention items, phases) does not count: none of it starts work.
     Without a previous tick that read it, not idle.
 
     Returns:
@@ -96,12 +88,9 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     previous = db.previous_tick(ctx.conn, outcome.tick_id)
     if previous is None or previous.read_at is None or previous.message_id is None:
         return False
-    return (
-        all(_quiet(d.action) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id))
-        and attention.keys(attention.listed(ctx)) == attention.keys(seen.attention)
-        and db.tickets_snapshot(ctx.conn) == seen.tickets
-        and _nothing_since(ctx, previous.read_at, previous.message_id)
-    )
+    return not any(
+        d.action.startswith(DISPATCH_PREFIX) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id)
+    ) and _nothing_since(ctx, previous.read_at, previous.message_id)
 
 
 def churn(ctx: Context, outcome: tick.Outcome, seen: Before) -> list[str]:
@@ -156,15 +145,6 @@ def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
         and not db.starts_moved_after(ctx.conn, read_at)
         and not db.granted_after(ctx.conn, read_at)
         and not notice.moved_after(ctx.conn, read_at)
-    )
-
-
-def _quiet(action: str) -> bool:
-    guard = action.removeprefix("refused:")
-    return (
-        action in _QUIET_ACTIONS
-        or action.startswith(attention.ACTION_PREFIX)
-        or (guard != action and guard in QUIET_REFUSALS)
     )
 
 

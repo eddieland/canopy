@@ -39,6 +39,8 @@ from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 PR = "https://example.test/pr/1"
+#: What the overseer passes to dispatch KEY: a dry run records it without starting a run.
+DISPATCH = ("--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement")
 # The journal's clock and the test's: a tick's `read_at` is put this far back, so what the test records after it is
 # after it, whatever the millisecond.
 BACK = timedelta(seconds=1)
@@ -100,8 +102,8 @@ class Case:
 
 def was_idle(ctx: Context, case: Case) -> bool:
     """Write `case`'s two ticks, and say whether the second was idle."""
-    outcome, seen = two_ticks(ctx, case)
-    return pacing.idle(ctx, outcome, seen)
+    outcome, _seen = two_ticks(ctx, case)
+    return pacing.idle(ctx, outcome)
 
 
 def churn_of(ctx: Context, case: Case) -> list[str]:
@@ -149,6 +151,18 @@ def seen_ticket(conn: sqlite3.Connection, _tick_id: int) -> None:
     db.set_unit(conn, KEY, "/r", "r", phase="ci_running", cursors={"ci": "1"}, pr_url=PR)
 
 
+def sets_ticket(*, phase: Phase | None = None, done: bool = False) -> Step:
+    return lambda conn, _tick_id: db.set_ticket(conn, KEY, "/r", phase=phase, done=done)
+
+
+def moves_ci_cursor(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.set_unit(conn, KEY, "/r", "r", cursors={"ci": "2"})
+
+
+def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
+    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-x' WHERE key = ?", (KEY,))
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -156,10 +170,21 @@ def seen_ticket(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(during=decided("skip")), id="a ticket's skip"),
         pytest.param(Case(setup=listed, during=listed), id="an attention item already listed"),
         pytest.param(Case(setup=seen_ticket, during=seen_ticket), id="a ticket as it was"),
-        *(pytest.param(Case(during=decided(f"refused:{g}")), id=f"refused {g}") for g in sorted(pacing.QUIET_REFUSALS)),
+        pytest.param(Case(during=decided("refused:running")), id="a refusal that lifts by itself"),
+        pytest.param(Case(during=decided("refused:review_limit")), id="a refusal that never lifts"),
+        pytest.param(Case(during=decided("refused:bad_slug")), id="a refusal of a bad request"),
+        pytest.param(Case(during=decided("done")), id="done"),
+        pytest.param(Case(during=decided("mirror")), id="mirror"),
+        pytest.param(Case(during=listed), id="attention item added"),
+        pytest.param(Case(setup=listed), id="attention item resolved"),
+        pytest.param(Case(during=seen_ticket), id="ticket first seen"),
+        pytest.param(Case(setup=seen_ticket, during=sets_ticket(phase=Phase.CI_RED)), id="phase changed"),
+        pytest.param(Case(setup=seen_ticket, during=sets_branch), id="branch changed"),
+        pytest.param(Case(setup=seen_ticket, during=moves_ci_cursor), id="unit cursor moved"),
+        pytest.param(Case(setup=seen_ticket, during=sets_ticket(done=True)), id="done flag"),
     ],
 )
-def test_a_tick_that_changed_nothing_is_idle(canopy_env: CanopyEnv, case: Case) -> None:
+def test_a_tick_that_dispatched_nothing_is_idle(canopy_env: CanopyEnv, case: Case) -> None:
     assert was_idle(context(canopy_env), case)
 
 
@@ -205,18 +230,6 @@ def reviews_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
     conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (PR, db.now()))
 
 
-def sets_ticket(*, phase: Phase | None = None, done: bool = False) -> Step:
-    return lambda conn, _tick_id: db.set_ticket(conn, KEY, "/r", phase=phase, done=done)
-
-
-def moves_ci_cursor(conn: sqlite3.Connection, _tick_id: int) -> None:
-    db.set_unit(conn, KEY, "/r", "r", cursors={"ci": "2"})
-
-
-def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
-    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-x' WHERE key = ?", (KEY,))
-
-
 def notice_set(conn: sqlite3.Connection, _tick_id: int) -> None:
     notice.set_notice(conn, "Artifactory is down.", minutes=60, channel="cli")
 
@@ -234,16 +247,8 @@ def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
     "case",
     [
         pytest.param(Case(during=decided("dispatch:implement")), id="dispatch"),
-        pytest.param(Case(during=decided("done")), id="done"),
-        pytest.param(Case(during=decided("mirror")), id="mirror"),
-        pytest.param(Case(during=decided("refused:bad_slug")), id="other refusal"),
-        pytest.param(Case(during=listed), id="attention item added"),
-        pytest.param(Case(setup=listed), id="attention item resolved"),
-        pytest.param(Case(during=seen_ticket), id="ticket first seen"),
-        pytest.param(Case(setup=seen_ticket, during=sets_ticket(phase=Phase.CI_RED)), id="phase changed"),
-        pytest.param(Case(setup=seen_ticket, during=sets_branch), id="branch changed"),
-        pytest.param(Case(setup=seen_ticket, during=moves_ci_cursor), id="unit cursor moved"),
-        pytest.param(Case(setup=seen_ticket, during=sets_ticket(done=True)), id="done flag"),
+        pytest.param(Case(during=decided("dispatch:review")), id="review dispatched"),
+        pytest.param(Case(during=decided("dispatch:chore")), id="chore dispatched"),
         pytest.param(Case(during=chore_starts), id="run started"),
         pytest.param(Case(setup=review_started_long_ago, during=review_ends), id="run ended"),
         pytest.param(Case(during=operator_reply), id="operator message"),
@@ -257,7 +262,7 @@ def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(previous_read=False), id="no previous read"),
     ],
 )
-def test_each_change_makes_a_tick_not_idle(canopy_env: CanopyEnv, case: Case) -> None:
+def test_a_dispatch_or_anything_new_makes_a_tick_not_idle(canopy_env: CanopyEnv, case: Case) -> None:
     assert not was_idle(context(canopy_env), case)
 
 
@@ -443,9 +448,11 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
         time = FakeTime()
 
         def at_each_wait() -> None:
-            # The fourth tick finds something new: a reviewer asked for changes.
+            # The fourth tick finds work to start, and the fifth finds none again.
             if time.now == sum((60, 120, 240)):
-                later.enter_context(overseer_does(canopy("attention", KEY, "needs_reviewer", "--detail", PR)))
+                later.enter_context(overseer_does(canopy("dispatch", KEY, *DISPATCH)))
+            elif time.now == sum((60, 120, 240, 60)):
+                later.close()
 
         time.on_sleep = at_each_wait
         term, out = console()
@@ -462,8 +469,8 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
         )
 
         assert statuses == {"ok": 6}
-        # The first tick saw PROJ-1 for the first time, the next two found nothing, the fourth raised an item, and the
-        # fifth found nothing again: idle counts restart from it.
+        # The first tick had no tick before it, the next two dispatched nothing, the fourth dispatched, and the fifth
+        # dispatched nothing again: idle counts restart from it.
         assert waits(canopy_env) == [(0, 60), (1, 120), (2, 240), (0, 60), (1, 120)]
         assert sum(time.slept) == sum((60, 120, 240, 60, 120))
         text = out.getvalue()

@@ -48,8 +48,8 @@ export const GROUP_LABEL: Record<SpendGroup, string> = {
 
 /** What each group means, on hover. */
 export const GROUP_HINT: Record<SpendGroup, string> = {
-    idle: 'The loop found nothing new: it decided only waits and skips, and nothing reached the journal before it',
-    busy: 'The loop ran it and it was not idle: something changed or it acted',
+    idle: 'The loop started no work: it dispatched nothing, and nothing reached the journal before it',
+    busy: 'The loop ran it and it was not idle: it dispatched, or a run ended or you acted before it',
     hand_run: 'canopy tick, run by hand: no loop said whether it was idle',
     not_ok: 'It ended other than ok: skipped, failed, or abandoned',
     dry_run: 'A dry run: it planned and acted on nothing',
