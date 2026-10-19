@@ -253,19 +253,20 @@ Rules:
   a run relied on it. Under the text, one line says where it came from, the commit on the run's hover, a proposal's
   run's end, ticket, and `private` chip (`ProposalFacts`) among it. In a list of proposals, where every row is pending,
   the standing says the time left in its place (`3d left`, muted, in `status-blocked` in the last two days, `lapsing`
-  once past). On the memory page the Lessons take the Proposals' columns, the ticket's empty, so key and text line up
-  down the page, and a ticket's opened notes sit on `surface-raised` at 40%, so they read as its own. A ticket's row on
-  the memory page carries its title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover), since
-  Forget asks for it typed. A lesson names what it was promoted from, as the CLI does, and when a run reported it wrong.
-  **Edit and promote** (or `Promote` under a note) opens its form in place of that line, on the surface with a hairline:
-  the lesson's words in a field, starting as the source's own, with their count against the bound in the readout at its
-  corner (in `status-failed` past it, when the button is disabled); the repositories whose runs read it as a segmented
-  control, `every repository` first for a source that names none; a muted line naming the lesson in force under its key
-  that it would replace, as plain `MemoryText`, reserved while the lessons are read; the CLI's warning in
-  `status-blocked` while the text is still a private ticket's run's own words; and `Promote memory:5` with a ghost
-  `Cancel`. **Forget** asks for the memory's ref typed out, in the same form as a ticket's Forget asks for its key
-  (`ForgetForm`). A row can leave once its verb is done, so what it did is said once, in the CLI's words, under the
-  panel's header or band, and only a refusal stays under the row, but one saying the memory changed under it
+  once past). On the memory page the Lessons and a ticket's opened notes take the Proposals' columns (`memory-across`),
+  the ticket's empty, so key and text line up down the page, and the tickets with notes flip with an `OrderToggle`,
+  newest first by default; and a ticket's opened notes sit on `surface-raised` at 40%, so they read as its own. A
+  ticket's row on the memory page carries its title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the
+  row's hover), since Forget asks for it typed. A lesson names what it was promoted from, as the CLI does, and when a
+  run reported it wrong. **Edit and promote** (or `Promote` under a note) opens its form in place of that line, on the
+  surface with a hairline: the lesson's words in a field, starting as the source's own, with their count against the
+  bound in the readout at its corner (in `status-failed` past it, when the button is disabled); the repositories whose
+  runs read it as a segmented control, `every repository` first for a source that names none; a muted line naming the
+  lesson in force under its key that it would replace, as plain `MemoryText`, reserved while the lessons are read; the
+  CLI's warning in `status-blocked` while the text is still a private ticket's run's own words; and `Promote memory:5`
+  with a ghost `Cancel`. **Forget** asks for the memory's ref typed out, in the same form as a ticket's Forget asks for
+  its key (`ForgetForm`). A row can leave once its verb is done, so what it did is said once, in the CLI's words, under
+  the panel's header or band, and only a refusal stays under the row, but one saying the memory changed under it
   (`not_pending`, `forgotten`, `unknown`, decided from the attention list or the CLI), which reads memory again, so its
   row may leave, and is said under the list too; proposals all decided from the page say so in the accent. On the
   attention list, a `memory_proposal` item lists its proposals with `Promote as written`, which saves at once, and

@@ -141,3 +141,19 @@ test('the memory page narrows every panel by words, a repository, and a lessonâ€
     await proposals.getByTestId('order-memory-proposals').click()
     await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-6')
 })
+
+test('opened notes line up with the lessons, and the tickets with notes flip', async ({ page }) => {
+    await page.goto('memory')
+    await settled(page)
+    const notes = page.getByTestId('memory-notes')
+    await notes.getByTestId('memory-ticket-ABC-100').getByRole('button', { name: 'Show 2 notes' }).click()
+    const noteKey = notes.getByTestId('memory-3').getByText('ci-cache', { exact: true })
+    const lessonKey = page.getByTestId('memory-8').getByText('billing-client', { exact: true })
+    const [a, b] = [await noteKey.boundingBox(), await lessonKey.boundingBox()]
+    expect(Math.abs((a?.x ?? 0) - (b?.x ?? 1))).toBeLessThan(1)
+
+    const rows = notes.getByTestId(/^memory-ticket-/u)
+    await expect(rows.first()).toHaveAttribute('data-testid', 'memory-ticket-ABC-102')
+    await notes.getByTestId('order-memory-tickets').click()
+    await expect(rows.first()).toHaveAttribute('data-testid', 'memory-ticket-ABC-100')
+})
