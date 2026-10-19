@@ -377,6 +377,8 @@ def link_template(placeholder: str) -> AfterValidator:
 # of them writes to an issue (DESIGN §22). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's
 # MCP server v2.0.1); a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL
 # asks for `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
+# The create tools are the ones a private worker files follow-ups with. GitHub's `issue_write` also edits and closes
+# issues, which has no narrower tool to name; the prompt keeps it to creating (TRUST_MODEL T6).
 DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
     "jira": McpTools(
         "atlassian",
@@ -394,6 +396,7 @@ DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
             "lookupJiraAccountId",
             "searchJiraIssuesUsingJql",
         ),
+        ("createJiraIssue",),
     ),
     "github": McpTools(
         "github",
@@ -414,6 +417,7 @@ DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
             "actions_list",
             "get_job_logs",
         ),
+        ("issue_write",),
     ),
 }
 
@@ -446,15 +450,16 @@ class Tracker(Section):
         """The server and tools a private worker gets, or None if neither config nor a default names any.
 
         Returns:
-            The configured server and read tools, each falling back to the provider's default, or None when either
-            is still missing.
+            The configured server and read tools, each falling back to the provider's default, and the provider's
+            create tools, none for a provider canopy ships no defaults for; or None when the server or the read tools
+            are still missing.
         """
         default = DEFAULT_TRACKER_TOOLS.get(self.provider)
         server = self.mcp_server or (default.server if default is not None else "")
         allowed = self.read_tools if self.read_tools is not None else (default.allowed if default is not None else ())
         if not server or not allowed:
             return None
-        return McpTools(server, tuple(allowed))
+        return McpTools(server, tuple(allowed), default.create if default is not None else ())
 
 
 #: The most `policy.trivial` may say: it is in every triage prompt (DESIGN §25).
@@ -478,6 +483,9 @@ class Policy(Section):
     ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
+    #: The most follow-up tickets one run's result has recorded, the first in its order (DESIGN §18). At 0 workers are
+    #: told to file none, and none is recorded.
+    max_follow_ups: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 5
     # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.
     max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Review runs per PR, whatever they ended as (DESIGN §21).

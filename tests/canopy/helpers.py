@@ -20,7 +20,7 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, records, replies, workspace
+from canopy.core import config, db, plans, prompts, records, replies, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
@@ -78,8 +78,16 @@ PROMPT_VALUES = {
     "REVIEW_FINDINGS": "None.",
     "PLAN": "None.",
     "REASONS": "- `review`: review comments to address.",
+    "FOLLOW_UPS": prompts.follow_ups("PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),
     # How comments reach GitHub under `trust.review_replies = "post"`, the text the prompts held before (DESIGN §29).
     **replies.posted_values("In every comment and reply you post, start it with `CANOPY:` and a space.", "needs-human"),
+}
+#: A private ticket's worker prompts take the same, but for how they file follow-ups (DESIGN §18, §22).
+PRIVATE_PROMPT_VALUES = {
+    **PROMPT_VALUES,
+    "FOLLOW_UPS": prompts.follow_ups(
+        "PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"], private=True
+    ),
 }
 
 
