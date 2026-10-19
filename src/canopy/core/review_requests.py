@@ -48,6 +48,19 @@ def open_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     )
 
 
+def waiting_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
+    """Return the open requests no review of their PR is running for, newest first: each waits on a tick to start one.
+
+    A request whose review ended any way but `done` waits again, since only a `done` review ends it.
+    """
+    return records.fetch_all(
+        conn,
+        records.ReviewRequest,
+        "SELECT * FROM review_requests q WHERE q.ended_at IS NULL AND NOT EXISTS "
+        "(SELECT 1 FROM review_runs r WHERE r.pr_url = q.pr_url AND r.status = 'running') ORDER BY q.id DESC",
+    )
+
+
 def open_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewRequest | None:
     """Return the PR's open request, or None when it has none."""
     return records.fetch_one(

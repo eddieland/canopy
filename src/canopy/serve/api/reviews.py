@@ -13,6 +13,7 @@ from canopy.serve import reviews
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
 from canopy.serve.schema import (
+    RequestedReview,
     ReviewDetail,
     ReviewDismissed,
     ReviewDismissRequest,
@@ -36,6 +37,13 @@ def review_list(backend: BackendDep) -> list[ReviewSummary]:
     """The latest 100 review runs canopy kept, newest first."""
     with backend.open() as ctx:
         return reviews.reviews(ctx)
+
+
+@router.get("/review-requests", operation_id="listReviewRequests", summary="List the reviews waiting on a tick")
+def review_requests(backend: BackendDep) -> list[RequestedReview]:
+    """The PRs the operator asked canopy to review that no review of is running yet, newest first."""
+    with backend.open() as ctx:
+        return reviews.requested(ctx)
 
 
 # The diff is read back from the file beside the run's log on each request; never on the stream. A diff at the reading

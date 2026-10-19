@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ScanSearch, Square } from 'lucide-react'
 import { useState } from 'react'
 
-import { refreshPullRequests, requestReview, stopReview } from '@/api/mutations'
+import { refreshReviewRequests, requestReview, stopReview } from '@/api/mutations'
 import type { ReviewRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { Input } from '@/components/input'
@@ -25,7 +25,7 @@ export function ReviewRequestForm({ className }: { className?: string }) {
         onSuccess: (requested) => {
             setSaid(reviewRequestedText(url.trim(), requested))
             setUrl('')
-            void refreshPullRequests(client)
+            void refreshReviewRequests(client)
         },
     })
     const ready = url.trim() !== '' && !request.isPending
@@ -89,7 +89,7 @@ export function ReviewRequestStatus({
         mutationFn: () => stopReview(url),
         onSuccess: (stopped) => {
             setSaid(reviewStoppedText(url, stopped))
-            void refreshPullRequests(client)
+            void refreshReviewRequests(client)
         },
     })
     if (request === null) {
