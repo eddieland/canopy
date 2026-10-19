@@ -6,33 +6,34 @@ from pathlib import Path
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import RunKind
 from canopy.loop import attention
 from canopy.runs import worker
-from tests.canopy.conftest import Ws, seed_pools
+from tests.canopy.conftest import Ws
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
     agent_runs,
+    canopy,
     decisions,
     in_tick,
-    operator,
-    overseer_does,
     pool_statuses,
     present,
     splitter_reports,
-    state_block,
-    wait_for_run,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import git
 
+BOTH = ("api", "web")
+#: The tickets a split of PROJ-12 over BOTH makes, and the repository each covers.
+CHILDREN = {"PROJ-13": "api", "PROJ-14": "web"}
 
-def split(key: str, *args: str) -> list[str]:
-    return ["dispatch", key, "--label", LABEL, "--kind", "split", *args]
+
+def split(key: str, request: str = "1", repo: str | tuple[str, ...] = BOTH) -> list[str]:
+    """The overseer dispatches a split of `key` over `repo`, asked for in comment `request`."""
+    return dispatches(key, RunKind.SPLIT, repo=repo, request=request)
 
 
 def children(conn: sqlite3.Connection) -> list[tuple[str, str, str, int]]:
@@ -40,59 +41,52 @@ def children(conn: sqlite3.Connection) -> list[tuple[str, str, str, int]]:
     return [tuple(r) for r in rows]
 
 
-def test_a_split_reads_a_desk_and_records_its_children(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
+def test_a_split_reads_a_desk_and_records_its_children(
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, agent_log: Path
+) -> None:
     """M8 acceptance, against the fakes: a requested split creates a child per repository and pushes nothing."""
-    seed_pools(ws, treehouse_state)
     (ws.root / "MAP.md").write_text("# Map\n\napi serves {{KEY}}; web calls it.\n")
-    conn = ws.journal()
+    conn = ws_scenario.conn
     result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
-    with (
-        in_tick(conn) as tick_id,
-        splitter_reports(result, ["git", "-C", "api", "status", "--porcelain=v2", "--branch"]),
-    ):
-        assert main(split("PROJ-12", "--request", "10234", "--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 1)
-        assert run["status"] == "done", Path(run["log_path"]).read_text()
+    porcelain = ["git", "-C", "api", "status", "--porcelain=v2", "--branch"]
+    run = ws_scenario.run(split("PROJ-12", request="10234"), worker=splitter_reports(result, porcelain))
+    assert run.status == "done", run.printed.out
 
-        desk = ws.root / "desks" / "PROJ-12"
-        [splitter] = agent_runs(agent_log)
-        assert splitter["argv"][:3] == ["run", "--agent", "canopy-splitter"]
-        assert splitter["cwd"] == str(desk)
-        # Each worktree is at its base, detached: a split creates no branch.
-        [status] = splitter["commands"]
-        assert "# branch.head (detached)" in status["stdout"]
-        assert not desk.exists()
-        assert pool_statuses(treehouse_state) == ["available", "available"]
-        for name in ("api", "web"):
-            assert git("for-each-ref", "refs/heads/", cwd=ws.origins[name]).count("\n") == 0  # only main
+    desk = ws.root / "desks" / "PROJ-12"
+    [splitter] = agent_runs(agent_log)
+    assert splitter["argv"][:3] == ["run", "--agent", "canopy-splitter"]
+    assert splitter["cwd"] == str(desk)
+    # Each worktree is at its base, detached: a split creates no branch.
+    [status] = splitter["commands"]
+    assert "# branch.head (detached)" in status["stdout"]
+    assert not desk.exists()
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    for name in BOTH:
+        assert git("for-each-ref", "refs/heads/", cwd=ws.origins[name]).count("\n") == 0  # only main
 
-        assert children(conn) == [("PROJ-13", "PROJ-12", "api", 1), ("PROJ-14", "PROJ-12", "web", 1)]
-        # The children carry the work now: the parent is never dispatched again.
-        implement = ["dispatch", "PROJ-12", "--label", LABEL, "--kind", "implement", "--repo", "api"]
-        assert main(implement, runner=InlineRunner()) == 1
-        assert decisions(conn, tick_id)[-1] == (
-            "refused:bad_split",
-            "PROJ-12 was split into PROJ-13, PROJ-14; dispatch those instead",
-        )
-        # The parent gets no branch and no units: the children carry the work.
-        parent = present(db.get_ticket(conn, "PROJ-12"))
-        assert parent.branch is None
-        assert db.units(conn, "PROJ-12") == []
-        assert run["branch"] == ""
-        (action, rationale), _ = decisions(conn, tick_id)
-        assert action == "dispatch:split"
-        assert rationale.startswith("run 1: split PROJ-12 into api, web in api at ")
-        assert rationale.endswith(f"; desk {desk}; label {LABEL}; request 10234")
+    assert children(conn) == [("PROJ-13", "PROJ-12", "api", 1), ("PROJ-14", "PROJ-12", "web", 1)]
+    # The children carry the work now: the parent is never dispatched again.
+    assert ws_scenario.refuses(dispatches("PROJ-12", repo="api")) == [
+        ("refused:bad_split", "PROJ-12 was split into PROJ-13, PROJ-14; dispatch those instead")
+    ]
+    # The parent gets no branch and no units: the children carry the work.
+    assert present(db.get_ticket(conn, "PROJ-12")).branch is None
+    assert db.units(conn, "PROJ-12") == []
+    assert run.branch == ""
+    [(action, rationale)] = decisions(conn, int(run.row["tick_id"]))
+    assert action == "dispatch:split"
+    assert rationale.startswith("run 1: split PROJ-12 into api, web in api at ")
+    assert rationale.endswith(f"; desk {desk}; label {LABEL}; request 10234")
 
-        prompt = (ws.state_dir / "runs" / "1.prompt").read_text()
-        assert prompt.startswith("# canopy worker: split\n")
-        assert "Read comment 10234 on PROJ-12." in prompt
-        assert f"- `api` at `{desk / 'api'}`, at `main`. The api repository." in prompt
-        assert f"- `web` at `{desk / 'web'}`, at `main`. The web repository." in prompt
-        assert "attempt 1 of 1" in prompt
-        # The map's text, not its path: the splitter may not read outside its desk. Its placeholders are left as
-        # they are.
-        assert "how they depend on each other:\n\n# Map\n\napi serves {{KEY}}; web calls it.\n" in prompt
+    prompt = run.prompt
+    assert prompt.startswith("# canopy worker: split\n")
+    assert "Read comment 10234 on PROJ-12." in prompt
+    assert f"- `api` at `{desk / 'api'}`, at `main`. The api repository." in prompt
+    assert f"- `web` at `{desk / 'web'}`, at `main`. The web repository." in prompt
+    assert "attempt 1 of 1" in prompt
+    # The map's text, not its path: the splitter may not read outside its desk. Its placeholders are left as
+    # they are.
+    assert "how they depend on each other:\n\n# Map\n\napi serves {{KEY}}; web calls it.\n" in prompt
 
 
 @pytest.mark.parametrize(
@@ -120,56 +114,39 @@ def test_a_split_reads_a_desk_and_records_its_children(ws: Ws, treehouse_state: 
         ),
     ],
 )
-def test_split_guards(ws: Ws, treehouse_state: Path, args: list[str], guard: str, reason: str) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        assert main(split("PROJ-12", *args), runner=runner) == 1
-        assert decisions(conn, tick_id) == [(f"refused:{guard}", reason)]
-        assert runner.spawned == []
-        assert pool_statuses(treehouse_state) == ["available", "available"]
+def test_split_guards(ws_scenario: Scenario, treehouse_state: Path, args: list[str], guard: str, reason: str) -> None:
+    assert ws_scenario.refuses(canopy("dispatch", "PROJ-12", "--label", LABEL, "--kind", "split", *args)) == [
+        (f"refused:{guard}", reason)
+    ]
+    assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
-def test_request_is_for_split_only(ws: Ws, treehouse_state: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        args = ["dispatch", "PROJ-12", "--label", LABEL, "--kind", "implement", "--repo", "api", "--request", "1"]
-        assert main(args, runner=InlineRunner()) == 1
-        assert decisions(conn, tick_id) == [
-            ("refused:bad_request", "--request names the comment asking for a split; it is for split only")
-        ]
+def test_request_is_for_split_only(ws_scenario: Scenario) -> None:
+    assert ws_scenario.refuses(dispatches("PROJ-12", repo="api", request="1")) == [
+        ("refused:bad_request", "--request names the comment asking for a split; it is for split only")
+    ]
 
 
-def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws: Ws, treehouse_state: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        db.touch_ticket(conn, "PROJ-1", str(ws.root))
-        conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")
-        runner = InlineRunner()
-        assert main(split("PROJ-1", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 1
+def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws_scenario: Scenario) -> None:
+    conn = ws_scenario.conn
+    ws_scenario.run(dispatches(repo="api"), worker=pushes())
+    assert ws_scenario.refuses(split("PROJ-1")) == [
+        ("refused:bad_split", "PROJ-1 already has work on agent/PROJ-1-work; a started ticket is not split")
+    ]
 
-        assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 0
-        assert db.finish_run(conn, "runs", 1, RunStatus.FAILED, "{}")
-        for s in db.run_slots(conn, 1):
-            assert runner.run(
-                ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}
-            ).ok
-        assert main(split("PROJ-12", "--request", "2", "--repo", "api", "--repo", "web"), runner=runner) == 1
-        assert decisions(conn, tick_id) == [
-            ("refused:bad_split", "PROJ-1 already has work on agent/PROJ-1-work; a started ticket is not split"),
-            ("dispatch:split", decisions(conn, tick_id)[1][1]),
-            ("refused:attempt_limit", "PROJ-12 has had 1 split runs and the limit is 1"),
-            ("attention:attempt_limit", "PROJ-12 has had 1 split runs and the limit is 1"),
-        ]
-        # A split's runs are the ticket's, never a unit's.
-        assert db.units(conn, "PROJ-12") == []
+    failed = ws_scenario.run(split("PROJ-12"), worker=splitter_reports({"status": "failed", "summary": "one change"}))
+    assert failed.status == "failed"
+    limit = "PROJ-12 has had 1 split runs and the limit is 1"
+    assert ws_scenario.refuses(split("PROJ-12", request="2")) == [
+        ("refused:attempt_limit", limit),
+        ("attention:attempt_limit", limit),
+    ]
+    # A split's runs are the ticket's, never a unit's.
+    assert db.units(conn, "PROJ-12") == []
 
 
 def test_a_workspace_of_one_repository_is_never_split(scenario: Scenario) -> None:
-    assert scenario.refuses([*dispatches(kind=RunKind.SPLIT), "--request", "1"]) == [
+    assert scenario.refuses(dispatches(kind=RunKind.SPLIT, request="1")) == [
         ("refused:bad_split", "a split names every repository PROJ-1 covers, at least two; name each with --repo")
     ]
 
@@ -207,31 +184,24 @@ def test_a_workspace_of_one_repository_is_never_split(scenario: Scenario) -> Non
     ],
 )
 def test_invalid_children_are_recorded_nowhere(
-    ws: Ws, treehouse_state: Path, agent_log: Path, result: object, note: str
+    ws_scenario: Scenario, treehouse_state: Path, result: object, note: str
 ) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn), splitter_reports(result):
-        # OLD-1 is a ticket the journal has dispatched before, and SEEN-1 one the overseer has decided about: a splitter
-        # must claim neither.
-        db.touch_ticket(conn, "OLD-1", str(ws.root))
-        db.touch_ticket(conn, "SEEN-1", str(ws.root))
-        conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status) "
-            "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-work', 'x', 'l', 'done')"
-        )
-        assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 2)
-        assert run["status"] == "unknown"
-        stored = json.loads(run["result_json"])
-        assert stored["harness"] == f"children not recorded: {note}"
-        # A refused map is not stored: however many children it named, the journal keeps none of them.
-        assert stored["children"] == {}
-        assert children(conn) == []
-        assert pool_statuses(treehouse_state) == ["available", "available"]
-        [item] = [i for i in attention.from_runs(conn) if i.ticket_key == "PROJ-12"]
-        assert item.reason == "unknown_result"
-        assert item.detail.startswith("run:2 (split) ended unknown: children not recorded: ")
+    conn = ws_scenario.conn
+    # OLD-1 is a ticket the journal has dispatched before, and SEEN-1 one the overseer has decided about: a splitter
+    # must claim neither.
+    ws_scenario.run(dispatches("OLD-1", repo="api"), worker=pushes())
+    ws_scenario.seen("SEEN-1")
+    run = ws_scenario.run(split("PROJ-12"), worker=splitter_reports(result))
+    assert (run.id, run.status) == (2, "unknown")
+    stored = json.loads(run.row["result_json"])
+    assert stored["harness"] == f"children not recorded: {note}"
+    # A refused map is not stored: however many children it named, the journal keeps none of them.
+    assert stored["children"] == {}
+    assert children(conn) == []
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    [item] = [i for i in attention.from_runs(conn) if i.ticket_key == "PROJ-12"]
+    assert item.reason == "unknown_result"
+    assert item.detail.startswith("run:2 (split) ended unknown: children not recorded: ")
 
 
 def test_a_blocked_or_missing_split_result_is_unknown() -> None:
@@ -242,31 +212,22 @@ def test_a_blocked_or_missing_split_result_is_unknown() -> None:
     )
 
 
-def test_a_failed_split_records_what_it_created(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
+def test_a_failed_split_records_what_it_created(ws_scenario: Scenario) -> None:
     result = {"status": "failed", "summary": "tracker errored", "children": {"PROJ-13": "api"}}
-    with in_tick(conn), splitter_reports(result):
-        assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 1)
-        assert run["status"] == "failed"
-        assert children(conn) == [("PROJ-13", "PROJ-12", "api", 1)]
+    run = ws_scenario.run(split("PROJ-12"), worker=splitter_reports(result))
+    assert run.status == "failed"
+    assert children(ws_scenario.conn) == [("PROJ-13", "PROJ-12", "api", 1)]
 
 
-def test_a_timed_out_split_records_the_children_it_reported(ws: Ws, treehouse_state: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn):
-        result = {"status": "done", "summary": "split", "children": {"PROJ-13": "api"}}
-        runner = InlineRunner(timeout_agent=True, timeout_stdout=json.dumps(result) + "\n")
-        assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 0
-        assert main(["_run", "1"], runner=runner) == 0
-        run = present(db.get_run(conn, 1))
-        assert run["status"] == "timeout"
-        assert json.loads(run["result_json"])["harness"] == "the splitter timed out after 45 minutes"
-        # The child exists in the tracker, so the journal knows it and a retry cannot make it again.
-        assert children(conn) == [("PROJ-13", "PROJ-12", "api", 1)]
-        assert pool_statuses(treehouse_state) == ["available", "available"]
+def test_a_timed_out_split_records_the_children_it_reported(ws_scenario: Scenario, treehouse_state: Path) -> None:
+    result = {"status": "done", "summary": "split", "children": {"PROJ-13": "api"}}
+    runner = InlineRunner(timeout_agent=True, timeout_stdout=json.dumps(result) + "\n")
+    run = ws_scenario.run(split("PROJ-12"), runner=runner)
+    assert run.status == "timeout"
+    assert json.loads(run.row["result_json"])["harness"] == "the splitter timed out after 45 minutes"
+    # The child exists in the tracker, so the journal knows it and a retry cannot make it again.
+    assert children(ws_scenario.conn) == [("PROJ-13", "PROJ-12", "api", 1)]
+    assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
 def test_a_child_is_not_worked_in_a_workspace_of_another_repository(scenario: Scenario) -> None:
@@ -284,76 +245,49 @@ def test_a_child_is_not_worked_in_a_workspace_of_another_repository(scenario: Sc
     ]
 
 
-def test_a_child_is_dispatched_only_in_its_repository(ws: Ws, treehouse_state: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn, dry_run=True) as tick_id:
-        db.touch_ticket(conn, "PROJ-12", str(ws.root))
-        conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status) "
-            "VALUES (?, 'PROJ-12', 'split', '', 'x', 'y', 'l', 'done')",
-            (tick_id,),
-        )
-        db.record_split_children(conn, "PROJ-12", 1, {"PROJ-13": "api", "PROJ-14": "web"})
-
-        def implement(key: str, *repos: str) -> int:
-            args = ["dispatch", key, "--label", LABEL, "--kind", "implement"]
-            return main([*args, *(a for r in repos for a in ("--repo", r))])
-
-        assert implement("PROJ-13", "web") == 1
-        assert implement("PROJ-13", "api", "web") == 1
-        assert implement("PROJ-13", "api") == 0
-        assert main(split("PROJ-14", "--request", "1", "--repo", "api", "--repo", "web")) == 1
-        reason = "PROJ-13 was split from PROJ-12 to cover api only; dispatch it with --repo api"
-        assert decisions(conn, tick_id)[:3] == [
-            ("refused:unknown_repo", reason),
-            ("refused:unknown_repo", reason),
-            ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-13-work in api; label {LABEL}"),
-        ]
-        assert decisions(conn, tick_id)[3] == (
-            "refused:bad_split",
-            "PROJ-14 was created by splitting PROJ-12; it is not split again",
-        )
+def test_a_child_is_dispatched_only_in_its_repository(ws_scenario: Scenario) -> None:
+    ws_scenario.run(split("PROJ-12"), worker=splitter_reports({"status": "done", "children": CHILDREN}))
+    reason = "PROJ-13 was split from PROJ-12 to cover api only; dispatch it with --repo api"
+    for repo in ("web", BOTH):
+        assert ws_scenario.refuses(dispatches("PROJ-13", repo=repo), dry_run=True) == [("refused:unknown_repo", reason)]
+    ticked = ws_scenario.tick(dispatches("PROJ-13", repo="api"), *waits("PROJ-12", "PROJ-14"), dry_run=True)
+    would = f"dry run: not dispatched; would work on agent/PROJ-13-work in api; label {LABEL}"
+    assert [(d.action, d.rationale) for d in ticked.decisions if d.ticket_key == "PROJ-13"] == [
+        ("dispatch:implement", would)
+    ]
+    assert ws_scenario.refuses(split("PROJ-14"), dry_run=True) == [
+        ("refused:bad_split", "PROJ-14 was created by splitting PROJ-12; it is not split again")
+    ]
 
 
-def test_a_dry_run_split_names_what_it_would_split(ws: Ws, treehouse_state: Path) -> None:
-    conn = ws.journal()
-    with in_tick(conn, dry_run=True) as tick_id:
-        assert (
-            main(split("PROJ-12", "--request", "c-9", "--repo", "web", "--repo", "api", "--cursor", "comment=c-9")) == 0
-        )
-        assert decisions(conn, tick_id) == [
-            (
-                "dispatch:split",
-                (
-                    f"dry run: not dispatched; would split PROJ-12 into web, api; label {LABEL}; request c-9; "
-                    "cursor comment=c-9"
-                ),
-            )
-        ]
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+def test_a_dry_run_split_names_what_it_would_split(ws_scenario: Scenario) -> None:
+    command = dispatches("PROJ-12", RunKind.SPLIT, repo=("web", "api"), request="c-9", cursors={"comment": "c-9"})
+    ticked = ws_scenario.tick(command, dry_run=True)
+    would = (
+        f"dry run: not dispatched; would split PROJ-12 into web, api; label {LABEL}; request c-9; cursor comment=c-9"
+    )
+    assert [(d.action, d.rationale) for d in ticked.decisions if d.ticket_key == "PROJ-12"] == [
+        ("dispatch:split", would)
+    ]
+    assert ws_scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_the_state_block_shows_split_children(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn), splitter_reports({"status": "done", "children": {"PROJ-13": "api", "PROJ-14": "web"}}):
-        assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 1)
-        with overseer_does(*waits("PROJ-12", rationale="split into PROJ-13 and PROJ-14")):
-            assert operator("tick", "--dry-run") == 0
+def test_the_state_block_shows_split_children(ws_scenario: Scenario, ws: Ws) -> None:
+    conn = ws_scenario.conn
+    run = ws_scenario.run(split("PROJ-12"), worker=splitter_reports({"status": "done", "children": CHILDREN}))
+    ws_scenario.tick(*waits("PROJ-12", rationale="split into PROJ-13 and PROJ-14"), dry_run=True)
 
-    state = state_block(agent_log)
+    state = ws_scenario.state()
     assert state["policy"]["max_split_attempts"] == 1
     [ticket] = state["tickets"]
     assert (ticket["key"], ticket["split_attempts"], ticket["units"]) == ("PROJ-12", 1, [])
     assert ticket["last_run"]["kind"] == "split"
     assert state["split_children"] == [
-        {"child": c, "parent": "PROJ-12", "repo": r, "split_run_id": 1, "split_ended_at": run["ended_at"]}
-        for c, r in (("PROJ-13", "api"), ("PROJ-14", "web"))
+        {"child": c, "parent": "PROJ-12", "repo": r, "split_run_id": 1, "split_ended_at": run.row["ended_at"]}
+        for c, r in CHILDREN.items()
     ]
 
     # Once the parent and every child are done, the children leave the state block.
-    for key in ("PROJ-12", "PROJ-13", "PROJ-14"):
+    for key in ("PROJ-12", *CHILDREN):
         db.set_ticket(conn, key, str(ws.root), done=True)
     assert db.open_split_children(conn) == []
