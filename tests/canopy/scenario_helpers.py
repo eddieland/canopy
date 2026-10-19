@@ -80,6 +80,15 @@ a test reads it from the move, not from `capsys`:
         scenario.run(worker=fails())
         assert "may now have 3." in scenario.operator("grant", "PROJ-1", "implement").out
 
+A story that spans repositories is told in `ws_scenario`, the same `Scenario` in the workspace of two, `api` and
+`web`, each pool a slot of its own. A dispatch names the repositories it works in, and a joint run's worker pushes in
+each through its desk:
+
+    def test_a_joint_implement_pushes_both_repositories(ws_scenario: Scenario, ws: Ws) -> None:
+        both = ("api", "web")
+        run = ws_scenario.run(dispatches(repo=both), worker=pushes(repos=both))
+        assert ws.remote_head("web", run.branch) is not None
+
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
 
@@ -611,7 +620,7 @@ def dispatches(
     key: str = KEY,
     kind: RunKind = RunKind.IMPLEMENT,
     *,
-    repo: str = "repo",
+    repo: str | Sequence[str] = "repo",
     label: str | None = LABEL,
     slug: str | None = None,
     base: str | None = None,
@@ -619,20 +628,24 @@ def dispatches(
     cursors: Mapping[str, str] | None = None,
     context: str | None = None,
     review_run: int | None = None,
+    request: str | None = None,
 ) -> list[str]:
     """The overseer dispatches a run of `key` in `repo`, by default an `implement` under the test operator's label.
 
-    Pass `label=None` for a ticket the operator started, which needs none.
+    `repo` is one repository, or several for a joint run or a split, in `ws_scenario`'s workspace of two. Pass
+    `label=None` for a ticket the operator started, which needs none, and `request` for a split, the comment asking for
+    it.
     """
-    flags = ["--kind", str(kind)]
+    repos = [repo] if isinstance(repo, str) else list(repo)
+    flags = [arg for name in repos for arg in ("--repo", name)] + ["--kind", str(kind)]
     flags += _option("--label", label) + _option("--slug", slug) + _option("--base", base)
     flags += _option("--review-run", None if review_run is None else str(review_run))
     for reason in reasons:
         flags += ["--reason", str(reason)]
     for name, value in (cursors or {}).items():
         flags += ["--cursor", f"{name}={value}"]
-    flags += _option("--context", context)
-    return canopy("dispatch", key, "--repo", repo, *flags)
+    flags += _option("--context", context) + _option("--request", request)
+    return canopy("dispatch", key, *flags)
 
 
 def raises(key: str, reason: str, detail: str | None = None) -> list[str]:
@@ -653,20 +666,29 @@ def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str |
 # What a worker does in its run: each is a block, for `Scenario.tick` and `Scenario.run`.
 
 
-def pushes(branch: str | None = None, message: str | None = None, **reported: object) -> Script:
+def pushes(
+    branch: str | None = None, message: str | None = None, *, repos: Sequence[str] = (), **reported: object
+) -> Script:
     """The worker commits `message`, pushes `branch`, and reports it done with a PR, its result carrying `reported`
     too: `pushes(notes=[...])`.
 
     What is left out is its ticket's own: the branch an `implement` without a slug pushes, `agent/<KEY>-work`; the
-    message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. Made for KEY until a run of
-    another ticket plays it.
+    message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. A joint run's worker, in a
+    desk, names its `repos`: it commits and pushes in each, and reports a PR for each,
+    `https://example.test/<repo>/pr/<the key's number>`. Made for KEY until a run of another ticket plays it.
     """
+    assert not isinstance(repos, str), "repos is a sequence of names: repos=('api', 'web')"
 
     def made(key: str) -> Script:
-        pushed = branch or f"agent/{key}-work"
-        result = json.loads(WORKER_DONE) | {"branch": pushed, "pr": f"https://example.test/pr/{key.rpartition('-')[2]}"}
-        result |= reported
-        return worker_does(*commit_and_push(pushed, message or f"{key}: the change"), result=json.dumps(result))
+        pushed, said, number = branch or f"agent/{key}-work", message or f"{key}: the change", key.rpartition("-")[2]
+        result = json.loads(WORKER_DONE) | {"branch": pushed, "pr": f"https://example.test/pr/{number}"}
+        commands = commit_and_push(pushed, said)
+        if repos:
+            # In a desk each repository is a link of its own, and the run records a PR per repository, not one.
+            del result["pr"]
+            result["prs"] = {name: f"https://example.test/{name}/pr/{number}" for name in repos}
+            commands = [["git", "-C", name, *command[1:]] for name in repos for command in commands]
+        return worker_does(*commands, result=json.dumps(result | reported))
 
     return replace(made(KEY), per_ticket=made)
 

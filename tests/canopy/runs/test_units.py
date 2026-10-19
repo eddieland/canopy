@@ -2,7 +2,6 @@
 
 import json
 import os
-import signal
 import sqlite3
 import threading
 import time
@@ -12,7 +11,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import RunStatus, TickStatus
+from canopy.core.vocab import Phase, ResumeReason, RunKind, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
@@ -25,16 +24,17 @@ from tests.canopy.helpers import (
     agent_runs,
     decisions,
     in_tick,
-    overseer_does,
+    last_tick,
     pool_statuses,
     present,
-    state_block,
-    wait_for_run,
     waits,
     worker_does,
 )
-from tests.conftest import CanopyEnv, executable, git
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, sets_phase
+from tests.conftest import executable, git
 
+#: The branch PROJ-1's first implement names, with its slug.
+LOGIN = "agent/PROJ-1-login"
 PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "docs": "https://x.test/docs/pull/3"}
 # Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
 TITLES = {"api": "PROJ-1: add the endpoint", "web": "PROJ-1: call\n  the endpoint", "docs": "PROJ-1: document it"}
@@ -62,160 +62,129 @@ def slots_of(conn: sqlite3.Connection, run_id: int) -> dict[str, Path]:
 
 
 def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
-    ws: Ws, treehouse_state: Path, agent_log: Path
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
 ) -> None:
     """M7 acceptance, against the fakes: one run over two repositories pushes both and records both PRs."""
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with (
-        in_tick(conn) as tick_id,
-        worker_does(["readlink", "api"], *push_in("api"), *push_in("web"), result=done(PRS, TITLES)),
-    ):
-        assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--repo", "api")) == 0
-        run = wait_for_run(conn, 1)
-        assert run["status"] == "done", Path(run["log_path"]).read_text()
+    conn = ws_scenario.conn
+    worker = worker_does(["readlink", "api"], *push_in("api"), *push_in("web"), result=done(PRS, TITLES))
+    run = ws_scenario.run(dispatches(repo=("api", "web", "api")), worker=worker)
+    assert run.status == "done", run.printed.out
 
-        # One run, one slot in each repository's pool, and the worker in a desk linking them.
-        slots = slots_of(conn, 1)
-        assert list(slots) == ["api", "web"]
-        desk = ws.root / "desks" / "PROJ-1"
-        [worker] = agent_runs(agent_log)
-        assert worker["cwd"] == str(desk)
-        assert [c["returncode"] for c in worker["commands"]] == [0, 0, 0, 0, 0]
-        assert worker["commands"][0]["stdout"].strip() == os.path.relpath(slots["api"], desk)
-        assert not desk.exists()  # removed when the run ended
-        assert pool_statuses(treehouse_state) == ["available", "available"]
+    # One run, one slot in each repository's pool, and the worker in a desk linking them.
+    slots = slots_of(conn, run.id)
+    assert list(slots) == ["api", "web"]
+    desk = ws.root / "desks" / "PROJ-1"
+    [w] = agent_runs(ws_scenario.agent_log)
+    assert w["cwd"] == str(desk)
+    assert [c["returncode"] for c in w["commands"]] == [0, 0, 0, 0, 0]
+    assert w["commands"][0]["stdout"].strip() == os.path.relpath(slots["api"], desk)
+    assert not desk.exists()  # removed when the run ended
+    assert pool_statuses(treehouse_state) == ["available", "available"]
 
-        for name in ("api", "web"):
-            assert ws.remote_head(name, BRANCH) == git("rev-parse", "HEAD", cwd=slots[name])
-        # Each unit has the ticket's branch and its own PR; a PR for a repository the run was not in is not recorded.
-        units = {u["repo"]: u for u in db.units(conn, "PROJ-1")}
-        assert {r: (u["branch"], u["pr_url"]) for r, u in units.items()} == {
-            "api": (BRANCH, PRS["api"]),
-            "web": (BRANCH, PRS["web"]),
-        }
-        assert json.loads(run["result_json"])["prs"] == {"api": PRS["api"], "web": PRS["web"]}
-        # Each PR's own title is recorded by its URL, on one line; docs's is not.
-        titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
-        assert json.loads(run["result_json"])["pr_titles"] == titles
-        assert {r["url"]: r["pr_title"] for r in db.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "dispatch:implement"
-        assert (
-            rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"
-        )
+    for name in ("api", "web"):
+        assert ws.remote_head(name, BRANCH) == git("rev-parse", "HEAD", cwd=slots[name])
+    # Each unit has the ticket's branch and its own PR; a PR for a repository the run was not in is not recorded.
+    units = {u["repo"]: u for u in db.units(conn, "PROJ-1")}
+    assert {r: (u["branch"], u["pr_url"]) for r, u in units.items()} == {
+        "api": (BRANCH, PRS["api"]),
+        "web": (BRANCH, PRS["web"]),
+    }
+    assert json.loads(run.row["result_json"])["prs"] == {"api": PRS["api"], "web": PRS["web"]}
+    # Each PR's own title is recorded by its URL, on one line; docs's is not.
+    titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
+    assert json.loads(run.row["result_json"])["pr_titles"] == titles
+    assert {r["url"]: r["pr_title"] for r in db.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
+    [(action, rationale)] = decisions(conn, int(run.row["tick_id"]))
+    assert action == "dispatch:implement"
+    assert rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"
 
-        prompt = (ws.state_dir / "runs" / "1.prompt").read_text()
-        assert f"ticket PROJ-1 in {desk}." in prompt
-        assert "This is a joint run over 2 repositories" in prompt
-        assert f"- `api` at `{desk / 'api'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
-        assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
-        assert "Each PR's body links its sibling PRs and says which one merges first." in prompt
-        assert '"prs":{"api":"<url or null>","web":"<url or null>"}' in prompt
-        assert '"pr_titles":{"api":"<its title or null>","web":"<its title or null>"}' in prompt
+    prompt = run.prompt
+    assert f"ticket PROJ-1 in {desk}." in prompt
+    assert "This is a joint run over 2 repositories" in prompt
+    assert f"- `api` at `{desk / 'api'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
+    assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
+    assert "Each PR's body links its sibling PRs and says which one merges first." in prompt
+    assert '"prs":{"api":"<url or null>","web":"<url or null>"}' in prompt
+    assert '"pr_titles":{"api":"<its title or null>","web":"<its title or null>"}' in prompt
 
-        # The next run is told each unit's PR.
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-        with in_tick(conn):
-            assert (
-                main(
-                    dispatch("PROJ-1", "--repo", "web", "--repo", "api", "--reason", "review", kind="resume"),
-                    runner=InlineRunner(),
-                )
-                == 0
-            )
-            prompt = (ws.state_dir / "runs" / "2.prompt").read_text()
-            assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: {PRS['web']}." in prompt
+    # The next run is told each unit's PR.
+    resume = dispatches(kind=RunKind.RESUME, repo=("web", "api"), reasons=[ResumeReason.REVIEW])
+    review_fix = ws_scenario.run(resume, worker=pushes(repos=("web", "api")))
+    assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: {PRS['web']}." in review_fix.prompt
 
 
-def test_leases_are_all_or_nothing(ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    seed_pools(ws, treehouse_state)
+def test_leases_are_all_or_nothing(
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     state = json.loads(treehouse_state.read_text())
     state["pools"][str(ws.clone("web"))].update(max_trees=1, slots=[{"name": "1", "path": "/busy", "status": "in-use"}])
     treehouse_state.write_text(json.dumps(state))
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
 
-        assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web"), runner=runner) == 1
-        assert "dispatch refused (no_slot): web: treehouse get exited 1: " in capsys.readouterr().err
-        assert [a for a, _ in decisions(conn, tick_id)] == ["refused:no_slot"]
-        # api's slot was leased first, and returned before the refusal was recorded.
-        assert pool_statuses(treehouse_state) == ["available", "in-use"]
-        calls: list[list[str]] = json.loads(treehouse_state.read_text())["calls"]
-        assert [c[0] for c in calls] == ["get", "get", "return"]
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
-        assert runner.spawned == []
+    # Refused, the dispatch starts no run.
+    assert [a for a, _ in ws_scenario.refuses(dispatches(repo=("api", "web")))] == ["refused:no_slot"]
+    # What `canopy dispatch` printed, which the scenario leaves to the test's own output.
+    assert "dispatch refused (no_slot): web: treehouse get exited 1: " in capsys.readouterr().err
+    # api's slot was leased first, and returned before the refusal was recorded.
+    assert pool_statuses(treehouse_state) == ["available", "in-use"]
+    calls: list[list[str]] = json.loads(treehouse_state.read_text())["calls"]
+    assert [c[0] for c in calls] == ["get", "get", "return"]
 
 
-def test_a_joint_run_is_unpushed_if_any_repository_is(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    seed_pools(ws, treehouse_state)
+def test_a_joint_run_is_unpushed_if_any_repository_is(ws_scenario: Scenario, ws: Ws, treehouse_state: Path) -> None:
     hook = ws.origins["web"] / "hooks" / "pre-receive"
     executable(hook, "#!/bin/sh\necho 'push refused by test hook' >&2\nexit 1\n")
-    conn = ws.journal()
-    with in_tick(conn), worker_does(*push_in("api"), *push_in("web"), result=done({"api": PRS["api"]})):
-        assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 1)
+    worker = worker_does(*push_in("api"), *push_in("web"), result=done({"api": PRS["api"]}))
+    run = ws_scenario.run(dispatches(repo=("api", "web")), worker=worker)
 
-        assert run["status"] == "unpushed"
-        note = json.loads(run["result_json"])["harness"]
-        assert note.startswith(f"web: commits on {BRANCH} are not on origin; the push failed: ")
-        assert "api" not in note.split(":", 1)[1]  # api's branch is pushed, so only web is named
-        assert ws.remote_head("api", BRANCH) is not None
-        assert pool_statuses(treehouse_state) == ["available", "available"]
-        [item] = attention.from_runs(conn)
-        assert (item.ticket_key, item.reason) == ("PROJ-1", "unpushed")
+    assert run.status == "unpushed"
+    note = json.loads(run.row["result_json"])["harness"]
+    assert note.startswith(f"web: commits on {BRANCH} are not on origin; the push failed: ")
+    assert "api" not in note.split(":", 1)[1]  # api's branch is pushed, so only web is named
+    assert ws.remote_head("api", BRANCH) is not None
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    [item] = attention.from_runs(ws_scenario.conn)
+    assert (item.ticket_key, item.reason) == ("PROJ-1", "unpushed")
 
 
-def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_state: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
+def test_units_have_their_own_attempts_and_share_the_branch(ws_scenario: Scenario) -> None:
+    conn = ws_scenario.conn
+    login = pushes(LOGIN)
 
-        def run(*args: str, kind: str = "implement") -> int:
-            code = main(dispatch("PROJ-1", *args, kind=kind), runner=runner)
-            if code == 0:
-                run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-                for s in db.run_slots(conn, run_id):  # as `_run` would when the worker is done
-                    assert runner.run(
-                        ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}
-                    ).ok
-                assert db.finish_run(conn, "runs", run_id, RunStatus.DONE, "{}")
-            return code
+    def ci_fix(repo: str) -> list[str]:
+        return dispatches(kind=RunKind.RESUME, repo=repo, reasons=[ResumeReason.CI])
 
-        assert run("--repo", "api", "--slug", "login") == 0
-        # The first implement named the branch; a later one adds a unit on the same branch, and may not rename it.
-        assert run("--repo", "web", "--slug", "other") == 1
-        assert run("--repo", "web", "--slug", "login") == 0
-        assert run("--repo", "api", "--reason", "ci", kind="resume") == 0
-        assert run("--repo", "api") == 0  # api's second implement: its limit is 2
-        assert run("--repo", "api", "--repo", "web") == 1
-        assert run("--repo", "web") == 0  # web has had one
+    assert ws_scenario.run(dispatches(repo="api", slug="login"), worker=login).kind == RunKind.IMPLEMENT
+    # The first implement named the branch; a later one adds a unit on the same branch, and may not rename it.
+    assert ws_scenario.refuses(dispatches(repo="web", slug="other")) == [
+        ("refused:bad_slug", "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug")
+    ]
+    ws_scenario.run(dispatches(repo="web", slug="login"), worker=login)
+    ws_scenario.run(ci_fix("api"), worker=login)
+    ws_scenario.run(dispatches(repo="api"), worker=login)  # api's second implement: its limit is 2
+    limit = "PROJ-1 in api has had 2 implement runs and the limit is 2"
+    assert ws_scenario.refuses(dispatches(repo=("api", "web"))) == [
+        ("refused:attempt_limit", limit),
+        ("attention:attempt_limit", limit),
+    ]
+    [item] = [d for d in db.decisions_for_tick(conn, last_tick(conn).id) if d.action == "attention:attempt_limit"]
+    assert item.repo == "api"  # the item is about the unit at its limit
+    ws_scenario.run(dispatches(repo="web"), worker=login)  # web has had one
+    assert {str(r["branch"]) for r in conn.execute("SELECT branch FROM runs")} == {LOGIN}
+    assert [str(r["action"]) for r in conn.execute("SELECT action FROM decisions ORDER BY id")] == [
+        "dispatch:implement",
+        "refused:bad_slug",
+        "dispatch:implement",
+        "dispatch:resume",
+        "dispatch:implement",
+        "refused:attempt_limit",
+        "attention:attempt_limit",
+        "dispatch:implement",
+    ]
 
-        assert [a for a, _ in decisions(conn, tick_id)] == [
-            "dispatch:implement",
-            "refused:bad_slug",
-            "dispatch:implement",
-            "dispatch:resume",
-            "dispatch:implement",
-            "refused:attempt_limit",
-            "attention:attempt_limit",
-            "dispatch:implement",
-        ]
-        reasons = dict(decisions(conn, tick_id))
-        assert reasons["refused:bad_slug"] == (
-            "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug"
-        )
-        assert reasons["refused:attempt_limit"] == "PROJ-1 in api has had 2 implement runs and the limit is 2"
-        [limit] = [d for d in db.decisions_for_tick(conn, tick_id) if d.action == "attention:attempt_limit"]
-        assert limit.repo == "api"  # the item is about the unit at its limit
-        assert {str(r["branch"]) for r in conn.execute("SELECT branch FROM runs")} == {"agent/PROJ-1-login"}
-
-        # The CI cooldown is per unit too: api's resume for CI just ended, web has had none.
-        assert main(dispatch("PROJ-1", "--repo", "api", "--reason", "ci", kind="resume"), runner=runner) == 1
-        assert decisions(conn, tick_id)[-1][0] == "refused:cooldown"
-        assert run("--repo", "web", "--reason", "ci", kind="resume") == 0
+    # The CI cooldown is per unit too: api's resume for CI just ended, web has had none.
+    [(action, _)] = ws_scenario.refuses(ci_fix("api"))
+    assert action == "refused:cooldown"
+    ws_scenario.run(ci_fix("web"), worker=login)
 
 
 def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, treehouse_state: Path) -> None:
@@ -245,20 +214,19 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
         ]
 
 
-def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with worker_does(*push_in("api"), *push_in("web"), result=done(PRS)):
-        with in_tick(conn):
-            assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
-            wait_for_run(conn, 1)
-            assert main(["ticket", "set", "PROJ-1", "--repo", "web", "--phase", "ci_red", "--cursor", "ci=run-9"]) == 0
-            assert main(["ticket", "set", "PROJ-1", "--phase", "running", "--cursor", "comment=c-1"]) == 0
-        with overseer_does(*waits("PROJ-1")):
-            assert main(["tick", "--dry-run"]) == 0
+def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
+    ws_scenario.run(
+        dispatches(repo=("api", "web")), worker=worker_does(*push_in("api"), *push_in("web"), result=done(PRS))
+    )
+    # The overseer records web's phase and cursor, and the ticket's own; the next tick's state block shows them.
+    ws_scenario.tick(
+        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor="ci=run-9"),
+        sets_phase("PROJ-1", Phase.RUNNING, cursor="comment=c-1"),
+        *waits("PROJ-1"),
+    )
+    ws_scenario.tick(*waits("PROJ-1"), dry_run=True)
 
-    state = state_block(agent_log)
-    [ticket] = state["tickets"]
+    [ticket] = ws_scenario.state()["tickets"]
     assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
         "running",
         BRANCH,
@@ -366,65 +334,47 @@ def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
 
 
 def test_a_joint_prompt_override_without_the_repositories_is_refused(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
+    ws_scenario: Scenario, treehouse_state: Path
 ) -> None:
-    seed_pools(ws, treehouse_state)
-    overrides = canopy_env.user_file.parent / "prompts"
+    overrides = ws_scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text(
         "Work {{KEY}} in {{SLOT}} on {{BRANCH}} for {{LABELS}}\n{{DRAFTS}}\n"
     )
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web"), runner=runner) == 1
-        [(action, reason)] = decisions(conn, tick_id)
-        assert action == "refused:bad_prompt"
-        assert reason.endswith("missing required placeholder {{REPOSITORIES}}, {{PRS}}")
-        assert pool_statuses(treehouse_state) == ["available", "available"]
-        # The same override still serves a run in one repository.
-        assert main(dispatch("PROJ-1", "--repo", "api"), runner=runner) == 0
+    [(action, reason)] = ws_scenario.refuses(dispatches(repo=("api", "web")))
+    assert action == "refused:bad_prompt"
+    assert reason.endswith("missing required placeholder {{REPOSITORIES}}, {{PRS}}")
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    # The same override still serves a run in one repository.
+    alone = ws_scenario.run(dispatches(repo="api"))
+    assert alone.prompt.startswith("Work PROJ-1 in ")
 
 
 def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
-    ws: Ws, treehouse_state: Path, agent_log: Path
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
 ) -> None:
     """M7 acceptance, against the fakes: a joint run killed mid-way is found by the next tick, every slot returned."""
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with worker_does(sleep=60):
-        with in_tick(conn, ends_ok=True):
-            assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
+    working = ws_scenario.starts(dispatches(repo=("api", "web")))
+    worker_pid = int(working.row["worker_pid"])
+    desk = ws.root / "desks" / "PROJ-1"
+    assert sorted(p.name for p in desk.iterdir()) == [desks.MARKER, "api", "web"]
+    # A desk some earlier run left behind, with no run of its ticket running.
+    stale = desks.make(ws.root, "PROJ-9", [("api", ws.clone("api"))])
+    working.dies()
+    assert pool_statuses(treehouse_state) == ["leased", "leased"]
 
-        deadline = time.monotonic() + 30
-        run = db.get_run(conn, 1)
-        while (run is None or run["worker_pid"] is None or not agent_log.exists()) and time.monotonic() < deadline:
-            time.sleep(0.05)
-            run = db.get_run(conn, 1)
-        assert run is not None
-        assert run["worker_pid"] is not None, "`_run` never started the worker"
-        pid, worker_pid = int(run["pid"]), int(run["worker_pid"])
-        desk = ws.root / "desks" / "PROJ-1"
-        assert sorted(p.name for p in desk.iterdir()) == [desks.MARKER, "api", "web"]
-        # A desk some earlier run left behind, with no run of its ticket running.
-        stale = desks.make(ws.root, "PROJ-9", [("api", ws.clone("api"))])
-        os.kill(pid, signal.SIGKILL)
-        while procs.alive(pid) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        assert pool_statuses(treehouse_state) == ["leased", "leased"]
-
-        with overseer_does(*waits("PROJ-1")):
-            assert main(["tick"]) == 0
-        crashed = present(db.get_run(conn, 1))
-        assert crashed["status"] == "crashed"
-        while procs.alive(worker_pid) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        assert not procs.alive(worker_pid)
-        assert pool_statuses(treehouse_state) == ["available", "available"]
-        assert not desk.exists()
-        assert not stale.exists()
-        assert ws.clone("api").is_dir()  # removing a desk never follows its links
-        assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("PROJ-1", "crashed")]
+    ticked = ws_scenario.tick(*waits("PROJ-1"))
+    assert ticked.actions[0] == "attention:crashed"
+    assert working.row["status"] == "crashed"
+    deadline = time.monotonic() + 30
+    while procs.alive(worker_pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not procs.alive(worker_pid)
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    assert not desk.exists()
+    assert not stale.exists()
+    assert ws.clone("api").is_dir()  # removing a desk never follows its links
+    assert ws_scenario.attention() == [("PROJ-1", "crashed")]
 
 
 def test_desks_are_made_only_in_a_directory_canopy_owns(ws: Ws, tmp_path: Path) -> None:
@@ -459,18 +409,14 @@ def test_canopy_removes_only_the_desks_it_made(ws: Ws) -> None:
 
 
 def test_a_joint_run_refuses_a_workspace_that_defines_canopys_agents(
-    ws: Ws, treehouse_state: Path, agent_log: Path
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
 ) -> None:
     # The desk is not a repository, so OpenCode may read config above it: the workspace root is checked (D044).
-    seed_pools(ws, treehouse_state)
     (ws.root / ".opencode" / "agent").mkdir(parents=True)
     (ws.root / ".opencode" / "agent" / "canopy-worker.md").write_text("---\npermission:\n  bash: allow\n---\n")
-    conn = ws.journal()
-    with in_tick(conn):
-        assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 1)
-        assert run["status"] == "crashed"
-        assert "defines one of canopy's agents" in json.loads(run["result_json"])["harness"]
-        assert not agent_log.exists()  # the worker never started
-        assert pool_statuses(treehouse_state) == ["available", "available"]
-        assert not (ws.root / "desks" / "PROJ-1").exists()
+    run = ws_scenario.run(dispatches(repo=("api", "web")))
+    assert run.status == "crashed"
+    assert "defines one of canopy's agents" in json.loads(run.row["result_json"])["harness"]
+    assert not ws_scenario.agent_log.exists()  # the worker never started
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    assert not (ws.root / "desks" / "PROJ-1").exists()
