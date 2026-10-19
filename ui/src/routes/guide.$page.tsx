@@ -90,7 +90,8 @@ function GuideTree({ page }: { page: GuidePage }) {
         <nav aria-label="Guide" className="flex flex-col gap-6">
             {GUIDE_GROUPS.map((group) => (
                 <section key={group.title} aria-label={group.title} className="flex flex-col gap-2">
-                    <h2 className="text-sm font-semibold">{group.title}</h2>
+                    {/* Not a heading: its section is named for it, and the page's outline starts at its h1. */}
+                    <p className="text-sm font-semibold">{group.title}</p>
                     <ul className="flex flex-col border-l">
                         {group.pages.map((other) => (
                             <li key={other.slug}>

@@ -215,7 +215,8 @@ export function PanelHeader({
                 sticky && 'sticky top-0 z-10 bg-surface bg-linear-to-b from-surface-raised/50 to-surface-raised/50',
             )}
         >
-            <span className="panel-label font-medium whitespace-nowrap text-foreground">{label}</span>
+            {/* Every panel's title is an h2 under the page's h1, so the outline skips no level (DESIGN.md). */}
+            <h2 className="panel-label font-medium whitespace-nowrap text-foreground">{label}</h2>
             {children}
         </div>
     )

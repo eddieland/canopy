@@ -70,13 +70,13 @@ describe('ReplyForm', () => {
     it('names the message it answers, and on a public ticket says the reply stays in canopy', () => {
         renderForm({ ...TICKET, isPublic: true }, 3)
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply to message 3' })
-        expect(field.placeholder).toMatch(/^Stays in canopy, never on the ticket\./u)
+        expect(field.placeholder).toMatch(/It stays in canopy, never on the ticket\.$/u)
     })
 
     it('asks about an untrusted review only while one waits on the go-ahead', () => {
         renderForm({ ...TICKET, isPublic: true }, null, true)
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
-        expect(field.placeholder).toMatch(/the untrusted review\.$/u)
+        expect(field.placeholder).toMatch(/^Say what to do about the untrusted review\./u)
         expect(screen.queryByRole('button', { name: /a note for its next worker/u })).toBeNull()
     })
 
@@ -86,7 +86,7 @@ describe('ReplyForm', () => {
         const show = screen.getByRole('button', { name: 'Show a note for its next worker', expanded: false })
         fireEvent.click(show)
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
-        expect(field.placeholder).toMatch(/^Stays in canopy, never on the ticket\./u)
+        expect(field.placeholder).toMatch(/It stays in canopy, never on the ticket\.$/u)
         expect(field.placeholder).not.toMatch(/untrusted/u)
         expect(screen.getByRole('button', { name: 'Hide a note for its next worker', expanded: true })).toBeDefined()
     })

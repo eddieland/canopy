@@ -25,7 +25,7 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     // In words, as everything that waits on you reads; nothing says a plan that waits is not needed.
     await expect(section.getByText('waiting on you', { exact: true })).toBeVisible()
     await expect(page.getByRole('main')).not.toContainText('needed')
-    await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
+    await expect(plan(page).getByRole('heading', { level: 3 })).toHaveText('Schedule report exports')
     await expect(page.getByRole('article')).toHaveCount(2)
     await expect(page.getByRole('button', { name: 'Show 1 resolved' })).toBeVisible()
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve' })).toBeVisible()
@@ -109,7 +109,7 @@ test("a plan that waits on the operator leads its ticket's page as a card, which
     await expect(page.getByTestId('ticket-plan')).toHaveCount(0)
     await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
-    await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
+    await expect(plan(page).getByRole('heading', { level: 3 })).toHaveText('Schedule report exports')
 })
 
 test("the ticket's page waits for its plans to paint, so a card that leads it never pushes it down", async ({

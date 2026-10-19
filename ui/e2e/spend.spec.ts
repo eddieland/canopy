@@ -53,6 +53,35 @@ test('the window switches from the toggle, and idle spend is its own series with
     await expect(page).toHaveURL(/\/ticks\/2$/u)
 })
 
+test("each series has one name in the totals, the legend, and the table, and the description is the window's", async ({
+    page,
+}) => {
+    await page.goto('spend')
+    await settled(page)
+    // The window's state, with what the page holds on the title's hover.
+    const total = await page.getByTestId('spend-total-total').textContent()
+    await expect(page.locator('main header p')).toHaveText(`${total ?? ''} over 7 days · no tickets done`)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /canopy spend --days N/u)
+
+    const series = ['idle ticks', 'overseer', 'workers and splits', 'chores', 'reviews', 'dry runs']
+    await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
+    await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
+    // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do.
+    const totals = page.getByTestId('spend-totals').locator('dt')
+    await expect(totals).toHaveText([
+        'total',
+        'overseer',
+        'idle ticks',
+        'workers and splits',
+        'chores',
+        'reviews',
+        'dry runs',
+        'tickets done',
+        'per ticket done',
+    ])
+    await expect(page.getByText('other ticks')).toHaveCount(0)
+})
+
 test('a window the page does not offer reads as the week', async ({ page }) => {
     await page.goto('spend?days=9')
     await settled(page)

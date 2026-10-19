@@ -75,8 +75,9 @@ than with what it says.
 you mostly come here to read what the agent did, not to audit its token budget, and each kind of page remembers your
 choice: open it once on a run and every run's page opens with it. Click a bar to see what that call added on the one
 before, largest first, and click an addition to find it in the transcript. The first bar splits into canopy's prompt
-and the runtime's own: the agent's definition, its system prompt, and its tools. Figures marked `≈` are estimates,
-shared out by characters.
+and the runtime's own: the agent's definition, its system prompt, and its tools. In the legend, **carried** is what a
+call brought along from the one before and **added** is what it put on top; on the first bar they're the runtime's
+own and canopy's prompt. Figures marked `≈` are estimates, shared out by characters.
 
 A session with only one call the runtime counted tokens for has the line alone. One bar is not a chart; it is a
 number standing on a box. Hover the peak for how much of it was canopy's prompt.

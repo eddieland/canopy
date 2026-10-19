@@ -14,6 +14,9 @@ const MAX_ADDITIONS = 5
 const AXIS_ALL = 12
 // The chart's top is the peak and this much over it, the room the peak's label sits in.
 const HEADROOM = 1.25
+// What each legend word means, on hover: the first call carried nothing, so its two parts are what it started with.
+const CARRIED_HINT = "What a call carried from the call before; on the first call, the runtime's own overhead"
+const ADDED_HINT = "What a call added on top; on the first call, canopy's prompt"
 // The chart's frame: in the counts' band, under them, and over the rows, so it starts at the band's spacing.
 const SECTION = 'flex flex-col gap-2 border-b px-3 pb-1'
 
@@ -108,7 +111,7 @@ export function ContextChart({
                                 aria-label={callLabel(call)}
                                 title={callLabel(call)}
                                 className={cn(
-                                    'relative flex h-full max-w-6 min-w-px flex-1 flex-col justify-end',
+                                    'relative flex h-full max-w-8 min-w-px flex-1 flex-col justify-end',
                                     'rounded-t-xs p-0 hover:bg-surface-raised',
                                 )}
                                 data-testid={`context-call-${call.n}`}
@@ -119,18 +122,19 @@ export function ContextChart({
                     </ToggleGroup>
                     <div aria-hidden className="-mt-1 flex items-start gap-1 text-muted-foreground">
                         {calls.map((call, i) => (
-                            <span key={call.n} className="readout max-w-6 min-w-px flex-1 text-center text-2xs">
+                            <span key={call.n} className="readout max-w-8 min-w-px flex-1 text-center text-2xs">
                                 {axisNames(i, calls.length, axisStep(calls.length, AXIS_ALL)) ? call.n : ''}
                             </span>
                         ))}
                         <ul className="ml-auto flex shrink-0 gap-3 pl-3 text-xs">
-                            <li className="flex items-center gap-1.5">
+                            {/* One word each; what the first call's two parts are is on hover, as its line says it. */}
+                            <li className="flex items-center gap-1.5" title={CARRIED_HINT}>
                                 <span className="size-2.5 rounded-xs bg-context-carried" />
-                                overhead, then carried
+                                carried
                             </li>
-                            <li className="flex items-center gap-1.5">
+                            <li className="flex items-center gap-1.5" title={ADDED_HINT}>
                                 <span className="size-2.5 rounded-xs bg-context-added" />
-                                prompt, then added
+                                added
                             </li>
                         </ul>
                     </div>
@@ -207,32 +211,33 @@ function Grew({
     shape: ContextShape
     onShow: (i: number) => void
 }) {
+    // One readout, the call in the foreground and the rest muted in the same face, so it reads as one line.
     const head = (
-        <span className="readout text-foreground">
+        <span className="text-foreground">
             call {call.n}
             {call.sent !== null && `, ${tokenCount(call.sent)} sent`}
         </span>
     )
     if (call.sent === null) {
-        return <p className="text-xs text-muted-foreground">{head}: the runtime counted no tokens for it</p>
+        return <p className="readout text-xs text-muted-foreground">{head}: the runtime counted no tokens for it</p>
     }
     if (before === undefined) {
         return (
-            <p className="text-xs text-muted-foreground">
+            <p className="readout text-xs text-muted-foreground">
                 {head}: {firstSplit(shape)}
             </p>
         )
     }
     if (call.step === null) {
         return (
-            <p className="text-xs text-muted-foreground">
+            <p className="readout text-xs text-muted-foreground">
                 {head}: the runtime counted no tokens for call {before.n}, so nothing says what grew it
             </p>
         )
     }
     if (call.step <= 0) {
         return (
-            <p className="text-xs text-muted-foreground">
+            <p className="readout text-xs text-muted-foreground">
                 {head}, {signed(call.step)} on call {before.n}:{' '}
                 {call.step === 0 ? 'nothing grew it' : 'the runtime dropped part of what it carried'}
             </p>
@@ -242,7 +247,7 @@ function Grew({
     const rest = call.additions.slice(MAX_ADDITIONS)
     return (
         <div className="flex flex-col gap-1 text-xs text-muted-foreground" data-testid="context-grew">
-            <p>
+            <p className="readout">
                 {head}, {signed(call.step)} on call {before.n}, from what call {before.n} printed, largest first:
             </p>
             <ol className="flex flex-col gap-0.5">

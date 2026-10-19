@@ -461,7 +461,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     // Where the plan stands: its chip in the Plan panel's header, and the rest in the page's description.
     const panel = page.getByTestId('ticket-plan')
     const state = page.locator('header', { has: page.getByRole('heading', { level: 1 }) })
-    await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
+    await expect(plan(page).getByRole('heading', { level: 3 })).toHaveText('Schedule report exports')
 
     // An edit is marked unsaved until ⌘S (Ctrl+S) saves it, as a document's is.
     await plan(page).getByText('Exports to anything but CSV.').click()
@@ -492,7 +492,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(ask.getByRole('button', { name: 'Ask again' })).toBeVisible()
 
     // An edit, saved and approved in one: the approval takes the file as saved.
-    await plan(page).getByRole('heading', { level: 1 }).click()
+    await plan(page).getByRole('heading', { level: 3 }).click()
     await page.keyboard.press('End')
     await page.keyboard.type(', weekly too')
     await actions.getByRole('button', { name: 'Save and approve' }).click()

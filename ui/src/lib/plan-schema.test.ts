@@ -155,6 +155,21 @@ describe('planExtensions', () => {
         expect(editor.getHTML()).toContain('title="https://x.test/docs"')
         expect(editor.getMarkdown()).toBe('See [the docs](https://x.test/docs).')
     })
+
+    it("draws a heading two levels under the Markdown's, under its panel's h2, and reads its own HTML back", () => {
+        const editor = open('# Plan\n\n## Steps\n\n#### Later')
+        const html = editor.getHTML()
+        expect(html).toContain('<h3 data-level="1">Plan</h3>')
+        expect(html).toContain('<h4 data-level="2">Steps</h4>')
+        expect(html).toContain('<h6 data-level="4">Later</h6>')
+        const reread = new Editor({ extensions: planExtensions(), content: html })
+        editors.push(reread)
+        expect(reread.getMarkdown()).toBe('# Plan\n\n## Steps\n\n#### Later')
+        // HTML from elsewhere has no level of its own: its tag is the level.
+        const pasted = new Editor({ extensions: planExtensions(), content: '<h2>Steps</h2>' })
+        editors.push(pasted)
+        expect(pasted.getMarkdown()).toBe('## Steps')
+    })
 })
 
 describe('docText', () => {
