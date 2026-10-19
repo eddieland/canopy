@@ -41,7 +41,8 @@ edit can be trivial, and a one-line change can reach everything.
 
 Before you answer `trivial`, name the change: the files it edits and what changes in each, and the test that covers
 it, if one does. If the ticket and the code do not let you name it, you are unsure. So are you when any of these
-holds, unless the operator's words name that kind of work as trivial:
+holds, unless the operator gave words and they name that kind of work as trivial; the examples above are no such
+exception:
 
 - the ticket leaves a requirement open, or the work could reasonably be done more than one way;
 - it changes what other code or people rely on: an interface, a schema or a migration, a config format, stored data,
