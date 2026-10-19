@@ -7,6 +7,7 @@ import { dropDraft, editDraft, refreshThreads, sendDrafts } from '@/api/mutation
 import { pullRequestThreadsQuery } from '@/api/queries'
 import type { Draft, PullRequestThreads, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
+import { CommentText } from '@/components/comment-text'
 import { Textarea } from '@/components/input'
 import { LinkOut } from '@/components/link-out-icon'
 import { MemoryText } from '@/components/memory-text'
@@ -26,8 +27,8 @@ import { cn } from '@/lib/utils'
  * A PR's review threads on the diff its latest run kept, each draft under the thread it answers (DESIGN §29, On the
  * PR's diff): what canopy's reader last read of the PR, never a worker's copy. A thread sits at its line, under its
  * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
- * draft are plain text, every hidden character named. A draft is edited, dropped, or sent where it sits; the head panel
- * sends every waiting one together, as one comment review.
+ * draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
+ * dropped, or sent where it sits; the head panel sends every waiting one together, as one comment review.
  */
 export function ReviewThreads({ url }: { url: string }) {
     const client = useQueryClient()
@@ -192,8 +193,8 @@ function sendRefs(drafts: Draft[]): string {
 
 /**
  * One review thread: where it is, whether GitHub says it is outdated or resolved, its comments as their authors wrote
- * them, plain text, with a link to each on its host, then the drafts that answer it. One the operator sent wears `sent
- * by you`. A thread no draft answers shows as it is.
+ * them, plain text with each `<details>` block folded (`CommentText`), with a link to each on its host, then the drafts
+ * that answer it. One the operator sent wears `sent by you`. A thread no draft answers shows as it is.
  */
 export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChange: () => void }) {
     const where = thread.path === null ? null : thread.line === null ? thread.path : `${thread.path}:${thread.line}`
@@ -214,7 +215,7 @@ export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChang
                             {c.created_at !== null && <Age at={c.created_at} variant="ago" />}
                             {c.url !== null && <LinkOut href={c.url} label="The comment on its host" />}
                         </span>
-                        <MemoryText text={c.body} lines />
+                        <CommentText text={c.body} />
                     </li>
                 ))}
             </ol>

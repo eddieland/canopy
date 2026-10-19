@@ -37,6 +37,11 @@ recollection of it. A thread on a line that's since changed sits under its file,
 on past the diff the page shows, a warning above the diff says so. Its files fold and filter by type as a review's do
 ([below](#a-reviews-page)).
 
+Comments show as plain text, never Markdown, with any character that hides text named by its code point. The one
+exception is a `<details>` block, which folds under its summary line as it does on GitHub, so a review bot's prompt for
+agents stays out of your way until you open it. A closed block that hides a character says so on its line: a fold is
+where you'd tuck something you hoped nobody would read.
+
 Each waiting draft has three buttons:
 
 - **Send** posts it, word for word, under your name, with no mark: you approved it, so it's yours. It's
