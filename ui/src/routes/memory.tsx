@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { History } from 'lucide-react'
 import { useState } from 'react'
@@ -30,6 +30,8 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { ticketNotesUsedText } from '@/lib/memory'
 import type { TierModes } from '@/lib/memory'
 import {
+    foundCount,
+    MEMORY_FOUND_MAX,
     MEMORY_QUERY_MAX,
     MEMORY_SHOWS,
     memoryQueryOf,
@@ -75,9 +77,19 @@ export const Route = createFileRoute('/memory')({
 
 function MemoryPage() {
     const { history } = Route.useSearch()
-    // One read or the other: the history adds the past to what the page always reads.
-    const now = useQuery({ ...memoryQuery, enabled: history !== true })
-    const withPast = useQuery({ ...memoryHistoryQuery, enabled: history === true })
+    const client = useQueryClient()
+    // One read or the other: the history adds the past to what the page always reads. Each shows the other's while it
+    // is read, so turning the history on or off keeps the page, and the rows opened on it, where they are.
+    const now = useQuery({
+        ...memoryQuery,
+        enabled: history !== true,
+        placeholderData: () => client.getQueryData(memoryHistoryQuery.queryKey),
+    })
+    const withPast = useQuery({
+        ...memoryHistoryQuery,
+        enabled: history === true,
+        placeholderData: () => client.getQueryData(memoryQuery.queryKey),
+    })
     const query = history === true ? withPast : now
     const { data } = query
     return (
@@ -97,13 +109,17 @@ function MemoryPage() {
                     </Empty>
                 </Panel>
             ) : (
-                <Tiers overview={data} state={data.state} />
+                <Tiers overview={data} state={data.state} pastRead={!withPast.isPlaceholderData} />
             )}
         </>
     )
 }
 
-function Tiers({ overview, state }: { overview: MemoryOverview; state: MemoryState }) {
+/**
+ * Every tier that is on, under the filter. `pastRead` is false while the history is still read, with what the page read
+ * without it shown in its place: the past sections then hold a skeleton rather than say there is none.
+ */
+function Tiers({ overview, state, pastRead }: { overview: MemoryOverview; state: MemoryState; pastRead: boolean }) {
     const { tickets, proposals, lessons, lessons_digest: digest } = overview
     const acting = state.lessons.mode !== 'off'
     const modes = { ticket_notes: state.ticket_notes.mode, lessons: state.lessons.mode }
@@ -117,6 +133,10 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
     const pastProposals = overview.past_proposals.filter((m) => memoryShown(m, unshown, now, modes))
     const pastLessons = overview.past_lessons.filter((m) => memoryShown(m, unshown, now, modes))
     const history = search.history === true
+    // A panel's past: not shown without the history, null while it is read.
+    function pastOf(entries: MemoryEntry[]): MemoryEntry[] | null | undefined {
+        return history ? (pastRead ? entries : null) : undefined
+    }
     // What notes say is searched on the server, as `canopy memory search`: the page holds their tickets' counts only.
     const searched = useQuery({ ...memorySearchQuery(filter.q ?? ''), enabled: filter.q !== undefined })
     const notesFound =
@@ -126,14 +146,18 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
     return (
         <>
             <FilterBar repos={overview.repos} />
-            {/* Wide, the queue keeps the width and the tickets with notes sit beside it, last as when narrow. */}
+            {/* Wide, the tickets with notes sit beside the queue, last as when narrow, in the width their opened notes'
+                columns need; only from 120rem, where the queue beside them still keeps a proposal's verbs on one line.
+                Narrower, they stack under it, and the queue has the page's width. */}
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
                     // Two columns only while both tiers show a panel: with one off, the other has the width alone.
                     acting &&
-                        state.ticket_notes.mode !== 'off' &&
-                        '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
+                        state.ticket_notes.mode !== 'off' && [
+                            'min-[120rem]:grid min-[120rem]:items-start',
+                            'min-[120rem]:grid-cols-[minmax(0,1fr)_minmax(0,34rem)]',
+                        ],
                 )}
             >
                 {/* A tier that is off shows no panel: the page holds what is on (DESIGN §28). */}
@@ -144,7 +168,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                             total={proposals.length}
                             filter={filter}
                             acting={acting}
-                            past={history ? pastProposals : undefined}
+                            past={pastOf(pastProposals)}
                         />
                         <Lessons
                             lessons={shownLessons}
@@ -154,7 +178,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                             tier={state.lessons}
                             acting={acting}
                             modes={modes}
-                            past={history ? pastLessons : undefined}
+                            past={pastOf(pastLessons)}
                         />
                     </div>
                 )}
@@ -190,7 +214,7 @@ function Proposals({
     total: number
     filter: MemoryFilter
     acting: boolean
-    past: MemoryEntry[] | undefined
+    past: MemoryEntry[] | null | undefined
 }) {
     const order = useListOrder('memory-proposals')
     const filtered = filter.q !== undefined || filter.repo !== undefined
@@ -205,7 +229,6 @@ function Proposals({
         <Panel data-testid="memory-proposals">
             <PanelHeader label="Proposals">
                 <span className="flex items-center gap-x-3">
-                    <HistoryToggle />
                     {proposals.length > 1 && <OrderToggle list="memory-proposals" />}
                     <span
                         className={cn('readout text-xs', total > 0 ? 'text-status-blocked' : 'text-muted-foreground')}
@@ -262,7 +285,7 @@ function Lessons({
     tier: MemoryTier
     acting: boolean
     modes: TierModes
-    past: MemoryEntry[] | undefined
+    past: MemoryEntry[] | null | undefined
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const below = new Map(
@@ -272,7 +295,6 @@ function Lessons({
         <Panel data-testid="memory-lessons">
             <PanelHeader label="Lessons">
                 <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                    <HistoryToggle />
                     {modes.lessons === 'use' && (
                         <nav aria-label="Filter lessons by where they stand" className="flex items-center gap-1">
                             <FilterLink change={{ show: undefined }} selected={filter.show === undefined}>
@@ -313,7 +335,8 @@ function Lessons({
 
 /**
  * A panel's history, under what is pending or in force, while `?history=true`: its latest memories no longer either,
- * each under the standing and reason the journal gives it, with no verbs, since nothing is left to decide.
+ * each under the standing and reason the journal gives it, with no verbs, since nothing is left to decide; a row's
+ * skeleton while `entries` is null, still being read.
  */
 function Past({
     label,
@@ -322,14 +345,16 @@ function Past({
     none,
 }: {
     label: string
-    entries: MemoryEntry[]
+    entries: MemoryEntry[] | null
     ticket?: boolean
     none: string
 }) {
     return (
         <section aria-label={label} className="border-t" data-testid={`memory-past-${label.toLowerCase()}`}>
             <h3 className="px-3 pt-2 panel-label">{label}</h3>
-            {entries.length === 0 ? (
+            {entries === null ? (
+                <PanelSkeleton rows={1} />
+            ) : entries.length === 0 ? (
                 <Empty>{none}</Empty>
             ) : (
                 <PanelScroll label={label}>
@@ -342,7 +367,8 @@ function Past({
 
 /**
  * The toggle that shows each panel's history, kept in `?history=true`, as a filter chip is: on, the page reads the
- * latest memories no longer pending or in force, and lists them under the rest.
+ * latest memories no longer pending or in force, and lists them under the rest. One, in the filter bar, since it acts
+ * on every panel.
  */
 function HistoryToggle() {
     const search = Route.useSearch()
@@ -382,9 +408,11 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
 
 /**
  * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
- * notes they hold beside them, since a row opens to several. Each opened note is forgotten from its row, and, while
+ * notes they hold beside them, since a row opens to several, or while the filter has words the notes found that hold
+ * them. Each opened note is forgotten from its row, and, while
  * lessons are on (`promote`), promoted; what that did is said under the band. While the filter has words, `found` is
- * the notes in force whose key or text holds one, as `canopy memory search` finds them, listed under the tickets.
+ * the notes in force whose key or text holds every one, as the rows above hold them, found by the function
+ * `canopy memory search` runs, listed under the tickets.
  */
 function TicketNotesPanel({
     tickets,
@@ -408,7 +436,9 @@ function TicketNotesPanel({
     const ticketsWord = total === 1 ? 'ticket' : 'tickets'
     const notesWord = notes === 1 ? 'note' : 'notes'
     const shown = shownCount(tickets.length, total, filter.q !== undefined)
-    const ticketsCount = `${shown} ${ticketsWord} · ${notes} ${notesWord}`
+    // While searching, the notes counted are those found, which the list under the tickets shows.
+    const notesCount = found === undefined ? `${notes} ${notesWord}` : foundCount(found.length)
+    const ticketsCount = `${shown} ${ticketsWord} · ${notesCount}`
     const order = useListOrder('memory-tickets')
     const filteredOut = tickets.length === 0 && total > 0
     const notesFound = found !== undefined && found.length > 0
@@ -455,7 +485,14 @@ function TicketNotesPanel({
             )}
             {notesFound && (
                 <section aria-label="Notes that say it" className="border-t" data-testid="memory-notes-found">
-                    <h3 className="px-3 pt-2 panel-label">Notes that say it</h3>
+                    <h3 className="flex items-baseline gap-2 px-3 pt-2">
+                        <span className="panel-label">Notes that say it</span>
+                        {found.length >= MEMORY_FOUND_MAX && (
+                            <span className="text-xs text-muted-foreground" data-testid="memory-notes-found-capped">
+                                the best {MEMORY_FOUND_MAX}: another word narrows them
+                            </span>
+                        )}
+                    </h3>
                     <PanelScroll label="Notes that say it">
                         <MemoryRows
                             entries={found}
@@ -479,7 +516,8 @@ function TicketNotesPanel({
 
 /**
  * The page's filter, over every panel: a field for words, kept in `?q=` as the tickets page keeps its own, narrowing
- * as the operator types and replacing the history entry; and a chip for each repository, kept in `?repo=`.
+ * as the operator types and replacing the history entry; a chip for each repository, kept in `?repo=`; and the toggle
+ * that lists what is no longer pending or in force.
  */
 function FilterBar({ repos }: { repos: string[] }) {
     const filter = Route.useSearch()
@@ -528,6 +566,7 @@ function FilterBar({ repos }: { repos: string[] }) {
                     ))}
                 </nav>
             )}
+            <HistoryToggle />
         </search>
     )
 }

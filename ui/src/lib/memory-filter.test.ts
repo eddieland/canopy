@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { memoryQueryOf, memoryRepoOf, memoryShowOf, memoryShown, shownCount, ticketNotesShown } from './memory-filter'
+import {
+    foundCount,
+    memoryQueryOf,
+    memoryRepoOf,
+    memoryShowOf,
+    memoryShown,
+    shownCount,
+    ticketNotesShown,
+} from './memory-filter'
 
 const NOW = Date.parse('2026-10-08T12:00:00Z')
 const USE = { ticket_notes: 'use', lessons: 'use' } as const
@@ -58,6 +66,14 @@ describe('the search params', () => {
         expect(memoryRepoOf('web')).toBe('web')
         expect(memoryRepoOf('Web')).toBeUndefined()
         expect(memoryRepoOf(3)).toBeUndefined()
+    })
+})
+
+describe('foundCount', () => {
+    it('counts the notes found, and says more may hold the words at the cap', () => {
+        expect(foundCount(1)).toBe('1 note found')
+        expect(foundCount(3)).toBe('3 notes found')
+        expect(foundCount(50)).toBe('50+ notes found')
     })
 })
 
