@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { draft } from '@/api/mocks'
+import { DEFAULT_CLOCK } from '@/lib/clock'
+import { localTime } from '@/lib/time'
 
 import {
     dismissedText,
@@ -270,7 +272,7 @@ describe('outcomes', () => {
             private: false,
         } as const
         const note = { ...lesson, id: 2, scope: 'ticket', ticket_key: 'ABC-1', repo: null, review_at: null } as const
-        const due = new Date('2027-01-06T12:00:00Z').toLocaleString()
+        const due = localTime('2027-01-06T12:00:00Z', DEFAULT_CLOCK)
         expect(promotedText({ lesson, source: note, superseded: null, served: true, private: false })).toBe(
             `Note 2 is lesson 9 (\`web-tests\`) for web, due for review at ${due}. Every run dispatched from now on ` +
                 'reads it.',

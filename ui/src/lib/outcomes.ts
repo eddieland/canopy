@@ -21,6 +21,7 @@ import type {
     Started,
     Stopped,
 } from '@/api/types'
+import { currentClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py), and what
@@ -273,7 +274,7 @@ export function promotedText(promoted: MemoryPromoted): string {
     const { lesson, source } = promoted
     const kind = source.scope === 'proposal' ? 'Proposal' : 'Note'
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at)}`
+    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
     const head = `${kind} ${source.id} is lesson ${lesson.id} (\`${lesson.key}\`)${where}${due}.`
     const replaces =
         promoted.superseded === null ? '' : ` It replaces lesson ${promoted.superseded}, under the same key.`
@@ -299,7 +300,7 @@ export const PRIVATE_WORDS =
 export function editedText(edited: MemoryEdited): string {
     const { lesson, replaced } = edited
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at)}`
+    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
     const head =
         `Lesson ${replaced.id} is edited into lesson ${lesson.id} (\`${lesson.key}\`)${where}, version ` +
         `${lesson.version}${due}. Lesson ${replaced.id} stays in its history.`
@@ -316,7 +317,7 @@ export function rejectedText(id: number): string {
 
 /** What a renew did, as `canopy memory renew` says it: when the lesson is next due for review. */
 export function renewedText(renewed: MemoryRenewed): string {
-    return `Lesson ${renewed.id} is renewed: due for review at ${localTime(renewed.review_at)}.`
+    return `Lesson ${renewed.id} is renewed: due for review at ${localTime(renewed.review_at, currentClock())}.`
 }
 
 /**

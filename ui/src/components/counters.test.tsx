@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mockAttention, mockRuns, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, Run, TicketSummary } from '@/api/types'
+import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
 import { Counters } from './counters'
@@ -72,7 +73,7 @@ describe('Counters', () => {
         const waiting = within(counter('waiting'))
         expect(waiting.getByText('2')).toBeDefined()
         expect(waiting.getByText(/^oldest/u)).toBeDefined()
-        expect(waiting.getByTitle(localTime('2026-10-08T10:00:00Z'))).toBeDefined()
+        expect(waiting.getByTitle(localTime('2026-10-08T10:00:00Z', DEFAULT_CLOCK))).toBeDefined()
     })
 
     it('says no question is open when every question has been answered', () => {

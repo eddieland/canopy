@@ -36,6 +36,7 @@ import {
 import type { MemoryStand, TierModes } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
+import { useClock } from '@/lib/clock'
 import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -208,6 +209,7 @@ function MemoryRow({
     lapses: string | undefined
     onVersionSaid: ((said: string) => void) | undefined
 }) {
+    const clock = useClock()
     const [open, setOpen] = useState(false)
     const byRun = entry.run_id !== null && entry.run_id !== ownRun
     return (
@@ -237,7 +239,7 @@ function MemoryRow({
                 </span>
                 <span
                     className="truncate text-right text-xs text-muted-foreground"
-                    title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at)}`}
+                    title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at, clock)}`}
                 >
                     {usedText(entry)}
                 </span>
@@ -280,7 +282,7 @@ function MemoryRow({
                                     (modes === undefined || modes.lessons === 'use') &&
                                     'text-status-blocked',
                             )}
-                            title={`at ${localTime(entry.review_at)}`}
+                            title={`at ${localTime(entry.review_at, clock)}`}
                         >
                             {reviewText(entry.review_at, now)}
                         </span>
@@ -396,6 +398,7 @@ function MemoryStanding({
     mode: MemoryTier['mode'] | undefined
     lapses: string | undefined
 }) {
+    const clock = useClock()
     const stand = memoryStand(entry, now, mode)
     const state = STAND_STATE[stand]
     if (stand === 'pending' && lapses !== undefined) {
@@ -407,7 +410,7 @@ function MemoryStanding({
                     'flex min-w-0 items-center gap-1.5 font-mono text-xs',
                     soon ? RUN_TEXT.blocked : 'text-muted-foreground',
                 )}
-                title={`waiting on you: ${lapsesText(lapses, now)}, at ${localTime(lapses)}`}
+                title={`waiting on you: ${lapsesText(lapses, now)}, at ${localTime(lapses, clock)}`}
                 data-testid="memory-stand"
             >
                 <RunDot state="blocked" />

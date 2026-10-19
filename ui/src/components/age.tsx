@@ -1,3 +1,4 @@
+import { useClock } from '@/lib/clock'
 import { age, localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -36,13 +37,14 @@ type AgeProps = Since | Span
  * that runs `for 3m` and once it ended `ended 3m ago`. The words sit muted beside the fixed-width number.
  */
 export function Age(props: AgeProps) {
+    const clock = useClock()
     const now = useNow()
     const at = props.variant === 'span' ? (props.ended ?? props.started) : props.at
     const [before, after] = words(props)
     return (
         <time
             dateTime={at}
-            title={localTime(at)}
+            title={localTime(at, clock)}
             className={cn('text-xs whitespace-nowrap text-muted-foreground', props.className)}
         >
             {before}

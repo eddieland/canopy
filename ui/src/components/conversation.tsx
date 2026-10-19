@@ -9,6 +9,7 @@ import { Chip } from '@/components/status'
 import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
 import { messageRef } from '@/lib/refs'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -94,6 +95,7 @@ export function Conversation({
 }
 
 function Head({ message, waiting, unread }: { message: Message; waiting: boolean; unread: Pending | null }) {
+    const clock = useClock()
     const comment = message.comment
     return (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
@@ -125,7 +127,7 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
                 </span>
             )}
             <Age at={message.at} variant="ago" className="ml-auto" />
-            <span className="sr-only">{localTime(message.at)}</span>
+            <span className="sr-only">{localTime(message.at, clock)}</span>
         </div>
     )
 }

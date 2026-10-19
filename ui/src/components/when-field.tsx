@@ -1,6 +1,7 @@
 import { Age } from '@/components/age'
 import { Field } from '@/components/fields'
 import { Timestamp } from '@/components/timestamp'
+import { useClock } from '@/lib/clock'
 import { endStamp, lasted } from '@/lib/time'
 
 /**
@@ -9,6 +10,7 @@ import { endStamp, lasted } from '@/lib/time'
  * age, `for 3m` while it runs and `ended 9d ago` after.
  */
 export function WhenField({ started, ended }: { started: string; ended: string | null }) {
+    const clock = useClock()
     return (
         <Field label="when" mono>
             <span className="flex flex-wrap items-baseline gap-x-2">
@@ -18,7 +20,7 @@ export function WhenField({ started, ended }: { started: string; ended: string |
                         <>
                             <span className="text-muted-foreground"> → </span>
                             <time dateTime={ended} title={ended} className="readout text-xs">
-                                {endStamp(started, ended)}
+                                {endStamp(started, ended, clock)}
                             </time>
                             <span className="text-muted-foreground"> · </span>
                             <span className="readout" title="how long it ran">
