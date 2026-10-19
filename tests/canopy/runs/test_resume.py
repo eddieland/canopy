@@ -13,7 +13,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, InlineRunner, canopy, in_tick, operator, present, unit_of, waits
+from tests.canopy.helpers import KEY, InlineRunner, canopy, in_tick, present, unit_of, waits
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -335,13 +335,11 @@ def test_state_block_shows_attempts_the_cooldown_and_a_resumes_reasons(scenario:
     assert db.parse_time(state["now"]) < until
 
 
-def test_grant_of_fix_ci_is_refused_naming_resume(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
-) -> None:
-    with_branch(conn)
-    old_fix_ci(conn)
-    assert operator("grant", "PROJ-1", "fix-ci") == 1
-    assert conn.execute("SELECT count(*) FROM attempt_grants").fetchone()[0] == 0
+def test_grant_of_fix_ci_is_refused_naming_resume(scenario: Scenario) -> None:
+    with_branch(scenario.conn)
+    old_fix_ci(scenario.conn)
+    assert "grant resume instead" in scenario.operator("grant", "PROJ-1", "fix-ci", code=1).err
+    assert scenario.conn.execute("SELECT count(*) FROM attempt_grants").fetchone()[0] == 0
 
 
 def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
@@ -379,15 +377,11 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
     assert unit_of(scenario.conn, "PROJ-1")["last_ci_run_id"] == "run-1"
 
 
-def test_status_shows_a_resumes_reasons_beside_its_kind(
-    scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_status_shows_a_resumes_reasons_beside_its_kind(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes())
     scenario.run(resumes(REVIEW, CI), worker=pushes())
     old_fix_ci(scenario.conn)
-    capsys.readouterr()
-    scenario.operator("status")
-    out = capsys.readouterr().out
+    out = scenario.operator("status").out
     assert "  PROJ-1  resume (ci, review)  done  " in out
     # An old fix-ci run reads as it ran, and an implement has no reasons.
     assert "  PROJ-1  fix-ci  done  " in out
