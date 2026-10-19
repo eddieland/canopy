@@ -222,6 +222,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   The operator is played whole too: `scenario.operator("grant", KEY, "fix-ci", code=1)` is a command canopy refuses,
   and it and a tick give back what canopy printed (`.out`, `.err`; a tick's `.printed`), read from the move rather
   than from `capsys`.
+  A story in the workspace of two repositories, `api` and `web`, is told the same way through `ws_scenario`, whose
+  pools are seeded: each dispatch names its repositories, `dispatches(repo=("api", "web"))`, and a joint run's worker
+  `pushes(repos=("api", "web"))` in each.
   A scenario keeps the story as it played, and a failed test's report prints it, a numbered step for each move; a step
   the scenario cannot record stays out of it, so prefer a verb where one fits. A step the verbs do not cover is written
   with the helpers above, in the same test; a verb two tests need goes there.

@@ -2,36 +2,39 @@
 
 import contextlib
 import json
-import os
 from pathlib import Path
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions, workspace
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
-from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
+from tests.canopy.conftest import Ws, bare_origin, map_text, th
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
     agent_runs,
     canopy,
-    commit_and_push,
     decisions,
     in_tick,
-    json_block,
-    overseer_does,
     present,
-    wait_for_run,
-    worker_does,
+    waits,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, git
 
 
 def dispatch(key: str, *args: str) -> list[str]:
     return ["dispatch", key, "--label", LABEL, "--kind", "implement", *args]
+
+
+def with_docs(ws: Ws) -> None:
+    """Map a third repository, `docs`, between api and web, with no clone."""
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
+    )
 
 
 # The map and the config layer
@@ -175,18 +178,16 @@ def test_a_definitions_snapshot_canopy_did_not_make_is_refused(tmp_path: Path) -
 # The tick
 
 
-def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
-    )
+def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, agent_log: Path
+) -> None:
+    with_docs(ws)
     (ws.root / "MAP.md").write_text("# map\n")
-    with overseer_does(canopy(*dispatch("PROJ-1", "--repo", "api")), canopy(*dispatch("PROJ-2"))):
-        assert main(["tick", "--dry-run"]) == 0
+    ticked = ws_scenario.tick(dispatches(repo="api"), canopy(*dispatch("PROJ-2")), dry_run=True)
 
     [run] = agent_runs(agent_log)
     assert run["cwd"] == str(ws.root)
-    prompt = run["argv"][3]
-    state = json_block(prompt)
+    state = ws_scenario.state()
     assert state["workspace"] == {"name": "acme", "map": str(ws.root / "MAP.md")}
     assert [(r["name"], r["summary"], r["cloned"], r["leased_slots"]) for r in state["repositories"]] == [
         ("api", "The api repository.", True, []),
@@ -201,8 +202,8 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehous
         {"cwd": str(ws.clone("web")), "treehouse_root": str(ws.root)},
     ]
 
-    conn = ws.journal()
-    assert decisions(conn, 1) == [
+    conn = ws_scenario.conn
+    assert decisions(conn, ticked.tick.id) == [
         (
             "attention:repo_missing",
             f"{ws.root / 'repos' / 'docs'} has no clone; run `canopy workspace sync` in {ws.root}",
@@ -219,98 +220,84 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehous
     assert "- docs, " in (ws.state_dir / "attention.md").read_text()
 
 
-def test_items_about_two_repositories_are_two_items(
-    ws: Ws, treehouse_state: Path, agent_log: Path, tmp_path: Path
-) -> None:
+def test_items_about_two_repositories_are_two_items(ws_scenario: Scenario, ws: Ws, tmp_path: Path) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("a", "https://x.test/a"), ("b", "https://x.test/b")))
     notified = tmp_path / "notified.txt"
-    user = Path(os.environ["XDG_CONFIG_HOME"]) / "canopy" / "config.toml"
-    user.write_text(user.read_text() + f"\n[notify]\ncmd = 'sh -c \"cat >> {notified}\"'\n")
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-        assert [(i.subject, i.reason) for i in attention.current(ws.journal())] == [
-            ("a", "repo_missing"),
-            ("b", "repo_missing"),
-        ]
-        assert notified.read_text().startswith("canopy attention: 2 new, 0 resolved\n+ a repo_missing: ")
+    ws_scenario.configures(notify={"cmd": f'sh -c "cat >> {notified}"'})
+    ws_scenario.tick(dry_run=True)
+    assert [(i.subject, i.reason) for i in attention.current(ws_scenario.conn)] == [
+        ("a", "repo_missing"),
+        ("b", "repo_missing"),
+    ]
+    assert notified.read_text().startswith("canopy attention: 2 new, 0 resolved\n+ a repo_missing: ")
 
-        git("clone", "--quiet", str(ws.origins["api"]), str(ws.root / "repos" / "a"), cwd=ws.root)
-        assert main(["tick", "--dry-run"]) == 0
-        assert "canopy attention: 0 new, 1 resolved\n- a repo_missing\n" in notified.read_text()
+    git("clone", "--quiet", str(ws.origins["api"]), str(ws.root / "repos" / "a"), cwd=ws.root)
+    ws_scenario.tick(dry_run=True)
+    assert "canopy attention: 0 new, 1 resolved\n- a repo_missing\n" in notified.read_text()
 
 
 # Dispatch
 
 
 def test_dispatch_names_one_repository_and_leases_from_its_pool(
-    ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
-    )
-    conn = ws.journal()
-    with in_tick(conn) as tick_id:
-        runner = InlineRunner()
-        assert main(dispatch("PROJ-1"), runner=runner) == 1
-        assert main(dispatch("PROJ-1", "--repo", "nope"), runner=runner) == 1
-        assert main(dispatch("PROJ-1", "--repo", "docs"), runner=runner) == 1
-        assert main(dispatch("PROJ-1", "--repo", "Bad"), runner=runner) == 2  # not a name at all: a usage error
-        assert main(dispatch("PROJ-1", "--repo", "api", "--slug", "login"), runner=runner) == 0
-        assert "dispatch refused (unknown_repo)" in capsys.readouterr().err
+    with_docs(ws)
+    conn = ws_scenario.conn
+    assert ws_scenario.refuses(canopy(*dispatch("PROJ-1"))) == [
+        ("refused:unknown_repo", "--repo is required: name the repositories for PROJ-1 (api, docs, web)")
+    ]
+    assert ws_scenario.refuses(dispatches(repo="nope")) == [
+        ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)")
+    ]
+    [(action, no_clone)] = ws_scenario.refuses(dispatches(repo="docs"))
+    assert action == "refused:unknown_repo"
+    assert no_clone.startswith("docs has no clone at ")
+    # What `canopy dispatch` printed, which a refusal leaves to the test's own output.
+    assert "dispatch refused (unknown_repo)" in capsys.readouterr().err
+    with in_tick(conn, ends_ok=True):
+        assert main(dispatch("PROJ-1", "--repo", "Bad"), runner=InlineRunner()) == 2  # not a name at all: a usage error
 
-        run = present(db.get_run(conn, 1))
-        [slot] = db.run_slots(conn, 1)
-        assert (slot["repo"], run["branch"]) == ("api", "agent/PROJ-1-login")
-        assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
-        state = th(treehouse_state)
-        assert state["calls"][-1] == [
-            "get",
-            "--lease",
-            "--lease-holder",
-            "canopy:PROJ-1",
-            "--json",
-            "--worktree-path",
-            "{pool}/{slot}/{repo}",
-        ]
-        assert state["contexts"][-1] == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
-        assert [a for a, _ in decisions(conn, tick_id)] == [
-            "refused:unknown_repo",
-            "refused:unknown_repo",
-            "refused:unknown_repo",
-            "dispatch:implement",
-        ]
-        assert decisions(conn, tick_id)[1][1] == "'nope' is not a repository in this workspace (api, docs, web)"
-        assert decisions(conn, tick_id)[2][1].startswith("docs has no clone at ")
-        assert (
-            decisions(conn, tick_id)[3][1] == f"run 1: agent/PROJ-1-login in api at {slot['slot_path']}; label {LABEL}"
-        )
+    run = ws_scenario.run(dispatches(repo="api", slug="login"), worker=pushes("agent/PROJ-1-login"))
+    [slot] = db.run_slots(conn, run.id)
+    assert (slot["repo"], run.branch) == ("api", "agent/PROJ-1-login")
+    assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    state = json.loads(treehouse_state.read_text())
+    [(lease, where)] = [(c, x) for c, x in zip(state["calls"], state["contexts"], strict=True) if c[0] == "get"]
+    assert lease == [
+        "get",
+        "--lease",
+        "--lease-holder",
+        "canopy:PROJ-1",
+        "--json",
+        "--worktree-path",
+        "{pool}/{slot}/{repo}",
+    ]
+    assert where == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
+    assert decisions(conn, int(run.row["tick_id"])) == [
+        ("dispatch:implement", f"run {run.id}: agent/PROJ-1-login in api at {slot['slot_path']}; label {LABEL}")
+    ]
 
-        # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
-        db.finish_run(conn, "runs", 1, RunStatus.DONE, "{}")
-        resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--reason", "ci", "--repo", "web"]
-        assert main(resume, runner=runner) == 1
-        assert decisions(conn, tick_id)[-1] == (
-            "refused:no_branch",
-            "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web",
-        )
-        assert main([*resume[:-1], "api"], runner=runner) == 0
+    # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
+    def resume(repo: str) -> list[str]:
+        return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI], repo=repo)
+
+    assert ws_scenario.refuses(resume("web")) == [
+        ("refused:no_branch", "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web")
+    ]
+    assert ws_scenario.run(resume("api"), worker=pushes("agent/PROJ-1-login")).status == "done"
 
 
-def test_two_tickets_in_two_repositories_end_to_end(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    conn = ws.journal()
-    with in_tick(conn):
-        # A detached run takes the worker's environment when it starts.
-        with worker_does(*commit_and_push("agent/PROJ-1-work")):
-            assert main(dispatch("PROJ-1", "--repo", "api")) == 0
-        first = wait_for_run(conn, 1)
-        with worker_does(*commit_and_push("agent/PROJ-2-work")):
-            assert main(dispatch("PROJ-2", "--repo", "web")) == 0
-        second = wait_for_run(conn, 2)
+def test_two_tickets_in_two_repositories_end_to_end(
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, agent_log: Path
+) -> None:
+    conn = ws_scenario.conn
+    # Each ticket's worker pushes its own branch, in the repository its run was dispatched to.
+    ticked = ws_scenario.tick(dispatches("PROJ-1", repo="api"), dispatches("PROJ-2", repo="web"), worker=pushes())
 
-    slots = [db.run_slots(conn, 1)[0], db.run_slots(conn, 2)[0]]
-    for run, slot in zip((first, second), slots, strict=True):
-        assert run["status"] == "done", Path(run["log_path"]).read_text()
+    slots = [db.run_slots(conn, run.id)[0] for run in ticked.runs]
+    for run, slot in zip(ticked.runs, slots, strict=True):
+        assert run.status == "done", Path(run.row["log_path"]).read_text()
         # Every worktree is under the workspace root.
         assert Path(slot["slot_path"]).is_relative_to(ws.root / ".treehouse")
     assert [s["repo"] for s in slots] == ["api", "web"]
@@ -319,27 +306,29 @@ def test_two_tickets_in_two_repositories_end_to_end(ws: Ws, treehouse_state: Pat
     assert ws.remote_head("web", "agent/PROJ-1-work") is None
     pools = json.loads(treehouse_state.read_text())["pools"]
     assert [s["status"] for p in pools.values() for s in p["slots"]] == ["available", "available"]
-    workers = agent_runs(agent_log)
-    assert [w["cwd"] for w in workers] == [s["slot_path"] for s in slots]
+    # The tick's overseer ran first, in the workspace root; each worker in its run's slot, though the order the two
+    # workers started in is theirs.
+    workers = [w for w in agent_runs(agent_log) if w["argv"][:3] == ["run", "--agent", "canopy-worker"]]
+    assert sorted(w["cwd"] for w in workers) == sorted(s["slot_path"] for s in slots)
 
 
-def test_reconcile_returns_leases_in_each_pool(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
-    seed_pools(ws, treehouse_state)
-    runner = InlineRunner()
-    conn = ws.journal()
-    with in_tick(conn):
-        assert main(dispatch("PROJ-1", "--repo", "api"), runner=runner) == 0
-        # A lease in web's pool that no run holds, left by a dispatch that died between lease and journal.
-        assert runner.run(
+def test_reconcile_returns_leases_in_each_pool(ws_scenario: Scenario, ws: Ws, treehouse_state: Path) -> None:
+    conn = ws_scenario.conn
+    working = ws_scenario.starts(dispatches(repo="api"))
+    # A lease in web's pool that no run holds, left by a dispatch that died between lease and journal.
+    assert (
+        InlineRunner()
+        .run(
             ["treehouse", "get", "--lease", "--lease-holder", "canopy:PROJ-9", "--json"],
             cwd=ws.clone("web"),
             env={"TREEHOUSE_ROOT": str(ws.root)},
-        ).ok
-        conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
-    with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "its run crashed")):
-        assert main(["tick", "--dry-run"]) == 0
+        )
+        .ok
+    )
+    working.dies()  # _run is gone
+    ws_scenario.tick(*waits("PROJ-1", rationale="its run crashed"), dry_run=True)
 
-    run = present(db.get_run(conn, 1))
+    run = present(db.get_run(conn, working.id))
     assert run["status"] == "crashed"
     state = json.loads(treehouse_state.read_text())
     assert [s["status"] for p in state["pools"].values() for s in p["slots"]] == ["available", "available"]

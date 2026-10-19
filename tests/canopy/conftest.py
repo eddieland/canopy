@@ -7,7 +7,7 @@ import json
 import os
 import sqlite3
 from collections.abc import Generator, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from unittest import mock
 
@@ -58,6 +58,27 @@ def scenario(
         told.close()
 
 
+@pytest.fixture
+def ws_scenario(
+    ws: "Ws", canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, tmp_path: Path
+) -> Iterator[Scenario]:
+    """The scenario told in `ws`, the workspace of two repositories, `api` and `web`, each pool a slot of its own
+    (`seed_pools`), for a story of a joint run, a split, or a ticket in each repository. The test names the
+    repositories each dispatch works in.
+
+    Yields:
+        The scenario, whose runs still held at work are stopped once the test ends.
+    """
+    seed_pools(ws, treehouse_state)
+    env = replace(canopy_env, root=ws.root, repo=ws.clone("api"), shared_file=ws.root / config.WORKSPACE_FILE_NAME)
+    titled_workers(env)
+    told = Scenario(env, ws.journal(), agent_log, tmp_path / "gates")
+    try:
+        yield told
+    finally:
+        told.close()
+
+
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item: pytest.Item) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     """A failed scenario test's report carries the story as it played, in a section of its own (`scenario_helpers.py`).
@@ -69,10 +90,12 @@ def pytest_runtest_makereport(item: pytest.Item) -> Generator[None, pytest.TestR
         The report pytest made.
     """
     report = yield
-    told = item.funcargs.get("scenario") if isinstance(item, pytest.Function) else None
+    funcargs: dict[str, object] = item.funcargs if isinstance(item, pytest.Function) else {}
     # The call's report: the journal is still open, since fixtures are torn down after it.
-    if report.when == "call" and report.failed and isinstance(told, Scenario):
-        report.sections.append(("scenario", told.told()))
+    if report.when == "call" and report.failed:
+        for name in ("scenario", "ws_scenario"):
+            if isinstance(told := funcargs.get(name), Scenario):
+                report.sections.append((name, told.told()))
     return report
 
 

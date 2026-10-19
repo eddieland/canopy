@@ -153,15 +153,16 @@ Rules:
   the window's edge. It sits at the foot of the sticky column, so at the window's foot however long the page; in a
   window too short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer
   is Sprig's (Fun, below).
-- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
+- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since a narrow window is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
   atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
   dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
   breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
-  inside the pane, is its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is
-  made for; a phone's is not.
+  inside the pane, is its own width's (Primitives). The UI is made for the operator's window, about 1720px wide
+  (`PRODUCT.md`), where its screenshots are taken. Down to about 820px it holds up, the rail a strip; a phone's does
+  not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -238,30 +239,30 @@ Rules:
   three, a filter field and a chip for each repository narrow the page (`?q=`, `?repo=`, `src/lib/memory-filter.ts`), as
   the tickets filters do: a word in a memory's key, text, ticket, or
   repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
-  through `canopy memory search`'s operator search (`GET /api/memory/search`, every word, as the rows above hold them),
-  listed under the tickets as Notes that say it, each with its verbs, counted in the header as `N notes found`, and
-  `50+` with a muted `the best 50` beside the label at the server's cap; while a repository chip is on, Ticket notes
-  says it is not narrowed by one, since a note
-  is read by its own ticket's runs in any repository; a lesson for every repository is kept under any repository's chip.
+  through `canopy memory search`'s operator search (`GET /api/memory/search`, every word, as the rows above hold them,
+  but each a whole word, its English endings aside, where a row's may be part of one), listed under the tickets as
+  Notes that say it, each with its verbs, counted in the header as `N notes found`, and `50+` with a muted `the best 50`
+  beside the label at the server's cap; while a repository chip is on, Ticket notes says it is not narrowed by one,
+  since a note is read by its own ticket's runs in any repository; a lesson for every repository is kept under any
+  repository's chip.
   While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
   filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
-  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip at the end of the filter
-  bar,
-  one since it acts on every panel (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories
-  no longer pending or in
-  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs; turning it
-  on or off keeps the panels and the rows opened on them, the sections holding a row's skeleton until read. Each list
-  scrolls in its panel but the proposals, which hold 20 at most and so grow with their rows. A row in force that its
-  digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
-  keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's
-  buttons are, and only while lessons are on, but Forget under a ticket's note, which shows while ticket notes are on,
-  since forgetting a note needs no lesson; a tier that is off shows no panel on the memory page, so with lessons off it
-  holds Ticket notes alone: under a proposal an outline `Promote as written`, which saves at once, since most proposals
-  need no edit, and a muted ghost `Edit and promote`, which opens the form (a private ticket's run's proposal, whose
-  words may hold what the operator kept off the tracker, and one whose key a lesson in force has, which it would
-  replace, have `Promote` in place of both, which opens the form and what it says before the save, the latter with a
-  muted `replaces memory:N` beside it, and on an attention item, which has no form, a muted line saying to promote it
-  from the memory page; until the lessons in force are read, `Promote as written` is disabled), then, apart from both
+  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A single `history` chip at the end of the
+  filter bar, which acts on every panel (`?history=true`, `GET /api/memory?history=true`), lists each panel's latest
+  memories no longer pending or in force under the rest, Decided and Retired, at most 50 each, with their standing and
+  reason and no verbs; turning it on or off keeps the panels and the rows opened on them, the sections holding a row's
+  skeleton until read. Each list scrolls in its panel but the proposals, which hold 20 at most and so grow with their
+  rows. A row in force that its digest's cap leaves out says so in its second line, in the same words for served and
+  recording that the digest's label keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line
+  under a row, `xs` as a row's buttons are, and only while lessons are on, but Forget under a ticket's note, which shows
+  while ticket notes are on, since forgetting a note needs no lesson; a tier that is off shows no panel on the memory
+  page, so with lessons off it holds Ticket notes alone: under a proposal an outline `Promote as written`, which saves
+  at once, since most proposals need no edit, and a muted ghost `Edit and promote`, which opens the form (a private
+  ticket's run's proposal, whose words may hold what the operator kept off the tracker, and one whose key a lesson in
+  force has, which it would replace, have `Promote` in place of both, which opens the form and what it says before the
+  save, the latter with a muted `replaces memory:N` beside it, and on an attention item, which has no form, a muted line
+  saying to promote it from the memory page; until the lessons in force are read, `Promote as written` is disabled, and
+  if that read fails, a muted line says so and to promote it from the memory page), then, apart from both
   at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on
   the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
   is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing
@@ -351,7 +352,7 @@ Rules:
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
-  lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
+  lists: runs, decisions, spend. So in a narrow window a ticket's reply is reached before its runs and
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
   what its reason asks for first (below, "The attention detail"), any limit it is stuck at, then its conversation and
   the reply. An action over a whole list
@@ -486,7 +487,7 @@ side.
   takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The free column
   never gets under 8rem: it holds the row's name, a ticket's title, which never vanishes.
   **A narrow list lets columns go**, in the order its kind gives them (a third entry in `ROW_COLUMNS`, 1 first), so it
-  fits its panel wherever the panel sits: half a monitor, beside a ticket's thread. A column shows from the narrowest
+  fits its panel wherever the panel sits: a narrow window, beside a ticket's thread. A column shows from the narrowest
   of Tailwind's container sizes (`ROW_TIERS`, `@sm` to `@4xl`) with room for it, the columns that go after it, and
   those that never do, the free one at its floor (`rowTiers`). The `Panel` is the container (`@container`), so a list
   goes by its own width, not the window's. The row's template at each size is a custom property, and a column left

@@ -79,12 +79,14 @@ runs, a lesson for every repository included, since those runs read it too. Whil
 has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
 keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. For what notes say, the page
 runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold every word under
-the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. The count in the
-Ticket notes header counts those notes while you search. It stops at the best fifty, and says so; another word narrows
-them faster than scrolling would. The repository chips don't narrow Ticket notes: a
-note is read by its own ticket's runs, whatever the repository. The **history** chip at the end of the filter
-bar lists what's no longer pending or in force under each panel: proposals rejected, lapsed, promoted, or forgotten, and
-lessons replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
+the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. One difference:
+the rows match part of a word and the search matches whole ones, endings aside, so `time` keeps a row about a timeout
+but finds no note that only says `timeout`, while `retry` finds one that says `retries`. The count in the Ticket notes
+header counts those notes while you search. It stops at the best fifty, and says so; another word narrows them faster
+than scrolling would. The repository chips don't narrow Ticket notes: a note is read by its own ticket's runs,
+whatever the repository. The **history** chip at the end of the filter bar lists what's no longer pending or in force
+under each panel: proposals rejected, lapsed, promoted, or forgotten, and lessons replaced or forgotten, the latest
+fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
 
