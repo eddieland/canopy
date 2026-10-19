@@ -235,6 +235,23 @@ test('a comment half written asks before the page is left, by a link or by closi
     expect(await asked).toBe('beforeunload')
 })
 
+test('writing a note on the whole plan never scrolls the page under it', async ({ page }) => {
+    // Short enough that the plan runs past the window, so the foot is stuck to its bottom.
+    await page.setViewportSize({ width: 1280, height: 600 })
+    const scroller = page.locator('.page-scroll')
+    const note = page.getByTestId('plan-bar').getByRole('textbox', { name: 'On the whole plan' })
+    const top = await scroller.evaluate((element) => element.scrollTop)
+    // By the pointer, where the field is: a locator's click scrolls it into view first, which a person's never does.
+    const box = await note.boundingBox()
+    await page.mouse.click((box?.x ?? 0) + 8, (box?.y ?? 0) + 8)
+    await expect(note).toBeFocused()
+    // Long enough to wrap: the field grows a line as the caret moves to the next.
+    const words = 'Split the export into a module of its own, and keep the time zone handling as it is in the plan.'
+    await note.pressSequentially(words)
+    await expect(note).toHaveValue(words)
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(top)
+})
+
 // The stream would send the list as the journal has it, which has no plan review: the list here is the test's,
 // ABC-105's.
 async function listPlanReview(page: Page) {
