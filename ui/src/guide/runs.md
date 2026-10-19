@@ -9,7 +9,9 @@ and what it cost; the worktrees page is the pools they work in.
 with earlier runs shows **Show N earlier runs** under it. Each row has the run's state, its id (`run:39`), its ticket
 and kind, with a resume's reasons beside it (`resume (ci, review)`), what it cost, and how long it ran or how long
 since it ended. Under it are the run's summary, its PRs, the worktrees it holds, and, while it runs, its latest tool
-call. In a narrow window, such as half a monitor, the cost goes first and then the kind; how long stays.
+call. A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to
+say doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
+the kind; how long stays.
 
 The chips filter by the latest run's state: `running`, `waiting on you` (the worker stopped to ask something),
 `failed`, `stopped`, and `done`. A cost of `–` means the runtime reported none, which is not the same as free.

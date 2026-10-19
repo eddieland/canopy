@@ -26,15 +26,15 @@ describe('parsePretty', () => {
 
 describe('withPretty', () => {
     it("turns one tick's on or off and leaves the others as they were", () => {
-        expect(withPretty([2], 7, true)).toBe('[2,7]')
-        expect(withPretty([2, 7], 2, false)).toBe('[7]')
-        expect(withPretty([2], 9, false)).toBe('[2]')
+        expect(withPretty([2], 7, true)).toEqual([2, 7])
+        expect(withPretty([2, 7], 2, false)).toEqual([7])
+        expect(withPretty([2], 9, false)).toEqual([2])
     })
 
     it('moves a tick turned on again to the end, and drops the oldest past the limit', () => {
-        expect(withPretty([2, 7], 2, true)).toBe('[7,2]')
+        expect(withPretty([2, 7], 2, true)).toEqual([7, 2])
         const full = Array.from({ length: MAX_KEPT }, (_, i) => i + 1)
-        const kept = JSON.parse(withPretty(full, 1000, true)) as number[]
+        const kept = withPretty(full, 1000, true)
         expect(kept).toHaveLength(MAX_KEPT)
         expect(kept[0]).toBe(2)
         expect(kept.at(-1)).toBe(1000)

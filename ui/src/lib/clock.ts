@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
  * How the UI writes a time of day (src/lib/time.ts): on a 24-hour clock (`14:05`) or a 12-hour one (`2:05 PM`), and
@@ -44,67 +44,17 @@ export function parseClock(raw: string | null): Clock {
  * component that shows a time reads it with `useClock` instead, so the time is written again when it changes.
  */
 export function currentClock(): Clock {
-    return snapshot
+    return setting.get()
 }
 
 /** How a time of day is written. Re-renders on a change from this tab or another. */
 export function useClock(): Clock {
-    return useSyncExternalStore(subscribe, getSnapshot)
+    return useStoredSetting(setting)
 }
 
 /** Stores a change to the setting and applies it now. */
 export function setClock(change: Partial<Clock>): void {
-    const next = { ...snapshot, ...change }
-    try {
-        globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
-        // Not persisted, but still applied for this page.
-    }
-    announce(next)
+    setting.set({ ...setting.get(), ...change })
 }
 
-function read(): Clock {
-    try {
-        return parseClock(globalThis.localStorage.getItem(STORAGE_KEY))
-    } catch {
-        // Storage can be unavailable (privacy modes).
-        return DEFAULT_CLOCK
-    }
-}
-
-let snapshot = read()
-const listeners = new Set<() => void>()
-
-function announce(next: Clock): void {
-    if (next.hours === snapshot.hours && next.zone === snapshot.zone) {
-        return
-    }
-    snapshot = next
-    for (const listener of listeners) {
-        listener()
-    }
-}
-
-function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) {
-        announce(read())
-    }
-}
-
-function subscribe(listener: () => void): () => void {
-    listeners.add(listener)
-    if (listeners.size === 1) {
-        globalThis.addEventListener('storage', onStorage)
-        announce(read())
-    }
-    return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-            globalThis.removeEventListener('storage', onStorage)
-        }
-    }
-}
-
-function getSnapshot(): Clock {
-    return snapshot
-}
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseClock, serialize: JSON.stringify })

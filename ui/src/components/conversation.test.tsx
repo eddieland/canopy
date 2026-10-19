@@ -123,6 +123,14 @@ describe('Conversation', () => {
         expect(within(item(5)).getByText('waiting for the next tick')).toBeDefined()
     })
 
+    it("marks the operator's messages a tick has read as seen, and never another's", async () => {
+        await renderRouted(<Conversation messages={[QUESTION, REPLY, LATER]} />, { client: knowing(4) })
+        expect(within(item(3)).queryByText('seen')).toBeNull()
+        expect(within(item(4)).getByText('seen')).toBeDefined()
+        expect(within(item(4)).queryByText('waiting for the next tick')).toBeNull()
+        expect(within(item(5)).queryByText('seen')).toBeNull()
+    })
+
     it("says what a chore's notes wait for instead, when told", async () => {
         const pending = {
             label: 'waiting for the next run',
@@ -133,6 +141,7 @@ describe('Conversation', () => {
         expect(within(item(4)).getByText('waiting for the next run')).toBeDefined()
         expect(within(item(5)).queryByText('waiting for the next run')).toBeNull()
         expect(screen.queryByText('waiting for the next tick')).toBeNull()
+        expect(screen.queryByText('seen')).toBeNull()
     })
 
     it('shows every body as text, markup kept as its characters and only its web addresses linked', async () => {

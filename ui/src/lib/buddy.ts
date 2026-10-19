@@ -1,6 +1,5 @@
-import { useSyncExternalStore } from 'react'
-
 import { nextIndex } from '@/lib/headlines'
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
  * Sprig, the helper at the foot of the side rail (src/components/shell/buddy.tsx): a bent wire with a sprig on top,
@@ -280,63 +279,14 @@ export function typeBurst<T>(keys: readonly T[], last: T, random: () => number =
     return [...typed, last]
 }
 
-function read(): BuddySetting {
-    try {
-        return parseBuddy(globalThis.localStorage.getItem(STORAGE_KEY))
-    } catch {
-        // Storage can be unavailable (privacy modes).
-        return DEFAULT
-    }
-}
-
-let snapshot = read()
-const listeners = new Set<() => void>()
-
-function announce(next: BuddySetting): void {
-    if (next === snapshot) {
-        return
-    }
-    snapshot = next
-    for (const listener of listeners) {
-        listener()
-    }
-}
-
-function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) {
-        announce(read())
-    }
-}
-
-function subscribe(listener: () => void): () => void {
-    listeners.add(listener)
-    if (listeners.size === 1) {
-        globalThis.addEventListener('storage', onStorage)
-        announce(read())
-    }
-    return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-            globalThis.removeEventListener('storage', onStorage)
-        }
-    }
-}
-
-function getSnapshot(): BuddySetting {
-    return snapshot
-}
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseBuddy, serialize: (value: BuddySetting) => value })
 
 /** Whether Sprig shows. Re-renders on a change from this tab or another. */
 export function useBuddy(): BuddySetting {
-    return useSyncExternalStore(subscribe, getSnapshot)
+    return useStoredSetting(setting)
 }
 
 /** Stores the setting and applies it now. */
 export function setBuddy(next: BuddySetting): void {
-    try {
-        globalThis.localStorage.setItem(STORAGE_KEY, next)
-    } catch {
-        // Not persisted, but still applied for this page.
-    }
-    announce(next)
+    setting.set(next)
 }
