@@ -375,6 +375,20 @@ export const memoryHistoryQuery = queryOptions({
         unwrap(await api.GET('/api/memory', { params: { query: { history: true } }, signal })),
 })
 
+/**
+ * What `canopy memory search` finds as the operator (DESIGN §28, Search): every memory that keeps its text whose key or
+ * text holds any of `q`'s words, best match first. Under the memory key, so what reads memory again reads this too; the
+ * last result stays while the next is read, so the list does not blink as the operator types.
+ */
+export function memorySearchQuery(q: string) {
+    return queryOptions({
+        queryKey: [...keys.memory, 'search', q] as const,
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/memory/search', { params: { query: { q } }, signal })),
+        placeholderData: (previous) => previous,
+    })
+}
+
 /** A ticket's notes, and what its next run would be served (DESIGN §28). */
 export function ticketMemoryQuery(key: string) {
     return queryOptions({

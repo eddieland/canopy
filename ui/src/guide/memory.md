@@ -77,10 +77,12 @@ Above the panels, a filter field narrows all three as you type: a word in a memo
 repository, or in a ticket's key or title. The repository chips keep the proposals and lessons for that repository's
 runs, a lesson for every repository included, since those runs read it too. While lessons are in use, the Lessons header
 has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
-keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. Searching a memory's words
-across the whole journal is still `canopy memory search`. The **history** chip in the Proposals and Lessons headers
-lists what's no longer pending or in force under them: proposals rejected, lapsed, promoted, or forgotten, and lessons
-replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
+keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. For what notes say, the page
+runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold a word under the
+tickets, so a note is found by what it says, not only by its ticket. The repository chips don't narrow Ticket notes: a
+note is read by its own ticket's runs, whatever the repository. The **history** chip in the Proposals and Lessons
+headers lists what's no longer pending or in force under them: proposals rejected, lapsed, promoted, or forgotten, and
+lessons replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
 
@@ -188,4 +190,4 @@ the journal's free pages. That's the point, if what you're deleting is a leaked 
 `canopy memory search WORDS` finds memories by their words, best match first, a word in a key counting more than one
 in a text. From your shell it finds every memory that still has its text. From a worker's run it finds only what that
 run could have been served: its ticket's notes and the lessons for its repositories. Never another ticket's notes,
-and never a proposal. The search box on the rail doesn't search memory; this does.
+and never a proposal. The search box on the rail doesn't search memory; this does, and so does the memory page's filter.

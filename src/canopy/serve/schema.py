@@ -1386,6 +1386,13 @@ class MemoryOverview(_Model):
     else none."""
 
 
+class MemoryFound(_Model):
+    """What `canopy memory search` finds as the operator (DESIGN §28, Search): every memory that keeps its text."""
+
+    entries: list[MemoryEntry]
+    """The memories whose key or text holds any of the words, best match first, at most 50."""
+
+
 class TicketMemory(_Model):
     """One ticket's notes (DESIGN §28): every one its runs wrote, and what its next run would be served."""
 

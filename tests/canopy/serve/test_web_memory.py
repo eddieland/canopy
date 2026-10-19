@@ -315,3 +315,11 @@ def test_the_overview_sends_the_memorys_history_only_when_asked(backend: Backend
     after = c.get("/api/memory", params={"history": "true"}).json()
     assert [(m["id"], m["status"]) for m in after["past_proposals"]] == [(5, "invalid"), (7, "superseded")]
     assert after["past_lessons"] == []
+
+
+def test_memory_search_finds_what_a_note_says_as_the_cli_does(backend: Backend) -> None:
+    c = client(None, backend)
+    # ABC-100's note `ci-cache` says it in its text; its ticket's key and title do not.
+    found = c.get("/api/memory/search", params={"q": "lockfile"}).json()["entries"]
+    assert [(m["id"], m["ticket_key"]) for m in found] == [(3, "ABC-100")]
+    assert c.get("/api/memory/search", params={"q": "!!"}).json() == {"entries": []}

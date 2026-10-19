@@ -16,10 +16,10 @@ import click
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO, TICKET_KEY
 from canopy.core import conversation, db, memory, memory_manage, records
+from canopy.core import memory_search as search
 from canopy.core.memory_text import visible
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus
 from canopy.infra import logs
-from canopy.memory import search
 
 if TYPE_CHECKING:
     from canopy.core.context import Context

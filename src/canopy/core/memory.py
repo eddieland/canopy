@@ -808,7 +808,7 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
     if left_out:
         body.append(f"[{left_out} older notes are left out of this prompt.]")
     if active:
-        # Search reaches what the cap left out, and the notes a later note under the key replaced (`memory.search`).
+        # Search reaches what the cap left out, and the notes a later note under the key replaced (`memory_search`).
         body.append(
             f"`{SEARCH_COMMAND}` searches this ticket's notes, the ones later notes replaced"
             f"{' and the ones left out here' if left_out else ''} included."
