@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useBlocker } from '@tanstack/react-router'
+import { Link, useBlocker } from '@tanstack/react-router'
 import { Check, Save, SkipForward } from 'lucide-react'
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import {
     changePlanThread,
@@ -17,6 +18,7 @@ import { keys, ticketPlanQuery } from '@/api/queries'
 import type { PlanChanged, PlanFile, PlanSummary, TicketPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
+import { Leaf } from '@/components/leaf'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PlanChip } from '@/components/plan-card'
@@ -131,6 +133,33 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
         return null
     }
     const { plan } = newest
+    // A plan skipped or otherwise put aside, its ticket needing none now: no planner comes for it.
+    const needless = plan.status === 'superseded' && !plans.needed
+    const next: [string, ReactNode][] = []
+    if (plans.planning !== null) {
+        next.push(['planning', `Run ${plans.planning} is writing a new plan.`])
+    }
+    // No planner reads a request for a ticket that needs no plan: the sentence that says so stands instead.
+    if (plans.planning === null && plans.changes_asked !== null && !needless) {
+        next.push([
+            'asked',
+            <Fragment key="asked">
+                You asked for changes <Age at={plans.changes_asked} variant="ago" className="text-sm" />: the next tick
+                asks the planner for a new plan.
+            </Fragment>,
+        ])
+    }
+    if (planWaits(plans)) {
+        next.push(['waits', 'It waits on you: read it, comment, then approve it or ask for changes.'])
+    }
+    if (needless) {
+        next.push([
+            'needless',
+            <span key="needless" title={planNeededWhy(plans)}>
+                Its ticket needs no plan now.
+            </span>,
+        ])
+    }
     return (
         <>
             Written by <RunLink id={plan.run_id} className="text-sm" />
@@ -142,17 +171,13 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
             )}
             {newest.edited && ', edited since the planner wrote it'}
             {newest.changed_since_approval && ', changed since it was approved'}.{' '}
-            {plans.planning !== null && `Run ${plans.planning} is writing a new plan.`}
-            {plans.planning === null && plans.changes_asked !== null && (
-                <>
-                    You asked for changes <Age at={plans.changes_asked} variant="ago" className="text-sm" />: the next
-                    tick asks the planner for a new plan.
-                </>
-            )}
-            {planWaits(plans) && 'It waits on you: read it, comment, then approve it or ask for changes.'}
-            {plan.status === 'superseded' && !plans.needed && (
-                <span title={planNeededWhy(plans)}>Its ticket needs no plan now.</span>
-            )}
+            {/* What comes next, a sentence each, apart by a space. */}
+            {next.map(([key, sentence], i) => (
+                <Fragment key={key}>
+                    {i > 0 && ' '}
+                    {sentence}
+                </Fragment>
+            ))}
         </>
     )
 }
@@ -184,8 +209,16 @@ function NewestPlan({
     const [seen, setSeen] = useState(plans.threads)
     const [markdown, setMarkdown] = useState(text)
     const [said, setSaid] = useState<string | null>(null)
+    // How many times the operator approved the plan here, the last thing they did: what the foot says then is a
+    // moment of its own, and each approval drops its leaf once.
+    const [approvals, setApprovals] = useState(0)
+    const [approved, setApproved] = useState(false)
     const [failure, setFailure] = useState<unknown>(null)
     const [busy, setBusy] = useState(0)
+    // Whether the note on the whole plan holds words, which Approve would leave unsent.
+    const [noted, setNoted] = useState(false)
+    // The decision asked about in the foot, before it is made: Skip, or Approve with a note that would not be sent.
+    const [confirming, setConfirming] = useState<'approve' | 'skip' | undefined>(undefined)
     // A comment made here has a local id until the journal gives it one: later changes to it wait for that.
     const created = useRef(new Map<string, Promise<number>>())
     const queue = useRef<Promise<unknown>>(Promise.resolve())
@@ -276,6 +309,7 @@ function NewestPlan({
     function act(work: () => Promise<string>) {
         setFailure(null)
         setSaid(null)
+        setApproved(false)
         enqueue(async () => setSaid(await work()))
     }
 
@@ -296,11 +330,18 @@ function NewestPlan({
     }, [])
 
     function decide(action: PlanChanged['action']) {
+        setConfirming(undefined)
         act(async () => {
             if (dirty && action === 'approve') {
                 await save()
             }
-            return planText(ticketKey, await decidePlan(ticketKey, action))
+            const done = planText(ticketKey, await decidePlan(ticketKey, action))
+            // Only once the journal holds it: the moment never shows for an approval that was refused.
+            if (action === 'approve') {
+                setApproved(true)
+                setApprovals((n) => n + 1)
+            }
+            return done
         })
     }
 
@@ -342,41 +383,66 @@ function NewestPlan({
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
+            onNoteChange={(note) => setNoted(note.trim() !== '')}
             actions={
                 // `contents`, so its buttons are items of the foot's line, with Ask for changes after them.
                 <div className="contents" data-testid="plan-actions">
-                    {approvable && (
+                    {confirming !== undefined && (
+                        <ConfirmDecision
+                            action={confirming}
+                            dirty={dirty}
+                            onConfirm={() => decide(confirming)}
+                            onKeep={() => setConfirming(undefined)}
+                        />
+                    )}
+                    {confirming === undefined && approvable && (
                         // The foot's one primary, whatever is open: Ask for changes, its other way out, is outlined.
-                        <Button onClick={() => decide('approve')} disabled={busy > 0} title={APPROVE_TITLE}>
+                        // A note on the whole plan goes only with Ask for changes, so Approve asks before leaving it.
+                        <Button
+                            onClick={() =>
+                                noted && status === 'proposed' ? setConfirming('approve') : decide('approve')
+                            }
+                            disabled={busy > 0}
+                            title={APPROVE_TITLE}
+                        >
                             <Check />
                             {dirty ? 'Save and approve' : 'Approve'}
                         </Button>
                     )}
-                    <Button
-                        variant="outline"
-                        onClick={() => act(saveAndSay)}
-                        disabled={busy > 0 || !dirty}
-                        title={`Save (${keysLabel(SAVE_KEYS, APPLE)})`}
-                        aria-keyshortcuts={ariaKeys(SAVE_KEYS, APPLE)}
-                    >
-                        <Save />
-                        Save
-                    </Button>
-                    {dirty && (
+                    {confirming === undefined && (
+                        <Button
+                            variant="outline"
+                            onClick={() => act(saveAndSay)}
+                            disabled={busy > 0 || !dirty}
+                            title={`Save (${keysLabel(SAVE_KEYS, APPLE)})`}
+                            aria-keyshortcuts={ariaKeys(SAVE_KEYS, APPLE)}
+                        >
+                            <Save />
+                            Save
+                        </Button>
+                    )}
+                    {confirming === undefined && dirty && (
                         // As a document says it, so an edit not yet in the plan's file is never taken for one that is.
                         <span className="text-xs text-muted-foreground">Unsaved edits</span>
                     )}
-                    <Button variant="ghost" onClick={() => decide('skip')} disabled={busy > 0}>
-                        <SkipForward />
-                        Skip the plan
-                    </Button>
+                    {confirming === undefined && (
+                        <Button variant="ghost" onClick={() => setConfirming('skip')} disabled={busy > 0}>
+                            <SkipForward />
+                            Skip the plan
+                        </Button>
+                    )}
                 </div>
             }
             actionsNote={actionsNote(status, open)}
+            // Kept once the plan is read only, so a decision that ends its editing, Skip's, still says what it did.
             outcome={
-                <Notice error={failure} reserve>
-                    {said}
-                </Notice>
+                approved && said !== null && failure === null ? (
+                    <Approved key={approvals} text={said} />
+                ) : editable || said !== null || failure !== null ? (
+                    <Notice error={failure} reserve>
+                        {said}
+                    </Notice>
+                ) : undefined
             }
         />
     )
@@ -395,10 +461,82 @@ function actionsNote(status: PlanFile['plan']['status'], open: number): string |
     return undefined
 }
 
+// What approving did, as the moment it is: the one time the operator lets an agent go ahead and write code. It says
+// so in the CLI's words on the accent's tint, as decided proposals do, rises in, and drops a leaf, as a cleared
+// attention item does, since approving clears the plan's item; then the way back to what else needs the operator.
+// It shows only once the approval is in the journal, so it never celebrates one that was refused.
+function Approved({ text }: { text: string }) {
+    return (
+        <div className="stagger">
+            <div
+                data-testid="plan-approved"
+                className="relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-accent/14 px-2.5 py-1.5"
+            >
+                <Leaf className="-top-1 left-1" />
+                <Check aria-hidden className="size-4 shrink-0 text-accent" />
+                <output className="min-w-0 flex-1 text-sm text-accent">{text}</output>
+                <Link to="/attention" className="text-xs font-medium text-accent underline-offset-4 hover:underline">
+                    Back to Attention
+                </Link>
+            </div>
+        </div>
+    )
+}
+
+// A decision asked about in its place in the foot before it is made, as deleting a comment is: Skip, which nothing
+// undoes on this page, and Approve while the note on the whole plan holds words it would leave unsent. Keep, the choice
+// that loses nothing, takes the focus, and Escape keeps too.
+function ConfirmDecision({
+    action,
+    dirty,
+    onConfirm,
+    onKeep,
+}: {
+    action: 'approve' | 'skip'
+    dirty: boolean
+    onConfirm: () => void
+    onKeep: () => void
+}) {
+    const keep = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        keep.current?.focus()
+    }, [])
+    function onKey(event: ReactKeyboardEvent<HTMLButtonElement>) {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            onKeep()
+        }
+    }
+    const question =
+        action === 'skip'
+            ? 'Skip the plan? Its implement goes ahead without it.'
+            : 'Approve without your note? It goes only with Ask for changes.'
+    return (
+        <fieldset className="flex flex-wrap items-center gap-2">
+            <legend className="float-left mr-1 text-sm">{question}</legend>
+            <Button ref={keep} type="button" variant="ghost" onClick={onKeep} onKeyDown={onKey}>
+                Keep
+            </Button>
+            {action === 'skip' ? (
+                <Button type="button" variant="outline" onClick={onConfirm} onKeyDown={onKey}>
+                    <SkipForward />
+                    Skip the plan
+                </Button>
+            ) : (
+                <Button type="button" onClick={onConfirm} onKeyDown={onKey} title={APPROVE_TITLE}>
+                    <Check />
+                    {dirty ? 'Save and approve' : 'Approve'}
+                </Button>
+            )}
+        </fieldset>
+    )
+}
+
 /** The ticket's earlier plans, newest first, each read only once opened. */
 function EarlierPlans({ ticketKey, plans }: { ticketKey: string; plans: PlanSummary[] }) {
     return (
-        <Panel data-testid="earlier-plans">
+        // As wide as the plan above it, not the plan and its comments: its plans read in the plan's measure.
+        <Panel data-testid="earlier-plans" className="max-w-[51rem]">
             <PanelHeader label="Earlier plans">
                 <span className="readout text-xs text-muted-foreground">{plans.length}</span>
             </PanelHeader>
@@ -419,7 +557,6 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
             <li className="flex flex-col">
                 <div className="flex items-center gap-2 px-3 py-2 text-sm">
                     <Disclosure open={open} what={`plan ${plan.id}`} />
-                    <span>plan {plan.id}</span>
                     <Chip>{plan.status}</Chip>
                     <span className="text-muted-foreground">
                         written <Age at={plan.created_at} variant="ago" />

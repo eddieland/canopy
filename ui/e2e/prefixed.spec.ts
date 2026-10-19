@@ -450,7 +450,9 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await expect(form.getByRole('status')).toHaveText(
         `${pr} is requested for review. The next tick reviews its head, once.`,
     )
-    // The request waits on the pull requests page until the next tick reviews it.
+    // It is in the reviews list at once, waiting on a tick to start its review.
+    await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
+    // The request waits on the pull requests page too, until the next tick reviews it.
     await page.goto('pull-requests')
     const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
     await expect(row).toContainText('requested')
@@ -464,6 +466,10 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
     await expect(request).toContainText('Your review request ended')
     await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
+    // Nothing waits on a tick for it any more.
+    await page.goto('reviews')
+    await expect(page.getByTestId('reviews').getByTestId('review-4')).toBeVisible()
+    await expect(page.getByTestId(`requested-${pr}`)).toHaveCount(0)
 })
 
 test("a plan's comment is kept, its edit saved and approved, and then the plan skipped, as canopy plan does", async ({
@@ -515,11 +521,15 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(panel).toContainText('approved')
     await expect(state).toContainText('edited since the planner wrote it')
 
-    // Skip supersedes it: no plan waits, and the ticket's own word now says so.
+    // Skip asks first, in its place, then supersedes it: no plan waits, and the ticket's own word now says so. What
+    // it did stays in the foot, though the plan is read only now and the foot's actions are gone.
+    await actions.getByRole('button', { name: 'Skip the plan' }).click()
+    await expect(actions.getByText('Skip the plan? Its implement goes ahead without it.')).toBeVisible()
     await actions.getByRole('button', { name: 'Skip the plan' }).click()
     await expect(state).toContainText('Its ticket needs no plan now.')
     await expect(panel).toContainText('superseded')
     await expect(page.getByTestId('plan-actions')).toHaveCount(0)
+    await expect(said).toContainText("ABC-105's plan is skipped")
 
     // The ticket's page has the request in its conversation, and the plan's card says where the plan stands.
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'ABC-105' }).click()

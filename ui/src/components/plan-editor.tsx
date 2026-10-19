@@ -8,6 +8,7 @@ import {
     ChevronDown,
     ChevronUp,
     Code,
+    Diff,
     Italic,
     List,
     ListOrdered,
@@ -103,6 +104,7 @@ export function PlanEditor({
     status,
     onAskForChanges,
     asked = false,
+    onNoteChange,
     actions,
     actionsNote,
     outcome,
@@ -126,11 +128,16 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
+    /** Called with the note on the whole plan, which goes with Ask for changes, as the operator writes it. */
+    onNoteChange?: (note: string) => void
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
     /** What the caller says of those, in words, on the line under them: what they will do. */
     actionsNote?: ReactNode
-    /** What the caller's last action did, or why it was refused, at the foot's end (`Notice`). */
+    /**
+     * What the caller's last action did, or why it was refused, at the foot's end (`Notice`). Given, the foot stays
+     * when the plan is read only, so an action that ends its editing, such as Skip, still says what it did.
+     */
     outcome?: ReactNode
     /**
      * The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`); with
@@ -410,7 +417,13 @@ export function PlanEditor({
         // stops at its text's measure (`.plan-doc`'s 48rem and the panel's padding), so on a wide page the comments
         // stay against the text, as a shared document's margin does, and the room left over goes after them.
         <div ref={frame} className="@container relative min-w-0">
-            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
+            <div
+                className={cn(
+                    'grid min-w-0 items-start gap-6',
+                    // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20.
+                    '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]',
+                )}
+            >
                 <Panel>
                     <PanelHeader label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -423,8 +436,9 @@ export function PlanEditor({
                             {previous !== undefined && (
                                 <span className="flex items-center gap-1">
                                     {/* A mode, named for what it shows: the plan as it reads now, what changed since
-                                        marked on it. */}
+                                        marked on it. Its icon says it is a control while it is off too. */}
                                     <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
+                                        <Diff aria-hidden />
                                         Changes since {previous.label}
                                     </Toggle>
                                     {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
@@ -441,8 +455,12 @@ export function PlanEditor({
                             pluginKey={BUBBLE}
                             // Fixed, so a bubble over a passage below the window never makes the window scroll: the
                             // window would scroll back as the bubble hides, under a click on the toolbar's Comment.
+                            // On the body, since a fixed element is placed from its nearest container, not the
+                            // window, and the frame is one (`@container`): under it, the bubble landed off by the
+                            // frame's place on the page, over the rail. Over the sticky header and foot, as a float is.
                             options={{ placement: 'top', strategy: 'fixed' }}
-                            className="rounded-md border bg-surface p-0.5"
+                            appendTo={() => document.body}
+                            className="z-20 rounded-md border bg-surface p-0.5"
                             data-testid="plan-bubble"
                         >
                             <Button
@@ -456,32 +474,38 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {editable && (actions !== undefined || onAskForChanges !== undefined) && (
+                    {((editable && (actions !== undefined || onAskForChanges !== undefined)) ||
+                        outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
                         <PanelFooter sticky data-testid="plan-bar">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {actions}
-                                {onAskForChanges !== undefined && (
-                                    <AskForChanges
-                                        threads={threads}
-                                        starts={starts}
-                                        edited={edited || changed}
-                                        asked={asked}
-                                        onAsk={onAskForChanges}
-                                        note={actionsNote}
-                                    />
-                                )}
-                                {onAskForChanges === undefined && actionsNote !== undefined && (
-                                    <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
-                                )}
-                            </div>
+                            {editable && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {actions}
+                                    {onAskForChanges !== undefined && (
+                                        <AskForChanges
+                                            threads={threads}
+                                            starts={starts}
+                                            edited={edited || changed}
+                                            asked={asked}
+                                            onAsk={onAskForChanges}
+                                            note={actionsNote}
+                                            onNoteChange={onNoteChange}
+                                        />
+                                    )}
+                                    {onAskForChanges === undefined && actionsNote !== undefined && (
+                                        <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
+                                    )}
+                                </div>
+                            )}
                             {outcome}
                         </PanelFooter>
                     )}
                 </Panel>
-                <Panel>
-                    <PanelHeader label="Comments">
+                {/* Beside the plan, its comments are a margin, not a box: cards on the page, each level with its
+                    passage, under a header that stays at the top of the page with their count. */}
+                <Panel className={cn(beside && 'border-transparent bg-transparent')}>
+                    <PanelHeader label="Comments" sticky={beside}>
                         <span className="readout text-xs text-muted-foreground">{open} open</span>
                     </PanelHeader>
                     <PlanThreads

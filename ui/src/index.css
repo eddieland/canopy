@@ -107,8 +107,12 @@
     }
 }
 
-/* A panel's sticky foot (`PanelFooter`) covers the page's foot: what the page scrolls into view stops above it. */
-.page-scroll:has([data-sticky-foot]) {
+/*
+ * A panel's sticky foot (`PanelFooter`) covers the page's foot: what the page scrolls into view stops above it. Not
+ * while the foot holds the focus: its own field is never under it, and with the padding the page would scroll on every
+ * key typed there, to clear a caret that the foot carries down with it.
+ */
+.page-scroll:has([data-sticky-foot]):not(:has([data-sticky-foot]:focus-within)) {
     scroll-padding-bottom: 8rem;
 }
 
@@ -847,7 +851,7 @@
     /* The comments beside a plan, each at its passage (src/lib/plan-margin.ts): apart, each is a card of its own, */
     /* and so is one whose passage is gone, under them. */
     .plan-margin[data-aligned] > :is([data-align], article) {
-        @apply mx-2 rounded-md border;
+        @apply mx-2 rounded-md border bg-surface;
     }
     /* The cards that follow the placed ones (a passage gone) keep the gap between cards. */
     .plan-margin[data-aligned] > article:not([data-align]) {
@@ -959,14 +963,24 @@
             @apply bg-accent/28 underline decoration-accent decoration-2 underline-offset-4;
         }
         /* While what changed is marked (`.plan-changes` on the editor), a passage at rest drops its tint, so a word */
-        /* never wears a comment's tint and a change's at once; the open one keeps its own. */
+        /* never wears a comment's tint and a change's at once, but keeps a thin underline in the accent, so the */
+        /* operator still sees where their comments are; the open one keeps its own. */
         .plan-changes & .plan-comment:not(.plan-comment-active) {
-            @apply bg-transparent;
+            @apply bg-transparent underline decoration-accent decoration-1 underline-offset-4;
         }
         /* What changed since the plan this one replaces (src/lib/plan-diff.ts): the words added on the diff's added */
         /* tint, those removed struck through on its removed tint, where they were. */
         & ins.plan-ins {
             @apply rounded-xs bg-diff-add/18 no-underline;
+        }
+        /* A block added whole: one tint behind it, and a bar in the diff's color at its left, in the room a negative */
+        /* margin takes, so its words stay where they were. A table's cell added whole takes the tint alone. */
+        & .plan-block-add {
+            @apply -ml-2 rounded-r-xs bg-diff-add/10 pl-2;
+            box-shadow: inset 2px 0 var(--color-diff-add);
+        }
+        & .plan-cell-add {
+            @apply bg-diff-add/10;
         }
         & del.plan-del {
             @apply mx-0.5 rounded-xs bg-diff-del/14 text-muted-foreground line-through decoration-diff-del;

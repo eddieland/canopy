@@ -42,8 +42,10 @@ export const keys = {
     spendBreakdown: (days: number) => ['spend', 'breakdown', days] as const,
     tick: ['tick'] as const,
     search: (q: string) => ['search', q] as const,
-    // The reviews list and each review's page share a prefix, so one invalidation marks both stale.
+    // The reviews list, the reviews waiting on a tick, and each review's page share a prefix, so one invalidation
+    // marks them all stale.
     reviews: ['reviews'] as const,
+    reviewRequests: ['reviews', 'requested'] as const,
     review: (id: number) => ['reviews', id] as const,
     // The PRs list and each PR's page share a prefix, so one invalidation marks both stale.
     pullRequests: ['pull-requests'] as const,
@@ -334,6 +336,15 @@ export function searchQuery(q: string) {
 export const reviewsQuery = queryOptions({
     queryKey: keys.reviews,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/reviews', { signal })),
+})
+
+/**
+ * The PRs the operator asked canopy to review that no review of is running yet, newest first: each waits on a tick to
+ * start one. The stream sends the list again whenever one is asked for, starts, or ends.
+ */
+export const reviewRequestsQuery = queryOptions({
+    queryKey: keys.reviewRequests,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/review-requests', { signal })),
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */

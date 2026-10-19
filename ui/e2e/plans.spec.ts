@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { plan, select, settled, signIn } from './helpers.ts'
 
@@ -35,7 +36,7 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByRole('button', { name: 'Changes since plan 1' })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('plan-bar').getByRole('button', { name: 'Changes since plan 1' })).toHaveCount(0)
     await expect(page.getByText(/^\d+ changes$/u)).toBeVisible()
-    await expect(plan(page).locator('ins').filter({ hasText: 'owner_timezone()' }).first()).toBeVisible()
+    await expect(plan(page).locator('.plan-cell-add').filter({ hasText: 'owner_timezone()' })).toBeVisible()
 })
 
 test("the plan's foot sits in its panel, with one primary, and at 820px takes two lines", async ({ page }) => {
@@ -149,27 +150,7 @@ test("a ticket's page loads no plan editor", async ({ page }) => {
 test("a plan review on the attention list shows the plan's card, which approves it and opens its page", async ({
     page,
 }) => {
-    // The stream would send the list as the journal has it, which has no plan review: the list here is the test's.
-    await page.route('**/api/events', (route) => route.abort())
-    await page.route('**/api/attention', (route) =>
-        route.fulfill({
-            json: [
-                {
-                    id: 'ABC-105:plan_review',
-                    ticket_key: 'ABC-105',
-                    ticket_title: 'Schedule report exports',
-                    reason: 'plan_review',
-                    detail: 'plan 2 waits on your approval',
-                    since: '2026-10-08T11:52:00Z',
-                    chore: null,
-                    pr: null,
-                    repo: null,
-                    finding: false,
-                    subject: 'ABC-105',
-                },
-            ],
-        }),
-    )
+    await listPlanReview(page)
     // The root server's journal never changes: the approval is answered here, as canopy plan --approve would.
     const approvals: unknown[] = []
     await page.route('**/api/tickets/ABC-105/plan', async (route) => {
@@ -187,6 +168,23 @@ test("a plan review on the attention list shows the plan's card, which approves 
     expect(approvals).toEqual([{ action: 'approve' }])
     await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+})
+
+test('a plan review you answered since its tick says so until the next one', async ({ page }) => {
+    await listPlanReview(page)
+    // The root server's journal never changes: the plan is answered here, as asking for changes would answer it.
+    await page.route('**/api/tickets', async (route) => {
+        const tickets = (await (await route.fetch()).json()) as { key: string; plan_waits: boolean }[]
+        for (const ticket of tickets) {
+            ticket.plan_waits &&= ticket.key !== 'ABC-105'
+        }
+        await route.fulfill({ json: tickets })
+    })
+    await page.goto('attention')
+    await expect(page.getByTestId('attention-item-ABC-105:plan_review')).toContainText('answered')
+    await expect(page.getByTestId('answered-note')).toHaveText(
+        'You answered the plan. The item leaves at the next tick, when the loop reads your answer.',
+    )
 })
 
 test('an earlier plan opens read only', async ({ page }) => {
@@ -236,3 +234,45 @@ test('a comment half written asks before the page is left, by a link or by closi
     await page.close({ runBeforeUnload: true })
     expect(await asked).toBe('beforeunload')
 })
+
+test('writing a note on the whole plan never scrolls the page under it', async ({ page }) => {
+    // Short enough that the plan runs past the window, so the foot is stuck to its bottom.
+    await page.setViewportSize({ width: 1280, height: 600 })
+    const scroller = page.locator('.page-scroll')
+    const note = page.getByTestId('plan-bar').getByRole('textbox', { name: 'On the whole plan' })
+    const top = await scroller.evaluate((element) => element.scrollTop)
+    // By the pointer, where the field is: a locator's click scrolls it into view first, which a person's never does.
+    const box = await note.boundingBox()
+    await page.mouse.click((box?.x ?? 0) + 8, (box?.y ?? 0) + 8)
+    await expect(note).toBeFocused()
+    // Long enough to wrap: the field grows a line as the caret moves to the next.
+    const words = 'Split the export into a module of its own, and keep the time zone handling as it is in the plan.'
+    await note.pressSequentially(words)
+    await expect(note).toHaveValue(words)
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(top)
+})
+
+// The stream would send the list as the journal has it, which has no plan review: the list here is the test's,
+// ABC-105's.
+async function listPlanReview(page: Page) {
+    await page.route('**/api/events', (route) => route.abort())
+    await page.route('**/api/attention', (route) =>
+        route.fulfill({
+            json: [
+                {
+                    id: 'ABC-105:plan_review',
+                    ticket_key: 'ABC-105',
+                    ticket_title: 'Schedule report exports',
+                    reason: 'plan_review',
+                    detail: 'plan 2 waits on your approval',
+                    since: '2026-10-08T11:52:00Z',
+                    chore: null,
+                    pr: null,
+                    repo: null,
+                    finding: false,
+                    subject: 'ABC-105',
+                },
+            ],
+        }),
+    )
+}

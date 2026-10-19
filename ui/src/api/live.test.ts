@@ -139,6 +139,17 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(true)
     })
 
+    it('writes the reviews waiting on a tick whole', () => {
+        const client = new QueryClient()
+        const requests = [
+            { pr_url: 'https://github.com/acme/web/pull/95', created_at: '2026-10-08T11:40:00Z', channel: 'web' },
+        ]
+        applyStreamEvent(client, { type: 'review_requests.updated', requests })
+        expect(client.getQueryData(keys.reviewRequests)).toEqual(requests)
+        applyStreamEvent(client, { type: 'review_requests.updated', requests: [] })
+        expect(client.getQueryData(keys.reviewRequests)).toEqual([])
+    })
+
     it('writes the pause whole, and lifts it', () => {
         const client = new QueryClient()
         const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
@@ -299,6 +310,9 @@ describe('parseStreamEvent', () => {
         const reviews = { type: 'reviews.updated', reviews: mockReviews }
         expect(parseStreamEvent(JSON.stringify(reviews))).toEqual(reviews)
         expect(parseStreamEvent('{"type":"reviews.updated"}')).toBeNull()
+        const requested = { type: 'review_requests.updated', requests: [] }
+        expect(parseStreamEvent(JSON.stringify(requested))).toEqual(requested)
+        expect(parseStreamEvent('{"type":"review_requests.updated","requests":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
         const day = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
         const spend = { type: 'spend.updated', spend: { day, month: { ...day, hours: 720 } } }

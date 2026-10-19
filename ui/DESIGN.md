@@ -40,7 +40,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
-| `spend-overseer`, `-idle`, `-workers`, `-triage`, `-chores`, `-reviews`, `-dry-run` | Spend chart series, as fills. |
+| `spend-overseer`, `-idle`, `-workers`, `-triage`, `-plans`, `-chores`, `-reviews`, `-dry-run` | Spend series fills. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
@@ -395,7 +395,8 @@ Rules:
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
   and status chip in its header (`PlanChip`: `waiting on you` in `status-blocked` while the plan waits on the
-  operator, as everything that waits on them reads; else its status; with no plan, `needed`, `not needed`, or
+  operator, as everything that waits on them reads; `changes asked` while a proposed plan waits on the planner for
+  the changes the operator asked; else its status; with no plan, `needed`, `not needed`, or
   `waived` while a triage's waiver is in force, its reason on hover, and only then), the run that wrote it and its
   open comments as fields, then a triage's run, its verdict or how it ended, and its reason, model text, when the
   ticket had one; and in its foot `Approve`, the primary, while the plan can be approved, `Ask for a plan`, outlined,
@@ -896,7 +897,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
-  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick; Waiting
+  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick, and so
+  does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes asked); Waiting
   on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
   `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost
@@ -1054,14 +1056,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   never asks. Closing the tab asks too, in the browser's own words. A question about one item, such as deleting a
   comment, asks in that item's place instead.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
-  `Plan` panel, and the comments in a `Comments` panel beside it, 20rem wide, once
+  `Plan` panel, and the comments in a `Comments` panel beside it, 20rem to 24rem wide as the page has room, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
   the plan, the comment being written, and a thread opened by a click on its passage, float over the plan under that
   passage instead, a card 24rem wide on `surface` with a hairline border, so the page never goes down to the list and
   back; it goes when the thread closes or the comment is sent or dropped. The plan's panel stops at its text's measure,
   51rem, so on a wide page the comments stay against the text and the room left over goes after them. Beside the plan,
-  the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): each open comment is a card of its
-  own at the height of its passage, in the plan's order, and one that would overlap the card before it moves down to
+  the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): their panel drops its border and
+  surface, so the room above and between the cards reads as margin, not an empty box, and its header, their count,
+  sticks to the top of the page as the plan's does; each open comment is a card of its own, on `surface`, at the height
+  of its passage, in the plan's order, and one that would overlap the card before it moves down to
   clear it. The open one, or the comment being written, sits exactly at its passage, and the cards before it move up to
   make room. A comment being written opens in its place among them, beside its passage, so opening one never scrolls the
   page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the comments
@@ -1083,15 +1087,20 @@ sliver beside four others; and its axis names short call numbers without measuri
   the plan. An empty plan shows its prompt in `muted-foreground` where its first line starts:
   `Write the plan here, or paste its Markdown.` The plan's header says where the plan stands, at its right: its chip
   (`PlanChip`, `waiting on you` while it waits) and its age, then after a hairline its mode, as a transcript's are:
-  with the plan this one replaces, `Changes since plan 1`, a `Toggle` that marks what changed since it over the plan
+  with the plan this one replaces, `Changes since plan 1`, a `Toggle` led by the diff icon, so it reads as a control
+  while off too, that marks what changed since it over the plan
   (the words added on `diff-add` at 18%, those removed struck through on `diff-del` at 14%, where they were, as `ins`
-  and `del`), pressed as a waiting plan opens, since that is when it is read for what changed; while pressed, how many
+  and `del`; a block added whole, a paragraph or heading, as one: `diff-add` at 10% behind it and a 2px bar of it at
+  its left, in a negative margin so its words stay put, and a table's cell added whole on the tint alone, so a new
+  section or table reads as one change, not as a pill for each run its code spans and marks break it into), pressed as
+  a waiting plan opens, since that is when it is read for what changed; while pressed, how many
   changes it marks (`12 changes`, a removal and what replaced it one) and ghost `icon-xs` buttons that step the cursor
   to the change before or after it, round to the other end, the plan scrolling to it. Last, a ghost `xs` `Outline ▾`
   (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
   section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
   the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a
-  commented passage drops its tint, so no word wears a comment's and a change's at once; the open one keeps its own.
+  commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps a 1px underline in
+  the accent, so the operator still sees where the comments are; the open one keeps its own.
   The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls
   into view (the cursor as it types, a passage a comment shows) stops 80px below it. A selection also shows a
   `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
@@ -1124,7 +1133,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   under them says how many open comments go with Ask for changes, or how far over a reply's bound the request is, then
   what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
   implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
-  hover. What an action did goes under that line. At 820px the foot is two lines at rest. The editor keeps what it
+  hover. `Skip the plan`, and `Approve` while the note holds words it would leave unsent, ask first in the actions'
+  place, as a comment's Delete does: the question, then `Keep`, which takes the focus and Escape gives too, then the
+  action. What an action did goes under that line, and stays once the plan turns read only, Skip's, so the foot stays
+  for it. An approval, once the journal holds it, is a moment of its own: its words in the accent on the accent's tint
+  at 14%, as decided proposals say so, with a check, rising in, and the leaf a cleared item drops (Fun), since it
+  clears the plan's item, then `Back to Attention`. Once changes are asked, the line says what `Ask again` sends,
+  not that the open comments are still to go. At 820px the foot is two lines at rest. The editor keeps what it
   scrolls into view 128px clear of the foot. A ticket's plan opens on its page, `/tickets/$key/plan`; `/plan-editor`
   is kept as the editor's bench, linked from nowhere: over a sample plan on mock data only, with what the planner would
   read and the plan's Markdown under it, and outside mock, an `Empty` saying a ticket's plan opens on its page. The

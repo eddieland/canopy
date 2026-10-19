@@ -390,9 +390,15 @@ export async function refreshLimits(client: QueryClient, ticketKey: string | nul
     ])
 }
 
-/** After a review request is made or stopped: read the PRs list and every PR's page again; the stream sends neither. */
-export function refreshPullRequests(client: QueryClient): Promise<void> {
-    return client.invalidateQueries({ queryKey: keys.pullRequests })
+/**
+ * After a review request is made or stopped: read the PRs list and every PR's page again, which the stream does not
+ * send, and the reviews waiting on a tick, which it sends a moment later, so the reviews page shows it at once.
+ */
+export async function refreshReviewRequests(client: QueryClient): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.pullRequests }),
+        client.invalidateQueries({ queryKey: keys.reviewRequests }),
+    ])
 }
 
 /**

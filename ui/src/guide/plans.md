@@ -49,9 +49,11 @@ where it stands and how old it is. Older plans are folded under **Earlier plans*
 leads back to the ticket.
 
 A plan that replaced one opens with its changes marked: the words added and removed since the plan before, word by
-word, so formatting alone is no change. **Changes since plan N**, in the Plan panel's header, turns the marks off and
+word, so formatting alone is no change. A paragraph, heading, or table cell that's new whole gets one green block with
+a bar at its left, rather than confetti. **Changes since plan N**, in the Plan panel's header, turns the marks off and
 back on; while they're on, the header counts them, **Previous change** and **Next change** step through them, round
-to the other end, and the comments' highlights step aside so a passage never wears two colors. After asking for
+to the other end, and the comments' highlights step down to a thin underline so a passage never wears two colors,
+but you can still see where your comments are. After asking for
 changes, that's how you check you got them without reading the whole plan again.
 
 **Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its
@@ -113,11 +115,18 @@ decided from wherever you got to. **Approve** is always its main button; everyth
   Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of comments may need
   resolving or shortening first.
 - **Skip the plan**, as `canopy plan KEY --skip`: the implement goes ahead with no plan. The current plan's file
-  stays.
+  stays. Nothing on the page undoes it, so it asks first, right there in the foot; **Keep** (or Escape) backs out.
 
 Approving doesn't send open comments. The implement reads the plan alone, so a comment left open is a comment nobody
 acts on. While any are open, the line under the buttons counts them and says so, every time, until you resolve them
 or send them.
+The note on the whole plan travels the same way: only with Ask for changes. Press Approve with words in it and the
+foot asks whether to approve without them, rather than quietly throw away what you wrote.
 
-After you ask, the plan's page says "You asked for changes" until the next planner starts, and the button reads
-**Ask again**, so you never send a second request without knowing about the first.
+After you ask, the plan's page says "You asked for changes" until the next planner starts, its chip reads
+`changes asked`, and the button reads **Ask again**, so you never send a second request without knowing about the
+first.
+
+Approving is the moment an agent gets the go-ahead to write code, so the foot marks it: a check, the CLI's words on
+the accent, a leaf, and a **Back to Attention** link for whatever is next. It shows only once the approval is in the
+journal. A refused approval gets its refusal, and no leaf.
