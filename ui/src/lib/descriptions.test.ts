@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ReviewSummary } from '@/api/types'
+import type { Limit, ReviewSummary } from '@/api/types'
 
 import {
     choreRunDescription,
@@ -48,15 +48,48 @@ describe('reviewDescription', () => {
 })
 
 describe('pullRequestDescription', () => {
-    it('names its ticket, its reviews, and the run working it', () => {
-        expect(pullRequestDescription({ ticket_key: 'ABC-099', running_run: 41 }, 2)).toBe(
-            'ABC-099 · 2 reviews · run:41 running',
+    const OURS = { ticket_key: 'ABC-099', running_run: null, latest_review: REVIEW }
+    const limit = (runs: number): Limit => ({
+        kind: 'review',
+        repo: 'web',
+        pr_url: REVIEW.pr_url,
+        runs,
+        granted: 0,
+        limit: 2,
+    })
+
+    it('leads with its latest review and that review verdict, not its ticket or how many reviews it has', () => {
+        expect(pullRequestDescription(OURS, limit(1))).toBe('review:4 3 findings, 1 major')
+        expect(pullRequestDescription({ ...OURS, latest_review: { ...REVIEW, verdict: 'clean' } }, limit(1))).toBe(
+            'review:4 clean',
         )
     })
 
-    it('says why a PR has no ticket', () => {
-        expect(pullRequestDescription({ ticket_key: null, running_run: null }, 1)).toBe(
-            'canopy only reviews it · 1 review',
+    it('says a review still running is reviewing', () => {
+        const running = { ...REVIEW, status: 'running', state: 'running', verdict: null } as const
+        expect(pullRequestDescription({ ...OURS, latest_review: running }, limit(1))).toBe('review:4 reviewing')
+    })
+
+    it('says when canopy has not reviewed it', () => {
+        expect(pullRequestDescription({ ...OURS, latest_review: null }, null)).toBe('not reviewed')
+    })
+
+    it('says it is at its review limit while it is', () => {
+        expect(pullRequestDescription(OURS, limit(2))).toBe('review:4 3 findings, 1 major · at its review limit')
+    })
+
+    it('names the run working it now', () => {
+        expect(pullRequestDescription({ ...OURS, running_run: 41 }, limit(1))).toBe(
+            'review:4 3 findings, 1 major · run:41 running',
+        )
+    })
+
+    it('says why a PR has no ticket, since its identity panel leaves the field out', () => {
+        expect(pullRequestDescription({ ...OURS, ticket_key: null }, limit(1))).toBe(
+            'review:4 3 findings, 1 major · canopy only reviews it',
+        )
+        expect(pullRequestDescription({ ticket_key: null, running_run: null, latest_review: null }, null)).toBe(
+            'not reviewed · canopy only reviews it',
         )
     })
 })

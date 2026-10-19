@@ -188,7 +188,8 @@ export function Panel({ className, ...props }: ComponentProps<'section'>) {
 /**
  * A panel's title row: a label on the left, anything on the right. Half a step toward `surface-raised`, with its label
  * in `foreground`, so it reads as the head of the rows under it; half, so a ghost button's hover in it still shows.
- * In a panel too narrow for both on one line, what is on the right wraps under the label. A `sticky` header stays at
+ * In a panel too narrow for both on one line, what is on the right wraps under the label. Alone in its panel, it drops
+ * its hairline, so the panel is one line. A `sticky` header stays at
  * the top of the page while its panel scrolls under it, as an editor's toolbar does.
  */
 export function PanelHeader({
@@ -207,6 +208,9 @@ export function PanelHeader({
                 'bg-surface-raised/50',
                 // Inside the panel's border, so a radius a pixel smaller than the panel's.
                 'first:rounded-t-[calc(var(--radius-md)-1px)]',
+                // Alone in its panel, as an empty list's is (`ListPanel`), it is the panel's foot too: no hairline over
+                // the panel's own border.
+                'last:rounded-b-[calc(var(--radius-md)-1px)] last:border-b-0',
                 // Over the panel's own rows, so opaque: the same half step, laid over the panel's surface.
                 sticky && 'sticky top-0 z-10 bg-surface bg-linear-to-b from-surface-raised/50 to-surface-raised/50',
             )}
