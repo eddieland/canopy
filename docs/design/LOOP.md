@@ -155,8 +155,9 @@ reviews. It is empty by default, so a review bot's comment never starts a fixup 
   message says, checking the overseer's classification again (D051). The comment stays data either way.
 
 The harness cannot tell a review comment's author (D003), so this gate is the overseer's judgment, checked again by the
-worker. What the harness can check, it does: only the operator's channels write operator messages, and cursors advance
-only with a run that starts.
+worker. With feedback plans on, the gate is instead the operator's approval of the PR's plan, checked in code (§32).
+What the harness can check, it does: only the operator's channels write operator messages, and cursors advance only
+with a run that starts.
 
 A private ticket (§22) needs no label, and its own phases come from the journal: `needs_human` when its latest run
 ended `blocked` with no operator message after it, `human_replied` when an operator message is newer than its message
