@@ -5,19 +5,21 @@ The pool here is what treehouse makes: slots that are worktrees of one primary c
 
 import ast
 import json
-import sqlite3
 from pathlib import Path
 
 import pytest
 
 from canopy.core import hostgit
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import WORK, dispatch_and_run, pool, present, slot_of, worker_does
-from tests.conftest import CanopyEnv, GitPool, executable, git
+from tests.canopy.helpers import pool, present, slot_of, worker_does
+from tests.canopy.scenario_helpers import Scenario, dispatches
+from tests.conftest import GitPool, executable, git
 
 PACKAGE = Path(__file__).resolve().parents[3] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
 WORKER_COMMIT = hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")
+#: The overseer dispatches PROJ-1's implement on its `work` branch.
+WORK = dispatches(slug="work")
 HOOKS = ("post-checkout", "reference-transaction", "pre-push", "post-index-change")
 
 
@@ -42,21 +44,15 @@ def test_the_planted_hooks_fire_for_plain_git(worktree_pool: tuple[Path, list[Pa
 
 
 def test_host_git_runs_no_hook_or_monitor_from_the_shared_git_directory(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    worktree_pool: tuple[Path, list[Path]],
-    agent_log: Path,
-    conn: sqlite3.Connection,
-    tmp_path: Path,
+    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]], tmp_path: Path
 ) -> None:
     primary, _ = worktree_pool
     fired = tmp_path / "fired"
     plant(primary, fired)
     # Left unpushed, so `_run` fetches, checks out, reads refs, and pushes: every git step it has.
-    with worker_does(WORKER_COMMIT):
-        run = dispatch_and_run(conn, *WORK)
-    assert run["status"] == "done"
-    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    run = scenario.run(WORK, worker=worker_does(WORKER_COMMIT))
+    assert run.status == "done"
+    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
     assert not fired.exists(), fired.read_text()
 
@@ -71,21 +67,18 @@ def test_host_git_runs_no_hook_or_monitor_from_the_shared_git_directory(
 )
 def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put_back(
     rewrite: str,
-    canopy_env: CanopyEnv,
+    scenario: Scenario,
     git_pool: GitPool,
     worktree_pool: tuple[Path, list[Path]],
-    agent_log: Path,
     treehouse_state: Path,
-    conn: sqlite3.Connection,
 ) -> None:
     _, slots = worktree_pool
     links = {slot: (slot / ".git").read_bytes() for slot in slots}
-    with worker_does(WORKER_COMMIT, ["sh", "-c", rewrite]):
-        run = dispatch_and_run(conn, *WORK)
+    run = scenario.run(WORK, worker=worker_does(WORKER_COMMIT, ["sh", "-c", rewrite]))
 
-    assert run["status"] == "crashed"
-    slot = Path(slot_of(conn, run["id"])["slot_path"])
-    result = json.loads(run["result_json"])
+    assert run.status == "crashed"
+    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    result = json.loads(run.row["result_json"])
     assert result["harness"] == f"repo: the worker rewrote {slot / '.git'}; nothing was checked or pushed"
     assert result["status"] == "done"  # what the worker claimed is kept
     # No git ran after the worker: its commit was not pushed for it.
@@ -118,24 +111,21 @@ def test_a_planted_commondir_runs_its_config_for_host_git(
 
 
 def test_a_worker_that_rewrites_commondir_crashes_the_run_and_commondir_is_put_back(
-    canopy_env: CanopyEnv,
+    scenario: Scenario,
     git_pool: GitPool,
     worktree_pool: tuple[Path, list[Path]],
-    agent_log: Path,
     treehouse_state: Path,
-    conn: sqlite3.Connection,
     tmp_path: Path,
 ) -> None:
     _, slots = worktree_pool
     fired = tmp_path / "fired"
     commondirs = {slot: hostgit.own_git_dir(slot, (slot / ".git").read_bytes()) for slot in slots}
-    with worker_does(WORKER_COMMIT, ["sh", "-c", plant_common_dir(fired)]):
-        run = dispatch_and_run(conn, *WORK)
+    run = scenario.run(WORK, worker=worker_does(WORKER_COMMIT, ["sh", "-c", plant_common_dir(fired)]))
 
-    assert run["status"] == "crashed"
-    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert run.status == "crashed"
+    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
     own = present(commondirs[slot])
-    result = json.loads(run["result_json"])
+    result = json.loads(run.row["result_json"])
     assert result["harness"] == f"repo: the worker rewrote {own / 'commondir'}; nothing was checked or pushed"
     assert not fired.exists()  # no git ran in the slot after the worker
     assert git_pool.remote_head("agent/PROJ-1-work") is None
