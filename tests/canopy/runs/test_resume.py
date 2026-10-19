@@ -110,10 +110,8 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
     assert "- `review`: review comments" in run.prompt
 
 
-def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
-) -> None:
-    canopy_env.append_user('\n[trust]\nauthorized_repliers = ["alice", "5b10ac"]\n')
+def test_resume_prompt_points_at_the_reply_and_names_the_repliers(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(trust={"authorized_repliers": ["alice", "5b10ac"]})
     first = scenario.run(worker=asks("which API?"))
     assert first.status == "blocked"
 
@@ -213,17 +211,17 @@ def test_implement_attempt_limit_refuses_and_raises_attention(scenario: Scenario
     assert scenario.attention() == [("PROJ-1", "attempt_limit")]
 
 
-def test_a_limit_of_zero_disables_the_kind(scenario: Scenario, canopy_env: CanopyEnv) -> None:
-    canopy_env.append_user("\n[policy]\nmax_resume_attempts = 0\n")
+def test_a_limit_of_zero_disables_the_kind(scenario: Scenario) -> None:
+    scenario.configures(policy={"max_resume_attempts": 0})
     with_branch(scenario.conn)
     [first, _] = scenario.refuses(resumes(CI))
     assert first == ("refused:attempt_limit", "PROJ-1 in repo has had 0 resume runs and the limit is 0")
 
 
 def test_one_limit_counts_every_resume_and_old_fix_ci_run_and_their_grants(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
+    scenario: Scenario, git_pool: GitPool
 ) -> None:
-    canopy_env.append_user("\n[policy]\nmax_resume_attempts = 3\n")
+    scenario.configures(policy={"max_resume_attempts": 3})
     scenario.run(worker=pushes())
     # Two fix-ci runs from before a resume fixed CI, and a fix-ci grant the operator gave then.
     old_fix_ci(scenario.conn, ended=datetime.now(UTC) - timedelta(hours=3))
@@ -342,12 +340,10 @@ def test_grant_of_fix_ci_is_refused_naming_resume(scenario: Scenario) -> None:
     assert scenario.conn.execute("SELECT count(*) FROM attempt_grants").fetchone()[0] == 0
 
 
-def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
-) -> None:
+def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario: Scenario, git_pool: GitPool) -> None:
     """M3 acceptance, against the fakes, as M56 left it. An overseer that asks for a resume for CI every tick, as a PR
     whose checks keep failing would make it, gets one run per cooldown window and none past `max_resume_attempts`."""
-    canopy_env.append_user("\n[policy]\nmax_resume_attempts = 2\n")
+    scenario.configures(policy={"max_resume_attempts": 2})
     scenario.tick(dispatches(), worker=pushes())
 
     fix = dispatches(kind=RunKind.RESUME, reasons=[CI], context="checks failed", cursors={"ci": "run-1"})

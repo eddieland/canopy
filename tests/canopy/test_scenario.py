@@ -1,6 +1,7 @@
 """The scenario DSL's own story: what a `Scenario` records of each move, for a failed test's report."""
 
 import sys
+import tomllib
 from datetime import timedelta
 from unittest import mock
 
@@ -141,3 +142,30 @@ def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
         scenario.operator("pause")
     assert capsys.readouterr() == ("pause: half done\n", "then this\n")
     assert scenario.story == []
+
+
+def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(policy={"max_resume_attempts": 1})
+    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]})
+    scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
+    scenario.configures("private", notify={"sinks": {"log": {"cmd": "true", "events": ["runs"]}}})
+    # Each key in its own table, though the user file ended on `[paths]`; a key set again takes the place of the old.
+    user = tomllib.loads(scenario.env.user_file.read_text())
+    assert user["policy"] == {"max_resume_attempts": 1, "max_implement_attempts": 3}
+    assert (user["tracker"], user["paths"]) == ({"labels": ["mine"]}, {})
+    assert user["runtime"]["worker_cmd"].endswith("--agent canopy-worker --title={title} {prompt}")
+    tracker = tomllib.loads(scenario.env.shared_file.read_text())["tracker"]
+    assert tracker == {"provider": "jira", "query": "project = PROJ", "needs_human_label": "blocked-on-team"}
+    assert scenario.told().splitlines()[:4] == [
+        "1. the user file sets policy.max_resume_attempts = 1",
+        '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"]',
+        '3. the workspace file sets tracker.needs_human_label = "blocked-on-team"',
+        '4. the private file sets notify.sinks.log.cmd = "true", notify.sinks.log.events = ["runs"]',
+    ]
+
+    # And the next command reads them: one resume, then the limit.
+    resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], label="mine")
+    scenario.run(dispatches(label="mine"), worker=pushes())
+    scenario.run(resume, worker=pushes())
+    [(action, _), _] = scenario.refuses(resume)
+    assert action == "refused:attempt_limit"

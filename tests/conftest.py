@@ -5,7 +5,10 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import sys
+import tomllib
+from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,7 +23,7 @@ from canopy.infra.procs import SubprocessRunner
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Iterator, Sequence
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
@@ -192,6 +195,77 @@ class CanopyEnv:
 
     def write_private(self, text: str) -> None:
         self.private_file.write_text(text)
+
+    def configure(self, file: Path, tables: Mapping[str, object]) -> list[str]:
+        """Merge `tables` into `file`, one of this workspace's config files: a key `tables` sets takes the place of the
+        one there, and a table it names keeps the keys it does not set.
+
+        The file is written whole again, so what it held stays, but not its comments or its quoting.
+
+        Returns:
+            Each key set, dotted from its table, as `name = value` in TOML.
+        """
+        merged = _merged(tomllib.loads(file.read_text()) if file.exists() else {}, tables)
+        text = "\n".join(_toml_lines(merged))
+        assert tomllib.loads(text) == merged, text
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(text)
+        return _settings(tables)
+
+
+#: A key TOML writes bare; any other it quotes.
+_BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _merged(old: Mapping[str, object], new: Mapping[str, object]) -> dict[str, object]:
+    merged = dict(old)
+    for key, value in new.items():
+        before = merged.get(key)
+        if isinstance(value, Mapping):
+            merged[key] = _merged(before if isinstance(before, dict) else {}, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _toml_lines(table: Mapping[str, object], path: Sequence[str] = ()) -> list[str]:
+    # A table's own keys under its header, then each table inside it, so that no key lands in the table above it.
+    keys = [f"{_toml_key(k)} = {_toml_value(v)}" for k, v in table.items() if not isinstance(v, Mapping)]
+    lines = [f"[{'.'.join(map(_toml_key, path))}]", *keys, ""] if path else [*keys, ""]
+    for key, value in table.items():
+        if isinstance(value, Mapping):
+            lines += _toml_lines(value, [*path, key])
+    return lines
+
+
+def _settings(tables: Mapping[str, object], prefix: str = "") -> list[str]:
+    settings: list[str] = []
+    for key, value in tables.items():
+        name = f"{prefix}{_toml_key(key)}"
+        if isinstance(value, Mapping):
+            settings += _settings(value, f"{name}.")
+        else:
+            settings.append(f"{name} = {_toml_value(value)}")
+    return settings
+
+
+def _toml_key(key: str) -> str:
+    return key if _BARE_KEY.fullmatch(key) else json.dumps(key, ensure_ascii=False)
+
+
+def _toml_value(value: object) -> str:
+    # JSON's string escapes are TOML's too, and a list of these is an array; a table in one is an inline table.
+    match value:
+        case bool():
+            return "true" if value else "false"
+        case int() | float() | str():
+            return json.dumps(value, ensure_ascii=False)
+        case list():
+            return f"[{', '.join(map(_toml_value, value))}]"
+        case Mapping():
+            return "{" + ", ".join(_settings(value)) + "}"
+        case _:
+            raise TypeError(f"no TOML for {value!r} in a test's config")
 
 
 REPO_NAME = "repo"
