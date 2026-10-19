@@ -35,8 +35,13 @@ IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
 WORK = (*IMPLEMENT, "--slug", "work")
 WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
-# The PR `run_drafting`'s worker opens.
+#: The PR a worker that sends drafts opens (`sends_drafts`).
 DRAFTS_PR = "https://github.com/acme/api/pull/7"
+#: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
+#: `scenario.configures("private", trust=APPROVE)`.
+APPROVE = {"review_replies": "approve"}
+#: The `connect` keys of a source that posts to the tracker, for drafts on a ticket.
+TRACKER_POSTS = {"sources": {"issues": {"kind": "tracker", "post_cmd": "canopy-post-github"}}}
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -505,12 +510,6 @@ def posting(canopy_env: CanopyEnv) -> None:
 def all_drafts(conn: sqlite3.Connection) -> list[records.Draft]:
     """Every draft in the journal, in the order they were written."""
     return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts ORDER BY id")
-
-
-def run_drafting(conn: sqlite3.Connection, entries: object, *args: str, pr: str = DRAFTS_PR) -> sqlite3.Row:
-    """Run KEY's next run, an `implement` on its `work` branch unless `args` says otherwise, its worker opening `pr` in
-    `repo` and sending `entries` as its drafts."""
-    return run_with(conn, *(args or WORK), prs={"repo": pr}, drafts=entries)
 
 
 def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "Rename this.") -> dict[str, Any]:

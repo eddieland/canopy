@@ -10,10 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, InlineRunner, canopy, in_tick, present, unit_of, waits
+from tests.canopy.helpers import KEY, canopy, in_tick, present, unit_of, waits
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -286,32 +285,18 @@ def test_a_fix_ci_prompt_override_refuses_every_resume_and_says_so(
     assert scenario.run(resumes(REVIEW), worker=pushes()).status == "done"
 
 
-def test_cursors_advance_only_when_the_worker_starts(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
-) -> None:
-    canopy_env.append_user("\n[capacity]\nmax_workers = 1\n")
-    with in_tick(conn):
-        runner = InlineRunner()
-        first = ["dispatch", "PROJ-1", "--repo", "repo", *LABEL, "--kind", "implement", "--cursor", "comment=c1"]
-        assert main(first, runner=runner) == 0
-        args = [
-            "dispatch",
-            "PROJ-2",
-            "--repo",
-            "repo",
-            *LABEL,
-            "--kind",
-            "implement",
-            "--cursor",
-            "comment=c2",
-            "--cursor",
-            "review=2026-10-07T20:58:50Z",
-        ]
-        assert main(args, runner=runner) == 1  # capacity
-        rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
-        assert rows["PROJ-1"]["last_comment_id"] == "c1"
-        assert rows["PROJ-2"]["last_comment_id"] is None
-        assert db.units(conn, "PROJ-2") == []  # nor its review cursor, nor a unit at all
+def test_cursors_advance_only_when_the_worker_starts(scenario: Scenario, git_pool: GitPool) -> None:
+    conn = scenario.conn
+    scenario.configures(capacity={"max_workers": 1})
+    scenario.starts(dispatches(cursors={"comment": "c1"}))
+    cursors = {"comment": "c2", "review": "2026-10-07T20:58:50Z"}
+    assert scenario.refuses(dispatches("PROJ-2", cursors=cursors)) == [
+        ("refused:capacity", "1 of 1 workers are running")
+    ]
+    rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
+    assert rows["PROJ-1"]["last_comment_id"] == "c1"
+    assert rows["PROJ-2"]["last_comment_id"] is None
+    assert db.units(conn, "PROJ-2") == []  # nor its review cursor, nor a unit at all
 
 
 def test_state_block_shows_attempts_the_cooldown_and_a_resumes_reasons(scenario: Scenario, git_pool: GitPool) -> None:

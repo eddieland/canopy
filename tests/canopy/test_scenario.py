@@ -1,5 +1,7 @@
 """The scenario DSL's own story: what a `Scenario` records of each move, for a failed test's report."""
 
+import json
+import os
 import shlex
 import sys
 import tomllib
@@ -12,9 +14,19 @@ from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
 from tests.canopy.conftest import Ws
-from tests.canopy.helpers import InlineRunner, waits
+from tests.canopy.helpers import DRAFTS_PR, InlineRunner, agent_runs, last_tick, present, waits
 from tests.canopy.review_helpers import CLEAN, PR, head, reviewer_reports
-from tests.canopy.scenario_helpers import Printed, Scenario, asks, dispatches, fails, pushes, raises, reviews
+from tests.canopy.scenario_helpers import (
+    Printed,
+    Scenario,
+    asks,
+    dispatches,
+    fails,
+    pushes,
+    raises,
+    reviews,
+    sends_drafts,
+)
 from tests.conftest import GitPool, git
 
 
@@ -217,10 +229,15 @@ def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_eac
     ]
 
 
-def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git_pool: GitPool) -> None:
+def reviews_on(scenario: Scenario) -> None:
+    """Reviews on for the loop's own PRs, the reviewer running the fake agent, and PROJ-1's unit having opened PR."""
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     scenario.configures(runtime={"review_cmd": template}, review={"agent_prs": True})
     db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
+
+
+def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git_pool: GitPool) -> None:
+    reviews_on(scenario)
     sha = head(git_pool)
     assert reviews(sha, ticket="PROJ-1")[-2:] == ["--ticket", "PROJ-1"]
 
@@ -235,3 +252,98 @@ def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git
     noted = "reported low impact, but review.low_impact is not set; recorded as normal"
     assert review_step == f"2. review run 1 of {PR} at {sha[:7]}: done: clean: Nothing found.: {noted}"
     assert refused_step == f"3. tick 2 refuses {shlex.join(reviews(sha))}"
+
+
+def test_a_review_held_at_work_runs_until_the_story_says_what_becomes_of_it(
+    scenario: Scenario, git_pool: GitPool
+) -> None:
+    reviews_on(scenario)
+    sha = head(git_pool)
+    reviewing = scenario.starts_review(reviews(sha), reviewer=reviewer_reports(CLEAN))
+    assert reviewing.row.status == "running"
+    assert scenario.refuses(reviews(sha)) == [("refused:running", f"review run {reviewing.id} of this PR is running")]
+    reviewed = reviewing.finishes()
+    assert (reviewed.status, reviewed.row.sha) == ("done", sha)
+    assert "--- reviewer exit 0 ---" in reviewed.printed.out
+    killed = scenario.starts_review(reviews(sha, pr=f"{PR}0"), reviewer=reviewer_reports(CLEAN))
+    killed.dies()
+    assert killed.row.status == "running"  # for the next tick's reconcile to find
+    _, at_work, refused, done, _, _ = [line for line in scenario.told().splitlines() if line[0].isdigit()]
+    assert (at_work, refused) == (
+        f"2. review run 1 of {PR} at {sha[:7]}: at work",
+        f"3. tick 2 refuses {shlex.join(reviews(sha))}",
+    )
+    assert done.startswith(f"4. review run 1 of {PR} at {sha[:7]}: done: clean")
+    assert (
+        scenario.story[-1]
+        == f"review run 2 of {PR}0 at {sha[:7]}: its `canopy _review` dies, its reviewer still at work"
+    )
+
+
+def test_every_role_a_run_plays_is_held(scenario: Scenario, git_pool: GitPool) -> None:
+    # A started ticket's run is worked privately, by its own role, and held as a worker is.
+    scenario.operator("start", "PROJ-1")
+    working = scenario.starts(dispatches(label=None))
+    assert agent_runs(scenario.agent_log) == []  # held before it did anything
+    assert working.finishes().status == "done"
+    [agent] = agent_runs(scenario.agent_log)
+    assert agent["argv"][:3] == ["run", "--agent", "canopy-worker-private"]
+    with scenario._held():  # noqa: SLF001  (each role's script, as a held run reads it)
+        gated = {role: json.loads(os.environ[f"FAKE_{role}_COMMANDS"])[0][2] for role in scenario_helpers.HELD_ROLES}
+        assert "FAKE_OVERSEER_COMMANDS" not in os.environ
+    assert set(gated.values()) == {scenario_helpers.GATE}
+
+
+def test_a_worker_sends_drafts_beside_its_pr(scenario: Scenario, git_pool: GitPool) -> None:
+    ran = scenario.run(worker=sends_drafts([{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]))
+    assert json.loads(ran.row["result_json"])["prs"] == {"repo": DRAFTS_PR}
+    # What the worker reported, as the run log carries it; canopy keeps the drafts where `trust.review_replies` says.
+    [reported] = [json.loads(line) for line in ran.printed.out.splitlines() if line.startswith('{"status"')]
+    assert reported["drafts"] == [{"on": "pr", "pr": DRAFTS_PR, "text": "Ready for review."}]
+
+
+def test_a_key_set_to_none_is_dropped_and_the_story_says_so(scenario: Scenario) -> None:
+    scenario.configures(notify={"sinks": {"log": {"cmd": "true"}, "phone": {"cmd": "true"}}})
+    scenario.configures(notify={"sinks": {"log": None}}, policy={"max_resume_attempts": 2})
+    user = tomllib.loads(scenario.env.user_file.read_text())
+    assert (user["notify"]["sinks"], user["policy"]) == ({"phone": {"cmd": "true"}}, {"max_resume_attempts": 2})
+    assert scenario.story[-1] == "the user file sets no notify.sinks.log, policy.max_resume_attempts = 2"
+
+
+def test_a_refusal_gives_back_its_tick_its_decisions_whole_and_what_it_printed(scenario: Scenario) -> None:
+    refused = scenario.refuses(dispatches(repo="nope"))
+    assert refused == [("refused:unknown_repo", "'nope' is not a repository in this workspace (repo)")]
+    assert refused.tick == last_tick(scenario.conn).id
+    [decision] = refused.decisions
+    assert (decision.tick_id, decision.ticket_key) == (refused.tick, "PROJ-1")
+    assert "dispatch refused (unknown_repo)" in refused.printed.err
+    # A list's own methods make a plain one of what was decided.
+    assert refused[:1] == [("refused:unknown_repo", "'nope' is not a repository in this workspace (repo)")]
+
+
+def test_the_overseer_runs_a_command_in_a_tick_of_its_own_or_in_one_held_open(scenario: Scenario) -> None:
+    refused = scenario.overseer("ticket", "set", "PROJ-1", "--phase", "conflicted", "--repo", "nope", code=1)
+    assert "'nope' is not a repository" in refused.err
+    with scenario.ticking() as tick_id:
+        scenario.overseer("attention", "PROJ-1", "needs_human", "--detail", "one")
+        scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
+    # Both raised in the one tick, which ended ok, so both are on the attention list.
+    assert scenario.attention() == [("PROJ-1", "needs_human"), ("PROJ-2", "needs_human")]
+    steps = [line for line in scenario.told().splitlines() if line[0].isdigit()]
+    assert steps[1:] == [
+        f"2. tick {tick_id} begins, for the overseer's commands",
+        f"3. the overseer runs canopy attention PROJ-1 needs_human --detail one in tick {tick_id}, which exits 0",
+        f"4. the overseer runs canopy attention PROJ-2 needs_human --detail two in tick {tick_id}, which exits 0",
+        f"5. tick {tick_id} ends ok",
+    ]
+
+
+def test_the_overseer_acts_in_a_dry_run_tick_as_in_any_other(scenario: Scenario) -> None:
+    with scenario.ticking(dry_run=True) as tick_id:
+        # Still running while the block lasts, so the test may look at it.
+        assert present(db.get_tick(scenario.conn, tick_id)).ended_at is None
+        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "dry")
+    assert present(db.get_tick(scenario.conn, tick_id)).dry_run
+    scenario.overseer("decide", "PROJ-2", "wait", "--rationale", "dry too", dry_run=True)
+    assert present(db.get_tick(scenario.conn, last_tick(scenario.conn).id)).dry_run
+    assert scenario.story[0] == f"dry-run tick {tick_id} begins, for the overseer's commands"

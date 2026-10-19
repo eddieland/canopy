@@ -18,7 +18,6 @@ from tests.canopy.helpers import (
     agent_runs,
     canopy,
     decisions,
-    in_tick,
     present,
     waits,
 )
@@ -240,7 +239,7 @@ def test_items_about_two_repositories_are_two_items(ws_scenario: Scenario, ws: W
 
 
 def test_dispatch_names_one_repository_and_leases_from_its_pool(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
 ) -> None:
     with_docs(ws)
     conn = ws_scenario.conn
@@ -250,13 +249,12 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     assert ws_scenario.refuses(dispatches(repo="nope")) == [
         ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)")
     ]
-    [(action, no_clone)] = ws_scenario.refuses(dispatches(repo="docs"))
+    no_clone = ws_scenario.refuses(dispatches(repo="docs"))
+    [(action, rationale)] = no_clone
     assert action == "refused:unknown_repo"
-    assert no_clone.startswith("docs has no clone at ")
-    # What `canopy dispatch` printed, which a refusal leaves to the test's own output.
-    assert "dispatch refused (unknown_repo)" in capsys.readouterr().err
-    with in_tick(conn, ends_ok=True):
-        assert main(dispatch("PROJ-1", "--repo", "Bad"), runner=InlineRunner()) == 2  # not a name at all: a usage error
+    assert rationale.startswith("docs has no clone at ")
+    assert "dispatch refused (unknown_repo)" in no_clone.printed.err
+    ws_scenario.overseer(*dispatch("PROJ-1", "--repo", "Bad"), code=2)  # not a name at all: a usage error
 
     run = ws_scenario.run(dispatches(repo="api", slug="login"), worker=pushes("agent/PROJ-1-login"))
     [slot] = db.run_slots(conn, run.id)

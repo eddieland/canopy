@@ -9,28 +9,24 @@ from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
 from tests.conftest import CanopyEnv
 
 
-def query_every_hour(env: CanopyEnv) -> None:
-    env.write_user(env.user_file.read_text().replace("[tracker]\n", "[tracker]\nquery_every_minutes = 60\n"))
-
-
 def test_a_tick_that_does_every_duty_closes_ok(scenario: Scenario) -> None:
     scenario.seen("PROJ-1")
     ticked = scenario.tick(*waits("PROJ-1", "PROJ-2"), queried=["PROJ-1", "PROJ-2"])
     assert ticked.tick.status == "ok"
 
 
-def test_a_due_query_with_no_record_fails_the_tick_and_stays_due(scenario: Scenario, canopy_env: CanopyEnv) -> None:
+def test_a_due_query_with_no_record_fails_the_tick_and_stays_due(scenario: Scenario) -> None:
     failed = scenario.tick(queried=None, code=1)
     assert failed.tick.status == "overseer_failed"
     assert "no `canopy queried` recorded it" in failed.tick.summary
     # Not counted as run: the next tick's block says it is due again.
-    query_every_hour(canopy_env)
+    scenario.configures(tracker={"query_every_minutes": 60})
     scenario.tick()
     assert scenario.state()["query_due"] is True
 
 
-def test_a_query_not_due_needs_no_record(scenario: Scenario, canopy_env: CanopyEnv) -> None:
-    query_every_hour(canopy_env)
+def test_a_query_not_due_needs_no_record(scenario: Scenario) -> None:
+    scenario.configures(tracker={"query_every_minutes": 60})
     ticks = [scenario.tick(), scenario.tick()]
     assert [(t.tick.query_due, t.tick.status) for t in ticks] == [(True, "ok"), (False, "ok")]
 
@@ -104,12 +100,12 @@ def test_a_long_list_of_tickets_left_out_is_counted(canopy_env: CanopyEnv) -> No
         assert duties.undone(conn, tick_id, owed) == [f"no decision for {', '.join(keys[:10])} and 2 more"]
 
 
-def test_queried_records_the_query_and_touches_each_ticket(canopy_env: CanopyEnv) -> None:
-    conn = canopy_env.journal()
-    with in_tick(conn) as tick_id:
-        assert main(["queried", "PROJ-3", "PROJ-1", "PROJ-3"]) == 0
-        assert main(["queried"]) == 0
-        recorded = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
+def test_queried_records_the_query_and_touches_each_ticket(scenario: Scenario) -> None:
+    conn = scenario.conn
+    with scenario.ticking() as tick_id:
+        scenario.overseer("queried", "PROJ-3", "PROJ-1", "PROJ-3")
+        scenario.overseer("queried")
+    recorded = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
     assert recorded == [
         (None, "queried", "the query returned these open tickets: PROJ-3 PROJ-1"),
         (None, "queried", "the query returned no open ticket"),
@@ -119,11 +115,11 @@ def test_queried_records_the_query_and_touches_each_ticket(canopy_env: CanopyEnv
     assert [t.key for t in db.open_tickets(conn)] == ["PROJ-1", "PROJ-3"]
 
 
-def test_queried_refuses_outside_a_tick_a_bad_key_and_a_result_too_long_for_one_call(canopy_env: CanopyEnv) -> None:
-    conn = canopy_env.journal()
-    assert main(["queried", "PROJ-1"]) == 1
-    with in_tick(conn) as tick_id:
-        assert main(["queried", "PROJ-1;rm"]) == 2
-        assert main(["queried", *(f"PROJ-{n}" for n in range(300))]) == 2
-        assert db.decisions_for_tick(conn, tick_id) == []
+def test_queried_refuses_outside_a_tick_a_bad_key_and_a_result_too_long_for_one_call(scenario: Scenario) -> None:
+    conn = scenario.conn
+    assert main(["queried", "PROJ-1"]) == 1  # no tick named: not the overseer's
+    with scenario.ticking() as tick_id:
+        scenario.overseer("queried", "PROJ-1;rm", code=2)
+        scenario.overseer("queried", *(f"PROJ-{n}" for n in range(300)), code=2)
+    assert db.decisions_for_tick(conn, tick_id) == []
     assert db.open_tickets(conn) == []

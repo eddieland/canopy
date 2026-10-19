@@ -32,7 +32,6 @@ from tests.canopy.helpers import (
     context,
     decisions,
     dispatch_in_tick,
-    in_tick,
     journal_at,
     last_run,
     operator,
@@ -279,11 +278,6 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
     assert not agent_log.exists()
 
 
-def private_by_default(canopy_env: CanopyEnv) -> None:
-    """Set `tracker.private` in the user file: a labeled ticket's first dispatch starts it privately."""
-    canopy_env.write_user(canopy_env.user_file.read_text().replace("[tracker]\n", "[tracker]\nprivate = true\n"))
-
-
 def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_privately(
     scenario: Scenario, git_pool: GitPool
 ) -> None:
@@ -327,15 +321,13 @@ def test_tracker_private_leaves_a_ticket_already_worked_in_public_public(scenari
     assert db.starts(scenario.conn) == []
 
 
-def test_tracker_private_in_a_dry_run_writes_no_start_record(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    private_by_default(canopy_env)
-    with in_tick(conn, dry_run=True):
-        assert main(["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
-    assert db.starts(conn) == []
-    [decision] = conn.execute("SELECT rationale FROM decisions").fetchall()
-    assert "starts it privately (tracker.private)" in decision["rationale"]
+def test_tracker_private_in_a_dry_run_writes_no_start_record(scenario: Scenario) -> None:
+    scenario.configures(tracker={"private": True})
+    ticked = scenario.tick(dispatches(), dry_run=True)
+    assert db.starts(scenario.conn) == []
+    [queried, decision] = ticked.decisions
+    assert (queried.action, decision.action) == ("queried", "dispatch:implement")
+    assert "starts it privately (tracker.private)" in decision.rationale
 
 
 def test_tracker_private_refuses_without_tracker_tools_for_a_private_worker(scenario: Scenario) -> None:
@@ -347,30 +339,19 @@ def test_tracker_private_refuses_without_tracker_tools_for_a_private_worker(scen
 
 
 def test_stop_now_ends_the_running_run_and_returns_its_slot(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-    capsys: pytest.CaptureFixture[str],
+    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
-    assert operator("start", KEY) == 0
-    assert dispatch_in_tick(conn, "--kind", "implement", runner=InlineRunner()).code == 0
-    run = last_run(conn)
-    # Stand-ins for `_run` and its worker, each leading its own process group as the real ones do.
-    # Each has a log, and so a lifelock, of its own.
-    state = canopy_env.state_dir
-    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "run.log")
-    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "worker.log")
-    conn.execute("UPDATE runs SET pid = ?, worker_pid = ? WHERE id = ?", (run_pid, worker_pid, run["id"]))
+    conn = scenario.conn
+    scenario.operator("start", KEY)
+    working = scenario.starts(dispatches(label=None))
+    run_pid, worker_pid = int(working.row["pid"]), int(working.row["worker_pid"])
     assert {s["status"] for s in pool(treehouse_state)} == {"available", "leased"}
 
-    assert operator("stop", KEY) == 0
-    assert "will finish; --now ends it" in capsys.readouterr().out
-    assert last_run(conn)["status"] == "running"
-    assert operator("stop", KEY, "--now") == 0
-    assert "was ended and its slots returned" in capsys.readouterr().out
+    assert "will finish; --now ends it" in scenario.operator("stop", KEY).out
+    assert working.row["status"] == "running"
+    assert "was ended and its slots returned" in scenario.operator("stop", KEY, "--now").out
 
-    run = last_run(conn)
+    run = working.row
     assert run["status"] == "stopped"
     assert not procs.alive(run_pid)
     assert not procs.alive(worker_pid)
@@ -484,7 +465,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(s
     ]
     assert private["awaiting_reply"] is None
     # A handled message moves the cursor past it.
-    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}"]) == 0
+    scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}")
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.state_section(conn, ticket) == {
         **private,
@@ -510,46 +491,39 @@ def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(scenario: Sce
     assert {t["key"]: "private" in t for t in started["tickets"]} == {KEY: True, "PROJ-2": False}
 
 
-def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", "message=c-1"]) == 2
-    assert "a message cursor is a message id" in capsys.readouterr().err
+def test_a_message_cursor_is_a_message_id(scenario: Scenario) -> None:
+    refused = scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", "message=c-1", code=2)
+    assert "a message cursor is a message id" in refused.err
 
 
-def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenario: Scenario) -> None:
+    conn = scenario.conn
+
     # The overseer records a decision for every ticket it looks at, but not always the ticket's own phase.
     def phase_line() -> str:
-        assert operator("status") == 0
-        [line] = [line for line in capsys.readouterr().out.splitlines() if line.startswith(f"  {KEY}  started")]
+        out = scenario.operator("status").out
+        [line] = [line for line in out.splitlines() if line.startswith(f"  {KEY}  started")]
         return line.split("  phase ", 1)[1]
 
     def summary() -> tuple[str | None, str | None]:
         found = views.summary(conn, db.recent_tickets(conn, 1, key=KEY)[0])
         return found.phase, found.last_decision
 
-    def in_a_tick(*args: str) -> None:
-        with in_tick(conn, ends_ok=True):
-            assert main(list(args)) == 0
-
-    assert operator("start", KEY) == 0
+    scenario.operator("start", KEY)
     assert phase_line() == "not seen by a tick yet"
     assert summary() == (None, None)
 
-    in_a_tick("decide", KEY, "wait", "--rationale", "blocked_by: PROJ-2")
+    scenario.overseer("decide", KEY, "wait", "--rationale", "blocked_by: PROJ-2")
     assert phase_line() == "not recorded, last decision wait"
     assert summary() == (None, "wait")
-    assert operator("show", KEY) == 0
-    assert "phase not recorded, last decision wait;" in capsys.readouterr().out
+    assert "phase not recorded, last decision wait;" in scenario.operator("show", KEY).out
 
-    in_a_tick("ticket", "set", KEY, "--phase", "blocked")
+    scenario.overseer("ticket", "set", KEY, "--phase", "blocked")
     assert phase_line() == "blocked"
     assert summary() == ("blocked", "wait")
 
     # Forgetting clears the phase and starts the loop's view over: the decisions before it no longer count.
-    assert operator("forget", KEY) == 0
+    scenario.operator("forget", KEY)
     assert phase_line() == "not seen by a tick yet"
     assert summary() == (None, None)
 

@@ -198,12 +198,12 @@ class CanopyEnv:
 
     def configure(self, file: Path, tables: Mapping[str, object]) -> list[str]:
         """Merge `tables` into `file`, one of this workspace's config files: a key `tables` sets takes the place of the
-        one there, and a table it names keeps the keys it does not set.
+        one there, a key it sets to None is dropped, and a table it names keeps the keys it does not set.
 
         The file is written whole again, so what it held stays, but not its comments or its quoting.
 
         Returns:
-            Each key set, dotted from its table, as `name = value` in TOML.
+            Each key set, dotted from its table, as `name = value` in TOML, and each dropped as `no name`.
         """
         merged = _merged(tomllib.loads(file.read_text()) if file.exists() else {}, tables)
         text = "\n".join(_toml_lines(merged))
@@ -221,7 +221,9 @@ def _merged(old: Mapping[str, object], new: Mapping[str, object]) -> dict[str, o
     merged = dict(old)
     for key, value in new.items():
         before = merged.get(key)
-        if isinstance(value, Mapping):
+        if value is None:
+            merged.pop(key, None)
+        elif isinstance(value, Mapping):
             merged[key] = _merged(before if isinstance(before, dict) else {}, value)
         else:
             merged[key] = value
@@ -242,7 +244,9 @@ def _settings(tables: Mapping[str, object], prefix: str = "") -> list[str]:
     settings: list[str] = []
     for key, value in tables.items():
         name = f"{prefix}{_toml_key(key)}"
-        if isinstance(value, Mapping):
+        if value is None:
+            settings.append(f"no {name}")
+        elif isinstance(value, Mapping):
             settings += _settings(value, f"{name}.")
         else:
             settings.append(f"{name} = {_toml_value(value)}")
