@@ -2243,7 +2243,7 @@ type DraftKindName = Annotated[
     Field(description="Where a draft goes: a reply on a review thread, its PR's one comment, or the ticket's."),
 ]
 type DraftStatusName = Annotated[
-    Literal["unchecked", "waiting", "refused", "superseded", "dropped", "sending", "unconfirmed", "sent"],
+    Literal["unchecked", "waiting", "refused", "superseded", "dropped", "sending", "unconfirmed", "staged", "sent"],
     Field(description="Where a draft stands (DESIGN §29)."),
 ]
 type DraftStanceName = Annotated[

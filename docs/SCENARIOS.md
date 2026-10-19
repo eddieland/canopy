@@ -133,6 +133,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   its request to end `reviewed` (`canopy show URL`). Ask for one more on a PR that then merges before the next tick,
   and one on a PR in a repository the workspace does not have: expect the overseer's `canopy review end` to end them
   `merged` and `unknown_repo`. Nothing is posted on any PR.
+- **S54. Drafts staged, and submitted on GitHub** (M53). With drafts waiting on one of the loop's PRs, `canopy draft
+  stage` two replies and the PR's comment. On GitHub, expect one pending review under your login holding both replies
+  on their threads and the comment as its body, which a coworker cannot see; add a comment of your own to it and
+  submit it from the PR's files page. Expect the next tick to settle both drafts `sent`, to dispatch nothing for them,
+  and the body you submitted to be the one canopy staged.
 
 ### Chores and notifications
 
