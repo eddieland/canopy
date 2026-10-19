@@ -26,7 +26,7 @@ The rest goes where the next person to change it will look:
 - every flag and output line of a command: its `--help` and its tests;
 - what a measurement found: `MEASUREMENTS.md`, cited here by date and finding, without its figures;
 - how a behavior came to be, who asked for it, and which milestone built it: the PR, and the milestone's lines in
-  `ROADMAP.md`;
+  `roadmap/`;
 - what a prompt tells an agent beyond the contract the harness checks: the prompt;
 - the web UI's pages and how they look: `ui/DESIGN.md`.
 

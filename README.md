@@ -20,7 +20,7 @@ repositories, your tracker, or your internal tools.
 notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend further (M36
 to M39) are not yet.
 
-- Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)
+- Milestones: [docs/roadmap/](docs/roadmap/README.md)
 - Live checks still to run: [docs/SCENARIOS.md](docs/SCENARIOS.md)
 - What canopy must do, and how far along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
 
