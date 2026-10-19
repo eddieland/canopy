@@ -74,7 +74,8 @@ not go in the middle of the sequence.
   - [23. Flaky CI (M25)](FLAKY_CI.md#23-flaky-ci-m25)
 - [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
   - [24. Sandboxed runs (M26)](SANDBOXING.md#24-sandboxed-runs-m26)
-- [Plans](PLANNING.md): a plan for a ticket, approved by the operator before any `implement`.
+- [Plans](PLANNING.md): a plan for a ticket, approved by the operator before any `implement`, and the triage that
+  waives one for trivial work.
   - [25. Plans before implementing (M44)](PLANNING.md#25-plans-before-implementing-m44)
 - [Garbage collection](GARBAGE_COLLECTION.md): what canopy removes of its own history and caches, and what it keeps.
   - [26. Garbage collection (M47)](GARBAGE_COLLECTION.md#26-garbage-collection-m47)
