@@ -16,13 +16,12 @@ from tests.canopy.helpers import (
     KEY,
     LABEL,
     QUESTION,
-    approve_policy,
     planner_does,
     present,
     waits,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, raises, sets_phase
-from tests.conftest import CanopyEnv, GitPool
+from tests.conftest import GitPool
 
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 PLAN = dispatches(kind=RunKind.PLAN)
@@ -34,10 +33,8 @@ def plan_of(scenario: Scenario) -> dict[str, object]:
     return found
 
 
-def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(
-    scenario: Scenario, canopy_env: CanopyEnv
-) -> None:
-    approve_policy(canopy_env)
+def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(scenario: Scenario) -> None:
+    scenario.configures("workspace", policy={"plan": "approve"})
     scenario.seen()
     ticked = scenario.tick(PLAN, sets_phase(KEY, Phase.READY), dry_run=True)
     assert plan_of(scenario) == {
@@ -59,10 +56,8 @@ def test_a_ticket_plans_do_not_touch_has_no_plan_in_the_state_block(scenario: Sc
     assert "plan" not in scenario.ticket_state()
 
 
-def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
-) -> None:
-    approve_policy(canopy_env)
+def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy={"plan": "approve"})
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
     [plan] = plans.history(scenario.conn, KEY)
     review = raises(KEY, "plan_review", f"plan {plan.id} waits: canopy show {KEY}")
@@ -96,8 +91,8 @@ def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(
     assert plan_of(scenario)["changes_asked"] is False
 
 
-def test_an_approval_after_a_reply_wins(scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool) -> None:
-    approve_policy(canopy_env)
+def test_an_approval_after_a_reply_wins(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy={"plan": "approve"})
     scenario.run(PLAN, worker=planner_does(plan=TEXT))
     scenario.operator("reply", KEY, "Make it blue.")
     scenario.operator("plan", KEY, "--approve")
@@ -107,10 +102,8 @@ def test_an_approval_after_a_reply_wins(scenario: Scenario, canopy_env: CanopyEn
     assert newest["status"] == PlanStatus.APPROVED
 
 
-def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
-) -> None:
-    approve_policy(canopy_env)
+def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy={"plan": "approve"})
     blocked = {"status": "blocked", "summary": "unclear", "question": QUESTION}
     run = scenario.run(PLAN, worker=planner_does(plan=None, result=blocked))
     assert run.status == RunStatus.BLOCKED
@@ -142,10 +135,8 @@ def test_a_private_tickets_blocked_plan_is_raised_once(scenario: Scenario, git_p
     assert plans.question(scenario.conn, KEY) is not None
 
 
-def test_a_proposed_plan_tells_the_sinks_without_its_text(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
-) -> None:
-    canopy_env.append_user("\n[notify.sinks.slack]\ncmd = 'true'\nevents = ['runs']\n")
+def test_a_proposed_plan_tells_the_sinks_without_its_text(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(notify={"sinks": {"slack": {"cmd": "true", "events": ["runs"]}}})
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
     [plan] = plans.history(scenario.conn, KEY)
     rows = scenario.conn.execute("SELECT kind, fields FROM notify_events ORDER BY id").fetchall()

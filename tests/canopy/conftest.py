@@ -20,7 +20,7 @@ from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
-from tests.canopy.helpers import context
+from tests.canopy.helpers import context, titled_workers
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, executable, git
 
@@ -44,11 +44,13 @@ def scenario(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection, tmp_path: Path
 ) -> Iterator[Scenario]:
     """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story
-    (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too.
+    (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too. Its workers are titled, as the default
+    templates title them, so each knows the ticket it runs for.
 
     Yields:
         The scenario, whose runs still held at work are stopped once the test ends.
     """
+    titled_workers(canopy_env)
     told = Scenario(canopy_env, conn, agent_log, tmp_path / "gates")
     try:
         yield told

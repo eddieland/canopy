@@ -1,6 +1,7 @@
 """The scenario DSL's own story: what a `Scenario` records of each move, for a failed test's report."""
 
 import sys
+import tomllib
 from datetime import timedelta
 from unittest import mock
 
@@ -10,8 +11,8 @@ from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
 from tests.canopy.helpers import waits
-from tests.canopy.scenario_helpers import Printed, Scenario, dispatches, pushes, raises
-from tests.conftest import GitPool
+from tests.canopy.scenario_helpers import Printed, Scenario, asks, dispatches, fails, pushes, raises
+from tests.conftest import GitPool, git
 
 
 def test_the_story_tells_each_move_and_what_canopy_did_with_it(scenario: Scenario, git_pool: GitPool) -> None:
@@ -80,6 +81,31 @@ def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario:
     ]
 
 
+def test_each_ticket_a_tick_dispatches_plays_its_own_worker(scenario: Scenario, git_pool: GitPool) -> None:
+    ticked = scenario.tick(dispatches(), dispatches("PROJ-2"), worker=pushes())
+    # One script for both, each run playing it as made for its ticket: its own branch, message, and PR.
+    assert [(r.key, r.status, r.branch) for r in ticked.runs] == [
+        ("PROJ-1", "done", "agent/PROJ-1-work"),
+        ("PROJ-2", "done", "agent/PROJ-2-work"),
+    ]
+    assert git("log", "-1", "--format=%s", "agent/PROJ-2-work", cwd=git_pool.origin) == "PROJ-2: the change"
+    resumed = scenario.run(dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.CI]))
+    assert "PR: https://example.test/pr/2." in resumed.prompt  # the PR PROJ-2's own implement reported
+
+    # And a ticket `workers` names plays the script it gives instead.
+    first, second = (dispatches(key, RunKind.RESUME, reasons=[ResumeReason.REVIEW]) for key in ("PROJ-1", "PROJ-2"))
+    ticked = scenario.tick(first, second, workers={"PROJ-2": fails()})
+    assert [(r.key, r.status) for r in ticked.runs] == [("PROJ-1", "done"), ("PROJ-2", "failed")]
+
+
+def test_a_held_run_plays_its_tickets_own_worker_once_it_finishes(scenario: Scenario, git_pool: GitPool) -> None:
+    held = scenario.tick(dispatches(), dispatches("PROJ-2"), hold=True, worker=fails(), workers={"PROJ-2": asks()})
+    assert [w.finishes().status for w in held.working] == ["failed", "blocked"]
+    pushed = scenario.starts(dispatches("PROJ-3"), worker=pushes())
+    assert pushed.finishes().branch == "agent/PROJ-3-work"
+    assert git_pool.remote_head("agent/PROJ-3-work") is not None
+
+
 def test_a_command_canopy_refuses_is_a_move_and_what_it_printed_is_the_operators_to_read(scenario: Scenario) -> None:
     refused = scenario.operator("show", "PROJ-1", code=1)
     assert refused.out == ""
@@ -116,3 +142,30 @@ def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
         scenario.operator("pause")
     assert capsys.readouterr() == ("pause: half done\n", "then this\n")
     assert scenario.story == []
+
+
+def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(policy={"max_resume_attempts": 1})
+    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]})
+    scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
+    scenario.configures("private", notify={"sinks": {"log": {"cmd": "true", "events": ["runs"]}}})
+    # Each key in its own table, though the user file ended on `[paths]`; a key set again takes the place of the old.
+    user = tomllib.loads(scenario.env.user_file.read_text())
+    assert user["policy"] == {"max_resume_attempts": 1, "max_implement_attempts": 3}
+    assert (user["tracker"], user["paths"]) == ({"labels": ["mine"]}, {})
+    assert user["runtime"]["worker_cmd"].endswith("--agent canopy-worker --title={title} {prompt}")
+    tracker = tomllib.loads(scenario.env.shared_file.read_text())["tracker"]
+    assert tracker == {"provider": "jira", "query": "project = PROJ", "needs_human_label": "blocked-on-team"}
+    assert scenario.told().splitlines()[:4] == [
+        "1. the user file sets policy.max_resume_attempts = 1",
+        '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"]',
+        '3. the workspace file sets tracker.needs_human_label = "blocked-on-team"',
+        '4. the private file sets notify.sinks.log.cmd = "true", notify.sinks.log.events = ["runs"]',
+    ]
+
+    # And the next command reads them: one resume, then the limit.
+    resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], label="mine")
+    scenario.run(dispatches(label="mine"), worker=pushes())
+    scenario.run(resume, worker=pushes())
+    [(action, _), _] = scenario.refuses(resume)
+    assert action == "refused:attempt_limit"

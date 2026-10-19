@@ -15,6 +15,16 @@ keywords.
         assert run.reasons == (ResumeReason.CI,)
         assert "This is attempt 1 of 6." in run.prompt
 
+A tick that dispatches several tickets runs a worker for each, and each plays the script it is given as made for its
+own ticket: `pushes()` pushes the branch of the ticket it runs for, so one script serves them all. `workers=` gives a
+ticket a script of its own, and the scenario's workers are titled, as the default templates title them, so each run
+knows its ticket:
+
+    def test_one_ticket_fails_while_the_other_pushes(scenario: Scenario, git_pool: GitPool) -> None:
+        ticked = scenario.tick(dispatches(), dispatches("PROJ-2"), worker=pushes(), workers={"PROJ-2": fails()})
+        assert [r.status for r in ticked.runs] == ["done", "failed"]
+        assert git_pool.remote_head("agent/PROJ-1-work") is not None
+
 A dispatch canopy turns down is a move too, and so is the clock: `refuses` says what canopy decided instead of running
 it, and `time_passes` moves every time the journal recorded into the past, so a cooldown or a schedule sees it gone by:
 
@@ -26,6 +36,17 @@ it, and `time_passes` moves every time the journal recorded into the past, so a 
         assert action == "refused:cooldown"
         scenario.time_passes(hours=1)
         scenario.run(fix, worker=pushes())
+
+The config is part of the story too: `configures` sets keys in the user file, by default, or in the workspace file or
+the private one, merged into what the file holds, so a key lands in its own table whatever came last in the file, and
+the story says what the next command reads:
+
+    def test_a_limit_of_one_stops_the_second_resume(scenario: Scenario, git_pool: GitPool) -> None:
+        scenario.configures(policy={"max_resume_attempts": 1})
+        scenario.run(worker=pushes())
+        scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]), worker=pushes())
+        [(action, _), _] = scenario.refuses(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]))
+        assert action == "refused:attempt_limit"
 
 A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
 it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
@@ -87,10 +108,10 @@ import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager, redirect_stderr, redirect_stdout
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Unpack
+from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
@@ -99,7 +120,6 @@ from canopy.core.vocab import Phase, ResumeReason, RunKind, RunStatus, TickStatu
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
-    BRANCH,
     KEY,
     LABEL,
     QUESTION,
@@ -107,6 +127,7 @@ from tests.canopy.helpers import (
     WORKER_DONE,
     Behavior,
     InlineRunner,
+    Script,
     blocked_result,
     canopy,
     commit_and_push,
@@ -124,8 +145,13 @@ from tests.canopy.helpers import (
 )
 from tests.conftest import CanopyEnv
 
-#: What a worker does: one of the `*_does` helpers' blocks, or `pushes` or `asks`.
+#: What a worker does: one of the `*_does` helpers' blocks, or `pushes`, `asks`, or `fails`. A `Script` among them,
+#: `worker_does`'s and those three, is played by each ticket's run as made for that ticket (`Script.for_ticket`).
 type Worker = AbstractContextManager[None]
+
+#: Which of the workspace's config files a test sets keys in (DESIGN §12): the operator's user file, the workspace
+#: file, or the workspace's private file.
+type ConfigFile = Literal["user", "workspace", "private"]
 
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
@@ -184,6 +210,11 @@ class Ran:
     def id(self) -> int:
         """The run's id."""
         return int(self.row["id"])
+
+    @property
+    def key(self) -> str:
+        """The key of the ticket the run was for."""
+        return str(self.row["ticket_key"])
 
     @property
     def kind(self) -> RunKind:
@@ -314,6 +345,7 @@ class Scenario:
         self,
         *commands: list[str],
         worker: Worker | None = None,
+        workers: Mapping[str, Script] | None = None,
         dry_run: bool = False,
         hold: bool = False,
         code: int = 0,
@@ -323,11 +355,12 @@ class Scenario:
     ) -> Ticked:
         """Run one tick, `canopy tick`, its overseer running `commands`, and wait for each run it dispatches to end.
 
-        Each run's worker does `worker`, the fake's default `done` if None. With `hold`, each is held at work instead,
-        and the tick's runs are left `working` for the test to finish or kill. The overseer records `queried`, the keys
-        its query found, when the query is due, or no query at all if None; it ends on `result`, by default the line
-        that ends a tick, and runs as `overseer` says (`exit_code`, `says`, ...). The tick must exit `code`, and a
-        failure says how it ended instead.
+        Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
+        script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
+        for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
+        or kill. The overseer records `queried`, the keys its query found, when the query is due, or no query at all if
+        None; it ends on `result`, by default the line that ends a tick, and runs as `overseer` says (`exit_code`,
+        `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
 
         Returns:
             What the tick did.
@@ -338,6 +371,7 @@ class Scenario:
             stack.enter_context(overseer_does(*commands, result=result, queried=recorded, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
+            stack.enter_context(_each_ticket(worker, workers or {}, commands))
             if hold:
                 stack.enter_context(self._held())
             exited, printed = _printing(lambda: main(argv))
@@ -355,7 +389,7 @@ class Scenario:
 
     def run(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Ran:
         """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
-        process, its worker doing `worker`.
+        process, its worker doing `worker`, made for the ticket `command` names.
 
         The overseer is not run, so a run's story can start without a tick's.
 
@@ -367,7 +401,7 @@ class Scenario:
         runner = InlineRunner()
         with ExitStack() as stack:
             if worker is not None:
-                stack.enter_context(worker)
+                stack.enter_context(_made_for(worker, command[2]))
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:], runner=runner)
                 if exited != 0:
@@ -383,7 +417,7 @@ class Scenario:
 
     def starts(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Working:
         """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and hold its worker
-        at work, the worker set to do `worker` once the test lets it go on.
+        at work, the worker set to do `worker`, made for the ticket `command` names, once the test lets it go on.
 
         The run is detached, as a tick's is, and the overseer is not run.
 
@@ -394,7 +428,7 @@ class Scenario:
         assert command[:2] == ["canopy", "dispatch"], command
         with ExitStack() as stack:
             if worker is not None:
-                stack.enter_context(worker)
+                stack.enter_context(_made_for(worker, command[2]))
             stack.enter_context(self._held())
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:])
@@ -456,6 +490,25 @@ class Scenario:
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
         return printed
 
+    def configures(self, file: ConfigFile = "user", /, **tables: Mapping[str, object]) -> None:
+        """Set the keys of each table in `tables`, named as in TOML, in the config `file`; the next command reads them.
+
+        A key set takes the place of the one there, and every other key stays, whatever table it is in, so a test sets
+        only what its story is about: `configures(policy={"max_resume_attempts": 2})`, or a table inside another as a
+        mapping inside one, `configures(notify={"sinks": {"slack": {"cmd": "true"}}})`.
+        """
+        assert tables, "configures sets at least one table's keys"
+        match file:
+            case "user":
+                path = self.env.user_file
+            case "workspace":
+                path = self.env.shared_file
+            case "private":
+                path = self.env.private_file
+            case _:
+                assert_never(file)
+        self.story.append(f"the {file} file sets {', '.join(self.env.configure(path, tables))}")
+
     def seen(self, *keys: str) -> None:
         """Record `keys`, KEY if none, as tickets an earlier tick saw, so the overseer owes each a decision."""
         seen(self.conn, self.env, *keys)
@@ -516,9 +569,17 @@ class Scenario:
         # The worker's script is in its environment by now; GATE goes first in it. A run reads the environment as it
         # starts, so the gate lasts as long as the run does.
         self.gates.mkdir(exist_ok=True)
+        gate = [sys.executable, "-c", GATE, str(self.gates)]
         script = os.environ.get("FAKE_WORKER_COMMANDS", os.environ.get("FAKE_AGENT_COMMANDS", "[]"))
-        gated = [[sys.executable, "-c", GATE, str(self.gates)], *json.loads(script)]
-        with mock.patch.dict(os.environ, {"FAKE_WORKER_COMMANDS": json.dumps(gated)}):
+        env = {"FAKE_WORKER_COMMANDS": json.dumps([gate, *json.loads(script)])}
+        # A ticket's own script stands in for the role's, commands and all, so its commands are gated too.
+        tickets: dict[str, dict[str, str]] = json.loads(os.environ.get("FAKE_WORKER_FOR", "{}"))
+        for settings in tickets.values():
+            if "COMMANDS" in settings:
+                settings["COMMANDS"] = json.dumps([gate, *json.loads(settings["COMMANDS"])])
+        if tickets:
+            env["FAKE_WORKER_FOR"] = json.dumps(tickets)
+        with mock.patch.dict(os.environ, env):
             yield
 
     def _at_work(self, run_id: int) -> Working:
@@ -586,19 +647,54 @@ def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str |
 # What a worker does in its run: each is a block, for `Scenario.tick` and `Scenario.run`.
 
 
-def pushes(branch: str = BRANCH, message: str = "PROJ-1: the change") -> Worker:
-    """The worker commits `message`, pushes `branch`, and reports it done with a PR."""
-    return worker_does(*commit_and_push(branch, message), result=WORKER_DONE.replace(BRANCH, branch))
+def pushes(branch: str | None = None, message: str | None = None) -> Script:
+    """The worker commits `message`, pushes `branch`, and reports it done with a PR.
+
+    What is left out is its ticket's own: the branch an `implement` without a slug pushes, `agent/<KEY>-work`; the
+    message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. Made for KEY until a run of
+    another ticket plays it.
+    """
+
+    def made(key: str) -> Script:
+        pushed = branch or f"agent/{key}-work"
+        result = json.loads(WORKER_DONE) | {"branch": pushed, "pr": f"https://example.test/pr/{key.rpartition('-')[2]}"}
+        return worker_does(*commit_and_push(pushed, message or f"{key}: the change"), result=json.dumps(result))
+
+    return replace(made(KEY), per_ticket=made)
 
 
-def asks(question: str = QUESTION) -> Worker:
-    """The worker pushes nothing and reports it blocked, asking `question`."""
-    return worker_does(result=json.dumps(blocked_result() | {"question": question}))
+def asks(question: str = QUESTION) -> Script:
+    """The worker pushes nothing and reports it blocked on its ticket's own branch, asking `question`."""
+
+    def made(key: str) -> Script:
+        return worker_does(result=json.dumps(blocked_result() | {"branch": f"agent/{key}-work", "question": question}))
+
+    return replace(made(KEY), per_ticket=made)
 
 
-def fails(summary: str = "could not build") -> Worker:
+def fails(summary: str = "could not build") -> Script:
     """The worker pushes nothing and reports it failed, saying `summary`."""
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
+@contextmanager
+def _each_ticket(worker: Worker | None, workers: Mapping[str, Script], commands: Iterable[list[str]]) -> Iterator[None]:
+    # Each ticket a command dispatches, and each `workers` names, gets its script made for it; a run reads its own.
+    dispatched = [command[2] for command in commands if command[:2] == ["canopy", "dispatch"]]
+    every = worker if isinstance(worker, Script) else None
+    made = {
+        key: script.for_ticket(key)
+        for key in dict.fromkeys([*dispatched, *workers])
+        if (script := workers.get(key, every))
+    }
+    assert all(script.role == "WORKER" for script in made.values()), made
+    tickets = {key: dict(script.settings) for key, script in made.items()}
+    with mock.patch.dict(os.environ, {"FAKE_WORKER_FOR": json.dumps(tickets)}):
+        yield
+
+
+def _made_for(worker: Worker, key: str) -> Worker:
+    return worker.for_ticket(key) if isinstance(worker, Script) else worker
 
 
 def _printing(command: Callable[[], int]) -> tuple[int, Printed]:

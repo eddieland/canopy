@@ -32,6 +32,11 @@ FAKE_AGENT_* ones, so one test can script an overseer and the workers it dispatc
 FAKE_OVERSEER_* the same way, `--agent canopy-splitter` FAKE_SPLITTER_*, `--agent canopy-planner` FAKE_PLANNER_*,
 `--agent canopy-plan-triage` FAKE_PLAN_TRIAGE_*, and `--agent canopy-worker-private` FAKE_WORKER_PRIVATE_*.
 
+A run whose argv carries `--title=<title>` is of the ticket the title names first, as canopy's session titles do
+(`PROJ-1 implement: ...`). FAKE_<ROLE>_FOR, a JSON object from a ticket key to settings named without the prefix
+(`{"PROJ-2": {"RESULT": "...", "EXIT": "1"}}`), scripts that ticket's runs: what it gives for the run's ticket is read
+before the role's, so one tick's workers can each do something of their own.
+
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
@@ -58,8 +63,21 @@ def role(argv: list[str]) -> str:
 
 
 def setting(argv: list[str], name: str, default: str) -> str:
+    for_ticket = ticket_settings(argv).get(name)
+    if for_ticket is not None:
+        return for_ticket
     specific = os.environ.get(f"FAKE_{role(argv)}_{name}")
     return specific if specific is not None else os.environ.get(f"FAKE_AGENT_{name}", default)
+
+
+def ticket_settings(argv: list[str]) -> dict[str, str]:
+    """What FAKE_<ROLE>_FOR scripts for the ticket this run's `--title=` names first; nothing if either is missing."""
+    scripts = os.environ.get(f"FAKE_{role(argv)}_FOR")
+    titles = [arg.removeprefix("--title=") for arg in argv[:-1] if arg.startswith("--title=")]
+    if not scripts or not titles or not titles[0].split():
+        return {}
+    settings: dict[str, str] = json.loads(scripts).get(titles[0].split()[0], {})
+    return settings
 
 
 def run_commands(argv: list[str]) -> list[dict[str, object]]:

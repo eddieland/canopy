@@ -203,10 +203,14 @@ If code and the design disagree, the design doc wins until a decision entry says
 - A test that tells a ticket's story, ticks and runs and the operator's commands in turn, tells it through the
   `scenario` fixture (`scenario_helpers.py`): `scenario.tick(dispatches(kind=RunKind.RESUME, ...), worker=pushes())`
   checks the tick's exit and waits for the runs it started, and `scenario.run(...)` runs one without the overseer. The
+  workers of a tick that dispatches several tickets each play their script as made for their own ticket, so `pushes()`
+  pushes that ticket's branch, and `workers={"PROJ-2": fails()}` gives one ticket a script of its own. The
   overseer is played whole: `scenario.tick(queried=["PROJ-9"], code=1)` is a tick that leaves a duty undone, and
   `result=` and `exit_code=` one it fails. A run comes back as a `Ran`, with its `reasons` and its worker's `prompt`;
   `scenario.refuses(...)` is a dispatch canopy turns down, as the decisions it made instead, and
   `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an `UPDATE` of one table's times.
+  The config is set the same way: `scenario.configures(policy={"max_resume_attempts": 2})` merges keys into the user
+  file, or into the `"workspace"` or `"private"` file named first, never TOML appended to whatever table is last.
   A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, until the
   test says it `finishes()` or `dies()`, rather than a worker left to sleep or a run row with a made-up pid.
   The operator is played whole too: `scenario.operator("grant", KEY, "fix-ci", code=1)` is a command canopy refuses,
@@ -241,6 +245,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   a flaky test says it passed the burn-in: one green run cannot tell a fix from a failure made rarer.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
   is the evaluation corpus for prompt changes. Do not add prompt "tests" that assert on model output.
+  Their sizes are recorded in `.agents/sizes.toml`. The number is a record, not a limit: grow or shrink a prompt as
+  the work needs and update its number in the same PR, so the diff shows by how much.
+  `tests/canopy/test_prompt_sizes.py` names the line to update, and `make prompt-sizes` prints the sizes with
+  estimated tokens.
 
 ## Do not build (unless a ROADMAP milestone says so)
 
