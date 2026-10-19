@@ -379,7 +379,9 @@ but must be distinguishable:
   journal records which run drafted it, whether the operator edited it, the channel, and the comment's id, by which
   canopy knows it: the state block lists those ids, and neither the overseer nor a worker reads one as review feedback
   or a go-ahead. A reaction a draft stages, one of the eight GitHub offers, is part of what the hash names, and is added
-  only by a send, before its review; nothing canopy reads gives a reaction meaning.
+  only by a send or a stage, before its review; nothing canopy reads gives a reaction meaning. The operator may stage
+  the same checked text instead, as a pending review canopy opens and never submits, which only they see until they
+  submit it on GitHub; its replies' ids count as theirs from the start.
 - Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
   `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
   them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
@@ -680,7 +682,8 @@ loop's terminal would.
 ## 6. What canopy must never do
 
 - Approve, merge, or close a PR, or submit a PR review that approves or requests changes. The one review canopy
-  submits is a comment review of text the operator sent through canopy word for word (DESIGN §29).
+  submits is a comment review of text the operator sent through canopy word for word (DESIGN §29); the one it leaves
+  pending holds text the operator staged, word for word, for them to submit.
 - Push to or edit a PR the loop is only reviewing.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator

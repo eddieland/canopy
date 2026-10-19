@@ -273,6 +273,8 @@ class DraftStatus(StrEnum):
     SENDING = "sending"
     # A send ended without saying whether it posted; a read, or the operator, settles it.
     UNCONFIRMED = "unconfirmed"
+    # In a pending review the operator opened through canopy, theirs to submit on GitHub; a read settles it.
+    STAGED = "staged"
     SENT = "sent"
 
 

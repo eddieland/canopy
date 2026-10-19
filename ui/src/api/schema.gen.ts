@@ -2362,7 +2362,7 @@ export type components = {
          * @description Where a draft stands (DESIGN §29).
          * @enum {string}
          */
-        DraftStatusName: "unchecked" | "waiting" | "refused" | "superseded" | "dropped" | "sending" | "unconfirmed" | "sent";
+        DraftStatusName: "unchecked" | "waiting" | "refused" | "superseded" | "dropped" | "sending" | "unconfirmed" | "staged" | "sent";
         /**
          * ErrorResponse
          * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, a 404, or a 503.

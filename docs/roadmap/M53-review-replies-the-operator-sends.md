@@ -145,4 +145,6 @@ diff, each draft under its thread with Send, Edit, and Drop, a send of every wai
 when the PR's head is past the diff; `drafts_waiting` opens it; the diff with cards on its lines takes any card
 (`DiffPanels`), M32's page keeping its look; and the mock journal's PR 88 carries a run's drafts, with canopy's GitHub
 programs answered in process, so a draft sent from `--mock` posts nowhere. A ticket's own drafts on its page and in
-its `drafts_waiting` item, each naming the issue it goes to. Left: the live acceptance above.
+its `drafts_waiting` item, each naming the issue it goes to. Staging, asked for by the operator (2026-10-19): `canopy
+draft stage` opens a PR's drafts as one pending review the operator submits on GitHub, settled by the next whole read
+(migration 0051). Left: the live acceptance above.

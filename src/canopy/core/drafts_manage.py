@@ -1,4 +1,4 @@
-"""The operator's verbs on drafts (DESIGN §29, Sending): editing, dropping, sending, and settling one.
+"""The operator's verbs on drafts (DESIGN §29, Sending): editing, dropping, sending, staging, and settling one.
 
 Each refuses inside canopy's ticks and runs (`conversation.check_operator`): an agent that could send a draft could post
 as the operator. The CLI's `canopy draft` and the web UI call the same functions, so with the same guards.
@@ -8,6 +8,12 @@ drafts sent together for one PR go through the `vcs` source's `post_cmd` as one 
 before it; a ticket's, through the `tracker` source's. Each is posted at most once: a send claims its drafts before it
 posts, and one whose post ends without saying whether it submitted is `unconfirmed`, never posted again by canopy until
 a whole read of its PR, or the operator for a ticket's, settles it.
+
+Staging is sending without the submit: one PR's drafts go into a pending review, left on GitHub for the operator to
+finish there, and stay `staged` until a whole read finds that review submitted, when they are sent, or gone, when they
+wait again. GitHub has no pending reaction, so a stage adds its reactions at once, as a send does, and a draft that is a
+reaction alone is sent. While a PR holds a staged review, nothing else is sent or staged on it, since GitHub keeps one
+pending review a person.
 """
 
 from __future__ import annotations
@@ -164,7 +170,7 @@ def settle(conn: sqlite3.Connection, run_id: int, number: int, *, sent: bool) ->
 
 
 def _check_open(draft: records.Draft) -> None:
-    """Refuse an edit or a drop of a draft past both: one sent, sending, superseded, refused, or unconfirmed.
+    """Refuse an edit or a drop of a draft past both: one sent, sending, staged, superseded, refused, or unconfirmed.
 
     Raises:
         Refused: Named for the draft's status.
@@ -184,12 +190,13 @@ class Wanted:
 
 @dataclass
 class Sent:
-    """What a send did: the drafts posted now, those posted before, those whose post failed, and those unconfirmed."""
+    """What a send or a stage did: the drafts posted, staged, posted before, failed, and unconfirmed."""
 
     posted: list[records.Draft] = field(default_factory=list)
     already: list[records.Draft] = field(default_factory=list)
     failed: list[tuple[records.Draft, str]] = field(default_factory=list)
     unconfirmed: list[records.Draft] = field(default_factory=list)
+    staged: list[records.Draft] = field(default_factory=list)
 
 
 def send(
@@ -212,9 +219,46 @@ def send(
 
     Raises:
         Refused: (`inside_run`); (`unknown`); a status that cannot be sent, named for it; (`stale`) a text changed since
-            the operator saw it; (`unchecked`) a PR not read whole now; (`thread_changed`); (`no_post`) no command
-            posts there.
+            the operator saw it; (`unchecked`) a PR not read whole now; (`thread_changed`); (`staged`) its PR holds a
+            review the operator staged; (`no_post`) no command posts there.
     """
+    return _deliver(conn, config, runner, wanted, channel=channel, log=log, submit=True)
+
+
+def stage(
+    conn: sqlite3.Connection,
+    config: Config,
+    runner: procs.Runner,
+    wanted: Sequence[Wanted],
+    *,
+    channel: str,
+    log: logs.TickAdapter,
+) -> Sent:
+    """Stage drafts in a pending review on each one's PR, for the operator to finish and submit there themselves.
+
+    Every check a send makes runs first, and each draft must be a PR's. Each PR's drafts go into one review, its own
+    comment as the review's body, and are `staged` until a whole read of the PR settles them. Their reactions are
+    added at once, since GitHub has no pending one, and a draft that is a reaction alone is sent.
+
+    Returns:
+        What was staged, sent (a reaction alone), already posted, failed, or left unconfirmed.
+
+    Raises:
+        Refused: As `send` does; (`not_pr`) a ticket's draft, which has no review.
+    """
+    return _deliver(conn, config, runner, wanted, channel=channel, log=log, submit=False)
+
+
+def _deliver(
+    conn: sqlite3.Connection,
+    config: Config,
+    runner: procs.Runner,
+    wanted: Sequence[Wanted],
+    *,
+    channel: str,
+    log: logs.TickAdapter,
+    submit: bool,
+) -> Sent:
     conversation.check_operator()
     outcome = Sent()
     chosen: dict[int, records.Draft] = {}
@@ -225,16 +269,21 @@ def send(
             outcome.already.append(draft)
             continue
         _check_sendable(conn, draft, w.hash)
+        if not submit and draft.kind is DraftKind.TICKET:
+            where = f"run {draft.run_id}'s draft {draft.number}"
+            raise conversation.Refused("not_pr", f"{where} is a ticket's comment, which no review holds; send it")
         chosen[draft.id] = draft
         seen[draft.id] = w.hash
     if not chosen:
         return outcome
     groups = _groups(chosen.values())
     sources = {key: _poster(config, key) for key in groups}
-    _check_threads(conn, config, runner, keys=[k for k in groups if k.pr is not None], groups=groups, log=log)
+    prs = [k for k in groups if k.pr is not None]
+    _check_threads(conn, config, runner, keys=prs, groups=groups, log=log)
+    _check_none_staged(conn, [k.pr for k in prs if k.pr is not None])
     _claim(conn, chosen.values(), seen, channel)
     for key, group in groups.items():
-        _post(conn, sources[key], runner, key=key, group=group, outcome=outcome, log=log)
+        _post(conn, sources[key], runner, key=key, group=group, outcome=outcome, log=log, submit=submit)
     return outcome
 
 
@@ -254,6 +303,8 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
             raise conversation.Refused(
                 "unconfirmed", f"{where} may have been posted already; a read of its PR, or `canopy draft settle`, says"
             )
+        case DraftStatus.STAGED:
+            raise conversation.Refused("staged", f"{where} is in the review you staged on {draft.pr_url}: {_FINISH}")
         case DraftStatus.SUPERSEDED | DraftStatus.DROPPED | DraftStatus.REFUSED | DraftStatus.SENDING:
             raise conversation.Refused(draft.status, f"{where} is {draft.status}: {draft.why or 'not sendable'}")
         case DraftStatus.SENT:
@@ -263,6 +314,21 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
     current = hash_of_version(drafts.text_of(conn, draft.id))
     if current != seen:
         raise conversation.Refused("stale", _changed(draft, current))
+
+
+# What the operator does with a review they staged, which a refusal for it says.
+_FINISH = "submit or delete it on GitHub, and the next read of the PR settles it"
+
+
+def _check_none_staged(conn: sqlite3.Connection, prs: Iterable[str]) -> None:
+    """Refuse to post on a PR that holds a review the operator staged: GitHub keeps one pending review a person.
+
+    Raises:
+        Refused: (`staged`), naming the PR.
+    """
+    for pr in prs:
+        if conn.execute("SELECT 1 FROM drafts WHERE pr_url = ? AND status = ?", (pr, DraftStatus.STAGED)).fetchone():
+            raise conversation.Refused("staged", f"{pr} holds a review you staged: {_FINISH}")
 
 
 def _changed(draft: records.Draft, current: str) -> str:
@@ -327,7 +393,7 @@ def _check_threads(
     missed = [pr for pr in prs if pr not in read.whole]
     if missed:
         raise conversation.Refused("unchecked", f"could not read {', '.join(missed)} whole now: {read.failure}")
-    settle_unconfirmed(conn, read.whole)
+    settle_by_read(conn, read.whole)
     changed: list[str] = []
     with db.transaction(conn):
         for key in keys:
@@ -417,8 +483,9 @@ def _post(
     group: Sequence[records.Draft],
     outcome: Sent,
     log: logs.TickAdapter,
+    submit: bool,
 ) -> None:
-    """Post one PR's drafts as one review, or a ticket's draft as one comment, and record what became of each."""
+    """Post one PR's drafts as one review, or stage them, or a ticket's draft as one comment, and record each's fate."""
     versions = {d.id: drafts.text_of(conn, d.id) for d in group}
     texts = {i: v.body for i, v in versions.items()}
     if key.pr is not None:
@@ -430,6 +497,8 @@ def _post(
             "body": body,
             "replies": replies,
         }
+        if not submit:
+            request["submit"] = False
     else:
         [draft] = group
         request = {"issue": key.issue, "ticket": key.ticket, "body": texts[draft.id]}
@@ -449,6 +518,18 @@ def _post(
     pending = lines.get("pending")
     if end is not None and end.get("submitted") is True:
         _posted(conn, group, lines, outcome)
+    elif end is not None and end.get("staged") is True:
+        # A reaction alone went at once, so it is sent; the rest wait in the review.
+        alone = [d for d in group if d.kind is DraftKind.THREAD and not versions[d.id].body]
+        held = [d for d in group if d not in alone]
+        # A staged review, or a reply in it, that a read cannot find by its id is not one canopy can settle as staged.
+        if pending is not None and _int(pending.get("id")) is not None and _replies_known(held, lines):
+            # Before `_staged`, since `_posted` clears the PR's pending review, which is the staged one.
+            if alone:
+                _posted(conn, alone, lines, outcome)
+            _staged(conn, held, lines, pending, outcome)
+        else:
+            _unconfirmed(conn, group, pending, outcome)
     elif end is not None:
         _back(conn, group, outcome, f"nothing was posted: {said or 'the post command refused'}", end)
     elif key.pr is not None and pending is None:
@@ -458,7 +539,12 @@ def _post(
         _unconfirmed(conn, group, pending, outcome)
     log.info(
         "drafts sent",
-        extra={"drafts": [d.id for d in group], "submitted": bool(end and end.get("submitted")), "stderr": said},
+        extra={
+            "drafts": [d.id for d in group],
+            "submitted": bool(end and end.get("submitted")),
+            "staged": bool(end and end.get("staged")),
+            "stderr": said,
+        },
     )
 
 
@@ -497,14 +583,15 @@ def _reacted(
 
 
 def _left_pending(conn: sqlite3.Connection, pr: str) -> str | None:
-    """The pending review an earlier post left on `pr`, which this one deletes first.
+    """The pending review an earlier post left on `pr`, which this one deletes first; never one the operator staged.
 
     Returns:
         Its node id, or None when no post left one.
     """
     row = conn.execute(
-        "SELECT pending_review FROM drafts WHERE pr_url = ? AND pending_review IS NOT NULL AND status != ? LIMIT 1",
-        (pr, DraftStatus.UNCONFIRMED),
+        "SELECT pending_review FROM drafts WHERE pr_url = ? AND pending_review IS NOT NULL AND status NOT IN (?, ?) "
+        "LIMIT 1",
+        (pr, DraftStatus.UNCONFIRMED, DraftStatus.STAGED),
     ).fetchone()
     return None if row is None else str(row["pending_review"])
 
@@ -578,6 +665,42 @@ def _posted(
     outcome.posted.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
 
 
+def _replies_known(group: Sequence[records.Draft], lines: Mapping[str, Mapping[str, object]]) -> bool:
+    """Whether the post named each thread's draft's new comment by its id, which a staged draft is known by.
+
+    Returns:
+        True when every reply in `group` has its `comment` line, with an id.
+    """
+    return all(
+        _int(lines.get(f"comment:{d.comment_id}", {}).get("id")) is not None
+        for d in group
+        if d.kind is DraftKind.THREAD
+    )
+
+
+def _staged(
+    conn: sqlite3.Connection,
+    group: Sequence[records.Draft],
+    lines: Mapping[str, Mapping[str, object]],
+    pending: Mapping[str, object],
+    outcome: Sent,
+) -> None:
+    """A stage that holds every draft in its pending review: each is `staged`, a reply known by its comment's id."""
+    node, review_id = _str(pending.get("review")), _int(pending.get("id"))
+    with db.transaction(conn):
+        for d in group:
+            # A thread's line names the comment it answered; the PR's own draft is the review's body.
+            comment: Mapping[str, object] = (
+                lines.get(f"comment:{d.comment_id}", {}) if d.kind is DraftKind.THREAD else {}
+            )
+            conn.execute(
+                "UPDATE drafts SET status = ?, why = NULL, pending_review = ?, pending_review_id = ?, "
+                "sent_comment_id = ?, sent_url = ? WHERE id = ?",
+                (DraftStatus.STAGED, node, review_id, _int(comment.get("id")), _str(comment.get("url")), d.id),
+            )
+    outcome.staged.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
+
+
 def _back(
     conn: sqlite3.Connection,
     group: Sequence[records.Draft],
@@ -619,14 +742,15 @@ def _unconfirmed(
     outcome.unconfirmed.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
 
 
-def settle_unconfirmed(conn: sqlite3.Connection, whole: Iterable[str]) -> list[records.Draft]:
-    """Settle the unconfirmed drafts of the PRs just read whole, by their pending review's id, never by text.
+def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[records.Draft]:
+    """Settle the unconfirmed and staged drafts of the PRs just read whole, by their pending review's id, never by text.
 
-    That review submitted means the drafts were posted, each reply known by its thread; still pending, or gone, means
-    nothing was, and they wait again, a pending one to be deleted by the next post.
+    For an unconfirmed send, that review submitted means the drafts were posted, each reply known by its thread; still
+    pending, or gone, means nothing was, and they wait again, a pending one to be deleted by the next post. A staged
+    draft is the operator's to submit on GitHub, so one still pending stays staged; see `_settle_staged`.
 
     Returns:
-        The drafts settled, as they now stand.
+        The drafts settled, as they now stand: those a staged review still holds are not among them.
     """
     settled: list[int] = []
     prs = sorted(set(whole))
@@ -635,12 +759,63 @@ def settle_unconfirmed(conn: sqlite3.Connection, whole: Iterable[str]) -> list[r
             for d in records.fetch_all(
                 conn,
                 records.Draft,
-                "SELECT * FROM drafts WHERE pr_url = ? AND status = ? AND pending_review_id IS NOT NULL",
-                (pr, DraftStatus.UNCONFIRMED),
+                "SELECT * FROM drafts WHERE pr_url = ? AND status IN (?, ?) AND pending_review_id IS NOT NULL",
+                (pr, DraftStatus.UNCONFIRMED, DraftStatus.STAGED),
             ):
-                _settle_one(conn, d)
-                settled.append(d.id)
+                if d.status is DraftStatus.UNCONFIRMED:
+                    _settle_one(conn, d)
+                    settled.append(d.id)
+                elif _settle_staged(conn, d):
+                    settled.append(d.id)
     return [d for d in (drafts.get(conn, i) for i in settled) if d is not None]
+
+
+def _settle_staged(conn: sqlite3.Connection, draft: records.Draft) -> bool:
+    """Settle a staged draft by what the read found of its review: still pending, submitted, or gone.
+
+    Submitted, the draft is sent, unless the operator took its reply out of the review first, when it is dropped. Gone,
+    the operator deleted the review on GitHub, and the draft waits on them again.
+
+    Returns:
+        Whether it is settled; False while the review is pending.
+    """
+    review = records.fetch_one(
+        conn,
+        records.ObservedReview,
+        "SELECT * FROM observed_reviews WHERE pr_url = ? AND item = ? AND id = ?",
+        (draft.pr_url, ReviewItem.REVIEW, draft.pending_review_id),
+    )
+    if review is not None and review.state is ReviewState.PENDING:
+        return False
+    if review is None:
+        _unclaim(conn, [draft.id], why="the review you staged was deleted on GitHub")
+        conn.execute(
+            "UPDATE drafts SET pending_review = NULL, pending_review_id = NULL, sent_comment_id = NULL, "
+            "sent_url = NULL WHERE id = ?",
+            (draft.id,),
+        )
+        return True
+    comment = None
+    if draft.kind is DraftKind.THREAD:
+        comment = records.fetch_one(
+            conn,
+            records.ObservedReview,
+            "SELECT * FROM observed_reviews WHERE pr_url = ? AND item = ? AND review_id = ? AND id = ?",
+            (draft.pr_url, ReviewItem.COMMENT, review.id, draft.sent_comment_id),
+        )
+        if comment is None:
+            conn.execute(
+                "UPDATE drafts SET status = ?, why = ?, pending_review = NULL, pending_review_id = NULL, "
+                "sent_comment_id = NULL, sent_url = NULL WHERE id = ?",
+                (DraftStatus.DROPPED, "taken out of the review you staged before you submitted it", draft.id),
+            )
+            return True
+    conn.execute(
+        "UPDATE drafts SET status = ?, sent_at = ?, sent_review_id = ?, sent_url = ?, pending_review = NULL, "
+        "pending_review_id = NULL, why = 'submitted by the operator on GitHub' WHERE id = ?",
+        (DraftStatus.SENT, db.now(), review.id, comment.url if comment is not None else review.url, draft.id),
+    )
+    return True
 
 
 def _settle_one(conn: sqlite3.Connection, draft: records.Draft) -> None:
@@ -677,14 +852,16 @@ def _settle_one(conn: sqlite3.Connection, draft: records.Draft) -> None:
     )
 
 
-def unconfirmed_prs(conn: sqlite3.Connection) -> list[str]:
-    """Return the PRs with an unconfirmed draft a read can settle, which each tick's reconcile reads again.
+def unsettled_prs(conn: sqlite3.Connection) -> list[str]:
+    """Return the PRs with an unconfirmed or staged draft a read can settle, which each tick's reconcile reads again.
+
+    A staged review is read each tick so the loop knows the operator submitted it before its overseer reads the PR.
 
     Returns:
         The PRs' URLs, in order.
     """
     rows = conn.execute(
-        "SELECT DISTINCT pr_url FROM drafts WHERE status = ? AND pending_review_id IS NOT NULL ORDER BY pr_url",
-        (DraftStatus.UNCONFIRMED,),
+        "SELECT DISTINCT pr_url FROM drafts WHERE status IN (?, ?) AND pending_review_id IS NOT NULL ORDER BY pr_url",
+        (DraftStatus.UNCONFIRMED, DraftStatus.STAGED),
     )
     return [str(r["pr_url"]) for r in rows]

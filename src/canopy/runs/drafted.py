@@ -30,17 +30,17 @@ def after_run(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
 
 
 def reconcile(ctx: Context, log: logs.TickAdapter) -> None:
-    """Read every PR a draft waits on or a send left unconfirmed, and check or settle its drafts (§6 step 3)."""
-    _read_and_check(ctx, {*drafts.unchecked_prs(ctx.conn), *drafts_manage.unconfirmed_prs(ctx.conn)}, log)
+    """Read every PR a draft waits on, a send left unconfirmed, or one staged, and settle its drafts (§6 step 3)."""
+    _read_and_check(ctx, {*drafts.unchecked_prs(ctx.conn), *drafts_manage.unsettled_prs(ctx.conn)}, log)
 
 
 def _read_and_check(ctx: Context, prs: Collection[str], log: logs.TickAdapter) -> None:
     if not prs:
         return
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
-    settled = drafts_manage.settle_unconfirmed(ctx.conn, read.whole)
+    settled = drafts_manage.settle_by_read(ctx.conn, read.whole)
     if settled:
-        log.info("unconfirmed drafts settled", extra={"drafts": {d.id: d.status for d in settled}})
+        log.info("drafts settled", extra={"drafts": {d.id: d.status for d in settled}})
     checked = drafts.check(ctx.conn, read.whole)
     if checked:
         counts = {s: sum(d.status is s for d in checked) for s in (DraftStatus.WAITING, DraftStatus.REFUSED)}
@@ -67,28 +67,38 @@ class Item:
 def waiting(conn: sqlite3.Connection) -> list[Item]:
     """Return a `drafts_waiting` item for each unit with a PR's draft unsent, and each ticket with a ticket's.
 
-    A PR's drafts stop waiting once the reader saw the PR merged or closed; they can still be sent. Superseded,
-    refused, dropped, and sent drafts wait on nobody.
+    A PR's drafts stop waiting once the reader saw the PR merged or closed; they can still be sent. A staged draft
+    waits on the operator to submit its review on GitHub. Superseded, refused, dropped, and sent drafts wait on nobody.
 
     Returns:
         The items, by ticket, then repository, the ticket's own after its units'.
     """
     rows = conn.execute(
-        "SELECT d.ticket_key, d.repo, d.pr_url, count(*) AS n, sum(d.status = ?) AS unchecked "
+        "SELECT d.ticket_key, d.repo, d.pr_url, count(*) AS n, sum(d.status = ?) AS unchecked, "
+        "sum(d.status = ?) AS staged "
         "FROM drafts d LEFT JOIN observed_prs p ON p.url = d.pr_url "
-        "WHERE d.status IN (?, ?) AND (p.state IS NULL OR p.state = ?) "
+        "WHERE d.status IN (?, ?, ?) AND (p.state IS NULL OR p.state = ?) "
         "GROUP BY d.ticket_key, d.repo, d.pr_url "
         "ORDER BY d.ticket_key, d.repo IS NULL, d.repo, d.pr_url",
-        (DraftStatus.UNCHECKED, DraftStatus.UNCHECKED, DraftStatus.WAITING, PrState.OPEN),
+        (
+            DraftStatus.UNCHECKED,
+            DraftStatus.STAGED,
+            DraftStatus.UNCHECKED,
+            DraftStatus.WAITING,
+            DraftStatus.STAGED,
+            PrState.OPEN,
+        ),
     ).fetchall()
     found: list[Item] = []
     for r in rows:
-        n, unchecked = int(r["n"]), int(r["unchecked"])
+        n, unchecked, staged = int(r["n"]), int(r["unchecked"]), int(r["staged"])
         what = f"{n} drafts wait on you" if n > 1 else "1 draft waits on you"
         if r["pr_url"] is None:
             found.append(Item(str(r["ticket_key"]), None, n, f"{what}, for the ticket"))
             continue
         detail = f"{what}, for {r['pr_url']}"
+        if staged:
+            detail += f"; {staged} in the review you staged there, for you to submit on GitHub"
         if unchecked:
             detail += f"; its threads could not be read yet, so {unchecked} cannot be sent until they are"
         found.append(Item(str(r["ticket_key"]), str(r["repo"]), n, detail))

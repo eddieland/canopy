@@ -22,7 +22,15 @@ describe('open', () => {
     it('lets the operator edit or drop only a draft waiting or not yet checked', () => {
         expect(open(draft())).toBe(true)
         expect(open(draft({ status: 'unchecked' }))).toBe(true)
-        for (const status of ['refused', 'superseded', 'dropped', 'sending', 'unconfirmed', 'sent'] as const) {
+        for (const status of [
+            'refused',
+            'superseded',
+            'dropped',
+            'sending',
+            'unconfirmed',
+            'staged',
+            'sent',
+        ] as const) {
             expect(open(draft({ status }))).toBe(false)
         }
     })
