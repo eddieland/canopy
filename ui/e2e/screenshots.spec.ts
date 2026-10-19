@@ -12,6 +12,7 @@ import {
     serveReview,
     settled,
     signIn,
+    storeGrey,
     storeTheme,
     THEMES,
     WHOLE_ROUTES,
@@ -89,6 +90,18 @@ for (const theme of THEMES) {
             await document.fonts.ready
         })
         await expect(page).toHaveScreenshot(`sign-in-${theme}.png`, { fullPage: true })
+    })
+
+    // The grey palette sets only the neutrals, so one whole page in each theme shows all it changes.
+    test(`attention in grey ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await storeGrey(page, theme)
+        await signIn(page)
+        await page.goto('attention')
+        await settled(page)
+        await expect(page.locator('html')).toHaveAttribute(`data-${theme}-palette`, 'grey')
+        await screenshotWhole(page, `attention-grey-${theme}.png`)
     })
 }
 

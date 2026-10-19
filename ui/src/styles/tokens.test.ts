@@ -15,7 +15,13 @@ type Rgb = [number, number, number]
 type Theme = Record<string, Rgb>
 
 const css = readFileSync(resolve(import.meta.dirname, 'tokens.css'), 'utf8')
-const THEMES: Record<string, Theme> = { light: theme(':root'), dark: theme('.dark') }
+// The grey palette sets some tokens over indigo's, so each grey theme is its indigo theme with those replaced.
+const THEMES: Record<string, Theme> = {
+    light: theme(':root'),
+    dark: theme('.dark'),
+    'grey light': { ...theme(':root'), ...theme(":root[data-light-palette='grey']:not(.dark)") },
+    'grey dark': { ...theme('.dark'), ...theme(".dark[data-dark-palette='grey']") },
+}
 
 // Text tokens, each read on the canvas, a surface, and a raised surface.
 const TEXT = [
@@ -136,9 +142,12 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
     })
 })
 
-/** A theme's opaque oklch tokens, by name, as sRGB. */
+/** The opaque oklch tokens a rule sets, by name, as sRGB. */
 function theme(selector: string): Theme {
-    const start = css.indexOf(`${selector} {`)
+    const start = css.indexOf(`\n${selector} {`)
+    if (start === -1) {
+        throw new Error(`tokens.css has no rule for ${selector}`)
+    }
     const body = css.slice(start, css.indexOf('\n}', start))
     const colors: Theme = {}
     for (const [, name, l, c, h] of body.matchAll(/--([\w-]+): oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/gu)) {

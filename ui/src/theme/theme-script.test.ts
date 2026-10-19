@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { stubSystemTheme } from '@/test-utils'
 
+import { STORAGE_KEY as PALETTE_KEY } from './palette'
 import { STORAGE_KEY } from './store'
 
 // The blocking script in index.html, run exactly as written.
@@ -21,11 +22,14 @@ beforeEach(() => {
     localStorage.clear()
     document.documentElement.className = ''
     document.documentElement.removeAttribute('style')
+    delete document.documentElement.dataset.lightPalette
+    delete document.documentElement.dataset.darkPalette
 })
 
 describe('index.html theme script', () => {
-    it('uses the same storage key as the store', () => {
+    it('uses the same storage keys as the stores', () => {
         expect(script).toContain(`'${STORAGE_KEY}'`)
+        expect(script).toContain(`'${PALETTE_KEY}'`)
     })
 
     it.each([
@@ -42,5 +46,21 @@ describe('index.html theme script', () => {
         run()
         expect(document.documentElement.classList.contains('dark')).toBe(dark)
         expect(document.documentElement.style.colorScheme).toBe(dark ? 'dark' : 'light')
+    })
+
+    it.each([
+        { stored: null, light: 'indigo', dark: 'indigo' },
+        { stored: '{"dark":"grey"}', light: 'indigo', dark: 'grey' },
+        { stored: '{"light":"grey","dark":"grey"}', light: 'grey', dark: 'grey' },
+        { stored: '{"light":"mauve"}', light: 'indigo', dark: 'indigo' },
+        { stored: 'not json', light: 'indigo', dark: 'indigo' },
+    ])('stored palettes $stored: light wears $light, dark $dark', ({ stored, light, dark }) => {
+        stubSystemTheme(false)
+        if (stored) {
+            localStorage.setItem(PALETTE_KEY, stored)
+        }
+        run()
+        expect(document.documentElement.dataset.lightPalette).toBe(light)
+        expect(document.documentElement.dataset.darkPalette).toBe(dark)
     })
 })

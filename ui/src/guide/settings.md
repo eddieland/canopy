@@ -9,6 +9,10 @@ are kept in this browser; everything else canopy reads from its config files, as
 **Light**, **Dark**, or **System**, which follows your machine. Every open tab follows along. The button at the right
 of the header flips it too.
 
+Each theme also has a palette, picked apart: **Indigo**, the default, tints the canvas with the accent's hue, and
+**Grey** keeps it plain. Only the neutrals change; every status color stays where you learned it. Dark in grey and
+light in indigo is a fine choice, and nobody will ask you to defend it.
+
 ## Time
 
 How every time of day on the page reads: **24-hour** (`14:05`, the default) or **12-hour** (`2:05 PM`). **Show time

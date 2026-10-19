@@ -33,8 +33,10 @@ import type { SendKey } from '@/lib/send-key'
 import { stamp, useNow } from '@/lib/time'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
-import type { ThemePreference } from '@/theme/store'
-import { switchTheme } from '@/theme/transition'
+import { usePalettes } from '@/theme/palette'
+import type { Palette } from '@/theme/palette'
+import type { ResolvedTheme, ThemePreference } from '@/theme/store'
+import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
@@ -48,6 +50,21 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
     { value: 'light', label: 'Light', icon: Sun },
     { value: 'dark', label: 'Dark', icon: Moon },
     { value: 'system', label: 'System', icon: Monitor },
+]
+
+const PALETTES: { value: Palette; label: string }[] = [
+    { value: 'indigo', label: 'Indigo' },
+    { value: 'grey', label: 'Grey' },
+]
+
+// Each theme's palette row: which theme, and the line beside its choice.
+const PALETTE_ROWS: { theme: ResolvedTheme; label: string; text: string }[] = [
+    {
+        theme: 'light',
+        label: 'Light palette',
+        text: "The light theme's neutrals: indigo, which tints the canvas with the accent's hue, or a plain grey.",
+    },
+    { theme: 'dark', label: 'Dark palette', text: "The dark theme's neutrals, picked apart from the light theme's." },
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
@@ -81,35 +98,13 @@ const SEND_KEYS: { value: SendKey; label: string }[] = [
 ]
 
 function SettingsPage() {
-    const { preference } = useTheme()
     return (
         <>
             <PageHeader title="Settings">
                 The theme, the clock, the send key, and the fun are kept in this browser. Everything else canopy reads
                 from its config files.
             </PageHeader>
-            <Panel>
-                <PanelHeader label="Theme" />
-                <div className="flex items-center justify-between gap-4 p-3">
-                    <p className="max-w-3xl text-sm text-muted-foreground">
-                        Follows the system unless you pick one. Syncs across tabs.
-                    </p>
-                    {/* Switched on click, not on a value change, so the transition grows from the item pressed. */}
-                    <ToggleGroup type="single" value={preference} aria-label="Theme">
-                        {THEMES.map(({ value, label, icon: Icon }) => (
-                            <ToggleGroupItem
-                                key={value}
-                                value={value}
-                                data-testid={`theme-${value}`}
-                                onClick={(event) => switchTheme(value, event.currentTarget)}
-                            >
-                                <Icon />
-                                {label}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
-                </div>
-            </Panel>
+            <ThemePanel />
             <ClockPanel />
             <SendKeyPanel />
             <NoticePanel />
@@ -118,6 +113,53 @@ function SettingsPage() {
             <FunPanel />
             <SessionPanel />
         </>
+    )
+}
+
+/** The theme, then the palette each theme wears. Each switches on click, with the theme toggle's reveal. */
+function ThemePanel() {
+    const { preference } = useTheme()
+    const palettes = usePalettes()
+    return (
+        <Panel>
+            <PanelHeader label="Theme" />
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    Follows the system unless you pick one. Syncs across tabs.
+                </p>
+                {/* Switched on click, not on a value change, so the transition grows from the item pressed. */}
+                <ToggleGroup type="single" value={preference} aria-label="Theme">
+                    {THEMES.map(({ value, label, icon: Icon }) => (
+                        <ToggleGroupItem
+                            key={value}
+                            value={value}
+                            data-testid={`theme-${value}`}
+                            onClick={(event) => switchTheme(value, event.currentTarget)}
+                        >
+                            <Icon />
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
+            </div>
+            {PALETTE_ROWS.map(({ theme, label, text }) => (
+                <div key={theme} className="flex items-center justify-between gap-4 border-b p-3 last:border-b-0">
+                    <p className="max-w-3xl text-sm text-muted-foreground">{text}</p>
+                    <ToggleGroup type="single" value={palettes[theme]} aria-label={label}>
+                        {PALETTES.map(({ value, label: name }) => (
+                            <ToggleGroupItem
+                                key={value}
+                                value={value}
+                                data-testid={`palette-${theme}-${value}`}
+                                onClick={(event) => switchPalette(theme, value, event.currentTarget)}
+                            >
+                                {name}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                </div>
+            ))}
+        </Panel>
     )
 }
 

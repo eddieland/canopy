@@ -9,7 +9,9 @@
  * status color on its own tint up to 20% (bg-status-failed/12) too; tokens.test.ts measures each pair. Section colors
  * are tuned the same way, as an icon, as text, and at 16%.
  *
- * Both themes' neutrals carry the accent's indigo hue, so the canvas has some color of its own.
+ * Each theme wears one of two palettes, picked apart for light and for dark (src/theme/palette.ts): indigo, the
+ * default, whose neutrals carry the accent's hue so the canvas has some color of its own, or grey, which sets only the
+ * neutrals, over indigo, to the near-colorless ones the 2026-10-19 exploration drew for Mailroom.
  */
 
 :root {
@@ -173,6 +175,35 @@
     --buddy-key: oklch(0.56 0.04 268);
 
     --rave-dark: oklch(0.08 0.02 275);
+}
+
+/* The grey palette: only the neutrals change, and what is drawn in them; every hue is indigo's. Muted text is a step
+ * further from the canvas than Mailroom drew it, and stopped one more, to read on its own tint as well. */
+:root[data-light-palette='grey']:not(.dark) {
+    --background: oklch(0.967 0.001 286);
+    --surface: oklch(1 0 0);
+    --surface-raised: oklch(0.956 0.004 286);
+    --border: oklch(0.92 0.005 286);
+    --foreground: oklch(0.21 0.006 286);
+    --muted-foreground: oklch(0.52 0.017 286);
+    --scrollbar: oklch(0.52 0.017 286 / 0.4);
+    --status-stopped: oklch(0.47 0.017 286);
+    --spend-dry-run: oklch(0.6 0.01 286);
+    --context-carried: oklch(0.6 0.01 286);
+}
+
+.dark[data-dark-palette='grey'] {
+    --background: oklch(0.169 0.004 286);
+    --surface: oklch(0.206 0.006 286);
+    --surface-raised: oklch(0.254 0.007 286);
+    --border: oklch(0.287 0.011 286);
+    --foreground: oklch(0.962 0.003 286);
+    --muted-foreground: oklch(0.67 0.015 286);
+    --accent-foreground: oklch(0.169 0.004 286);
+    --scrollbar: oklch(0.67 0.015 286 / 0.4);
+    --status-stopped: oklch(0.72 0.015 286);
+    --spend-dry-run: oklch(0.6 0.01 286);
+    --context-carried: oklch(0.58 0.01 286);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */

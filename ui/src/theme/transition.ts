@@ -1,7 +1,9 @@
 import { flushSync } from 'react-dom'
 
-import { setPreference } from './store'
-import type { ThemePreference } from './store'
+import { setPalette } from './palette'
+import type { Palette } from './palette'
+import { getSnapshot, setPreference } from './store'
+import type { ResolvedTheme, ThemePreference } from './store'
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
 const DURATION_MS = 420
@@ -14,8 +16,18 @@ const DURATION_MS = 420
  * when the user prefers reduced motion or the browser has no View Transitions API.
  */
 export function switchTheme(preference: ThemePreference, origin?: HTMLElement | null): void {
+    reveal(() => setPreference(preference), origin)
+}
+
+/** Picks `palette` for `theme`, with the same reveal as a theme's when the page shows that theme, else at once. */
+export function switchPalette(theme: ResolvedTheme, palette: Palette, origin?: HTMLElement | null): void {
+    reveal(() => setPalette(theme, palette), getSnapshot().resolved === theme ? origin : null)
+}
+
+/** Runs `change` and lets React commit it, inside a view transition that grows from `origin` when there is one. */
+function reveal(change: () => void, origin?: HTMLElement | null): void {
     const commit = (): void => {
-        flushSync(() => setPreference(preference))
+        flushSync(change)
     }
     if (
         typeof document.startViewTransition !== 'function' ||

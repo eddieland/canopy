@@ -95,3 +95,19 @@ describe('switchTheme', () => {
         expect(animate).not.toHaveBeenCalled()
     })
 })
+
+describe('switchPalette', () => {
+    it('reveals a palette for the theme shown, and picks one for the other theme at once', async () => {
+        const start = stubViewTransitions(Promise.resolve())
+        // The stubbed system is light, and nothing is stored, so the page shows light.
+        const { switchPalette } = await load()
+
+        switchPalette('dark', 'grey', button())
+        expect(document.documentElement.dataset.darkPalette).toBe('grey')
+        expect(start).not.toHaveBeenCalled()
+
+        switchPalette('light', 'grey', button())
+        expect(document.documentElement.dataset.lightPalette).toBe('grey')
+        expect(start).toHaveBeenCalledTimes(1)
+    })
+})
