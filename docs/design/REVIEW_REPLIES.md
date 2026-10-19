@@ -104,3 +104,4 @@ text it posts is the model's last word, not the operator's); the harness calling
 
 - Whether a draft on a PR that merged or closed should still be sendable, as it is.
 - Editing or deleting a sent reply from canopy.
+- The operator staging a reaction of their own on a thread no draft answers: every draft today is a run's.
