@@ -211,6 +211,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   runner of its own, one that times its worker out. `scenario.refuses(...)` is a dispatch canopy turns down, as the
   decisions it made instead, and `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an
   `UPDATE` of one table's times.
+  A review is the overseer's move as a dispatch is: `scenario.review(reviews(sha, ticket=KEY), reviewer=...)` starts one
+  in a tick of its own and does it in this process, giving back a `Reviewed`, and `scenario.refuses(reviews(...))` is
+  one canopy turns down.
   The config is set the same way: `scenario.configures(policy={"max_resume_attempts": 2})` merges keys into the user
   file, or into the `"workspace"` or `"private"` file named first, never TOML appended to whatever table is last.
   A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, until the
