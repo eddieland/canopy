@@ -346,6 +346,52 @@ function holdsCursor(element: Element): boolean {
 }
 
 /**
+ * Clicks just past the last character of `target`, an element in the plan, as the operator would to write on after it,
+ * and waits for the editor to hold its cursor at the element's end. Not `clickIn` and End: End stops at the end of the
+ * line the click lands on, which in an element that wraps need not be its last, and the editor reads the cursor End
+ * moves on `selectionchange`, as it does a selection `select` makes, so a loaded machine can put it back where the
+ * click left it. This clicks again until the editor holds it.
+ */
+export async function clickAtEnd(target: Locator): Promise<void> {
+    await expect(async () => {
+        await target.click({ position: await target.evaluate(endPoint) })
+        await expect.poll(() => target.evaluate(holdsCursorAtEnd), { timeout: 250 }).toBe(true)
+    }).toPass({ timeout: 5000 })
+}
+
+// Where in `element`, from its top left corner, a click puts the cursor after its last character: the last character's
+// right half, on its line.
+function endPoint(element: Element): { x: number; y: number } {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let last: Text | null = null
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        if ((node.textContent ?? '') !== '') {
+            last = node as Text
+        }
+    }
+    if (last === null) {
+        throw new Error('the element has no text to click after')
+    }
+    const range = document.createRange()
+    range.setStart(last, last.length - 1)
+    range.setEnd(last, last.length)
+    const char = range.getBoundingClientRect()
+    const box = element.getBoundingClientRect()
+    return { x: char.right - box.left - 1, y: char.top + char.height / 2 - box.top }
+}
+
+// Whether the plan's editor holds its cursor, and nothing selected, at the end of `element`'s content.
+function holdsCursorAtEnd(element: Element): boolean {
+    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    if (root === null) {
+        return false
+    }
+    const { view } = root.editor
+    const { from, to } = view.state.selection
+    return from === to && from === view.posAtDOM(element, element.childNodes.length)
+}
+
+/**
  * Selects `text` inside the plan, as a drag over it would, and waits for the editor to hold it: a key pressed next acts
  * on these words, not the ones before. ProseMirror reads the page's selection on `selectionchange`, which the browser
  * fires later. When the selection moves the focus into the plan from outside it, ProseMirror also puts its own
