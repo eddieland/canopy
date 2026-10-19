@@ -140,11 +140,14 @@ def test_the_mock_journal_places_run_45s_drafts_on_the_threads_of_pr_88(backend:
     assert (found["diff_run"], found["diff_head"]) == (45, found["head_sha"])
     assert [(t["path"], t["diff_line"], [d["number"] for d in t["drafts"]]) for t in found["threads"]] == [
         ("src/search/SearchBox.tsx", 6, [2]),
-        ("src/search/useSearch.ts", None, []),  # outdated and resolved: under its file, answered by nothing
+        ("src/search/useSearch.ts", None, [4]),  # outdated and resolved: under its file
         ("src/search/useSearch.ts", 16, [1]),
     ]
     assert [(d["number"], d["kind"]) for d in found["pr_drafts"]] == [(3, "pr")]
     assert found["threads"][0]["drafts"][0]["edited"]
+    # The nit the run fixed is answered with a reaction alone.
+    [nit] = found["threads"][1]["drafts"]
+    assert (nit["text"], nit["reaction"]) == ("", "+1")
 
 
 def test_a_draft_sent_from_the_mock_posts_nothing_and_reads_as_sent(backend: Backend) -> None:

@@ -23,6 +23,7 @@ import type {
     PlanChanged,
     PlanSaved,
     PlanThreadView,
+    Reaction,
     Replied,
     ReviewDismissed,
     ReviewRequested,
@@ -234,14 +235,15 @@ export async function sendReviewFindings(run: number, findings: number[], submis
 }
 
 /**
- * `canopy draft edit run:ID N --text TEXT`: the operator's text for the run's draft number `number`, kept as a new
- * version beside the run's own, held to the bounds a draft is.
+ * `canopy draft edit run:ID N --text TEXT --react NAME`: the operator's words for the run's draft number `number`, its
+ * text and its reaction (null for none, which `--no-react` sets), kept as a new version beside the run's own, held to
+ * the bounds a draft is.
  */
-export async function editDraft(run: number, number: number, text: string): Promise<Draft> {
+export async function editDraft(run: number, number: number, text: string, reaction: Reaction | null): Promise<Draft> {
     return unwrap(
         await api.POST('/api/runs/{run_id}/drafts/{number}/edit', {
             params: { path: { run_id: run, number } },
-            body: { text },
+            body: { text, reaction },
         }),
     )
 }

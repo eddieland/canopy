@@ -1,4 +1,4 @@
-import type { Draft, DraftStatus, PullRequestThreads, ReviewThread } from '@/api/types'
+import type { Draft, DraftStatus, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { place } from '@/lib/reviews'
 import type { Placed } from '@/lib/reviews'
 import type { Tone } from '@/lib/tone'
@@ -19,6 +19,37 @@ export const DRAFT_TONE: Record<DraftStatus, Tone> = {
     superseded: 'plain',
     dropped: 'plain',
     sent: 'plain',
+}
+
+/** How the page draws a reaction: its emoji, and what a screen reader says for it. */
+export interface ReactionLook {
+    /** The emoji GitHub shows for it. */
+    emoji: string
+    /** Its name in words. */
+    label: string
+}
+
+/**
+ * Every reaction GitHub offers on a review comment, by the name canopy and GitHub's API give it. A `Record`, so the
+ * typecheck fails if the schema gains one this misses.
+ */
+export const REACTION_LOOKS: Record<Reaction, ReactionLook> = {
+    '+1': { emoji: '👍', label: 'Thumbs up' },
+    '-1': { emoji: '👎', label: 'Thumbs down' },
+    laugh: { emoji: '😄', label: 'Laugh' },
+    hooray: { emoji: '🎉', label: 'Hooray' },
+    confused: { emoji: '😕', label: 'Confused' },
+    heart: { emoji: '❤️', label: 'Heart' },
+    rocket: { emoji: '🚀', label: 'Rocket' },
+    eyes: { emoji: '👀', label: 'Eyes' },
+}
+
+/** The reactions in the order GitHub's picker shows them. */
+export const REACTIONS: Reaction[] = ['+1', '-1', 'laugh', 'hooray', 'confused', 'heart', 'rocket', 'eyes']
+
+/** The reaction a picker's value names, or null for none or a value no reaction has. */
+export function reactionOf(value: string): Reaction | null {
+    return REACTIONS.find((r) => r === value) ?? null
 }
 
 /** Whether the operator can still edit or drop a draft: one waiting, or one no read has checked yet. */

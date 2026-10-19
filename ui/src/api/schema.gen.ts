@@ -856,9 +856,10 @@ export type paths = {
         put?: never;
         /**
          * Edit a draft
-         * @description `canopy draft edit run:ID N --text TEXT`: the operator's text, as a new version beside the run's own.
+         * @description `canopy draft edit run:ID N --text TEXT [--react NAME]`: the operator's words, a new version beside the run's.
          *
-         *     Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), and `bad_text`.
+         *     Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), `bad_text`, and
+         *     `no_reaction` for a reaction on a draft that is not a thread's.
          */
         post: operations["editDraft"];
         delete?: never;
@@ -2170,7 +2171,7 @@ export type components = {
             edited: boolean;
             /**
              * Hash
-             * @description The name of that text, which a send carries so what posts is what the operator read.
+             * @description The name of that text and reaction, which a send carries so what posts is what the operator read.
              */
             hash: string;
             /**
@@ -2185,6 +2186,10 @@ export type components = {
              * @description Its number in the run's drafts, from 1: with the run, how the operator names it.
              */
             number: number;
+            /** @description The reaction a send added on GitHub, which stays there though the rest of that send posted nothing. */
+            reacted: components["schemas"]["ReactionName"] | null;
+            /** @description For a thread's draft, the reaction it stages on the comment it names, as it stands. */
+            reaction: components["schemas"]["ReactionName"] | null;
             /**
              * Run
              * @description The run that drafted it.
@@ -2206,7 +2211,8 @@ export type components = {
             supersedes_edited: boolean;
             /**
              * Text
-             * @description Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here.
+             * @description Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here. Empty
+             *     when it sends its reaction alone.
              */
             text: string;
             /**
@@ -2239,12 +2245,14 @@ export type components = {
         };
         /**
          * DraftEditRequest
-         * @description An edit of a draft's text, as `canopy draft edit run:ID N --text TEXT` takes it.
+         * @description An edit of a draft's words, as `canopy draft edit run:ID N --text TEXT [--react NAME | --no-react]` takes it.
          */
         DraftEditRequest: {
+            /** @description The reaction it stages, or None for none: given every time, so an edit never keeps one the page did not show. */
+            reaction: components["schemas"]["ReactionName"] | null;
             /**
              * Text
-             * @description The draft's new text. Bounded again in code, as a run's draft is.
+             * @description The draft's new text, empty beside a reaction to send it alone. Bounded again in code, as a run's draft is.
              */
             text: string;
         };
@@ -3757,6 +3765,11 @@ export type components = {
              */
             truncated: boolean;
         };
+        /**
+         * @description A reaction a thread's draft stages on the comment it names, by GitHub's name for it.
+         * @enum {string}
+         */
+        ReactionName: "+1" | "-1" | "laugh" | "confused" | "heart" | "hooray" | "rocket" | "eyes";
         /**
          * Refusal
          * @description A guard refused the operator's action: which guard, and why, as the CLI says it.

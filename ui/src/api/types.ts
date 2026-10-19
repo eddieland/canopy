@@ -189,6 +189,8 @@ export type ThreadComment = Schemas['ThreadComment']
 export type Draft = Schemas['Draft']
 /** Where a draft stands, as `canopy draft list` prints it. */
 export type DraftStatus = Schemas['DraftStatusName']
+/** A reaction a thread's draft stages on the comment it names, by GitHub's name for it. */
+export type Reaction = Schemas['ReactionName']
 /** What a send did: the drafts posted, sent before, not sent and why, and those it cannot say of. */
 export type DraftsSent = Schemas['DraftsSent']
 

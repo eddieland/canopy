@@ -71,11 +71,12 @@ test("replies a run drafted lead to the PR's page, where each waits on its threa
     // Each thread at its line, answered or not, and the review's body above the diff.
     await expect(page.getByTestId('review-thread')).toHaveCount(3)
     await expect(page.getByTestId('pr-drafts').getByTestId('draft')).toHaveCount(1)
-    await expect(page.getByTestId('draft').and(page.locator('[data-status=waiting]'))).toHaveCount(3)
-    await expect(page.getByRole('button', { name: 'Send 3 waiting' })).toBeVisible()
-    // The head lists every draft, and each one's link lands on its card.
+    await expect(page.getByTestId('draft').and(page.locator('[data-status=waiting]'))).toHaveCount(4)
+    await expect(page.getByRole('button', { name: 'Send 4 waiting' })).toBeVisible()
+    // The head lists every draft, and each one's link lands on its card; a reaction sent alone is named by it.
     const list = page.getByTestId('draft-list')
-    await expect(list.getByRole('listitem')).toHaveCount(3)
+    await expect(list.getByRole('listitem')).toHaveCount(4)
+    await expect(list.getByRole('link', { name: 'Thumbs up, alone' })).toBeVisible()
     await list.getByRole('link', { name: /^ABC-099 asks for 250 ms/u }).click()
     await expect(page).toHaveURL(/#draft-\d+-2$/u)
     const card = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' }).getByTestId('draft')

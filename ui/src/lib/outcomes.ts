@@ -159,7 +159,7 @@ export function reviewSentText(sent: ReviewSent): string {
 
 /** What an edit of a draft did, as `canopy draft edit` says it: the text is the operator's now, named by its hash. */
 export function draftEditedText(draft: Draft): string {
-    return `Run ${draft.run}'s draft ${draft.number} is your text now, hash ${draft.hash}.`
+    return `Run ${draft.run}'s draft ${draft.number} is in your words now, hash ${draft.hash}.`
 }
 
 /** What a drop or its undo did, as `canopy draft drop` says it: where the draft stands now. */
