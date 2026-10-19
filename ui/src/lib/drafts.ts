@@ -64,14 +64,6 @@ export function waiting(threads: PullRequestThreads): Draft[] {
     return [...threads.pr_drafts, ...threads.threads.flatMap((t) => t.drafts)].filter((d) => d.status === 'waiting')
 }
 
-/**
- * The waiting drafts a stage takes, in the page's order: all but those whose reaction is not on GitHub yet, since a
- * pending review holds no reaction. Those stay to send.
- */
-export function stageable(threads: PullRequestThreads): Draft[] {
-    return waiting(threads).filter((d) => d.reaction === null || d.reacted === d.reaction)
-}
-
 /** Every draft for the PR in the review the operator staged, which they submit on GitHub. */
 export function staged(threads: PullRequestThreads): Draft[] {
     return [...threads.pr_drafts, ...threads.threads.flatMap((t) => t.drafts)].filter((d) => d.status === 'staged')

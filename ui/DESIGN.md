@@ -1389,10 +1389,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   draft in the order their cards show (a `thread-draft` row: its status chip, `run:N` and its number, its first line
   linking to its card, or its reaction's name for one it sends alone, and where the card sits in muted monospace),
   whose links open the card's file as a review's findings list does, the drafts for the review's body, and in its foot
-  `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline
-  `Start a review on GitHub` beside it, which stages them in a pending review instead, with a muted line saying what
-  each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the PR's files
-  on GitHub to finish it. Then the diff (`DiffPanels`), each thread's card
+  `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline `Start a
+  review on GitHub` beside it, which stages them in a pending review instead, its reactions added at once, with a muted
+  line saying what each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the
+  PR's files on GitHub to finish it. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a

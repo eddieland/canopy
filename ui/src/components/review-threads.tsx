@@ -34,13 +34,19 @@ import {
     open,
     placeThreads,
     reactionOf,
-    stageable,
     staged,
     threadWhere,
     waiting,
 } from '@/lib/drafts'
 import type { Placed } from '@/lib/reviews'
-import { draftDroppedText, draftEditedText, draftsSentText, draftsSentToast, draftsStagedToast } from '@/lib/outcomes'
+import {
+    draftDroppedText,
+    draftEditedText,
+    draftsSentText,
+    draftsSentToast,
+    draftsStagedText,
+    draftsStagedToast,
+} from '@/lib/outcomes'
 import { shortSha } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
@@ -129,7 +135,6 @@ function RepliesPanel({
     const [said, setSaid] = useState<string | null>(null)
     const toast = useToast()
     const sendable = waiting(threads)
-    const toStage = stageable(threads)
     const held = staged(threads)
     const send = useMutation({
         mutationFn: () => sendDrafts(sendable),
@@ -140,9 +145,9 @@ function RepliesPanel({
         },
     })
     const stage = useMutation({
-        mutationFn: () => stageDrafts(toStage),
+        mutationFn: () => stageDrafts(sendable),
         onSuccess: (sent) => {
-            setSaid(draftsSentText(sent))
+            setSaid(draftsStagedText(sent))
             toast(draftsStagedToast(sent, threads.url))
             onChange()
         },
@@ -240,21 +245,21 @@ function RepliesPanel({
                                 <Send />
                                 {send.isPending ? `Sending ${sendable.length}…` : `Send ${sendable.length} waiting`}
                             </Button>
-                            {toStage.length > 0 && (
-                                <Button
-                                    variant="outline"
-                                    onClick={() => stage.mutate()}
-                                    disabled={busy}
-                                    title={`canopy draft stage ${sendRefs(toStage)}`}
-                                >
-                                    <GitPullRequestDraft />
-                                    {stage.isPending ? 'Starting the review…' : 'Start a review on GitHub'}
-                                </Button>
-                            )}
+                            <Button
+                                variant="outline"
+                                onClick={() => stage.mutate()}
+                                disabled={busy}
+                                title={`canopy draft stage ${sendRefs(sendable)}`}
+                            >
+                                <GitPullRequestDraft />
+                                {stage.isPending ? 'Starting the review…' : 'Start a review on GitHub'}
+                            </Button>
                             <span className="text-xs text-muted-foreground">
                                 Send posts one comment review, in your name: it approves nothing and resolves no thread.
                                 A review started on GitHub holds the same words, for you to add to and submit there
-                                {toStage.length < sendable.length && ', without the drafts that add a reaction'}.
+                                {sendable.some((d) => d.reaction !== null) &&
+                                    "; its reactions go on their comments now, since GitHub can't keep one pending"}
+                                .
                             </span>
                         </span>
                     )}

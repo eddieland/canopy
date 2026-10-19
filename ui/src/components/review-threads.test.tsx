@@ -283,24 +283,39 @@ describe('ReviewThreads', () => {
         expect(within(screen.getByTestId('threads-elsewhere')).getByText('Threads')).toBeTruthy()
     })
 
-    it('stages the waiting drafts in a review on GitHub, but one adding a reaction GitHub has not got', async () => {
+    it('stages every waiting draft in a review on GitHub, and says reactions go on their comments now', async () => {
         const body = draft({ kind: 'pr', number: 2, stance: null, comment_id: null, hash: 'bbbbbbbbbbbb' })
-        const reacts = draft({ run: 46, reaction: '+1', hash: 'cccccccccccc' })
+        const reacts = draft({ run: 46, text: '', reaction: '+1', hash: 'cccccccccccc' })
         const threads = pullRequestThreads({
             pr_drafts: [body],
             threads: [reviewThread({ drafts: [draft(), reacts] })],
         })
         const held = [draft({ status: 'staged' }), { ...body, status: 'staged' as const }]
-        const staged = { posted: [], already: [], failed: [], unconfirmed: [], staged: held }
+        const staged = {
+            posted: [{ ...reacts, status: 'sent' as const, reacted: '+1' as const }],
+            already: [],
+            failed: [],
+            unconfirmed: [],
+            staged: held,
+        }
         answer = (path) => Response.json(path === '/api/drafts/stage' ? staged : threads)
         await renderRouted(toasting(<ReviewThreads url={PR} />))
         const start = await screen.findByRole<HTMLButtonElement>('button', { name: 'Start a review on GitHub' })
-        expect(start.title).toBe('canopy draft stage run:45 2@bbbbbbbbbbbb 1@cb496d375e04')
-        expect(screen.getByTestId('review-replies').textContent).toContain('without the drafts that add a reaction')
+        expect(start.title).toBe('canopy draft stage run:45 2@bbbbbbbbbbbb 1@cb496d375e04 run:46 1@cccccccccccc')
+        expect(screen.getByTestId('review-replies').textContent).toContain(
+            "its reactions go on their comments now, since GitHub can't keep one pending.",
+        )
         fireEvent.click(start)
-        await screen.findByRole('status')
+        expect((await screen.findByRole('status')).textContent).toContain(
+            "Run 46's draft 1 put thumbs up on its comment now, not in the review: GitHub can't keep a reaction " +
+                'pending.',
+        )
         expect(toasts).toEqual([
-            { title: 'Staged 2 drafts in a review on GitHub', detail: `${PR}/files`, tone: 'done' },
+            {
+                title: 'Staged 2 drafts in a review on GitHub, and added 1 reaction now',
+                detail: `${PR}/files`,
+                tone: 'done',
+            },
         ])
         expect(writes()).toEqual([
             {
@@ -310,6 +325,7 @@ describe('ReviewThreads', () => {
                     drafts: [
                         { run: 45, number: 2, hash: 'bbbbbbbbbbbb' },
                         { run: 45, number: 1, hash: 'cb496d375e04' },
+                        { run: 46, number: 1, hash: 'cccccccccccc' },
                     ],
                 },
             },

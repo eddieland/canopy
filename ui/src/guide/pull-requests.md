@@ -68,14 +68,15 @@ left wondering whether that click took. If anything didn't make it, the toast we
 says why. canopy never approves, requests changes, or
 resolves a thread: whether the conversation is over stays the reviewer's call.
 
-**Start a review on GitHub**, beside it, puts the same waiting drafts in a pending review on the PR instead, the
-replies on their threads and the review's body as its own, and stops there. Only you can see it. Open it on GitHub,
-add your own comments, reword what you like, and submit it yourself: it's `canopy draft stage`, for when you'd rather
-your last click be on GitHub. A pending review can't hold a reaction, so a draft that adds one stays behind for
-**Send**. The staged cards say where they are, and the panel links to the PR's files, where GitHub keeps its
-**Finish your review** button. canopy's next read of the PR settles them: sent once you submit, dropped if you took a
-reply out first, waiting again if you deleted the review. Until then nothing else is sent on that PR, because GitHub
-gives each person one pending review per PR and canopy isn't about to delete yours.
+**Start a review on GitHub**, beside it, puts the same waiting drafts in a pending review on the PR instead, the replies
+on their threads and the review's body as its own, and stops there. Only you can see it. Open it on GitHub, add your own
+comments, reword what you like, and submit it yourself: it's `canopy draft stage`, for when you'd rather your last click
+be on GitHub. GitHub has no such thing as a pending reaction, so a draft's 👍 goes on its comment the moment you click,
+and a draft that's only a reaction is simply sent; the help line warns you first, and the toast counts them after. The
+staged cards say where they are, and the panel links to the PR's files, where GitHub keeps its **Finish your review**
+button. canopy's next read of the PR settles them: sent once you submit, dropped if you took a reply out first, waiting
+again if you deleted the review. Until then nothing else is sent on that PR, because GitHub gives each person one
+pending review per PR and canopy isn't about to delete yours.
 
 canopy is careful about what it posts. A send carries the hash of the text you saw, so if the draft changed in another
 tab, it's refused `stale` rather than sending words you never read. If a coworker commented on the thread since the

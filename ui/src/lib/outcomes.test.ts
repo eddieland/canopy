@@ -11,6 +11,7 @@ import {
     draftEditedText,
     draftsSentText,
     draftsSentToast,
+    draftsStagedText,
     draftsStagedToast,
     editedText,
     failedText,
@@ -222,13 +223,40 @@ describe('outcomes', () => {
         )
     })
 
-    it('toast a stage: how many drafts wait in the review, and where to finish it', () => {
+    it('say what a stage did: each draft in the review, and each reaction that went on its comment now', () => {
+        const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
+        expect(
+            draftsStagedText({
+                ...none,
+                staged: [draft({ status: 'staged', reacted: 'heart' })],
+                posted: [draft({ number: 2, status: 'sent', text: '', reacted: '+1' })],
+                failed: [{ draft: draft({ number: 3 }), why: 'the post failed' }],
+            }),
+        ).toBe(
+            "Staged run 45's draft 1 in a review for you to submit on GitHub. Run 45's draft 2 put thumbs up on its " +
+                "comment now, not in the review: GitHub can't keep a reaction pending. Run 45's draft 1 put heart on " +
+                "its comment now, not in the review: GitHub can't keep a reaction pending. Run 45's draft 3 was not " +
+                'sent: the post failed.',
+        )
+    })
+
+    it('toast a stage: how many drafts wait in the review, where to finish it, and the reactions added now', () => {
         const pr = 'https://github.com/acme/web/pull/88'
         const none = { posted: [], already: [], failed: [], unconfirmed: [], staged: [] }
         const two = [draft({ status: 'staged' }), draft({ number: 2, status: 'staged' })]
         expect(draftsStagedToast({ ...none, staged: two }, pr)).toEqual({
             title: 'Staged 2 drafts in a review on GitHub',
             detail: `${pr}/files`,
+            tone: 'done',
+        })
+        const alone = draft({ number: 3, status: 'sent', text: '', reacted: '+1' })
+        expect(draftsStagedToast({ ...none, staged: two, posted: [alone] }, pr)).toEqual({
+            title: 'Staged 2 drafts in a review on GitHub, and added 1 reaction now',
+            detail: `${pr}/files`,
+            tone: 'done',
+        })
+        expect(draftsStagedToast({ ...none, posted: [alone] }, pr)).toEqual({
+            title: 'Added 1 reaction now',
             tone: 'done',
         })
         expect(draftsStagedToast({ ...none, failed: [{ draft: draft(), why: 'refused' }] }, pr)).toEqual({
