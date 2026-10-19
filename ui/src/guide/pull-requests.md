@@ -44,7 +44,10 @@ Each waiting draft has three buttons:
 - **Drop** means nobody sends it. **Undo** takes that back.
 
 **Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
-review, so your coworker gets one notification rather than a burst. canopy never approves, requests changes, or
+review, so your coworker gets one notification rather than a burst. The button reads **Sending…** while the post is on
+its way, and once it lands a toast at the bottom of the window says what went and where it went, so you're not
+left wondering whether that click took. If anything didn't make it, the toast wears a cross and the line under the card
+says why. canopy never approves, requests changes, or
 resolves a thread: whether the conversation is over stays the reviewer's call.
 
 canopy is careful about what it posts. A send carries the hash of the text you saw, so if the draft changed in another

@@ -16,8 +16,9 @@ import { DiffPanels } from '@/components/review-diff'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
 import { DRAFT_TONE, MAX_DRAFT_CHARS, draftChars, movedHead, open, placeThreads, waiting } from '@/lib/drafts'
-import { draftDroppedText, draftEditedText, draftsSentText } from '@/lib/outcomes'
+import { draftDroppedText, draftEditedText, draftsSentText, draftsSentToast } from '@/lib/outcomes'
 import { shortSha } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
@@ -87,11 +88,13 @@ export function ReviewThreads({ url }: { url: string }) {
  */
 function RepliesPanel({ threads, onChange }: { threads: PullRequestThreads; onChange: () => void }) {
     const [said, setSaid] = useState<string | null>(null)
+    const toast = useToast()
     const sendable = waiting(threads)
     const send = useMutation({
         mutationFn: () => sendDrafts(sendable),
         onSuccess: (sent) => {
             setSaid(draftsSentText(sent))
+            toast(draftsSentToast(sent))
             onChange()
         },
     })
@@ -163,7 +166,7 @@ function RepliesPanel({ threads, onChange }: { threads: PullRequestThreads; onCh
                                 title={`canopy draft send ${sendRefs(sendable)}`}
                             >
                                 <Send />
-                                Send {sendable.length} waiting
+                                {send.isPending ? `Sending ${sendable.length}…` : `Send ${sendable.length} waiting`}
                             </Button>
                         )}
                         <span className="text-xs text-muted-foreground">
@@ -229,18 +232,21 @@ export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChang
 /**
  * One draft, a worker's text until the operator sends it: its run and number, where it stands, what the run did about
  * its thread, and its text, plain, every hidden character named. A waiting draft has Send, Edit, and Drop; one no read
- * has checked yet, Edit and Drop; a dropped one, Undo. Its hash is the one a send carries, so what posts is
- * the text shown. A draft superseded by this one that carried the operator's edits is named, since they are not
- * carried over. A ticket's draft names the issue it goes to, as the worker read it, for the operator to check. Each
- * verb calls `onChange` once done, to read again what shows the draft.
+ * has checked yet, Edit and Drop; a dropped one, Undo. Send reads Sending… until the post returns, and a toast says
+ * what it did as well as the line under the card. Its hash is the one a send carries, so what posts is the text shown.
+ * A draft superseded by this one that carried the operator's edits is named, since they are not carried over. A
+ * ticket's draft names the issue it goes to, as the worker read it, for the operator to check. Each verb calls
+ * `onChange` once done, to read again what shows the draft.
  */
 export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
     const [said, setSaid] = useState<string | null>(null)
     const [editing, setEditing] = useState(false)
+    const toast = useToast()
     const send = useMutation({
         mutationFn: () => sendDrafts([draft]),
         onSuccess: (sent) => {
             setSaid(draftsSentText(sent))
+            toast(draftsSentToast(sent))
             onChange()
         },
     })
@@ -319,7 +325,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                             title={`canopy draft send run:${draft.run} ${draft.number}@${draft.hash}`}
                         >
                             <Send />
-                            Send
+                            {send.isPending ? 'Sending…' : 'Send'}
                         </Button>
                     )}
                     {open(draft) && (

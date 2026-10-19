@@ -8,6 +8,7 @@ import {
     draftDroppedText,
     draftEditedText,
     draftsSentText,
+    draftsSentToast,
     editedText,
     failedText,
     forgotText,
@@ -205,6 +206,41 @@ describe('outcomes', () => {
                 "Run 45's draft 3 was not sent: the post failed: 502. Run 45's draft 4 may have been posted: the " +
                 'post ended without saying. A read of its PR settles it; canopy sends it no other time.',
         )
+    })
+
+    it("toast a send: the one draft's fate, or how many of several reached the PR, and where they went", () => {
+        const url = 'https://github.com/acme/web/pull/88#pullrequestreview-1'
+        const none = { posted: [], already: [], failed: [], unconfirmed: [] }
+        expect(draftsSentToast({ ...none, posted: [draft({ status: 'sent', sent_url: url })] })).toEqual({
+            title: "Sent run 45's draft 1",
+            detail: url,
+            tone: 'done',
+        })
+        expect(draftsSentToast({ ...none, already: [draft({ status: 'sent', sent_url: null })] })).toEqual({
+            title: "Run 45's draft 1 was sent already",
+            tone: 'done',
+        })
+        expect(draftsSentToast({ ...none, failed: [{ draft: draft(), why: 'the post failed: 502' }] })).toEqual({
+            title: "Run 45's draft 1 was not sent",
+            tone: 'failed',
+        })
+        expect(draftsSentToast({ ...none, unconfirmed: [draft({ status: 'unconfirmed' })] })).toEqual({
+            title: "Run 45's draft 1 may have been posted",
+            tone: 'failed',
+        })
+        const two = [draft({ status: 'sent', sent_url: url }), draft({ number: 2, status: 'sent', sent_url: url })]
+        expect(draftsSentToast({ ...none, posted: two })).toEqual({ title: 'Sent 2 drafts', detail: url, tone: 'done' })
+        expect(
+            draftsSentToast({
+                ...none,
+                posted: two,
+                failed: [{ draft: draft({ number: 3 }), why: 'the post failed' }],
+            }),
+        ).toEqual({ title: 'Sent 2 of 3 drafts', detail: url, tone: 'failed' })
+        expect(draftsSentToast({ ...none, failed: two.map((d) => ({ draft: d, why: 'the post failed' })) })).toEqual({
+            title: '2 drafts not sent',
+            tone: 'failed',
+        })
     })
 
     it('say whether a reply was new', () => {
