@@ -190,7 +190,7 @@ describe('outcomes', () => {
 
     it('say what a verb on a draft did, as canopy draft does', () => {
         expect(draftEditedText(draft({ hash: 'abc123def456' }))).toBe(
-            "Run 45's draft 1 is your text now, hash abc123def456.",
+            "Run 45's draft 1 is in your words now, hash abc123def456.",
         )
         expect(draftDroppedText(draft({ status: 'dropped' }))).toBe("Run 45's draft 1 is dropped.")
         const url = 'https://github.com/acme/web/pull/88#discussion_r1'

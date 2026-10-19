@@ -71,8 +71,8 @@ test("replies a run drafted lead to the PR's page, where each waits on its threa
     // Each thread at its line, answered or not, and the review's body above the diff.
     await expect(page.getByTestId('review-thread')).toHaveCount(3)
     await expect(page.getByTestId('pr-drafts').getByTestId('draft')).toHaveCount(1)
-    await expect(page.getByTestId('draft').and(page.locator('[data-status=waiting]'))).toHaveCount(3)
-    await expect(page.getByRole('button', { name: 'Send 3 waiting' })).toBeVisible()
+    await expect(page.getByTestId('draft').and(page.locator('[data-status=waiting]'))).toHaveCount(4)
+    await expect(page.getByRole('button', { name: 'Send 4 waiting' })).toBeVisible()
 })
 
 test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {

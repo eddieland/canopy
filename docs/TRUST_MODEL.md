@@ -606,9 +606,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
   proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
-  `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
-  `drop`, and `send` do (DESIGN §29), ask the loop to read its config files again as SIGHUP does, and ask it for a
-  tick now as `t` at its terminal does.
+  `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction, drop, and send them
+  as `canopy draft edit`, `drop`, and `send` do (DESIGN §29), ask the loop to read its config files again as SIGHUP
+  does, and ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
@@ -631,8 +631,8 @@ reaches every run's prompt, every ticket's, until it lapses, at most seven days,
 outlives a new secret; the banner on every page and `canopy status` show it while it is
 in force. A lesson promoted that way reaches every worker's prompt while `memory.proposals` is `use`, as such a notice
 does, with no lapse: it outlives a new secret until the operator forgets it, and `canopy memory lessons` and the
-memory page list it, with where it came from. It can also edit a run's draft into text of its choosing and send it,
-which posts that text on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
+memory page list it, with where it came from. It can also edit a run's draft into text and a reaction of its choosing
+and send it, which posts them on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
 the edit, the send, and the channel. Binding to a private address rather than loopback relies on the network
 for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port

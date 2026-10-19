@@ -1373,10 +1373,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
   plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
   a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it
-  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped. Its
+  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped,
+  left out when the draft sends its reaction alone. A thread's draft that stages a reaction says so in a muted line
+  under the text (`draft-reaction`): the emoji, hidden from screen readers, then its name and whether it goes with the
+  reply or alone; one a failed send already added says so in `status-blocked` (`draft-reacted`). Its
   verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
   ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
-  the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
+  the text in a `Textarea` with its count against 4,000, `Save` disabled past it, and on a thread's draft a `Reaction`
+  `ToggleGroup` of GitHub's eight in its picker's order, each an emoji named for screen readers, the lit one pressed
+  again for none; `Save` also takes an empty text beside a reaction. What each verb did goes under it
   (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send
   did as well, since a send speaks for the operator outside canopy and the line under the card leaves with its attention
   item at the next tick: the draft's fate, or how many of several reached the PR, with the URL when they share one, and

@@ -172,10 +172,12 @@ export function draft(fields: Partial<Draft> = {}): Draft {
         issue_url: null,
         why: null,
         text: 'Moved it into a `finally`.',
+        reaction: null,
         hash: 'cb496d375e04',
         edited: false,
         supersedes_edited: false,
         sent_url: null,
+        reacted: null,
         created_at: '2026-10-08T11:38:00Z',
         ...fields,
     }

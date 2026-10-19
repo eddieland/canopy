@@ -2203,6 +2203,10 @@ type DraftStanceName = Annotated[
     Literal["changed", "declined", "answered"],
     Field(description="What a thread's draft says the run did: made the change, declined it, or answered a question."),
 ]
+type ReactionName = Annotated[
+    Literal["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+    Field(description="A reaction a thread's draft stages on the comment it names, by GitHub's name for it."),
+]
 
 
 class Draft(_Model):
@@ -2229,15 +2233,20 @@ class Draft(_Model):
     why: str | None = None
     """The harness's words for its latest change of status, such as why it was refused."""
     text: str
-    """Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here."""
+    """Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here. Empty
+    when it sends its reaction alone."""
+    reaction: ReactionName | None = None
+    """For a thread's draft, the reaction it stages on the comment it names, as it stands."""
     hash: str
-    """The name of that text, which a send carries so what posts is what the operator read."""
+    """The name of that text and reaction, which a send carries so what posts is what the operator read."""
     edited: bool
     """Whether the operator edited it."""
     supersedes_edited: bool
     """Whether a draft it superseded carried the operator's edits, which are not carried over."""
     sent_url: str | None = None
     """Once sent, the comment's or the review's URL on GitHub."""
+    reacted: ReactionName | None = None
+    """The reaction a send added on GitHub, which stays there though the rest of that send posted nothing."""
     created_at: datetime
     """When the run drafted it."""
 
@@ -2312,10 +2321,12 @@ class PullRequestThreads(_Model):
 
 
 class DraftEditRequest(_Model):
-    """An edit of a draft's text, as `canopy draft edit run:ID N --text TEXT` takes it."""
+    """An edit of a draft's words, as `canopy draft edit run:ID N --text TEXT [--react NAME | --no-react]` takes it."""
 
     text: Annotated[str, Field(max_length=8000)]
-    """The draft's new text. Bounded again in code, as a run's draft is."""
+    """The draft's new text, empty beside a reaction to send it alone. Bounded again in code, as a run's draft is."""
+    reaction: ReactionName | None
+    """The reaction it stages, or None for none: given every time, so an edit never keeps one the page did not show."""
 
 
 class DraftDropRequest(_Model):
