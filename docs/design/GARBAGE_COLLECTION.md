@@ -27,6 +27,7 @@ maintenance (§18) and nothing runs maintenance in its place.
 | Any of those with no journal row | a review run that never started | never | after an hour |
 | `canopy.log` | every log line of every canopy process | never; no rotation | rotated past `log_max_mib` |
 | Attention items the harness raised | each open item, every tick | never | outside the window (below) |
+| Connector runs and derivations (§30) | each tick, and each of M39's polls | never | outside the window (below) |
 | Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | never | checkpointed each pass; `canopy gc --vacuum` |
 | Loose objects and packs in a primary clone | every worker's fetches and commits | never (`gc.auto=0`) | `canopy gc --git` (below) |
 | `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | never | `canopy gc --caches` |
@@ -42,10 +43,10 @@ maintenance (§18) and nothing runs maintenance in its place.
   They are small; the bytes are in their files.
 - **A tick, ticket, message, unit, or forget.** Ticks are what runs, decisions, chore runs, and review runs point to;
   tickets, messages, and units are the conversation (§22) and its cursors, and forgets its history.
-- **The overseer's own decisions.** They are the audit log and the prompt-evaluation corpus (§11). Only the attention
-  items the harness raises are pruned.
+- **The overseer's own decisions.** They are the audit log and the prompt-evaluation corpus (§11). Of the decisions,
+  only the attention items the harness raises are pruned.
 - **Records the design keeps, or a reader needs whole:** starts, notices, and ended review requests (§11, §21); chore
-  runs, whose `ok` runs date each finding's sequence (§19).
+  runs, whose `ok` runs date each finding's sequence (§19); plan files, which are the operator's to remove (§25).
 - **Anything a live run uses.** A file is removed only when its run has ended, and never while the run's lifelock is
   held.
 - **Remote branches.** Deleting one is outward-facing and the branch may hold work. They stay the operator's (§22);
@@ -107,6 +108,13 @@ Rejected: recording an item only when it opens and when it closes. That would sa
 §14 derives the list, and every reader of decisions with it; the window rule saves them and changes nothing that is
 read.
 
+Connector runs and derivations (§30) go under the same rule, a connector run between ticks (M39) dated against the
+window's oldest tick. Each source's newest run, and the newest that recorded the query's result, stay whatever their
+age, since `canopy status`, `connector_failed`, and the derivation read them. Agreement between a derivation and the
+overseer is computed from the rows (§30), so what is removed with them is only how far back it can be computed again.
+They are pruned by the pass, not by the tick that writes them as delivery prunes notification events (§20): one rule,
+one record of what went, and no delete in every tick.
+
 After the deletes the pass checkpoints the WAL. A long-lived reader, such as one of the web UI's event streams, can
 hold the checkpoint back; then the pass logs it and moves on. SQLite reuses freed pages, but the file never shrinks:
 `canopy gc --vacuum` runs `VACUUM`, refusing while any run is live, since runs write the journal. It also refuses
@@ -140,7 +148,7 @@ User file, personal:
 [retention]
 run_files_days = 30    # a run's, chore run's, or review's log, prompt, and diff, once it ended this long ago
 tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for run_files_days
-journal_days = 90      # harness attention rows, past the window the attention list reads
+journal_days = 90      # harness attention rows, connector runs, and derivations, past the attention list's window
 log_max_mib = 50       # canopy.log is rotated past this
 log_keep = 3           # and this many rotated files are kept
 memory_days = 30       # the text of a note or proposal no longer in force (§28); a lesson is never pruned
@@ -154,4 +162,6 @@ measures a live workspace, and its numbers set the defaults.
 - The defaults, from the measurement.
 - Whether the overseer's own attention rows, which it also records every tick an item stays open, need a rule of
   their own. They are the evaluation corpus, so not until the measurement shows their share.
+- Whether connector runs and derivations need a key of their own rather than `journal_days`, once the dry run has
+  counted them on a workspace that runs the connectors.
 - Whether the pass runs `--git` on its own once it has run live.

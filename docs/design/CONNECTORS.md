@@ -141,8 +141,14 @@ Each line is validated against its kind (pydantic, D026) before anything is writ
   of its stderr.
 - A dry run observes as a live tick does: reading changes nothing in the world, and a mirrored comment is recorded in
   a dry run already (§22).
-- `connector_runs` and `derivations` gain a row or more every tick; §26's pass removes them under the rule it applies to
-  the harness's attention rows. Observations are replaced, so they do not grow with ticks.
+- `connector_runs` and `derivations` gain a row or more every tick, and M39's polls add runs between ticks. Neither is
+  a record a guard counts, the conversation, or the overseer's decisions, so §26's pass removes them under the rule it
+  applies to the harness's attention rows, with `retention.journal_days`, keeping the runs this section reads (§26, The
+  journal). Observations are replaced, and comments are recorded once per id, so they do not grow with ticks.
+- Nothing of either is kept forever. Agreement is computed, never stored (below), so there is no disagreeing row to
+  keep apart; the measurement reads ticks inside the window and is recorded in `MEASUREMENTS.md`, which outlives the
+  rows. Rejected: keeping the derivations that disagree. The pass would have to run the comparison to choose them, and
+  a fix to the comparison would then reread only what the old one chose.
 
 ### In the tick
 
@@ -250,8 +256,8 @@ To be approved by the operator in merging the PR that builds the connectors:
 - AGENTS.md's "a tracker adapter interface" line (Do not build) allows this contract, and its Toolchain line names the
   Jira connector beside the GitHub programs.
 - §3's tracker non-goal, §4 principle 5, and §17 say the tracker is reached through MCP and connectors, with no
-  tracker code in the harness. §6 step 3, §11, §12 (the keys above and `human_checks`), §14 (`connector_failed`), and
-  §26's table change as this section says.
+  tracker code in the harness. §6 step 3, §11, §12 (the keys above and `human_checks`), and §14 (`connector_failed`)
+  change as this section says. §26 names the two tables already.
 - TRUST_MODEL T1: comments a connector records are data, as mirrored ones are, and authorize nothing; in this milestone
   no observation decides anything. T2: the Jira connector reads its credentials file and calls only its site, and the
   GitHub connector's reads widen to issues, branches, and checks, with `gh`'s token as before. T7: `human_checks`
