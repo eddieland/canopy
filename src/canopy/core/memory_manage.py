@@ -4,7 +4,9 @@ Each deletes bodies, never rows: a forgotten memory is a tombstone that keeps wh
 with `PRAGMA secure_delete` on, the search index is merged after it so it keeps no word of the text, and the
 write-ahead log is checkpointed, so a purged poison or a leaked secret does not survive in free pages or the log. Only
 the operator runs these, from `canopy memory` or the web UI: they refuse inside canopy's ticks and runs. A lesson is
-made only here, from a proposal or a ticket's note the operator promotes: no agent writes one.
+made only here, from a proposal or a ticket's note the operator promotes, or from a lesson they edit: no agent writes
+one. Neither changes a lesson's text in place: the new lesson supersedes the one before it, which keeps its text as
+the lesson's history.
 """
 
 from __future__ import annotations
@@ -242,6 +244,104 @@ def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
         "UPDATE memories SET review_at = ?, wrong_at = NULL, wrong_run_id = NULL WHERE id = ?", (due, lesson_id)
     )
     return due
+
+
+@dataclass(frozen=True)
+class Edited:
+    """A lesson the operator edited: the new version, the one it replaced, and whether runs read it now."""
+
+    #: The new version, in force under the key.
+    lesson: records.Memory
+    #: The version it replaced, superseded, its text kept as the lesson's history.
+    replaced: records.Memory
+    #: Which version of the lesson the new one is: 2 for the first edit of a lesson promoted once.
+    version: int
+    #: Whether runs are served lessons now, rather than recording them.
+    served: bool
+
+
+def edit(
+    conn: sqlite3.Connection,
+    config: Config,
+    lesson_id: int,
+    *,
+    text: str | None = None,
+    repo: str | None = None,
+    every_repo: bool = False,
+    repos: Sequence[str] = (),
+) -> Edited:
+    """Write a lesson in force anew: in `text` if given, for `repo` if given, or with `every_repo` for every one.
+
+    The new version keeps the key, supersedes the lesson, and is made from it, so the old one stays, with its text, as
+    the lesson's history, and what runs read of it and said of it stays with the words they read. It is due for review
+    `REVIEW_DAYS` on, with no run's report that it is wrong: in writing it, the operator vouched for it. `repos` are
+    the workspace's repositories, which `repo` must be one of.
+
+    Returns:
+        The new version, the one it replaced, which version it is, and whether runs are served lessons now.
+
+    Raises:
+        Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no lesson
+            in force has the id; (`unknown_repo`) `repo` is not in `repos`; (`bad_text`) the text is outside the
+            bounds; (`unchanged`) it would say the same words to the same repositories.
+        ValueError: Both `repo` and `every_repo` are given.
+        RuntimeError: The lesson it wrote cannot be read back.
+    """
+    if repo is not None and every_repo:
+        raise ValueError("an edit takes a repository or every repository, not both")
+    conversation.check_operator()
+    _check_on(config)
+    old = memory.get(conn, lesson_id)
+    if old is None or old.scope is not MemoryScope.LESSON or old.status is not MemoryStatus.ACTIVE:
+        why = f": {old.status}, {old.why}" if old is not None and old.why is not None else ""
+        raise conversation.Refused("unknown", f"no lesson in force has id {lesson_id}{why}")
+    if repo is not None and repo not in repos:
+        names = ", ".join(repos) or "none yet"
+        raise conversation.Refused("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
+    try:
+        body = check_text(text if text is not None else old.body or "", memory.MAX_PROPOSAL_CHARS)
+    except TextRefused as e:
+        raise conversation.Refused("bad_text", f"the lesson's {e}") from None
+    serves = None if every_repo else repo if repo is not None else old.repo
+    if body == old.body and serves == old.repo:
+        where = f"runs in {serves}" if serves is not None else "every run"
+        raise conversation.Refused("unchanged", f"lesson {lesson_id} already says that, to {where}")
+    now = datetime.now(UTC)
+    stamp = db.format_time(now)
+    with db.transaction(conn):
+        # Out of force first: the journal holds one lesson in force under a key.
+        conn.execute("UPDATE memories SET status = ? WHERE id = ?", (MemoryStatus.SUPERSEDED, old.id))
+        cur = conn.execute(
+            "INSERT INTO memories (scope, repo, key, body, status, author, supersedes, promoted_from, created_at, "
+            "approved_at, review_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                MemoryScope.LESSON,
+                serves,
+                old.key,
+                body,
+                MemoryStatus.ACTIVE,
+                MemoryAuthor.OPERATOR,
+                old.id,
+                old.id,
+                stamp,
+                stamp,
+                db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
+            ),
+        )
+        new_id = int(cur.lastrowid or 0)
+        conn.execute(
+            "UPDATE memories SET why = ?, invalidated_at = ? WHERE id = ?",
+            (f"edited into lesson {new_id}", stamp, old.id),
+        )
+    lesson = memory.get(conn, new_id)
+    if lesson is None:
+        raise RuntimeError(f"lesson {new_id} vanished")
+    return Edited(
+        lesson=lesson,
+        replaced=old,
+        version=memory.version(conn, lesson),
+        served=config.memory.proposals is MemoryMode.USE,
+    )
 
 
 def _promotable(conn: sqlite3.Connection, config: Config, memory_id: int) -> records.Memory:

@@ -75,7 +75,7 @@ export function LessonsDue() {
     }
     const due = dueForReview(data.lessons, now)
     const below = new Map(
-        due.map((m) => [m.id, <LessonActions key={m.id} lesson={m} forget={false} onSaid={setSaid} />]),
+        due.map((m) => [m.id, <LessonActions key={m.id} lesson={m} edit={false} forget={false} onSaid={setSaid} />]),
     )
     return (
         <section aria-label="Lessons due" className="border-b" data-testid="attention-lessons-due">

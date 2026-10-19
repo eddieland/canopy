@@ -974,6 +974,8 @@ def _memory(conn: sqlite3.Connection) -> None:
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'worker', ?, 1, ?, ?, ?, ?, ?)",
         notes,
     )
+    # Note 2 is the second version of `flaky-checkout`, as `_run` links a note to the one under its key it replaced.
+    conn.execute("UPDATE memories SET supersedes = 1 WHERE id = 2")
     conn.execute(
         "INSERT INTO memories (id, scope, repo, key, body, status, author, promoted_from, created_at, approved_at, "
         "review_at) VALUES (8, 'lesson', 'web', 'billing-client', ?, 'active', 'operator', 7, ?, ?, ?)",

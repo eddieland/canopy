@@ -5,19 +5,19 @@ import { useId, useState } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 
 import { ApiError } from '@/api/client'
-import { forgetMemory, promoteMemory, refreshMemory, rejectMemory, renewMemory } from '@/api/mutations'
+import { editMemory, forgetMemory, promoteMemory, refreshMemory, rejectMemory, renewMemory } from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
 import { ForgetForm } from '@/components/forget-form'
 import { Textarea } from '@/components/input'
-import { MemoryText } from '@/components/memory'
+import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { InlineCode } from '@/components/rich-text'
 import { RowLine } from '@/components/rows'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { lessonChars, MAX_LESSON_CHARS, memoryStand, repoChoices } from '@/lib/memory'
-import { memoryForgottenText, PRIVATE_WORDS, promotedText, rejectedText, renewedText } from '@/lib/outcomes'
+import { editRepoChoices, lessonChars, MAX_LESSON_CHARS, memoryStand, repoChoices } from '@/lib/memory'
+import { editedText, memoryForgottenText, PRIVATE_WORDS, promotedText, rejectedText, renewedText } from '@/lib/outcomes'
 import { memoryRef } from '@/lib/refs'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -229,15 +229,21 @@ export function NoteActions({ note, promote = true, onSaid }: Said & { note: Mem
 }
 
 /**
- * A lesson's verbs, under its row, shown at rest only while it is due or wrong: Renew, and Forget, which cannot be
- * undone and so asks for the lesson's ref typed. Until then Forget is the quieter, at the line's end. With `forget`
- * false, as on a `lesson_review` item, Renew alone.
+ * A lesson's verbs, under its row, shown at rest only while it is due or wrong: Renew; Edit, which opens the form for
+ * its new version; and Forget, which cannot be undone and so asks for the lesson's ref typed. Until then Forget is the
+ * quieter, at the line's end. With `edit` and `forget` false, as on a `lesson_review` item, Renew alone.
  */
-export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson: MemoryEntry; forget?: boolean }) {
+export function LessonActions({
+    lesson,
+    edit = true,
+    forget = true,
+    onSaid,
+}: Said & { lesson: MemoryEntry; edit?: boolean; forget?: boolean }) {
     const client = useQueryClient()
     const now = useNow()
     // Renewing is the decision a due or wrong lesson asks for; on one in force and not due it is there, but quiet.
     const asked = ['due', 'wrong'].includes(memoryStand(lesson, now))
+    const [open, setOpen] = useState(false)
     const [confirming, setConfirming] = useState(false)
     const renew = useMutation({
         mutationFn: () => renewMemory(lesson.id),
@@ -250,7 +256,7 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
     // A lesson that asks nothing shows its verbs only on its row's hover or focus, as a row's copy button does, so a
     // list of hundreds is not a wall of buttons, and at rest they take no room: they show over the row's end, on the
     // panel's ground, so nothing under the row moves. A touch screen, with no hover, keeps them in the row's flow.
-    const shown = asked || confirming || renew.error !== null
+    const shown = asked || open || confirming || renew.error !== null
     return (
         <RowLine
             from="key"
@@ -260,29 +266,49 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
                     'pointer-fine:absolute pointer-fine:right-3 pointer-fine:bottom-1.5 pointer-fine:bg-surface',
                     'pointer-fine:pl-2 opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100',
                     'pointer-coarse:opacity-100',
+                    // While the row's versions are open they are its end: the verbs keep to the row's flow above them.
+                    'pointer-fine:group-data-[state=open]/copy:static',
                 ],
             )}
         >
-            <span className="flex flex-wrap items-center gap-2">
-                <Button
-                    variant={asked ? 'outline' : 'ghost'}
-                    size="xs"
-                    className={cn(!asked && 'text-muted-foreground')}
-                    title={`canopy memory renew ${lesson.id}`}
-                    onClick={() => renew.mutate()}
-                    disabled={renew.isPending}
-                >
-                    <RefreshCw />
-                    Renew
-                </Button>
-                {forget && !confirming && (
-                    <ForgetButton memory={lesson} onClick={() => setConfirming(true)} disabled={renew.isPending} />
-                )}
-            </span>
+            {open ? (
+                <EditForm lesson={lesson} onSaid={onSaid} onClose={() => setOpen(false)} />
+            ) : (
+                <span className="flex flex-wrap items-center gap-2">
+                    <Button
+                        variant={asked ? 'outline' : 'ghost'}
+                        size="xs"
+                        className={cn(!asked && 'text-muted-foreground')}
+                        title={`canopy memory renew ${lesson.id}`}
+                        onClick={() => renew.mutate()}
+                        disabled={renew.isPending}
+                    >
+                        <RefreshCw />
+                        Renew
+                    </Button>
+                    {edit && (
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            title={`canopy memory edit ${lesson.id} --text TEXT --repo REPO`}
+                            onClick={() => setOpen(true)}
+                            disabled={renew.isPending}
+                        >
+                            <Pencil />
+                            Edit
+                        </Button>
+                    )}
+                    {forget && !confirming && (
+                        <ForgetButton memory={lesson} onClick={() => setConfirming(true)} disabled={renew.isPending} />
+                    )}
+                </span>
+            )}
             {confirming && (
                 <ForgetChallenge memory={lesson} onSaid={onSaid} onCancel={() => setConfirming(false)}>
                     canopy deletes this lesson&apos;s text, and no run reads it again. Its row stays, saying who
                     promoted it and when. This cannot be undone: {backText(lesson)}
+                    {lesson.version > 1 && ' Its earlier versions keep their words: forget each from its versions.'}
                 </ForgetChallenge>
             )}
             <Notice error={renew.error} />
@@ -299,7 +325,6 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
  */
 export function PromoteForm({ source, onSaid, onClose }: Said & { source: MemoryEntry; onClose: () => void }) {
     const client = useQueryClient()
-    const id = useId()
     const own = source.text ?? ''
     const [text, setText] = useState(own)
     const [repo, setRepo] = useState(source.repo)
@@ -319,8 +344,7 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
         },
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
-    const chars = lessonChars(text)
-    const fits = chars > 0 && chars <= MAX_LESSON_CHARS
+    const fits = lessonFits(text)
     const replaced = data === undefined ? undefined : inForceUnder(data.lessons, source.key)
     const privateWords = source.private && text.trim() === own.trim()
 
@@ -337,53 +361,13 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
             aria-label={`Promote ${memoryRef(source.id)}`}
             className="flex flex-col gap-2 rounded-md border bg-surface p-3"
         >
-            <span className="flex items-baseline justify-between gap-3">
-                <label className="panel-label" htmlFor={`${id}-text`}>
-                    The lesson, in your words
-                </label>
-                <span
-                    className={cn('readout text-xs text-muted-foreground', !fits && chars > 0 && 'text-status-failed')}
-                    data-testid="lesson-chars"
-                >
-                    {chars} of {MAX_LESSON_CHARS}
-                </span>
-            </span>
-            <Textarea
-                id={`${id}-text`}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                spellCheck
-                className="min-h-20"
+            <LessonFields
+                text={text}
+                onText={setText}
+                repo={repo}
+                onRepo={setRepo}
+                choices={data === undefined ? undefined : repoChoices(source, data.repos)}
             />
-            {data !== undefined && (
-                <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-muted-foreground" id={`${id}-repo`}>
-                        Served to runs in
-                    </span>
-                    <ToggleGroup
-                        type="single"
-                        value={repo ?? EVERY}
-                        aria-labelledby={`${id}-repo`}
-                        onValueChange={(value) => {
-                            // A radio group keeps one picked: pressing the picked one again leaves it, as ''.
-                            if (value !== '') {
-                                setRepo(value === EVERY ? null : value)
-                            }
-                        }}
-                        className="flex-wrap"
-                    >
-                        {repoChoices(source, data.repos).map((name) => (
-                            <ToggleGroupItem
-                                key={name ?? EVERY}
-                                value={name ?? EVERY}
-                                className={cn(name && 'font-mono')}
-                            >
-                                {name ?? 'every repository'}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
-                </span>
-            )}
             {/* Reserved while the lessons are read, so the line that names the one replaced moves nothing in. */}
             <p className="min-h-4 text-xs text-muted-foreground" data-testid="promote-replaces">
                 {data === undefined ? (
@@ -426,6 +410,177 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
 /** The lesson in force under `key`, which promoting a memory under it replaces, as `promote` does; else undefined. */
 function inForceUnder(lessons: MemoryEntry[], key: string): MemoryEntry | undefined {
     return lessons.find((m) => m.key === key)
+}
+
+/**
+ * A lesson's next version (`canopy memory edit`): its words, starting as its own and held to the bound a proposal is,
+ * and the repositories whose runs it is served to, its own or every one first. The version in force stays, superseded,
+ * as the lesson's history, and the new one comes up for review later with any run's report that it is wrong cleared.
+ * It reads the workspace's repositories when it opens (`memoryQuery`, which the memory page has already read).
+ */
+export function EditForm({ lesson, onSaid, onClose }: Said & { lesson: MemoryEntry; onClose: () => void }) {
+    const client = useQueryClient()
+    const own = lesson.text ?? ''
+    const [text, setText] = useState(own)
+    const [repo, setRepo] = useState(lesson.repo)
+    const { data } = useQuery(memoryQuery)
+    const edit = useMutation({
+        mutationFn: () =>
+            editMemory(lesson.id, {
+                // What is unchanged goes as null, as the CLI leaves --text and --repo out: the server trims the text.
+                text: text.trim() === own.trim() ? null : text,
+                repo: repo === lesson.repo || repo === null ? null : repo,
+                every_repo: repo === null && lesson.repo !== null,
+            }),
+        onSuccess: (edited) => {
+            onSaid(editedText(edited))
+            onClose()
+            void refreshMemory(client)
+        },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
+    })
+    const changed = text.trim() !== own.trim() || repo !== lesson.repo
+    const fits = lessonFits(text)
+
+    function submit(event: SubmitEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (fits && changed) {
+            edit.mutate()
+        }
+    }
+
+    return (
+        <form
+            onSubmit={submit}
+            aria-label={`Edit ${memoryRef(lesson.id)}`}
+            className="flex flex-col gap-2 rounded-md border bg-surface p-3"
+        >
+            <LessonFields
+                text={text}
+                onText={setText}
+                repo={repo}
+                onRepo={setRepo}
+                choices={data === undefined ? undefined : editRepoChoices(lesson, data.repos)}
+            />
+            <p className="min-h-4 text-xs text-muted-foreground" data-testid="edit-keeps">
+                It replaces {memoryRef(lesson.id)}, which stays in the lesson&apos;s versions with its words. The new
+                version is due for review in 90 days.
+            </p>
+            <span className="flex flex-wrap items-center gap-2">
+                <Button type="submit" disabled={edit.isPending || !fits || !changed}>
+                    <Pencil />
+                    Edit {memoryRef(lesson.id)}
+                </Button>
+                <Button type="button" variant="ghost" onClick={onClose} disabled={edit.isPending}>
+                    Cancel
+                </Button>
+            </span>
+            <Notice error={edit.error} />
+        </form>
+    )
+}
+
+/**
+ * Forget under one of a memory's versions out of force (`MemoryRows`' `versionVerbs`): its words leave the journal
+ * while the version in force keeps its own, as `canopy memory forget ID` does for any version. A leaked secret an edit
+ * took out of a lesson is still in the version before it.
+ */
+export function VersionForget({ version, onSaid }: Said & { version: MemoryEntry }) {
+    const [confirming, setConfirming] = useState(false)
+    if (!confirming) {
+        return (
+            <span className="flex">
+                <ForgetButton memory={version} onClick={() => setConfirming(true)} />
+            </span>
+        )
+    }
+    return (
+        <ForgetChallenge memory={version} onSaid={onSaid} onCancel={() => setConfirming(false)}>
+            canopy deletes this version&apos;s text. Its row stays in the versions, saying when it was written, and the
+            version in force keeps its own words. This cannot be undone.
+        </ForgetChallenge>
+    )
+}
+
+/**
+ * A lesson's words and the repositories its runs are served in, as a promote or an edit takes them: the words in a
+ * field with their count against the bound, and, once `choices` are read, the repositories as a segmented control.
+ */
+function LessonFields({
+    text,
+    onText,
+    repo,
+    onRepo,
+    choices,
+}: {
+    text: string
+    onText: (text: string) => void
+    repo: string | null
+    onRepo: (repo: string | null) => void
+    choices: (string | null)[] | undefined
+}) {
+    const id = useId()
+    const chars = lessonChars(text)
+    return (
+        <>
+            <span className="flex items-baseline justify-between gap-3">
+                <label className="panel-label" htmlFor={`${id}-text`}>
+                    The lesson, in your words
+                </label>
+                <span
+                    className={cn(
+                        'readout text-xs text-muted-foreground',
+                        !lessonFits(text) && chars > 0 && 'text-status-failed',
+                    )}
+                    data-testid="lesson-chars"
+                >
+                    {chars} of {MAX_LESSON_CHARS}
+                </span>
+            </span>
+            <Textarea
+                id={`${id}-text`}
+                value={text}
+                onChange={(event) => onText(event.target.value)}
+                spellCheck
+                className="min-h-20"
+            />
+            {choices !== undefined && (
+                <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground" id={`${id}-repo`}>
+                        Served to runs in
+                    </span>
+                    <ToggleGroup
+                        type="single"
+                        value={repo ?? EVERY}
+                        aria-labelledby={`${id}-repo`}
+                        onValueChange={(value) => {
+                            // A radio group keeps one picked: pressing the picked one again leaves it, as ''.
+                            if (value !== '') {
+                                onRepo(value === EVERY ? null : value)
+                            }
+                        }}
+                        className="flex-wrap"
+                    >
+                        {choices.map((name) => (
+                            <ToggleGroupItem
+                                key={name ?? EVERY}
+                                value={name ?? EVERY}
+                                className={cn(name && 'font-mono')}
+                            >
+                                {name ?? 'every repository'}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                </span>
+            )}
+        </>
+    )
+}
+
+/** Whether a lesson's words fit the bound, past the spaces at either end the server trims, and are not blank. */
+function lessonFits(text: string): boolean {
+    const chars = lessonChars(text)
+    return chars > 0 && chars <= MAX_LESSON_CHARS
 }
 
 /**

@@ -1258,7 +1258,7 @@ type MemoryStatusName = Annotated[
 
 
 class MemoryOrigin(_Model):
-    """What a lesson was promoted from (DESIGN §28): a proposal, or a ticket's note."""
+    """What a lesson was promoted from (DESIGN §28): a proposal, or a ticket's note, past every edit of the lesson."""
 
     id: int
     """The source's id."""
@@ -1309,9 +1309,15 @@ class MemoryEntry(_Model):
     wrong_run_id: int | None
     """The run that reported it."""
     promoted_from: int | None
-    """A lesson's proposal, or the note it was promoted from."""
+    """What a lesson was made from: the proposal or note it was promoted from, or the lesson it was edited from."""
     origin: MemoryOrigin | None = None
-    """A lesson's source, as the CLI names it; None for a note or a proposal, or a source no longer in the journal."""
+    """A lesson's source, as the CLI names it, past every edit; None for a note or a proposal, or a source no longer in
+    the journal."""
+    version: int = 1
+    """Which version of its memory it is: 1 for one that replaced none, one more for each a lesson's edit or promote,
+    or a note under the same key, replaced before it. `GET /api/memory/{id}/history` lists them."""
+    edited: bool = False
+    """Whether it is a lesson the operator made by editing the version before it."""
     private: bool = False
     """Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
     tracker."""
@@ -1464,6 +1470,35 @@ class MemoryPromoted(_Model):
     private: bool
     """Whether its text is still a private ticket's run's own words, which may hold what the operator kept off the
     tracker: the warning `canopy memory promote` gives."""
+
+
+class LessonEditRequest(_Model):
+    """An edit, as `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]` takes it (DESIGN §28)."""
+
+    text: Annotated[str | None, Field(max_length=4000)] = None
+    """The lesson's new words; None keeps its own. Bounded again in code, as the CLI's are."""
+    repo: Annotated[str | None, Field(max_length=200)] = None
+    """The one repository whose runs are served the lesson; None keeps the lesson's, unless `every_repo`."""
+    every_repo: bool = False
+    """Serve the lesson to runs in every repository; refused `bad_request` with `repo`."""
+
+
+class MemoryEdited(_Model):
+    """What an edit made: the lesson's new version, the one it replaced, and whether runs read it now."""
+
+    lesson: MemoryEntry
+    """The new version, in force under the key."""
+    replaced: MemoryEntry
+    """The version it replaced, as it is now: superseded, its text kept as the lesson's history."""
+    served: bool
+    """Whether runs are served lessons now, `memory.proposals` at `use`; False while recording."""
+
+
+class MemoryHistory(_Model):
+    """Every version of a lesson or a note, newest first (DESIGN §28): each edit of a lesson, each note under a key."""
+
+    versions: list[MemoryEntry]
+    """The versions, the newest first, each with its `version`."""
 
 
 class MemoryRejected(_Model):

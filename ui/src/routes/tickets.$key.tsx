@@ -280,6 +280,7 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
                         entries={data.notes}
                         digest={data.digest}
                         below={below}
+                        onVersionSaid={setSaid}
                         modes={
                             memory
                                 ? { ticket_notes: memory.ticket_notes.mode, lessons: memory.lessons.mode }

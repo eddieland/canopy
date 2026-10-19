@@ -1,11 +1,15 @@
 import { QueryClient } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import type { Middleware } from 'openapi-fetch'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { api } from '@/api/client'
 
 import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { MemoryBand, MemoryDigestView, MemoryRows, MemoryText, ProposalFacts } from './memory'
+import { MemoryBand, MemoryDigestView, MemoryRows, ProposalFacts } from './memory'
+import { MemoryText } from './memory-text'
 
 afterEach(() => {
     cleanup()
@@ -69,6 +73,8 @@ const NOTE: MemoryEntry = {
     last_used_at: '2026-10-08T11:30:00Z',
     promoted_from: null,
     origin: null,
+    version: 1,
+    edited: false,
     private: false,
     created_at: '2026-10-08T10:00:00Z',
 }
@@ -255,5 +261,86 @@ describe('MemoryRows lapses', () => {
         cleanup()
         await renderRows(<MemoryRows entries={[NOTE]} ownRun={41} />)
         expect(screen.getByText('at a1b2c3d')).toBeDefined()
+    })
+})
+
+describe('MemoryRows, versions', () => {
+    const first: MemoryEntry = {
+        ...NOTE,
+        id: 8,
+        scope: 'lesson',
+        ticket_key: null,
+        run_id: null,
+        head: null,
+        text: 'Run the tests once.',
+        status: 'superseded',
+        why: 'edited into lesson 10',
+        promoted_from: 7,
+        review_at: '2027-01-06T12:00:00Z',
+    }
+    const second: MemoryEntry = {
+        ...first,
+        id: 10,
+        text: 'Run the tests once, with --run.',
+        status: 'active',
+        why: null,
+        promoted_from: 8,
+        version: 2,
+        edited: true,
+    }
+    // Every path the rows read; the versions are read only once opened.
+    let read: string[] = []
+    const server: Middleware = {
+        onRequest({ request }) {
+            read.push(new URL(request.url).pathname)
+            return Response.json({ versions: [second, first] })
+        },
+    }
+
+    function renderLive(rows: React.JSX.Element) {
+        read = []
+        api.use(server)
+        return renderRouted(rows, { client: new QueryClient() })
+    }
+
+    afterEach(() => {
+        api.eject(server)
+    })
+
+    it('says which version a lesson is, and lists every version, newest first, only once opened', async () => {
+        await renderLive(<MemoryRows entries={[second]} onVersionSaid={vi.fn<(said: string) => void>()} />)
+        const row = screen.getByTestId('memory-10')
+        expect(within(row).getByText('version 2')).toBeDefined()
+        expect(within(row).getByText('edited from memory:8')).toBeDefined()
+        expect(read).toEqual([])
+        fireEvent.click(within(row).getByRole('button', { name: 'Show versions' }))
+        const versions = await screen.findByRole('list', { name: 'Versions, newest first' })
+        expect(read).toEqual(['/api/memory/10/history'])
+        const [newest, oldest] = within(versions).getAllByRole('listitem')
+        expect(newest?.textContent).toMatch(/^v2memory:10activewebedited.+this rowRun the tests once, with --run\.$/u)
+        expect(oldest?.textContent).toMatch(/^v1memory:8supersededwebpromoted.+Run the tests once\.Forget$/u)
+        // Forget under the version out of force alone: the one in force has its own verbs on its row.
+        expect(within(versions).getAllByRole('button', { name: 'Forget' })).toHaveLength(1)
+        expect(newest && within(newest).queryByRole('button', { name: 'Forget' })).toBeNull()
+    })
+
+    it("has no Forget under a version where the list has no verbs, as on a run's page", async () => {
+        await renderLive(<MemoryRows entries={[first]} />)
+        expect(screen.queryByText(/^version /u)).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show versions' }))
+        const versions = await screen.findByRole('list', { name: 'Versions, newest first' })
+        expect(within(versions).queryByRole('button', { name: 'Forget' })).toBeNull()
+    })
+
+    it('opens no versions on a memory that has none, nor on a proposal a promote used up', async () => {
+        await renderLive(
+            <MemoryRows
+                entries={[
+                    NOTE,
+                    { ...NOTE, id: 5, scope: 'proposal', status: 'superseded', why: 'promoted to lesson 8' },
+                ]}
+            />,
+        )
+        expect(screen.queryByRole('button', { name: 'Show versions' })).toBeNull()
     })
 })

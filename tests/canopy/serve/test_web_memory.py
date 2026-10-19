@@ -245,6 +245,70 @@ def test_renew_pushes_a_lessons_review_out(backend: Backend) -> None:
     assert refused(c.post("/api/memory/5/renew", headers=WRITE)) == "unknown: no lesson in force has id 5"
 
 
+def test_edit_makes_a_lessons_next_version_and_its_history_lists_both(backend: Backend) -> None:
+    c = client(None, backend)
+    words = "  Billing goes through src/billing/client.ts alone, the v2 client included. "
+    edited = c.post("/api/memory/8/edit", json={"text": words, "repo": "api"}, headers=WRITE).json()
+    lesson, replaced = edited["lesson"], edited["replaced"]
+    assert (lesson["text"], lesson["repo"], lesson["key"], lesson["version"], lesson["edited"]) == (
+        words.strip(),
+        "api",
+        "billing-client",
+        2,
+        True,
+    )
+    # Past the edit, the lesson still names the proposal it was promoted from.
+    assert (lesson["promoted_from"], lesson["origin"]["id"], lesson["origin"]["scope"]) == (8, 7, "proposal")
+    assert (replaced["id"], replaced["status"], replaced["why"]) == (
+        8,
+        "superseded",
+        f"edited into lesson {lesson['id']}",
+    )
+    assert (replaced["version"], replaced["edited"], edited["served"]) == (1, False, False)
+    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == [lesson["id"]]
+    for memory_id in (8, lesson["id"]):
+        versions = c.get(f"/api/memory/{memory_id}/history").json()["versions"]
+        assert [(m["id"], m["version"]) for m in versions] == [(lesson["id"], 2), (8, 1)]
+    widened = c.post(f"/api/memory/{lesson['id']}/edit", json={"every_repo": True}, headers=WRITE).json()
+    assert (widened["lesson"]["repo"], widened["lesson"]["text"], widened["lesson"]["version"]) == (
+        None,
+        words.strip(),
+        3,
+    )
+
+
+def test_a_notes_history_is_each_note_under_its_key(backend: Backend) -> None:
+    c = client(None, backend)
+    versions = c.get("/api/memory/1/history").json()["versions"]
+    assert [(m["id"], m["status"], m["version"], m["edited"]) for m in versions] == [
+        (2, "active", 2, False),
+        (1, "superseded", 1, False),
+    ]
+    assert [m["id"] for m in c.get("/api/memory/5/history").json()["versions"]] == [5]
+    assert c.get("/api/memory/999/history").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("memory_id", "body", "guard"),
+    [
+        (8, {}, "unchanged: lesson 8 already says that, to runs in web"),
+        (8, {"repo": "web"}, "unchanged: lesson 8 already says that, to runs in web"),
+        (8, {"repo": "nowhere"}, "unknown_repo: 'nowhere' is not a repository in this workspace (api, mobile, web)"),
+        (8, {"text": "x" * 601}, "bad_text"),
+        (8, {"text": "bad\u202etext"}, "bad_text"),
+        (8, {"repo": "api", "every_repo": True}, "bad_request: name one repository or every repository, not both"),
+        (5, {"text": "Other words."}, "unknown: no lesson in force has id 5"),
+        (999, {"text": "Other words."}, "unknown: no lesson in force has id 999"),
+    ],
+)
+def test_edit_is_refused_as_the_cli_refuses_it(
+    backend: Backend, memory_id: int, body: dict[str, str | bool], guard: str
+) -> None:
+    c = client(None, backend)
+    assert refused(c.post(f"/api/memory/{memory_id}/edit", json=body, headers=WRITE)).startswith(guard)
+    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == [8]
+
+
 def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) -> None:
     c = client(None, backend)
 
@@ -273,22 +337,34 @@ def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) 
 
 
 @pytest.mark.parametrize(
-    ("verb", "body"), [("promote", {}), ("reject", None), ("renew", None), ("forget", {"confirm": "memory:6"})]
+    ("verb", "body"),
+    [
+        ("promote", {}),
+        ("reject", None),
+        ("renew", None),
+        ("edit", {"text": "Other words."}),
+        ("forget", {"confirm": "memory:6"}),
+    ],
 )
 def test_every_verb_is_refused_inside_a_run(backend: Backend, verb: str, body: dict[str, str] | None) -> None:
     c = client(None, backend)
     before = c.get("/api/memory").json()
-    memory_id = 8 if verb == "renew" else 6
+    memory_id = 8 if verb in {"renew", "edit"} else 6
     with in_run(7):
         response = c.post(f"/api/memory/{memory_id}/{verb}", json=body, headers=WRITE)
     assert refused(response).startswith("inside_run")
     assert c.get("/api/memory").json() == before
 
 
-def test_with_proposals_off_promote_reject_and_renew_are_refused(canopy_env: CanopyEnv) -> None:
+def test_with_proposals_off_promote_reject_renew_and_edit_are_refused(canopy_env: CanopyEnv) -> None:
     with_memory(canopy_env, ticket_notes="record")
     c, headers = signed_in_client(migrated(canopy_env))
-    calls: list[tuple[str, dict[str, str] | None]] = [("promote", {}), ("reject", None), ("renew", None)]
+    calls: list[tuple[str, dict[str, str] | None]] = [
+        ("promote", {}),
+        ("reject", None),
+        ("renew", None),
+        ("edit", {"text": "Other words."}),
+    ]
     for verb, body in calls:
         assert refused(c.post(f"/api/memory/1/{verb}", json=body, headers=headers)).startswith("off: memory.proposals")
 

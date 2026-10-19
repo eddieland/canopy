@@ -401,6 +401,18 @@ export function ticketMemoryQuery(key: string) {
     })
 }
 
+/**
+ * Every version of a lesson or a note, newest first (DESIGN §28): each edit of a lesson, each note under its key. Under
+ * the memory key, so what reads memory again reads this too.
+ */
+export function memoryVersionsQuery(id: number) {
+    return queryOptions({
+        queryKey: [...keys.memory, 'versions', id] as const,
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/memory/{memory_id}/history', { params: { path: { memory_id: id } }, signal })),
+    })
+}
+
 /** What a run wrote and read of memory, and what it had refused (DESIGN §28). */
 export function runMemoryQuery(id: number) {
     return queryOptions({

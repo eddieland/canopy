@@ -32,6 +32,8 @@ const ENTRY: MemoryEntry = {
     wrong_run_id: null,
     promoted_from: null,
     origin: null,
+    version: 1,
+    edited: false,
     private: false,
 }
 

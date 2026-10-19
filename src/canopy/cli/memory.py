@@ -118,6 +118,13 @@ def cmd_forget(click_ctx: click.Context, memory_id: int) -> int:
         raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("memory forgotten", extra={"memory": memory_id, "scope": found.scope})
     click.echo(f"Memory {memory_id} ({found.scope} `{found.key}`) is forgotten: its text is deleted.")
+    kept = [m.id for m in memory.history(ctx.conn, memory_id) if m.body is not None]
+    if kept:
+        ids = ", ".join(str(i) for i in kept)
+        click.echo(
+            f"Its other versions keep their text ({ids}): forget each too if the words must go. "
+            f"`canopy memory history {memory_id}` shows them."
+        )
     _print_checkpoint(scrubbed)
     return 0
 
@@ -190,7 +197,7 @@ def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool) -> 
         where = f" for {m.repo}" if m.repo else ""
         wrong = f"; run {m.wrong_run_id} reported it wrong at {m.wrong_at}" if m.wrong_at is not None else ""
         click.echo(
-            f"\n  {m.id}  `{m.key}`{where}; promoted at {m.approved_at}{_origin(ctx, m)}; review at {m.review_at}; "
+            f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; review at {m.review_at}; "
             f"{_use(m)}{wrong}\n      {visible(m.body or '')}"
         )
     return 0
@@ -224,8 +231,9 @@ def cmd_promote(click_ctx: click.Context, memory_id: int, text: str | None, repo
         click.echo(f"It replaces lesson {promoted.superseded}, which was under the same key.")
     if promoted.private:
         click.echo(
-            "Warning: its text is from a private ticket's run, and may hold what you kept off the tracker. If it is "
-            "not fit for every worker, forget the lesson and promote it again with --text."
+            f"Warning: its text is from a private ticket's run, and may hold what you kept off the tracker. If it is "
+            f"not fit for every worker, run `canopy memory edit {lesson.id} --text TEXT`, then forget lesson "
+            f"{lesson.id}: the edit keeps its words as the lesson's history."
         )
     if promoted.served:
         click.echo("Every run dispatched from now on reads it.")
@@ -266,6 +274,68 @@ def cmd_renew(click_ctx: click.Context, lesson_id: int) -> int:
     return 0
 
 
+@memory_group.command("edit")
+@click.argument("lesson_id", metavar="ID", type=int)
+@click.option("--text", help="The lesson's new words.")
+@click.option("--repo", type=REPO, help="Serve the lesson only to runs in this repository.")
+@click.option("--every-repo", is_flag=True, help="Serve the lesson to runs in every repository.")
+@click.pass_context
+def cmd_edit(click_ctx: click.Context, lesson_id: int, text: str | None, repo: str | None, *, every_repo: bool) -> int:
+    """Write a lesson anew, in new words or for other repositories. The old version stays, as the lesson's history.
+
+    The new version has an id of its own, and comes up for review later, with any run's report that the lesson is
+    wrong cleared. `canopy memory history ID` lists every version.
+    """
+    if text is None and repo is None and not every_repo:
+        raise click.UsageError("name what changes: --text, --repo, or --every-repo")
+    if repo is not None and every_repo:
+        raise click.UsageError("--repo and --every-repo cannot both be given")
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        repos = [r.name for r in ctx.ws.repos]
+        edited = memory_manage.edit(
+            ctx.conn, ctx.config, lesson_id, text=text, repo=repo, every_repo=every_repo, repos=repos
+        )
+    except conversation.Refused as r:
+        raise CliError(f"edit refused ({r.guard}): {r.reason}") from None
+    lesson = edited.lesson
+    logs.for_tick(None).info("lesson edited", extra={"lesson": lesson_id, "into": lesson.id})
+    where = f" for {lesson.repo}" if lesson.repo else ""
+    click.echo(
+        f"Lesson {lesson_id} is edited into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, due "
+        f"for review at {lesson.review_at}. Lesson {lesson_id} stays in its history."
+    )
+    if edited.served:
+        click.echo("Every run dispatched from now on reads the new version.")
+    else:
+        click.echo("It is recorded, not served: memory.proposals is record, so no run reads it until it is use.")
+    return 0
+
+
+@memory_group.command("history")
+@click.argument("memory_id", metavar="ID", type=int)
+@click.pass_context
+def cmd_history(click_ctx: click.Context, memory_id: int) -> int:
+    """List every version of a lesson or a note, newest first: each edit of a lesson, each note under its key."""
+    ctx = open_context(click_ctx)
+    versions = memory.history(ctx.conn, memory_id)
+    if not versions:
+        raise CliError(f"no memory has id {memory_id}")
+    newest = versions[0]
+    count = f"{len(versions)} version{'s' if len(versions) != 1 else ''}"
+    of = f" of {newest.ticket_key}" if newest.ticket_key is not None else ""
+    click.echo(f"{_kind(newest.scope)} `{newest.key}`{of}: {count}, newest first.")
+    for number, m in zip(range(len(versions), 0, -1), versions, strict=True):
+        status = m.status if m.why is None else f"{m.status}, {m.why}"
+        where = f" for {m.repo}" if m.repo else ""
+        made = _made(ctx, m) if m.scope is MemoryScope.LESSON else f"by run {m.run_id} at {m.created_at}"
+        text = visible(m.body) if m.body is not None else "(text deleted)"
+        mark = "  <-" if m.id == memory_id and len(versions) > 1 else ""
+        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m)}{mark}\n      {text}")
+    return 0
+
+
 def _provenance(ctx: Context, p: records.Memory) -> str:
     run = db.get_run(ctx.conn, p.run_id) if p.run_id is not None else None
     ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
@@ -276,12 +346,17 @@ def _provenance(ctx: Context, p: records.Memory) -> str:
     return f"  {p.id}  `{p.key}`{where}; from {p.ticket_key}{private}, {how}, {merged}; at {p.created_at}"
 
 
-def _origin(ctx: Context, lesson: records.Memory) -> str:
-    source = memory.get(ctx.conn, lesson.promoted_from) if lesson.promoted_from is not None else None
+def _made(ctx: Context, lesson: records.Memory) -> str:
+    """How a lesson version came to be: edited from the one before it, or promoted, and what it was promoted from."""
+    if memory.edited(lesson):
+        made = f"edited from lesson {lesson.promoted_from} at {lesson.approved_at}"
+    else:
+        made = f"promoted at {lesson.approved_at}"
+    source = memory.origin(ctx.conn, lesson)
     if source is None:
-        return ""
+        return made
     of = f" of {source.ticket_key}" if source.scope is MemoryScope.TICKET else ""
-    return f" from {_kind(source.scope).lower()} {source.id}{of}"
+    return f"{made} from {_kind(source.scope).lower()} {source.id}{of}"
 
 
 def _search_run(ctx: Context, run_env: str, text: str, limit: int) -> int:

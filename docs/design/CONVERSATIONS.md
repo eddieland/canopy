@@ -314,7 +314,7 @@ own server thread (D073). Capacity, attempt limits, and cooldowns hold as for an
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send`, `notice` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume, tick now; setting and clearing a notice to workers (M35); promoting, rejecting, renewing, and forgetting memory (M52) | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume, tick now; setting and clearing a notice to workers (M35); promoting, rejecting, renewing, editing, and forgetting memory (M52, M59) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -336,7 +336,7 @@ Served by `canopy loop` from a thread (D073):
   CLI's verbs use, with channel `web`: `start`, `stop` (with `now`, the same end of the run as `canopy stop --now`),
   `reply` (a note to a chore is a reply on its subject, as `canopy reply chore:NAME` is, and sending a review's
   findings a reply on its ticket, §21), `forget`, `grant` (one run each), `dismiss`, `send`, `pause` and `resume`
-  (§6), `notice` and its clear (§8), `plan` (§25), and `memory promote`, `reject`, `renew`, and `forget` (§28).
+  (§6), `notice` and its clear (§8), `plan` (§25), and `memory promote`, `reject`, `renew`, `edit`, and `forget` (§28).
   Beyond the CLI's verbs it writes only the operator's own words on a plan: the plan editor's save and comments on its
   passages (§25). Reload asks the loop to read its config
   again, as SIGHUP does (§6); it writes nothing, and the files stay the operator's to edit. Tick now asks the loop for

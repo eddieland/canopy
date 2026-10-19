@@ -4,9 +4,9 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import type { MemoryEntry, MemoryOverview, MemoryPromoted } from '@/api/types'
+import type { MemoryEdited, MemoryEntry, MemoryOverview, MemoryPromoted } from '@/api/types'
 
-import { LessonActions, NoteActions, ProposalActions } from './memory-actions'
+import { LessonActions, NoteActions, ProposalActions, VersionForget } from './memory-actions'
 
 const ENTRY: MemoryEntry = {
     id: 5,
@@ -28,6 +28,8 @@ const ENTRY: MemoryEntry = {
     wrong_run_id: null,
     promoted_from: null,
     origin: null,
+    version: 1,
+    edited: false,
     private: false,
 }
 const LESSON: MemoryEntry = {
@@ -395,7 +397,92 @@ describe('NoteActions', () => {
     })
 })
 
+function edited(fields: Partial<MemoryEdited> = {}): MemoryEdited {
+    return {
+        lesson: { ...LESSON, id: 10, promoted_from: 8, version: 2, edited: true },
+        replaced: { ...LESSON, status: 'superseded', why: 'edited into lesson 10' },
+        served: false,
+        ...fields,
+    }
+}
+
 describe('LessonActions', () => {
+    it("opens the edit form on the lesson's own words and repository, and saves nothing unchanged", async () => {
+        renderIn(<LessonActions lesson={LESSON} onSaid={vi.fn<(said: string) => void>()} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        const form = screen.getByRole('form', { name: 'Edit memory:8' })
+        const field = within(form).getByRole<HTMLTextAreaElement>('textbox', { name: 'The lesson, in your words' })
+        expect(field.value).toBe(LESSON.text)
+        // Every repository first, as --every-repo, then the lesson's own, then the workspace's others.
+        await vi.waitFor(() => {
+            expect(
+                within(form)
+                    .getAllByRole('radio')
+                    .map((r) => r.textContent),
+            ).toEqual(['every repository', 'web', 'api', 'mobile'])
+        })
+        expect(within(form).getByRole('radio', { name: 'web' }).getAttribute('aria-checked')).toBe('true')
+        expect(within(form).getByTestId('edit-keeps').textContent).toContain(
+            "It replaces memory:8, which stays in the lesson's versions with its words.",
+        )
+        const save = within(form).getByRole<HTMLButtonElement>('button', { name: 'Edit memory:8' })
+        expect(save.disabled).toBe(true)
+        fireEvent.change(field, { target: { value: `  ${LESSON.text ?? ''} ` } })
+        expect(save.disabled).toBe(true)
+        fireEvent.change(field, { target: { value: 'x'.repeat(601) } })
+        expect(save.disabled).toBe(true)
+        fireEvent.click(within(form).getByRole('button', { name: 'Cancel' }))
+        expect(screen.queryByRole('form')).toBeNull()
+        expect(sent).toEqual([])
+    })
+
+    it('sends only what changed, as the CLI takes it, and says what the edit made', async () => {
+        answer = Response.json(edited())
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<LessonActions lesson={LESSON} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        const form = screen.getByRole('form', { name: 'Edit memory:8' })
+        fireEvent.change(within(form).getByRole('textbox', { name: 'The lesson, in your words' }), {
+            target: { value: 'Run the tests once: `npm test -- --run`.' },
+        })
+        fireEvent.click(within(form).getByRole('button', { name: 'Edit memory:8' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledOnce()
+        })
+        expect(sent).toEqual([
+            {
+                path: '/api/memory/8/edit',
+                body: { text: 'Run the tests once: `npm test -- --run`.', repo: null, every_repo: false },
+            },
+        ])
+        const said = onSaid.mock.calls[0]?.[0] ?? ''
+        expect(said).toMatch(
+            /^Lesson 8 is edited into lesson 10 \(`web-tests`\) for web, version 2, due for review at /u,
+        )
+        expect(said).toMatch(/\. Lesson 8 stays in its history\. It is recorded, not served/u)
+        expect(screen.queryByRole('form')).toBeNull()
+    })
+
+    it('widens a lesson to every repository as --every-repo does, its words left as they are', async () => {
+        answer = Response.json(edited())
+        renderIn(<LessonActions lesson={LESSON} onSaid={vi.fn<(said: string) => void>()} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        const form = screen.getByRole('form', { name: 'Edit memory:8' })
+        fireEvent.click(await within(form).findByRole('radio', { name: 'every repository' }))
+        fireEvent.click(within(form).getByRole('button', { name: 'Edit memory:8' }))
+        await vi.waitFor(() => {
+            expect(sent).toEqual([{ path: '/api/memory/8/edit', body: { text: null, repo: null, every_repo: true } }])
+        })
+    })
+
+    it('says, before forgetting an edited lesson, that its earlier versions keep their words', () => {
+        renderIn(<LessonActions lesson={{ ...LESSON, version: 2 }} onSaid={vi.fn<(said: string) => void>()} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        expect(screen.getByRole('form', { name: 'Forget memory:8' }).textContent).toContain(
+            'Its earlier versions keep their words: forget each from its versions.',
+        )
+    })
+
     it('renews, and says when the lesson is next due', async () => {
         answer = Response.json({ id: 8, review_at: '2027-01-16T12:00:00Z' })
         const onSaid = vi.fn<(said: string) => void>()
@@ -488,7 +575,26 @@ describe('LessonActions', () => {
     })
 
     it('offers Renew alone on a lesson_review item', () => {
-        renderIn(<LessonActions lesson={LESSON} forget={false} onSaid={vi.fn<(said: string) => void>()} />)
+        renderIn(<LessonActions lesson={LESSON} edit={false} forget={false} onSaid={vi.fn<(said: string) => void>()} />)
         expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Renew'])
+    })
+})
+
+describe('VersionForget', () => {
+    it("forgets a version's words once its ref is typed, and says so", async () => {
+        answer = Response.json({ id: 8, scope: 'lesson', key: 'web-tests', checkpointed: true })
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<VersionForget version={{ ...LESSON, status: 'superseded' }} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        const form = screen.getByRole('form', { name: 'Forget memory:8' })
+        expect(form.textContent).toContain('the version in force keeps its own words')
+        fireEvent.change(within(form).getByRole('textbox', { name: 'Type memory:8 to confirm' }), {
+            target: { value: 'memory:8' },
+        })
+        fireEvent.click(within(form).getByRole('button', { name: 'Forget memory:8' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledWith('Memory 8 (lesson `web-tests`) is forgotten: its text is deleted.')
+        })
+        expect(sent).toEqual([{ path: '/api/memory/8/forget', body: { confirm: 'memory:8' } }])
     })
 })

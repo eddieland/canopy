@@ -324,7 +324,14 @@ function Lessons({
             ) : (
                 <PanelScroll label="Lessons">
                     {/* The proposals' columns, the ticket's left empty, so key and text line up down the page. */}
-                    <MemoryRows entries={lessons} across digest={digest} below={below} modes={modes} />
+                    <MemoryRows
+                        entries={lessons}
+                        across
+                        digest={digest}
+                        below={below}
+                        modes={modes}
+                        onVersionSaid={acting ? setSaid : undefined}
+                    />
                 </PanelScroll>
             )}
             {past !== undefined && <Past label="Retired" entries={past} none="no lesson replaced or forgotten yet" />}
@@ -506,6 +513,7 @@ function TicketNotesPanel({
                                 )
                             }
                             modes={modes}
+                            onVersionSaid={setSaid}
                         />
                     </PanelScroll>
                 </section>
@@ -665,5 +673,7 @@ function OpenNotes({
     const below = new Map(
         inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} promote={promote} onSaid={onSaid} />]),
     )
-    return <MemoryRows entries={inForce} across digest={data.digest} below={below} modes={modes} />
+    return (
+        <MemoryRows entries={inForce} across digest={data.digest} below={below} modes={modes} onVersionSaid={onSaid} />
+    )
 }

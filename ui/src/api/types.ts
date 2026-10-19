@@ -231,3 +231,9 @@ export type MemoryRejected = Schemas['MemoryRejected']
 export type MemoryRenewed = Schemas['MemoryRenewed']
 /** A memory whose text a forget deleted, its row left. */
 export type MemoryForgotten = Schemas['MemoryForgotten']
+/** An edit, as `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]` takes it. */
+export type LessonEditRequest = Schemas['LessonEditRequest']
+/** What an edit made: the lesson's new version, the one it replaced, and whether runs read it now. */
+export type MemoryEdited = Schemas['MemoryEdited']
+/** Every version of a lesson or a note, newest first. */
+export type MemoryHistory = Schemas['MemoryHistory']

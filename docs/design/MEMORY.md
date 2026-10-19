@@ -136,7 +136,9 @@ worker was told memory exists.
 - A pending proposal nobody reviews expires 14 days after it was written, by the tick's reconcile (§6, step 3), in
   every mode.
 - M47's pass (§26) deletes the text of notes and proposals no longer in force after `retention.memory_days`, keeping
-  the row. A lesson never lapses: it is the operator's word.
+  the row. A lesson never lapses: it is the operator's word, and so is each version an edit replaced, whose text stays
+  until the operator forgets it. Forgetting a version leaves the others' text, and `forget` names the versions that
+  keep theirs, since a secret an edit took out of a lesson is still in the version before it.
 
 ### Proposals and lessons
 
@@ -146,6 +148,18 @@ worker was told memory exists.
   with their text if given, under the same bounds, for `REPO` if given; a lesson in force under its key is superseded.
   `canopy memory reject ID` ends a proposal. Both work at `record` as at `use`, so the operator can build the lessons up
   before any is served.
+- `canopy memory edit ID [--text TEXT] [--repo REPO | --every-repo]` writes a lesson in force anew, under the same
+  bounds and in the operator's name (M59). The new version supersedes the lesson and is made from it, so nothing is
+  edited in place: the old words stay as the lesson's history, which no run is served or finds, and what runs read of
+  each version, and said of it, stays with the words they read. The new version is due for review 90 days on, with
+  any run's report that the lesson is wrong cleared: in writing it, the operator vouched for it. An edit that changes
+  neither the words nor the repository is refused `unchanged`. Rejected: an edit in place, which would leave a run's
+  citations naming words it never read; and a table of versions beside `memories`, which `memory_reads` would have to
+  cite as well.
+- A memory's versions are the chain `supersedes` links, both ways: a lesson's edits and the lessons promoted over it
+  under its key, and a note's under a key its ticket's later runs reused. `canopy memory history ID` lists them, newest
+  first, each with how it was made. A lesson forgotten, or a note dropped, ends its chain: one written under its key
+  after starts another.
 - `promote` takes a ticket's note too, whatever its status while it keeps its text, since what a ticket taught is
   often clearest once it is done and its notes invalidated. The note stays its ticket's, unchanged; its lesson is for
   every repository unless `--repo` names one, since a note names none. Promoting a note or a proposal from a private
@@ -207,9 +221,10 @@ and a search as the only way to read memory, since agents skip tools they are no
 
 `canopy memory` lists ticket notes (`list`), the proposals waiting with where each came from (`proposals`), and the
 lessons with their review dates and reports (`lessons`), each after every tier's mode in words; `list` and `lessons`
-also print the digest a run would get, labelled as served or as what `use` would serve. `promote`, `reject`, and `renew`
-make and keep lessons. `search WORDS` finds memories by their words (Search). `forget ID` deletes one memory's text and
-`purge` many (a ticket's runs', a run's, or all), leaving the rows; a forgotten lesson is retired. They delete with
+also print the digest a run would get, labelled as served or as what `use` would serve. `promote`, `reject`, `renew`,
+and `edit` make and keep lessons, and `history ID` lists a lesson's or a note's versions. `search WORDS` finds
+memories by their words (Search). `forget ID` deletes one memory's text and `purge` many (a ticket's runs', a run's, or
+all), leaving the rows; a forgotten lesson is retired. They delete with
 `secure_delete` on and checkpoint the write-ahead log after, so a purged poison or a leaked secret does not survive in
 free pages. Every one that writes refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice`
 does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
@@ -217,19 +232,23 @@ does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
 The web UI searches as the operator's shell does (`GET /api/memory/search`, the same function, every memory that keeps
 its text), the memory page for the ticket notes in force that hold every word, as its filter keeps its rows, though
 each as a whole word, its English endings aside, where the filter's may be part of one. It takes `promote`, `reject`,
-`renew`, and `forget` (M52) through the same functions, so with the same guards and refusals, logged with channel
-`web` (§22). Promote takes the CLI's options, the lesson's words and its repository, and before the save names the
-lesson in force under the key it would replace, and warns while the text is still a private ticket's run's own words,
-as the CLI warns after. So a proposal whose key a lesson in force has, or a private ticket's run's, is never promoted
-in one click: its promote opens that form, and an attention item, which has no form, reads the lessons in force to
-tell before its Promote as written is enabled. The form reads the lessons in force and the workspace's repositories
-from the memory overview when it opens, rather than every ticket's memory carrying them: a ticket's page reads them
-only when the operator promotes from it. Forget cannot be undone, so it carries the memory's
+`renew`, and `forget` (M52), and `edit` (M59), through the same functions, so with the same guards and refusals,
+logged with channel `web` (§22); `GET /api/memory/{id}/history` reads a memory's versions as `history` does. Promote
+takes the CLI's options, the lesson's words and its repository, and before the save names the lesson in force under
+the key it would replace, and warns while the text is still a private ticket's run's own words, as the CLI warns
+after. So a proposal whose key a lesson in force has, or a private ticket's run's, is never promoted in one click: its
+promote opens that form, and an attention item, which has no form, reads the lessons in force to tell before its
+Promote as written is enabled. Edit takes `edit`'s options, starting as the lesson's own, and saves nothing unchanged.
+The form reads the lessons in force and the workspace's repositories from the memory overview when it opens, rather
+than every ticket's memory carrying them: a ticket's page reads them only when the operator promotes from it. Forget
+cannot be undone, so it carries the memory's
 ref typed out (`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge`
 stays the CLI's: a verb over many memories at once is not a click. The verbs show where the memories do: Promote,
-Reject, and Forget on each proposal, Renew and Forget on each lesson, and Promote and Forget on each of a ticket's notes
-that keeps its text, on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked
-secret leaves from where the operator sees it; and on the attention list, Promote as written and Reject on a
+Reject, and Forget on each proposal, Renew, Edit, and Forget on each lesson, and Promote and Forget on each of a
+ticket's notes that keeps its text, on the memory page and, done or invalidated ones too, on its ticket's page; a
+memory with more than one version says which it is and opens its versions under it, read only then, with Forget on
+each version out of force that keeps its text wherever its row has verbs; Forget is how a leaked secret leaves from
+where the operator sees it; and on the attention list, Promote as written and Reject on a
 `memory_proposal`'s proposals, Renew on the lessons a `lesson_review` is about, and the way to the lessons from a
 `lesson_wrong`. With `memory.proposals` off, only Forget shows, on each of a ticket's notes that keeps its text while
 ticket notes are on, since forgetting a note needs no lesson and a leaked secret should leave from where the operator
@@ -285,6 +304,12 @@ With M52, approved by the operator in merging its PR:
 - T8: the web channel promotes, rejects, renews, and forgets, through the CLI's functions. Its residual gains that a
   stolen session could make a lesson that reaches every worker at `use`, as a notice set that way does, and that
   outlives a new secret until the operator forgets it.
+
+With M59, approved by the operator in merging its PR:
+
+- T1 and T8: `edit` writes a lesson anew in the operator's shell or from the web channel, through one function that
+  refuses in any run, as `promote` does. It reaches workers no further than a promote over the lesson would: the
+  version it replaces is served to no run and found by no run's search. The residual is a promote's.
 
 ### Open
 
