@@ -31,7 +31,7 @@ for up to a week, for outages with ambitions.
 The loop reads your workspace's `canopy-workspace.toml` and your `config.toml` when it starts. **Reload** reads them
 again, as `kill -HUP` on the loop does; a tick that's running finishes first. It says what changed, and which changes
 wait for a restart. A file that doesn't load changes nothing, and the error names its file and key, so a typo costs you
-a fix, not a loop.
+a fix, not a loop. [Config files](config-files) lists every key.
 
 ## Fun
 
