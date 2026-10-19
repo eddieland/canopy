@@ -39,7 +39,7 @@ any OpenCode upgrade, and before relying on a permission they check.
 - **S4. A heredoc `canopy` command** (M19). Confirmed in OpenCode's source (1.18.35), not in a run. Check that the
   overseer's `canopy *` rule admits `canopy mirror` fed by a heredoc.
 - **S44. The token split** (M33). Confirmed in OpenCode's source (1.19.3), not in a run. canopy's new tokens add a
-  `step_finish`'s `output` and `reasoning` (`core/agent_output.py`), which holds only while `output` leaves reasoning
+  `step_finish`'s `output` and `reasoning` (`runtime/events.py`), which holds only while `output` leaves reasoning
   out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the overlap
   differed in earlier releases (PRIOR_ART).
 - **S30. A session's transcript** (M15, M27). Open a worker run's page and a tick's page. Expect the tool calls

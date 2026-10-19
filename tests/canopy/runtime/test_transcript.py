@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.core import agent_output, transcript
-from canopy.core.transcript import Error, Step, Text, Tokens, ToolCall
+from canopy.runtime import events, transcript
+from canopy.runtime.transcript import Error, Step, Text, Tokens, ToolCall
 
 SESSION = "ses_abc123"
 T = 1_791_460_800_000  # 2026-10-08 12:00 UTC, in milliseconds
@@ -249,7 +249,7 @@ def test_a_missing_prompt_a_symlink_and_a_directory_are_not_read(tmp_path: Path)
 
 def test_what_a_tool_call_did_is_its_command_else_its_title_on_one_line() -> None:
     def did(line: str) -> tuple[str, str] | None:
-        found = agent_output.parse_event(line)
+        found = events.parse_event(line)
         assert found is not None
         return transcript.did(found)
 

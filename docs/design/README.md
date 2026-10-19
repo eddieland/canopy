@@ -150,9 +150,9 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `infra`. A module imports
-from its own package and lower layers only. Features never import each other; what two share moves down a layer.
-`tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
+the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `runtime`; `infra`. A
+module imports from its own package and lower layers only. Features never import each other; what two share moves down
+a layer. `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
 ```text
 canopy (harness, Python)
@@ -168,12 +168,14 @@ canopy (harness, Python)
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,
                conversations, pools
+  runtime/     all canopy knows of the agent runtime (§13, D009): its events, transcripts, definitions' format, and
+               config files; nothing about tickets
   infra/       plumbing that knows nothing about tickets or agents; procs.py is the only module that runs subprocesses
 ```
 
 ```text
 prompts/         the overseer's, workers', and the reviewer's prompts
-agents/          OpenCode agent definitions, one per kind of run
+agents/          agent definitions in the runtime's format, one per kind of run
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql

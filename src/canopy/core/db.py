@@ -17,12 +17,12 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never
 
-from canopy.core import agent_output, records
+from canopy.core import records
 from canopy.core.vocab import Phase, PlanStatus, PoolKind, ResumeReason, StartStatus, TickStatus
 from canopy.infra import procs
+from canopy.runtime.report import ToolUse, Usage
 
 if TYPE_CHECKING:
-    from canopy.core.agent_output import ToolUse, Usage
     from canopy.core.vocab import AnyRunStatus, RunStatus
 
 DB_FILE_NAME = "canopy.db"
@@ -945,7 +945,7 @@ def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
     values = records.columns(row)
     if values["cost_usd"] is None:
         return None
-    return agent_output.Usage(
+    return Usage(
         cost_usd=float(values["cost_usd"]),
         input=int(values["tokens_input"] or 0),
         output=int(values["tokens_output"] or 0),

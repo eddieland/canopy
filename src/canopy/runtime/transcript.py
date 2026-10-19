@@ -31,7 +31,9 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, StrictInt, StrictStr, ValidationError
 
-from canopy.core import agent_output, conversation
+from canopy.infra.text import printable
+from canopy.runtime import events
+from canopy.runtime.report import MAX_COST_USD, Count
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -85,22 +87,20 @@ class _Tool(_Part):
 
 
 class _Cache(_Part):
-    read: agent_output.Count = 0
-    write: agent_output.Count = 0
+    read: Count = 0
+    write: Count = 0
 
 
 class _Tokens(_Part):
-    input: agent_output.Count = 0
-    output: agent_output.Count = 0
-    reasoning: agent_output.Count = 0
+    input: Count = 0
+    output: Count = 0
+    reasoning: Count = 0
     cache: _Cache = Field(default_factory=_Cache)
 
 
 class _Step(_Part):
     reason: StrictStr | None = None
-    cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=agent_output.MAX_COST_USD, allow_inf_nan=False)] | None = (
-        None
-    )
+    cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)] | None = None
     tokens: _Tokens | None = None
 
 
@@ -237,7 +237,7 @@ def did(event: Mapping[str, object]) -> tuple[str, str] | None:
     Returns:
         The tool's name and what it did, or None when `event` is not a `tool_use` event that validates.
     """
-    if event["type"] != "tool_use":
+    if event["type"] != events.TOOL_USE:
         return None
     try:
         tool = _Tool.model_validate(event.get("part"))
@@ -265,7 +265,7 @@ def tail(path: Path) -> Tail | None:
     if truncated:
         # The first line read may be cut short, a character too: start at the next whole line.
         data = data[data.find(b"\n") + 1 :]
-    return Tail(conversation.printable(data.decode("utf-8", errors="replace")), size, truncated)
+    return Tail(printable(data.decode("utf-8", errors="replace")), size, truncated)
 
 
 def prompt_path(log: Path) -> Path:
@@ -285,7 +285,7 @@ def prompt(path: Path) -> Prompt | None:
     with os.fdopen(fd, "rb") as f:
         data = f.read(MAX_PROMPT + 1)
     truncated = len(data) > MAX_PROMPT
-    return Prompt(conversation.printable(data[:MAX_PROMPT].decode("utf-8", errors="replace")), truncated)
+    return Prompt(printable(data[:MAX_PROMPT].decode("utf-8", errors="replace")), truncated)
 
 
 def _open(path: Path) -> int | None:
@@ -311,7 +311,7 @@ def _parse(lines: Iterable[str], session_id: str, *, truncated: bool) -> Transcr
     unreadable = 0
     call = 0
     for line in lines:
-        event = agent_output.parse_event(line)
+        event = events.parse_event(line)
         if event is None or event["sessionID"] != session_id:
             continue
         if event["type"] == "step_start":
@@ -393,7 +393,7 @@ def _cut(text: str, limit: int) -> tuple[str, bool]:
     Returns:
         The printable text, at most `limit` characters, and True if it was longer.
     """
-    shown = conversation.printable(text)
+    shown = printable(text)
     return (shown[:limit], True) if len(shown) > limit else (shown, False)
 
 

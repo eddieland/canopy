@@ -154,7 +154,7 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   failed native tool under OpenCode, whose plugin API has no failure hook; canopy reads the failure from the event
   stream.
 - **The token split is OpenCode's, and OpenCode has changed it.** canopy's new tokens add `output` and `reasoning`
-  (`core/agent_output.py`). In OpenCode 1.19.3 `output` already leaves reasoning out (`session.ts`:
+  (`runtime/events.py`). In OpenCode 1.19.3 `output` already leaves reasoning out (`session.ts`:
   `output: outputTokens - reasoningTokens`), so the sum holds; aide found the overlap differed in earlier releases and
   keeps OpenCode's raw output apart. SCENARIOS S44 checks it on an upgrade.
 - **A runtime point release can hang headless agents on a permission prompt**

@@ -10,7 +10,8 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, db
+from canopy.core import db
+from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -44,26 +45,20 @@ class Progress:
         self.log = log
         self.agent = agent
         self.fields = fields
-        self.tally = agent_output.Tally()
+        self.watch = Watch()
 
     def __call__(self, line: str) -> None:
         """Write `line` to the log, and record the session at its first event and the spend at each model call's end."""
         self.out.write(line)
         self.out.flush()
-        event = agent_output.parse_event(line)
-        if event is None:
-            return
-        seen = self.tally.session_id
-        self.tally.add(event)
-        session = self.tally.session_id
-        if session is None:
-            return
-        usage = self.tally.usage if event["type"] == "step_finish" else None
-        if session == seen and usage is None:
+        change = self.watch.read(line)
+        if change is None or (not change.started and change.usage is None):
             return
         try:
-            db.set_progress(self.conn, self.table, self.row_id, session, usage=usage)
+            db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)
         except sqlite3.Error as e:
             self.log.warning("agent progress not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
-        if seen is None:
-            self.log.info("agent session started", extra={**self.fields, "agent": self.agent, "session_id": session})
+        if change.started:
+            self.log.info(
+                "agent session started", extra={**self.fields, "agent": self.agent, "session_id": change.session_id}
+            )

@@ -3,7 +3,7 @@
 An example is a prompt, `<name>.md`, and its config table, `<name>.toml`, in `examples/chores/`, and may come with the
 agent its `cmd` names, `agents/<agent>.md`. Installing one copies the prompt into the workspace's state directory,
 `chore-prompts/<name>.md`, and the agent to `chore-agents/<name>/agents/`, and writes the table to the workspace's
-private file: `prompt` names the copy, `cmd` starts by pointing `OPENCODE_CONFIG_DIR` at the agent's directory, and
+private file: `prompt` names the copy, `cmd` starts by pointing the runtime's config at the agent's directory, and
 `cwd`, where the example has one, is the workspace root. All are the workspace's own: another workspace's copy of the
 same example is filled in apart from it, and an upgraded canopy changes none of them until the chore is installed again.
 The state directory is the operator's alone, as a prompt file must be (TRUST_MODEL T7), and neither copy is in
@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import config
 from canopy.infra import logs, resources
+from canopy.runtime import agents, invocation
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -40,14 +41,12 @@ if TYPE_CHECKING:
 
 #: The directory of the state directory installed prompts are copied into.
 PROMPTS_DIR = "chore-prompts"
-#: The directory of the state directory each installed chore's OpenCode config directory is in, by the chore's name.
+#: The directory of the state directory each installed chore's runtime config directory is in, by the chore's name.
 AGENTS_DIR = "chore-agents"
 #: The comment above an installed table, which says who owns it.
 MARKER = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
 # A line that starts a table or an array of tables, and so ends the one before it.
 _HEADER_RE = re.compile(r"[ \t]*\[")
-# The agent a command runs, by a name that is safe as one path component.
-_AGENT_RE = re.compile(r"--agent[ =]([a-z][a-z0-9-]*)(?:\s|$)")
 
 
 class InstallError(Exception):
@@ -129,7 +128,7 @@ def install(ws: Workspace, name: str) -> Installed:
     agent_dir = ws.state_dir / AGENTS_DIR / name
     agent = _agent(table.get("cmd"))
     if agent is not None:
-        table["cmd"] = f"env OPENCODE_CONFIG_DIR={shlex.quote(str(agent_dir))} {table['cmd']}"
+        table["cmd"] = invocation.with_config_dir(shlex.quote(str(agent_dir)), table["cmd"])
     config.Chore.model_validate(table)
     new_text, replaced = _with_table(old_text, name, _render(name, table))
     _check(private, old, new_text, name, table)
@@ -152,15 +151,15 @@ def _read(path: Path) -> dict[str, object]:
 
 def _agent(cmd: object) -> Path | None:
     """Return the agent definition the example comes with for the agent `cmd` runs, or None when it comes with none."""
-    found = _AGENT_RE.search(cmd) if isinstance(cmd, str) else None
-    if found is None:
+    name = invocation.agent_of(cmd) if isinstance(cmd, str) else None
+    if name is None:
         return None
-    path = resources.example_chores_dir() / "agents" / f"{found[1]}.md"
+    path = resources.example_chores_dir() / agents.AGENTS_SUBDIR / f"{name}.md"
     return path if path.is_file() else None
 
 
 def _copy_agent(agent: Path | None, agent_dir: Path) -> Path | None:
-    """Replace `agent_dir` with an OpenCode config directory holding only a copy of `agent`; with no agent, remove it.
+    """Replace `agent_dir` with a runtime config directory holding only a copy of `agent`; with no agent, remove it.
 
     The copy and its directories are readable by the operator alone.
 
@@ -173,8 +172,8 @@ def _copy_agent(agent: Path | None, agent_dir: Path) -> Path | None:
         return None
     agent_dir.parent.mkdir(mode=0o700, exist_ok=True)
     agent_dir.mkdir(mode=0o700)
-    (agent_dir / "agents").mkdir(mode=0o700)
-    copied = agent_dir / "agents" / agent.name
+    (agent_dir / agents.AGENTS_SUBDIR).mkdir(mode=0o700)
+    copied = agent_dir / agents.AGENTS_SUBDIR / agent.name
     logs.write_private(copied, agent.read_text(encoding="utf-8"))
     return copied
 

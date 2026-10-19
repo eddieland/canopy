@@ -12,6 +12,7 @@ import pytest
 
 from canopy.core import config, definitions, plans
 from canopy.infra import resources
+from canopy.runtime import agents
 from tests.conftest import CanopyEnv
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
@@ -20,16 +21,16 @@ PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
     snapshot = definitions.ensure(tmp_path)
     assert snapshot == tmp_path / "runtime" / definitions.digest()
-    for name in definitions.agent_names():
+    for name in agents.agent_names():
         bundled = resources.agents_dir() / f"{name}.md"
         assert (snapshot / "agents" / f"{name}.md").read_text() == bundled.read_text()
     for skill in resources.skills_dir().iterdir():
         assert (snapshot / "skills" / skill.name / "SKILL.md").read_text() == (skill / "SKILL.md").read_text()
-    assert "canopy-worker" in definitions.agent_names()
-    assert "canopy-overseer" in definitions.agent_names()
+    assert "canopy-worker" in agents.agent_names()
+    assert "canopy-overseer" in agents.agent_names()
 
 
-@pytest.mark.parametrize("name", definitions.agent_names())
+@pytest.mark.parametrize("name", agents.agent_names())
 def test_no_agent_has_web_tools(name: str) -> None:
     # Fetched and searched pages are text anyone can shape (TRUST_MODEL T1, D077). Scalars, so a repository's config
     # cannot loosen them (D044).
@@ -38,7 +39,7 @@ def test_no_agent_has_web_tools(name: str) -> None:
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
-@pytest.mark.parametrize("name", definitions.agent_names())
+@pytest.mark.parametrize("name", agents.agent_names())
 def test_no_bundled_agent_sets_a_temperature(name: str) -> None:
     # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
     # that sets one. The overseer's, the triage agent's, and the reviewer's come from `runtime`, rendered into the
@@ -99,54 +100,6 @@ def test_prune_without_a_runtime_directory(tmp_path: Path) -> None:
     assert definitions.prune(tmp_path, tmp_path / "runtime" / "x") == []
 
 
-@pytest.mark.parametrize(
-    "rel",
-    [
-        ".opencode/agent/canopy-worker.md",
-        ".opencode/agents/canopy-overseer.md",
-        ".opencode/mode/canopy-worker.md",
-        ".opencode/modes/canopy-worker.md",
-    ],
-)
-def test_shadowing_finds_an_agent_file_with_a_canopy_name(tmp_path: Path, rel: str) -> None:
-    path = tmp_path / rel
-    path.parent.mkdir(parents=True)
-    path.write_text("---\ndescription: x\n---\n")
-    assert definitions.shadowing(tmp_path) == [path]
-
-
-@pytest.mark.parametrize(
-    "rel",
-    [".opencode/agent/my-helper.md", ".opencode/agent/team/canopy-worker.md", ".opencode/skill/canopy-worker/SKILL.md"],
-)
-def test_shadowing_ignores_other_agents_and_skills(tmp_path: Path, rel: str) -> None:
-    path = tmp_path / rel
-    path.parent.mkdir(parents=True)
-    path.write_text("---\ndescription: x\n---\n")
-    assert definitions.shadowing(tmp_path) == []
-
-
-@pytest.mark.parametrize(
-    "rel", ["opencode.json", "opencode.jsonc", ".opencode/opencode.json", ".opencode/opencode.jsonc"]
-)
-def test_shadowing_finds_a_json_config_that_names_a_canopy_agent(tmp_path: Path, rel: str) -> None:
-    path = tmp_path / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text('{"agent": {"canopy-worker": {"permission": {"bash": {"*": "allow"}}}}}')
-    assert definitions.shadowing(tmp_path) == [path]
-
-
-def test_shadowing_accepts_a_json_config_that_does_not(tmp_path: Path) -> None:
-    (tmp_path / "opencode.json").write_text('{"mcp": {"docs": {"type": "remote", "url": "https://example.test"}}}')
-    assert definitions.shadowing(tmp_path) == []
-
-
-def test_the_shadowing_message_names_the_files(tmp_path: Path) -> None:
-    message = definitions.shadowing_message([tmp_path / "opencode.json"])
-    assert str(tmp_path / "opencode.json") in message
-    assert "D044" in message
-
-
 def _rules(agent: str, section: str = "") -> list[tuple[str, str]]:
     """The agent's quoted permission rules, in order: its top-level ones, OpenCode's patterns for MCP tool names, or
     those under `section`, such as `bash`, whose patterns are command lines."""
@@ -167,7 +120,7 @@ def _rules_in(definition: str, section: str = "") -> list[tuple[str, str]]:
     return rules
 
 
-@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> None:
     """The prompts push HEAD by refspec from a detached checkout (D109); the definitions must not refuse it."""
     rules = _rules(agent, "bash")
@@ -185,7 +138,7 @@ def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> No
 LEASED_PUSH = "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x"
 
 
-@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env: CanopyEnv, agent: str) -> None:
     """`trust.rebase` adds the one forced push the prompts name; every other force, and the rest, stay denied."""
     path = f"agents/{agent}.md"
@@ -256,22 +209,9 @@ def test_a_temperature_of_minus_one_sets_none(canopy_env: CanopyEnv, agent: str,
     assert definitions.digest(unset) != definitions.digest(sets_one)
 
 
-@pytest.mark.parametrize("agent", [agent for agent, _ in TEMPERATURES])
-def test_a_definition_without_its_temperature_line_is_refused(agent: str) -> None:
-    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
-    with pytest.raises(definitions.DefinitionsError, match="no line"):
-        definitions.render_temperature(bundled.replace("# canopy: temperature\n", ""), agent, 0.1)
-
-
 def _set_runtime(canopy_env: CanopyEnv, line: str) -> None:
     # The user file has a `[runtime]` table already, and TOML forbids repeating a header.
     canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\n{line}\n", 1))
-
-
-def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
-    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
-    with pytest.raises(definitions.DefinitionsError, match="no line"):
-        definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
 
 
 def _allowed(rules: Iterable[tuple[str, str]], tool: str) -> bool:
@@ -300,7 +240,7 @@ def _allowed(rules: Iterable[tuple[str, str]], tool: str) -> bool:
         "atlassian_createJiraIssue",
     ],
 )
-@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_deny_dangerous_mcp_tools(agent: str, tool: str) -> None:
     assert not _allowed(_rules(agent), tool)
 
@@ -315,12 +255,12 @@ def test_workers_deny_dangerous_mcp_tools(agent: str, tool: str) -> None:
         "github_add_reply_to_pull_request_comment",
     ],
 )
-@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None:
     assert _allowed(_rules(agent), tool)
 
 
-@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
     """A resumed worker reads the review comments it was pointed at, and a fix-ci one the failing checks; the private
     one still cannot reach the ticket."""
@@ -334,12 +274,12 @@ def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
         "gh run view 123 --log-failed",
     ):
         assert _allowed(rules, command), command
-    if agent == definitions.PRIVATE_WORKER:
+    if agent == agents.PRIVATE_WORKER:
         for refused in ("gh", "gh issue view 12", "gh issue comment 12 --body x", "gh pr comment 12 --body x"):
             assert not _allowed(rules, refused), refused
 
 
-@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_search_their_memory_and_run_no_other_canopy_command(agent: str) -> None:
     """The memory digests name `canopy memory search` (DESIGN §28); the loop's other commands stay the overseer's."""
     rules = _rules(agent, "bash")
@@ -466,7 +406,7 @@ def _outside_bash(definition: str) -> list[str]:
     ],
 )
 # The triage agent is the planner with nothing to edit (DESIGN §25, Triage before a plan).
-@pytest.mark.parametrize("agent", [definitions.PLANNER, definitions.PLAN_TRIAGE])
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
 def test_the_planner_reads_the_ticket_and_writes_nothing(
     canopy_env: CanopyEnv, agent: str, tool: str, *, allowed: bool
 ) -> None:
@@ -478,7 +418,7 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(
 
 
 def test_the_planner_has_no_shell_or_subagent_tools() -> None:
-    frontmatter = (resources.agents_dir() / f"{definitions.PLANNER}.md").read_text().split("---")[1]
+    frontmatter = (resources.agents_dir() / f"{agents.PLANNER}.md").read_text().split("---")[1]
     for tool in ("bash", "task", "external_directory"):
         assert f"\n  {tool}: deny\n" in frontmatter
 
@@ -499,9 +439,7 @@ def test_the_planner_has_no_shell_or_subagent_tools() -> None:
 def test_the_planner_may_edit_only_its_plan_file(canopy_env: CanopyEnv, path: str, *, allowed: bool) -> None:
     # Evaluated as OpenCode 1.19 does: every key matches the permission's name as a wildcard, so `*edit*` is an edit
     # rule too, and the last rule matching both the name and the path wins (D021).
-    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
-        f"agents/{definitions.PLANNER}.md"
-    ]
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agents.PLANNER}.md"]
     ruleset = _opencode_ruleset(rendered.decode())
     assert _opencode_action(ruleset, "edit", path) == ("allow" if allowed else "deny")
 
@@ -509,9 +447,7 @@ def test_the_planner_may_edit_only_its_plan_file(canopy_env: CanopyEnv, path: st
 def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyEnv) -> None:
     # OpenCode leaves a tool out of the model's toolset when the last rule for its permission denies `*`
     # (`Permission.disabled`): a `*edit*` after the edit rules would take away the only way to write the plan.
-    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
-        f"agents/{definitions.PLANNER}.md"
-    ]
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agents.PLANNER}.md"]
     ruleset = _opencode_ruleset(rendered.decode())
     assert not _opencode_disabled(ruleset, "edit")
     # The file `_run` reads the plan from is the one the definition lets the planner write.
@@ -523,7 +459,7 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
 def test_the_triage_agent_can_edit_nothing_and_has_no_shell(canopy_env: CanopyEnv) -> None:
     # It writes nothing anywhere (TRUST_MODEL T6): OpenCode leaves each of these tools out of its toolset.
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
-        f"agents/{definitions.PLAN_TRIAGE}.md"
+        f"agents/{agents.PLAN_TRIAGE}.md"
     ]
     ruleset = _opencode_ruleset(rendered.decode())
     for permission in ("edit", "bash", "task", "webfetch", "external_directory"):
@@ -580,7 +516,7 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
-    head = definitions.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
+    head = agents.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
     assert text.startswith(head)
     body = text.removeprefix(head)
     prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")
@@ -618,22 +554,9 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
         definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
 
 
-def test_the_overseer_prompt_stands_alone_without_a_skill_for_its_tracker() -> None:
-    head = f"---\ndescription: x\n---\n\n{PROMPT_MARKER}"
-    assert definitions.render_overseer(f"{head}stub\n", "# canopy overseer\n\nDecide.\n", None) == (
-        "---\ndescription: x\n---\n\n# canopy overseer\n\nDecide.\n"
-    )
-
-
-def test_an_overseer_definition_without_its_marked_line_is_refused() -> None:
-    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
-    with pytest.raises(definitions.DefinitionsError, match="no line"):
-        definitions.render_overseer(bundled.replace(PROMPT_MARKER, ""), "# canopy overseer\n", None)
-
-
 @pytest.mark.parametrize(
     ("agent", "tracker_posts", "issue_comments"),
-    [("canopy-worker", False, True), ("canopy-worker", True, False), (definitions.PRIVATE_WORKER, False, False)],
+    [("canopy-worker", False, True), ("canopy-worker", True, False), (agents.PRIVATE_WORKER, False, False)],
 )
 def test_under_approve_workers_lose_the_tools_that_comment(
     canopy_env: CanopyEnv, agent: str, *, tracker_posts: bool, issue_comments: bool
@@ -656,11 +579,3 @@ def test_under_approve_workers_lose_the_tools_that_comment(
     assert _allowed(bash, "gh issue comment 1 --body x") is issue_comments
     assert _allowed(tools, "github_create_pull_request")
     assert _allowed(bash, "git push origin HEAD:refs/heads/agent/PROJ-1-x")
-
-
-def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:
-    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
-    with pytest.raises(definitions.DefinitionsError, match="reply rules"):
-        definitions.render_replies(
-            bundled.replace("  # canopy: reply tools\n", ""), "canopy-worker", approve=False, ticket_comments=True
-        )

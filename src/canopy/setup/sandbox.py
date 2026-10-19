@@ -62,8 +62,8 @@ INSTALLED_LOCK = "canopy-installed.lock"
 NPM_TIMEOUT = 600
 SHARED_CACHE = """\
 {template} lets a sandboxed run write {paths}: your own caches, whose packages and programs your tools run outside
-the sandbox, OpenCode's for the overseer included. Remove them from its allowWrite and allowRead, and add @CACHE@ to
-both, as the shipped template does (docs/SANDBOX.md)."""
+the sandbox, the agent runtime's for the overseer included. Remove them from its allowWrite and allowRead, and
+add @CACHE@ to both, as the shipped template does (docs/SANDBOX.md)."""
 
 
 @dataclass

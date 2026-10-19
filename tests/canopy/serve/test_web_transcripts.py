@@ -5,7 +5,7 @@ import dataclasses
 import json
 from unittest import mock
 
-from canopy.core import transcript
+from canopy.runtime import transcript
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import client
 

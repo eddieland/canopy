@@ -38,7 +38,7 @@ PRs, a stage starting only once the one before has passed its check, recorded on
 - The harness gives the overseer's run the server's entry, removes it from every run it starts, and removes the code
   mode flags from the overseer's environment; the definition
   allows each tool by exact name and denies `bash`, `treehouse status*` included; every other definition denies
-  `canopy_*`; `definitions.shadowing` refuses a workspace config that names a `canopy` server; §6's preflight starts
+  `canopy_*`; `project_config.shadowing` refuses a workspace config that names a `canopy` server; §6's preflight starts
   the server and sends `initialize`, closing the tick `canopy_unavailable` if it fails.
 - The prompt names tools, not commands; a mirror's body is a field; the state block drops the heredoc delimiter.
 - TRUST_MODEL T1 and T7; DESIGN §6, §13, §22; D020 edited in place, D081 superseded.

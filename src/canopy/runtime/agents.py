@@ -1,0 +1,274 @@
+"""canopy's agent definitions in OpenCode's format (DESIGN §13): the bundled files, and what is rendered into them.
+
+canopy ships its agents and skills as OpenCode reads them from a config directory, `agents/<name>.md` and
+`skills/<name>/SKILL.md`. Each agent is a Markdown file whose frontmatter holds its permission rules. What canopy
+decides from config, what each agent may do (`Rules`), `render` writes at the lines the shipped files mark for it:
+
+- the tracker's MCP server and the tools of it the private worker, the planner, and the triage agent may call, its read
+  tools (DESIGN §22, §25);
+- the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
+- the denial of the tools that comment, when workers draft their replies (DESIGN §29);
+- the reviewer's, overseer's, and triage agent's temperature, unless it sets none;
+- the overseer's prompt, then the tracker's skill if canopy ships one, as the overseer's body: the body is the agent's
+  system prompt, which the provider caches across ticks, where the state block, the tick's message, changes every tick
+  (DESIGN §6).
+
+OpenCode applies the last matching permission rule (D021), so every catch-all `"*"` comes before its exceptions, and
+a rendered rule that allows goes after the deny it narrows.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from canopy.infra import resources
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+    from pathlib import Path
+
+#: The directories of a config directory OpenCode reads agents and skills from.
+AGENTS_SUBDIR = "agents"
+SKILLS_SUBDIR = "skills"
+
+WORKER = "canopy-worker"
+PRIVATE_WORKER = "canopy-worker-private"
+PLANNER = "canopy-planner"
+#: The triage agent: the planner with nothing to edit (DESIGN §25, Triage before a plan).
+PLAN_TRIAGE = "canopy-plan-triage"
+REVIEWER = "canopy-reviewer"
+OVERSEER = "canopy-overseer"
+SPLITTER = "canopy-splitter"
+CHORE = "canopy-chore"
+
+#: A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
+#: rendered into definitions, so nothing else may reach them.
+TOOL_PART_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+#: OpenCode's rule for a skill's name: lowercase letters and digits in words joined by single hyphens, at most 64.
+SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MAX_SKILL_NAME = 64
+
+
+def _file(agent: str) -> str:
+    return f"{AGENTS_SUBDIR}/{agent}.md"
+
+
+_PRIVATE_FILE = _file(PRIVATE_WORKER)
+_OVERSEER_FILE = _file(OVERSEER)
+# The definitions that may call only the tracker's read tools, rendered at their marked line.
+_READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, _file(PLANNER), _file(PLAN_TRIAGE))
+_WORKER_FILES = (_file(WORKER), _PRIVATE_FILE)
+# The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
+_REBASE_MARKER = "    # canopy: rebase rules\n"
+# The one forced push `trust.rebase` allows, after the deny of every other: the prompts' own command, a lease on the
+# branch's remote-tracking ref. A `--force` added to it is denied again; the rules after the marker still deny the rest.
+_REBASE_RULES = (
+    '    "git push --force-with-lease origin HEAD:refs/heads/*": allow\n',
+    '    "git push *--force": deny\n',
+    '    "git push *--force *": deny\n',
+)
+# The lines of the shipped worker definitions the denial of commenting is rendered at, when workers draft their
+# replies (DESIGN §29): in bash, `gh`'s commands that comment; among the MCP rules, the GitHub server's comment tools.
+# A worker that still posts its ticket comments itself, for want of a tracker source that posts, keeps the issue ones.
+_REPLY_BASH_MARKER = "    # canopy: reply rules\n"
+_REPLY_TOOLS_MARKER = "  # canopy: reply tools\n"
+_REPLY_BASH = ('    "gh pr comment*": deny\n',)
+_REPLY_BASH_ISSUES = ('    "gh issue comment*": deny\n',)
+_REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_to_pending_review*": deny\n')
+_REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
+# The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
+_TOOLS_MARKER = "  # canopy: tracker tools\n"
+# The line of the shipped reviewer's, overseer's, and triage agent's definitions their temperature is rendered at.
+_TEMPERATURE_MARKER = "# canopy: temperature\n"
+# The line of the shipped overseer definition its prompt replaces, with everything after it.
+_PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+
+
+class DefinitionsError(Exception):
+    """canopy's definitions cannot be made, or a snapshot of them is not one canopy made, so no run may load them."""
+
+
+@dataclass(frozen=True)
+class McpTools:
+    """An MCP server, and the only tools of it an agent may call: every other one is denied."""
+
+    server: str
+    allowed: Sequence[str]
+
+
+@dataclass(frozen=True)
+class Drafts:
+    """Whether a worker drafts its comments rather than posting them (DESIGN §29), and which it still posts."""
+
+    #: The worker drafts its PR replies, so the tools that post them are denied.
+    approve: bool
+    #: The worker still posts its ticket comments itself, so the tools that comment on an issue stay.
+    ticket_comments: bool
+
+
+@dataclass(frozen=True)
+class Rules:
+    """What canopy decided from config that each agent may do, which `render` writes into the definitions."""
+
+    #: The tracker's server and its read tools, for the agents that may only read it; None when none is known.
+    tracker_tools: McpTools | None
+    #: Whether workers may push a rebased branch with a lease.
+    rebase: bool
+    #: What the public worker and the private one draft.
+    worker_drafts: Drafts
+    private_drafts: Drafts
+    #: Each agent's temperature by name, None to set none and leave the model's own: some models, such as OpenAI's
+    #: reasoning models, refuse a request that sets one. An agent not named keeps its file's marked line as it is.
+    temperatures: Mapping[str, float | None]
+    #: The overseer's prompt, and the tracker's provider, whose shipped skill, if any, follows it.
+    overseer_prompt: str
+    tracker_provider: str
+
+
+def agent_names() -> list[str]:
+    """Return the names of the agents canopy ships, as OpenCode names them: the file name without `.md`."""
+    return sorted(p.stem for p in resources.agents_dir().glob("*.md"))
+
+
+def bundled() -> dict[str, bytes]:
+    """Return the bundled agents and skills as a config directory holds them, by relative path, unrendered."""
+    found: dict[str, bytes] = {}
+    for name, root in ((AGENTS_SUBDIR, resources.agents_dir()), (SKILLS_SUBDIR, resources.skills_dir())):
+        for path in _files(root):
+            found[f"{name}/{path.relative_to(root).as_posix()}"] = path.read_bytes()
+    return found
+
+
+def _files(root: Path) -> list[Path]:
+    return sorted(p for p in root.rglob("*") if p.is_file())
+
+
+def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
+    """Return `files`, a config directory's by relative path, with `rules` written into canopy's agents.
+
+    Returns:
+        A copy of `files` with each of canopy's definitions it holds rendered.
+
+    Raises:
+        DefinitionsError: A definition lacks a line it is rendered at.
+    """
+    found = dict(files)
+    for rel in _READ_ONLY_TRACKER_FILES:
+        if rel in found:
+            found[rel] = render_private(found[rel].decode(), rules.tracker_tools, rel).encode()
+    for rel in _WORKER_FILES:
+        if rel in found:
+            text = render_rebase(found[rel].decode(), rel, rebase=rules.rebase)
+            drafts = rules.private_drafts if rel == _PRIVATE_FILE else rules.worker_drafts
+            rendered = render_replies(text, rel, approve=drafts.approve, ticket_comments=drafts.ticket_comments)
+            found[rel] = rendered.encode()
+    for agent, temperature in rules.temperatures.items():
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
+    if _OVERSEER_FILE in found:
+        skill = _tracker_skill(found, rules.tracker_provider)
+        found[_OVERSEER_FILE] = render_overseer(found[_OVERSEER_FILE].decode(), rules.overseer_prompt, skill).encode()
+    return found
+
+
+def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE) -> str:
+    """Return definition `name`, the private worker's, the planner's, or the triage's, with the tracker's rules.
+
+    Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
+    (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run or a plan then
+    (`no_read_tools`, DESIGN §22, §25).
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the tracker's tools at.
+    """
+    if _TOOLS_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_TOOLS_MARKER.strip()!r} to render the tracker's tools at")
+    if tools is None:
+        return text
+    rules = [f'  "{tools.server}_*": deny\n', *(f'  "{tools.server}_{tool}": allow\n' for tool in tools.allowed)]
+    return text.replace(_TOOLS_MARKER, _TOOLS_MARKER + "".join(rules), 1)
+
+
+def render_rebase(text: str, name: str, *, rebase: bool) -> str:
+    """Return worker definition `name` with the rules for a rebased branch's push at its marked line, if `rebase`.
+
+    Without `rebase`, the marked line stays as it is, and every forced push stays denied (TRUST_MODEL T1).
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the rules at.
+    """
+    if _REBASE_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_REBASE_MARKER.strip()!r} to render the rebase rules at")
+    if not rebase:
+        return text
+    return text.replace(_REBASE_MARKER, _REBASE_MARKER + "".join(_REBASE_RULES), 1)
+
+
+def render_replies(text: str, name: str, *, approve: bool, ticket_comments: bool) -> str:
+    """Return worker definition `name` denying the GitHub server's comment tools and `gh`'s, if `approve`.
+
+    Under `trust.review_replies = "approve"` a worker drafts every comment it would post (DESIGN §29), so the tools that
+    comment are denied by name, as defense in depth: the prompt is what keeps it from posting. A worker that still
+    posts its ticket comments itself (`ticket_comments`) keeps the issue-comment ones, which GitHub's issues share with
+    a PR's top-level comments.
+
+    Raises:
+        DefinitionsError: `text` has no marked lines to render the rules at.
+    """
+    for marker in (_REPLY_BASH_MARKER, _REPLY_TOOLS_MARKER):
+        if marker not in text:
+            raise DefinitionsError(f"{name} has no line {marker.strip()!r} to render the reply rules at")
+    if not approve:
+        return text
+    bash = (*_REPLY_BASH, *(() if ticket_comments else _REPLY_BASH_ISSUES))
+    tools = (*_REPLY_TOOLS, *(() if ticket_comments else _REPLY_TOOLS_ISSUES))
+    text = text.replace(_REPLY_BASH_MARKER, _REPLY_BASH_MARKER + "".join(bash), 1)
+    return text.replace(_REPLY_TOOLS_MARKER, _REPLY_TOOLS_MARKER + "".join(tools), 1)
+
+
+def render_temperature(text: str, name: str, temperature: float | None) -> str:
+    """Return definition `name` with `temperature` at its marked line, or as it is if `temperature` sets none.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the temperature at.
+    """
+    if _TEMPERATURE_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_TEMPERATURE_MARKER.strip()!r} to render the temperature at")
+    if temperature is None:
+        return text
+    return text.replace(_TEMPERATURE_MARKER, f"{_TEMPERATURE_MARKER}temperature: {temperature}\n", 1)
+
+
+def render_overseer(text: str, prompt: str, skill: str | None) -> str:
+    """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
+
+    The body is the agent's system prompt, so it is cached across ticks with the tools (DESIGN §6, §13). `skill` is the
+    tracker's skill, its own frontmatter left out: given here, the overseer need not load it with a tool call each tick.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the prompt at.
+    """
+    head, marker, _ = text.partition(_PROMPT_MARKER)
+    if not marker:
+        raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_PROMPT_MARKER.strip()!r} to render the prompt at")
+    parts = [prompt] if skill is None else [prompt, skill]
+    return head + "\n\n".join(part.strip("\n") for part in parts) + "\n"
+
+
+def _tracker_skill(found: Mapping[str, bytes], provider: str) -> str | None:
+    """Return the shipped skill for `provider`, introduced by name, without the frontmatter that names it for loading.
+
+    Returns:
+        The skill's text, or None when canopy ships no skill for `provider`.
+    """
+    name = f"tracker-{provider}"
+    data = found.get(f"{SKILLS_SUBDIR}/{name}/SKILL.md")
+    if data is None:
+        return None
+    text = data.decode()
+    if text.startswith("---\n"):
+        _, _, text = text.removeprefix("---\n").partition("\n---\n")
+    return f"The skill `{name}` follows, given here so that you need not load it.\n\n{text.strip()}"

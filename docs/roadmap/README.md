@@ -106,7 +106,8 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
-  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
+  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4), all of
+  it in `canopy.runtime` (D009).
 - Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
   §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
   change.

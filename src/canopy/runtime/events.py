@@ -1,4 +1,4 @@
-"""What an agent run printed (DESIGN §13): the text its result line is read from, and what the runtime reported.
+"""OpenCode's JSON events (DESIGN §13), read into what a run reports (`canopy.runtime.report`).
 
 A command template either prints the agent's text on stdout, or, with OpenCode's `--format json`, prints one JSON event
 per line. canopy reads three kinds of event and one field of every event, each validated (D026):
@@ -23,26 +23,25 @@ import contextlib
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Annotated, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
-# Printed by `canopy status` and pasted into a shell, so nothing a terminal or a shell would read as anything else.
+from canopy.runtime.report import MAX_COST_USD, AgentOutput, Count, ToolUse, Usage
+
+#: Printed by `canopy status` and pasted into a shell, so nothing a terminal or a shell would read as anything else.
 SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
 
-# Far above anything one model call reports, and low enough that no run's sums overflow a float or SQLite's integers.
-MAX_TOKENS = 10**12
-MAX_COST_USD = 10**6
-
-# How many distinct tools one run's rollup keeps, and how long a tool's name may be: far more than a runtime offers,
-# and few enough that output no runtime printed cannot fill the journal. The calls of any tool past the first
-# `MAX_TOOLS` count under `OTHER_TOOLS`, which no runtime names a tool.
+#: How many distinct tools one run's rollup keeps, and how long a tool's name may be: far more than a runtime offers,
+#: and few enough that output no runtime printed cannot fill the journal. The calls of any tool past the first
+#: `MAX_TOOLS` count under `OTHER_TOOLS`, which no runtime names a tool.
 MAX_TOOLS = 200
 MAX_TOOL_NAME = 200
 OTHER_TOOLS = "(other tools)"
 
-Count = Annotated[StrictInt, Field(ge=0, le=MAX_TOKENS)]
+#: The event that ends a model call, and the one that ends a tool call.
+STEP_FINISH = "step_finish"
+TOOL_USE = "tool_use"
 
 
 class _Text(BaseModel):
@@ -88,94 +87,6 @@ class _ToolPart(BaseModel):
 
     tool: StrictStr
     state: _ToolState
-
-
-@dataclass(frozen=True)
-class ToolUse:
-    """What one tool's calls in a run put into its context.
-
-    How many ended, how many of those in an error, and the characters of what they returned, output or error. The
-    characters, not tokens: `step_finish` does not say which of a call's tokens a tool's result was. About four
-    characters make a token, so `result_chars / 4` is an estimate, and only that.
-    """
-
-    tool: str
-    calls: int
-    errors: int
-    result_chars: int
-
-
-@dataclass(frozen=True)
-class Usage:
-    """What a run cost: dollars as the runtime priced them, tokens by kind, and the most one model call was sent.
-
-    `first_call` is what its first model call was sent, from the cache or not, and `first_cache_write` what that call
-    wrote to the cache. Each of the three is None for a run recorded before canopy kept it; the first call's are None
-    too for a run that made no model call.
-    """
-
-    cost_usd: float
-    input: int
-    output: int
-    reasoning: int
-    cache_read: int
-    cache_write: int
-    peak_context: int | None = None
-    first_call: int | None = None
-    first_cache_write: int | None = None
-
-    @property
-    def new_tokens(self) -> int:
-        """The tokens the model took in or wrote for the first time: every kind but cache reads.
-
-        A cache read is context a call had already been sent, read again by each call after it, so summed over a run's
-        calls it grows with their number and outweighs the rest; the peak context says how large that context got.
-        """
-        return self.input + self.cache_write + self.output + self.reasoning
-
-    def describe(self) -> str:
-        """What it cost for a person, as `$0.25, 12.3k tokens, 45.6k peak context`.
-
-        Returns:
-            The cost to the cent, the tokens (`new_tokens`), and the peak context when it is known, counts abbreviated
-            with `k` or `M` from a thousand up.
-        """
-        peak = f", {count_text(self.peak_context)} peak context" if self.peak_context is not None else ""
-        return f"${self.cost_usd:.2f}, {count_text(self.new_tokens)} tokens{peak}"
-
-    def spent(self) -> dict[str, object]:
-        """What it cost as a log line's fields.
-
-        Returns:
-            The cost in dollars, the tokens (`new_tokens`), and the peak context.
-        """
-        return {"cost_usd": self.cost_usd, "new_tokens": self.new_tokens, "peak_context": self.peak_context}
-
-
-def count_text(n: int) -> str:
-    """A count for a person, abbreviated from a thousand up: `950`, `12.3k`, `4.5M`.
-
-    Returns:
-        The count, with one decimal and `k` or `M` from a thousand up.
-    """
-    for size, suffix in ((1_000_000, "M"), (1_000, "k")):
-        if n >= size:
-            return f"{n / size:.1f}{suffix}"
-    return str(n)
-
-
-@dataclass(frozen=True)
-class AgentOutput:
-    """`text` is what a result contract is read from, and `last` the agent's final message, the end of `text`.
-
-    `session_id` and `usage` are None when nothing reported them; `tools` is empty when no tool call was printed.
-    """
-
-    text: str
-    last: str
-    session_id: str | None = None
-    usage: Usage | None = None
-    tools: tuple[ToolUse, ...] = ()
 
 
 def read(stdout: str) -> AgentOutput:
@@ -224,10 +135,10 @@ class Tally:
         The session is the first valid one an event names.
         """
         self.session_id = self.session_id or session_of(event)
-        if event["type"] == "tool_use":
+        if event["type"] == TOOL_USE:
             self._add_tool(event)
             return
-        if event["type"] != "step_finish":
+        if event["type"] != STEP_FINISH:
             return
         try:
             self._steps.append(_StepFinish.model_validate(event.get("part")))

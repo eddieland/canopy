@@ -12,13 +12,14 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import agent_output, config, conversation, db, pause
+from canopy.core import config, conversation, db, pause
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
 from canopy.runs import policy
+from canopy.runtime.report import Usage
 from canopy.serve import live, secret, views
 from canopy.serve.schema import LoopUpdated
 from tests.canopy.helpers import (
@@ -69,7 +70,7 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
 
 def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> None:
     run_id = running_run(ctx, KEY, private=False)
-    usage = agent_output.Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    usage = Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
     db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", dataclasses.replace(usage, peak_context=26_000))
 
     c, _ = signed_in_client(ctx)
@@ -87,7 +88,7 @@ def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context
     tick = c.get("/api/ticks").json()[0]
     assert (tick["new_tokens"], tick["peak_context"]) == (None, None)  # nothing reported while it runs
 
-    usage = agent_output.Usage(0.25, input=3000, output=400, reasoning=100, cache_read=20_000, cache_write=500)
+    usage = Usage(0.25, input=3000, output=400, reasoning=100, cache_read=20_000, cache_write=500)
     db.set_tick_report(ctx.conn, tick_id, "ses_o1", dataclasses.replace(usage, peak_context=12_000))
     db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     tick = c.get("/api/ticks").json()[0]
