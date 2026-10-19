@@ -4,7 +4,7 @@ import { History } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { memoryHistoryQuery, memoryQuery, ticketMemoryQuery } from '@/api/queries'
+import { memoryHistoryQuery, memoryQuery, memorySearchQuery, ticketMemoryQuery } from '@/api/queries'
 import type {
     MemoryDigest,
     MemoryEntry,
@@ -117,6 +117,12 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
     const pastProposals = overview.past_proposals.filter((m) => memoryShown(m, unshown, now, modes))
     const pastLessons = overview.past_lessons.filter((m) => memoryShown(m, unshown, now, modes))
     const history = search.history === true
+    // What notes say is searched on the server, as `canopy memory search`: the page holds their tickets' counts only.
+    const searched = useQuery({ ...memorySearchQuery(filter.q ?? ''), enabled: filter.q !== undefined })
+    const notesFound =
+        filter.q === undefined
+            ? undefined
+            : (searched.data?.entries ?? []).filter((m) => m.scope === 'ticket' && m.status === 'active')
     return (
         <>
             <FilterBar repos={overview.repos} />
@@ -159,6 +165,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                         tier={state.ticket_notes}
                         promote={acting}
                         modes={modes}
+                        found={notesFound}
                     />
                 )}
             </div>
@@ -375,7 +382,8 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
 /**
  * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
  * notes they hold beside them, since a row opens to several. Each opened note is forgotten from its row, and, while
- * lessons are on (`promote`), promoted; what that did is said under the band.
+ * lessons are on (`promote`), promoted; what that did is said under the band. While the filter has words, `found` is
+ * the notes in force whose key or text holds one, as `canopy memory search` finds them, listed under the tickets.
  */
 function TicketNotesPanel({
     tickets,
@@ -384,6 +392,7 @@ function TicketNotesPanel({
     tier,
     promote,
     modes,
+    found,
 }: {
     tickets: TicketNotes[]
     total: number
@@ -391,6 +400,7 @@ function TicketNotesPanel({
     tier: MemoryTier
     promote: boolean
     modes: TierModes
+    found: MemoryEntry[] | undefined
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const notes = tickets.reduce((sum, t) => sum + t.count, 0)
@@ -399,6 +409,8 @@ function TicketNotesPanel({
     const shown = shownCount(tickets.length, total, filter.q !== undefined)
     const ticketsCount = `${shown} ${ticketsWord} · ${notes} ${notesWord}`
     const order = useListOrder('memory-tickets')
+    const filteredOut = tickets.length === 0 && total > 0
+    const notesFound = found !== undefined && found.length > 0
     return (
         <Panel data-testid="memory-notes">
             <PanelHeader label="Ticket notes">
@@ -411,8 +423,18 @@ function TicketNotesPanel({
             </PanelHeader>
             <MemoryBand tier={tier} name="ticket notes" />
             <MemorySaid said={said} className="border-b px-3 py-2" />
-            {tickets.length === 0 && total > 0 ? (
-                <Empty>no ticket with notes has “{filter.q?.trim()}” in its key or title</Empty>
+            {filter.repo !== undefined && (
+                <p className="border-b px-3 py-2 text-xs text-muted-foreground" data-testid="memory-notes-every-repo">
+                    Not narrowed by repository: a ticket&apos;s notes are read by its own runs, in any repository.
+                </p>
+            )}
+            {filteredOut ? (
+                // The notes found below may still hold the words; only when none does is the panel empty.
+                notesFound ? null : (
+                    <Empty>
+                        no note says “{filter.q?.trim()}”, and no ticket with notes has it in its key or title
+                    </Empty>
+                )
             ) : tickets.length === 0 ? (
                 <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
             ) : (
@@ -429,6 +451,26 @@ function TicketNotesPanel({
                         ))}
                     </ul>
                 </PanelScroll>
+            )}
+            {notesFound && (
+                <section aria-label="Notes that say it" className="border-t" data-testid="memory-notes-found">
+                    <h3 className="px-3 pt-2 panel-label">Notes that say it</h3>
+                    <PanelScroll label="Notes that say it">
+                        <MemoryRows
+                            entries={found}
+                            ticket
+                            below={
+                                new Map(
+                                    found.map((n) => [
+                                        n.id,
+                                        <NoteActions key={n.id} note={n} promote={promote} onSaid={setSaid} />,
+                                    ]),
+                                )
+                            }
+                            modes={modes}
+                        />
+                    </PanelScroll>
+                </section>
             )}
         </Panel>
     )

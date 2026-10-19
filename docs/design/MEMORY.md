@@ -214,21 +214,22 @@ make and keep lessons. `search WORDS` finds memories by their words (Search). `f
 free pages. Every one that writes refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice`
 does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
 
-The web UI takes `promote`, `reject`, `renew`, and `forget` (M52) through the same functions, so with the same guards
-and refusals, logged with channel `web` (§22). Promote takes the CLI's options, the lesson's words and its repository,
-and before the save names the lesson in force under the key it would replace, and warns while the text is still a
-private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the workspace's
-repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a ticket's page
-reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's ref typed out
-(`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge` stays the CLI's: a
-verb over many memories at once is not a click. The verbs show where the memories do: Promote, Reject, and Forget on
-each proposal, Renew and Forget on each lesson, and Promote and Forget on each of a ticket's notes that keeps its text,
-on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked secret leaves from
-where the operator sees it; and on the attention list, Promote as written and Reject on a `memory_proposal`'s proposals,
-Renew on the lessons a `lesson_review` is about, and the way to the lessons from a `lesson_wrong`. With
-`memory.proposals` off, only Forget shows, on each of a ticket's notes that keeps its text while ticket notes are on,
-since forgetting a note needs no lesson and a leaked secret should leave from where the operator sees it (operator's
-decision, 2026-10-18); and a tier that is off shows no panel on the memory page.
+The web UI searches as the operator's shell does (`GET /api/memory/search`, the same function, every memory that keeps
+its text), and takes `promote`, `reject`, `renew`, and `forget` (M52) through the same functions, so with the same
+guards and refusals, logged with channel `web` (§22). Promote takes the CLI's options, the lesson's words and its
+repository, and before the save names the lesson in force under the key it would replace, and warns while the text is
+still a private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the
+workspace's repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a
+ticket's page reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's
+ref typed out (`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge`
+stays the CLI's: a verb over many memories at once is not a click. The verbs show where the memories do: Promote,
+Reject, and Forget on each proposal, Renew and Forget on each lesson, and Promote and Forget on each of a ticket's notes
+that keeps its text, on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked
+secret leaves from where the operator sees it; and on the attention list, Promote as written and Reject on a
+`memory_proposal`'s proposals, Renew on the lessons a `lesson_review` is about, and the way to the lessons from a
+`lesson_wrong`. With `memory.proposals` off, only Forget shows, on each of a ticket's notes that keeps its text while
+ticket notes are on, since forgetting a note needs no lesson and a leaked secret should leave from where the operator
+sees it (operator's decision, 2026-10-18); and a tier that is off shows no panel on the memory page.
 
 ### Showing memory
 
