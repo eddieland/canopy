@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: pool-contract treehouse burn-in burn-in-py burn-in-ui ui-e2e-burn-in
+.PHONY: pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
@@ -51,6 +51,10 @@ coverage: ## Run all tests measuring coverage: a summary, htmlcov/, and coverage
 # the snapshots no test reads any more. Serial: syrupy refuses to update under xdist without an experimental file lock.
 snapshots: ## Run all tests, recording every snapshot that differs
 	uv run pytest -q --snapshot-update
+
+# What tests/canopy/test_prompt_sizes.py holds to .agents/sizes.toml, for reading before and after a prompt edit.
+prompt-sizes: ## Print each bundled prompt, agent definition, and skill's size in characters and estimated tokens
+	uv run python tests/canopy/test_prompt_sizes.py
 
 ##@ Flaky tests
 
