@@ -8,7 +8,15 @@ import { api } from '@/api/client'
 import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { MemoryBand, MemoryDigestFold, MemoryDigestView, MemoryPurge, MemoryRows, ProposalFacts } from './memory'
+import {
+    MemoryBand,
+    MemoryDigestFold,
+    MemoryDigestView,
+    MemoryKinds,
+    MemoryPurge,
+    MemoryRows,
+    ProposalFacts,
+} from './memory'
 import { MemoryText } from './memory-text'
 
 afterEach(() => {
@@ -200,6 +208,22 @@ describe('MemoryRows', () => {
         const [first, second] = screen.getAllByRole('listitem')
         expect(first && within(first).queryByText('from notes 4 and 5')).toBeNull()
         expect(second && within(second).getByText('from notes 4 and 5')).toBeDefined()
+    })
+})
+
+describe('MemoryKinds', () => {
+    it('heads each kind a run wrote or read with its name, its count, and what it is for', async () => {
+        const proposed = { ...NOTE, id: 13, scope: 'proposal' as const, status: 'pending' as const }
+        await renderRows(<MemoryKinds entries={[proposed, NOTE, { ...NOTE, id: 14 }]} ownRun={41} modes={undefined} />)
+        expect(screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual([
+            "ticket notes 2 · for its ticket's runs alone",
+            'proposals 1 · lessons a worker proposed, yours to promote or reject',
+        ])
+        const notes = screen.getByRole('region', { name: 'ticket notes' })
+        expect(within(notes).getAllByRole('listitem')).toHaveLength(2)
+        const proposals = screen.getByRole('region', { name: 'proposals' })
+        expect(within(proposals).getByText('pending')).toBeDefined()
+        expect(screen.queryByRole('region', { name: 'lessons' })).toBeNull()
     })
 })
 

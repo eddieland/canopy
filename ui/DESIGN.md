@@ -341,7 +341,8 @@ Rules:
   (`code`) never breaks across lines. Prose inside a panel keeps the same measure, `max-w-3xl`, however wide the
   panel: Settings' explanations, the sentence under Spend's totals, as the guide's article and a plan do.
 - **One heading ladder**: a page has one `h1`, its `PageHeader`'s title; every panel's label is an `h2`; what heads a
-  part of a panel (a run's memory's `Wrote` and `Read`) is an `h3` in `panel-label` type; and a plan's own headings
+  part of a panel (a run's memory's `Wrote` and `Read`) is an `h3` in `panel-label` type, and a part of that an `h4`
+  (each kind of memory under them, a chip naming it); and a plan's own headings
   start under its panel's, its `#` an `h3` (`PlanHeading` in `src/lib/plan-schema.ts`, styled by its `data-level`).
   No level is skipped, so a screen reader's list of headings is the page's outline; `e2e/headings.spec.ts` holds every
   route to it. A list of links named by its region (the guide's sidebar groups) is not a heading.
