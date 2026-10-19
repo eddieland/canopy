@@ -130,12 +130,15 @@ export function TicketVerbs({
  */
 function useCleared(ticketKey: string): number {
     const items = useQuery(attentionQuery).data
-    const [seen, setSeen] = useState(() => ({ from: items, ids: about(items, ticketKey), cleared: 0 }))
-    if (seen.from !== items) {
+    const [seen, setSeen] = useState(() => ({ key: ticketKey, from: items, ids: about(items, ticketKey), cleared: 0 }))
+    if (seen.key !== ticketKey) {
+        // The page stays mounted when it moves to another ticket: start over, so the last one's items never count.
+        setSeen({ key: ticketKey, from: items, ids: about(items, ticketKey), cleared: 0 })
+    } else if (seen.from !== items) {
         // A read that has not arrived says nothing of what cleared, so the ids last read stand.
         const ids = items === undefined ? seen.ids : about(items, ticketKey)
         const gone = seen.ids.filter((id) => !ids.includes(id)).length
-        setSeen({ from: items, ids, cleared: seen.cleared + (gone > 0 ? 1 : 0) })
+        setSeen({ key: ticketKey, from: items, ids, cleared: seen.cleared + (gone > 0 ? 1 : 0) })
     }
     return seen.cleared
 }

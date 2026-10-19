@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -137,6 +138,37 @@ describe('TicketAnswer', () => {
         })
         const leaf = await screen.findByTestId('leaf')
         expect(leaf.getAttribute('aria-hidden')).toBe('true')
+    })
+
+    it('counts only the ticket it shows now, when the page moves to another ticket', async () => {
+        const next = { ...TICKET, key: 'ABC-300', private: false }
+        const nextItem = { ...ITEM, id: 'n1', subject: 'ABC-300', ticket_key: 'ABC-300' }
+        // A page that stays mounted while its ticket changes, as a route does when only its key does.
+        function Moving() {
+            const [ticket, setTicket] = useState<TicketSummary>({ ...TICKET, private: false })
+            return (
+                <>
+                    <button type="button" onClick={() => setTicket(next)}>
+                        Next ticket
+                    </button>
+                    <TicketAnswer detail={{ ...DETAIL, ticket }} />
+                </>
+            )
+        }
+        const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
+        client.setQueryData(keys.attention, [ITEM, nextItem])
+        await renderRouted(<Moving />, { client })
+        fireEvent.click(screen.getByRole('button', { name: 'Next ticket' }))
+        // The item of the ticket left behind clears: it was never this ticket's, so no leaf drops here.
+        act(() => {
+            client.setQueryData(keys.attention, [nextItem])
+        })
+        await waitFor(() => expect(screen.getByRole('textbox', { name: /^Reply/u })).toBeTruthy())
+        expect(screen.queryByTestId('leaf')).toBeNull()
+        act(() => {
+            client.setQueryData(keys.attention, [])
+        })
+        expect(await screen.findByTestId('leaf')).toBeTruthy()
     })
 
     it('drops none where the list drops its own', async () => {
