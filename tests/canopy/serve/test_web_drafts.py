@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from canopy.core import db, drafts_manage
+from canopy.core.vocab import Reaction
 from canopy.infra import resources
 from tests.canopy.helpers import (
     APPROVE,
@@ -81,7 +82,8 @@ def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
         "waiting",
         "changed",
     )
-    assert (draft["text"], draft["hash"], draft["edited"]) == ("Renamed.", drafts_manage.hash_of("Renamed."), False)
+    hashed = drafts_manage.hash_of("Renamed.", None)
+    assert (draft["text"], draft["hash"], draft["edited"]) == ("Renamed.", hashed, False)
     assert (second["id"], second["drafts"]) == ("PRRT_2", [])
     assert [(d["number"], d["text"]) for d in found["pr_drafts"]] == [(2, "Fixed the lint job.")]
     assert [(d["number"], d["status"]) for d in found["unplaced"]] == [(3, "refused")]
@@ -90,7 +92,9 @@ def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
 @pytest.mark.usefixtures("git_pool")
 def test_the_page_edits_and_sends_drafts_as_one_review(scenario: Scenario, github_state: Path) -> None:
     c, write, run_id = drafted(scenario, github_state)
-    edited = c.post(f"/api/runs/{run_id}/drafts/1/edit", json={"text": "Renamed it to `retries`."}, headers=write)
+    edited = c.post(
+        f"/api/runs/{run_id}/drafts/1/edit", json={"text": "Renamed it to `retries`.", "reaction": None}, headers=write
+    )
     assert edited.status_code == 200, edited.text
     draft = edited.json()
     assert (draft["text"], draft["edited"]) == ("Renamed it to `retries`.", True)
@@ -107,10 +111,40 @@ def test_the_page_edits_and_sends_drafts_as_one_review(scenario: Scenario, githu
 
 
 @pytest.mark.usefixtures("git_pool")
+def test_the_page_stages_a_reaction_and_sends_it_alone(scenario: Scenario, github_state: Path) -> None:
+    c, write, run_id = drafted(scenario, github_state)
+    path = f"/api/runs/{run_id}/drafts/1/edit"
+    staged = c.post(path, json={"text": "", "reaction": "+1"}, headers=write)
+    assert staged.status_code == 200, staged.text
+    draft = staged.json()
+    assert (draft["text"], draft["reaction"], draft["hash"]) == (
+        "",
+        "+1",
+        drafts_manage.hash_of("", Reaction.THUMBS_UP),
+    )
+    assert threads_of(c)["threads"][0]["drafts"][0]["reaction"] == "+1"
+    assert refused(c.post(path, json={"text": "", "reaction": None}, headers=write)).startswith("bad_text: ")
+    body = threads_of(c)["pr_drafts"][0]
+    pr_path = f"/api/runs/{run_id}/drafts/{body['number']}/edit"
+    assert refused(c.post(pr_path, json={"text": "x", "reaction": "+1"}, headers=write)).startswith("no_reaction: ")
+    wanted = [{"run": run_id, "number": 1, "hash": draft["hash"]}]
+    sent = c.post("/api/drafts/send", json={"drafts": wanted}, headers=write)
+    assert sent.status_code == 200, sent.text
+    [posted] = sent.json()["posted"]
+    assert (posted["status"], posted["reacted"]) == ("sent", "+1")
+    assert reads(github_state, "post")[0]["replies"] == [{"comment": 501, "reaction": "+1"}]
+    # A reaction the page left out is no reaction: an edit names it every time.
+    missing = c.post(path, json={"text": "Renamed."}, headers=write)
+    assert missing.status_code == 422
+
+
+@pytest.mark.usefixtures("git_pool")
 def test_a_send_of_text_the_page_no_longer_shows_is_refused_stale(scenario: Scenario, github_state: Path) -> None:
     c, write, run_id = drafted(scenario, github_state)
     seen = threads_of(c)["threads"][0]["drafts"][0]["hash"]
-    c.post(f"/api/runs/{run_id}/drafts/1/edit", json={"text": "Edited in another tab."}, headers=write)
+    c.post(
+        f"/api/runs/{run_id}/drafts/1/edit", json={"text": "Edited in another tab.", "reaction": None}, headers=write
+    )
     sent = c.post("/api/drafts/send", json={"drafts": [{"run": run_id, "number": 1, "hash": seen}]}, headers=write)
     assert refused(sent).startswith("stale: ")
     assert reads(github_state, "post") == []

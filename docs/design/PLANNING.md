@@ -84,8 +84,9 @@ or if anything goes wrong, the ticket is planned. Triage's keys are private, unl
 triage loosens the operator's plan gate (T7).
 
 A triage is due only when the ticket needs a plan by `policy.plan` alone (a ticket the operator marked is always
-planned) and has had no branch, plan run, or triage, so it is triaged at most once, never reset or granted (D030). It
-reads only, holds no slot, and writes nothing, as the planner with nothing to edit. Result contract (D026):
+planned) and has had no branch, plan run, or triage, so it is triaged at most once, never reset or granted (D030).
+While one is due, the overseer's plan is refused in code: only the operator's own word plans a ticket ahead of its
+triage. It reads only, holds no slot, and writes nothing, as the planner with nothing to edit. Result contract (D026):
 
 ```json
 {"status":"done|failed","reason":"one sentence","verdict":"trivial|plan"}
@@ -99,8 +100,8 @@ untrusted reviewer's text start a worker.
 
 The ticket's plan card in the web UI shows its triage, running or ended, and a waiver by its run and reason; it offers
 asking for a plan only while that would undo the waiver, before the ticket has a branch. `canopy spend`, the spend page,
-and `canopy health` count triage runs as a kind of their own, with the plans they waived, so their cost reads against
-the planner runs they saved.
+and `canopy health` count triage runs and plan runs each as a kind of their own, with the plans triage waived, so its
+cost reads against what the planner runs it saved would have cost.
 
 **A second opinion after.** Where `review.agent_prs` is on, the reviewer, not told of the waiver, judges each PR's
 impact (§21); one judged `high` raises `not_trivial` until the ticket is done or forgotten or the operator replaces the

@@ -1,12 +1,12 @@
 """What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
 
 Reads only. Every cost is what the agent runtime reported (§13), summed by the UTC day a run started on: the overseer
-of each tick, worker and split runs, triage runs before a plan (§25), chore runs, and review runs. A dry run's overseer
-is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live
-overseer's. Beside what the window cost, what it got done: the tickets marked done in it, the plans its triage runs
-waived, and what each ticket and PR's own runs cost. And what each kind
-of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started
-cold. And what each kind's tool calls put into its context, by tool: the reads that each later model call reads again.
+of each tick, worker and split runs, triage runs before a plan and the plan runs (§25), chore runs, and review runs. A
+dry run's overseer is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of their own
+within the live overseer's. Beside what the window cost, what it got done: the tickets marked done in it, the plans its
+triage runs waived, and what each ticket and PR's own runs cost. And what each kind of run's first model call was
+sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started cold. And what each kind's
+tool calls put into its context, by tool: the reads that each later model call reads again.
 """
 
 from __future__ import annotations
@@ -27,14 +27,14 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
-type Kind = Literal["overseer", "workers", "triage", "chores", "reviews"]
+type Kind = Literal["overseer", "workers", "triage", "plans", "chores", "reviews"]
 type Done = Literal["merged", "closed"]
 
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
-KINDS: tuple[Kind, ...] = ("overseer", "workers", "triage", "chores", "reviews")
+KINDS: tuple[Kind, ...] = ("overseer", "workers", "triage", "plans", "chores", "reviews")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
@@ -42,12 +42,14 @@ DEFAULT_DAYS = 7
 IDLE_TICKS = 20
 
 # Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a triage before a
-# plan (§25) is a row of `runs`, a kind of its own, and every other row there a worker's or a split's. Then every kind,
-# the overseer's ticks included. The tables and conditions are fixed, never input.
+# plan and a plan run (§25) are rows of `runs`, each a kind of its own, and every other row there a worker's or a
+# split's. Then every kind, the overseer's ticks included. The tables and conditions are fixed, never input.
 _TRIAGE = f"kind = '{RunKind.NEEDS_PLAN.value}'"
+_PLANS = f"kind = '{RunKind.PLAN.value}'"
 _TABLES: dict[Kind, tuple[str, str]] = {
-    "workers": ("runs", f"NOT ({_TRIAGE})"),
+    "workers": ("runs", f"NOT ({_TRIAGE} OR {_PLANS})"),
     "triage": ("runs", _TRIAGE),
+    "plans": ("runs", _PLANS),
     "chores": ("chore_runs", "1"),
     "reviews": ("review_runs", "1"),
 }
@@ -73,13 +75,14 @@ class Costs:
     dry_run: float | None = None
     workers: float | None = None
     triage: float | None = None
+    plans: float | None = None
     chores: float | None = None
     reviews: float | None = None
 
     @property
     def total(self) -> float | None:
         """Everything, dry runs included, as the web UI's 24 hour and 30 day counters count it; None when none did."""
-        return _sum([self.overseer, self.dry_run, self.workers, self.triage, self.chores, self.reviews])
+        return _sum([self.overseer, self.dry_run, self.workers, self.triage, self.plans, self.chores, self.reviews])
 
 
 @dataclass(frozen=True)
@@ -601,6 +604,7 @@ def _costs(found: Mapping[str, float | None]) -> Costs:
         dry_run=found.get("dry_run"),
         workers=found.get("workers"),
         triage=found.get("triage"),
+        plans=found.get("plans"),
         chores=found.get("chores"),
         reviews=found.get("reviews"),
     )

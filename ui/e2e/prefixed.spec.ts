@@ -359,7 +359,7 @@ test("a run's drafted reply is edited and sent from the PR's page, as canopy dra
     const text = `Moved it into a finally. ${crypto.randomUUID()}`
     await reply.getByRole('textbox', { name: 'In your words' }).fill(text)
     await reply.getByRole('button', { name: 'Save' }).click()
-    await expect(reply.getByRole('status')).toContainText("Run 45's draft 1 is your text now")
+    await expect(reply.getByRole('status')).toContainText("Run 45's draft 1 is in your words now")
     await expect(reply).toContainText(text)
     await expect(reply.getByText('your text', { exact: true })).toBeVisible()
     // The mock answers for canopy's GitHub programs: the send posts nowhere, and reads as sent.
@@ -371,6 +371,24 @@ test("a run's drafted reply is edited and sent from the PR's page, as canopy dra
     await expect(reply).toHaveAttribute('data-status', 'sent')
     await expect(reply.getByRole('button')).toHaveCount(0)
     await expect(reply.getByRole('link', { name: 'The reply on its host' })).toBeVisible()
+})
+
+test("a draft's reaction is changed and sent alone from the PR's page, with no reply", async ({ page }) => {
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    const nit = page.getByTestId('review-thread').filter({ hasText: 'is type-only' }).getByTestId('draft')
+    await expect(nit.getByTestId('draft-reaction')).toContainText('Thumbs up on the comment it answers, alone')
+    await nit.getByRole('button', { name: 'Edit' }).click()
+    const reactions = nit.getByRole('radiogroup', { name: 'Reaction' })
+    await expect(reactions.getByRole('radio', { name: 'Thumbs up' })).toBeChecked()
+    await reactions.getByRole('radio', { name: 'Rocket' }).click()
+    await nit.getByRole('button', { name: 'Save' }).click()
+    await expect(nit.getByRole('status')).toContainText("Run 45's draft 4 is in your words now")
+    await expect(nit.getByTestId('draft-reaction')).toContainText('Rocket on the comment it answers, alone')
+    await nit.getByRole('button', { name: 'Send' }).click()
+    await expect(nit.getByRole('status')).toHaveText(
+        /^Sent run 45's draft 4: https:\/\/github\.com\/acme\/web\/pull\/88#discussion_r2468013644\.$/u,
+    )
+    await expect(nit).toHaveAttribute('data-status', 'sent')
 })
 
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
@@ -498,11 +516,15 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(panel).toContainText('approved')
     await expect(state).toContainText('edited since the planner wrote it')
 
-    // Skip supersedes it: no plan waits, and the ticket's own word now says so.
+    // Skip asks first, in its place, then supersedes it: no plan waits, and the ticket's own word now says so. What
+    // it did stays in the foot, though the plan is read only now and the foot's actions are gone.
+    await actions.getByRole('button', { name: 'Skip the plan' }).click()
+    await expect(actions.getByText('Skip the plan? Its implement goes ahead without it.')).toBeVisible()
     await actions.getByRole('button', { name: 'Skip the plan' }).click()
     await expect(state).toContainText('Its ticket needs no plan now.')
     await expect(panel).toContainText('superseded')
     await expect(page.getByTestId('plan-actions')).toHaveCount(0)
+    await expect(said).toContainText("ABC-105's plan is skipped")
 
     // The ticket's page has the request in its conversation, and the plan's card says where the plan stands.
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'ABC-105' }).click()

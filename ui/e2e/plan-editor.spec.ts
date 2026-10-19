@@ -37,6 +37,9 @@ async function topGap(a: Locator, b: Locator): Promise<number> {
     return Math.abs((boxA?.y ?? 0) - (boxB?.y ?? Infinity))
 }
 
+// What the changes since the plan before are marked with: words added and removed, and blocks and cells added whole.
+const MARKS = 'ins, del, .plan-block-add, .plan-cell-add'
+
 function comments(page: Page): Locator {
     return page.getByRole('article')
 }
@@ -211,6 +214,44 @@ test('the toolbar stays at the top of the page while the plan scrolls under it',
     await toolbar.getByRole('button', { name: 'Bold' }).click()
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('a **template cache**')
+})
+
+test("the outline lists the plan's headings and goes to the one chosen, under the toolbar, the cursor in it", async ({
+    page,
+}) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await page.getByRole('button', { name: 'Outline' }).click()
+    await expect(page.getByRole('menuitem')).toHaveText([
+        'Export reports as CSV',
+        'What changes',
+        'Files',
+        'Tests',
+        'Out of scope',
+        'Risks',
+    ])
+    await page.getByRole('menuitem', { name: 'Tests' }).click()
+    const heading = plan(page).getByRole('heading', { name: 'Tests' })
+    await expect(heading).toBeInViewport()
+    const below = async () => {
+        const [bar, top] = await Promise.all([toolbar.boundingBox(), heading.boundingBox()])
+        return (top?.y ?? 0) - ((bar?.y ?? 0) + (bar?.height ?? 0))
+    }
+    await expect.poll(below).toBeGreaterThanOrEqual(0)
+    await expect(plan(page)).toBeFocused()
+    await expect(toolbar.getByRole('button', { name: /^Text style/u })).toHaveAccessibleName('Text style: Heading 2')
+})
+
+test('the outline marks the section being read as it opens', async ({ page }) => {
+    const outline = page.getByRole('button', { name: 'Outline' })
+    await outline.click()
+    await expect(page.getByRole('menuitem', { name: 'Export reports as CSV' })).toHaveAttribute(
+        'aria-current',
+        'location',
+    )
+    await page.getByRole('menuitem', { name: 'Files' }).click()
+    await outline.click()
+    await expect(page.getByRole('menuitem', { name: 'Files' })).toHaveAttribute('aria-current', 'location')
+    await expect(page.locator('[role=menuitem][aria-current]')).toHaveCount(1)
 })
 
 test('each comment sits beside its passage, and moves with it as the plan is edited above', async ({ page }) => {
@@ -506,17 +547,19 @@ test('Ask for changes stays at the bottom of the page while the plan is read, an
 test('Changes marks what the plan changed since the one it replaces, and off, marks nothing', async ({ page }) => {
     const changes = page.getByRole('button', { name: 'Changes since plan 1' })
     await expect(changes).toHaveAttribute('aria-pressed', 'false')
-    await expect(plan(page).locator('ins, del')).toHaveCount(0)
+    await expect(plan(page).locator(MARKS)).toHaveCount(0)
     await changes.click()
     await expect(changes).toHaveAttribute('aria-pressed', 'true')
     await expect(plan(page).locator('ins').filter({ hasText: 'three lines' })).toBeVisible()
     await expect(plan(page).locator('del').filter({ hasText: 'a row per line' })).toBeVisible()
-    await expect(plan(page).locator('ins').filter({ hasText: 'Scheduling exports' })).toBeVisible()
+    // A paragraph added whole is marked as one block, not as its words.
+    await expect(plan(page).locator('.plan-block-add').filter({ hasText: 'Scheduling exports' })).toBeVisible()
+    await expect(plan(page).locator('ins').filter({ hasText: 'Scheduling exports' })).toHaveCount(0)
     // What it marks is no part of the plan: its Markdown is as it was.
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).not.toContainText('a row per line')
     await changes.click()
-    await expect(plan(page).locator('ins, del')).toHaveCount(0)
+    await expect(plan(page).locator(MARKS)).toHaveCount(0)
 })
 
 test('the changes are counted, and Next and Previous step the cursor to each, round to the other end', async ({
@@ -527,10 +570,10 @@ test('the changes are counted, and Next and Previous step the cursor to each, ro
     // From the top, the one before is the last.
     await page.getByRole('button', { name: 'Previous change' }).click()
     await expect(plan(page)).toBeFocused()
-    await expect(plan(page).locator('ins, del').last()).toBeInViewport()
+    await expect(plan(page).locator(MARKS).last()).toBeInViewport()
     // And the one after the last is the first.
     await page.getByRole('button', { name: 'Next change' }).click()
-    await expect(plan(page).locator('ins, del').first()).toBeInViewport()
+    await expect(plan(page).locator(MARKS).first()).toBeInViewport()
 })
 
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
@@ -692,6 +735,29 @@ test('once a comment is sent or resolved, the cursor is back in the plan after i
         .getByRole('button', { name: 'resolve', exact: true })
         .click()
     await expect(plan(page)).toBeFocused()
+})
+
+test('the bubble shows just over the selection', async ({ page }) => {
+    await select(page, "Excel's own format")
+    const bubble = page.getByTestId('plan-bubble')
+    await expect(bubble).toBeVisible()
+    const passage = await page.evaluate(() => {
+        const box = globalThis.getSelection()?.getRangeAt(0).getBoundingClientRect()
+        return box === undefined ? undefined : { left: box.left, right: box.right, top: box.top }
+    })
+    // Its bottom a few pixels over the passage's top, and centred on it within a pixel, not across the page.
+    await expect(async () => {
+        const box = await bubble.boundingBox()
+        expect(passage).toBeDefined()
+        expect(box).not.toBeNull()
+        if (passage === undefined || box === null) {
+            return
+        }
+        const gap = passage.top - (box.y + box.height)
+        expect(gap).toBeGreaterThanOrEqual(0)
+        expect(gap).toBeLessThan(16)
+        expect(Math.abs(box.x + box.width / 2 - (passage.left + passage.right) / 2)).toBeLessThanOrEqual(1)
+    }).toPass()
 })
 
 test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {

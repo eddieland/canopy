@@ -102,7 +102,7 @@ _THREADS = (
     ("PRRT_kwDOA3", 2_468_013_644, "alice", "src/search/useSearch.ts", None, True, -46, "nit: `Result` is type-only."),
 )
 _DRAFTS = (
-    # number, kind, comment, stance, the run's text, the operator's edit
+    # number, kind, comment, stance, the run's text, the operator's edit, the run's reaction
     (
         1,
         "thread",
@@ -112,6 +112,7 @@ _DRAFTS = (
             "Moved `setLoading(false)` into a `finally`, skipped for an aborted request so a newer query's spinner "
             "stays on."
         ),
+        None,
         None,
     ),
     (
@@ -124,6 +125,7 @@ _DRAFTS = (
             "ABC-099 asks for 250 ms: at 300 the type-ahead felt sluggish. Happy to make it a shared constant in a "
             "follow-up so the two stop drifting."
         ),
+        None,
     ),
     (
         3,
@@ -135,7 +137,10 @@ _DRAFTS = (
             "the thread."
         ),
         None,
+        None,
     ),
+    # A nit the run fixed, answered with a reaction alone.
+    (4, "thread", 2_468_013_644, "changed", "", None, "+1"),
 )
 
 
@@ -165,7 +170,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
     review_diff.keep(kept, DIFF)
     review_diff.keep_head(kept, SHA)
     _read(conn, at)
-    for number, kind, comment, stance, text, edit in _DRAFTS:
+    for number, kind, comment, stance, text, edit, reaction in _DRAFTS:
         thread = next((t[0] for t in _THREADS if t[1] == comment), None)
         found = conn.execute(
             "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, thread_id, "
@@ -173,12 +178,14 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
             "VALUES (?, ?, 'ABC-099', ?, 'web', ?, ?, ?, ?, 'waiting', ?, ?, ?) RETURNING id",
             (RUN, number, kind, PR_88, comment, stance, thread, at(_STARTED), at(_ENDED), at(-18)),
         ).fetchone()
-        versions: list[tuple[int, str, str, str | None, str]] = [(1, text, "worker", None, at(_ENDED))]
+        versions: list[tuple[int, str, str, str | None, str, str | None]] = [
+            (1, text, "worker", None, at(_ENDED), reaction)
+        ]
         if edit is not None:
-            versions.append((2, edit, "operator", "web", at(-10)))
+            versions.append((2, edit, "operator", "web", at(-10), reaction))
         conn.executemany(
-            "INSERT INTO draft_versions (draft_id, version, body, author, channel, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO draft_versions (draft_id, version, body, author, channel, created_at, reaction) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             [(found["id"], *v) for v in versions],
         )
 
@@ -284,14 +291,29 @@ def _post(stdin: str) -> str:
     lines: list[dict[str, object]] = [{"kind": "as", "login": "op"}]
     pr = request.get("pr")
     if isinstance(pr, str):
-        review = 4_102_000_000 + made
-        lines.append({"kind": "pending", "review": f"PRR_mock{review}", "id": review})
-        replies = request.get("replies")
-        for reply in replies if isinstance(replies, list) else []:
-            answered = reply.get("comment") if isinstance(reply, dict) else None
-            posted = 2_469_000_000 + (answered if isinstance(answered, int) else 0) % 1_000_000
-            lines.append({"kind": "comment", "comment": answered, "id": posted, "url": f"{pr}#discussion_r{posted}"})
-        lines.append({"kind": "review", "id": review, "url": f"{pr}#pullrequestreview-{review}"})
+        raw = request.get("replies")
+        replies: list[dict[str, object]] = [r for r in raw if isinstance(r, dict)] if isinstance(raw, list) else []
+        # Reactions first, as the real poster adds them, and a PR's drafts that are all reactions open no review.
+        lines.extend(
+            {
+                "kind": "reaction",
+                "comment": r.get("comment"),
+                "reaction": r["reaction"],
+                "url": f"{pr}#discussion_r{r.get('comment')}",
+            }
+            for r in replies
+            if "reaction" in r
+        )
+        texts = [r for r in replies if "text" in r]
+        if texts or request.get("body") is not None:
+            review = 4_102_000_000 + made
+            lines.append({"kind": "pending", "review": f"PRR_mock{review}", "id": review})
+            for reply in texts:
+                answered = reply.get("comment")
+                posted = 2_469_000_000 + (answered if isinstance(answered, int) else 0) % 1_000_000
+                url = f"{pr}#discussion_r{posted}"
+                lines.append({"kind": "comment", "comment": answered, "id": posted, "url": url})
+            lines.append({"kind": "review", "id": review, "url": f"{pr}#pullrequestreview-{review}"})
     else:
         posted = 2_470_000_000 + made
         lines.append({"kind": "comment", "id": posted, "url": f"{request.get('issue')}#issuecomment-{posted}"})

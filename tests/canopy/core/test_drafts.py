@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.core import drafts, replies
-from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, ReplyMode
+from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode
 from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, TRACKER_POSTS, all_drafts, present
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
@@ -92,6 +92,38 @@ def test_each_draft_is_refused_alone(scenario: Scenario) -> None:
         (9, "its text looks like it holds a secret"),
         (10, "no_post: this run was asked for no ticket's draft"),
         (12, f"a second draft for {PR}'s own comment; a PR takes one"),
+    ]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_threads_draft_stages_a_reaction_beside_its_text_or_alone(scenario: Scenario) -> None:
+    conn = scenario.conn
+    scenario.configures("private", trust=APPROVE)
+    alone = {"on": "thread", "pr": PR, "comment": 502, "did": "changed", "react": "rocket"}
+    run = scenario.run(WORK, worker=sends_drafts([{**THREAD, "react": "+1"}, alone]))
+    beside, only = (drafts.text_of(conn, d.id) for d in all_drafts(conn))
+    assert (beside.body, beside.reaction) == (REPLY, Reaction.THUMBS_UP)
+    assert (only.body, only.reaction) == ("", Reaction.ROCKET)
+    assert refused(conn, run) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_reaction_github_does_not_offer_or_off_a_thread_is_refused(scenario: Scenario) -> None:
+    conn = scenario.conn
+    scenario.configures("private", trust=APPROVE)
+    entries = [
+        {**THREAD, "react": "thumbsup"},
+        {"on": "pr", "pr": PR, "text": "Fixed CI.", "react": "+1"},
+        {"on": "thread", "pr": PR, "comment": 502, "did": "changed"},
+        {**THREAD, "text": "  ", "react": "eyes"},
+    ]
+    run = scenario.run(WORK, worker=sends_drafts(entries))
+    assert all_drafts(conn) == []
+    assert refused(conn, run) == [
+        (1, "its `react` is not one of +1, -1, laugh, confused, heart, hooray, rocket, eyes"),
+        (2, "its `react` is on a draft that is not a thread's; only a review comment takes one"),
+        (3, "its text is not a string"),
+        (4, "its text is blank"),
     ]
 
 

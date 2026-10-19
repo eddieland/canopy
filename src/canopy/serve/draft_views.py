@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, drafts, drafts_manage, records
 from canopy.core.vocab import DraftKind
-from canopy.serve.schema import Draft, DraftKindName, DraftStanceName, DraftStatusName
+from canopy.serve.schema import Draft, DraftKindName, DraftStanceName, DraftStatusName, ReactionName
 
 if TYPE_CHECKING:
     import sqlite3
@@ -42,10 +42,12 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         issue_url=found.issue_url,
         why=found.why,
         text=text.body,
-        hash=drafts_manage.hash_of(text.body),
+        reaction=cast("ReactionName", text.reaction.value) if text.reaction is not None else None,
+        hash=drafts_manage.hash_of_version(text),
         edited=text.version > 1,
         supersedes_edited=supersedes_edited is not None,
         sent_url=found.sent_url,
+        reacted=cast("ReactionName", found.reacted.value) if found.reacted is not None else None,
         created_at=db.parse_time(found.created_at),
     )
 

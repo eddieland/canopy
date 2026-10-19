@@ -179,6 +179,7 @@ export function AskForChanges({
     asked = false,
     note: said,
     onAsk,
+    onNoteChange,
 }: {
     /** The plan's threads. */
     threads: PlanThread[]
@@ -192,8 +193,14 @@ export function AskForChanges({
     note?: ReactNode
     /** Sends the message. */
     onAsk: (message: string) => void
+    /** Called with the note on the whole plan as it changes, so the caller's own actions can say what it leaves. */
+    onNoteChange?: ((note: string) => void) | undefined
 }) {
-    const [note, setNote] = useState('')
+    const [note, setNoteState] = useState('')
+    function setNote(next: string) {
+        setNoteState(next)
+        onNoteChange?.(next)
+    }
     usePending(note.trim() !== '')
     const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length
@@ -207,9 +214,14 @@ export function AskForChanges({
         }
     }
 
+    const comments = `${open} open ${open === 1 ? 'comment' : 'comments'}`
+    // Once asked, what Ask again sends, not that the open comments are still to go: some went with the first request.
+    const goes = asked
+        ? `Ask again sends the ${comments} again.`
+        : `${comments} ${open === 1 ? 'goes' : 'go'} with Ask for changes.`
     const told = over
         ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some.`
-        : open > 0 && `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with Ask for changes.`
+        : open > 0 && goes
 
     return (
         // `contents`, so its field and button are items of the caller's line, beside its own actions.
@@ -221,7 +233,7 @@ export function AskForChanges({
                 value={note}
                 maxLength={MAX_REQUEST}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder="A note on the whole plan, optional"
+                placeholder="A note on the whole plan"
                 className={cn(
                     'field-sizing-content max-h-32 min-h-8 min-w-32 flex-1 resize-none py-1',
                     // Empty in the actions' line, one line, its prompt cut to fit rather than grow the line taller.

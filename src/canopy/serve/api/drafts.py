@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from canopy.core import contract, conversation, drafts_manage
+from canopy.core.vocab import Reaction
 from canopy.infra import logs
 from canopy.serve import threads
 from canopy.serve.api.deps import BackendDep
@@ -72,13 +73,15 @@ def pull_request_threads(url: PrUrl, backend: BackendDep) -> PullRequestThreads:
     responses=REFUSED,
 )
 def edit(run_id: RunId, number: DraftNumber, body: DraftEditRequest, backend: BackendDep) -> Draft:
-    """`canopy draft edit run:ID N --text TEXT`: the operator's text, as a new version beside the run's own.
+    """`canopy draft edit run:ID N --text TEXT [--react NAME]`: the operator's words, a new version beside the run's.
 
-    Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), and `bad_text`.
+    Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), `bad_text`, and
+    `no_reaction` for a reaction on a draft that is not a thread's.
     """
     with backend.open() as ctx:
         try:
-            drafts_manage.edit(ctx.conn, run_id, number, body.text, channel=WEB)
+            reaction = None if body.reaction is None else Reaction(body.reaction)
+            drafts_manage.edit(ctx.conn, run_id, number, body.text, reaction, channel=WEB)
             found = drafts_manage.find(ctx.conn, run_id, number)
         except conversation.Refused as r:
             raise RefusedError(r) from None

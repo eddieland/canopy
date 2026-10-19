@@ -777,13 +777,14 @@ split's child one other than its own (`unknown_repo`), split fewer than two repo
 started ticket, or a split's child, or dispatch for a ticket already split (`bad_split`), rename a ticket's branch with
 `--slug` (`bad_slug`), plan a ticket with a branch or a split's parent (`bad_plan`), give a plan or a triage `--slug`,
 `--base`, or `--request` (`bad_slug`, `bad_base`, `bad_request`), triage a ticket with triage off (`triage_off`), one
-triaged before, however that ended (`triaged`), or one whose `plan.triage_due` is not true (`bad_triage`), implement a
-ticket that needs an approved plan and has none (`unplanned`), implement or resume one whose approved plan changed
-(`plan_changed`), exceed capacity (`capacity`), target a ticket with a running worker (`running`), exceed the
-kind's attempt limit in any unit named (`attempt_limit`), are a `resume` whose only reason is `ci` inside a unit's CI
-cooldown (`cooldown`), continue a branch the journal does not know in a unit named (`no_branch`), or are a `resume` for
-`ci` after the operator set or cleared a notice since this tick read the journal (`notice_changed`; the next tick
-decides with it). Every `resume` is refused `bad_prompt` while the operator still overrides a retired fix-ci prompt.
+triaged before, however that ended (`triaged`), or one whose `plan.triage_due` is not true (`bad_triage`), plan one
+whose `plan.triage_due` is true (`untriaged`), implement a ticket that needs an approved plan and has none
+(`unplanned`), implement or resume one whose approved plan changed (`plan_changed`), exceed capacity (`capacity`),
+target a ticket with a running worker (`running`), exceed the kind's attempt limit in any unit named
+(`attempt_limit`), are a `resume` whose only reason is `ci` inside a unit's CI cooldown (`cooldown`), continue a branch
+the journal does not know in a unit named (`no_branch`), or are a `resume` for `ci` after the operator set or cleared a
+notice since this tick read the journal (`notice_changed`; the next tick decides with it).
+Every `resume` is refused `bad_prompt` while the operator still overrides a retired fix-ci prompt.
 It records the refusal as a decision; an `attempt_limit` refusal also records the `attempt_limit` attention item, and
 that `bad_prompt` the `fix_ci_override` one. Do not work around a refusal; it
 is correct.

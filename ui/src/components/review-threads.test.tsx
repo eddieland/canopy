@@ -105,7 +105,7 @@ describe('DraftCard', () => {
             'canopy draft send run:45 1@cb496d375e04',
         )
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Edit' }).title).toBe(
-            'canopy draft edit run:45 1 --text TEXT',
+            'canopy draft edit run:45 1 --text TEXT --react NAME',
         )
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Drop' }).title).toBe('canopy draft drop run:45 1')
         expect(screen.getByText('changed')).toBeTruthy()
@@ -165,9 +165,64 @@ describe('DraftCard', () => {
         fireEvent.change(field, { target: { value: 'Mine.' } })
         fireEvent.click(save)
         expect((await screen.findByRole('status')).textContent).toBe(
-            "Run 45's draft 1 is your text now, hash aaaaaaaaaaaa.",
+            "Run 45's draft 1 is in your words now, hash aaaaaaaaaaaa.",
         )
-        expect(writes()).toEqual([{ method: 'POST', path: '/api/runs/45/drafts/1/edit', body: { text: 'Mine.' } }])
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/runs/45/drafts/1/edit', body: { text: 'Mine.', reaction: null } },
+        ])
+    })
+
+    it('shows the reaction a draft stages, beside its text or alone', async () => {
+        await renderRouted(<DraftCard draft={draft({ reaction: 'rocket' })} onChange={changed} />)
+        expect(screen.getByTestId('draft-reaction').textContent).toContain('Rocket on the comment it answers, with')
+        expect(screen.getByText('Moved it into a `finally`.')).toBeTruthy()
+        cleanup()
+        await renderRouted(<DraftCard draft={draft({ text: '', reaction: '+1' })} onChange={changed} />)
+        expect(screen.getByTestId('draft-reaction').textContent).toContain('Thumbs up on the comment it answers, alone')
+        expect(screen.queryByTestId('draft-reacted')).toBeNull()
+    })
+
+    it('names a reaction an earlier send added though nothing else posted', async () => {
+        await renderRouted(<DraftCard draft={draft({ reaction: '+1', reacted: '+1' })} onChange={changed} />)
+        expect(screen.getByTestId('draft-reacted').textContent).toContain('Thumbs up is on the comment already')
+        cleanup()
+        await renderRouted(<DraftCard draft={draft({ status: 'sent', reacted: '+1' })} onChange={changed} />)
+        expect(screen.queryByTestId('draft-reacted')).toBeNull()
+    })
+
+    it("picks a thread's reaction, or none, and saves a reaction alone with no text", async () => {
+        answer = () => Response.json(draft({ text: '', reaction: 'heart', edited: true, hash: 'bbbbbbbbbbbb' }))
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' })
+        fireEvent.change(screen.getByRole('textbox', { name: 'In your words' }), { target: { value: '' } })
+        expect(save.disabled).toBe(true)
+        const group = screen.getByRole('radiogroup', { name: 'Reaction' })
+        expect(
+            within(group)
+                .getAllByRole('radio')
+                .map((r) => r.getAttribute('aria-label')),
+        ).toEqual(['Thumbs up', 'Thumbs down', 'Laugh', 'Hooray', 'Confused', 'Heart', 'Rocket', 'Eyes'])
+        fireEvent.click(within(group).getByRole('radio', { name: 'Heart' }))
+        expect(save.disabled).toBe(false)
+        fireEvent.click(save)
+        expect((await screen.findByRole('status')).textContent).toBe(
+            "Run 45's draft 1 is in your words now, hash bbbbbbbbbbbb.",
+        )
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/runs/45/drafts/1/edit', body: { text: '', reaction: 'heart' } },
+        ])
+    })
+
+    it("offers no reaction on a draft for a PR's own comment", async () => {
+        await renderRouted(
+            <DraftCard draft={draft({ kind: 'pr', stance: null, comment_id: null })} onChange={changed} />,
+        )
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Edit' }).title).toBe(
+            'canopy draft edit run:45 1 --text TEXT',
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        expect(screen.queryByRole('radiogroup', { name: 'Reaction' })).toBeNull()
     })
 
     it('drops a draft, and takes a drop back', async () => {
@@ -250,6 +305,15 @@ describe('ReviewThreads', () => {
             expect(link.getAttribute('href')).toMatch(new RegExp(`^/pull-requests/pr\\?url=.+#${anchor}$`, 'u'))
             expect(document.querySelector<HTMLElement>(`#${anchor}`)?.dataset['testid']).toBe('draft')
         }
+    })
+
+    it('names a reaction sent alone by its reaction in the list, so its link is never empty', async () => {
+        const alone = draft({ run: 46, number: 1, status: 'unchecked', text: '', reaction: '+1' })
+        answer = () => Response.json(pullRequestThreads({ unplaced: [alone] }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        const list = await screen.findByTestId('draft-list')
+        const link = within(list).getByRole('link', { name: 'Thumbs up, alone' })
+        expect(link.getAttribute('href')).toMatch(/#draft-46-1$/u)
     })
 
     it("says when the PR's head is past the diff the page shows", async () => {

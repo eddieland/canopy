@@ -135,6 +135,14 @@ describe('PlanCard', () => {
         expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     })
 
+    it('says changes are asked of a proposed plan, which waits on the planner now, not on you', async () => {
+        await renderCard({ changes_asked: '2026-10-08T11:40:00Z' })
+        const card = await screen.findByTestId('plan-card')
+        expect(card.textContent).toContain('changes asked')
+        expect(card.textContent).not.toContain('waiting on you')
+        expect(card.textContent).not.toContain('proposed')
+    })
+
     it('says a plan is needed while none is written, why on hover, and which run writes one', async () => {
         await renderCard({ newest: null, plans: [], threads: [], planning: 7 })
         const card = await screen.findByTestId('plan-card')
@@ -208,6 +216,14 @@ describe('PlanCard', () => {
 
         await renderCard({ changes_asked: '2026-10-08T11:40:00Z', planning: 51 })
         expect((await screen.findByTestId('plan-card')).textContent).toContain('Run 51 is writing a new plan.')
+        expect(screen.queryByRole('region', { name: 'Changes asked' })).toBeNull()
+        cleanup()
+
+        // A plan put aside on a ticket that needs none now: no planner comes to read them.
+        const superseded = { ...PLAN, status: 'superseded' as const }
+        const newest = PLANS.newest === null ? null : { ...PLANS.newest, plan: superseded }
+        await renderCard({ changes_asked: '2026-10-08T11:40:00Z', needed: false, newest, plans: [superseded] })
+        expect((await screen.findByTestId('plan-card')).textContent).toContain('superseded')
         expect(screen.queryByRole('region', { name: 'Changes asked' })).toBeNull()
     })
 })

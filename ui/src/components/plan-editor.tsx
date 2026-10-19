@@ -8,10 +8,12 @@ import {
     ChevronDown,
     ChevronUp,
     Code,
+    Diff,
     Italic,
     List,
     ListOrdered,
     ListTodo,
+    ListTree,
     MessageSquarePlus,
     Redo2,
     SquareCode,
@@ -48,6 +50,8 @@ import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } fr
 import type { Range } from '@/lib/plan-highlights'
 import { changesKey, PlanChanges, textOf } from '@/lib/plan-diff'
 import { alignComments, floatUnder } from '@/lib/plan-margin'
+import { planOutline, sectionAt } from '@/lib/plan-outline'
+import type { OutlineEntry } from '@/lib/plan-outline'
 import { planExtensions } from '@/lib/plan-schema'
 import {
     addReply,
@@ -100,6 +104,7 @@ export function PlanEditor({
     status,
     onAskForChanges,
     asked = false,
+    onNoteChange,
     actions,
     actionsNote,
     outcome,
@@ -123,11 +128,16 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
+    /** Called with the note on the whole plan, which goes with Ask for changes, as the operator writes it. */
+    onNoteChange?: (note: string) => void
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
     /** What the caller says of those, in words, on the line under them: what they will do. */
     actionsNote?: ReactNode
-    /** What the caller's last action did, or why it was refused, at the foot's end (`Notice`). */
+    /**
+     * What the caller's last action did, or why it was refused, at the foot's end (`Notice`). Given, the foot stays
+     * when the plan is read only, so an action that ends its editing, such as Skip, still says what it did.
+     */
     outcome?: ReactNode
     /**
      * The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`); with
@@ -407,28 +417,35 @@ export function PlanEditor({
         // stops at its text's measure (`.plan-doc`'s 48rem and the panel's padding), so on a wide page the comments
         // stay against the text, as a shared document's margin does, and the room left over goes after them.
         <div ref={frame} className="@container relative min-w-0">
-            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
+            <div
+                className={cn(
+                    'grid min-w-0 items-start gap-6',
+                    // The comments take up to 24rem of what the page leaves beside the plan, and no less than 20.
+                    '@min-[60rem]:grid-cols-[minmax(0,51rem)_minmax(20rem,24rem)]',
+                )}
+            >
                 <Panel>
                     <PanelHeader label="Plan" sticky>
-                        {(status !== undefined || previous !== undefined) && (
-                            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                {status}
-                                {status !== undefined && previous !== undefined && (
-                                    // What the plan is, then after the rule how it is shown, as a transcript's modes.
-                                    <span aria-hidden className="h-4 w-px bg-border" />
-                                )}
-                                {previous !== undefined && (
-                                    <span className="flex items-center gap-1">
-                                        {/* A mode, named for what it shows: the plan as it reads now, what changed
-                                            since marked on it. */}
-                                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
-                                            Changes since {previous.label}
-                                        </Toggle>
-                                        {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
-                                    </span>
-                                )}
-                            </span>
-                        )}
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {status}
+                            {status !== undefined && (
+                                // What the plan is, then after the rule how it is shown and read, as a transcript's
+                                // modes are.
+                                <span aria-hidden className="h-4 w-px bg-border" />
+                            )}
+                            {previous !== undefined && (
+                                <span className="flex items-center gap-1">
+                                    {/* A mode, named for what it shows: the plan as it reads now, what changed since
+                                        marked on it. Its icon says it is a control while it is off too. */}
+                                    <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
+                                        <Diff aria-hidden />
+                                        Changes since {previous.label}
+                                    </Toggle>
+                                    {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
+                                </span>
+                            )}
+                            <OutlineMenu editor={editor} />
+                        </span>
                         {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
                     </PanelHeader>
                     <EditorContent editor={editor} className={cn('px-6 py-4', showChanges && 'plan-changes')} />
@@ -438,8 +455,12 @@ export function PlanEditor({
                             pluginKey={BUBBLE}
                             // Fixed, so a bubble over a passage below the window never makes the window scroll: the
                             // window would scroll back as the bubble hides, under a click on the toolbar's Comment.
+                            // On the body, since a fixed element is placed from its nearest container, not the
+                            // window, and the frame is one (`@container`): under it, the bubble landed off by the
+                            // frame's place on the page, over the rail. Over the sticky header and foot, as a float is.
                             options={{ placement: 'top', strategy: 'fixed' }}
-                            className="rounded-md border bg-surface p-0.5"
+                            appendTo={() => document.body}
+                            className="z-20 rounded-md border bg-surface p-0.5"
                             data-testid="plan-bubble"
                         >
                             <Button
@@ -453,32 +474,38 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {editable && (actions !== undefined || onAskForChanges !== undefined) && (
+                    {((editable && (actions !== undefined || onAskForChanges !== undefined)) ||
+                        outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
                         <PanelFooter sticky data-testid="plan-bar">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {actions}
-                                {onAskForChanges !== undefined && (
-                                    <AskForChanges
-                                        threads={threads}
-                                        starts={starts}
-                                        edited={edited || changed}
-                                        asked={asked}
-                                        onAsk={onAskForChanges}
-                                        note={actionsNote}
-                                    />
-                                )}
-                                {onAskForChanges === undefined && actionsNote !== undefined && (
-                                    <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
-                                )}
-                            </div>
+                            {editable && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {actions}
+                                    {onAskForChanges !== undefined && (
+                                        <AskForChanges
+                                            threads={threads}
+                                            starts={starts}
+                                            edited={edited || changed}
+                                            asked={asked}
+                                            onAsk={onAskForChanges}
+                                            note={actionsNote}
+                                            onNoteChange={onNoteChange}
+                                        />
+                                    )}
+                                    {onAskForChanges === undefined && actionsNote !== undefined && (
+                                        <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
+                                    )}
+                                </div>
+                            )}
                             {outcome}
                         </PanelFooter>
                     )}
                 </Panel>
-                <Panel>
-                    <PanelHeader label="Comments">
+                {/* Beside the plan, its comments are a margin, not a box: cards on the page, each level with its
+                    passage, under a header that stays at the top of the page with their count. */}
+                <Panel className={cn(beside && 'border-transparent bg-transparent')}>
+                    <PanelHeader label="Comments" sticky={beside}>
                         <span className="readout text-xs text-muted-foreground">{open} open</span>
                     </PanelHeader>
                     <PlanThreads
@@ -553,6 +580,87 @@ function ChangeSteps({ count, onStep }: { count: number; onStep: (step: 1 | -1) 
                 <ChevronDown aria-hidden />
             </Button>
         </span>
+    )
+}
+
+// How far the outline indents a heading, by its depth under the plan's shallowest.
+const DEPTHS = ['pl-2', 'pl-5', 'pl-8', 'pl-11']
+
+// The plan's headings, as a menu that goes to the one chosen, as a document's outline does: each indented by its level
+// under the plan's shallowest, and the section being read as the menu opens marked as where the page is. A heading
+// chosen comes to the top of the page, under the sticky header (its scroll margin, `.plan-doc` in src/index.css); in a
+// plan the operator may edit, the cursor goes to it too, so the keyboard reads on from there. Escape gives the focus
+// back to the menu's button.
+function OutlineMenu({ editor }: { editor: Editor }) {
+    const outline = useEditorState({ editor, selector: ({ editor: current }) => planOutline(current.state.doc) })
+    const [chose, setChose] = useState(false)
+    const [reading, setReading] = useState<number | undefined>(undefined)
+
+    function headingAt(entry: OutlineEntry): HTMLElement | undefined {
+        const dom = editor.view.nodeDOM(entry.pos)
+        return dom instanceof HTMLElement ? dom : undefined
+    }
+
+    // The section whose heading the page has scrolled past, by the line under the sticky header.
+    function sectionInView(): number | undefined {
+        const page = editor.view.dom.closest('.page-scroll')?.getBoundingClientRect().top ?? 0
+        const tops = outline.map((entry) => headingAt(entry)?.getBoundingClientRect().top ?? Infinity)
+        return sectionAt(tops, page + TOOLBAR_CLEARANCE)
+    }
+
+    function go(entry: OutlineEntry) {
+        setChose(editor.isEditable)
+        if (editor.isEditable) {
+            // Inside the heading, at its start. The heading is scrolled to below, to the page's top rather than the
+            // nearest edge, as the editor would.
+            editor.commands.focus(entry.pos + 1, { scrollIntoView: false })
+        }
+        headingAt(entry)?.scrollIntoView({ block: 'start' })
+    }
+
+    return (
+        <DropdownMenu
+            onOpenChange={(open) => {
+                if (open) {
+                    setChose(false)
+                    setReading(sectionInView())
+                }
+            }}
+        >
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="xs" title="Go to a section of the plan">
+                    <ListTree aria-hidden />
+                    Outline
+                    <ChevronDown aria-hidden />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                align="end"
+                className="max-w-[min(24rem,calc(100vw-2rem))]"
+                onCloseAutoFocus={(event) => {
+                    if (chose) {
+                        event.preventDefault()
+                    }
+                }}
+            >
+                {outline.length === 0 && <DropdownMenuItem disabled>No headings yet</DropdownMenuItem>}
+                {outline.map((entry, i) => (
+                    <DropdownMenuItem
+                        key={entry.pos}
+                        aria-current={i === reading ? 'location' : undefined}
+                        title={entry.text}
+                        className={cn(
+                            DEPTHS[Math.min(entry.depth, DEPTHS.length - 1)],
+                            entry.depth === 0 ? 'font-medium' : 'text-muted-foreground',
+                            'aria-[current=location]:text-accent',
+                        )}
+                        onSelect={() => go(entry)}
+                    >
+                        <span className="truncate">{entry.text}</span>
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     )
 }
 

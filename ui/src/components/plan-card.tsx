@@ -141,7 +141,8 @@ export function PlanCard({
 
 /**
  * Where a ticket's plan stands, in words, as a chip: `waiting on you` in the blocked tone while its newest plan waits
- * on the operator, as everything that waits on them reads; else its status. With no plan at all, whether the ticket
+ * on the operator, as everything that waits on them reads; `changes asked` in the running tone while a proposed plan
+ * waits on the planner for the changes the operator asked; else its status. With no plan at all, whether the ticket
  * needs one, or `waived` while a triage's waiver is in force, and why (its own setting, the waiver, or `policy.plan`)
  * on hover.
  */
@@ -196,9 +197,11 @@ export function ChangesAsked({ plans, className }: { plans: TicketPlans; classNa
     )
 }
 
-// Whether the operator asked for changes that no planner has started on yet.
+// Whether the operator asked for changes that no planner has started on yet. A ticket whose plan was put aside and that
+// needs none now has no planner coming to read them, so it is not.
 function changesAsked(plans: TicketPlans): plans is TicketPlans & { changes_asked: string } {
-    return plans.changes_asked !== null && plans.planning === null
+    const needless = plans.newest?.plan.status === 'superseded' && !plans.needed
+    return plans.changes_asked !== null && plans.planning === null && !needless
 }
 
 // What comes next for the plan, in a line beside its actions: a planner or a triage at work, a waiver in force, or
@@ -207,7 +210,7 @@ function cardNote(plans: TicketPlans, open: number): string | null {
     if (plans.planning !== null) {
         return `Run ${plans.planning} is writing a new plan.`
     }
-    if (plans.changes_asked !== null) {
+    if (changesAsked(plans)) {
         return null
     }
     if (plans.newest === null && plans.triage?.status === 'running') {

@@ -856,9 +856,10 @@ export type paths = {
         put?: never;
         /**
          * Edit a draft
-         * @description `canopy draft edit run:ID N --text TEXT`: the operator's text, as a new version beside the run's own.
+         * @description `canopy draft edit run:ID N --text TEXT [--react NAME]`: the operator's words, a new version beside the run's.
          *
-         *     Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), and `bad_text`.
+         *     Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), `bad_text`, and
+         *     `no_reaction` for a reaction on a draft that is not a thread's.
          */
         post: operations["editDraft"];
         delete?: never;
@@ -2170,7 +2171,7 @@ export type components = {
             edited: boolean;
             /**
              * Hash
-             * @description The name of that text, which a send carries so what posts is what the operator read.
+             * @description The name of that text and reaction, which a send carries so what posts is what the operator read.
              */
             hash: string;
             /**
@@ -2185,6 +2186,10 @@ export type components = {
              * @description Its number in the run's drafts, from 1: with the run, how the operator names it.
              */
             number: number;
+            /** @description The reaction a send added on GitHub, which stays there though the rest of that send posted nothing. */
+            reacted: components["schemas"]["ReactionName"] | null;
+            /** @description For a thread's draft, the reaction it stages on the comment it names, as it stands. */
+            reaction: components["schemas"]["ReactionName"] | null;
             /**
              * Run
              * @description The run that drafted it.
@@ -2206,7 +2211,8 @@ export type components = {
             supersedes_edited: boolean;
             /**
              * Text
-             * @description Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here.
+             * @description Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here. Empty
+             *     when it sends its reaction alone.
              */
             text: string;
             /**
@@ -2239,12 +2245,14 @@ export type components = {
         };
         /**
          * DraftEditRequest
-         * @description An edit of a draft's text, as `canopy draft edit run:ID N --text TEXT` takes it.
+         * @description An edit of a draft's words, as `canopy draft edit run:ID N --text TEXT [--react NAME | --no-react]` takes it.
          */
         DraftEditRequest: {
+            /** @description The reaction it stages, or None for none: given every time, so an edit never keeps one the page did not show. */
+            reaction: components["schemas"]["ReactionName"] | null;
             /**
              * Text
-             * @description The draft's new text. Bounded again in code, as a run's draft is.
+             * @description The draft's new text, empty beside a reaction to send it alone. Bounded again in code, as a run's draft is.
              */
             text: string;
         };
@@ -3758,6 +3766,11 @@ export type components = {
             truncated: boolean;
         };
         /**
+         * @description A reaction a thread's draft stages on the comment it names, by GitHub's name for it.
+         * @enum {string}
+         */
+        ReactionName: "+1" | "-1" | "laugh" | "confused" | "heart" | "hooray" | "rocket" | "eyes";
+        /**
          * Refusal
          * @description A guard refused the operator's action: which guard, and why, as the CLI says it.
          */
@@ -4583,7 +4596,7 @@ export type components = {
             totals: components["schemas"]["SpendCosts"];
             /**
              * Unpriced
-             * @description A row per kind of run, in a fixed order: overseer, workers, triage, chores, reviews.
+             * @description A row per kind of run, in a fixed order: overseer, workers, triage, plans, chores, reviews.
              */
             unpriced: components["schemas"]["SpendUnpriced"][];
             /**
@@ -4624,6 +4637,11 @@ export type components = {
              * @description The live ticks' overseers.
              */
             overseer: number | null;
+            /**
+             * Plans
+             * @description Plan runs, which write a ticket's plan (`plan`, DESIGN §25): what a waived plan would have cost.
+             */
+            plans: number | null;
             /**
              * Reviews
              * @description Review runs.
@@ -4670,10 +4688,10 @@ export type components = {
          */
         SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
         /**
-         * @description A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan (`needs-plan`, DESIGN §25), chore runs, review runs.
+         * @description A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan (`needs-plan`, DESIGN §25), plan runs (`plan`, §25), chore runs, review runs.
          * @enum {string}
          */
-        SpendKind: "overseer" | "workers" | "triage" | "chores" | "reviews";
+        SpendKind: "overseer" | "workers" | "triage" | "plans" | "chores" | "reviews";
         /**
          * SpendPullRequest
          * @description What the runs that pushed to one PR and the review runs of it, started in the window, cost.
@@ -5426,6 +5444,12 @@ export type components = {
              * @description The overseer's last derived phase, for display; never read as truth.
              */
             phase: string | null;
+            /**
+             * Plan Waits
+             * @description Whether its newest plan waits on the operator: proposed, no planner at work, no changes asked (DESIGN §25).
+             * @default false
+             */
+            plan_waits: boolean;
             /**
              * Private
              * @description Started in canopy (DESIGN §22): its conversation never reaches the tracker.
