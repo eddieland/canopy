@@ -5445,6 +5445,12 @@ export type components = {
              */
             phase: string | null;
             /**
+             * Plan Waits
+             * @description Whether its newest plan waits on the operator: proposed, no planner at work, no changes asked (DESIGN §25).
+             * @default false
+             */
+            plan_waits: boolean;
+            /**
              * Private
              * @description Started in canopy (DESIGN §22): its conversation never reaches the tracker.
              */

@@ -40,6 +40,13 @@ describe('answered', () => {
         expect(answered(item, undefined)).toBe(false)
     })
 
+    it('is a plan review whose plan waits on you no more: approved, skipped, or sent back for changes', () => {
+        const review = { ...item, reason: 'plan_review' }
+        expect(answered(review, listing({ plan_waits: false }))).toBe(true)
+        expect(answered(review, listing({ plan_waits: true }))).toBe(false)
+        expect(answered(review, undefined)).toBe(false)
+    })
+
     it('is never another reason', () => {
         expect(answered({ ...item, reason: 'worker_failed' }, listing({ awaiting: null }))).toBe(false)
     })

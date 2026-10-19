@@ -21,6 +21,7 @@ const TICKET: TicketSummary = {
     latest_message_id: null,
     awaiting: null,
     running_run: null,
+    plan_waits: false,
 }
 
 // Every action the buttons send, and what the server stand-in answers each.

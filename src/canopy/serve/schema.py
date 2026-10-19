@@ -243,6 +243,8 @@ class TicketSummary(_Model):
     """The question waiting on the operator's reply, on a started ticket."""
     running_run: int | None = None
     """The run working it now, if one is."""
+    plan_waits: bool = False
+    """Whether its newest plan waits on the operator: proposed, no planner at work, no changes asked (DESIGN §25)."""
 
 
 class Unit(_Model):

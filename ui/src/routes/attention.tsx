@@ -356,7 +356,7 @@ function ReasonChip({ item }: { item: AttentionItem }) {
     return item.finding ? <Chip>finding</Chip> : <Chip tone={TONE[severity(item)]} word={item.reason} />
 }
 
-/** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
+/** On an `awaiting_reply` or `plan_review` item the operator has answered: it stays until a tick reads the answer. */
 function Answered() {
     return <Chip tone="running">answered</Chip>
 }
@@ -461,12 +461,19 @@ function Head({
             )}
             {done && (
                 <p className="text-sm text-muted-foreground" data-testid="answered-note">
-                    You answered it. The item leaves at the next tick, when the loop reads your reply.
+                    {answeredNote(item)}
                 </p>
             )}
             {notice}
         </div>
     )
+}
+
+// What an answered item's head says under its detail: that it leaves at the next tick, which reads the answer.
+function answeredNote(item: AttentionItem): string {
+    return item.reason === 'plan_review'
+        ? 'You answered the plan. The item leaves at the next tick, when the loop reads your answer.'
+        : 'You answered it. The item leaves at the next tick, when the loop reads your reply.'
 }
 
 /**

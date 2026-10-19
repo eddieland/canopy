@@ -95,6 +95,7 @@ export const mockTickets: TicketSummary[] = [
         latest_message_id: 5,
         awaiting: 5,
         running_run: null,
+        plan_waits: false,
     },
 ]
 

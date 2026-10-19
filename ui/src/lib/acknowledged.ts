@@ -10,14 +10,28 @@ export function awaitsTick(message: Pick<Message, 'id' | 'source'>, acknowledged
 }
 
 /**
- * Whether an `awaiting_reply` item was answered since the tick that listed it: its ticket, still started, or public
- * with a planner's question (DESIGN §25), waits on no question now. The list is the latest `ok` tick's (DESIGN §14), so
+ * Whether an item was answered since the tick that listed it: an `awaiting_reply` item's ticket, still started, or
+ * public with a planner's question (DESIGN §25), waits on no question now, or a `plan_review` item's plan waits on the
+ * operator no more, approved, skipped, or sent back for changes. The list is the latest `ok` tick's (DESIGN §14), so
  * the item stays until the next one.
  */
 export function answered(item: AttentionItem, tickets: TicketSummary[] | undefined): boolean {
-    if (item.reason !== 'awaiting_reply' || item.ticket_key === null) {
+    if (item.ticket_key === null) {
         return false
     }
     const ticket = tickets?.find((t) => t.key === item.ticket_key)
-    return ticket !== undefined && ticket.start !== 'stopped' && ticket.awaiting === null
+    if (ticket === undefined) {
+        return false
+    }
+    switch (item.reason) {
+        case 'awaiting_reply': {
+            return ticket.start !== 'stopped' && ticket.awaiting === null
+        }
+        case 'plan_review': {
+            return !ticket.plan_waits
+        }
+        default: {
+            return false
+        }
+    }
 }

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { plan, select, settled, signIn } from './helpers.ts'
 
@@ -149,27 +150,7 @@ test("a ticket's page loads no plan editor", async ({ page }) => {
 test("a plan review on the attention list shows the plan's card, which approves it and opens its page", async ({
     page,
 }) => {
-    // The stream would send the list as the journal has it, which has no plan review: the list here is the test's.
-    await page.route('**/api/events', (route) => route.abort())
-    await page.route('**/api/attention', (route) =>
-        route.fulfill({
-            json: [
-                {
-                    id: 'ABC-105:plan_review',
-                    ticket_key: 'ABC-105',
-                    ticket_title: 'Schedule report exports',
-                    reason: 'plan_review',
-                    detail: 'plan 2 waits on your approval',
-                    since: '2026-10-08T11:52:00Z',
-                    chore: null,
-                    pr: null,
-                    repo: null,
-                    finding: false,
-                    subject: 'ABC-105',
-                },
-            ],
-        }),
-    )
+    await listPlanReview(page)
     // The root server's journal never changes: the approval is answered here, as canopy plan --approve would.
     const approvals: unknown[] = []
     await page.route('**/api/tickets/ABC-105/plan', async (route) => {
@@ -187,6 +168,23 @@ test("a plan review on the attention list shows the plan's card, which approves 
     expect(approvals).toEqual([{ action: 'approve' }])
     await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+})
+
+test('a plan review you answered since its tick says so until the next one', async ({ page }) => {
+    await listPlanReview(page)
+    // The root server's journal never changes: the plan is answered here, as asking for changes would answer it.
+    await page.route('**/api/tickets', async (route) => {
+        const tickets = (await (await route.fetch()).json()) as { key: string; plan_waits: boolean }[]
+        for (const ticket of tickets) {
+            ticket.plan_waits &&= ticket.key !== 'ABC-105'
+        }
+        await route.fulfill({ json: tickets })
+    })
+    await page.goto('attention')
+    await expect(page.getByTestId('attention-item-ABC-105:plan_review')).toContainText('answered')
+    await expect(page.getByTestId('answered-note')).toHaveText(
+        'You answered the plan. The item leaves at the next tick, when the loop reads your answer.',
+    )
 })
 
 test('an earlier plan opens read only', async ({ page }) => {
@@ -236,3 +234,28 @@ test('a comment half written asks before the page is left, by a link or by closi
     await page.close({ runBeforeUnload: true })
     expect(await asked).toBe('beforeunload')
 })
+
+// The stream would send the list as the journal has it, which has no plan review: the list here is the test's,
+// ABC-105's.
+async function listPlanReview(page: Page) {
+    await page.route('**/api/events', (route) => route.abort())
+    await page.route('**/api/attention', (route) =>
+        route.fulfill({
+            json: [
+                {
+                    id: 'ABC-105:plan_review',
+                    ticket_key: 'ABC-105',
+                    ticket_title: 'Schedule report exports',
+                    reason: 'plan_review',
+                    detail: 'plan 2 waits on your approval',
+                    since: '2026-10-08T11:52:00Z',
+                    chore: null,
+                    pr: null,
+                    repo: null,
+                    finding: false,
+                    subject: 'ABC-105',
+                },
+            ],
+        }),
+    )
+}
