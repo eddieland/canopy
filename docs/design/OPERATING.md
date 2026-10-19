@@ -508,6 +508,58 @@ also define its own agents under other names, MCP servers, and permissions (TRUS
 a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
 names the skill and the prompt then says to use it (§8). Prefer that to a prompt override.
 
+### What OpenCode does with a plugin
+
+canopy ships no plugin yet. ROADMAP M57 would ship one in the snapshot, to tell a running agent the minutes left on its
+tool calls, and rests on what follows, read from OpenCode's source at 1.19.3 and `srt`'s at 0.0.79 (2026-10-19). A later
+OpenCode is read again before it is built.
+
+- **Where plugins load from.** `ConfigPlugin.load` (`packages/opencode/src/config/plugin.ts`) globs
+  `{plugin,plugins}/*.{ts,js}` in each config directory, symlinks followed, and `ConfigPaths.directories` lists
+  `OPENCODE_CONFIG_DIR` last of them. `opencode run` without `--attach` serves itself in process, and its bootstrap
+  (`project/bootstrap.ts`) runs `plugin.init()` before the session starts. With `OPENCODE_PURE` set, no plugin from
+  config loads (`plugin/index.ts`).
+- **Shape and failure.** A file plugin is a default export `{ id, server }`, refused without `id`, or a module whose
+  every export is a plugin function. One that fails to load is logged and skipped, and the run goes on without it.
+  Hooks run in turn, config plugins in config order, so a repository's plugins run before the snapshot's.
+  `Plugin.trigger` runs each hook through `Effect.promise`, so a hook that throws fails the tool call, after the tool
+  has run.
+- **Which calls.** `session/tools.ts` triggers `tool.execute.after` after every built-in tool (bash, read, edit, write,
+  patch, task, skill, and the rest), the MCP resource tools, and every MCP tool, once the tool returns. A call that
+  fails triggers none: a refused permission, a tool's error, an MCP result with `isError`, which `mcp/catalog.ts` turns
+  into an error. A bash command that exits non-zero has not failed; its output says the status. A subagent's calls
+  run in the same process and trigger it too, under the subagent's `sessionID`.
+- **What the model reads next.** A built-in tool's hook gets the object the call returns, already truncated by the
+  wrapper `Tool.define` puts around every tool (`tool/tool.ts`); its `output` is the part's output
+  (`session/processor.ts`), and that is the tool result the next call sends (`session/message-v2.ts`). So text
+  appended to `output.output` is what the model reads next. An MCP tool's hook gets the MCP result itself,
+  `{ content: [...] }`, not the `{ title, output, metadata }` the hook's type names. OpenCode joins `content`'s text
+  after the hook and truncates it then, keeping the head, 2,000 lines or 50 KiB by default (`tool/truncate.ts`). So
+  for an MCP tool a line goes into `content`, first, or a long result loses it; an `output` set there is ignored.
+- **Network.** Loading a file plugin fetches nothing: `plugin/shared.ts` stats the file, reads a `package.json` beside
+  it if there is one, and imports it, and a module with no imports resolves nothing else. But for every config
+  directory it loads, OpenCode writes a `.gitignore` and starts installing `@opencode-ai/plugin` at its own version
+  there, in the background (`Config.loadInstanceState`). With any plugin configured, the plugin service waits for every
+  one of those installs before loading plugins (`config.waitForDependencies()`), with no timeout of its own; a failed
+  install is only logged. `Npm.install` (`packages/core/src/npm.ts`) returns at once for a directory
+  `access(dir, W_OK)` refuses, and does nothing where `node_modules/` exists and the lock holds the package; otherwise
+  arborist fetches it from the registry. So a plugin in the snapshot makes every run wait, before its session, for:
+  - the snapshot's own install, from the registry, on the first run that loads a new snapshot writable, most often the
+    overseer's, outside any sandbox. A snapshot no one can write, owner included, is skipped everywhere, and the
+    `.gitignore` write's `PermissionDenied` is ignored.
+  - a worktree's `.opencode/`, when the repository has one. It is writable inside the sandbox, so a slot without its
+    `node_modules/` waits on the registry, which succeeds only where the template allows it. How long a refused fetch
+    takes to fail is not in OpenCode's source.
+
+  In a sandboxed run on Linux the snapshot and `~/.config/opencode` are read-only binds, which `access` refuses, so
+  neither waits. On macOS, whether `access` reports a Seatbelt write deny is not settled by the source.
+- **The environment.** The plugin runs in OpenCode's process, which has the command's environment. `procs` merges a
+  run's variables over canopy's own, as it does `CANOPY_GIT_OBJECTS`. `canopy-sandbox` drops only what points git at
+  another repository, `BASH_ENV`, `ENV`, and relative `PATH` entries, and runs `srt` with the rest. `srt` spawns with
+  its own environment and unsets only the variables a policy's `credentials.envVars` deny (`--unsetenv` for bubblewrap,
+  `env -u` before `sandbox-exec`), and no shipped template has `credentials`. So a variable canopy sets for a run
+  reaches a sandboxed agent unchanged.
+
 ### The operator's skill
 
 `canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI and the
