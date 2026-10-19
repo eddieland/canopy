@@ -130,8 +130,8 @@ merge or approve, never transition the ticket directly or through closing keywor
 The tracker is
 jira; if a skill named `tracker-jira` is available, load it before touching the ticket.
 If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in the
-title. Open each PR through the GitHub MCP. Post no comment or reply on a PR: put your reply to each review comment you addressed in a `thread` draft
-(Result, below), briefly, for the operator to send as their own. In every comment and reply you post, on the ticket, start it with `CANOPY:` and a space, without the backticks. You post as the operator, so that is how canopy knows the comment is yours and never reads it back as a reply.
+title. Open each PR through the GitHub MCP. Post no comment, reply, or reaction on a PR: put your reply to each review comment you addressed in a
+`thread` draft (Result, below), briefly, for the operator to send as their own. In every comment and reply you post, on the ticket, start it with `CANOPY:` and a space, without the backticks. You post as the operator, so that is how canopy knows the comment is yours and never reads it back as a reply.
 When `reply` is among the reasons above, remove the `needs-human` label from the
 ticket after reading it. Change labels with the tracker's MCP tool for editing the ticket, changing nothing but its
 labels. Time limit 45 minutes.
@@ -166,7 +166,7 @@ Last line of stdout, exactly one JSON object:
 
 That JSON object also carries `"drafts"`: each comment you would otherwise have posted, which canopy keeps for the operator. They read each one where it goes, may edit or drop it, and send it as their own words, so post none of them yourself and mark none. At most 30, each one of these:
 
-- `{"on":"thread","pr":"<PR URL>","comment":<id>,"did":"changed|declined|answered","text":"<reply>"}`: a reply on a review thread. `comment` is the id of any review comment on the thread, the number in its URL after `#discussion_r`. `did` says whether you made the change it asked for, declined it, or answered a question.
+- `{"on":"thread","pr":"<PR URL>","comment":<id>,"did":"changed|declined|answered","text":"<reply>"}`: a reply on a review thread. `comment` is the id of any review comment on the thread, the number in its URL after `#discussion_r`. `did` says whether you made the change it asked for, declined it, or answered a question. It may also carry `"react"`, a reaction on the comment `comment` names, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, `eyes`: where a reaction says what a reply would, such as `+1` on a nit you fixed, give it and leave `text` out.
 - `{"on":"pr","pr":"<PR URL>","text":"<comment>"}`: at most one a PR, for what is no reply on a thread, such as an answer to a review's own text, or what you fixed in CI.
 
 Each `pr` is one of this run's PRs. Each text is at most 4,000 characters of GitHub Markdown, written as the operator would say it, with no secret and no hidden characters. Nobody but the operator sees a draft until they send it.

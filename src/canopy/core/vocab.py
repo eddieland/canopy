@@ -283,6 +283,22 @@ class DraftAuthor(StrEnum):
     OPERATOR = "operator"
 
 
+class Reaction(StrEnum):
+    """A reaction a thread's draft stages on the comment it names, `draft_versions.reaction` (DESIGN §29).
+
+    Every one GitHub offers on a review comment, by the name its REST API and its web page give it.
+    """
+
+    THUMBS_UP = "+1"
+    THUMBS_DOWN = "-1"
+    LAUGH = "laugh"
+    CONFUSED = "confused"
+    HEART = "heart"
+    HOORAY = "hooray"
+    ROCKET = "rocket"
+    EYES = "eyes"
+
+
 class PrState(StrEnum):
     """A PR's state as canopy's reader last saw it, `observed_prs.state` (DESIGN §29)."""
 

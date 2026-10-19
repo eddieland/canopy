@@ -3,11 +3,11 @@
 Each refuses inside canopy's ticks and runs (`conversation.check_operator`): an agent that could send a draft could post
 as the operator. The CLI's `canopy draft` and the web UI call the same functions, so with the same guards.
 
-Sending posts exactly the text the operator last saw, named by its hash, with no comment marks. The drafts sent
-together for one PR go through the `vcs` source's `post_cmd` as one comment review; a ticket's, through the `tracker`
-source's. Each is posted at most once: a send claims its drafts before it posts, and one whose post ends without saying
-whether it submitted is `unconfirmed`, never posted again by canopy until a whole read of its PR, or the operator for a
-ticket's, settles it.
+Sending posts exactly the text and the reaction the operator last saw, named by their hash, with no comment marks. The
+drafts sent together for one PR go through the `vcs` source's `post_cmd` as one comment review, their reactions added
+before it; a ticket's, through the `tracker` source's. Each is posted at most once: a send claims its drafts before it
+posts, and one whose post ends without saying whether it submitted is `unconfirmed`, never posted again by canopy until
+a whole read of its PR, or the operator for a ticket's, settles it.
 """
 
 from __future__ import annotations
@@ -21,9 +21,8 @@ from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import conversation, db, drafts, observe, records
 from canopy.core.config import notify_words
-from canopy.core.memory_text import TextRefused, check_text
-from canopy.core.replies import MAX_DRAFT_CHARS
-from canopy.core.vocab import DraftAuthor, DraftKind, DraftStatus, ReviewItem, ReviewState
+from canopy.core.memory_text import TextRefused
+from canopy.core.vocab import DraftAuthor, DraftKind, DraftStatus, Reaction, ReviewItem, ReviewState
 from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
@@ -36,9 +35,18 @@ _MAX_QUOTED = 100
 _MAX_STDERR = 300
 
 
-def hash_of(text: str) -> str:
-    """Return the name of a draft's text as the operator saw it: the start of its SHA-256, hex."""
-    return hashlib.sha256(text.encode()).hexdigest()[:HASH_CHARS]
+def hash_of(text: str, reaction: Reaction | None) -> str:
+    """Return the name of a draft's words as the operator saw them: the start of their SHA-256, hex.
+
+    A draft with no reaction is named by its text alone, as it was before a draft could stage one.
+    """
+    words = text if reaction is None else f"{text}\0{reaction}"
+    return hashlib.sha256(words.encode()).hexdigest()[:HASH_CHARS]
+
+
+def hash_of_version(version: records.DraftVersion) -> str:
+    """Return the name of a version of a draft: its text and its reaction, as `hash_of` names them."""
+    return hash_of(version.body, version.reaction)
 
 
 def find(conn: sqlite3.Connection, run_id: int, number: int) -> records.Draft:
@@ -58,32 +66,41 @@ def find(conn: sqlite3.Connection, run_id: int, number: int) -> records.Draft:
     return found
 
 
-def edit(conn: sqlite3.Connection, run_id: int, number: int, text: str, *, channel: str) -> records.DraftVersion:
-    """Make the operator's `text` the draft's, as a new version beside the run's own.
+def edit(
+    conn: sqlite3.Connection, run_id: int, number: int, text: str, reaction: Reaction | None, *, channel: str
+) -> records.DraftVersion:
+    """Make the operator's `text` and `reaction` the draft's, as a new version beside the run's own.
+
+    The text may be empty beside a reaction, which then goes alone.
 
     Returns:
-        The draft's text as it now stands.
+        The draft's words as they now stand.
 
     Raises:
         Refused: (`inside_run`) inside one of canopy's ticks or runs; (`unknown`) no such draft; a status that takes no
             edit, named for it, such as `sent`; (`bad_text`) a text canopy would not keep, for the reason a run's
-            draft would be refused.
+            draft would be refused, or none without a reaction; (`no_reaction`) a reaction on a draft that is not a
+            thread's.
     """
     conversation.check_operator()
     draft = find(conn, run_id, number)
     _check_open(draft)
+    if reaction is not None and draft.kind is not DraftKind.THREAD:
+        raise conversation.Refused(
+            "no_reaction", f"run {run_id}'s draft {number} is not a thread's; only a review comment takes a reaction"
+        )
     try:
-        body = check_text(text, MAX_DRAFT_CHARS, lines=True)
+        body = drafts.check_words(text, reaction)
     except TextRefused as e:
         raise conversation.Refused("bad_text", str(e)) from e
     current = drafts.text_of(conn, draft.id)
-    if body == current.body:
+    if (body, reaction) == (current.body, current.reaction):
         return current
     with db.transaction(conn):
         conn.execute(
-            "INSERT INTO draft_versions (draft_id, version, body, author, channel, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (draft.id, current.version + 1, body, DraftAuthor.OPERATOR, channel, db.now()),
+            "INSERT INTO draft_versions (draft_id, version, body, author, channel, created_at, reaction) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (draft.id, current.version + 1, body, DraftAuthor.OPERATOR, channel, db.now(), reaction),
         )
     return drafts.text_of(conn, draft.id)
 
@@ -243,7 +260,7 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
             pass
         case _:
             assert_never(draft.status)
-    current = hash_of(drafts.text_of(conn, draft.id).body)
+    current = hash_of_version(drafts.text_of(conn, draft.id))
     if current != seen:
         raise conversation.Refused("stale", _changed(draft, current))
 
@@ -375,7 +392,7 @@ def _claim(conn: sqlite3.Connection, chosen: Iterable[records.Draft], seen: Mapp
     with db.transaction(conn):
         for draft in chosen:
             text = drafts.text_of(conn, draft.id)
-            current = hash_of(text.body)
+            current = hash_of_version(text)
             if current != seen[draft.id]:
                 raise conversation.Refused("stale", _changed(draft, current))
             version = text.version
@@ -402,10 +419,11 @@ def _post(
     log: logs.TickAdapter,
 ) -> None:
     """Post one PR's drafts as one review, or a ticket's draft as one comment, and record what became of each."""
-    texts = {d.id: drafts.text_of(conn, d.id).body for d in group}
+    versions = {d.id: drafts.text_of(conn, d.id) for d in group}
+    texts = {i: v.body for i, v in versions.items()}
     if key.pr is not None:
         body = next((texts[d.id] for d in group if d.kind is DraftKind.PR), None)
-        replies = [{"comment": d.comment_id, "text": texts[d.id]} for d in group if d.kind is DraftKind.THREAD]
+        replies = [_reply(d, versions[d.id]) for d in group if d.kind is DraftKind.THREAD]
         request: dict[str, object] = {
             "pr": key.pr,
             "delete_pending": _left_pending(conn, key.pr),
@@ -425,6 +443,7 @@ def _post(
         log.warning("drafts not posted", extra={"drafts": [d.id for d in group], "reason": str(e)})
         return
     lines = _post_lines(result.stdout)
+    _reacted(conn, group, versions, lines)
     said = result.stderr.strip()[-_MAX_STDERR:]
     end = lines.get("end")
     pending = lines.get("pending")
@@ -443,6 +462,40 @@ def _post(
     )
 
 
+def _reply(draft: records.Draft, version: records.DraftVersion) -> dict[str, object]:
+    """A thread's draft as the post command takes it: the comment it answers, its text, and its reaction, if any.
+
+    Returns:
+        The reply, with no `text` for a reaction sent alone and no `reaction` for a draft with none.
+    """
+    reply: dict[str, object] = {"comment": draft.comment_id}
+    if version.body:
+        reply["text"] = version.body
+    if version.reaction is not None:
+        reply["reaction"] = version.reaction
+    return reply
+
+
+def _reacted(
+    conn: sqlite3.Connection,
+    group: Sequence[records.Draft],
+    versions: Mapping[int, records.DraftVersion],
+    lines: Mapping[str, Mapping[str, object]],
+) -> None:
+    """Record each reaction the post command says it added, whatever became of the rest of the post.
+
+    A reaction is added before the review is opened, and stays on GitHub if the review then fails, so the draft keeps
+    it even when it waits again.
+    """
+    now = db.now()
+    with db.transaction(conn):
+        for d in group:
+            # Only a thread's draft holds a reaction.
+            reaction = versions[d.id].reaction
+            if reaction is not None and lines.get(f"reaction:{d.comment_id}", {}).get("reaction") == reaction:
+                conn.execute("UPDATE drafts SET reacted = ?, reacted_at = ? WHERE id = ?", (reaction, now, d.id))
+
+
 def _left_pending(conn: sqlite3.Connection, pr: str) -> str | None:
     """The pending review an earlier post left on `pr`, which this one deletes first.
 
@@ -457,7 +510,9 @@ def _left_pending(conn: sqlite3.Connection, pr: str) -> str | None:
 
 
 def _post_lines(stdout: str) -> dict[str, dict[str, object]]:
-    """The post command's lines by kind, a comment's by the comment it answered as `comment:<id>`, the last of each.
+    """The post command's lines by kind, the last of each.
+
+    A comment's or a reaction's is keyed by the comment it names, `comment:<id>` or `reaction:<id>`.
 
     Returns:
         The lines, each a JSON object.
@@ -472,8 +527,8 @@ def _post_lines(stdout: str) -> dict[str, dict[str, object]]:
             continue
         line = {str(k): v for k, v in raw.items()}
         kind = str(line.get("kind"))
-        if kind == "comment" and "comment" in line:
-            kind = f"comment:{line['comment']}"
+        if kind in {"comment", "reaction"} and "comment" in line:
+            kind = f"{kind}:{line['comment']}"
         found[kind] = line
     return found
 
@@ -496,7 +551,8 @@ def _posted(
         for d in group:
             match d.kind:
                 case DraftKind.THREAD:
-                    line = lines.get(f"comment:{d.comment_id}", {})
+                    # A reaction sent alone posts no comment: its line names the comment it went on.
+                    line = lines.get(f"comment:{d.comment_id}") or lines.get(f"reaction:{d.comment_id}", {})
                 case DraftKind.PR:
                     line = review
                 case DraftKind.TICKET:

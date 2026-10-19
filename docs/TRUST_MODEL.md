@@ -363,7 +363,8 @@ but must be distinguishable:
   word as they last saw it, named by its hash, as one comment review that approves nothing and resolves no thread. The
   journal records which run drafted it, whether the operator edited it, the channel, and the comment's id, by which
   canopy knows it: the state block lists those ids, and neither the overseer nor a worker reads one as review feedback
-  or a go-ahead.
+  or a go-ahead. A reaction a draft stages, one of the eight GitHub offers, is part of what the hash names, and is added
+  only by a send, before its review; nothing canopy reads gives a reaction meaning.
 - Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
   `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
   them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
@@ -403,11 +404,11 @@ Controls:
   `plan_triage_cmd`, and no sandbox role exists for it yet (DESIGN §24), so with M26's sandbox on, a triage still runs
   outside the OS sandbox, reading ticket text anyone can write and the primary clones; its definition's tool denials
   are its only bound.
-- With `trust.review_replies = "approve"`, a worker's comments leave the machine only as the operator sent them: its
-  prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the GitHub
-  server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker source
-  posts the ticket's drafts, the issue-comment ones too. canopy posts what the operator sent through
-  `canopy-post-github` (T2), never through an agent.
+- With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
+  sent them: its prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the
+  GitHub server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker
+  source posts the ticket's drafts, the issue-comment ones too. `gh api`, the one `gh` command that reacts, is denied
+  whatever the setting. canopy posts what the operator sent through `canopy-post-github` (T2), never through an agent.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy

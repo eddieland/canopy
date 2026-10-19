@@ -1,18 +1,23 @@
 """`canopy-post-github`: posts what the operator approved in canopy, word for word (DESIGN §29).
 
-On stdin, one JSON object: one PR's drafts,
-`{"pr": URL, "delete_pending": ID | null, "body": TEXT | null, "replies": [{"comment": ID, "text": TEXT}, ...]}`,
-posted as one review: a pending review, each reply added to the thread of the review comment it names, the body as
-the review's, submitted as `COMMENT`; or one ticket's, `{"issue": URL, "ticket": KEY, "body": TEXT}`, posted as one
-comment on that issue, which must be numbered as the key is. `delete_pending` names a pending review an earlier post
-left, which is deleted first, and only if it is still pending, on that PR, and the poster's own.
+On stdin, one JSON object: one PR's drafts, `{"pr": URL, "delete_pending": ID | null, "body": TEXT | null,
+"replies": [{"comment": ID, "text": TEXT | null, "reaction": REACTION | null}, ...]}`, posted as one review: a pending
+review, each reply's text added to the thread of the review comment it names, the body as the review's, submitted as
+`COMMENT`; or one ticket's, `{"issue": URL, "ticket": KEY, "body": TEXT}`, posted as one comment on that issue, which
+must be numbered as the key is. `delete_pending` names a pending review an earlier post left, which is deleted first,
+and only if it is still pending, on that PR, and the poster's own. A reply's `reaction`, one of `+1`, `-1`, `laugh`,
+`confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the comment it names before the review is opened; a
+reply with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no review.
 
-On stdout, one JSON line each: `as`, the login it posts as; for a PR, `pending`, the pending review's node id and its
-id, once it has one; once it is submitted, `comment` for each reply (the comment it answered, the new comment's id and
-URL) and `review` (its id and URL); for an issue, `comment`; last, `end`, saying whether it submitted.
-`"submitted": false` is printed only when nothing was posted, with `pending` naming a pending review it could not
-delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line means the
-outcome is unknown: the submit may have reached GitHub.
+On stdout, one JSON line each: `as`, the login it posts as; for a PR, `reaction` for each reaction added (the comment,
+the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once it
+is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL) and `review` (its id and
+URL); for an issue, `comment`; last, `end`, saying whether it submitted: `"submitted": true` once the review or the
+issue comment is submitted, or once every reaction is added when there is nothing else to post. `"submitted": false` is
+printed only when nothing but the reactions its `reaction` lines name was posted, with `pending` naming a pending review
+it could not delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line
+means the outcome is unknown: the submit may have reached GitHub. A reaction GitHub already holds is not added twice, so
+a reaction whose outcome is unknown is one to send again, never one that can post twice.
 
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed.
 
@@ -52,6 +57,17 @@ from canopy_github.read import threads
 
 # GitHub's own limit on a comment's body.
 MAX_TEXT = 65536
+# Each reaction a reply may add, by the name canopy and GitHub's REST API give it, to the name GraphQL takes.
+REACTIONS = {
+    "+1": "THUMBS_UP",
+    "-1": "THUMBS_DOWN",
+    "laugh": "LAUGH",
+    "confused": "CONFUSED",
+    "heart": "HEART",
+    "hooray": "HOORAY",
+    "rocket": "ROCKET",
+    "eyes": "EYES",
+}
 MAX_REPLIES = 100
 # A key a GitHub Issues tracker gives a ticket: letters, a hyphen, the issue's number (DESIGN §17).
 _KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]{0,9})")
@@ -103,6 +119,11 @@ mutation Submit($review: ID!, $body: String) {
 _DELETE = """
 mutation Delete($review: ID!) { deletePullRequestReview(input: {pullRequestReviewId: $review}) { clientMutationId } }
 """
+_REACT = """
+mutation React($subject: ID!, $content: ReactionContent!) {
+  addReaction(input: {subjectId: $subject, content: $content}) { reaction { content } }
+}
+"""
 _COMMENT = """
 mutation Comment($subject: ID!, $body: String!) {
   addComment(input: {subjectId: $subject, body: $body}) { commentEdge { node { fullDatabaseId url } } }
@@ -112,10 +133,14 @@ mutation Comment($subject: ID!, $body: String!) {
 
 @dataclass(frozen=True)
 class Reply:
-    """A reply to post: the review comment whose thread it answers, and its text."""
+    """A reply to post: the review comment whose thread it answers, its text, and its reaction on that comment.
+
+    At least one of the text and the reaction is set.
+    """
 
     comment: int
-    text: str
+    text: str | None
+    reaction: str | None
 
 
 @dataclass(frozen=True)
@@ -212,7 +237,7 @@ def parse_request(request: Mapping[str, object]) -> Review | IssueComment:
         What to post.
 
     Raises:
-        InputError: It is neither shape, or a text is empty or too long.
+        InputError: It is neither shape, a text is empty or too long, or a reaction is not one GitHub offers.
     """
     if "issue" in request:
         issue = parse_issue(request.get("issue"))
@@ -244,8 +269,13 @@ def _reply(raw: object) -> Reply:
     found = items([raw])
     comment = number(found[0].get("comment")) if found else None
     if comment is None:
-        raise InputError("each reply needs the id of the review comment it answers, and its text")
-    return Reply(comment=comment, text=_text(found[0].get("text"), "reply"))
+        raise InputError("each reply needs the id of the review comment it answers, and its text or reaction")
+    reaction, text = found[0].get("reaction"), found[0].get("text")
+    if reaction is not None and reaction not in REACTIONS:
+        raise InputError(f"a reply's reaction must be one of {', '.join(REACTIONS)}")
+    if reaction is not None and text is None:
+        return Reply(comment=comment, text=None, reaction=str(reaction))
+    return Reply(comment=comment, text=_text(text, "reply"), reaction=None if reaction is None else str(reaction))
 
 
 def _text(value: object, what: str) -> str:
@@ -261,11 +291,10 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
 
     Raises:
         InputError: A reply names a comment the PR has no thread for, or the pending review to delete is not one.
-        UnknownOutcomeError: The submit may have reached GitHub.
-        GitHubError: GitHub refused before anything could be seen; the pending review is deleted, or named.
+        GitHubError: GitHub refused a reaction, which opened no review; or as `_submit` raises it.
     """
     pr = review.pr
-    found = {line.get("id"): thread.id for thread in threads(client, pr) for line in thread.comments}
+    found = {line.get("id"): (thread.id, line) for thread in threads(client, pr) for line in thread.comments}
     missing = [r.comment for r in review.replies if r.comment not in found]
     if missing:
         raise InputError(f"{pr.url} has no review thread with comment {', '.join(map(str, missing))}")
@@ -273,6 +302,33 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
     pr_id = _id(obj(_repository(client, _PR_ID, variables).get("pullRequest"), "pullRequest").get("id"), "PR's id")
     if review.delete_pending is not None:
         _delete_left(client, review.delete_pending, pr_id, login)
+    # First, since GitHub adds a reaction once however often it is asked: one added before a review that then fails
+    # stays added, and sending again adds nothing more.
+    for reply in review.replies:
+        if reply.reaction is not None:
+            _react(client, reply.comment, found[reply.comment][1], reply.reaction, out)
+    replies = [(r.comment, found[r.comment][0], r.text) for r in review.replies if r.text is not None]
+    if review.body is None and not replies:
+        out.line({"kind": "end", "submitted": True})
+        return
+    _submit(client, pr, pr_id, review.body, replies, login, out)
+
+
+def _submit(  # noqa: PLR0917  (what one review is posted from)
+    client: Client,
+    pr: Ref,
+    pr_id: str,
+    body: str | None,
+    replies: Sequence[tuple[int, str, str]],
+    login: str,
+    out: Out,
+) -> None:
+    """Post `body` and `replies`, each a comment answered, its thread's node id, and the text, as one comment review.
+
+    Raises:
+        UnknownOutcomeError: The submit may have reached GitHub.
+        GitHubError: GitHub refused before anything of it could be seen; the pending review is deleted, or named.
+    """
     try:
         added = obj(client.query(_ADD_REVIEW, {"pr": pr_id}).get("addPullRequestReview"), "addPullRequestReview")
         opened = obj(added.get("pullRequestReview"), "pullRequestReview")
@@ -285,19 +341,17 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
     out.line({"kind": "pending", "review": pending, "id": number(opened.get("fullDatabaseId"))})
     posted: list[Mapping[str, object]] = []
     try:
-        for reply in review.replies:
-            variables = {"review": pending, "thread": found[reply.comment], "body": reply.text}
+        for answered, thread, words in replies:
+            variables = {"review": pending, "thread": thread, "body": words}
             data = obj(client.query(_REPLY, variables).get("addPullRequestReviewThreadReply"), "reply")
             comment = obj(data.get("comment"), "comment")
-            posted.append(
-                {"comment": reply.comment, "id": number(comment.get("fullDatabaseId")), "url": comment.get("url")}
-            )
+            posted.append({"comment": answered, "id": number(comment.get("fullDatabaseId")), "url": comment.get("url")})
     except GitHubError:
         # Nobody else sees a pending review or its replies, so a reply that failed posted nothing.
         _abandon(client, pending, out)
         raise
     try:
-        submit = client.query(_SUBMIT, {"review": pending, "body": review.body})
+        submit = client.query(_SUBMIT, {"review": pending, "body": body})
     except GitHubError as e:
         if not e.certain:
             raise UnknownOutcomeError(e) from e
@@ -308,6 +362,17 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
         out.line({"kind": "comment", **line})
     out.line({"kind": "review", "id": number(submitted.get("fullDatabaseId")), "url": submitted.get("url")})
     out.line({"kind": "end", "submitted": True})
+
+
+def _react(client: Client, comment: int, line: Mapping[str, object], reaction: str, out: Out) -> None:
+    """Add the poster's `reaction` to review comment `comment`, whose line as the reader prints it is `line`.
+
+    Raises:
+        GitHubError: GitHub refused it, or its outcome is unknown; either way it is safe to send again.
+    """
+    subject = _id(line.get("node"), "review comment's node id")
+    client.query(_REACT, {"subject": subject, "content": REACTIONS[reaction]})
+    out.line({"kind": "reaction", "comment": comment, "reaction": reaction, "url": line.get("url")})
 
 
 def _id(value: object, what: str) -> str:

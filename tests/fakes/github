@@ -19,9 +19,13 @@ State keys, each optional:
                 `pending_left` (nothing posted, and its pending review left), or `unknown` (no `end` line). With
                 `unknown`, `posted: true` makes it post all the same, as a submit that reached GitHub would.
     issues      [{"url": URL, "body": TEXT, "id": N}]: the comments the poster made on issues, appended as it posts.
+    reactions   [{"pr": URL, "comment": ID, "reaction": NAME, "by": LOGIN}]: the reactions the poster added, appended
+                as it adds them, once each, as GitHub keeps them.
+    react       `refused`: GitHub refuses the first reaction, so the post adds none and opens no review.
 
-A post that posts adds each reply to the state as a `comment` review line by the poster, on the thread of the comment
-it answers, and the review as a `review` line, so the next read sees them.
+A post adds its reactions first, then, unless its replies are all reactions alone and it has no body, adds each reply's
+text to the state as a `comment` review line by the poster, on the thread of the comment it answers, and the review as
+a `review` line, so the next read sees them.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -102,6 +106,18 @@ def post(state: dict[str, Any], request: dict[str, Any]) -> int:
         return 1
     if "issue" in request:
         return post_issue(state, request, outcome)
+    return post_pr(state, request, login, outcome)
+
+
+def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome: str) -> int:
+    url = request["pr"]
+    if not react(state, request, login):
+        emit({"kind": "end", "submitted": False})
+        return 1
+    replies = [r for r in request.get("replies", []) if "text" in r]
+    if not replies and request.get("body") is None:
+        emit({"kind": "end", "submitted": True})
+        return 0
     pending_id = next_id(state)
     pending = f"PRR_fake_{pending_id}"
     emit({"kind": "pending", "review": pending, "id": pending_id})
@@ -110,11 +126,10 @@ def post(state: dict[str, Any], request: dict[str, Any]) -> int:
         return 1
     if outcome == "unknown" and not state.get("posted"):
         return 1
-    url = request["pr"]
     reviews = state.setdefault("prs", {}).setdefault(url, {}).setdefault("reviews", [])
     review_id = pending_id
     lines = []
-    for reply in request.get("replies", []):
+    for reply in replies:
         answered = next(r for r in reviews if r.get("item") == "comment" and r["id"] == reply["comment"])
         comment_id = next_id(state)
         reviews.append(
@@ -152,6 +167,24 @@ def post(state: dict[str, Any], request: dict[str, Any]) -> int:
     emit({"kind": "review", "id": review_id, "url": review_url})
     emit({"kind": "end", "submitted": True})
     return 0
+
+
+def react(state: dict[str, Any], request: dict[str, Any], login: str) -> bool:
+    """Add each reply's reaction, once, as GitHub keeps them, printing a line for each; False if GitHub refused."""
+    url = request["pr"]
+    for reply in request.get("replies", []):
+        if "reaction" not in reply:
+            continue
+        if state.get("react") == "refused":
+            print("canopy-post-github: GitHub refused the reaction", file=sys.stderr)
+            return False
+        added = {"pr": url, "comment": reply["comment"], "reaction": reply["reaction"], "by": login}
+        if added not in state.setdefault("reactions", []):
+            state["reactions"].append(added)
+        found = state.get("prs", {}).get(url, {}).get("reviews", [])
+        on = next((r for r in found if r.get("item") == "comment" and r["id"] == reply["comment"]), {})
+        emit({"kind": "reaction", "comment": reply["comment"], "reaction": reply["reaction"], "url": on.get("url")})
+    return True
 
 
 def post_issue(state: dict[str, Any], request: dict[str, Any], outcome: str) -> int:

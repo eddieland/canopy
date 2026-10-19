@@ -65,7 +65,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy memory history ID` | Every version of a lesson or a note, newest first, each with how it was made. |
 | `canopy memory search WORDS` | Every memory with its text, best match first; `--ticket KEY` for one ticket's. |
 | `canopy draft list [KEY\|URL]` | The comments workers drafted for you under `trust.review_replies = "approve"`, with hashes. |
-| `canopy draft send run:ID N@HASH...` | Posts those drafts as your own words, one comment review a PR; `edit`, `drop`, `settle`. |
+| `canopy draft send run:ID N@HASH...` | Posts those drafts as your own words, one comment review a PR; `edit` (text, `--react`), `drop`, `settle`. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |

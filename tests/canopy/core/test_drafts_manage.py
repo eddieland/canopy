@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 
 from canopy.core import drafts, drafts_manage, observe
-from canopy.core.vocab import DraftStatus, ResumeReason, RunKind
+from canopy.core.vocab import DraftStatus, Reaction, ResumeReason, RunKind
 from canopy.infra import logs, procs
 from canopy.runs import drafted
 from tests.canopy.helpers import (
@@ -51,7 +51,7 @@ def drafted_run(scenario: Scenario, state: Path, entries: object, connect: Mappi
 
 def hashed(conn: sqlite3.Connection, run_id: int, number: int) -> str:
     draft = drafts_manage.find(conn, run_id, number)
-    return f"{number}@{drafts_manage.hash_of(drafts.text_of(conn, draft.id).body)}"
+    return f"{number}@{drafts_manage.hash_of_version(drafts.text_of(conn, draft.id))}"
 
 
 def state_of(path: Path) -> dict[str, Any]:
@@ -266,10 +266,104 @@ def test_list_and_show_print_each_draft_with_its_thread_and_hash(scenario: Scena
     assert f"run:{run_id} 1  waiting  a reply to comment 501 on {PR} (changed)" in out
     assert f"> alice at {OLD}: Rename this." in out
     # Each line of a draft prints as a line, never as a named line feed.
-    assert f"hash {drafts_manage.hash_of(reply)}:\n    Renamed.\n    \n    The old name stays an alias.\n" in out
+    assert f"hash {drafts_manage.hash_of(reply, None)}:\n    Renamed.\n    \n    The old name stays an alias.\n" in out
     assert "comment 999" not in out
     out = scenario.operator("draft", "show", f"run:{run_id}").out
     assert f"2: unknown_thread: {PR} has no review comment 999" in out
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_reaction_is_added_with_its_draft_and_one_alone_posts_no_comment(
+    scenario: Scenario, github_state: Path
+) -> None:
+    conn = scenario.conn
+    alone = {"on": "thread", "pr": PR, "comment": 502, "did": "answered", "react": "heart"}
+    run_id = drafted_run(scenario, github_state, [{**thread(501), "react": "+1"}, alone])
+    scenario.operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1), hashed(conn, run_id, 2))
+    [posted] = reads(github_state, "post")
+    assert posted["replies"] == [
+        {"comment": 501, "text": "Renamed.", "reaction": "+1"},
+        {"comment": 502, "reaction": "heart"},
+    ]
+    assert state_of(github_state)["reactions"] == [
+        {"pr": PR, "comment": 501, "reaction": "+1", "by": "me"},
+        {"pr": PR, "comment": 502, "reaction": "heart", "by": "me"},
+    ]
+    beside, only = all_drafts(conn)
+    assert (beside.status, beside.reacted) == (DraftStatus.SENT, Reaction.THUMBS_UP)
+    assert beside.sent_comment_id is not None
+    assert (only.status, only.reacted, only.sent_comment_id) == (DraftStatus.SENT, Reaction.HEART, None)
+    assert only.sent_url == f"{PR}#discussion_r502"
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_drafts_that_are_all_reactions_alone_open_no_review(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    alone = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "react": "hooray"}
+    run_id = drafted_run(scenario, github_state, [alone])
+    wanted = hashed(conn, run_id, 1)
+    assert f"hash {wanted.split('@')[1]}, the reaction hooray alone\n" in scenario.operator("draft", "list").out
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
+    [draft] = all_drafts(conn)
+    assert (draft.status, draft.sent_review_id) == (DraftStatus.SENT, None)
+    assert [r for r in state_of(github_state)["prs"][PR]["reviews"] if r.get("author") == "me"] == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_the_operator_sets_changes_and_clears_a_reaction_and_each_is_a_new_hash(
+    scenario: Scenario, github_state: Path
+) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501), {"on": "pr", "pr": PR, "text": "Done."}])
+    plain = hashed(conn, run_id, 1)
+    scenario.operator("draft", "edit", f"run:{run_id}", "1", "--react", "eyes")
+    version = drafts.text_of(conn, drafts_manage.find(conn, run_id, 1).id)
+    assert (version.body, version.reaction, version.version) == ("Renamed.", Reaction.EYES, 2)
+    assert "send refused (stale)" in scenario.operator("draft", "send", f"run:{run_id}", plain, code=1).err
+    scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "", "--react", "+1")
+    version = drafts.text_of(conn, drafts_manage.find(conn, run_id, 1).id)
+    assert (version.body, version.reaction) == ("", Reaction.THUMBS_UP)
+    refused = scenario.operator("draft", "edit", f"run:{run_id}", "1", "--no-react", code=1)
+    assert "edit refused (bad_text): its text is blank" in refused.err
+    scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "Renamed.", "--no-react")
+    # Back to the run's own words, the draft is named as they were.
+    assert hashed(conn, run_id, 1) == plain
+    refused = scenario.operator("draft", "edit", f"run:{run_id}", "2", "--react", "+1", code=1)
+    assert "edit refused (no_reaction)" in refused.err
+    usage = scenario.operator("draft", "edit", f"run:{run_id}", "1", code=2)
+    assert "or a reaction with --react or --no-react" in usage.err
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_refused_reaction_posts_nothing_and_the_draft_waits(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [{**thread(501), "react": "+1"}])
+    github_state.write_text(json.dumps({**state_of(github_state), "react": "refused"}))
+    unsent = scenario.operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1), code=1)
+    assert "was not sent: nothing was posted" in unsent.out
+    [draft] = all_drafts(conn)
+    assert (draft.status, draft.reacted) == (DraftStatus.WAITING, None)
+    assert "reactions" not in state_of(github_state)
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_review_that_fails_after_its_reaction_keeps_the_reaction_and_sending_again_adds_none(
+    scenario: Scenario, github_state: Path
+) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [{**thread(501), "react": "+1"}])
+    wanted = hashed(conn, run_id, 1)
+    github_state.write_text(json.dumps({**state_of(github_state), "post": "pending_left"}))
+    scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1)
+    [draft] = all_drafts(conn)
+    assert (draft.status, draft.reacted) == (DraftStatus.WAITING, Reaction.THUMBS_UP)
+    out = scenario.operator("draft", "list").out
+    assert "+1 is on comment 501 already: a send that did not post the rest added it" in out
+    assert f"hash {wanted.split('@')[1]}, with the reaction +1:\n    Renamed.\n" in out
+    github_state.write_text(json.dumps({**state_of(github_state), "post": "ok"}))
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
+    assert present(drafts.get(conn, draft.id)).status is DraftStatus.SENT
+    assert len(state_of(github_state)["reactions"]) == 1
 
 
 @pytest.mark.usefixtures("git_pool")

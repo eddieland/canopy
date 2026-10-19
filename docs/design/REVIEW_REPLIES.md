@@ -6,16 +6,13 @@ the operator sends. Sections are numbered across the whole design; the [README](
 
 ## 29. Review replies the operator sends
 
-REQUIREMENTS R20. §8, §21, and §22 describe workers that post their own comments; this section says what changes when
-they draft them instead.
-
 A `resume` worker answers coworkers' review comments as the operator (D010), and the operator first reads what it said
 when their coworkers do. Every reply starts with `CANOPY:`, which tells the reader a model wrote it and the loop to
 read past it (D069), but it is still the operator's name on it. So under `trust.review_replies = "approve"`, the
 default, a worker drafts every comment it would have posted, canopy reads the PR's review threads itself, and the
 operator reads each draft on its thread, edits or drops it, and sends the ones they approve. canopy posts exactly that
 text, unmarked: the operator approved it word for word, so it is their comment. canopy ships its own GitHub program to
-post it (REQUIREMENTS C7, D003).
+post it (REQUIREMENTS R20, C7, D003).
 
 ### Configuration
 
@@ -64,12 +61,12 @@ unchecked, superseded, dropped, refused, or of unknown outcome; one whose text c
 one whose thread has a comment newer than the draft, other than the operator's own through canopy. That refusal names
 the new comments, so the operator reads them before sending again.
 
-What reaches GitHub is the text, verbatim, with no marks. The drafts sent together for one PR are one comment review,
-so a reviewer gets one notification. Nothing canopy sends resolves a thread, approves, or requests changes: that stays
-the reviewer's. A draft is posted at most once. A post that ends without saying whether it submitted is never sent
-again until a whole read, or the operator, settles it. Each sent draft records its comment, the run that drafted it,
-and whether the operator edited it. Garbage collection (§26) deletes no draft, since a sent one is how canopy knows its
-comment.
+What reaches GitHub is the text, verbatim, with no marks. The drafts sent together for one PR are one comment review, so
+a reviewer gets one notification. Nothing canopy sends resolves a thread, approves, or requests changes: that stays the
+reviewer's, and is what §6's "never submit a PR review" means. A draft is posted at most once. A post that ends without
+saying whether it submitted is never sent again until a whole read, or the operator, settles it. Each sent draft records
+its comment, the run that drafted it, and whether the operator edited it. Garbage collection (§26) deletes no draft,
+since a sent one is how canopy knows its comment.
 
 A sent reply carries no mark and is by the operator's login, so the loop would read it as new review feedback, or as an
 authorized reply; canopy knows it instead by the id the post returned. The state block lists, per PR, the comments the
@@ -77,6 +74,15 @@ operator sent through canopy as neither review feedback nor a go-ahead, and the 
 
 The harness raises `drafts_waiting` (§14), the operator's alone, for each unit or ticket with a draft to send, until
 each is sent, dropped, or superseded, or the PR closes. It says when the threads could not be read, and holds nothing.
+
+### Reactions
+
+A thread's draft may stage a reaction, one of the eight GitHub offers, on the review comment it names, beside its reply
+or alone: a `+1` on a fixed nit says what "Done." would. It is part of the draft's words: the operator sets, changes, or
+clears it as they edit, and a send names it with the text. A send adds its reactions first, and opens no review for
+reactions alone. GitHub keeps one reaction of a kind a person, so one a failed send added stays, the draft says so, and
+sending again adds no second. Nothing canopy reads gives a reaction meaning, so a sent one is neither feedback nor a
+go-ahead.
 
 ### On the PR's diff
 
@@ -86,9 +92,8 @@ comment's `<details>` block folds under its summary, as GitHub shows it, and say
 
 ### canopy's GitHub program
 
-`packages/canopy-github`, a uv workspace member importing nothing from canopy, as the Slack sink is (§5, §20); the
-harness may not import it. Its reader reads a PR's reviews and threads (§30). Its poster, the first program canopy
-ships that writes to GitHub, posts one PR's drafts as one review, or one ticket's comment, and reports whether it
+`packages/canopy-github` is a program of its own, which the harness may not import (§5). Its reader reads a PR's reviews
+and threads (§30); its poster posts one PR's drafts as one review, or one ticket's comment, and reports whether it
 submitted.
 
 The program, never the harness, reads the host from the PR's URL and uses the token `gh` holds for it, so GitHub
@@ -96,12 +101,8 @@ Enterprise works as github.com does and the harness never holds a token (TRUST_M
 it reads a token only for a host `gh` is logged in to, and follows no redirect. Rejected: posting through an agent (the
 text it posts is the model's last word, not the operator's); the harness calling GitHub (D003).
 
-### Trust model changes
-
-TRUST_MODEL T1, T2, T5, T6, and T8 hold what this changes: a draft is untrusted until the operator sends it, word for
-word. §6's "never submit a PR review" means never one that approves or requests changes.
-
 ### Open
 
 - Whether a draft on a PR that merged or closed should still be sendable, as it is.
 - Editing or deleting a sent reply from canopy.
+- The operator staging a reaction of their own on a thread no draft answers: every draft today is a run's.

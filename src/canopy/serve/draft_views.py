@@ -42,7 +42,7 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         issue_url=found.issue_url,
         why=found.why,
         text=text.body,
-        hash=drafts_manage.hash_of(text.body),
+        hash=drafts_manage.hash_of_version(text),
         edited=text.version > 1,
         supersedes_edited=supersedes_edited is not None,
         sent_url=found.sent_url,

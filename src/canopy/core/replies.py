@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import records
 from canopy.core.prompts import mark_comments
-from canopy.core.vocab import ReplyMode, RunKind
+from canopy.core.vocab import Reaction, ReplyMode, RunKind
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
@@ -151,8 +151,8 @@ def _drafted_values(ticket_marks: str, label: str, *, ticket: bool) -> dict[str,
         "it back as a reply."
     )
     replies = (
-        "Post no comment or reply on a PR: put your reply to each review comment you addressed in a `thread` draft\n"
-        "(Result, below), briefly, for the operator to send as their own."
+        "Post no comment, reply, or reaction on a PR: put your reply to each review comment you addressed in a\n"
+        "`thread` draft (Result, below), briefly, for the operator to send as their own."
     )
     decline = (
         "If a review comment asks for a change you believe is wrong, make the case in a\n"
@@ -228,7 +228,9 @@ def _contract(*, ticket: bool) -> str:
             '- `{"on":"thread","pr":"<PR URL>","comment":<id>,"did":"changed|declined|answered","text":"<reply>"}`: '
             "a reply on a review thread. `comment` is the id of any review comment on the thread, the number in its "
             "URL after `#discussion_r`. `did` says whether you made the change it asked for, declined it, or "
-            "answered a question."
+            'answered a question. It may also carry `"react"`, a reaction on the comment `comment` names, one of '
+            f"{', '.join(f'`{r}`' for r in Reaction)}: where a reaction says what a reply would, such as `+1` on "
+            "a nit you fixed, give it and leave `text` out."
         ),
         (
             '- `{"on":"pr","pr":"<PR URL>","text":"<comment>"}`: at most one a PR, for what is no reply on a thread, '

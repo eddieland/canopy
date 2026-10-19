@@ -136,7 +136,7 @@ Your last line of stdout must be exactly one JSON object and nothing after it:
 
 That JSON object also carries `"drafts"`: each comment you would otherwise have posted, which canopy keeps for the operator. They read each one where it goes, may edit or drop it, and send it as their own words, so post none of them yourself and mark none. At most 30, each one of these:
 
-- `{"on":"thread","pr":"<PR URL>","comment":<id>,"did":"changed|declined|answered","text":"<reply>"}`: a reply on a review thread. `comment` is the id of any review comment on the thread, the number in its URL after `#discussion_r`. `did` says whether you made the change it asked for, declined it, or answered a question.
+- `{"on":"thread","pr":"<PR URL>","comment":<id>,"did":"changed|declined|answered","text":"<reply>"}`: a reply on a review thread. `comment` is the id of any review comment on the thread, the number in its URL after `#discussion_r`. `did` says whether you made the change it asked for, declined it, or answered a question. It may also carry `"react"`, a reaction on the comment `comment` names, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, `eyes`: where a reaction says what a reply would, such as `+1` on a nit you fixed, give it and leave `text` out.
 - `{"on":"pr","pr":"<PR URL>","text":"<comment>"}`: at most one a PR, for what is no reply on a thread, such as an answer to a review's own text, or what you fixed in CI.
 
 Each `pr` is one of this run's PRs. Each text is at most 4,000 characters of GitHub Markdown, written as the operator would say it, with no secret and no hidden characters. Nobody but the operator sees a draft until they send it.

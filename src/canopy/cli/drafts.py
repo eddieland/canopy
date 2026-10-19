@@ -18,7 +18,7 @@ import click
 from canopy.cli.common import CliError, Group, open_context
 from canopy.core import conversation, drafts, drafts_manage, records, replies
 from canopy.core.memory_text import visible
-from canopy.core.vocab import DraftKind, DraftStatus, ReviewItem
+from canopy.core.vocab import DraftKind, DraftStatus, Reaction, ReviewItem
 from canopy.infra import logs
 from canopy.loop import attention
 
@@ -100,24 +100,50 @@ def cmd_show(click_ctx: click.Context, run_ref: str) -> int:
 @draft_group.command("edit")
 @click.argument("run_ref", metavar="run:ID")
 @click.argument("number", metavar="N", type=int)
-@click.option("--text", help="The draft's new text.")
+@click.option("--text", help="The draft's new text; empty, with a reaction, to send the reaction alone.")
 @click.option("--file", "path", type=click.Path(dir_okay=False, allow_dash=True), help="Read it from a file, - stdin.")
+@click.option(
+    "--react",
+    "reaction",
+    type=click.Choice([r.value for r in Reaction]),
+    help="A thread's draft: the reaction it adds to the comment it answers.",
+)
+@click.option("--no-react", "unreact", is_flag=True, help="Take the draft's reaction off.")
 @click.pass_context
-def cmd_edit(click_ctx: click.Context, run_ref: str, number: int, text: str | None, path: str | None) -> int:
-    """Make the text of draft N of run:ID yours. The run's own text is kept beside it."""
-    if (text is None) == (path is None):
-        raise click.UsageError("give the new text with --text or --file")
+def cmd_edit(  # noqa: PLR0917  (click passes each option)
+    click_ctx: click.Context,
+    run_ref: str,
+    number: int,
+    text: str | None,
+    path: str | None,
+    reaction: str | None,
+    *,
+    unreact: bool,
+) -> int:
+    """Make the words of draft N of run:ID yours: its text, its reaction, or both. The run's own are kept beside them.
+
+    What you leave out stays as it stands.
+    """
+    if text is not None and path is not None:
+        raise click.UsageError("give the new text with --text or --file, not both")
+    if reaction is not None and unreact:
+        raise click.UsageError("give --react or --no-react, not both")
+    if text is None and path is None and reaction is None and not unreact:
+        raise click.UsageError("give the new text with --text or --file, or a reaction with --react or --no-react")
     if text is None and path is not None:
         text = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
     run_id = _run_ref(run_ref)
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        version = drafts_manage.edit(ctx.conn, run_id, number, text or "", channel=CLI)
+        current = drafts.text_of(ctx.conn, drafts_manage.find(ctx.conn, run_id, number).id)
+        react = None if unreact else Reaction(reaction) if reaction is not None else current.reaction
+        words = current.body if text is None else text
+        version = drafts_manage.edit(ctx.conn, run_id, number, words, react, channel=CLI)
     except conversation.Refused as r:
         raise CliError(f"edit refused ({r.guard}): {r.reason}") from None
-    click.echo(f"Run {run_id}'s draft {number} is your text now, version {version.version}, hash "
-               f"{drafts_manage.hash_of(version.body)}.")  # fmt: skip
+    click.echo(f"Run {run_id}'s draft {number} is in your words now, version {version.version}, hash "
+               f"{drafts_manage.hash_of_version(version)}.")  # fmt: skip
     return 0
 
 
@@ -219,6 +245,14 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
             (draft.pr_url, ReviewItem.COMMENT, draft.thread_id),
         ):
             click.echo(f"  > {c.author} at {c.created_at}: {visible(' '.join(c.body.split()))}")
-    click.echo(f"  hash {drafts_manage.hash_of(text.body)}{edited}:")
+    if draft.reacted is not None and draft.status is not DraftStatus.SENT:
+        click.echo(
+            f"  {draft.reacted} is on comment {draft.comment_id} already: a send that did not post the rest added it"
+        )
+    hashed = f"  hash {drafts_manage.hash_of_version(text)}{edited}"
+    if text.reaction is not None and not text.body:
+        click.echo(f"{hashed}, the reaction {text.reaction} alone")
+        return
+    click.echo(f"{hashed}, with the reaction {text.reaction}:" if text.reaction is not None else f"{hashed}:")
     for line in text.body.split("\n"):
         click.echo(f"    {visible(line)}")
