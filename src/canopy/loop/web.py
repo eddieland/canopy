@@ -40,6 +40,8 @@ class Serving:
     url: str | None = None
     server: WebServer | None = None
     backend: Backend | None = None
+    #: Where notifications' links open the UI: `serve.url`, else `url`. None when nothing is served.
+    links: str | None = None
 
 
 def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tick_now.TickNow) -> Serving:
@@ -48,7 +50,8 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
     The UI's reload asks through `reload`, as SIGHUP does, and its Tick now through `asked`, as `t` does.
 
     Returns:
-        The note for the loop's header, with the URL, server, and backend when the server started.
+        The note for the loop's header, with the URL, server, backend, and the address of notifications' links when
+        the server started.
     """
     cfg = ctx.config.serve
     options = ServeOptions(host=cfg.bind, port=cfg.port, base_path=cfg.base_path, ui_dir=resources.ui_dir())
@@ -68,7 +71,8 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
     url = options.url()
     log.info("web UI served", extra={"url": url})
     built = "" if options.ui_dir is not None else "; the UI is not built into this installation"
-    return Serving(f"{url}  sign in with the secret `canopy secret` prints{built}", url, server, served)
+    note = f"{url}  sign in with the secret `canopy secret` prints{built}"
+    return Serving(note, url, server, served, links=cfg.url or url)
 
 
 def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Backend:

@@ -669,3 +669,49 @@ def test_finishing_forgets_only_earlier_days(tmp_path: Path) -> None:
     threads.finish("2026-09-24")
     assert threads.threads == {"NOW": ("2026-09-24", "1.2"), "LATER": ("2026-09-25", "1.3")}
     assert threads.posted == set()
+
+
+def test_slack_links_each_item_and_event_to_its_page_in_the_web_ui() -> None:
+    ui = "http://localhost:9000/canopy/"
+    query, escaped = "pr?url=https%3A%2F%2Fx.test&a=1", "pr?url=https%3A%2F%2Fx.test&amp;a=1"
+    added = [{"ticket": "P-1", "reason": "needs_reviewer", "ui": f"{ui}tickets/P-1"}]
+    events = [
+        {"kind": "test", "text": "canopy test message", "ui": None},
+        {"kind": "loop.recovered", "failed": 3, "ui": f"{ui}pull-requests/{query}"},
+        {
+            "kind": "run.ended",
+            "ticket": "P-2",
+            "run": 3,
+            "run_kind": "implement",
+            "status": "done",
+            "ui": f"{ui}runs/3",
+        },
+    ]
+    message: dict[str, Any] = {"repo": "/r/api", "ui": ui, "attention": {"added": added, "open": 1}, "events": events}
+    assert _texts(slack.blocks(message))[:5] == [
+        f"1 new · 0 resolved · 1 open · 3 events · <{ui}|open>",
+        f":bell: *P-1* · needs_reviewer · <{ui}tickets/P-1|open>",
+        ":test_tube: canopy test message",
+        # `&` is escaped in a link, as in any of Slack's text.
+        f":white_check_mark: *The loop recovered* after 3 failed ticks · <{ui}pull-requests/{escaped}|open>",
+        f":white_check_mark: *P-2* · implement run 3 ended *done* · <{ui}runs/3|open>",
+    ]
+    # The fallback text for Slack's notifications links nothing.
+    assert "open>" not in slack.render(message)
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "javascript:alert(1)",
+        "http://localhost/x|label",
+        "http://localhost/<!channel>",
+        "http://localhost/a b",
+        "ftp://localhost/",
+        "http://localhost/" + "x" * 2000,
+        42,
+    ],
+)
+def test_a_page_that_is_not_a_plain_url_is_not_linked(page: object) -> None:
+    added = [{"ticket": "P-1", "reason": "r", "ui": page}]
+    assert _texts(slack.blocks({"repo": "/r/api", "attention": {"added": added}}))[1] == ":bell: *P-1* · r"

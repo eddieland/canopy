@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
+from urllib.parse import quote
 
 from canopy.core import contract, db
 from canopy.core.items import Item, age
@@ -27,6 +28,9 @@ MAX_LINES = 20
 # Events older than this when a sink next succeeds are counted, not listed.
 STALE_EVENTS = timedelta(hours=24)
 _DONE_LISTED = 10
+# The attention list's subjects that are not tickets: a chore, by `chore:<name>`, and a PR, by `pr:<url>`.
+_CHORE = "chore:"
+_PR = "pr:"
 
 
 def _line(text: object) -> str:
@@ -77,6 +81,57 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     return _line(f"{kind} {json.dumps(f)}")
 
 
+def item_page(ui: str | None, ticket_key: str | None) -> str | None:
+    """The web UI's page for an attention item's subject: its ticket's, chore's, or PR's, else the attention list.
+
+    Returns:
+        The page's URL under `ui`, or None when `ui` is None.
+    """
+    if ticket_key is None:
+        return page(ui, "attention")
+    if ticket_key.startswith(_CHORE):
+        return page(ui, "chores", ticket_key.removeprefix(_CHORE))
+    if ticket_key.startswith(_PR):
+        return page(ui, "pull-requests", "pr", query=ticket_key.removeprefix(_PR))
+    return page(ui, "tickets", ticket_key)
+
+
+def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str | None:
+    """The web UI's page for what an event is about: a run, a plan, a chore run, a review run, or a failed tick.
+
+    Returns:
+        The page's URL under `ui`, or None when `ui` is None or the event is about nothing with a page of its own.
+    """
+    f = fields
+    match kind:
+        case "run.started" | "run.ended" if f.get("run"):
+            return page(ui, "runs", f["run"])
+        case "plan.proposed" if f.get("ticket"):
+            return page(ui, "tickets", f["ticket"], "plan")
+        case "chore.ended" if f.get("chore") and f.get("run"):
+            return page(ui, "chores", f["chore"], "runs", f["run"])
+        case "review.ended" if f.get("run"):
+            return page(ui, "reviews", f["run"])
+        case "loop.failing" if f.get("tick"):
+            return page(ui, "ticks", f["tick"])
+        case _:
+            return None
+
+
+def page(ui: str | None, *parts: object, query: str | None = None) -> str | None:
+    """A page of the web UI at `ui`, each of `parts` one segment of its path, and `query` its `url` parameter.
+
+    Every part is percent-encoded whole, so no ticket key or chore name can reach another page.
+
+    Returns:
+        The page's URL, or None when `ui` is None.
+    """
+    if ui is None:
+        return None
+    path = "/".join(quote(str(part), safe="") for part in parts)
+    return f"{ui}{path}" + (f"?url={quote(query, safe='')}" if query is not None else "")
+
+
 @dataclass(frozen=True)
 class Event:
     """One event from the outbox, as a message lists it."""
@@ -106,18 +161,20 @@ class Event:
         """The event as one line for a person."""
         return event_line(self.kind, self.fields)
 
-    def as_json(self, titles: Mapping[str, str] | None = None) -> dict[str, object]:
+    def as_json(self, titles: Mapping[str, str] | None = None, ui: str | None = None) -> dict[str, object]:
         """The event as the `json` format lists it: an event about a ticket also carries its title from `titles`.
 
         Returns:
-            The event's id, kind, time, fields, the ticket's title if it has one, and its `line`.
+            The event's id, kind, time, fields, the ticket's title if it has one, its `line`, and its page in the web
+            UI at `ui`, None when there is none.
         """
         ticket = self.fields.get("ticket")
         named = {"title": (titles or {}).get(str(ticket))} if ticket else {}
-        return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, **named, "line": self.line}
+        own = {"line": self.line, "ui": event_page(ui, self.kind, self.fields)}
+        return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, **named, **own}
 
 
-_OWN = ("id", "kind", "at", "line")
+_OWN = ("id", "kind", "at", "line", "ui")
 
 
 class DoneRun(TypedDict):
@@ -291,6 +348,8 @@ class AddedItem(TypedDict):
     reason: str
     detail: str
     since: str
+    #: The subject's page in the web UI, when the loop serves it.
+    ui: str | None
 
 
 class ResolvedItem(TypedDict):
@@ -310,6 +369,8 @@ class AttentionJson(TypedDict):
     resolved: list[ResolvedItem]
     open: int
     path: str
+    #: The attention list's page in the web UI, when the loop serves it.
+    ui: str | None
 
 
 @dataclass
@@ -326,6 +387,9 @@ class Message:
     now: datetime | None = None
     # Ticket titles by key, which the `json` format carries beside each key; the `text` format shows keys alone.
     titles: dict[str, str] = field(default_factory=dict[str, str])
+    #: The web UI's address, ending in `/`, when the loop serves it: the `json` format links to its pages. The `text`
+    #: format links nothing, so `notify.cmd` sees no change.
+    ui: str | None = None
 
     def is_empty(self) -> bool:
         """Whether there is nothing to send.
@@ -400,6 +464,7 @@ class Message:
                         "reason": i.reason,
                         "detail": _line(i.detail)[:500],
                         "since": i.since,
+                        "ui": item_page(self.ui, i.ticket_key),
                     }
                     for i in added
                 ],
@@ -415,14 +480,16 @@ class Message:
                 ],
                 "open": self.open_items,
                 "path": str(self.path),
+                "ui": page(self.ui, "attention"),
             }
         body = {
             "version": VERSION,
             "sink": self.sink,
             "repo": self.repo,
             "sent_at": db.format_time(self.now) if self.now is not None else db.now(),
+            "ui": self.ui,
             "attention": attention,
-            "events": [e.as_json(self.titles) for e in events],
+            "events": [e.as_json(self.titles, self.ui) for e in events],
             "omitted": omitted,
             "digest": self.digest.as_json() if self.digest is not None else None,
             "text": self.text(),

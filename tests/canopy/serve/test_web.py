@@ -21,7 +21,19 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.helpers import KEY, FakeTime, canopy, console, context, in_run, overseer_does, present, running_run
+from tests.canopy.helpers import (
+    KEY,
+    FakeTime,
+    canopy,
+    console,
+    context,
+    in_run,
+    messages,
+    overseer_does,
+    present,
+    running_run,
+)
+from tests.canopy.scenario_helpers import raises
 from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
@@ -723,6 +735,34 @@ def test_without_a_secret_the_loop_serves_nothing_and_says_how_to_make_one(
     assert statuses == {"ok": 1}
     assert "not served: there is no listener secret at" in out.getvalue()
     assert "canopy secret" in out.getvalue()
+
+
+@pytest.mark.parametrize("url", [None, "http://localhost:9000/canopy/"])
+def test_a_loop_that_serves_the_ui_links_its_notifications_to_it(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, sink_script: Path, tmp_path: Path, url: str | None
+) -> None:
+    port = free_port()
+    out = tmp_path / "slack.txt"
+    moved = f'url = "{url}"\n' if url is not None else ""
+    serve_on(canopy_env, port, f"{moved}[notify.sinks.slack]\ncmd = '{sink_script} {out}'\n")
+    secret.create(secret.path(), rotate=False)
+    term, _ = console()
+    with overseer_does(raises(KEY, "needs_reviewer")):
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=1,
+            max_ticks=1,
+            console=term,
+            stop=repeat.Stop(),
+            serve=True,
+        )
+    assert statuses == {"ok": 1}
+    [sent] = [json.loads(m) for m in messages(out)]
+    # `serve.url` moves the links, not the listener.
+    ui = url or f"http://127.0.0.1:{port}/"
+    assert (sent["ui"], sent["attention"]["ui"]) == (ui, f"{ui}attention")
+    assert [a["ui"] for a in sent["attention"]["added"]] == [f"{ui}tickets/{KEY}"]
 
 
 @pytest.mark.parametrize(

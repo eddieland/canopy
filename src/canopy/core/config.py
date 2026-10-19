@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
@@ -800,6 +801,35 @@ def check_base_path(value: str) -> str:
     return value
 
 
+#: The longest `serve.url`: the links built on it must fit in a notification.
+MAX_UI_URL = 200
+# A URL's own characters, so a link built on it needs no escaping in a notification's markup: no space, `|`, `<`, `>`,
+# quote, or backslash. The Slack sink checks each link against the same class (`_PAGE` in `canopy_notify_slack`).
+_UI_URL_RE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+
+
+def _ui_url(value: str) -> str:
+    """Refuse an address for the web UI's links that is not a plain `http` or `https` URL with a host.
+
+    Returns:
+        `value`, ending in `/`, so a page's path follows it.
+
+    Raises:
+        ValueError: `value` is too long, holds a character a URL does not, a user part, a query, or a fragment, has
+            a port that is not a number, or is not `http` or `https` with a host.
+    """
+    if len(value) > MAX_UI_URL or not _UI_URL_RE.fullmatch(value):
+        raise ValueError(f"{value[:MAX_UI_URL]!r} must be an http:// or https:// URL, like http://localhost:9000/")
+    parts = urlsplit(value)
+    try:
+        parts.port  # noqa: B018  (read for the error a port that is not a number raises)
+    except ValueError:
+        raise ValueError(f"{value!r} has a port that is not a number from 0 to 65535") from None
+    if not parts.hostname or "@" in parts.netloc or parts.query or parts.fragment:
+        raise ValueError(f"{value!r} must name a host, with no user part, query, or fragment")
+    return value if value.endswith("/") else f"{value}/"
+
+
 class Serve(Section):
     """The `[serve]` table: the web UI `canopy loop` serves (DESIGN §22).
 
@@ -810,6 +840,10 @@ class Serve(Section):
     bind: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(listen_address)] = "127.0.0.1"
     port: Annotated[StrictInt, Scope.PRIVATE, Field(ge=1, le=65535)] = 8765
     base_path: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(check_base_path)] = ""
+    # Where notifications' links open the UI, in place of the address it is served at: an SSH forward's port, or a
+    # proxy's address. It replaces that whole address, so it includes `base_path` if the UI is served under one. It
+    # moves only the links; the server still listens on `bind`, and still checks the Host header.
+    url: Annotated[Annotated[StrictStr, AfterValidator(_ui_url)] | None, Scope.PRIVATE] = None
 
 
 class Paths(Section):

@@ -423,8 +423,8 @@ def more_text(count: int) -> str:
     return f"{count} more finding{'s' if count != 1 else ''} not listed, past the chore's max_findings"
 
 
-def publish(ctx: Context, log: logs.TickAdapter) -> None:
-    """Rewrite `attention.md` and deliver to the notification sinks (DESIGN §6 step 7, §20).
+def publish(ctx: Context, log: logs.TickAdapter, *, ui: str | None = None) -> None:
+    """Rewrite `attention.md` and deliver to the notification sinks (DESIGN §6 step 7, §20), linking to `ui` if set.
 
     Failures are logged, never raised: the tick is already closed. A delivery that fails is tried again next tick.
     """
@@ -435,7 +435,7 @@ def publish(ctx: Context, log: logs.TickAdapter) -> None:
         if f.dismissed
     }
     try:
-        deliver.publish(ctx, items, ctx.state_dir / FILE_NAME, log, dismissed=dismissed)
+        deliver.publish(ctx, items, ctx.state_dir / FILE_NAME, log, dismissed=dismissed, ui=ui)
     except Exception as e:
         log.exception("notification failed", extra={"error": str(e)})
 

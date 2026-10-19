@@ -73,10 +73,11 @@ class Outcome:
     usage: agent_output.Usage | None = None  # what the overseer cost, when the runtime reported it
 
 
-def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None) -> Outcome:
+def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str | None = None) -> Outcome:
     """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error.
 
     `woken_by` is what started a tick `canopy loop` runs, for the overseer's session title; None for one run by hand.
+    `ui` is where notifications' links open the web UI, when the loop running the tick serves it; None links nothing.
 
     Returns:
         How the tick ended: its id, status, summary, and what the overseer cost. A busy lock is `lock_busy`, with no
@@ -86,7 +87,7 @@ def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None) -> Outc
         with lock.hold(ctx.lock_path):
             outcome = _locked(ctx, dry_run=dry_run, woken_by=woken_by)
             # After the tick is closed: the list is the latest `ok` tick's, and this tick may be it.
-            attention.publish(ctx, logs.for_tick(outcome.tick_id))
+            attention.publish(ctx, logs.for_tick(outcome.tick_id), ui=ui)
             return outcome
     except lock.LockBusyError:
         logs.for_tick(None).info("tick skipped: another tick holds the lock", extra={"lock": str(ctx.lock_path)})
