@@ -3579,7 +3579,7 @@ export type components = {
             /**
              * Active At
              * Format: date-time
-             * @description The newest of its ticket's last sighting, its review runs' starts and ends, and its review requests'.
+             * @description The newest of its ticket's last change, its review runs' starts and ends, and its review requests'.
              */
             active_at: string;
             /**
@@ -5372,7 +5372,7 @@ export type components = {
             /**
              * Active At
              * Format: date-time
-             * @description The newest of: a message, a run starting or ending, a start or stop, a tick seeing it.
+             * @description The newest of: a message, a run starting or ending, a start or stop, a change to it, such as its phase.
              */
             active_at: string;
             /**

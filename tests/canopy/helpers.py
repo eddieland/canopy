@@ -768,6 +768,13 @@ def journal_at(journals: Journals, tmp_path: Path, version: int) -> sqlite3.Conn
     return journals.open_through(tmp_path / "canopy.db", shipped_through(tmp_path / "migrations", version))
 
 
+def old_ticket(conn: sqlite3.Connection, key: str) -> None:
+    """Record ticket `key` in a journal `journal_at` opened, with only the columns its first migration made."""
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES (?, '/r', ?, ?)", (key, db.now(), db.now())
+    )
+
+
 def shipped_through(dest: Path, version: int) -> Path:
     """Copy the shipped migrations through `version` into `dest`, the directory an older canopy shipped."""
     dest.mkdir(parents=True, exist_ok=True)

@@ -234,7 +234,7 @@ class TicketSummary(_Model):
     branch: str | None = None
     """The branch its work is on."""
     active_at: datetime
-    """The newest of: a message, a run starting or ending, a start or stop, a tick seeing it."""
+    """The newest of: a message, a run starting or ending, a start or stop, a change to it, such as its phase."""
     latest_message_id: int | None = None
     """The newest message in its conversation, so a new message changes the list the stream sends."""
     awaiting: int | None = None
@@ -2048,7 +2048,7 @@ class PullRequest(_Model):
     phase: str | None = None
     """The unit's phase as the overseer last derived it, for display; None for a PR no unit records."""
     active_at: datetime
-    """The newest of its ticket's last sighting, its review runs' starts and ends, and its review requests'."""
+    """The newest of its ticket's last change, its review runs' starts and ends, and its review requests'."""
     running_run: int | None = None
     """A run of its ticket working now, whose page it opens."""
     reviews: int = 0

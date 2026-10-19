@@ -42,6 +42,9 @@ CANOPY_VERSION = version("canopy")
 TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id", "message": "last_message_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
+#: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
+#: here, never from input.
+type TicketChange = Literal["phase", "title", "done", "plan_setting"]
 # The tables of detached runs (DESIGN §6): workers' and splits', chores', and reviews'. Each has the same lifecycle,
 # written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
 # report, and its close. A table name in SQL comes from here, never from input.
@@ -438,9 +441,20 @@ def touch_ticket(conn: sqlite3.Connection, key: str, repo: str) -> None:
     """Record that `key` was seen now, creating its row on first sight."""
     ts = now()
     conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?) "
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at) VALUES (?, ?, ?, ?, ?) "
         "ON CONFLICT (key) DO UPDATE SET last_seen_at = excluded.last_seen_at",
-        (key, repo, ts, ts),
+        (key, repo, ts, ts, ts),
+    )
+
+
+def change_ticket(conn: sqlite3.Connection, key: str, column: TicketChange, value: object) -> None:
+    """Set one of `key`'s columns, and mark the ticket changed only if the value is new.
+
+    So a tick that sets what was already there is no activity on the web UI's lists (DESIGN §22).
+    """
+    conn.execute(
+        f"UPDATE tickets SET {column} = ?, changed_at = ? WHERE key = ? AND {column} IS NOT ?",  # noqa: S608
+        (value, now(), key, value),
     )
 
 
@@ -458,15 +472,15 @@ def set_ticket(
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
-            conn.execute("UPDATE tickets SET phase = ? WHERE key = ?", (phase, key))
+            change_ticket(conn, key, "phase", phase)
         if title is not None:
-            conn.execute("UPDATE tickets SET title = ? WHERE key = ?", (title, key))
+            change_ticket(conn, key, "title", title)
         for name, value in (cursors or {}).items():
             # The column name comes from a fixed mapping, never from input.
             sql = f"UPDATE tickets SET {TICKET_CURSORS[name]} = ? WHERE key = ?"  # noqa: S608
             conn.execute(sql, (value, key))
         if done:
-            conn.execute("UPDATE tickets SET done = 1 WHERE key = ?", (key,))
+            change_ticket(conn, key, "done", 1)
 
 
 def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str) -> None:
@@ -495,13 +509,16 @@ def set_unit(
         touch_ticket(conn, key, repo)
         _ensure_unit(conn, key, unit)
         where = "WHERE ticket_key = ? AND repo = ?"
-        if phase is not None:
-            conn.execute(f"UPDATE ticket_units SET phase = ? {where}", (phase, key, unit))  # noqa: S608
+        for column, value in (("phase", phase), ("pr_url", pr_url)):
+            if value is None:
+                continue
+            # The column name comes from this fixed pair, never from input.
+            sql = f"UPDATE ticket_units SET {column} = ? {where} AND {column} IS NOT ?"  # noqa: S608
+            if conn.execute(sql, (value, key, unit, value)).rowcount:
+                conn.execute("UPDATE tickets SET changed_at = ? WHERE key = ?", (now(), key))
         for name, value in (cursors or {}).items():
             # The column name comes from a fixed mapping, never from input.
             conn.execute(f"UPDATE ticket_units SET {UNIT_CURSORS[name]} = ? {where}", (value, key, unit))  # noqa: S608
-        if pr_url is not None:
-            conn.execute(f"UPDATE ticket_units SET pr_url = ? {where}", (pr_url, key, unit))  # noqa: S608
 
 
 def set_pr_title(conn: sqlite3.Connection, pr_url: str, title: str) -> None:
@@ -1286,7 +1303,7 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
 def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
     """Return the `limit` PRs with the most recent activity, most recently active first; with `url`, only it (§22).
 
-    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, by a review run, whose activity
+    A PR is known by a ticket's unit, whose activity is the ticket's last change, by a review run, whose activity
     is its start or end, or by the operator's review request, whose activity is when it was made or ended. Each row
     has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`, and the ticket's `title`, all
     NULL for a PR no unit records, and the PR's own `pr_title`, NULL until a worker reports one. Decisions are not a
@@ -1303,7 +1320,7 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
     return conn.execute(
         "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title, p.title AS pr_title "
         "FROM ("
-        "  SELECT u.pr_url AS url, t.last_seen_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
+        "  SELECT u.pr_url AS url, t.changed_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
         "  WHERE u.pr_url IN (SELECT value FROM json_each(?))"
         "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
         "  WHERE pr_url IN (SELECT value FROM json_each(?))"
@@ -1317,14 +1334,14 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
     ).fetchall()
 
 
-# Each source of a PR's activity as `pull_requests` weighs it, for `_candidates`: its units by when a tick last saw
-# their ticket, its review runs by when each ended, or started while it runs (`finish_run` sets the end), and its
+# Each source of a PR's activity as `pull_requests` weighs it, for `_candidates`: its units by when their ticket last
+# changed, its review runs by when each ended, or started while it runs (`finish_run` sets the end), and its
 # review requests by when each ended, or was made while it is open.
 # CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
 _PR_ACTIVITY = (
     (
-        "SELECT u.pr_url, t.last_seen_at FROM tickets t CROSS JOIN ticket_units u ON u.ticket_key = t.key "
-        "WHERE u.pr_url IS NOT NULL ORDER BY t.last_seen_at DESC"
+        "SELECT u.pr_url, t.changed_at FROM tickets t CROSS JOIN ticket_units u ON u.ticket_key = t.key "
+        "WHERE u.pr_url IS NOT NULL ORDER BY t.changed_at DESC"
     ),
     "SELECT pr_url, ended_at FROM review_runs WHERE ended_at IS NOT NULL ORDER BY ended_at DESC",
     "SELECT pr_url, started_at FROM review_runs WHERE status = 'running' ORDER BY started_at DESC",
@@ -1675,8 +1692,9 @@ def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
 def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
     """Return the `limit` tickets with the most recent activity, most recently active first, each row with `active_at`.
 
-    Activity is a message, a run starting or ending, a start or stop, or a tick seeing the ticket. Every one of those
-    times is the journal's own format, so the newest is the greatest string. With `key`, only that ticket.
+    Activity is a message, a run starting or ending, a start or stop, or a change to the ticket (`changed_at`), not a
+    tick that only sees it. Every one of those times is the journal's own format, so the newest is the greatest
+    string. With `key`, only that ticket.
 
     Only the candidates `_candidates` finds are weighed, so the read costs what `limit` does, not what the
     journal's history does: the web UI's event stream reads the list on every commit (DESIGN §22).
@@ -1691,7 +1709,7 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
 def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT t.*, max("
-        "  t.last_seen_at,"
+        "  t.changed_at,"
         "  coalesce((SELECT max(m.at) FROM messages m WHERE m.subject_kind = ? AND m.subject_id = t.key), ''),"
         "  coalesce((SELECT max(coalesce(r.ended_at, r.started_at)) FROM runs r WHERE r.ticket_key = t.key), ''),"
         "  coalesce((SELECT coalesce(s.stopped_at, s.started_at) FROM starts s"
@@ -1708,7 +1726,7 @@ def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sq
 # ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
 # keeps SQLite reading the start records in order from their index, rather than sorting every one.
 _TICKET_ACTIVITY = (
-    "SELECT key, last_seen_at FROM tickets ORDER BY last_seen_at DESC",
+    "SELECT key, changed_at FROM tickets ORDER BY changed_at DESC",
     (
         "SELECT m.subject_id, m.at FROM messages m JOIN tickets t ON t.key = m.subject_id "
         "WHERE m.subject_kind = 'ticket' ORDER BY m.at DESC"
@@ -1737,12 +1755,14 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
     recorded with the `branch` and `prs` it dropped, beside every earlier one. A waiting or approved plan is
     superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
     """
+    ts = now()
     conn.execute(
         "UPDATE tickets SET branch = NULL, phase = NULL, needs_human_since = NULL, done = 0, forgotten_at = ?, "
+        "changed_at = ?, "
         "forgotten_run_id = (SELECT max(id) FROM runs WHERE ticket_key = ?), "
         "forgotten_message_id = (SELECT max(id) FROM messages WHERE subject_kind = ? AND subject_id = ?) "
         "WHERE key = ?",
-        (now(), key, SUBJECT_TICKET, key, key),
+        (ts, ts, key, SUBJECT_TICKET, key, key),
     )
     conn.execute(
         "INSERT INTO forgets (ticket_key, at, channel, run_id, message_id, branch, prs) "

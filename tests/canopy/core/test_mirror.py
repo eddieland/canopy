@@ -17,6 +17,7 @@ from tests.canopy.helpers import (
     KEY,
     context,
     journal_at,
+    old_ticket,
     present,
     versions_after,
     waits,
@@ -239,7 +240,7 @@ def test_the_real_delimiter_is_fresh_each_tick() -> None:
 
 def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path: Path, journals: Journals) -> None:
     conn = journal_at(journals, tmp_path, 3)
-    db.touch_ticket(conn, "OLD-1", "/r")
+    old_ticket(conn, "OLD-1")
     conn.execute("UPDATE tickets SET last_comment_id = 'c-9' WHERE key = 'OLD-1'")
     conn.execute(
         "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
