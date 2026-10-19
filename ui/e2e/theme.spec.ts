@@ -97,7 +97,7 @@ test.describe('the toggle', () => {
         await expect(page.locator('html')).toHaveClass(/\bdark\b/u)
         await expect(themes.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
         await page.keyboard.press('Tab')
-        await expect(page.getByTestId('send-key-enter')).toBeFocused()
+        await expect(page.getByTestId('clock-24')).toBeFocused()
     })
 
     test('a change in one tab reaches the others', async ({ context }) => {

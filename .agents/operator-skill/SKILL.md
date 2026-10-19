@@ -69,6 +69,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
+| `canopy chore install [NAME]` | Sets up an example chore canopy ships, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
 | `canopy chore history NAME` | A chore's runs, newest first, with what each found; `--run ID` prints one with its detail. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
@@ -95,6 +96,8 @@ the commands below from the workspace root.
 | `runs/<run id>.log` | A worker run's output, including the worker agent's own. |
 | `runs/<run id>.prompt` | The prompt that run's worker got. |
 | `chores/<run id>.log`, `.prompt` | A chore run's output and prompt; `chores/<name>/` is a chore's own directory. |
+| `chore-prompts/<name>.md` | The prompt `canopy chore install NAME` copied; installing it again replaces it. |
+| `chore-agents/<name>/` | The agent an installed chore runs, if its example came with one, as an OpenCode config dir. |
 | `reviews/<run id>.log`, `.prompt` | A review run's output and prompt. |
 
 Config: the workspace's `canopy-workspace.toml`, which also lists the repositories, shared; the user file

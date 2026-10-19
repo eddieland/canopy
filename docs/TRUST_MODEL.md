@@ -431,7 +431,12 @@ Controls:
   runtime need not grant it a write tool at all.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit or subagent tools, a
   shell that runs `canopy chore history` alone, which reads its own chore's earlier runs and writes nothing, and
-  denies MCP write tools by name.
+  denies MCP write tools by name. The agents example chores come with, `canopy-introspect` and
+  `canopy-memory-tickets`, which `canopy chore install` copies into the workspace's state directory for a chore's
+  `cmd` to name, are the same with a shell for canopy's read-only commands as well: `canopy health --json`,
+  `canopy spend --json`, `canopy decisions`, `canopy show` of a run or a chore, and `opencode mcp list`; and
+  `canopy memory lessons`, `proposals`, and `list`. None of those writes, and the memory commands that do refuse inside
+  any run.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.

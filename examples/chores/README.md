@@ -4,6 +4,14 @@ What engineers may want to use chores for, with worked examples. `build-health.m
 `canopy-health.md`, `canopy-efficiency.md`, and `memory-tickets.md` in this directory are the prompts that ship; the
 rest are ideas to write your own from. The rules are in DESIGN §19.
 
+`canopy chore install <name>` sets up one of the five in the workspace you run it in. It copies the prompt to the
+workspace's `.canopy/chore-prompts/<name>.md`, and the agent the example comes with, if any, from `agents/` here. It
+writes the `[chores.<name>]` table from `<name>.toml` here to its private config, `cwd` set to the workspace root
+where the chore reads canopy's journal, then prints what is left to do, such as the lists to fill in. The copies stay
+as installed when canopy is upgraded. The command owns them: running it again replaces them with the shipped ones, so
+an edit to any is lost. Steer an installed chore with `canopy reply` notes, which survive it, or copy it under a name
+of your own. `canopy chore install` alone lists the examples.
+
 ## What a chore is
 
 A chore is a recurring, read-only check you define once and the overseer runs when it is due. It works on no ticket,
@@ -28,7 +36,8 @@ Reach for a ticket when you already know what to change.
 
 Every example below only reads and reports. "Shipped agent" means it runs under `canopy-chore` with your GitHub or
 tracker MCP server's read tools; "own agent" means you copy that definition and allow one read-only CLI in its bash
-rules. Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is the hint the overseer weighs.
+rules; "its own agent", named, is one the example comes with, which `canopy chore install` copies into the workspace.
+Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is the hint the overseer weighs.
 
 ### CI and builds
 
@@ -82,9 +91,9 @@ rules. Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `whe
 
 | Chore | What it reports | Finding id | Cadence | Runs under |
 | --- | --- | --- | --- | --- |
-| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Own agent, `canopy health --json *` and three more read-only commands allowed |
-| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Own agent, as `canopy-health`, with `opencode mcp list` |
-| `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Own agent, `canopy memory lessons`, `proposals`, and `list` allowed, tracker and GitHub MCP read tools |
+| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, `canopy health --json *` and three more read-only commands allowed |
+| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with `opencode mcp list` |
+| `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, `canopy memory lessons`, `proposals`, and `list` allowed, tracker and GitHub MCP read tools |
 
 ## Writing a good chore
 
@@ -207,13 +216,18 @@ hours = "08:00-12:00"
 timeout_minutes = 15
 ```
 
-- **Its own agent.** Copy `canopy-chore` to `~/.config/opencode/agent/canopy-introspect.md`, keep every other rule,
-  and replace `bash: deny` with exactly the commands the prompts use. Each one only reads; `canopy show` is allowed for
-  runs and chores only, since a ticket's page holds its conversation.
+- **Its agent comes with it.** [`canopy-introspect`](agents/canopy-introspect.md) is `canopy-chore` with bash allowed
+  for exactly the commands the prompts use. `canopy chore install` copies it into the workspace's
+  `.canopy/chore-agents/<name>/`, and starts the table's `cmd` with `env OPENCODE_CONFIG_DIR=` that directory, so the
+  chore runs the copy, which stays as installed when canopy is upgraded until you install the chore again. Each
+  command only reads; `canopy show` is allowed for runs and chores only, since a ticket's page holds its
+  conversation. If you made a copy of your own in `~/.config/opencode/agent/` before, delete it: OpenCode would merge
+  it in.
 
   ```yaml
   bash:
     "*": deny
+    "canopy chore history *": allow
     "canopy health --json*": allow
     "canopy spend --json*": allow
     "canopy decisions*": allow
@@ -222,8 +236,9 @@ timeout_minutes = 15
     "opencode mcp list": allow
   ```
 
-- **No MCP servers needed.** Neither prompt calls one. Deny your servers' tools in the definition by name
-  (`"github_*": deny`) so a steered run cannot reach them.
+- **No MCP servers needed.** Neither prompt calls one. Deny your servers' tools for the agent by name in
+  `~/.config/opencode/opencode.json`, `"agent": {"canopy-introspect": {"permission": {"github_*": "deny"}}}`, so a
+  steered run cannot reach them.
 - **Not sandboxed.** The sandbox wrapper hides the workspace's `.canopy/` from a run whose directory is in the
   workspace ([SANDBOX.md](../../docs/SANDBOX.md)), and these chores read the journal in it. Leave the `canopy-sandbox`
   prefix off their `cmd`.
@@ -258,23 +273,28 @@ timeout_minutes = 20
 
 - **Memory on.** It reads what `[memory]` records, so at least one tier must be `record` or `use`; with both off it
   finds nothing, and says so.
-- **Its own agent.** Copy `canopy-chore` to `~/.config/opencode/agent/canopy-memory-tickets.md`, keep every other rule,
-  and replace `bash: deny` with the three listings the prompt uses. The commands that change memory (`promote`,
-  `reject`, `renew`, `forget`, `purge`) match none of them, and refuse `inside_run` in any run anyway.
+- **Its agent comes with it.** [`canopy-memory-tickets`](agents/canopy-memory-tickets.md) is `canopy-chore` with bash
+  allowed for the three listings the prompt uses, which `canopy chore install` copies into the workspace as for
+  canopy's own chores. The commands that change memory (`promote`, `reject`, `renew`, `forget`, `purge`) match none
+  of them, and refuse `inside_run` in any run anyway. If you made a copy of your own in `~/.config/opencode/agent/`
+  before, delete it.
 
   ```yaml
   bash:
     "*": deny
+    "canopy chore history *": allow
     "canopy memory lessons": allow
     "canopy memory proposals": allow
     "canopy memory list": allow
   ```
 
 - **MCP read tools, not write tools.** It searches the tracker and GitHub to leave out what is already filed, and reads
-  `AGENTS.md`, so it needs both servers' read tools, which the copied definition allows. Keep its deny patterns:
-  they are what keeps it from filing the tickets itself, which a chore does not do (DESIGN §19). Check the names
-  `opencode mcp list` gives your servers' write tools against them, and deny by full name any they miss
-  (`"jira_addCommentToJiraIssue": deny`). Deny the servers it does not need (`"sentry_*": deny`).
+  `AGENTS.md`, so it needs both servers' read tools, which the definition allows. Its deny patterns, `canopy-chore`'s,
+  are what keeps it from filing the tickets itself, which a chore does not do (DESIGN §19). Check the names
+  `opencode mcp list` gives your servers' write tools against them, and deny any they miss by full name for the agent
+  in `~/.config/opencode/opencode.json`
+  (`"agent": {"canopy-memory-tickets": {"permission": {"jira_addCommentToJiraIssue": "deny"}}}`). Deny the servers it
+  does not need there too (`"sentry_*": "deny"`).
 - **Not sandboxed.** It reads the journal in `.canopy/`, which the sandbox hides, as for canopy's own chores.
 - **Fill in the lists.** The prompt names the tracker project and the repositories to search.
 - **A finding is a ticket to file.** Its title is the ticket's title and its detail the ticket's body, naming the
@@ -287,7 +307,7 @@ timeout_minutes = 20
 
 ### The loop for getting it right
 
-1. Write the prompt and the `[chores.<name>]` table.
+1. Write the prompt and the `[chores.<name>]` table, or `canopy chore install` an example to start from.
 2. Run `canopy chore try <name>` until the findings are the ones you want. It ignores `every_minutes` and works with
    `max_chores = 0`. Each try is a real run: its findings replace the chore's open ones, and
    `canopy show chore:<name>` lists it. Add `--no-record` to record nothing, so a draft cannot clear findings you

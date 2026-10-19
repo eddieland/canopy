@@ -3028,15 +3028,15 @@ export type components = {
             source: components["schemas"]["MessageSource"];
         };
         /**
-         * @description What a message is (DESIGN §22).
+         * @description What a message is (DESIGN §22): a `note` is canopy's word on what a tick did.
          * @enum {string}
          */
-        MessageKind: "report" | "question" | "reply" | "comment";
+        MessageKind: "report" | "question" | "reply" | "comment" | "note";
         /**
-         * @description Who wrote a message (DESIGN §22).
+         * @description Who wrote a message (DESIGN §22): `canopy` for a tick's note on the operator's messages.
          * @enum {string}
          */
-        MessageSource: "worker" | "operator" | "tracker";
+        MessageSource: "worker" | "operator" | "tracker" | "canopy";
         /**
          * Meta
          * @description The server itself: what it runs and whether its data is real.
@@ -4161,6 +4161,22 @@ export type components = {
             worst_count: number;
         };
         /**
+         * ReviewsUpdated
+         * @description The review runs changed: one started or ended. The payload is the whole list, as `GET /reviews` returns it.
+         */
+        ReviewsUpdated: {
+            /**
+             * Reviews
+             * @description The latest review runs, as `GET /reviews` returns them.
+             */
+            reviews: components["schemas"]["ReviewSummary"][];
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "reviews.updated";
+        };
+        /**
          * @description A review run's verdict (DESIGN §21).
          * @enum {string}
          */
@@ -4944,7 +4960,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
         /**
          * Thread
          * @description A PR's review thread as last read, where it sits on the diff, and the drafts that answer it.

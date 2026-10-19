@@ -24,10 +24,12 @@ type RunState = Annotated[
     ),
 ]
 type MessageSource = Annotated[
-    Literal["worker", "operator", "tracker"], Field(description="Who wrote a message (DESIGN §22).")
+    Literal["worker", "operator", "tracker", "canopy"],
+    Field(description="Who wrote a message (DESIGN §22): `canopy` for a tick's note on the operator's messages."),
 ]
 type MessageKind = Annotated[
-    Literal["report", "question", "reply", "comment"], Field(description="What a message is (DESIGN §22).")
+    Literal["report", "question", "reply", "comment", "note"],
+    Field(description="What a message is (DESIGN §22): a `note` is canopy's word on what a tick did."),
 ]
 type GrantKind = Annotated[
     Literal["implement", "resume"],
@@ -2115,6 +2117,15 @@ class ChoresUpdated(_Model):
     """The chores, as `GET /chores` returns them."""
 
 
+class ReviewsUpdated(_Model):
+    """The review runs changed: one started or ended. The payload is the whole list, as `GET /reviews` returns it."""
+
+    type: Literal["reviews.updated"] = "reviews.updated"
+    """What the event is."""
+    reviews: list[ReviewSummary]
+    """The latest review runs, as `GET /reviews` returns them."""
+
+
 class TicketChanged(_Model):
     """Something about one ticket changed: a page showing it reads it again."""
 
@@ -2175,6 +2186,7 @@ class StreamEvent(
             | TicketsUpdated
             | TicketChanged
             | ChoresUpdated
+            | ReviewsUpdated
             | SpendUpdated
             | TickUpdated
             | LoopUpdated

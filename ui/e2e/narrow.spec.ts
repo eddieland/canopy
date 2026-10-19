@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { expectSpendAxisWhole, FULL_RAIL, NOW, ROUTES, settled, signIn, windowWidth } from './helpers.ts'
+import { expectSpendAxisWhole, FULL_RAIL, hoverTime, NOW, ROUTES, settled, signIn, windowWidth } from './helpers.ts'
 
 // About the narrowest window the UI holds up in (DESIGN.md): the rail a strip of icons.
 const HALF = { width: 820, height: 900 }
@@ -100,7 +100,7 @@ test.describe('in a narrow window', () => {
             await page.keyboard.press('Tab')
             await expect(age).toBeFocused({ timeout: 100 })
         }).toPass({ timeout: 5000 })
-        const local = await page.evaluate(() => new Date('2026-10-08T12:00:00Z').toLocaleString())
+        const local = await hoverTime(page, '2026-10-08T12:00:00Z')
         await expect(page.getByRole('tooltip')).toHaveText(local)
     })
 
@@ -116,7 +116,7 @@ test.describe('in a narrow window', () => {
         const sheet = page.getByRole('dialog', { name: 'Rail' })
         // The rail's first item is the search box, so the sheet opens in it.
         await expect(sheet.getByRole('searchbox', { name: 'Search the journal' })).toBeFocused()
-        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(3)
+        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(4)
         await expect(sheet.getByTestId('rail-spend-24h')).toBeVisible()
 
         // A link followed leaves the page the sheet covered: it closes.
@@ -175,7 +175,7 @@ test.describe('on a touch screen', () => {
         await page.goto('runs')
         await settled(page)
         const age = page.getByTestId('run-41').first().getByText('for 30m')
-        const local = await page.evaluate(() => new Date('2026-10-08T12:00:00Z').toLocaleString())
+        const local = await hoverTime(page, '2026-10-08T12:00:00Z')
         await age.tap()
         await expect(page.getByRole('tooltip')).toHaveText(local)
         await age.tap()

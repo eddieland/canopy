@@ -1,0 +1,10 @@
+# Name your MCP servers in the prompt, and keep this chore out of the sandbox; its agent comes with it:
+# https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-canopys-own-chores
+[chores.canopy-efficiency]
+prompt = "~/.config/canopy/chores/canopy-efficiency.md"
+cmd = 'opencode run --agent canopy-introspect --format json --title={title} {prompt}'
+cwd = "~"
+every_minutes = 1440
+days = ["mon"]
+hours = "08:00-12:00"
+timeout_minutes = 15

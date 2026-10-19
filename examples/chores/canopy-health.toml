@@ -1,0 +1,10 @@
+# Keep this chore out of the sandbox, since it reads the journal in .canopy/; its agent comes with it:
+# https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-canopys-own-chores
+[chores.canopy-health]
+prompt = "~/.config/canopy/chores/canopy-health.md"
+cmd = 'opencode run --agent canopy-introspect --format json --title={title} {prompt}'
+cwd = "~"
+every_minutes = 720
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-11:00"
+timeout_minutes = 15

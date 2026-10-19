@@ -39,6 +39,14 @@ describe('RichText', () => {
         expect(screen.getByText(/seven/u)).toBeDefined()
     })
 
+    it('folds one long paragraph as it folds many lines, cut where a word ends', () => {
+        const long = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ')
+        render(<RichText text={long} lines={2} />)
+        expect(screen.getByRole('button', { name: /^show \d+ more lines$/u, expanded: false })).toBeDefined()
+        expect(screen.getByText(/word10 .*…$/u)).toBeDefined()
+        expect(screen.queryByText(/word79/u)).toBeNull()
+    })
+
     it("lays out an agent's lists, headings, and code, its markup as characters and only bare URLs linked", () => {
         const text = [
             '## What changed',

@@ -7,6 +7,7 @@ import type { WorkerNotice } from '@/api/types'
 import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +23,7 @@ const CHANNEL: Record<WorkerNotice['channel'], string> = {
  * stream sends it, and one that lapses goes the same way. Settings sets one.
  */
 export function NoticeBanner() {
+    const clock = useClock()
     const client = useQueryClient()
     const told = useQuery(loopQuery).data?.notice ?? null
     const clear = useMutation({
@@ -48,9 +50,9 @@ export function NoticeBanner() {
                 </p>
                 <p
                     className="readout text-xs text-muted-foreground"
-                    title={`Set at ${localTime(told.since)} from ${CHANNEL[told.channel]}`}
+                    title={`Set at ${localTime(told.since, clock)} from ${CHANNEL[told.channel]}`}
                 >
-                    Every run dispatched until {localTime(told.lapses_at)} hears it.
+                    Every run dispatched until {localTime(told.lapses_at, clock)} hears it.
                 </p>
                 <Notice error={clear.error} />
             </div>

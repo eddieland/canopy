@@ -7,9 +7,10 @@ a PR, so this is the only place, besides `canopy review show`, you'll read them.
 
 [Pull requests](/pull-requests) lists the loop's own PRs, every PR canopy reviewed, and every PR you asked it to
 review, most recent activity first. Each row shows where the PR stands (a run working it, or its latest review's
-verdict), the PR as `org/repo#123`, its phase, its ticket and title, and how long since anything happened. The name
-opens canopy's page for the PR; the small icon beside it opens the PR itself. The PR column is only as wide as the
-longest name in the list, and in a narrow window the phase goes first, then the age, so the title keeps the room.
+verdict), the PR as `org/repo#123`, its phase, its ticket and title, and how long since anything happened. A PR canopy
+only reviews has no ticket, so it shows `none` there; hover it for why. The name opens canopy's page for the PR; the
+small icon beside it opens the PR itself. The PR column is only as wide as the longest name in the list, and in a
+narrow window the phase goes first, then the age, so the title keeps the room.
 
 The title is the PR's own, as the worker that opened it or canopy's last review of it read it, so it says what the PR
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
@@ -36,6 +37,15 @@ the thread it answers. canopy reads the threads itself, so what you see is what 
 recollection of it. A thread on a line that's since changed sits under its file, marked `outdated`. If the PR has moved
 on past the diff the page shows, a warning above the diff says so. Its files fold and filter by type as a review's do
 ([below](#a-reviews-page)).
+
+Comments show as plain text, never Markdown, with any character that hides text named by its code point. The one
+exception is a `<details>` block, which folds under its summary line as it does on GitHub, so a review bot's prompt for
+agents stays out of your way until you open it. A closed block that hides a character says so on its line: a fold is
+where you'd tuck something you hoped nobody would read.
+
+The panel at the top lists every draft on the PR, in the order the page shows them: where it stands, its run, its
+first line, and where it sits, such as `src/search/useSearch.ts:16`. The first line links to the draft's card, opening
+its file if you'd folded it away, so a PR with forty threads doesn't turn into a scrolling contest.
 
 Each waiting draft has three buttons:
 
@@ -77,6 +87,14 @@ PR goes in the summary instead, so a worker is never sent to fix code its PR did
 becomes a refactor nobody asked for.
 
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once.
+
+The reviewer runs its own command, `runtime.review_cmd`, so point it at another model than your workers': a second
+model misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
+(`runtime.review_temperature = -1`, the default), because OpenAI's reasoning models refuse a request that sets one, and
+a review that never starts finds nothing. If your reviewer's model takes one, set it low, such as `0.1`. Each new commit
+is reviewed again, and a reviewer sampling hot finds something fresh every time in code nobody touched; with the
+reviewer trusted, each of those sends a worker back. A cool one says much the same thing twice, which is also how
+you'll learn whether it deserves that trust.
 
 canopy treats its own reviewer as it treats anyone else's. With `canopy:review` in `trust.trusted_reviewers`, findings
 on a loop PR send a worker back to address them, and the PR's phase is `review findings`. Without it, the findings wait

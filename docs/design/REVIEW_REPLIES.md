@@ -87,7 +87,8 @@ go-ahead.
 ### On the PR's diff
 
 The operator reads each draft under its thread, on the diff the run pushed (§8 step 5), told when the PR has moved on.
-A draft and a thread are untrusted text and are shown as text, never Markdown, every hidden character named (§28).
+A draft and a thread are untrusted text and are shown as text, never Markdown, every hidden character named (§28); a
+comment's `<details>` block folds under its summary, as GitHub shows it, and says while closed when it hides a character.
 
 ### canopy's GitHub program
 

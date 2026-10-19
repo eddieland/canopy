@@ -9,6 +9,7 @@ import { Chip } from '@/components/status'
 import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
 import { messageRef } from '@/lib/refs'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -16,18 +17,22 @@ const WHO: Record<Message['source'], string> = {
     worker: 'worker',
     operator: 'you',
     tracker: 'tracker',
+    canopy: 'canopy',
 }
 
 // Written out so Tailwind finds them. Each message is a bubble: the operator's own words on the right in the accent's
-// tint, a question in the tint of what waits on a person, anything else on the raised surface.
+// tint, a question in the tint of what waits on a person, canopy's note on what a tick did as a muted outline, since
+// it is about the loop rather than the work, anything else on the raised surface.
 const TONE: Record<Message['kind'], string> = {
     report: 'bg-surface-raised',
     question: 'bg-status-blocked/12',
     reply: 'bg-accent/12',
     comment: 'bg-surface-raised',
+    note: 'border border-dashed text-muted-foreground',
 }
 
 const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
+const SEEN = 'A tick has read it: the loop is acting on it.'
 
 /** Which of the operator's messages nothing has read yet, and what the chip on each says and explains. */
 export interface Pending {
@@ -44,7 +49,8 @@ export interface Pending {
  * body is untrusted text, a tracker comment's or an agent's included: it is rendered as React text, which escapes it,
  * never as HTML. Bubbles pop in from their own side, one after another, and a new one when it arrives. The operator's
  * own messages that no `ok` tick has read yet say so: the loop acts on them, and the attention list catches up, at the
- * next tick. A chore's notes say instead which its next run reads (`pending`).
+ * next tick. Once one has, they say `seen`, so the operator knows they landed. A chore's notes say instead which its
+ * next run reads (`pending`), and say nothing once read.
  */
 export function Conversation({
     messages,
@@ -77,6 +83,12 @@ export function Conversation({
                         message={message}
                         waiting={message.id === waiting}
                         unread={unread.test(message) ? unread : null}
+                        seen={
+                            pending === undefined &&
+                            message.source === 'operator' &&
+                            acknowledged !== undefined &&
+                            !awaitsTick(message, acknowledged)
+                        }
                     />
                     <p
                         className={cn(
@@ -93,7 +105,18 @@ export function Conversation({
     )
 }
 
-function Head({ message, waiting, unread }: { message: Message; waiting: boolean; unread: Pending | null }) {
+function Head({
+    message,
+    waiting,
+    unread,
+    seen,
+}: {
+    message: Message
+    waiting: boolean
+    unread: Pending | null
+    seen: boolean
+}) {
+    const clock = useClock()
     const comment = message.comment
     return (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
@@ -124,8 +147,13 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
                     <Chip tone="running">{unread.label}</Chip>
                 </span>
             )}
+            {seen && (
+                <span title={SEEN}>
+                    <Chip>seen</Chip>
+                </span>
+            )}
             <Age at={message.at} variant="ago" className="ml-auto" />
-            <span className="sr-only">{localTime(message.at)}</span>
+            <span className="sr-only">{localTime(message.at, clock)}</span>
         </div>
     )
 }

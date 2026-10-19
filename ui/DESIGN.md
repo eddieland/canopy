@@ -140,16 +140,18 @@ Rules:
   then a small box on `surface` at the page's top left. It moves the focus to the page's `main`, so the next Tab is the
   page's own first stop rather than the rail's search, a dozen nav items, its runs, and its spend. It moves the focus
   by script: `#main` under the base path would be another page's address.
-- **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
+- **The rail** holds, top to bottom: the search box, the nav, what is working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
   `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
   and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item is height
   the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds, and each
   spend window what it covers, as a native `title`; a spend window opens the spend page over its week or month. Each
-  block under the nav is a hairline and a `panel-label` over its content. The working runs are those running first, then
-  those waiting on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color,
-  the ticket's key, how long it has run (or `waiting on you` in `status-blocked`), and the ticket's title under it,
-  opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window. The
+  block under the nav is a hairline and a `panel-label` over its content. What is working is every agent run running,
+  worker runs, reviews of PRs, and chore runs alike, then the worker runs waiting on the operator's answer, each oldest
+  first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the PR, the
+  chore), how long it has run (or `waiting on you` in `status-blocked`), and under it the ticket's title, the review's
+  reference and ticket, or `chore run #N`, opening the run's page; at most four, then `+N more` to the page of
+  the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it is shown
   nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
   version, a link out to canopy's releases on GitHub, with the width to itself and cut short only past a long build's
@@ -661,10 +663,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
   keeps on hover, beside its age on a review's page, and in a run's, tick's, or chore run's `when` field, which sets
   its end after it, the time alone on the same day, how long it ran (`lasted`, the age's units), and its `span` age;
-  a raw ISO string is never shown. A
-  cost is `Cost`: `$0.42` as a readout, its dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent
-  as the CLI rounds), or a dash when nothing reported one, `none reported` on hover; never formatted in place, a hat's
-  price included.
+  a raw ISO string is never shown. Every time of day, hovered ones included, reads on the clock picked in Settings
+  (`useClock`): 24-hour or `10:30 AM`, with the zone or without. A cost is `Cost`: `$0.42` as a readout, its
+  dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent as the CLI rounds), or a dash when
+  nothing reported one, `none reported` on hover; never formatted in place, a hat's price included.
 - **A fact on hover is a tip** (`Tip` in `src/components/tip.tsx`, on the `Tooltip` wrapper): a word's CLI spelling,
   an age's local time, a commit's whole hash, every one of a `+N more`. A `title` reaches neither the keyboard nor a
   touch screen, so a fact a list keeps out of its text is a `Tip`: it opens on hover, after half a second so a pointer
@@ -883,8 +885,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
   (`ticketDescription`).
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
-  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
-  accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
+  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, a dashed
+  hairline with muted text for canopy's note on what a tick did, and the accent's tint for the operator's own words,
+  which sit on the right. A bubble's corner nearest its side is square.
   The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
   (`TicketThread`) shows what came after the latest forget. At the oldest end, each forget heads the attempt it ended:
   a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded
@@ -892,8 +895,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   says the loop reads what came after. The panel's count is of the messages after the latest forget.
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
-  (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
-  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
+  (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
+  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick; Waiting
+  on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
   `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost
   so far, and for how long. It comes from the runs on the stream, so it rises in when the run starts, follows what it
@@ -1360,16 +1364,23 @@ sliver beside four others; and its axis names short call numbers without measuri
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
   panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head, a
-  `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, the drafts for the review's
-  body, and in its foot `Send N waiting`, which sends every waiting draft as one comment review, its command on hover,
-  with a muted line saying it approves nothing and resolves no thread. Then the diff (`DiffPanels`), each thread's card
+  `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, a `Drafts` list of every
+  draft in the order their cards show (a `thread-draft` row: its status chip, `run:N` and its number, its first line
+  linking to its card, and where the card sits in muted monospace), whose links open the card's file as a review's
+  findings list does, the drafts for the review's body, and in its foot `Send N waiting`, which sends every waiting
+  draft as one comment review, its command on hover, with a muted line saying it approves nothing and resolves no
+  thread. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
-  same. A draft's card (`DraftCard`, `surface`, a
-  `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and its number, its status as a chip
+  same. A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
+  as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
+  written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
+  `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.
+  A draft's card (`DraftCard`, `surface`, a `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and
+  its number, its status as a chip
   (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
   plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
   a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it

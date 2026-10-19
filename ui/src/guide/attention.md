@@ -112,8 +112,14 @@ What happens next depends on the ticket:
   the tracker.
 
 Either way, the loop reads it at its next tick. Until then your message carries `waiting for the next tick`, and the
-item shows `answered`. Sending a reply wakes the loop, so the next tick is never far off, unless the loop is paused.
+item shows `answered`. Once a tick has read it, the chip turns to `seen`: a read receipt, not a promise of a
+reply. Sending a reply wakes the loop, so the next tick is never far off, unless the loop is paused.
 Sending the same reply twice, say after a dropped connection, records it once.
+
+The tick that reads it answers under it, as `canopy`, in a dashed bubble: what it decided about the ticket and why.
+`Tick 812 read message 40: started run 57 (resume)` means a worker is on it, and its report follows when it's done.
+`waiting: CI is still running` means the loop heard you and has a reason to hold off. You get one note per tick that
+reads something new, not one per tick forever. Silence was never golden; it was just ambiguous.
 
 A reply that answers its item moves you on: the next item waiting on you is picked, its row takes the focus, and a
 toast at the bottom says what your reply did. Beside the list, it's already open; on half a monitor you're back on the

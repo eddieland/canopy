@@ -39,6 +39,7 @@ from canopy.serve.schema import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
+    ReviewsUpdated,
     RunsUpdated,
     SpendUpdated,
     StreamEnding,
@@ -464,16 +465,18 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 9)
+    headers, events = read_events(served, 10)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, chores, spend, tick, loop, changed, spent = (e.root for e in events)
+    first, runs, tickets, chores, reviews, spend, tick, loop, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
     assert isinstance(chores, ChoresUpdated)
     assert [c.name for c in chores.chores] == ["build-health", "deps"]
+    assert isinstance(reviews, ReviewsUpdated)
+    assert reviews.reviews
     assert isinstance(spend, SpendUpdated)
     assert isinstance(tick, TickUpdated)
     assert tick.tick is not None
@@ -602,11 +605,30 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
     assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
 
 
+def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_path: Path) -> None:
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        run_id = db.insert_review_run(
+            ctx.conn,
+            tick_id=1,
+            pr_url="https://github.com/acme/web/pull/91",
+            sha="abc1234",
+            ticket="ABC-103",
+            repo="web",
+            purpose="own",
+            logs_dir=tmp_path,
+        )
+        events = [e.root for e in sent.changes(backend, ctx)]
+    [reviewed] = [e for e in events if isinstance(e, ReviewsUpdated)]
+    assert (reviewed.reviews[0].id, reviewed.reviews[0].state) == (run_id, "running")
+
+
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
         with closing(live.Stream(backend)) as opened:
             stream = opened.events(poll_seconds=0.01)
-            first = [await anext(stream) for _ in range(7)]
+            first = [await anext(stream) for _ in range(8)]
             # A reload commits nothing to the journal: the stream sees it in the config it serves.
             chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
             backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)

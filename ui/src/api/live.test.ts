@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockChores, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
 import { keys } from './queries'
-import type { ChoreDetail, ChoreRunDetail, Run, TicketDetail } from './types'
+import type { ChoreDetail, ChoreRunDetail, ReviewDetail, ReviewSummary, Run, TicketDetail } from './types'
 
 describe('applyStreamEvent', () => {
     it('replaces each list whole', () => {
@@ -116,6 +116,27 @@ describe('applyStreamEvent', () => {
         const spent = { ...chore, latest: { ...run, cost_usd: (run.cost_usd ?? 0) + 0.25 } }
         applyStreamEvent(client, { type: 'chores.updated', chores: [spent] })
         expect(client.getQueryState(keys.choreRunTranscript(chore.name, run.id))?.isInvalidated).toBe(true)
+    })
+
+    it("writes the reviews whole, and reads a review's page and the PRs again only when a review moves", () => {
+        const client = new QueryClient()
+        const [running] = mockReviews as [ReviewSummary]
+        const detail = { review: running } as ReviewDetail
+        client.setQueryData(keys.review(running.id), detail)
+        client.setQueryData(keys.pullRequests, [])
+
+        applyStreamEvent(client, { type: 'reviews.updated', reviews: mockReviews })
+        expect(client.getQueryData(keys.reviews)).toEqual(mockReviews)
+        expect(client.getQueryState(keys.review(running.id))?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(false)
+
+        // The review ended: its page reads it again, the list replaced whole stays as sent, and the PRs read again.
+        const ended = { ...running, status: 'done', state: 'done', ended_at: '2026-10-08T12:06:00Z' } as const
+        applyStreamEvent(client, { type: 'reviews.updated', reviews: [ended] })
+        expect(client.getQueryData(keys.reviews)).toEqual([ended])
+        expect(client.getQueryState(keys.reviews)?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.review(running.id))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(true)
     })
 
     it('writes the pause whole, and lifts it', () => {
@@ -275,6 +296,9 @@ describe('parseStreamEvent', () => {
         const chores = { type: 'chores.updated', chores: mockChores }
         expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
         expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
+        const reviews = { type: 'reviews.updated', reviews: mockReviews }
+        expect(parseStreamEvent(JSON.stringify(reviews))).toEqual(reviews)
+        expect(parseStreamEvent('{"type":"reviews.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
         const day = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
         const spend = { type: 'spend.updated', spend: { day, month: { ...day, hours: 720 } } }

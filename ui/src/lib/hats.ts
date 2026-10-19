@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
  * Sprig's hats (drawn in src/components/hat.tsx), bought in Settings with what canopy has spent over its whole life
@@ -95,63 +95,14 @@ export function buy(wardrobe: Wardrobe, id: HatId, totalUsd: number | null | und
     return { owned, worn: id }
 }
 
-function read(): Wardrobe {
-    try {
-        return parseWardrobe(globalThis.localStorage.getItem(STORAGE_KEY))
-    } catch {
-        // Storage can be unavailable (privacy modes).
-        return EMPTY
-    }
-}
-
-let snapshot = read()
-const listeners = new Set<() => void>()
-
-function announce(next: Wardrobe): void {
-    if (next.worn === snapshot.worn && next.owned.join() === snapshot.owned.join()) {
-        return
-    }
-    snapshot = next
-    for (const listener of listeners) {
-        listener()
-    }
-}
-
-function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) {
-        announce(read())
-    }
-}
-
-function subscribe(listener: () => void): () => void {
-    listeners.add(listener)
-    if (listeners.size === 1) {
-        globalThis.addEventListener('storage', onStorage)
-        announce(read())
-    }
-    return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-            globalThis.removeEventListener('storage', onStorage)
-        }
-    }
-}
-
-function getSnapshot(): Wardrobe {
-    return snapshot
-}
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseWardrobe, serialize: JSON.stringify })
 
 /** Sprig's wardrobe. Re-renders on a change from this tab or another. */
 export function useWardrobe(): Wardrobe {
-    return useSyncExternalStore(subscribe, getSnapshot)
+    return useStoredSetting(setting)
 }
 
 /** Stores the wardrobe and applies it now. */
 export function setWardrobe(next: Wardrobe): void {
-    try {
-        globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
-        // Not persisted, but still applied for this page.
-    }
-    announce(next)
+    setting.set(next)
 }

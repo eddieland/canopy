@@ -7,19 +7,25 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-test('the rail lists the runs working now, the running ones first, on every page', async ({ page }) => {
+test('the rail lists what is working now, the running runs and chore runs first, on every page', async ({ page }) => {
     await page.goto('tickets')
     await settled(page)
     const working = page.getByTestId('rail-working')
-    await expect(working.getByRole('link')).toHaveCount(3)
-    await expect(working.getByRole('link').first()).toContainText('ABC-101')
-    await expect(working.getByRole('link').nth(2)).toContainText('ABC-102')
+    await expect(working.getByRole('link')).toHaveCount(4)
+    // The chore run started ten minutes before the worker runs.
+    await expect(working.getByRole('link').first()).toContainText('build-health')
+    await expect(working.getByRole('link').nth(1)).toContainText('ABC-101')
+    await expect(working.getByRole('link').nth(3)).toContainText('ABC-102')
     await expect(page.getByTestId('rail-run-42')).toContainText('waiting on you')
     await expect(page.getByTestId('rail-run-41')).toContainText('Sign in with SSO')
+    await expect(page.getByTestId('rail-chore-build-health')).toContainText('chore run #4')
 
     await page.getByTestId('rail-run-41').click()
     await expect(page).toHaveURL(/\/runs\/41$/u)
     await expect(page.getByTestId('rail-run-41')).toBeVisible()
+
+    await page.getByTestId('rail-chore-build-health').click()
+    await expect(page).toHaveURL(/\/chores\/build-health\/runs\/4$/u)
 })
 
 test('the nav lists the sections by how often the operator opens them, and the foot opens Settings', async ({
