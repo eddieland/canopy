@@ -27,6 +27,10 @@ and whenever a ticket moves into it you get `ABC-102: needs human`, with the tic
 human** and a worker's question finds you wherever you're reading, instead of waiting for you to wander back to the
 list. The phases of a ticket's PRs, such as **ci red** or **approved**, are the PRs' own and aren't on the list.
 
+**Reviews** covers canopy's own reviews of PRs: **started** when one begins, then how it ended, **clean**,
+**findings**, or **failed**. The toast names the review and its verdict, `review:4: 3 findings, 1 major`, with the PR
+under it, so you can go and read it while it's still fresh, or decide it can wait.
+
 Each tab toasts for itself, so three open tabs means three toasts, and a tab only toasts changes it saw happen: open one
 after lunch and it won't recite the morning.
 

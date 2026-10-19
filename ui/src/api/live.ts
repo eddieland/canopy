@@ -4,13 +4,13 @@ import { keys } from './queries'
 import type { ChoreRun, ChoreRunDetail, LastTick, Run, StreamEvent, Tick } from './types'
 
 /**
- * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
- * read again, only if a page shows it, and so is a chore's page whenever the chores change, and the ticks and the
- * ticket shown whenever the latest tick does. The worktrees are not on the stream: a run starting or ending, or
- * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A run's
- * transcript is read again when its status, latest tool call, or cost moves, as its worker prints; a chore run's when
- * its status does, and a tick's when the tick changes, the only times their logs can. The loop's pause arrives whole,
- * as a list does. Unknown event types are ignored, so the server can add some.
+ * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one, canopy's reviews
+ * among them; a changed ticket is read again, only if a page shows it, and so is a chore's page whenever the chores
+ * change, and the ticks and the ticket shown whenever the latest tick does. The worktrees are not on the stream: a run
+ * starting or ending, or changing the worktrees it holds, marks them stale, and they are read again only if a page
+ * shows them. A run's transcript is read again when its status, latest tool call, or cost moves, as its worker prints;
+ * a chore run's when its status does, and a tick's when the tick changes, the only times their logs can. The loop's
+ * pause arrives whole, as a list does. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -44,6 +44,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                     void client.invalidateQueries({ queryKey: keys.runMemory(run.id) })
                 }
             }
+            break
+        }
+        case 'reviews.updated': {
+            client.setQueryData(keys.reviews, event.reviews)
             break
         }
         case 'tickets.updated': {
@@ -96,7 +100,7 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 void client.invalidateQueries({ queryKey: keys.tickTranscript(event.tick.id) })
             }
             // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions. A
-            // review run ends between two ticks, so the reviews go with them.
+            // review run ends between two ticks, so a review's page goes with them; the list arrives on the stream.
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
@@ -149,6 +153,7 @@ export function holding(runs: Run[]): string {
 const LISTS: Record<string, string> = {
     'attention.updated': 'items',
     'runs.updated': 'runs',
+    'reviews.updated': 'reviews',
     'tickets.updated': 'tickets',
     'chores.updated': 'chores',
 }

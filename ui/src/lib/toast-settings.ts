@@ -10,10 +10,12 @@ import { useSyncExternalStore } from 'react'
 /**
  * What a toast can be about, and the states of each that can show one, in the order Settings lists them. A ticket's
  * are its own phases (DESIGN §7), in the phase table's order, then done: the phases about a PR are a unit's, and the
- * tickets list the stream sends never carries them.
+ * tickets list the stream sends never carries them. A review's are canopy's review run of a PR starting, then how it
+ * ended: clean, with findings, or failed.
  */
 export const TOAST_STATES = {
     tickets: ['ready', 'blocked', 'running', 'needs_human', 'human_replied', 'split', 'plan_proposed', 'done'],
+    reviews: ['started', 'clean', 'findings', 'failed'],
 } as const satisfies Record<string, readonly string[]>
 
 /** What a toast can be about. */
@@ -28,7 +30,7 @@ export type ToastSettings = { [S in ToastSubject]: ToastState<S>[] }
 /** Where localStorage keeps the settings, as JSON. */
 export const STORAGE_KEY = 'canopy-toasts'
 /** The settings until the operator changes them: no toasts. */
-export const DEFAULTS: ToastSettings = { tickets: [] }
+export const DEFAULTS: ToastSettings = { tickets: [], reviews: [] }
 
 /** Settings from their stored JSON: each subject's known states, once each, in order; none for anything else. */
 export function parseToastSettings(raw: string | null): ToastSettings {
@@ -41,8 +43,8 @@ export function parseToastSettings(raw: string | null): ToastSettings {
     if (typeof stored !== 'object' || stored === null) {
         return DEFAULTS
     }
-    const { tickets } = stored as Record<string, unknown>
-    return { tickets: known(TOAST_STATES.tickets, tickets) }
+    const { tickets, reviews } = stored as Record<string, unknown>
+    return { tickets: known(TOAST_STATES.tickets, tickets), reviews: known(TOAST_STATES.reviews, reviews) }
 }
 
 /** The settings once `state` of `subject` is turned on, or off when `on` is false. */

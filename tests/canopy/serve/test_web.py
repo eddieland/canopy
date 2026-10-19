@@ -14,13 +14,13 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
-from canopy.core.vocab import RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import ReviewRunStatus, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
-from canopy.serve.schema import LoopUpdated
+from canopy.serve.schema import LoopUpdated, ReviewsUpdated
 from tests.canopy.helpers import KEY, FakeTime, canopy, console, context, in_run, overseer_does, present, running_run
 from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
@@ -402,6 +402,28 @@ def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
     assert isinstance(event, LoopUpdated)
     assert event.paused is not None
     assert event.paused.channel == "cli"
+
+
+def test_the_stream_sends_the_reviews_when_one_starts_or_ends(ctx: Context) -> None:
+    backend = web.backend(ctx, reread.Reload(), tick_now.TickNow())
+    sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+    assert ReviewsUpdated(reviews=[]) in [e.root for e in sent.changes(backend, ctx)]
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    review = db.insert_review_run(
+        ctx.conn,
+        tick_id=tick_id,
+        pr_url="https://github.com/acme/web/pull/1",
+        sha="a" * 40,
+        ticket=KEY,
+        repo=None,
+        purpose="own",
+        logs_dir=ctx.state_dir / "reviews",
+    )
+    started = [e.root for e in sent.changes(backend, ctx) if isinstance(e.root, ReviewsUpdated)]
+    assert [[(r.id, r.state) for r in e.reviews] for e in started] == [[(review, "running")]]
+    db.finish_run(ctx.conn, "review_runs", review, ReviewRunStatus.DONE, None)
+    ended = [e.root for e in sent.changes(backend, ctx) if isinstance(e.root, ReviewsUpdated)]
+    assert [[(r.id, r.state) for r in e.reviews] for e in ended] == [[(review, "done")]]
 
 
 def test_a_web_pause_holds_the_loops_wait_until_the_web_resumes_it(

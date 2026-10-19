@@ -424,9 +424,10 @@ each waiting write holds one of the server's request threads, reads' too, for th
 
 The event stream: SQLite has no change notifications, so each open stream watches the journal for commits. When
 another connection has committed, or the loop has read its config again (§6), it reads the attention list, the runs,
-the tickets, the chores, the spend, the latest tick, and the pause and notice again, in one read transaction, so one
-snapshot, and sends each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, `chores.updated`,
-`spend.updated`, `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. A
+canopy's latest reviews, the tickets, the chores, the spend, the latest tick, and the pause and notice again, in one read
+transaction, so one snapshot, and sends each that changed, whole: `attention.updated`, `runs.updated`,
+`reviews.updated`, `tickets.updated`, `chores.updated`, `spend.updated`, `tick.updated`, `loop.updated`, and
+`ticket.changed` naming each ticket whose summary changed. A
 notice to workers lapses with no commit, so a stream also reads again once the notice it last sent has lapsed. A new
 stream starts with every list, the spend, the latest tick, and the pause and notice, so a pause from the loop's
 terminal or the CLI shows as one from the web does. Nothing in the browser polls, but the worktrees (below). A client
