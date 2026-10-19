@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import config
 from canopy.infra import logs, resources
-from canopy.runtime import agents, invocation
+from canopy.runtime import definitions, invocation
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -154,7 +154,7 @@ def _agent(cmd: object) -> Path | None:
     name = invocation.agent_of(cmd) if isinstance(cmd, str) else None
     if name is None:
         return None
-    path = resources.example_chores_dir() / agents.AGENTS_SUBDIR / f"{name}.md"
+    path = resources.example_chores_dir() / definitions.AGENTS_SUBDIR / f"{name}.md"
     return path if path.is_file() else None
 
 
@@ -172,8 +172,8 @@ def _copy_agent(agent: Path | None, agent_dir: Path) -> Path | None:
         return None
     agent_dir.parent.mkdir(mode=0o700, exist_ok=True)
     agent_dir.mkdir(mode=0o700)
-    (agent_dir / agents.AGENTS_SUBDIR).mkdir(mode=0o700)
-    copied = agent_dir / agents.AGENTS_SUBDIR / agent.name
+    (agent_dir / definitions.AGENTS_SUBDIR).mkdir(mode=0o700)
+    copied = agent_dir / definitions.AGENTS_SUBDIR / agent.name
     logs.write_private(copied, agent.read_text(encoding="utf-8"))
     return copied
 

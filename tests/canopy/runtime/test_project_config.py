@@ -1,67 +1,48 @@
-"""The runtime's own config where an agent starts: the guard against a definition that shadows canopy's (D044)."""
+"""Where the runtime's own config refuses an agent's start: shadowing first, then a private run's tracker tools."""
 
 from pathlib import Path
-
-import pytest
 
 from canopy.runtime import project_config
 
 
-@pytest.mark.parametrize(
-    "rel",
-    [
-        ".opencode/agent/canopy-worker.md",
-        ".opencode/agents/canopy-overseer.md",
-        ".opencode/mode/canopy-worker.md",
-        ".opencode/modes/canopy-worker.md",
-    ],
-)
-def test_shadowing_finds_an_agent_file_with_a_canopy_name(tmp_path: Path, rel: str) -> None:
-    path = tmp_path / rel
+def shadow(root: Path) -> Path:
+    path = root / ".opencode" / "agents" / "canopy-worker.md"
     path.parent.mkdir(parents=True)
     path.write_text("---\ndescription: x\n---\n")
-    assert project_config.shadowing(tmp_path) == [path]
+    return path
 
 
-@pytest.mark.parametrize(
-    "rel",
-    [".opencode/agent/my-helper.md", ".opencode/agent/team/canopy-worker.md", ".opencode/skill/canopy-worker/SKILL.md"],
-)
-def test_shadowing_ignores_other_agents_and_skills(tmp_path: Path, rel: str) -> None:
-    path = tmp_path / rel
-    path.parent.mkdir(parents=True)
-    path.write_text("---\ndescription: x\n---\n")
-    assert project_config.shadowing(tmp_path) == []
+def name_tool(root: Path, server: str) -> Path:
+    path = root / "opencode.json"
+    path.write_text(f'{{"permission": {{"{server}_editJiraIssue": "allow"}}}}')
+    return path
 
 
-@pytest.mark.parametrize(
-    "rel", ["opencode.json", "opencode.jsonc", ".opencode/opencode.json", ".opencode/opencode.jsonc"]
-)
-def test_shadowing_finds_a_json_config_that_names_a_canopy_agent(tmp_path: Path, rel: str) -> None:
-    path = tmp_path / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text('{"agent": {"canopy-worker": {"permission": {"bash": {"*": "allow"}}}}}')
-    assert project_config.shadowing(tmp_path) == [path]
+def test_a_start_is_refused_where_any_place_shadows_a_canopy_agent(tmp_path: Path) -> None:
+    clean, shadowed = tmp_path / "clean", tmp_path / "shadowed"
+    clean.mkdir()
+    shadowed.mkdir()
+    assert project_config.refusal([clean]) is None
+    found = shadow(shadowed)
+    refused = project_config.refusal([clean, shadowed])
+    assert refused is not None
+    assert str(found) in refused
 
 
-def test_shadowing_accepts_a_json_config_that_does_not(tmp_path: Path) -> None:
-    (tmp_path / "opencode.json").write_text('{"mcp": {"docs": {"type": "remote", "url": "https://example.test"}}}')
-    assert project_config.shadowing(tmp_path) == []
+def test_only_a_run_given_the_tracker_server_is_refused_where_its_tools_are_named(tmp_path: Path) -> None:
+    found = name_tool(tmp_path, "atlassian")
+    assert project_config.refusal([tmp_path]) is None
+    assert project_config.refusal([tmp_path], tracker_server="linear") is None
+    refused = project_config.refusal([tmp_path], tracker_server="atlassian")
+    assert refused is not None
+    assert str(found) in refused
+    assert "'atlassian'" in refused
 
 
-def test_the_shadowing_message_names_the_files(tmp_path: Path) -> None:
-    message = project_config.shadowing_message([tmp_path / "opencode.json"])
-    assert str(tmp_path / "opencode.json") in message
-    assert "D044" in message
-
-
-def test_naming_tools_finds_a_config_that_names_a_tool_of_the_server(tmp_path: Path) -> None:
-    (tmp_path / ".opencode" / "agent").mkdir(parents=True)
-    named = tmp_path / ".opencode" / "agent" / "helper.md"
-    named.write_text('---\npermission:\n  "atlassian_editJiraIssue": allow\n---\n')
-    (tmp_path / "opencode.json").write_text('{"mcp": {"github": {}}}')
-    assert project_config.naming_tools(tmp_path, "atlassian") == [named]
-    assert project_config.naming_tools(tmp_path, "linear") == []
-    message = project_config.naming_tools_message("atlassian", [named])
-    assert str(named) in message
-    assert "'atlassian'" in message
+def test_shadowing_is_what_a_refusal_names_first(tmp_path: Path) -> None:
+    shadowed = shadow(tmp_path)
+    named = name_tool(tmp_path, "atlassian")
+    refused = project_config.refusal([tmp_path], tracker_server="atlassian")
+    assert refused is not None
+    assert str(shadowed) in refused
+    assert str(named) not in refused

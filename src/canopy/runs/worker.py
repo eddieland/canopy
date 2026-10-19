@@ -54,7 +54,7 @@ from canopy.core.vocab import PoolKind, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, drafted, policy, tidy
-from canopy.runtime import events, project_config
+from canopy.runtime import project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -467,19 +467,16 @@ def _run_agent(
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     desked = dispatch.in_desk(str(run["kind"]), slots)
     trees = [(s.repo, s.path) for s in slots] or list(reads)
-    # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044). A worker in a desk
-    # starts in no repository, so OpenCode may look above it: the directories above it are checked. A triage's places
-    # are the primary clones it reads, as they stand.
+    # Checked on the branch the worker will run on: the runtime reads the worktree's config too (D044). A worker in a
+    # desk starts in no repository, so the runtime may look above it: the directories above it are checked. A triage's
+    # places are the primary clones it reads, as they stand.
     desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if desked else []
     places = [path for _, path in trees] + desk_parents
-    shadowing = [found for place in places for found in project_config.shadowing(place)]
-    if shadowing:
-        raise _SetupError(project_config.shadowing_message(shadowing))
     tools = ctx.config.tracker.tools()
-    if (run["private"] or run["kind"] in (policy.PLAN, policy.NEEDS_PLAN)) and tools is not None:
-        naming = [found for place in places for found in project_config.naming_tools(place, tools.server)]
-        if naming:
-            raise _SetupError(project_config.naming_tools_message(tools.server, naming))
+    read_only = run["private"] or run["kind"] in (policy.PLAN, policy.NEEDS_PLAN)
+    refused = project_config.refusal(places, tracker_server=tools.server if read_only and tools is not None else None)
+    if refused is not None:
+        raise _SetupError(refused)
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     command = ctx.config.runtime.worker_template(template) if wrap else template
@@ -516,7 +513,7 @@ def _run_agent(
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = events.read(result.stdout)
+    output = stdout.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools

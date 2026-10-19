@@ -51,7 +51,8 @@ from canopy.core import chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
 from canopy.infra import procs
 from canopy.runtime import agents, invocation
-from canopy.runtime.agents import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE, McpTools
+from canopy.runtime.agents import McpTools
+from canopy.runtime.definitions import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo

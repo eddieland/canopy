@@ -29,7 +29,7 @@ from canopy.core import (
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ChoreRunStatus, RunStatus
-from canopy.runtime import transcript
+from canopy.runtime import entries, transcript
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
     AttentionItem,
@@ -451,18 +451,18 @@ def session_transcript(path: Path, session: object) -> Transcript:
     )
 
 
-def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
+def transcript_entry(entry: entries.Entry) -> TranscriptEntry:
     """One entry of a transcript as the API sends it.
 
     Returns:
         The model for the entry's kind: text, a tool call, a step, or an error.
     """
     match entry:
-        case transcript.Text():
+        case entries.Text():
             return TranscriptText(
                 at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut, call=entry.call
             )
-        case transcript.ToolCall():
+        case entries.ToolCall():
             return TranscriptTool(
                 at=entry.at,
                 tool=entry.tool,
@@ -474,7 +474,7 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 cut=entry.cut,
                 call=entry.call,
             )
-        case transcript.Step():
+        case entries.Step():
             t = entry.tokens
             return TranscriptStep(
                 at=entry.at,
@@ -484,7 +484,7 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 split=TranscriptTokens(**vars(t)) if t is not None else None,
                 call=entry.call,
             )
-        case transcript.Error():
+        case entries.Error():
             return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)
 
 
