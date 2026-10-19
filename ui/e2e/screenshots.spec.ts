@@ -34,6 +34,8 @@ for (const theme of THEMES) {
             await settled(page)
             if (route === 'guide/overview') {
                 await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lorem ipsum')
+                // Its code block is taken colored, once the grammar has loaded.
+                await expect(page.locator('pre[data-highlighted]')).toBeVisible()
             }
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
             const screenshot = WHOLE_ROUTES.includes(route) ? screenshotWhole : screenshotMain

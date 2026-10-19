@@ -20,9 +20,11 @@ occaecat **cupidatat non proident**, sunt in culpa qui officia deserunt mollit a
 Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit, as [quo minus](#tempor-incididunt) id
 quod maxime placeat.
 
-```text
-lorem ipsum --dolor sit
-amet consectetur adipiscing
+```toml
+# Lorem ipsum dolor sit amet
+[lorem]
+ipsum = "dolor sit"
+amet = 3
 ```
 
 ### Sed do eiusmod

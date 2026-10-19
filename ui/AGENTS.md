@@ -22,8 +22,8 @@ memory, and do not upgrade in passing.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
   `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page and
   the sample editor, never the ticket's page, whose plan card does not import it.
-- Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
-  import it, and only on demand, each grammar its own chunk.
+- Shiki for a review's diff and the guide's code blocks alone (D121): only `src/lib/highlight.ts` and
+  `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
 - oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
   type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.

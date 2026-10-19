@@ -1,8 +1,12 @@
 import { Link } from '@tanstack/react-router'
 import { Fragment } from 'react'
 
+import { CodeTokens } from '@/components/code-tokens'
+import { useHighlightLines } from '@/hooks/use-highlight'
 import { anchor, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
+import type { CodeToken } from '@/lib/highlight'
+import { fenceLanguage } from '@/lib/languages'
 import type { Block, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 
@@ -96,13 +100,35 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
             )
         }
         case 'code': {
-            return (
-                <pre className="overflow-x-auto rounded-md border bg-surface-raised px-4 py-3 font-mono text-sm/6">
-                    {block.lines.join('\n')}
-                </pre>
-            )
+            return <CodeBlock lines={block.lines} lang={block.lang} />
         }
     }
+}
+
+// A code block, colored by the language its fence names once that grammar has read it, plain text until then.
+function CodeBlock({ lines, lang }: { lines: string[]; lang: string | undefined }) {
+    const tokens = useHighlightLines(lang === undefined ? undefined : fenceLanguage(lang), lines)
+    return (
+        <pre
+            className="overflow-x-auto rounded-md border bg-surface-raised px-4 py-3 font-mono text-sm/6"
+            data-highlighted={tokens !== undefined || undefined}
+        >
+            {tokens === undefined ? lines.join('\n') : <HighlightedLines lines={lines} tokens={tokens} />}
+        </pre>
+    )
+}
+
+// A code block's lines, each as its tokens, or as written when Shiki could not account for it.
+function HighlightedLines({ lines, tokens }: { lines: string[]; tokens: (CodeToken[] | undefined)[] }) {
+    return lines.map((line, i) => {
+        const lineTokens = tokens[i]
+        return (
+            <Fragment key={i}>
+                {i > 0 && '\n'}
+                {lineTokens === undefined ? line : <CodeTokens tokens={lineTokens} />}
+            </Fragment>
+        )
+    })
 }
 
 function LineView({ line }: { line: Line<GuidePiece> }) {

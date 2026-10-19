@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DiffHunk, DiffLine } from '@/api/types'
-import { highlightHunks, kindOf } from '@/lib/highlight'
+import { highlightHunks, highlightLines, kindOf } from '@/lib/highlight'
 import type { CodeToken } from '@/lib/highlight'
 
 // Lines without their numbers, which the highlighter never reads.
@@ -70,6 +70,21 @@ describe('highlightHunks', () => {
         const [lines] = await highlightHunks('python', [{ header: '', lines: [add(long), add('y = 1')] }])
         expect(lines?.[0]).toEqual([{ kind: 'text', text: long }])
         expect(of(lines?.[1], 'constant')).toContain('1')
+    })
+})
+
+describe('highlightLines', () => {
+    it("reads a code block whole, a line apiece, each line's tokens spelling it", async () => {
+        const lines = ['# The loop', '[policy]', 'max_resume_attempts = 2', '', 'name = """', 'still a string', '"""']
+        const tokens = await highlightLines('toml', lines)
+        expect(tokens).toHaveLength(lines.length)
+        expect(of(tokens[0], 'comment').join('')).toBe('# The loop')
+        expect(of(tokens[2], 'constant')).toContain('2')
+        // Read whole, so a string across lines stays a string on the line between.
+        expect(tokens[5]).toEqual([{ kind: 'string', text: 'still a string' }])
+        for (const [i, line] of lines.entries()) {
+            expect(tokens[i]?.map((token) => token.text).join('')).toBe(line)
+        }
     })
 })
 

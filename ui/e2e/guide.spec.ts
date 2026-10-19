@@ -88,6 +88,16 @@ test("the guide's columns come in by the pane's width, and never take the articl
     expect((await article.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(measure - 1)
 })
 
+test("a code block is colored by its fence's language once the grammar loads", async ({ page }) => {
+    await page.goto('guide/config-files')
+    const config = page.getByTestId('guide-page').locator('pre').last()
+    await expect(config).toHaveAttribute('data-highlighted', 'true')
+    // The same characters, a comment muted and a string in its own color.
+    await expect(config).toContainText('labels = ["agent-ready-yourname"]')
+    await expect(config.getByText(/^# Your queue\./u)).toHaveClass('text-muted-foreground')
+    await expect(config.getByText('"agent-ready-yourname"', { exact: true }).first()).toHaveClass('text-syntax-string')
+})
+
 test('a page the guide does not have is the 404', async ({ page }) => {
     await page.goto('guide/no-such-page')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing here')
