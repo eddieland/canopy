@@ -39,6 +39,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StrictBool,
+    StrictFloat,
     StrictInt,
     StrictStr,
     ValidationError,
@@ -105,6 +106,19 @@ class Tighten(Enum):
 def _non_blank(value: str) -> str:
     if not value.strip():
         raise ValueError("must not be empty")
+    return value
+
+
+#: The temperature that sets none, leaving the model's own: some models, such as OpenAI's reasoning ones, refuse a
+#: request that sets one. No provider takes a negative temperature, so it cannot mean one.
+NO_TEMPERATURE = -1
+#: The highest temperature a provider takes; OpenAI's range ends there, Anthropic's at 1.
+MAX_TEMPERATURE = 2
+
+
+def _temperature(value: float) -> float:
+    if value != NO_TEMPERATURE and not 0 <= value <= MAX_TEMPERATURE:
+        raise ValueError(f"must be from 0 to {MAX_TEMPERATURE}, or {NO_TEMPERATURE} to set none")
     return value
 
 
@@ -297,6 +311,8 @@ def _user_path(value: Path) -> Path:
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
+#: An agent's sampling temperature, or `NO_TEMPERATURE`. TOML has no null, so a sentinel says "set none".
+Temperature = Annotated[StrictFloat, AfterValidator(_temperature)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
 AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
 NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
@@ -628,6 +644,9 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking "
         "--title={title} {prompt}"
     )
+    #: The reviewer's temperature, or -1 to set none and leave the model's own: set -1 when `review_cmd` names a model
+    #: that refuses one, such as OpenAI's reasoning models.
+    review_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
     # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `split_cmd`,
     # `plan_cmd`), such as a sandbox wrapper or a model option, so one key covers all four (DESIGN §12).
     worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""

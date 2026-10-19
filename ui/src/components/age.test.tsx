@@ -1,6 +1,8 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { tipOf } from '@/test-utils'
+
 import { Age } from './age'
 
 beforeEach(() => {
@@ -30,8 +32,8 @@ describe('Age', () => {
         expect(screen.getByRole('time').getAttribute('datetime')).toBe('2026-10-08T11:55:00Z')
     })
 
-    it('gives the local time on hover', () => {
+    it("gives the local time in its tip, on hover and on the keyboard's focus", () => {
         render(<Age at="2026-10-08T11:57:00Z" />)
-        expect(screen.getByRole('time').title).toBe(new Date('2026-10-08T11:57:00Z').toLocaleString())
+        expect(tipOf(screen.getByRole('time'))).toBe(new Date('2026-10-08T11:57:00Z').toLocaleString())
     })
 })

@@ -6,6 +6,7 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
+import { Clipped } from '@/components/tip'
 import { TicketLink } from '@/components/ticket-link'
 import { actionTone } from '@/lib/decisions'
 import { rowLineFrom } from '@/lib/rows'
@@ -66,11 +67,7 @@ function Subject({ decision }: { decision: Decision }) {
     if (decision.pr !== null) {
         return <PullRequestLink url={decision.pr} className={cell} />
     }
-    return (
-        <span className={cn(cell, 'font-mono text-xs text-muted-foreground')} title={decision.subject}>
-            {decision.subject}
-        </span>
-    )
+    return <Clipped text={decision.subject} className={cn(cell, 'font-mono text-xs text-muted-foreground')} />
 }
 
 /** Whether a decision is about a PR no ticket owns, so its subject is the PR. */

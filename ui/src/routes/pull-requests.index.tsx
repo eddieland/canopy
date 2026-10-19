@@ -13,8 +13,11 @@ import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Clipped } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText, verdictTone } from '@/lib/reviews'
+import { fitColumn } from '@/lib/rows'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
@@ -48,7 +51,16 @@ function PullRequestsPage() {
                         no PRs yet: none of the loop&apos;s tickets has one, and nothing was reviewed
                     </Empty>
                 ) : (
-                    <ul className="divide-y" data-testid="pull-requests">
+                    <ul
+                        className="divide-y"
+                        // The PR column as wide as the longest name, and the name's icon beside it.
+                        style={fitColumn(
+                            'pr',
+                            data.map((pr) => pullRequestLabel(pr.url)),
+                            1.25,
+                        )}
+                        data-testid="pull-requests"
+                    >
                         {ordered('pull-requests', order, data).map((pr) => (
                             <Row key={pr.url} pr={pr} />
                         ))}
@@ -110,9 +122,7 @@ function State({ pr }: { pr: PullRequest }) {
                 <>
                     {pr.running_run === null && <RunDot state={review.state} />}
                     <ReviewLink id={review.id} />
-                    <span className="truncate" title={verdictText(review)}>
-                        {verdictText(review)}
-                    </span>
+                    <Clipped text={verdictText(review)} />
                 </>
             ) : (
                 'not reviewed'

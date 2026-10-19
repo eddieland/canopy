@@ -94,7 +94,8 @@ def test_the_tickets_list_is_what_weighing_every_ticket_finds(journals: Journals
         conn.execute("INSERT INTO ticks (id, started_at, status) VALUES (1, 'x', 'ok')")
         for key in keys:
             conn.execute(
-                "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES (?, '/r', '0', ?)",
+                "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at) "
+                "VALUES (?, '/r', '0', '0', ?)",
                 (key, moment(rnd)),
             )
             for _ in range(rnd.randrange(4)):
@@ -139,7 +140,8 @@ def test_the_pull_requests_are_what_weighing_every_one_finds(journals: Journals,
         for i in range(10):
             key = f"K-{i}"
             conn.execute(
-                "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title) VALUES (?, '/r', '0', ?, ?)",
+                "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at, title) "
+                "VALUES (?, '/r', '0', '0', ?, ?)",
                 (key, moment(rnd), f"Ticket {i}"),
             )
             # A unit with no PR yet, and a PR no other unit has: a PR is one unit's.
@@ -256,9 +258,9 @@ def add_history(conn: sqlite3.Connection, first: int, count: int) -> None:
             [(-1 - i, old(i), old(i, 1)) for i in rows],
         )
         conn.executemany(
-            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase, done) "
-            "VALUES (?, '/r', ?, ?, 'merged', 1)",
-            [(f"OLD-{i}", old(i), old(i, 2)) for i in rows],
+            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at, phase, done) "
+            "VALUES (?, '/r', ?, ?, ?, 'merged', 1)",
+            [(f"OLD-{i}", old(i), old(i, 2), old(i, 2)) for i in rows],
         )
         conn.executemany(
             "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, 'merged')",
@@ -323,7 +325,7 @@ def every_ticket(conn: sqlite3.Connection, limit: int) -> list[tuple[str, str]]:
     """The tickets list as it was read before migration 0022: every ticket's activity, weighed."""
     rows = conn.execute(
         "SELECT t.key, max("
-        "  t.last_seen_at,"
+        "  t.changed_at,"
         "  coalesce((SELECT max(m.at) FROM messages m WHERE m.subject_kind = 'ticket' AND m.subject_id = t.key), ''),"
         "  coalesce((SELECT max(coalesce(r.ended_at, r.started_at)) FROM runs r WHERE r.ticket_key = t.key), ''),"
         "  coalesce((SELECT coalesce(s.stopped_at, s.started_at) FROM starts s"
@@ -340,7 +342,7 @@ def every_pull_request(conn: sqlite3.Connection, limit: int, *, url: str | None 
     rows = conn.execute(
         "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title, p.title "
         "FROM ("
-        "  SELECT u.pr_url AS url, t.last_seen_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
+        "  SELECT u.pr_url AS url, t.changed_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
         "  WHERE u.pr_url IS NOT NULL"
         "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
         ") k "

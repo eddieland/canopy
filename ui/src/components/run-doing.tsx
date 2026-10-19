@@ -1,5 +1,6 @@
 import type { RunActivity } from '@/api/types'
 import { Age } from '@/components/age'
+import { Clipped } from '@/components/tip'
 import { cn } from '@/lib/utils'
 
 /**
@@ -15,11 +16,7 @@ export function RunDoing({ activity, className }: { activity: RunActivity; class
             <span className="shrink-0 text-status-running" title="its latest tool call">
                 {activity.tool}
             </span>
-            {activity.did !== '' && (
-                <span className="min-w-0 truncate" title={activity.did}>
-                    {activity.did}
-                </span>
-            )}
+            {activity.did !== '' && <Clipped text={activity.did} className="min-w-0" />}
             <Age at={activity.at} variant="ago" className="shrink-0" />
         </span>
     )

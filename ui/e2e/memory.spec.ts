@@ -32,7 +32,7 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(notes.getByTestId('memory-notes-count')).toHaveText('2 tickets · 3 notes')
     const ticket = notes.getByTestId('memory-ticket-ABC-100')
     // Named by its title as every list names a ticket; no run has relied on its notes, so no use is shown.
-    await expect(ticket.getByTitle('Fix the flaky checkout test')).toBeVisible()
+    await expect(ticket.getByText('Fix the flaky checkout test')).toBeVisible()
     await expect(ticket).not.toContainText('used by')
     await expect(ticket.getByTestId('memory-3')).toHaveCount(0)
     await ticket.getByRole('button', { name: 'Show 2 notes' }).click()

@@ -38,6 +38,15 @@ def test_no_agent_has_web_tools(name: str) -> None:
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
+@pytest.mark.parametrize("name", [name for name in definitions.agent_names() if name != "canopy-overseer"])
+def test_no_agent_but_the_overseer_sets_a_temperature(name: str) -> None:
+    # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
+    # that sets one. The overseer keeps its own: its decisions are the corpus prompt changes are evaluated on. The
+    # reviewer's is `runtime.review_temperature`, rendered into the snapshot rather than set in its bundled file.
+    frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
+    assert "\ntemperature:" not in frontmatter
+
+
 def test_the_operator_skill_is_not_in_the_snapshot(tmp_path: Path) -> None:
     # It is for the operator's own sessions; an operator's copy of it in $HOME would clash with a second one here.
     snapshot = definitions.ensure(tmp_path)
@@ -202,6 +211,37 @@ def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env
         assert not _allowed(rules, refused), refused
 
 
+@pytest.mark.parametrize(("setting", "rendered"), [(None, "0.1"), ("0.7", "0.7"), ("0", "0.0")])
+def test_the_reviewer_gets_its_configured_temperature(
+    canopy_env: CanopyEnv, setting: str | None, rendered: str
+) -> None:
+    if setting is not None:
+        _set_runtime(canopy_env, f"review_temperature = {setting}")
+    text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))["agents/canopy-reviewer.md"].decode()
+    assert f"\ntemperature: {rendered}\n" in text.split("---")[1]
+
+
+def test_a_reviewer_temperature_of_minus_one_sets_none(canopy_env: CanopyEnv) -> None:
+    """-1 leaves the model's own, for a model that refuses a request that sets one; a new snapshot says so."""
+    default = config.load(canopy_env.root, canopy_env.user_file)
+    _set_runtime(canopy_env, "review_temperature = -1")
+    unset = config.load(canopy_env.root, canopy_env.user_file)
+    frontmatter = definitions.sources(unset)["agents/canopy-reviewer.md"].decode().split("---")[1]
+    assert "\ntemperature:" not in frontmatter
+    assert definitions.digest(unset) != definitions.digest(default)
+
+
+def test_a_reviewer_definition_without_its_temperature_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-reviewer.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="no line"):
+        definitions.render_temperature(bundled.replace("# canopy: temperature\n", ""), "canopy-reviewer", 0.1)
+
+
+def _set_runtime(canopy_env: CanopyEnv, line: str) -> None:
+    # The user file has a `[runtime]` table already, and TOML forbids repeating a header.
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\n{line}\n", 1))
+
+
 def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
     bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
     with pytest.raises(definitions.DefinitionsError, match="no line"):
@@ -323,12 +363,6 @@ def test_the_reviewer_posts_nothing(tool: str) -> None:
 )
 def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
-
-
-def test_the_reviewer_sets_no_temperature() -> None:
-    # The reviewer runs on a model of the operator's choosing, and some refuse a request that sets one (DESIGN §21).
-    frontmatter = (resources.agents_dir() / "canopy-reviewer.md").read_text().split("---")[1]
-    assert "\ntemperature:" not in frontmatter
 
 
 @pytest.mark.parametrize(

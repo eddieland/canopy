@@ -526,7 +526,11 @@ side.
 - **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
   `src/lib/rows.ts`). Each column is a named grid line and a width; every one is fixed but one free column, which
   takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The free column
-  never gets under 8rem: it holds the row's name, a ticket's title, which never vanishes.
+  never gets under 8rem: it holds the row's name, a ticket's title, which never vanishes. A kind whose name needs more
+  sets a floor of its own (`free`): a worktree's branch, 12rem, room for `agent/ABC-104-retry-queue` whole. A column
+  may be fitted instead of fixed (`fitted`): its list sets its width to the longest of its cells, all in monospace, so
+  its rows still share it and line up (`fitColumn`), and the room it does not take goes to the free column; its most
+  is what the tiers count. The PR list's `pr` column is one, at most 11rem.
   **A narrow list lets columns go**, in the order its kind gives them (a third entry in `ROW_COLUMNS`, 1 first), so it
   fits its panel wherever the panel sits: a narrow window, beside a ticket's thread. A column shows from the narrowest
   of Tailwind's container sizes (`ROW_TIERS`, `@sm` to `@4xl`) with room for it, the columns that go after it, and
@@ -649,7 +653,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   describes. A list without a state (decisions, findings, search hits, a transcript) leads with its id or its subject.
   On its subject's page a list keeps the order and leaves out what the page is (`own-run`, `own-review`).
 - **Readouts** say an age, a moment, or a cost one way on every page (`src/components/age.tsx`, `timestamp.tsx`,
-  `cost.tsx`). An age is `Age`, the CLI's largest whole unit with the local time on hover, in the variant for what it
+  `cost.tsx`). An age is `Age`, the CLI's largest whole unit with the local time in its tip, in the variant for what it
   measures: `ago` for a moment (`3m ago`: a message, a decision, a search hit, a ticket's or PR's last activity),
   `span` for something that runs (`for 3m`, then `ended 3m ago`: a run, a review, a tick, a chore run, a held
   worktree), and `bare` for how long an item has stood open, where its place says so (`3m`: an attention item, an open
@@ -661,6 +665,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   cost is `Cost`: `$0.42` as a readout, its dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent
   as the CLI rounds), or a dash when nothing reported one, `none reported` on hover; never formatted in place, a hat's
   price included.
+- **A fact on hover is a tip** (`Tip` in `src/components/tip.tsx`, on the `Tooltip` wrapper): a word's CLI spelling,
+  an age's local time, a commit's whole hash, every one of a `+N more`. A `title` reaches neither the keyboard nor a
+  touch screen, so a fact a list keeps out of its text is a `Tip`: it opens on hover, after half a second so a pointer
+  crossing a list opens nothing, on the keyboard's focus, and on a tap, and closes on Escape, on leaving, or on
+  another tap; what it wraps becomes a stop for the keyboard. Text cut to fit is **`Clipped`**, the whole in its tip
+  while it is cut and only then, so a title that fits is no stop. A tip is `text-xs` on `surface` with a hairline, no
+  shadow and no motion, as a menu is, and the fact is in monospace where it is the CLI's spelling. Inside a link, a
+  button, or an element with a `title` of its own, a tip is the plain `title` it was: the keyboard stops on the control
+  already, and a stop inside it would be a control in a control. What the operator acts on is in the text, never only
+  in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
+  hint or what a column counts, stays a `title`.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
@@ -693,19 +708,21 @@ sliver beside four others; and its axis names short call numbers without measuri
   filter goes by each ticket's latest run, and so do the rail's working runs: a blocked run a later one followed waits
   on nothing. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
-  then `+N more worktrees` with every one on hover, never `+1 more`, which would take the room the fourth's path
+  then `+N more worktrees` with every one in its tip, never `+1 more`, which would take the room the fourth's path
   does: a ticket across many repositories holds a slot in each, and its run's page lists them all.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
-- **The tickets list**: where the ticket stands (`TicketState`), the key, the phase (cut to fit, the whole on hover),
-  the `public` or `private, started` chip, the title in the free column, and the age. Where it stands is the running
-  run or `waiting on you`, each with its run's dot, else `done` or `open` with the dot of a run that ended so, so every
-  row has a dot and the column is never blank. Narrow, the chip goes first, then the phase, then the age; where it
-  stands, which says when the ticket waits on the operator, goes last. A run's list lets its cost go first, then its
-  chips, then its age, then its id; a review's its cost, its impact, its ticket, its age, then its verdict; a tick's
-  its tokens, its peak, its cost, its decisions, then its age; a PR's its phase, its age, then where it stands. Money
-  and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
+- **The tickets list**: where the ticket stands (`TicketState`), the key, the phase (cut to fit, the CLI's spelling in
+  its tip), the `public` or `private, started` chip, the title in the free column, and the age. Where it stands is the
+  running run or `waiting on you`, each with its run's dot, else `done` or `open` with the dot of a run that ended so,
+  so every row has a dot and the column is never blank. Narrow, the chip goes first, then the phase, then the age;
+  where it stands, which says when the ticket waits on the operator, goes last. A run's list lets its cost go first,
+  then its chips, then its age, then its id; a review's its cost, its impact, its ticket, its age, then its verdict; a
+  tick's its tokens, its peak, its cost, its decisions, then its age; a PR's its phase, before its title is cut to a
+  word, its age, then where it stands; a worktree's what holds it, before its branch is cut, since the branch names the
+  ticket too, then its age. At half a monitor (an 820px window, a list about 44rem wide) a run keeps its age and a
+  slot its branch. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
 - **The tickets filters** narrow the list two ways at once (`src/lib/ticket-filter.ts`). Where a ticket stands is the
   runs page's chips, in the Tickets panel's header (`?show=`): `open` (not done), `working` (a run on it now) and
   `waiting on you` (a question waiting), each with its run's dot, `blocked` (the overseer's phase for a ticket an
@@ -718,15 +735,15 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
-  the CLI's spelling stays on hover, so it can still be found in `attention.md` or typed into the CLI
+  the CLI's spelling stays in its tip, so it can still be found in `attention.md` or typed into the CLI
   (`src/lib/words.ts`). Outside a chip, a phase in a field or a list and a status in a header or a row read the same
   way (`Word`, `phaseLabel`); no journal word shows with its underscores. Journal text that is not a fixed word (a
   chore finding's id, `review.query`) and a count (`1 finding`) are muted monospace, never a chip. A chip with a
-  long word in a narrow column cuts it to fit (`min-w-0 shrink`), as the search page's labels do; none is stretched
-  to its column. Its color is its `tone`, from the one map of them (`Chip` in `src/components/status.tsx`): its color's
-  hairline at 40% over the same color at 10%, so it holds its edge on a selected row's tint; `plain` in
-  `muted-foreground`, else the status color of the state it marks, `failed`, `blocked`, or `running`. No chip is
-  colored by classes of its own.
+  long word in a narrow column cuts it to fit (`min-w-0 shrink`), the whole word in its tip, as the search page's
+  labels do; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip` in
+  `src/components/status.tsx`): its color's hairline at 40% over the same color at 10%, so it holds its edge on a
+  selected row's tint; `plain` in `muted-foreground`, else the status color of the state it marks, `failed`,
+  `blocked`, or `running`. No chip is colored by classes of its own.
 - **A status on a detail page** (a run's, a chore run's, a tick's, a review's) is its description's first word
   alone; the identity panel's header names the panel and nothing else, so the state is said once. Of the two homes
   it had, the description was kept, as the smaller change: it is the page's line of state on every detail page, and a
@@ -738,12 +755,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   question's chip say it. The URL keeps `?state=blocked`, and a run's own status in its page's header stays the CLI's
   word.
 - **A ticket's title** (`TicketTitle`) follows its key, in medium weight, so it reads as the row's name and apart
-  from what a run said under it; one line, cut to fit, the whole on hover. A ticket with none yet reads `untitled`,
-  muted, so its cell is never blank, the rail's working runs included, never the run's kind in its place. A ticket's
-  page heading sets the key in muted mono before it. Nowhere too narrow to show more than a few letters of it.
+  from what a run said under it; one line, cut to fit, the whole in its tip while it is cut. A ticket with none yet
+  reads `untitled`, muted, so its cell is never blank, the rail's working runs included, never the run's kind in its
+  place. A ticket's page heading sets the key in muted mono before it. Nowhere too narrow to show more than a few
+  letters of it.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
   attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
-  The line under the value is cut to fit, and whole on hover, since it grows with the workspace (`4 pools unread`).
+  The line under the value is cut to fit, and whole in its tip, since it grows with the workspace (`4 pools unread`).
   A line is state, never what every visit would say: Held's names what holds its slots (`1 in use · 1 canopy-sync`).
   Nor what another counter or the nav already says (One home per fact): on the attention page only Waiting on you has
   a line, the oldest open question's age (`oldest 9d`), since it has no other home. Running's would count the runs
@@ -776,11 +794,11 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
-- **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
-  number). An idle slot shows its state and number alone, muted; only a note or an unreadable branch takes a second
+- **A slot is one line** in our state words, never treehouse's (its word is in its tip, as the path is in its
+  number's). An idle slot shows its state and number alone, muted; only a note or an unreadable branch takes a second
   line, from the holder's column. A dirty slot's note, in `status-blocked`, says what it blocks (the pool never reuses
   it and counts it busy) and what clears it, since it is the slot most likely to sit there unnoticed. The branch and
-  the processes treehouse found share the free column, each cut to fit with the whole on hover: an agent can start a
+  the processes treehouse found share the free column, each cut to fit with the whole in its tip: an agent can start a
   dozen, and the line still ends at the age. A pool treehouse could not read says why as a `Notice`.
 - **Idle slots fold**: three or more in a row (`IDLE_RUN`, `slotGroups` in `src/lib/worktree-state.ts`) are one line,
   their state and then `Show 37 slots, #4 to #40`, a `Disclosure` (as a ticket's earlier runs are) that opens each
@@ -1165,17 +1183,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   path and branch, a run's or chore run's session id, a chore run's log) it shows only while its row (`group/copy`) is
   hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard needs a
   secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
-- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
-  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
-  with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
-  in muted monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard,
-  whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
-  reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
-  it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
-  too, and a refusal is still a `Notice`. A reply that moves the attention page on (The attention list is an inbox,
-  above) takes its form with it, so its toast says what it did, and its item's row and conversation keep it.
-  `main.tsx` renders the one `Toaster`, around the router, so a toast
-  outlives the page it came from.
+- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
+  shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
+  window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and
+  a line under it in muted monospace `text-xs`, on one line with an ellipsis where it is cut: a copy's text is on the
+  clipboard, whole, and a send's URL under its card. It closes on its own after 3 seconds, held while the pointer or the
+  focus is on it, or when swiped down; F8 reaches it from the keyboard and Escape closes it. At most three show, the
+  newest last. A screen reader announces it. It never carries an action, and it is never the only place an outcome
+  shows: the control that acted says so too, and a refusal is still a `Notice`. A reply that moves the attention page on
+  (The attention list is an inbox, above) takes its form with it, so its toast says what it did, and its item's row and
+  conversation keep it. `main.tsx` renders the one `Toaster`, around the router, so a toast outlives the page it came
+  from.
 - **The note of what changed while away** is the one toast no action shows (`useAwayNote`, `src/lib/away.ts`).
   Shown again after it was hidden 10 minutes or more, the tab says in one line what changed meanwhile: what newly
   blocks work first (`blocking`, as the tab's count), then the items cleared, the PRs opened, and the runs ended
@@ -1257,8 +1275,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
   monospace (`resume in web`, `reviews of web#88`, just `reviews` on the PR's own page), its runs against it in
   `status-failed` (`1 of 1 runs`, and `, N granted` past the policy's), and an outline `Allow one more` button at the
-  row's end, the default size of every button in a panel's foot, as a ticket's actions are, the CLI's command on
-  hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
+  row's end, the default size of every button in a panel's foot, as a ticket's actions are. Under the row, in muted
+  monospace `text-xs`, is the CLI's command for the same grant with a `Copyable`: in the text, not a tip, since it is
+  something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
   does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying
@@ -1358,7 +1377,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
   ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
   the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
-  (`Notice`), in `canopy draft`'s words. A ticket's own drafts (`TicketDrafts`) are a `Drafts for the ticket` panel
+  (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send
+  did as well, since a send speaks for the operator outside canopy and the line under the card leaves with its attention
+  item at the next tick: the draft's fate, or how many of several reached the PR, with the URL when they share one, and
+  a cross when any is not on the PR. A ticket's own drafts (`TicketDrafts`) are a `Drafts for the ticket` panel
   under the ticket page's grid, shown only when it has any, each card naming the issue it goes to in monospace, as
   text and never a link, since a worker named it.
 - **Search** sits atop the nav on every page (`SearchBox`, a `SearchField`): a magnifier, the field, and `/` in a

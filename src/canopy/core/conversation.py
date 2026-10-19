@@ -248,9 +248,9 @@ def start(
             raise Refused("bad_plan", f"plan run {running['id']} for {ref} is running; wait for it to end")
         db.touch_ticket(conn, ref.id, repo)
         if plan_lock is not None:
-            conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.PLAN, ref.id))
+            db.change_ticket(conn, ref.id, "plan_setting", PlanSetting.PLAN)
         # A ticket the overseer marked done is worked again: the operator asked for it.
-        conn.execute("UPDATE tickets SET done = 0 WHERE key = ?", (ref.id,))
+        db.change_ticket(conn, ref.id, "done", 0)
         db.set_start(conn, TICKET, ref.id, status=StartStatus.STARTED, channel=channel)
     return Started(already=is_started(record), running=running)
 
