@@ -76,5 +76,7 @@ counted within capacity; the waiver, which only a validated `done` `trivial` res
 `canopy plan KEY` undoes, and `canopy forget` ends; the state block's `triage_due` and `waived`; `canopy show` naming
 it; and the TRUST_MODEL lines. Until the open three are settled, a triage runs in no sandbox and a waiver sends no event
 of its own. Then, 2026-10-19, the overseer prompt's triage row: `needs-plan` where `plan.triage_due` is true, before
-any `plan`, and after a failed triage the plan at once, with no `wait`. Left: the web UI's plan card; the reviewer's
-`not_trivial`; the spend page's kind; and the feedback half (M54).
+any `plan`, and after a failed triage the plan at once, with no `wait`. Then, 2026-10-19, the reviewer's second
+opinion: the harness raises `not_trivial` every tick about a unit whose PR any `done` review judged `high` while its
+ticket's waiver is in force, naming the review and the triage's reason, with no change to the reviewer's prompt or
+result. Left: the web UI's plan card; the spend page's kind; and the feedback half (M54).

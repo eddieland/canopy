@@ -504,7 +504,8 @@ change can break everything, so no line count is checked (the operator, 2026-10-
 canopy's reviewer already judges each of the loop's PRs `low`, `normal`, or `high` impact (§21), and is not told of
 the waiver. When any `done` review of a waived ticket's PR judges it `high`, the harness raises `not_trivial` every
 tick, about that unit, naming the triage run's reason and the review run, until the ticket is marked done or
-forgotten. It stops nothing: the PR's human review is still the gate. It tells the operator, while they review the
+forgotten, or the operator's `--skip` takes the waiver's place. Any `done` review of the PR counts, whatever it was run
+for. It stops nothing: the PR's human review is still the gate. It tells the operator, while they review the
 PR, that triage was likely wrong, and tells the `decisions` corpus how often. A `normal` or `low` review raises
 nothing. With reviews off, the PR's review is the only second opinion.
 
