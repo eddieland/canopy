@@ -992,7 +992,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   operator sees and does in the UI's own words (`waiting on you`, not `blocked`), and leaves how the code does it to
   the code and why to the design. It talks to the operator as `you`, in plain, direct sentences, as good developer
   docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
-  stands in for one, and they stay rare enough to land. A new page is a file there and a line in its group in
+  stands in for one, and they stay rare enough to land. An empty fence that names one of the repository's example
+  files after its language (```` ```toml examples/config.toml ````, `EMBEDS`) shows that file whole, as it is when the
+  guide is built, so a page never keeps a copy of one. A new page is a file there and a line in its group in
   `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
   about that one.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the

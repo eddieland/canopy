@@ -3,8 +3,11 @@
 // `GuideText` renders as React elements, never HTML. It is canopy's own text, not the journal's, so unlike agent text
 // it reads labelled links too: to another page of the guide, to a section of the app, or to the web.
 
+import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
+import exampleConfig from '../../../examples/config.toml?raw'
 import attention from '@/guide/attention.md?raw'
 import chores from '@/guide/chores.md?raw'
+import configFiles from '@/guide/config-files.md?raw'
 import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
 import memory from '@/guide/memory.md?raw'
@@ -97,7 +100,10 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
     },
     {
         title: 'Reference',
-        pages: [['glossary', glossary]],
+        pages: [
+            ['config-files', configFiles],
+            ['glossary', glossary],
+        ],
     },
 ]
 
@@ -130,6 +136,16 @@ export const PAGE_GUIDES = {
     '/search': 'overview#search',
     '/settings': 'settings',
 } as const satisfies Record<Exclude<keyof FileRoutesById, '__root__' | '/' | '/guide/' | '/guide/$page'>, string>
+
+/**
+ * The files a page of the guide shows whole, by the path its fence names after the language: the repository's own
+ * examples, read when the guide is built, so the guide shows the files canopy ships rather than a copy that drifts. A
+ * fence opens empty in the page, as ```` ```toml examples/config.toml ````, and the file is its body.
+ */
+export const EMBEDS: Readonly<Record<string, string>> = {
+    'examples/canopy-workspace.toml': exampleWorkspace,
+    'examples/config.toml': exampleConfig,
+}
 
 const SLUGS: ReadonlySet<string> = new Set(SOURCES.flatMap(({ pages }) => pages.map(([slug]) => slug)))
 const PAGE_REF = /^([a-z0-9-]*)(?:#([a-z0-9-]+))?$/u
@@ -213,7 +229,7 @@ export function plainText(line: Line<GuidePiece>): string {
 }
 
 function readPage(slug: string, group: string, text: string): GuidePage {
-    const blocks = parseWith(text, (line) => guideLine(line, slug))
+    const blocks = parseWith(embed(text), (line) => guideLine(line, slug))
     const [first, second, ...rest] = blocks
     const title = first?.kind === 'heading' && first.level === 1 ? plainText(first.line) : slug
     const lead = second?.kind === 'paragraph' ? second.lines : []
@@ -224,6 +240,14 @@ function readPage(slug: string, group: string, text: string): GuidePage {
             : [],
     )
     return { slug, group, title, lead, body, headings }
+}
+
+/** `text` with each empty fence that names a file of `EMBEDS` filled with that file; any other is left as written. */
+function embed(text: string): string {
+    return text.replaceAll(/^(```\w+ (\S+)\n)```$/gmu, (fence: string, open: string, path: string) => {
+        const file = EMBEDS[path]
+        return file === undefined ? fence : `${open}${file.endsWith('\n') ? file : `${file}\n`}\`\`\``
+    })
 }
 
 /** A line of a guide page on `slug`: `code`, **strong**, and `[text](href)`; a link going nowhere stays as written. */
