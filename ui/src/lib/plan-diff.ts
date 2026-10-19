@@ -2,12 +2,15 @@
 // new plan added and those it removed, drawn over the plan in its editor while the operator asks to see them. A new
 // plan answers comments by rewriting passages, and the operator reads what changed rather than the whole plan again.
 // The words are compared as the editor reads them (`docText`), so a change of formatting alone is no change, and both
-// plans are read by the same parser. Added words are drawn as `ins`, removed ones as a `del` where they were; both are
+// plans are read by the same parser. Added words are drawn as `ins`, removed ones as a `del` where they were; a block
+// the new plan added whole (a paragraph, a heading, a table's cell) is marked as one, `plan-block-add` or
+// `plan-cell-add`, rather than as a run of `ins`, which its marks and code spans would break into many. All are
 // decorations, so the plan's Markdown holds nothing of them, and the removed words are the old plan's, set as text.
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { diffArrays } from 'diff'
 import type { ArrayChange } from 'diff'
@@ -33,6 +36,9 @@ export interface Changes {
     /** Where each change starts in the plan, in its order, a removal and the words that replaced it one change. */
     starts: number[]
 }
+
+// A letter or a digit: what makes text a word rather than spaces or punctuation.
+const WORD = /[\p{L}\p{N}]/u
 
 /** How many words may differ before the plans are shown as all changed: past it, the comparison costs too much. */
 export const MAX_EDITS = 2000
@@ -122,8 +128,8 @@ function draw(state: EditorState, base: string): Pick<Changes, 'decorations' | '
         if (change.kind === 'add') {
             const range = rangeOf(positions, change.at, change.at + change.text.trimEnd().length)
             if (range !== undefined) {
-                decorations.push(Decoration.inline(range.from, range.to, { nodeName: 'ins', class: 'plan-ins' }))
                 starts.add(range.from)
+                decorations.push(...addedMarks(state.doc, range.from, range.to))
             }
         } else {
             const removed = change.text.replaceAll(/\s+/gu, ' ').trim()
@@ -136,6 +142,42 @@ function draw(state: EditorState, base: string): Pick<Changes, 'decorations' | '
         decorations: DecorationSet.create(state.doc, decorations),
         starts: [...starts].toSorted((a, b) => a - b),
     }
+}
+
+// The decorations for words added from `from` to `to`, which may span blocks: each block they cover whole is marked
+// as one, and the words in the rest as `ins`.
+function addedMarks(doc: ProseMirrorNode, from: number, to: number): Decoration[] {
+    const out: Decoration[] = []
+    doc.nodesBetween(from, to, (node, pos) => {
+        if (!node.isTextblock) {
+            return true
+        }
+        const start = pos + 1
+        const end = pos + node.nodeSize - 1
+        const lo = Math.max(from, start)
+        const hi = Math.min(to, end)
+        if (lo < hi) {
+            // Whole when what it leaves out of the block is no word: spaces, or a stop the old plan's words share.
+            const whole = !WORD.test(doc.textBetween(start, lo)) && !WORD.test(doc.textBetween(hi, end))
+            out.push(
+                whole ? wholeBlock(doc, pos, node) : Decoration.inline(lo, hi, { nodeName: 'ins', class: 'plan-ins' }),
+            )
+        }
+        return false
+    })
+    return out
+}
+
+// A block added whole, marked as one; the only block in a table's cell marks the cell, so a new table's cells tint as
+// the table's grid rather than as strips inside it.
+function wholeBlock(doc: ProseMirrorNode, pos: number, node: ProseMirrorNode): Decoration {
+    const cell = doc.resolve(pos)
+    const role: unknown = cell.parent.type.spec.tableRole
+    if ((role === 'cell' || role === 'header_cell') && cell.parent.childCount === 1) {
+        const from = cell.before()
+        return Decoration.node(from, from + cell.parent.nodeSize, { class: 'plan-cell-add' })
+    }
+    return Decoration.node(pos, pos + node.nodeSize, { class: 'plan-block-add' })
 }
 
 // Where the text's offset `offset` falls in the document: just after the character before it, so words removed at the
