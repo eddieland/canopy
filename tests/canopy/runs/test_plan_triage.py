@@ -337,6 +337,40 @@ def test_the_state_block_says_when_a_triage_is_due_and_which_waived_the_plan(
     assert (plan["needed"], plan["triage_due"], plan["waived"]) == (False, False, ran.id)
 
 
+@pytest.mark.parametrize(
+    ("result", "status", "then"),
+    [
+        (verdict("trivial"), RunStatus.DONE, RunKind.IMPLEMENT),
+        (verdict("plan"), RunStatus.DONE, RunKind.PLAN),
+        ({"status": "failed", "reason": "The tracker did not answer."}, RunStatus.FAILED, RunKind.PLAN),
+    ],
+    ids=["trivial", "plan", "failed"],
+)
+def test_a_tick_triages_where_one_is_due_and_the_next_tick_dispatches_what_the_verdict_leaves(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    result: Mapping[str, object],
+    status: RunStatus,
+    then: RunKind,
+) -> None:
+    # The overseer prompt's triage row: `needs-plan` where `plan.triage_due` is true, then `implement` under a waiver,
+    # or `plan` at once, with no `wait` for a triage that failed, since none raised an attention item.
+    triage_on(canopy_env)
+    scenario.seen()
+    ticked = scenario.tick(dispatches(kind=RunKind.NEEDS_PLAN), worker=triage_reports(result))
+    [ran] = ticked.runs
+    assert (ran.kind, ran.status) == (RunKind.NEEDS_PLAN, status)
+    assert scenario.attention() == []
+
+    ticked = scenario.tick(dispatches(kind=then), dry_run=True)
+    ticket = scenario.ticket_state()
+    assert (ticket["last_run"]["kind"], ticket["last_run"]["status"]) == (RunKind.NEEDS_PLAN, status)
+    assert ticket["plan"]["triage_due"] is False
+    assert ticket["plan"]["needed"] is (then == RunKind.PLAN)
+    assert [d.action for d in ticked.decisions if d.action.startswith(("dispatch", "refused"))] == [f"dispatch:{then}"]
+
+
 def test_a_dry_run_triages_nothing(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
     triage_on(canopy_env)
     with in_tick(conn, dry_run=True) as tick_id:

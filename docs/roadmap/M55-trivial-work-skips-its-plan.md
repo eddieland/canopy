@@ -75,5 +75,6 @@ prompt for public and private tickets, and its result validated; dispatch's `tri
 counted within capacity; the waiver, which only a validated `done` `trivial` result writes, `unplanned` reads,
 `canopy plan KEY` undoes, and `canopy forget` ends; the state block's `triage_due` and `waived`; `canopy show` naming
 it; and the TRUST_MODEL lines. Until the open three are settled, a triage runs in no sandbox and a waiver sends no event
-of its own. Left: the overseer prompt's triage row, without which the loop dispatches `plan` where a triage is due;
-the web UI's plan card; the reviewer's `not_trivial`; the spend page's kind; and the feedback half (M54).
+of its own. Then, 2026-10-19, the overseer prompt's triage row: `needs-plan` where `plan.triage_due` is true, before
+any `plan`, and after a failed triage the plan at once, with no `wait`. Left: the web UI's plan card; the reviewer's
+`not_trivial`; the spend page's kind; and the feedback half (M54).

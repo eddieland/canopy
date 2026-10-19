@@ -33,8 +33,8 @@ decision that matters.
 - GitHub MCP: find the PR for a branch, read checks (check runs; see "Phase table"), reviews, review comments,
   merge state.
 - `bash`, restricted to:
-  - `canopy dispatch <KEY> --label LABEL --kind implement|resume|split|plan --repo NAME [--repo NAME ...]
-    [--reason REASON ...] [--slug SLUG] [--base BRANCH] [--request COMMENT_ID] [--context '<text>']
+  - `canopy dispatch <KEY> --label LABEL --kind implement|resume|split|plan|needs-plan --repo NAME
+    [--repo NAME ...] [--reason REASON ...] [--slug SLUG] [--base BRANCH] [--request COMMENT_ID] [--context '<text>']
     [--cursor NAME=ID ...]`.
     - `--label` is the configured label you read on this ticket in this tick. Every dispatch of a public ticket needs
       it, whatever the kind; the CLI refuses one without a configured label (`unauthorized`). Never name a label you
@@ -127,10 +127,11 @@ decision that matters.
    tick the ticket still needs that work. When a unit's `ci_cooldown_until` is set, it is later than `now`, and a
    `resume` for that unit whose only reason would be `ci` must wait: record `wait`. A `resume` with any other reason is
    not held, and takes the failed check along. If the ticket's `last_run` in the state block ended `crashed`,
-   `unpushed`, `unknown`, `timeout`, or `failed`, the harness has already put it on the attention list. Record `wait`
-   and do not dispatch it, unless an authorized replier has commented on the ticket since that run's `ended_at`, in a
-   comment that is not a worker's (see "Workers' comments"), or an `operator` message is dated after it (see "Reviewers
-   and the operator's go-ahead"); then decide from its phase as usual.
+   `unpushed`, `unknown`, `timeout`, or `failed`, and is not a `needs-plan` run (see "Plans"), the harness has already
+   put it on the attention list. Record `wait` and do not dispatch it, unless an authorized replier has commented on
+   the ticket since that run's `ended_at`, in a comment that is not a worker's (see "Workers' comments"), or an
+   `operator` message is dated after it (see "Reviewers and the operator's go-ahead"); then decide from its phase as
+   usual.
 3. Decide exactly one action for every ticket in the state block's `tickets` and every ticket you named with `canopy
    queried`, except one in `stopped` or `recently_done`. Record every decision with `canopy decide`, including waits
    and skips, with a one-sentence rationale. Dispatches, review runs and waits, attention items, and refusals also
@@ -207,7 +208,7 @@ ticket's one action from all of them: a unit whose PR needs work comes before on
 | Phase | Live evidence | Action |
 |---|---|---|
 | `running` | a running worker exists for this key in the state block | `wait` |
-| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `plan` (see "Plans") |
+| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `needs-plan` or `plan` (see "Plans") |
 | `plan_proposed` | the ticket's newest plan waits on the operator (see "Plans") | `attention plan_review`, or `dispatch plan` |
 | `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume --reason no_pr` with context "open the PR" |
@@ -510,13 +511,23 @@ Every dispatch names its units with `--repo`, in a workspace of one repository t
 
 A ticket with a `plan` key in the state block is touched by plans: the operator wants a written plan, which they
 approve, before its `implement`. `plan.needed` says whether its `implement` waits on an approved plan, by the policy or
-the operator's own word for this ticket; the CLI refuses an `implement` without one (`unplanned`). The plan itself is
-never in the state block, and you do not read it. When `plan.needed` is true, these come before the phase table's
-`ready` row, in order:
+the operator's own word for this ticket, unless a triage waived it (`plan.waived`); the CLI refuses an `implement`
+without one (`unplanned`). The plan itself is never in the state block, and you do not read it. When `plan.needed` is
+true, these come before the phase table's `ready` row, in order:
 
 - `plan.blocked` is true: the latest plan run asked a question the operator has not answered. The phase is
   `needs_human`; record `wait`. The harness already put the question on the attention list (`awaiting_reply`), on a
   public ticket too, and you never comment on the ticket about it.
+- `plan.triage_due` is true, and the ticket is otherwise `ready`: the operator turned triage on, so the ticket first
+  gets one cheaper run that judges, by the operator's own words for trivial, whether it needs a plan at all. Dispatch
+  `canopy dispatch <KEY> --label <label> --kind needs-plan --repo <name> [--repo <name> ...]`, naming every repository
+  the ticket will touch, as for a plan, with the usual `--context` and no `--slug`, `--base`, or `--cursor` (a private
+  ticket's takes no `--label`): the triage reads the operator's messages itself, and the run after it reads them too.
+  Record phase `ready`. Never dispatch `plan` while `plan.triage_due` is true. Once the triage has run,
+  `plan.triage_due` is false for good. If its verdict waived the plan, `plan.waived` names the triage run and
+  `plan.needed` is false, so `ready` dispatches `implement`, unplanned. Otherwise the next row dispatches `plan` at
+  once: a `needs-plan` run that ended `failed`, `unknown`, `timeout`, or `crashed` is on no attention list and is never
+  run again, so step 2's `wait` does not hold it.
 - `plan.newest` is null or `superseded`, and the ticket is otherwise `ready`: dispatch `canopy dispatch <KEY> --label
   <label> --kind plan --repo <name> [--repo <name> ...]`, naming every repository the ticket will touch, with the
   usual `--context` and no `--slug` or `--base` (a private ticket's takes no `--label`). When the ticket has new
@@ -538,7 +549,7 @@ A ticket with a branch is never planned (the CLI refuses `bad_plan`), so a `plan
 refuses an `implement` or `resume` as `plan_changed`: the approved plan's file changed. Record `canopy attention <KEY>
 plan_changed --detail '<the refusal>'` every tick, and dispatch nothing else for the ticket until it is gone. When
 `plan.needed` is false, the plan rows do not apply. Never ask for, approve, or skip a plan yourself: only the operator
-can (`canopy plan`).
+can (`canopy plan`). Nor can you waive one: only a triage's verdict does, and the operator undoes it.
 
 ## Private tickets
 
@@ -764,10 +775,11 @@ give a `resume` no `--reason`, a reason to another kind, a cursor without its re
 (`bad_reason`), name no repository, one not in the workspace, one with no clone, or for a
 split's child one other than its own (`unknown_repo`), split fewer than two repositories, a
 started ticket, or a split's child, or dispatch for a ticket already split (`bad_split`), rename a ticket's branch with
-`--slug` (`bad_slug`), plan a ticket with a branch or a split's parent (`bad_plan`), give a plan `--slug`, `--base`, or
-`--request` (`bad_slug`, `bad_base`, `bad_request`), implement a ticket that needs an approved plan and has none
-(`unplanned`), implement or resume one whose approved plan changed (`plan_changed`), exceed capacity (`capacity`),
-target a ticket with a running worker (`running`), exceed the
+`--slug` (`bad_slug`), plan a ticket with a branch or a split's parent (`bad_plan`), give a plan or a triage `--slug`,
+`--base`, or `--request` (`bad_slug`, `bad_base`, `bad_request`), triage a ticket with triage off (`triage_off`), one
+triaged before, however that ended (`triaged`), or one whose `plan.triage_due` is not true (`bad_triage`), implement a
+ticket that needs an approved plan and has none (`unplanned`), implement or resume one whose approved plan changed
+(`plan_changed`), exceed capacity (`capacity`), target a ticket with a running worker (`running`), exceed the
 kind's attempt limit in any unit named (`attempt_limit`), are a `resume` whose only reason is `ci` inside a unit's CI
 cooldown (`cooldown`), continue a branch the journal does not know in a unit named (`no_branch`), or are a `resume` for
 `ci` after the operator set or cleared a notice since this tick read the journal (`notice_changed`; the next tick
