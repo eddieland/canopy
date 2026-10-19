@@ -12,6 +12,7 @@ import {
     List,
     ListOrdered,
     ListTodo,
+    ListTree,
     MessageSquarePlus,
     Redo2,
     SquareCode,
@@ -48,6 +49,8 @@ import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } fr
 import type { Range } from '@/lib/plan-highlights'
 import { changesKey, PlanChanges, textOf } from '@/lib/plan-diff'
 import { alignComments, floatUnder } from '@/lib/plan-margin'
+import { planOutline, sectionAt } from '@/lib/plan-outline'
+import type { OutlineEntry } from '@/lib/plan-outline'
 import { planExtensions } from '@/lib/plan-schema'
 import {
     addReply,
@@ -410,25 +413,25 @@ export function PlanEditor({
             <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
                 <Panel>
                     <PanelHeader label="Plan" sticky>
-                        {(status !== undefined || previous !== undefined) && (
-                            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                {status}
-                                {status !== undefined && previous !== undefined && (
-                                    // What the plan is, then after the rule how it is shown, as a transcript's modes.
-                                    <span aria-hidden className="h-4 w-px bg-border" />
-                                )}
-                                {previous !== undefined && (
-                                    <span className="flex items-center gap-1">
-                                        {/* A mode, named for what it shows: the plan as it reads now, what changed
-                                            since marked on it. */}
-                                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
-                                            Changes since {previous.label}
-                                        </Toggle>
-                                        {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
-                                    </span>
-                                )}
-                            </span>
-                        )}
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {status}
+                            {status !== undefined && (
+                                // What the plan is, then after the rule how it is shown and read, as a transcript's
+                                // modes are.
+                                <span aria-hidden className="h-4 w-px bg-border" />
+                            )}
+                            {previous !== undefined && (
+                                <span className="flex items-center gap-1">
+                                    {/* A mode, named for what it shows: the plan as it reads now, what changed since
+                                        marked on it. */}
+                                    <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
+                                        Changes since {previous.label}
+                                    </Toggle>
+                                    {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
+                                </span>
+                            )}
+                            <OutlineMenu editor={editor} />
+                        </span>
                         {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
                     </PanelHeader>
                     <EditorContent editor={editor} className={cn('px-6 py-4', showChanges && 'plan-changes')} />
@@ -553,6 +556,87 @@ function ChangeSteps({ count, onStep }: { count: number; onStep: (step: 1 | -1) 
                 <ChevronDown aria-hidden />
             </Button>
         </span>
+    )
+}
+
+// How far the outline indents a heading, by its depth under the plan's shallowest.
+const DEPTHS = ['pl-2', 'pl-5', 'pl-8', 'pl-11']
+
+// The plan's headings, as a menu that goes to the one chosen, as a document's outline does: each indented by its level
+// under the plan's shallowest, and the section being read as the menu opens marked as where the page is. A heading
+// chosen comes to the top of the page, under the sticky header (its scroll margin, `.plan-doc` in src/index.css); in a
+// plan the operator may edit, the cursor goes to it too, so the keyboard reads on from there. Escape gives the focus
+// back to the menu's button.
+function OutlineMenu({ editor }: { editor: Editor }) {
+    const outline = useEditorState({ editor, selector: ({ editor: current }) => planOutline(current.state.doc) })
+    const [chose, setChose] = useState(false)
+    const [reading, setReading] = useState<number | undefined>(undefined)
+
+    function headingAt(entry: OutlineEntry): HTMLElement | undefined {
+        const dom = editor.view.nodeDOM(entry.pos)
+        return dom instanceof HTMLElement ? dom : undefined
+    }
+
+    // The section whose heading the page has scrolled past, by the line under the sticky header.
+    function sectionInView(): number | undefined {
+        const page = editor.view.dom.closest('.page-scroll')?.getBoundingClientRect().top ?? 0
+        const tops = outline.map((entry) => headingAt(entry)?.getBoundingClientRect().top ?? Infinity)
+        return sectionAt(tops, page + TOOLBAR_CLEARANCE)
+    }
+
+    function go(entry: OutlineEntry) {
+        setChose(editor.isEditable)
+        if (editor.isEditable) {
+            // Inside the heading, at its start. The heading is scrolled to below, to the page's top rather than the
+            // nearest edge, as the editor would.
+            editor.commands.focus(entry.pos + 1, { scrollIntoView: false })
+        }
+        headingAt(entry)?.scrollIntoView({ block: 'start' })
+    }
+
+    return (
+        <DropdownMenu
+            onOpenChange={(open) => {
+                if (open) {
+                    setChose(false)
+                    setReading(sectionInView())
+                }
+            }}
+        >
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="xs" title="Go to a section of the plan">
+                    <ListTree aria-hidden />
+                    Outline
+                    <ChevronDown aria-hidden />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                align="end"
+                className="max-w-[min(24rem,calc(100vw-2rem))]"
+                onCloseAutoFocus={(event) => {
+                    if (chose) {
+                        event.preventDefault()
+                    }
+                }}
+            >
+                {outline.length === 0 && <DropdownMenuItem disabled>No headings yet</DropdownMenuItem>}
+                {outline.map((entry, i) => (
+                    <DropdownMenuItem
+                        key={entry.pos}
+                        aria-current={i === reading ? 'location' : undefined}
+                        title={entry.text}
+                        className={cn(
+                            DEPTHS[Math.min(entry.depth, DEPTHS.length - 1)],
+                            entry.depth === 0 ? 'font-medium' : 'text-muted-foreground',
+                            'aria-[current=location]:text-accent',
+                        )}
+                        onSelect={() => go(entry)}
+                    >
+                        <span className="truncate">{entry.text}</span>
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     )
 }
 
