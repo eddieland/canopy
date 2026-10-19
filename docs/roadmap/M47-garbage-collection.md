@@ -34,9 +34,10 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 
 **Stage 3, the journal.**
 
-- The pass deletes harness-raised attention rows older than both the attention list's 1000-tick window and
-  `journal_days`, then runs `PRAGMA wal_checkpoint(TRUNCATE)`. `canopy gc --vacuum` runs `VACUUM` while no run is
-  live and the disk has room for a copy of the journal.
+- The pass deletes harness-raised attention rows, and M36's `connector_runs` and `derivations` where they exist, older
+  than both the attention list's 1000-tick window and `journal_days`, keeping each connector source's newest run and
+  the newest that recorded the query's result (§26, §30), then runs `PRAGMA wal_checkpoint(TRUNCATE)`. `canopy gc
+  --vacuum` runs `VACUUM` while no run is live and the disk has room for a copy of the journal.
 - Tests: with rows on both sides of the window, the attention list, each item's open-since, and the notification
   diff are the same before and after a pass; with fewer than 1000 `ok` ticks, a pass deletes no row.
 - Check: on the operator's journal, the attention list and `canopy status` are unchanged across a pass, and the file
