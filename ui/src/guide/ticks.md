@@ -45,14 +45,20 @@ opens at its end, where the errors are, since that's usually why you're reading 
 ## The spend page
 
 [Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **7 days** or **30 days**. The
-**Totals** split it by who spent it: the overseer, with its idle ticks apart, the workers, chores, reviews, and dry
-runs. Beside them are the tickets the loop marked done in that window, and what each cost on average, the overseer and
-chores included.
+line under the title is the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for what the
+page holds. The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent, then the
+workers, chores, reviews, and dry runs. Beside them are the tickets the loop marked done in that window, and what each
+cost on average, the overseer and chores included.
+
+Each split has one name everywhere on the page, in the totals, the chart's legend, and the table: **overseer** is all
+the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went
+on deciding there was nothing to do. Hover a name for what it counts.
 
 **By day** stacks each UTC day's spend by the same split, with a table under it. The dearest day has its total printed
 over its bar, so you can read the scale without hovering; hover any bar for that day's figures. A day that cost nothing
-is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, and at real prices they're a
-sliver beside a worker's run, so read their trend from the table. A window where nothing reported a cost says so in
+is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, under the rest of the overseer's
+spend in a deeper shade of its color, and at real prices they're a sliver beside a worker's run, so read their trend
+from the table. A window where nothing reported a cost says so in
 one line rather than draw you an empty chart. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
