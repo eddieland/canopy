@@ -34,6 +34,7 @@ from tests.canopy.helpers import (
     dispatch_in_tick,
     journal_at,
     last_run,
+    old_ticket,
     operator,
     overseer_does,
     pool,
@@ -402,7 +403,7 @@ def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
 def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path, journals: Journals) -> None:
     conn = journal_at(journals, tmp_path, 2)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    db.touch_ticket(conn, "OLD-1", "/r")
+    old_ticket(conn, "OLD-1")
     results = [
         ("done", json.dumps({"summary": "did it", "prs": {"api": "https://e.test/pr/1", "web": None}}), "2026-01-02"),
         ("blocked", json.dumps({"summary": "", "question": "Which one?"}), "2026-01-01"),

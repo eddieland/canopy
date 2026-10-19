@@ -129,6 +129,8 @@ class Ticket(Row):
     title: str | None
     # The ticket's own plan setting, overriding `policy.plan`; None when unset (DESIGN §25).
     plan_setting: PlanSetting | None
+    #: When it last changed: made, or its phase, title, done flag, plan setting, or a unit's phase or PR set anew.
+    changed_at: str
 
 
 @dataclass(frozen=True)

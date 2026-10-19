@@ -275,7 +275,7 @@ def ask(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
         waived = waiver(conn, ticket)
         superseded = supersede(conn, key)
         already = ticket.plan_setting is PlanSetting.PLAN and superseded is None
-        conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.PLAN, key))
+        db.change_ticket(conn, key, "plan_setting", PlanSetting.PLAN)
     return Asked(superseded=superseded, already=already, waived=waived.run_id if waived is not None else None)
 
 
@@ -299,7 +299,7 @@ def skip(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
         waived = waiver(conn, ticket)
         superseded = supersede(conn, key)
         already = ticket.plan_setting is PlanSetting.SKIP and superseded is None
-        conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.SKIP, key))
+        db.change_ticket(conn, key, "plan_setting", PlanSetting.SKIP)
     return Asked(superseded=superseded, already=already, waived=waived.run_id if waived is not None else None)
 
 
