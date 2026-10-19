@@ -441,8 +441,12 @@ export function PlanEditor({
                             pluginKey={BUBBLE}
                             // Fixed, so a bubble over a passage below the window never makes the window scroll: the
                             // window would scroll back as the bubble hides, under a click on the toolbar's Comment.
+                            // On the body, since a fixed element is placed from its nearest container, not the
+                            // window, and the frame is one (`@container`): under it, the bubble landed off by the
+                            // frame's place on the page, over the rail. Over the sticky header and foot, as a float is.
                             options={{ placement: 'top', strategy: 'fixed' }}
-                            className="rounded-md border bg-surface p-0.5"
+                            appendTo={() => document.body}
+                            className="z-20 rounded-md border bg-surface p-0.5"
                             data-testid="plan-bubble"
                         >
                             <Button

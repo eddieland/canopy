@@ -732,6 +732,29 @@ test('once a comment is sent or resolved, the cursor is back in the plan after i
     await expect(plan(page)).toBeFocused()
 })
 
+test('the bubble shows just over the selection', async ({ page }) => {
+    await select(page, "Excel's own format")
+    const bubble = page.getByTestId('plan-bubble')
+    await expect(bubble).toBeVisible()
+    const passage = await page.evaluate(() => {
+        const box = globalThis.getSelection()?.getRangeAt(0).getBoundingClientRect()
+        return box === undefined ? undefined : { left: box.left, right: box.right, top: box.top }
+    })
+    // Its bottom a few pixels over the passage's top, and centred on it within a pixel, not across the page.
+    await expect(async () => {
+        const box = await bubble.boundingBox()
+        expect(passage).toBeDefined()
+        expect(box).not.toBeNull()
+        if (passage === undefined || box === null) {
+            return
+        }
+        const gap = passage.top - (box.y + box.height)
+        expect(gap).toBeGreaterThanOrEqual(0)
+        expect(gap).toBeLessThan(16)
+        expect(Math.abs(box.x + box.width / 2 - (passage.left + passage.right) / 2)).toBeLessThanOrEqual(1)
+    }).toPass()
+})
+
 test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {
     await select(page, 'Excel')
     await page.keyboard.press('ControlOrMeta+Alt+m')
