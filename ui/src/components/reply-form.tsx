@@ -5,16 +5,13 @@ import type { KeyboardEvent, SubmitEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
 import type { Replied } from '@/api/types'
-import { Disclosure } from '@/components/disclosure'
 import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Kbd } from '@/components/ui/kbd'
 import { notedText, repliedText } from '@/lib/outcomes'
 import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
 import { isApple, sends, sendShortcut, useSendKey } from '@/lib/send-key'
-import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
@@ -53,11 +50,9 @@ export type ReplyTarget =
  * id for the tab's life (`src/lib/reply-draft.ts`), so a sign-out mid-reply loses nothing. On a public ticket the
  * reply stays in canopy: it is how the operator says what to do about an untrusted reviewer's comments (D089).
  *
- * It is open where a reply is awaited: a question waiting (`waiting`), an untrusted review waiting on the go-ahead
- * (`untrusted`), and any private ticket, whose workers hear the operator only here. A public ticket with nothing
- * waiting gets a `Disclosure` instead, `Show a note for its next worker`, since a box there invites a reply nothing
- * waits on; so does a chore, `Show a note for its next runs`, since nothing ever waits on a note. It opens by itself
- * once a reply is awaited, or a draft is kept, and stays open after.
+ * It is always open, on any ticket and any chore, so a note for the next worker is never a click away; what it is
+ * for is said by its label and placeholder: the message it answers (`waiting`), an untrusted review waiting on the
+ * go-ahead (`untrusted`), or where a reply on a public ticket goes.
  *
  * `onReplied` hears each reply recorded, after the form has said what it did, with that line: the attention page moves
  * on to the next item that waits on the operator.
@@ -82,12 +77,6 @@ export function ReplyForm({
     const [body, setBody] = useState(draft?.body ?? '')
     const [submission, setSubmission] = useState(() => draft?.submission ?? newSubmission())
     const [said, setSaid] = useState<string | null>(null)
-    const awaited = target.kind === 'ticket' && (!target.isPublic || waiting !== null || untrusted)
-    const [open, setOpen] = useState(() => awaited || Boolean(draft?.body))
-    // Once awaited it stays open, so the reply that ends the wait does not fold away what it said.
-    if (awaited && !open) {
-        setOpen(true)
-    }
     const mutation = useMutation({
         mutationFn: (text: string): Promise<Replied> =>
             target.kind === 'ticket'
@@ -143,51 +132,32 @@ export function ReplyForm({
     }
 
     return (
-        <Collapsible open={open} onOpenChange={setOpen} className="border-t">
-            {!awaited && (
-                <Disclosure
-                    open={open}
-                    what={chore ? 'a note for its next runs' : 'a note for its next worker'}
-                    className="m-2"
+        <form onSubmit={submit} aria-label={chore ? 'Note' : 'Reply'} className="flex flex-col gap-2 border-t p-3">
+            <label className="flex flex-col gap-1.5">
+                <span className="panel-label">{label}</span>
+                <Textarea
+                    name="body"
+                    value={body}
+                    maxLength={MAX_REPLY}
+                    onChange={(event) => {
+                        setBody(event.target.value)
+                        keepDraft(stored, { body: event.target.value, submission })
+                    }}
+                    onKeyDown={sendOnKey}
+                    placeholder={placeholder}
                 />
-            )}
-            <CollapsibleContent asChild>
-                <form
-                    onSubmit={submit}
-                    aria-label={chore ? 'Note' : 'Reply'}
-                    className={cn('flex flex-col gap-2 p-3', !awaited && 'pt-0')}
-                >
-                    <label className="flex flex-col gap-1.5">
-                        <span className="panel-label">{label}</span>
-                        <Textarea
-                            name="body"
-                            value={body}
-                            maxLength={MAX_REPLY}
-                            onChange={(event) => {
-                                setBody(event.target.value)
-                                keepDraft(stored, { body: event.target.value, submission })
-                            }}
-                            onKeyDown={sendOnKey}
-                            placeholder={placeholder}
-                        />
-                    </label>
-                    <div className="flex items-center justify-between gap-3">
-                        <Notice error={mutation.error}>{said}</Notice>
-                        <span className="ml-auto readout text-xs text-muted-foreground">
-                            {body.length}/{MAX_REPLY}
-                        </span>
-                        <Button
-                            type="submit"
-                            disabled={mutation.isPending || !body.trim()}
-                            aria-keyshortcuts={shortcut}
-                        >
-                            <Send />
-                            {chore ? 'Add note' : 'Reply'}
-                            {shortcut && <Shortcut keys={shortcut} />}
-                        </Button>
-                    </div>
-                </form>
-            </CollapsibleContent>
-        </Collapsible>
+            </label>
+            <div className="flex items-center justify-between gap-3">
+                <Notice error={mutation.error}>{said}</Notice>
+                <span className="ml-auto readout text-xs text-muted-foreground">
+                    {body.length}/{MAX_REPLY}
+                </span>
+                <Button type="submit" disabled={mutation.isPending || !body.trim()} aria-keyshortcuts={shortcut}>
+                    <Send />
+                    {chore ? 'Add note' : 'Reply'}
+                    {shortcut && <Shortcut keys={shortcut} />}
+                </Button>
+            </div>
+        </form>
     )
 }

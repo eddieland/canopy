@@ -31,7 +31,6 @@ test("a public ticket's page says where a reply goes one way: its chip on hover 
     const hint = /comments stay on the tracker; a reply you send here stays in canopy/u
     await expect(chip).toHaveAttribute('title', hint)
     await expect(chip).toContainText(hint)
-    await page.getByRole('button', { name: 'Show a note for its next worker' }).click()
     await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveAttribute(
         'placeholder',
         'For its next worker, as an instruction. It stays in canopy, never on the ticket.',

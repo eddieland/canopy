@@ -580,9 +580,9 @@ function ChoreThread({ name }: { name: string }) {
 
 /**
  * A ticket's item under its head: what its reason asks first (a broken run's row and any grant it is stuck at, or the
- * PR's link out), then the ticket's answer (`TicketAnswer`): its conversation, the reply form, which is open only where
- * a reply is awaited (`ReplyForm`), and the ticket's verbs and any other grant as a quiet row under them. On a reason
- * that asks for nothing else, the verbs lead instead, as what the item asks for.
+ * PR's link out), then the ticket's answer (`TicketAnswer`): its conversation, the reply form (`ReplyForm`), and the
+ * ticket's verbs and any other grant as a quiet row under them. On a reason that asks for nothing else, the verbs lead
+ * instead, as what the item asks for.
  */
 function Thread({
     item,

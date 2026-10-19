@@ -35,9 +35,9 @@ Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
   repository), and what the ticket has cost so far.
-- **Conversation**: every message, the box to reply in, folded on a public ticket with nothing waiting, and under it
-  the ticket's actions. [Attention](attention#replying) covers how a reply works. When one of the ticket's attention
-  items clears while you're here, a leaf drifts off the panel, the same one the attention list drops.
+- **Conversation**: every message, the box to reply in, and under it the ticket's actions.
+  [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
+  you're here, a leaf drifts off the panel, the same one the attention list drops.
 - **Runs**: every run on the ticket, each linking to its transcript.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the guard that stopped it, and an `attention` decision the reason it reached your list.

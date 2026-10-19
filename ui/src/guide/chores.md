@@ -67,10 +67,10 @@ more, and `max_findings` goes up. Either way, decide once, rather than skimming 
 ## Notes to a chore
 
 A note is an instruction to the chore's next runs, such as a finding to leave out or a place to look harder. Nothing
-waits on one, so the box stays folded: open **Show a note for its next runs** in **Notes**, write it, and press **Add
-note**, or your send key; it's `canopy reply chore:NAME`. Every run reads the latest ten, oldest first, and a later
-note wins over an earlier one. A note no run has read yet is marked `waiting for the next run`. A chore with no notes
-follows its prompt file alone, which is how most of them should spend most of their lives.
+waits on one, but the box sits open under **Notes** all the same: write it and press **Add note**, or your send key;
+it's `canopy reply chore:NAME`. Every run reads the latest ten, oldest first, and a later note wins over an earlier
+one. A note no run has read yet is marked `waiting for the next run`. A chore with no notes follows its prompt file
+alone, which is how most of them should spend most of their lives.
 
 Nothing deletes a note. To take one back, write a newer one that says so. Notes never reach the overseer or the
 attention list: they shape what the chore looks for, not when it runs.

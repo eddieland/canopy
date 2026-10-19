@@ -77,33 +77,28 @@ describe('ReplyForm', () => {
         renderForm({ ...TICKET, isPublic: true }, null, true)
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
         expect(field.placeholder).toMatch(/^Say what to do about the untrusted review\./u)
-        expect(screen.queryByRole('button', { name: /a note for its next worker/u })).toBeNull()
     })
 
-    it('keeps a public ticket with nothing waiting closed, behind a disclosure, until it is opened', () => {
+    it('stays open on a public ticket with nothing waiting, its box saying what a note is for', () => {
         renderForm({ ...TICKET, isPublic: true })
-        expect(screen.queryByRole('form', { name: 'Reply' })).toBeNull()
-        const show = screen.getByRole('button', { name: 'Show a note for its next worker', expanded: false })
-        fireEvent.click(show)
+        expect(screen.getByRole('form', { name: 'Reply' })).toBeDefined()
+        expect(screen.queryByRole('button', { name: /a note for its next worker/u })).toBeNull()
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
         expect(field.placeholder).toMatch(/It stays in canopy, never on the ticket\.$/u)
         expect(field.placeholder).not.toMatch(/untrusted/u)
-        expect(screen.getByRole('button', { name: 'Hide a note for its next worker', expanded: true })).toBeDefined()
     })
 
-    it('opens by itself on a public ticket whose draft is kept', () => {
+    it('keeps a public ticket’s draft', () => {
         renderForm({ ...TICKET, isPublic: true })
-        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next worker' }))
         type('Reply', 'Leave the docs alone')
         cleanup()
         renderForm({ ...TICKET, isPublic: true })
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Leave the docs alone')
     })
 
-    it('notes something to a chore, for its next runs, once its folded form is opened', () => {
+    it('notes something to a chore, for its next runs, its form open', () => {
         renderForm(CHORE)
-        expect(screen.queryByRole('form', { name: 'Note' })).toBeNull()
-        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs', expanded: false }))
+        expect(screen.queryByRole('button', { name: /a note for its next runs/u })).toBeNull()
         expect(screen.getByRole('form', { name: 'Note' })).toBeDefined()
         expect(screen.getByRole('textbox', { name: 'Note' })).toBeDefined()
         expect(screen.getByRole('button', { name: 'Add note' })).toBeDefined()
@@ -111,7 +106,6 @@ describe('ReplyForm', () => {
 
     it('says what a reply did in the CLI’s words, and clears the field for the next', async () => {
         renderForm(CHORE)
-        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs' }))
         type('Note', 'Leave lodash at 4')
         fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
 
@@ -156,9 +150,9 @@ describe('ReplyForm', () => {
 
         renderForm(TICKET)
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Use the v2 API')
-        // The chore keeps no draft of the ticket's, so its form stays folded.
+        // The chore keeps no draft of the ticket's, so its box starts empty.
         renderForm(CHORE)
-        expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull()
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' }).value).toBe('')
         cleanup()
 
         renderForm(TICKET)
