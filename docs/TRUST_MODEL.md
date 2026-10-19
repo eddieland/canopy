@@ -619,6 +619,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.
 
+The mock server is not such a listener: it serves a journal seeded from fixtures, on loopback for development, or
+under public host names as the web UI's demo on a host such as Vercel (D122). It holds nothing of the operator's, so it
+needs no secret, and it serves nothing else: a public name is refused unless the server serves mock data, and the
+loop's server never does.
+
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials, and run each chore back to back, one at a time per chore, at the operator's cost. A notice set that way
 reaches every run's prompt, every ticket's, until it lapses, at most seven days, or the operator clears it, and it
