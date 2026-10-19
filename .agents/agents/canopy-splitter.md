@@ -6,7 +6,6 @@
 # desk with OpenCode's read, list, glob, and grep tools, and reaches the tracker through its MCP server.
 description: canopy splitter. Splits a ticket into one ticket per repository on request; adds no labels, pushes nothing.
 mode: primary
-temperature: 0.1
 permission:
   edit: deny
   bash: deny
