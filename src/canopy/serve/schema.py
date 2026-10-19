@@ -1915,6 +1915,17 @@ class ReviewSummary(_Model):
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
 
 
+class RequestedReview(_Model):
+    """A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21)."""
+
+    pr_url: str
+    """The PR's URL, as the operator gave it: an opaque https:// string."""
+    created_at: datetime
+    """When the operator asked."""
+    channel: str
+    """Where they asked: `cli` or `web`."""
+
+
 class ReviewFinding(_Model):
     """One finding, with where it falls in the diff: `file` indexes the diff's files, `line` is on the new side.
 
@@ -2130,6 +2141,15 @@ class ReviewsUpdated(_Model):
     """The latest review runs, as `GET /reviews` returns them."""
 
 
+class ReviewRequestsUpdated(_Model):
+    """The PRs waiting on a review changed: one was asked for or stopped, or its review started or failed. Whole."""
+
+    type: Literal["review_requests.updated"] = "review_requests.updated"
+    """What the event is."""
+    requests: list[RequestedReview]
+    """The open review requests no review is running for, as `GET /review-requests` returns them."""
+
+
 class TicketChanged(_Model):
     """Something about one ticket changed: a page showing it reads it again."""
 
@@ -2191,6 +2211,7 @@ class StreamEvent(
             | TicketChanged
             | ChoresUpdated
             | ReviewsUpdated
+            | ReviewRequestsUpdated
             | SpendUpdated
             | TickUpdated
             | LoopUpdated

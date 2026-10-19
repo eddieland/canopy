@@ -701,6 +701,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/review-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the reviews waiting on a tick
+         * @description The PRs the operator asked canopy to review that no review of is running yet, newest first.
+         */
+        get: operations["listReviewRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews": {
         parameters: {
             query?: never;
@@ -3832,6 +3852,28 @@ export type components = {
             submission: string;
         };
         /**
+         * RequestedReview
+         * @description A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21).
+         */
+        RequestedReview: {
+            /**
+             * Channel
+             * @description Where they asked: `cli` or `web`.
+             */
+            channel: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the operator asked.
+             */
+            created_at: string;
+            /**
+             * Pr Url
+             * @description The PR's URL, as the operator gave it: an opaque https:// string.
+             */
+            pr_url: string;
+        };
+        /**
          * ReviewDetail
          * @description One review run in full: its summary, findings, the diff they sit on, and the PR's other review runs.
          */
@@ -4053,6 +4095,22 @@ export type components = {
              * @description A review run of the PR still running, which finishes; None when none is.
              */
             running_review: number | null;
+        };
+        /**
+         * ReviewRequestsUpdated
+         * @description The PRs waiting on a review changed: one was asked for or stopped, or its review started or failed. Whole.
+         */
+        ReviewRequestsUpdated: {
+            /**
+             * Requests
+             * @description The open review requests no review is running for, as `GET /review-requests` returns them.
+             */
+            requests: components["schemas"]["RequestedReview"][];
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "review_requests.updated";
         };
         /**
          * ReviewSendRequest
@@ -4978,7 +5036,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
         /**
          * Thread
          * @description A PR's review thread as last read, where it sits on the diff, and the drafts that answer it.
@@ -8421,6 +8479,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PullRequest"][];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listReviewRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestedReview"][];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

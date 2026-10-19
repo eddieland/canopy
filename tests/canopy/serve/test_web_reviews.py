@@ -7,6 +7,7 @@ sending some to a worker, as `canopy send review:ID`.
 from pathlib import Path
 
 from canopy.core import db, review_diff
+from canopy.core.vocab import ReviewRunStatus
 from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import present
@@ -26,6 +27,31 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     # Its worst finding, which colors its verdict, and how many are that bad, which its verdict says: none for a clean
     # review or one that reported nothing.
     assert [(r["worst"], r["worst_count"]) for r in listed] == [("major", 1), (None, 0), (None, 0), ("blocking", 1)]
+
+
+def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_again_if_it_fails(
+    backend: Backend, tmp_path: Path
+) -> None:
+    c = client(None, backend)
+    # Asked for from the web UI, and no review of it has run yet: the reviews page shows it waiting on a tick.
+    assert [(r["pr_url"], r["channel"]) for r in c.get("/api/review-requests").json()] == [(mock_reviews.PR_95, "web")]
+    with backend.open() as ctx:
+        run_id = db.insert_review_run(
+            ctx.conn,
+            tick_id=1,
+            pr_url=mock_reviews.PR_95,
+            sha="abc1234",
+            ticket=None,
+            repo="web",
+            purpose="request",
+            logs_dir=tmp_path,
+        )
+    # Its review is in the reviews list now, so it is not listed twice.
+    assert c.get("/api/review-requests").json() == []
+    with backend.open() as ctx:
+        db.finish_run(ctx.conn, "review_runs", run_id, ReviewRunStatus.FAILED, None)
+    # Only a `done` review ends a request: it waits on the next tick again.
+    assert [r["pr_url"] for r in c.get("/api/review-requests").json()] == [mock_reviews.PR_95]
 
 
 def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:

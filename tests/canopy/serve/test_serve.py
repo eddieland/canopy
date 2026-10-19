@@ -26,7 +26,7 @@ from starlette.types import Message, Receive, Scope, Send
 
 from canopy.core import conversation, db
 from canopy.core.context import Context, db_path
-from canopy.serve import live, secret, views
+from canopy.serve import live, mock_reviews, secret, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.__main__ import main
 from canopy.serve.api import session
@@ -39,6 +39,7 @@ from canopy.serve.schema import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
+    ReviewRequestsUpdated,
     ReviewsUpdated,
     RunsUpdated,
     SpendUpdated,
@@ -465,11 +466,11 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 10)
+    headers, events = read_events(served, 11)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, chores, reviews, spend, tick, loop, changed, spent = (e.root for e in events)
+    first, runs, tickets, chores, reviews, requested, spend, tick, loop, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
@@ -477,6 +478,8 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert [c.name for c in chores.chores] == ["build-health", "deps"]
     assert isinstance(reviews, ReviewsUpdated)
     assert reviews.reviews
+    assert isinstance(requested, ReviewRequestsUpdated)
+    assert [r.pr_url for r in requested.requests] == [mock_reviews.PR_95]
     assert isinstance(spend, SpendUpdated)
     assert isinstance(tick, TickUpdated)
     assert tick.tick is not None
@@ -624,11 +627,32 @@ def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_pat
     assert (reviewed.reviews[0].id, reviewed.reviews[0].state) == (run_id, "running")
 
 
+def test_a_review_of_a_requested_pr_starting_takes_it_off_the_requests_waiting(
+    backend: Backend, tmp_path: Path
+) -> None:
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        db.insert_review_run(
+            ctx.conn,
+            tick_id=1,
+            pr_url=mock_reviews.PR_95,
+            sha="abc1234",
+            ticket=None,
+            repo="web",
+            purpose="request",
+            logs_dir=tmp_path,
+        )
+        events = [e.root for e in sent.changes(backend, ctx)]
+    [requested] = [e for e in events if isinstance(e, ReviewRequestsUpdated)]
+    assert requested.requests == []
+
+
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
         with closing(live.Stream(backend)) as opened:
             stream = opened.events(poll_seconds=0.01)
-            first = [await anext(stream) for _ in range(8)]
+            first = [await anext(stream) for _ in range(9)]
             # A reload commits nothing to the journal: the stream sees it in the config it serves.
             chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
             backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
@@ -966,6 +990,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/events",
         "/api/loop",
         "/api/reviews",
+        "/api/review-requests",
         "/api/reviews/{run_id}",
         "/api/reviews/{run_id}/dismissals",
         "/api/reviews/{run_id}/sends",

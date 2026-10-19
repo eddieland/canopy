@@ -90,6 +90,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             }
             break
         }
+        case 'review_requests.updated': {
+            client.setQueryData(keys.reviewRequests, event.requests)
+            break
+        }
         case 'ticket.changed': {
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             // A run of the ticket started or ended: the runs a PR's page shows, and the PRs list's run working now.
@@ -184,6 +188,7 @@ const LISTS: Record<string, string> = {
     'tickets.updated': 'tickets',
     'chores.updated': 'chores',
     'reviews.updated': 'reviews',
+    'review_requests.updated': 'requests',
 }
 
 /** Parses an SSE `data` payload into a StreamEvent, or null when it is not one this UI knows. */

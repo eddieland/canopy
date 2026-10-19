@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import contract, conversation, db, review_diff
+from canopy.core import contract, conversation, db, review_diff, review_requests
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.serve.schema import (
@@ -18,6 +18,7 @@ from canopy.serve.schema import (
     DiffHunk,
     DiffLine,
     FindingSeverity,
+    RequestedReview,
     ReviewDetail,
     ReviewDiff,
     ReviewFinding,
@@ -43,6 +44,18 @@ def reviews(ctx: Context) -> list[ReviewSummary]:
         At most `RECENT_REVIEWS` runs, each as the reviews list shows it.
     """
     return [summary(r) for r in db.recent_review_runs(ctx.conn, RECENT_REVIEWS)]
+
+
+def requested(ctx: Context) -> list[RequestedReview]:
+    """The PRs the operator asked canopy to review that wait on a tick to start the review, newest first.
+
+    Returns:
+        Each open request no review of its PR is running for: one that started shows in `reviews` instead.
+    """
+    return [
+        RequestedReview(pr_url=r.pr_url, created_at=db.parse_time(r.created_at), channel=r.channel)
+        for r in review_requests.waiting_requests(ctx.conn)
+    ]
 
 
 def review(ctx: Context, run_id: int) -> ReviewDetail | None:

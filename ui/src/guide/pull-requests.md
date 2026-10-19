@@ -113,8 +113,9 @@ one: the reviewer is wrong often enough that you'll want to read a few before it
 To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the
 [reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. The next tick reviews the
 PR once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
-Until then the PR waits on the [pull requests page](#the-pull-requests-page) wearing `requested`, and its page shows
-the open request, with **Stop** to withdraw it.
+Until then it's a `requested` row at the head of the reviews list, so you can see it landed, and it waits on the
+[pull requests page](#the-pull-requests-page) wearing `requested` too. The PR's page shows the open request, with
+**Stop** to withdraw it.
 
 The review stays in canopy, like every other. Whether you pass any of it on to your coworker, and in what tone, is
 between you and them.
@@ -126,6 +127,11 @@ between you and them.
 with the worst among them, such as `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. With no review
 yet, it points you to **Review a PR** above the list, which works with the defaults, and to `review.agent_prs` and
 `review.query`, which have the loop review PRs on its own.
+
+A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
+verdict, commit, or cost because nothing has read it yet. Once a tick starts its review, the review's own row takes its
+place. If that review fails, the request is still open, so the `requested` row comes back and the next tick tries
+again.
 
 ## A review's page
 

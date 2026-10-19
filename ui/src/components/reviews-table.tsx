@@ -1,4 +1,4 @@
-import type { ReviewSummary } from '@/api/types'
+import type { RequestedReview, ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -12,18 +12,64 @@ import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
 
+// No PR waiting on a tick: one array, as a default made in the signature would be a new one on every render.
+const NONE_REQUESTED: RequestedReview[] = []
+
 /**
  * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket,
  * its impact, its PR and the commit it read, cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR
- * are left out, as `RunsTable` leaves out a ticket on the ticket's page.
+ * are left out, as `RunsTable` leaves out a ticket on the ticket's page. The reviews page passes the PRs the operator
+ * asked to have reviewed that no review of has started yet as `requested`, a row each, before the runs, or after them
+ * with `requestedLast`: what comes next is the newest end of the list.
  */
-export function ReviewsTable({ reviews, pr = true }: { reviews: ReviewSummary[]; pr?: boolean }) {
+export function ReviewsTable({
+    reviews,
+    requested = NONE_REQUESTED,
+    requestedLast = false,
+    pr = true,
+}: {
+    reviews: ReviewSummary[]
+    requested?: RequestedReview[]
+    requestedLast?: boolean
+    pr?: boolean
+}) {
+    const waiting = requested.map((request) => <RequestedRow key={`requested-${request.pr_url}`} request={request} />)
     return (
         <ul className="divide-y" data-testid="reviews">
+            {!requestedLast && waiting}
             {reviews.map((review) => (
                 <ReviewRow key={review.id} review={review} pr={pr} />
             ))}
+            {requestedLast && waiting}
         </ul>
+    )
+}
+
+/**
+ * A PR the operator asked to have reviewed, waiting on a tick to start its review: a hollow ring, as nothing runs for
+ * it yet, then `requested`, its PR, which opens its page with **Stop**, and how long it has waited. It has no review
+ * id, impact, commit, or cost until its review starts, and then the review's own row takes its place.
+ */
+function RequestedRow({ request }: { request: RequestedReview }) {
+    return (
+        <ListRow kind="review" className="text-sm" data-testid={`requested-${request.pr_url}`}>
+            <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                <span aria-hidden className="inline-flex size-2 shrink-0 rounded-full border border-muted-foreground" />
+                <Tip fact="Waiting on the next tick to start its review">
+                    <span>requested</span>
+                </Tip>
+            </span>
+            <span />
+            <span className="truncate">
+                <None reason={NO_TICKET} brief className="font-mono text-xs" />
+            </span>
+            <span />
+            <span className="flex min-w-0 items-center gap-3">
+                <PullRequestLink url={request.pr_url} />
+            </span>
+            <span />
+            <Age at={request.created_at} variant="ago" className="text-right" />
+        </ListRow>
     )
 }
 
