@@ -2,10 +2,10 @@
 
 A scenario test reads the way an entry in docs/SCENARIOS.md does: the overseer ticks and decides, workers run and push,
 the operator replies, and the test checks what canopy did. The `scenario` fixture's `Scenario` tells the story; the
-functions below it are the moves in it, the overseer's (`dispatches`, `raises`, `sets_phase`, `skips_tick`, and `waits`
-from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of `helpers.py`
-with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's flags spelled as
-keywords.
+functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, `skips_tick`,
+and `waits` from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
+`helpers.py` with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's
+flags spelled as keywords.
 
     def test_a_red_check_resumes_the_branch(scenario: Scenario, git_pool: GitPool) -> None:
         scenario.run(worker=pushes())
@@ -89,6 +89,13 @@ each through its desk:
         run = ws_scenario.run(dispatches(repo=both), worker=pushes(repos=both))
         assert ws.remote_head("web", run.branch) is not None
 
+A review is the overseer's move as a dispatch is: `reviews` is its command, and `review` starts it in a tick of its
+own and does it in this process, its reviewer reporting what the test gives it:
+
+    def test_a_review_names_its_ticket(scenario: Scenario, git_pool: GitPool) -> None:
+        reviewed = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+        assert (reviewed.status, reviewed.row.ticket_key) == ("done", "PROJ-1")
+
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
 
@@ -125,7 +132,7 @@ from unittest import mock
 
 from canopy.cli.main import main
 from canopy.core import db, records
-from canopy.core.vocab import Phase, ResumeReason, RunKind, RunStatus, TickStatus
+from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -152,6 +159,7 @@ from tests.canopy.helpers import (
     wait_for_run,
     worker_does,
 )
+from tests.canopy.review_helpers import PR
 from tests.conftest import CanopyEnv
 
 #: What a worker does: one of the `*_does` helpers' blocks, or `pushes`, `asks`, or `fails`. A `Script` among them,
@@ -309,6 +317,41 @@ class Working:
 
 
 @dataclass(frozen=True)
+class Reviewed:
+    """A review run as it ended: its row, the prompt its reviewer was given, and what its `canopy _review` printed."""
+
+    #: The review run's row, closed.
+    row: records.ReviewRun
+    #: Where the prompt its reviewer was given is.
+    prompt_file: Path
+    #: What its `canopy _review` printed, the run log among it.
+    printed: Printed
+
+    @property
+    def id(self) -> int:
+        """The review run's id."""
+        return self.row.id
+
+    @property
+    def status(self) -> ReviewRunStatus:
+        """How the review run ended."""
+        return self.row.status
+
+    @property
+    def prompt(self) -> str:
+        """The prompt the review run's reviewer was given."""
+        return self.prompt_file.read_text()
+
+    def __str__(self) -> str:
+        """The review run in a line, for a failed step's message: what it reviewed, how it ended, and what it said."""
+        row = self.row
+        result: dict[str, Any] = json.loads(row.result_json or "{}")
+        said = [str(result[k]) for k in ("verdict", "summary", "harness") if result.get(k)]
+        ticket = f" for {row.ticket_key}" if row.ticket_key else ""
+        return ": ".join([f"review run {row.id} of {row.pr_url} at {row.sha[:7]}{ticket}", row.status, *said])
+
+
+@dataclass(frozen=True)
 class Ticked:
     """What a tick did: its row, its decisions in the order it recorded them, and the worker runs it started."""
 
@@ -455,19 +498,53 @@ class Scenario:
         self.story.append(str(working))
         return working
 
+    def review(
+        self, command: list[str], *, reviewer: Worker | None = None, runner: InlineRunner | None = None
+    ) -> Reviewed:
+        """Start the review `command`, a `reviews(...)`, in a tick of its own, and do it in this process, its reviewer
+        doing `reviewer`, a `reviewer_reports(...)`, or the fake's default report if None.
+
+        The overseer is not run. `runner` runs the reviewer's processes, one that times it out, say, or a plain
+        `InlineRunner` if None.
+
+        Returns:
+            The review run, closed, with what its `canopy _review` printed.
+        """
+        assert command[:3] == ["canopy", "review", "run"], command
+        with ExitStack() as stack:
+            if reviewer is not None:
+                stack.enter_context(reviewer)
+            with in_tick(self.conn) as tick_id:
+                exited = main(command[1:], runner=InlineRunner())
+                if exited != 0:
+                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
+                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
+                run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+                exited, printed = _printing(lambda: main(["_review", str(run_id)], runner=runner or InlineRunner()))
+        row = present(db.get_review_run(self.conn, run_id))
+        reviewed = Reviewed(row, self.env.state_dir / "reviews" / f"{run_id}.prompt", printed)
+        self.story.append(str(reviewed) if exited == 0 else f"{reviewed}, and `canopy _review` exits {exited}")
+        assert exited == 0, reviewed
+        return reviewed
+
     def refuses(self, command: list[str], *, dry_run: bool = False) -> list[tuple[str, str]]:
-        """Dispatch `command`, a `dispatches(...)`, in a tick of its own, which canopy must refuse, starting no run.
+        """Dispatch `command`, a `dispatches(...)`, or start the review `command`, a `reviews(...)`, in a tick of its
+        own, which canopy must refuse, starting no run.
 
         Returns:
             The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any.
         """
-        assert command[:2] == ["canopy", "dispatch"], command
+        review = command[:3] == ["canopy", "review", "run"]
+        assert review or command[:2] == ["canopy", "dispatch"], command
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited = main(command[1:], runner=InlineRunner())
         made = decisions(self.conn, tick_id)
         self._tell(f"tick {tick_id} {'refuses' if exited == 1 else 'does not refuse'} {shlex.join(command)}", tick_id)
-        assert exited == 1, f"dispatch exited {exited}, not refused: {made}"
-        started = self.conn.execute("SELECT count(*) FROM runs WHERE tick_id = ?", (tick_id,)).fetchone()[0]
+        assert exited == 1, f"{shlex.join(command[:3])} exited {exited}, not refused: {made}"
+        # The table's name is one of two literals.
+        runs = "review_runs" if review else "runs"
+        started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
         assert started == 0, made
         return made
 
@@ -646,6 +723,20 @@ def dispatches(
         flags += ["--cursor", f"{name}={value}"]
     flags += _option("--context", context) + _option("--request", request)
     return canopy("dispatch", key, *flags)
+
+
+def reviews(
+    sha: str,
+    pr: str = PR,
+    *,
+    repo: str = "repo",
+    ticket: str | None = None,
+    context: str | None = None,
+) -> list[str]:
+    """The overseer starts a review of `pr` at `sha` in `repo`, of `ticket`'s PR if given, with `context` for the
+    reviewer."""
+    flags = _option("--ticket", ticket) + _option("--context", context)
+    return canopy("review", "run", "--pr", pr, "--sha", sha, "--repo", repo, *flags)
 
 
 def raises(key: str, reason: str, detail: str | None = None) -> list[str]:
