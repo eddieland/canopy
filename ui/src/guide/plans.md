@@ -113,11 +113,13 @@ decided from wherever you got to. **Approve** is always its main button; everyth
   Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of comments may need
   resolving or shortening first.
 - **Skip the plan**, as `canopy plan KEY --skip`: the implement goes ahead with no plan. The current plan's file
-  stays.
+  stays. Nothing on the page undoes it, so it asks first, right there in the foot; **Keep** (or Escape) backs out.
 
 Approving doesn't send open comments. The implement reads the plan alone, so a comment left open is a comment nobody
 acts on. While any are open, the line under the buttons counts them and says so, every time, until you resolve them
 or send them.
+The note on the whole plan travels the same way: only with Ask for changes. Press Approve with words in it and the
+foot asks whether to approve without them, rather than quietly throw away what you wrote.
 
 After you ask, the plan's page says "You asked for changes" until the next planner starts, and the button reads
 **Ask again**, so you never send a second request without knowing about the first.
