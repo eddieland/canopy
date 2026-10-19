@@ -36,6 +36,13 @@ The tab's icon says it too, for when you've pinned the tab and its title is gone
 blocks, red for something broken, amber for something waiting on your answer, grey for the rest. No dot, no reason to
 switch tabs. It's the one notification that never makes a sound.
 
+Leave the tab in the background for ten minutes or more, and when you come back a note at the bottom says what
+changed while you were gone: `Since 14:05: 1 new item needs you, 3 items cleared, 2 PRs opened, 5 runs ended`. Every
+number is counted after you return, from the list the loop sends again and the runs in the journal, so it's the news,
+not a rumor; if the loop doesn't answer within half a minute, you get no note rather than a stale one. When nothing
+happened, it says nothing, which is the best news there is. It only knows you left if the browser hid the tab: one
+left open on a second monitor was never away.
+
 ## An item
 
 Click an item to open it beside the list. The first one open is the worst item about a ticket. The address keeps the

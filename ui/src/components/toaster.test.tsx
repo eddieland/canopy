@@ -64,6 +64,19 @@ describe('Toaster', () => {
         expect(shown()).toEqual([])
     })
 
+    it('keeps a note of what changed while away for 8 seconds, long enough to read on coming back', () => {
+        renderToaster({ title: 'Since 14:05: 2 PRs opened', tone: 'note' })
+        fireEvent.click(screen.getByRole('button', { name: 'Since 14:05: 2 PRs opened' }))
+        act(() => {
+            vi.advanceTimersByTime(7999)
+        })
+        expect(shown()).toEqual(['Since 14:05: 2 PRs opened'])
+        act(() => {
+            vi.advanceTimersByTime(1)
+        })
+        expect(shown()).toEqual([])
+    })
+
     it('shows at most three at once, the newest last, closing the oldest for a fourth', () => {
         const toasts = ['One', 'Two', 'Three', 'Four'].map((title): NewToast => ({ title, tone: 'done' }))
         renderToaster(...toasts)

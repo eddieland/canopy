@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from datetime import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import RunId, not_found
-from canopy.serve.schema import RawOutput, Run, Transcript
+from canopy.serve.schema import RawOutput, Run, RunsSince, Transcript
 
 TAG = "runs"
 router = APIRouter(tags=[TAG])
@@ -18,6 +21,17 @@ def runs(backend: BackendDep) -> list[Run]:
     """The running runs, then the 50 that ended last."""
     with backend.open() as ctx:
         return views.runs(ctx)
+
+
+# Before `/runs/{run_id}`, which would otherwise take `since` for a run's id and refuse it.
+@router.get("/runs/since", operation_id="getRunsSince", summary="Count what the runs did since a moment")
+def runs_since(
+    since: Annotated[datetime, Query(description="The moment to count from, as an ISO 8601 time with its offset.")],
+    backend: BackendDep,
+) -> RunsSince:
+    """How many runs ended since `since`, and how many PRs they opened, over the whole journal."""
+    with backend.open() as ctx:
+        return views.runs_since(ctx, since)
 
 
 @router.get("/runs/{run_id}", operation_id="getRun", summary="Get a run", responses=not_found("run"))
