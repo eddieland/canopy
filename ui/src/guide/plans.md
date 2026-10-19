@@ -54,6 +54,12 @@ back on; while they're on, the header counts them, **Previous change** and **Nex
 to the other end, and the comments' highlights step aside so a passage never wears two colors. After asking for
 changes, that's how you check you got them without reading the whole plan again.
 
+**Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its
+section, and goes to the one you pick, with the cursor in it if you can edit. Every plan has the same headings (Goal,
+Acceptance, Context, and so on down to Risks), so after a few plans you'll know where Steps is without looking, and
+the menu still saves you the scrolling. As it opens it marks the section you're reading, for when a long plan has lost
+you.
+
 While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
 only too.
 
