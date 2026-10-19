@@ -54,9 +54,8 @@ test("a broken run's item leads with the run, and grants another try without lea
     const actions = await detail.getByTestId('attention-actions').boundingBox()
     const first = await run.boundingBox()
     expect(first !== null && grant !== null && actions !== null && first.y < grant.y && grant.y < actions.y).toBe(true)
-    // A public ticket with nothing waiting has no open box, only a way to write its next worker a note.
-    await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
-    await detail.getByRole('button', { name: 'Show a note for its next worker' }).click()
+    // A public ticket with nothing waiting keeps its box open, saying what a note there is for.
+    await expect(detail.getByRole('button', { name: 'Show a note for its next worker' })).toHaveCount(0)
     const field = detail.getByRole('form', { name: 'Reply' }).getByRole('textbox')
     await expect(field).toHaveAttribute('placeholder', /^For its next worker, as an instruction\./u)
     await expect(field).not.toHaveAttribute('placeholder', /untrusted/u)
@@ -128,8 +127,6 @@ test("a chore's finding opens the chore's notes and a folded form for another", 
     await expect(text.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')
     await expect(detail.getByTestId('message-8')).toContainText("Leave out the docs site's lockfile")
     await expect(detail.getByTestId('message-8')).not.toContainText('waiting for the next run')
-    await expect(detail.getByRole('form', { name: 'Note' })).toHaveCount(0)
-    await detail.getByRole('button', { name: 'Show a note for its next runs' }).click()
     await expect(detail.getByRole('form', { name: 'Note' })).toBeVisible()
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })

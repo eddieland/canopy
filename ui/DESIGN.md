@@ -851,13 +851,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   while its page shows it, a leaf drifts off the conversation's header, as a cleared row drops one in the list (Fun):
   the reward is for the item clearing, wherever it was answered. The attention page's answer drops none, its row
   dropping its own.
-- **The reply form is open only where a reply is awaited** (`ReplyForm`): a question waiting, an untrusted review
-  waiting on the go-ahead, and any private ticket, whose workers hear the operator only there. A public ticket with
-  nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a reply nothing
-  waits on, and a chore's note form always does, `Show a note for its next runs`, since nothing ever waits on a note;
-  it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
-  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On
-  a public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
+- **The reply form is always open** (`ReplyForm`), on every ticket and every chore, never folded under a `Disclosure`: a
+  note for the next worker is as likely as an answer to a question, and a click to reach the box hides where the
+  operator writes. Its label names the message it answers while a question waits, and its placeholder speaks of an
+  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On a
+  public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
   canopy, never on the ticket.`, as the ticket's `public` chip says on hover and to a screen reader, where its comments
   stay on the tracker.
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
@@ -889,8 +887,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
   (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, after the chore's findings and runs and before
-  its spend, with a note form folded under its `Disclosure` (`ChoreNotes`). With no notes the panel is its header and
-  that one line, and the form's placeholder says what the empty list would have: its runs follow its prompt file
+  its spend, with the note form open under them (`ChoreNotes`). With no notes the panel is its header and the form,
+  and the form's placeholder says what the empty list would have: its runs follow its prompt file
   alone. A note no run of the chore has started since carries `waiting for the next run` in `status-running`
   (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository

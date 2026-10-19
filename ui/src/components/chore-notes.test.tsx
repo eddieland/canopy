@@ -48,20 +48,16 @@ function shown(): string[] {
 }
 
 describe('ChoreNotes', () => {
-    it('folds the note form until asked, its box saying runs follow the prompt file alone without notes', async () => {
+    it('shows the note form open, its box saying runs follow the prompt file alone without notes', async () => {
         const { unmount } = await renderNotes([])
         expect(screen.queryByTestId('conversation')).toBeNull()
-        expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull()
         expect(screen.queryByRole('button', { name: /first/u })).toBeNull()
-        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs', expanded: false }))
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' })
         expect(field.placeholder).toMatch(/^No notes yet: its runs follow its prompt file alone\. /u)
         unmount()
 
         await renderNotes([READ])
         expect(screen.queryByRole('button', { name: /first/u })).toBeNull()
-        expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull()
-        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs' }))
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' }).placeholder).toMatch(
             /^Its next runs/u,
         )

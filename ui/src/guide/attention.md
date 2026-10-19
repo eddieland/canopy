@@ -63,7 +63,7 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause.
 
-An item about a ticket then shows the ticket's conversation and, where a reply is awaited, a box to reply in. The
+An item about a ticket then shows the ticket's conversation and a box to reply in. The
 ticket's own actions (**Start privately**, **Stop**, **Forget**; see [Tickets](tickets#acting-on-a-ticket)) sit quietly
 under the box, so from the keyboard the reply comes right after the conversation and **Forget** is never one Tab too
 far. On a reason that asks for none of the above, they come first instead.
@@ -84,9 +84,8 @@ comment on the tracker can be written by anyone who can reach the ticket, and ca
 question the ticket waits on is marked `waiting on you`, and while a run works the ticket, a live row at the newest
 end shows its latest tool call and what it has cost so far.
 
-The box under it is open wherever a reply is awaited: a question waiting, an untrusted review waiting on your
-go-ahead, or any private ticket. A public ticket with nothing waiting keeps it folded behind **Show a note for its next
-worker**, because an open box tempts you to answer something nobody asked. Open it when you do have a note.
+The box under it is always open, whether or not anything waits on you. With nothing waiting, what you write is a note
+for the ticket's next worker; the box's placeholder says which one you're writing.
 
 Type in the box and press **Reply**, or your send key (Enter, unless you changed it in
 [Settings](settings#replies); Shift+Enter always makes a new line). This is `canopy reply KEY`. A reply answers the
@@ -116,7 +115,7 @@ without the leaves.
 
 ## Chore items
 
-An item about a chore shows the chore's notes, with **Show a note for its next runs** to add one: your next instruction
+An item about a chore shows the chore's notes, with a box under them to add one: your next instruction
 to its runs, such as "the deploy check is red on purpose until Friday". A note doesn't wake the loop; the chore's next
 run reads it.
 
