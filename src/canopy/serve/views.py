@@ -114,10 +114,21 @@ SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
-_SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
+_SOURCES: dict[str, MessageSource] = {
+    "worker": "worker",
+    "operator": "operator",
+    "tracker": "tracker",
+    "canopy": "canopy",
+}
 _PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
 _NOTICE_CHANNELS: dict[str, NoticeChannel] = {"cli": "cli", "web": "web"}
-_KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "reply": "reply", "comment": "comment"}
+_KINDS: dict[str, MessageKind] = {
+    "report": "report",
+    "question": "question",
+    "reply": "reply",
+    "comment": "comment",
+    "note": "note",
+}
 
 
 def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:

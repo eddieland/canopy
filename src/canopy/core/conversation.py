@@ -7,8 +7,9 @@ within its bound. Agents never write a message: `_run` records a run's report an
 (`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
-without reading the tracker (D003, D072). The overseer records the one other kind of message, a tracker comment it
-mirrors (`mirror`), which authorizes nothing.
+without reading the tracker (D003, D072). The overseer records one other kind of message, a tracker comment it
+mirrors (`mirror`), which authorizes nothing. The last is canopy's own: a tick's note of what it did about the
+operator's messages (`note`), which no agent writes and no agent's prompt carries.
 """
 
 from __future__ import annotations
@@ -70,6 +71,10 @@ PROMPT_CHARS = 30_000
 PREVIOUS_RUNS = 3
 # How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
 CHORE_NOTES = 10
+#: Who wrote a tick's note on a ticket: canopy, from what the tick recorded (`loop/acknowledge.py`).
+CANOPY = "canopy"
+#: What a tick's note is: canopy's word on the operator's messages, never an instruction or a report of work.
+NOTE = "note"
 
 TICKET = db.SUBJECT_TICKET
 PR = "pr"
@@ -879,11 +884,12 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
 
     Messages from before the operator forgot the ticket's work are left out: they are about work that is gone. So is a
     triage's report: model text written from the ticket, which no other run hears (DESIGN §25, Triage before a plan).
+    So are canopy's notes: they say what the loop did, which the worker knows, and quote the overseer's reasons.
     """
     rows = conn.execute(
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? AND source != ? "
         "AND (run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)) ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
+        (TICKET, key, db.forgotten_message_id(conn, key), CANOPY, RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
     ).fetchall()
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
 
@@ -955,6 +961,18 @@ def _prompt_message(m: sqlite3.Row) -> str:
 def _quoted(text: str) -> str:
     # A message's body as a quote, one `> ` line per line, without control characters.
     return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
+
+
+# A tick's note
+
+
+def note(conn: sqlite3.Connection, key: str, body: str, *, answers: int) -> int:
+    """Record canopy's note on ticket `key`: what a tick did about the operator's messages, the newest `answers`.
+
+    Returns:
+        The note's id.
+    """
+    return db.insert_message(conn, TICKET, key, source=CANOPY, kind=NOTE, channel="tick", body=body, answers=answers)
 
 
 # A run's messages

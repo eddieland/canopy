@@ -16,15 +16,18 @@ const WHO: Record<Message['source'], string> = {
     worker: 'worker',
     operator: 'you',
     tracker: 'tracker',
+    canopy: 'canopy',
 }
 
 // Written out so Tailwind finds them. Each message is a bubble: the operator's own words on the right in the accent's
-// tint, a question in the tint of what waits on a person, anything else on the raised surface.
+// tint, a question in the tint of what waits on a person, canopy's note on what a tick did as a muted outline, since
+// it is about the loop rather than the work, anything else on the raised surface.
 const TONE: Record<Message['kind'], string> = {
     report: 'bg-surface-raised',
     question: 'bg-status-blocked/12',
     reply: 'bg-accent/12',
     comment: 'bg-surface-raised',
+    note: 'border border-dashed text-muted-foreground',
 }
 
 const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
