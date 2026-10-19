@@ -113,7 +113,7 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await expect(list.getByRole('link').filter({ hasText: 'awaiting reply' })).toHaveAttribute('aria-current', 'page')
 })
 
-test("a chore's finding opens the chore's notes and a folded form for another", async ({ page }) => {
+test("a chore's finding opens the chore's notes and an open form for another", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
