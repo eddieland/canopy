@@ -64,7 +64,8 @@ memory in use never share a label, so you never mistake one for the other.
 - **Proposals** are what workers suggested, oldest first, each with where it came from: its run's kind and how it ended,
   whether its ticket is done, and when it lapses if you leave it, and Promote, Reject, and Forget under it. None reaches
   a run until you promote it. The nav counts them beside **Memory** on every page, and so does the panel, so a proposal
-  doesn't quietly expire at 14 days because you never came looking. Clear the lot and the panel says so.
+  doesn't quietly expire at 14 days because you never came looking. A long queue scrolls in its panel, so your lessons
+  stay in reach under it. Clear the lot and the panel says so.
 - **Lessons** are the ones you promoted, each with Renew, Edit, and Forget, the ones a run reported wrong first, then
   by review date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run
   is served from your lessons, or would be served at use while recording.
