@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import click
 
 from canopy.cli.common import CliError, open_context
+from canopy.cli.render import report_json
 from canopy.core import conversation
 from canopy.loop import gc
 
@@ -45,7 +45,7 @@ def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool) -> int:
     ctx = open_context(click_ctx)
     report = gc.measure(ctx, datetime.now(UTC))
     if as_json:
-        click.echo(json.dumps(dataclasses.asdict(report), sort_keys=True))
+        click.echo(report_json(dataclasses.asdict(report)))
         return 0
     for line in render(report):
         click.echo(line)

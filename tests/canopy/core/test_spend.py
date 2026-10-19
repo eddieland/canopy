@@ -226,7 +226,10 @@ def test_canopy_spend_json_is_the_breakdown_with_each_total(
 ) -> None:
     journal_of_a_week(canopy_env.journal(), noon_today())
     assert main(["spend", "--json"]) == 0
-    data = json.loads(capsys.readouterr().out)
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    # A value to a line, so an agent's file tools, which cut a long line, read all of a report too long to print whole.
+    assert all(line.count('": ') <= 1 for line in out.splitlines())
     assert data["days"] == spend.DEFAULT_DAYS
     assert len(data["per_day"]) == spend.DEFAULT_DAYS
     assert data["totals"]["total"] == pytest.approx(7.05)
