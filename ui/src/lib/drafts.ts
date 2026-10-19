@@ -64,6 +64,11 @@ export function waiting(threads: PullRequestThreads): Draft[] {
     return [...threads.pr_drafts, ...threads.threads.flatMap((t) => t.drafts)].filter((d) => d.status === 'waiting')
 }
 
+/** Every draft for the PR in the review the operator staged, which they submit on GitHub. */
+export function staged(threads: PullRequestThreads): Draft[] {
+    return [...threads.pr_drafts, ...threads.threads.flatMap((t) => t.drafts)].filter((d) => d.status === 'staged')
+}
+
 /** Sorts a PR's threads onto its diff: at their line, under their file, or elsewhere, as a review's findings are. */
 export function placeThreads(threads: PullRequestThreads): Placed<ReviewThread> {
     return place(threads.threads, (t) => ({ file: t.file, line: t.diff_line }), threads.diff !== null)

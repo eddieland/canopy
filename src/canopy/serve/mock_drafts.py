@@ -221,8 +221,39 @@ class GitHub(procs.SubprocessRunner):
         if name == "canopy-connect-github":
             return procs.Result(tuple(args), 0, self._read(json.loads(stdin or "{}")), "")
         if name == "canopy-post-github":
-            return procs.Result(tuple(args), 0, _post(stdin or "{}"), "")
+            printed = _post(stdin or "{}")
+            self._hold_staged(json.loads(stdin or "{}"), printed)
+            return procs.Result(tuple(args), 0, printed, "")
         return super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line)
+
+    def _hold_staged(self, request: Mapping[str, object], printed: str) -> None:
+        """Keep a staged review where the reader reads it, pending under the operator's login, as GitHub would."""
+        pr = request.get("pr")
+        if request.get("submit") is not False or not isinstance(pr, str):
+            return
+        lines = [json.loads(line) for line in printed.splitlines()]
+        pending = next((line for line in lines if line["kind"] == "pending"), None)
+        if pending is None:
+            return
+        conn = db.connect(self.journal)
+        try:
+            with db.transaction(conn):
+                conn.execute(
+                    "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, "
+                    "observed_at) VALUES (?, 'review', ?, 'op', 0, 'pending', NULL, ?, NULL, ?)",
+                    (pr, pending["id"], request.get("body") or "", db.now()),
+                )
+                for line in (line for line in lines if line["kind"] == "comment"):
+                    conn.execute(
+                        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, created_at, body, url, "
+                        "review_id, thread_id, path, line, side, outdated, resolved, observed_at) "
+                        "SELECT pr_url, 'comment', ?, 'op', 0, ?, ?, ?, ?, thread_id, path, line, side, outdated, "
+                        "resolved, ? FROM observed_reviews WHERE pr_url = ? AND item = 'comment' AND id = ?",
+                        (line["id"], db.now(), _text_for(request, line["comment"]), line["url"], pending["id"],
+                         db.now(), pr, line["comment"]),
+                    )  # fmt: skip
+        finally:
+            conn.close()
 
     def _read(self, request: Mapping[str, list[str]]) -> str:
         conn = db.connect(self.journal)
@@ -280,6 +311,17 @@ class GitHub(procs.SubprocessRunner):
         return "".join(json.dumps(line) + "\n" for line in lines)
 
 
+def _text_for(request: Mapping[str, object], comment: object) -> str:
+    """The text of the reply `request` makes to `comment`.
+
+    Returns:
+        The text, or empty when it makes none.
+    """
+    raw = request.get("replies")
+    replies: list[object] = raw if isinstance(raw, list) else []
+    return next((str(r.get("text")) for r in replies if isinstance(r, dict) and r.get("comment") == comment), "")
+
+
 def _post(stdin: str) -> str:
     """What `canopy-post-github` would print for one PR's drafts or one ticket's.
 
@@ -313,6 +355,9 @@ def _post(stdin: str) -> str:
                 posted = 2_469_000_000 + (answered if isinstance(answered, int) else 0) % 1_000_000
                 url = f"{pr}#discussion_r{posted}"
                 lines.append({"kind": "comment", "comment": answered, "id": posted, "url": url})
+            if request.get("submit") is False:
+                lines.append({"kind": "end", "submitted": False, "staged": True})
+                return "".join(json.dumps(line) + "\n" for line in lines)
             lines.append({"kind": "review", "id": review, "url": f"{pr}#pullrequestreview-{review}"})
     else:
         posted = 2_470_000_000 + made

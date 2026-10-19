@@ -129,6 +129,7 @@ describe('DraftCard', () => {
                 already: [],
                 failed: [],
                 unconfirmed: [],
+                staged: [],
             }),
         )
         expect((await screen.findByRole('status')).textContent).toBe(`Sent run 45's draft 1: ${PR}#discussion_r9.`)
@@ -260,10 +261,8 @@ describe('ReviewThreads', () => {
     it('sends every waiting draft together, the review body first', async () => {
         const body = draft({ kind: 'pr', number: 2, stance: null, comment_id: null, hash: 'bbbbbbbbbbbb' })
         const threads = pullRequestThreads({ pr_drafts: [body] })
-        answer = (path) =>
-            path === '/api/drafts/send'
-                ? Response.json({ posted: [draft({ status: 'sent' })], already: [], failed: [], unconfirmed: [] })
-                : Response.json(threads)
+        const outcome = { posted: [draft({ status: 'sent' })], already: [], failed: [], unconfirmed: [], staged: [] }
+        answer = (path) => Response.json(path === '/api/drafts/send' ? outcome : threads)
         await renderRouted(toasting(<ReviewThreads url={PR} />))
         fireEvent.click(await screen.findByRole('button', { name: 'Send 2 waiting' }))
         await screen.findByRole('status')
@@ -282,6 +281,67 @@ describe('ReviewThreads', () => {
         ])
         // With no diff kept, the threads are listed whole.
         expect(within(screen.getByTestId('threads-elsewhere')).getByText('Threads')).toBeTruthy()
+    })
+
+    it('stages every waiting draft in a review on GitHub, and says reactions go on their comments now', async () => {
+        const body = draft({ kind: 'pr', number: 2, stance: null, comment_id: null, hash: 'bbbbbbbbbbbb' })
+        const reacts = draft({ run: 46, text: '', reaction: '+1', hash: 'cccccccccccc' })
+        const threads = pullRequestThreads({
+            pr_drafts: [body],
+            threads: [reviewThread({ drafts: [draft(), reacts] })],
+        })
+        const held = [draft({ status: 'staged' }), { ...body, status: 'staged' as const }]
+        const staged = {
+            posted: [{ ...reacts, status: 'sent' as const, reacted: '+1' as const }],
+            already: [],
+            failed: [],
+            unconfirmed: [],
+            staged: held,
+        }
+        answer = (path) => Response.json(path === '/api/drafts/stage' ? staged : threads)
+        await renderRouted(toasting(<ReviewThreads url={PR} />))
+        const start = await screen.findByRole<HTMLButtonElement>('button', { name: 'Start a review on GitHub' })
+        expect(start.title).toBe('canopy draft stage run:45 2@bbbbbbbbbbbb 1@cb496d375e04 run:46 1@cccccccccccc')
+        expect(screen.getByTestId('review-replies').textContent).toContain(
+            "its reactions go on their comments now, since GitHub can't keep one pending.",
+        )
+        fireEvent.click(start)
+        expect((await screen.findByRole('status')).textContent).toContain(
+            "Run 46's draft 1 put thumbs up on its comment now, not in the review: GitHub can't keep a reaction " +
+                'pending.',
+        )
+        expect(toasts).toEqual([
+            {
+                title: 'Staged 2 drafts in a review on GitHub, and added 1 reaction now',
+                detail: `${PR}/files`,
+                tone: 'done',
+            },
+        ])
+        expect(writes()).toEqual([
+            {
+                method: 'POST',
+                path: '/api/drafts/stage',
+                body: {
+                    drafts: [
+                        { run: 45, number: 2, hash: 'bbbbbbbbbbbb' },
+                        { run: 45, number: 1, hash: 'cb496d375e04' },
+                        { run: 46, number: 1, hash: 'cccccccccccc' },
+                    ],
+                },
+            },
+        ])
+    })
+
+    it('offers no send while the PR holds a staged review, and says where to finish it', async () => {
+        const body = draft({ kind: 'pr', number: 2, stance: null, comment_id: null, status: 'staged' })
+        answer = () => Response.json(pullRequestThreads({ pr_drafts: [body] }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        const held = await screen.findByTestId('staged-review')
+        expect(held.textContent).toContain('1 draft waits in the review you staged.')
+        expect(within(held).getByRole<HTMLAnchorElement>('link', { name: 'on GitHub' }).href).toBe(`${PR}/files`)
+        expect(screen.queryByRole('button', { name: 'Send 1 waiting' })).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Start a review on GitHub' })).toBeNull()
+        expect(screen.getAllByText('It is in the review you staged, for you to submit on GitHub.')).toHaveLength(1)
     })
 
     it('lists every draft with a link to its card, in the order the cards show', async () => {

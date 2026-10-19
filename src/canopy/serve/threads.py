@@ -99,10 +99,10 @@ def known(conn: sqlite3.Connection, url: str) -> bool:
 
 
 def sent(conn: sqlite3.Connection, outcome: drafts_manage.Sent) -> DraftsSent:
-    """What a send did, as the API sends it.
+    """What a send or a stage did, as the API sends it.
 
     Returns:
-        The drafts posted now, before, failed, and unconfirmed, each as it now stands.
+        The drafts posted now, before, failed, unconfirmed, and staged, each as it now stands.
     """
 
     def now(found: Iterable[records.Draft]) -> list[Draft]:
@@ -114,7 +114,11 @@ def sent(conn: sqlite3.Connection, outcome: drafts_manage.Sent) -> DraftsSent:
         if (d := drafts.get(conn, f.id)) is not None
     ]
     return DraftsSent(
-        posted=now(outcome.posted), already=now(outcome.already), failed=failed, unconfirmed=now(outcome.unconfirmed)
+        posted=now(outcome.posted),
+        already=now(outcome.already),
+        failed=failed,
+        unconfirmed=now(outcome.unconfirmed),
+        staged=now(outcome.staged),
     )
 
 

@@ -190,9 +190,32 @@ export type paths = {
          *     One PR's drafts go as one comment review, which approves nothing and resolves no thread. Every check runs before
          *     anything posts, and any refusal posts nothing: `unchecked`, `superseded`, `dropped`, `refused`, `unconfirmed`,
          *     `stale` for a text that changed since the page showed it, `thread_changed` for a comment that arrived on its thread,
-         *     and `no_post`.
+         *     `staged` for a PR holding a review the operator staged, and `no_post`.
          */
         post: operations["sendDrafts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drafts/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage drafts in a review on GitHub
+         * @description `canopy draft stage`: the drafts in one pending review a PR, for the operator to finish and submit on GitHub.
+         *
+         *     Every check a send makes runs first, and any refusal stages nothing: as for a send, and `not_pr` for a ticket's
+         *     draft, `reaction` for a reaction not yet on GitHub, which no pending review holds.
+         */
+        post: operations["stageDrafts"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2318,7 +2341,7 @@ export type components = {
         };
         /**
          * DraftSendRequest
-         * @description Drafts to send together, as `canopy draft send` takes them: one PR's go as one comment review.
+         * @description Drafts to send or stage together, as `canopy draft send` and `stage` take them: one PR's go as one review.
          */
         DraftSendRequest: {
             /**
@@ -2329,7 +2352,7 @@ export type components = {
         };
         /**
          * DraftsSent
-         * @description What a send did, as `canopy draft send` reports it.
+         * @description What a send or a stage did, as `canopy draft send` and `canopy draft stage` report it.
          */
         DraftsSent: {
             /**
@@ -2347,6 +2370,11 @@ export type components = {
              * @description The drafts posted now.
              */
             posted: components["schemas"]["Draft"][];
+            /**
+             * Staged
+             * @description The drafts a stage put in a pending review, for the operator to submit on GitHub.
+             */
+            staged: components["schemas"]["Draft"][];
             /**
              * Unconfirmed
              * @description The drafts whose post ended without saying whether it submitted, until a read of the PR settles them.
@@ -6673,6 +6701,93 @@ export interface operations {
         };
     };
     sendDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftsSent"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stageDrafts: {
         parameters: {
             query?: never;
             header?: never;

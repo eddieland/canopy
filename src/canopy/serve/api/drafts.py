@@ -1,8 +1,9 @@
-"""Review replies (DESIGN §29): a PR's threads on its diff, and editing, dropping, and sending its drafts.
+"""Review replies (DESIGN §29): a PR's threads on its diff, and editing, dropping, sending, and staging its drafts.
 
 The verbs are `canopy draft`'s, through `canopy.core.drafts_manage`, so with its refusals. A send posts the text the
-page showed, named by its hash, as the operator's own words: the drafts for one PR as one comment review. A PR is named
-by its URL, an opaque string with slashes in it, so it is a query parameter, never a path.
+page showed, named by its hash, as the operator's own words: the drafts for one PR as one comment review. A stage puts
+the same text in a pending review instead, which the operator submits on GitHub. A PR is named by its URL, an opaque
+string with slashes in it, so it is a query parameter, never a path.
 """
 
 from __future__ import annotations
@@ -117,7 +118,7 @@ def send(body: DraftSendRequest, backend: BackendDep) -> DraftsSent:
     One PR's drafts go as one comment review, which approves nothing and resolves no thread. Every check runs before
     anything posts, and any refusal posts nothing: `unchecked`, `superseded`, `dropped`, `refused`, `unconfirmed`,
     `stale` for a text that changed since the page showed it, `thread_changed` for a comment that arrived on its thread,
-    and `no_post`.
+    `staged` for a PR holding a review the operator staged, and `no_post`.
     """
     wanted = [drafts_manage.Wanted(d.run, d.number, d.hash) for d in body.drafts]
     with backend.open() as ctx:
@@ -129,5 +130,28 @@ def send(body: DraftSendRequest, backend: BackendDep) -> DraftsSent:
         _log.info(
             "drafts sent",
             extra={"posted": len(outcome.posted), "failed": len(outcome.failed), "channel": WEB},
+        )
+        return threads.sent(ctx.conn, outcome)
+
+
+@router.post(
+    "/drafts/stage", operation_id="stageDrafts", summary="Stage drafts in a review on GitHub", responses=REFUSED
+)
+def stage(body: DraftSendRequest, backend: BackendDep) -> DraftsSent:
+    """`canopy draft stage`: the drafts in one pending review a PR, for the operator to finish and submit on GitHub.
+
+    Every check a send makes runs first, and any refusal stages nothing: as for a send, and `not_pr` for a ticket's
+    draft, `reaction` for a reaction not yet on GitHub, which no pending review holds.
+    """
+    wanted = [drafts_manage.Wanted(d.run, d.number, d.hash) for d in body.drafts]
+    with backend.open() as ctx:
+        try:
+            outcome = drafts_manage.stage(ctx.conn, ctx.config, ctx.runner, wanted, channel=WEB, log=_log)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        backend.write_attention(ctx)
+        _log.info(
+            "drafts staged",
+            extra={"staged": len(outcome.staged), "failed": len(outcome.failed), "channel": WEB},
         )
         return threads.sent(ctx.conn, outcome)

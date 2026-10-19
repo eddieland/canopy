@@ -139,6 +139,26 @@ def test_the_page_stages_a_reaction_and_sends_it_alone(scenario: Scenario, githu
 
 
 @pytest.mark.usefixtures("git_pool")
+def test_the_page_stages_drafts_in_a_review_and_sends_nothing_else_while_it_is_pending(
+    scenario: Scenario, github_state: Path
+) -> None:
+    c, write, run_id = drafted(scenario, github_state)
+    reply = threads_of(c)["threads"][0]["drafts"][0]
+    wanted = [{"run": run_id, "number": 1, "hash": reply["hash"]}]
+    staged = c.post("/api/drafts/stage", json={"drafts": wanted}, headers=write)
+    assert staged.status_code == 200, staged.text
+    assert [(d["number"], d["status"]) for d in staged.json()["staged"]] == [(1, "staged")]
+    assert reads(github_state, "post")[0]["submit"] is False
+    assert threads_of(c)["threads"][0]["drafts"][0]["status"] == "staged"
+    body = threads_of(c)["pr_drafts"][0]
+    again = c.post(
+        "/api/drafts/send", json={"drafts": [{"run": run_id, "number": 2, "hash": body["hash"]}]}, headers=write
+    )
+    assert refused(again).startswith("staged: ")
+    assert len(reads(github_state, "post")) == 1
+
+
+@pytest.mark.usefixtures("git_pool")
 def test_a_send_of_text_the_page_no_longer_shows_is_refused_stale(scenario: Scenario, github_state: Path) -> None:
     c, write, run_id = drafted(scenario, github_state)
     seen = threads_of(c)["threads"][0]["drafts"][0]["hash"]
