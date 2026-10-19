@@ -1,5 +1,5 @@
-# Name your tracker project and repositories in the prompt, define the canopy-memory-tickets agent, and keep this chore
-# out of the sandbox:
+# Name your tracker project and repositories in the prompt, and keep this chore out of the sandbox. Its agent comes
+# with it:
 # https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-memory-tickets
 [chores.memory-tickets]
 prompt = "~/.config/canopy/chores/memory-tickets.md"
