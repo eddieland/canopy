@@ -4,318 +4,97 @@ Part of the canopy design, normative like all of it: what workers record of what
 decides. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [The overseer's
 tools](OVERSEER_TOOLS.md). Next: [Review replies](REVIEW_REPLIES.md).
 
-## 28. Agent memory (M50)
+## 28. Agent memory
 
-ROADMAP M50. §7, §8, §12, §14, and §22 describe canopy with memory off; this section says what memory changes in each.
-Off by default, and with it off nothing a run, a tick, or the overseer reads changes.
+§7, §8, §12, §14, and §22 describe canopy with memory off; this section says what memory changes in each. Off by
+default, and with it off nothing a run, a tick, or the overseer reads changes. TRUST_MODEL T1, T7, and T8 hold what it
+lets the loop do.
 
-`{{PREVIOUS_RUNS}}` (§8) is ticket memory already, but it forgets by position, it is narrative, and a wrong conclusion
-stays until it scrolls out; and workspace-wide only the operator writes text every run reads. Coding agents gain from
-short, distilled, verified lessons and lose from raw history or memory that does not fit the task; they often skip
-memory tools, so what must be seen is pushed into the prompt; and every memory-poisoning incident shipped so far had an
-agent that read untrusted text write a store that later reached a broader context. So memory comes in two tiers, split
-by who can make text reach another ticket:
+Agents gain from short, verified lessons, not raw history; they skip memory tools, so what must be seen is pushed into
+the prompt; and memory is poisoned when an agent that read untrusted text writes a store a broader context reads. So
+memory comes in two tiers, split by who can make text reach another ticket:
 
-- **Ticket notes**: keyed entries a ticket's runs write, read only by that ticket's later runs, as data. Their reach is
-  their ticket's, as the reports in `{{PREVIOUS_RUNS}}` are.
-- **Workspace lessons**: workers only propose them. A proposal reaches no prompt. The operator promotes one into a
-  lesson, in their own words if they like, or rejects it, and may promote a ticket's note the same way; a lesson is
-  the operator's text, beside the standing instructions, and only the operator retires it.
+- **Ticket notes**: keyed entries a ticket's runs write, read only by that ticket's later runs, as data.
+- **Workspace lessons**: workers only propose them, and a proposal reaches no prompt. A lesson is the operator's text,
+  promoted from a proposal or a note, beside the standing instructions, and only the operator retires it.
 
-The overseer writes no memory and reads none: it reads every ticket's text every tick, and T1 refuses it the notice for
-that reason, so a curator role would hand it the notice under another name. Nothing is added to the state block or
-`prompts/overseer.md`, so the overseer's cached prefix (§6) stays as it is. Reviews, chores, and splits get neither
-tier: a reviewer stays independent of the author's beliefs.
+The overseer writes no memory and reads none, since it reads every ticket's text (T1). Reviews, chores, and splits get
+neither tier: a reviewer stays independent of the author's beliefs.
 
-### Configuration
-
-Private keys, in the user file or the private file (§12), never the workspace file:
-
-```toml
-[memory]
-ticket_notes = "off"   # off | record | use
-proposals = "off"      # off | record | use
-```
-
-- Each tier has its own key, since they carry different risk. `record` asks workers to write and serves nothing, so
-  the operator can judge what a tier holds before any of it reaches a prompt; `use` writes and serves.
-- Private, since `use` changes what agents may write into later prompts and `record` fills what `use` would serve
-  (TRUST_MODEL T7).
-- Turning a key down stops what its mode added and deletes nothing; `canopy memory purge --all` removes what a trial
-  wrote. Turning `record` to `use` serves what was recorded with nothing approved again: the operator reads it first.
-- A run keeps the modes its prompt was rendered under (§8, step 3), whatever the config says by the time it ends: its
-  result is read under the modes the journal recorded for it.
-
-### Off
-
-With both keys off, `{{TICKET_MEMORY}}`, `{{WORKSPACE_LESSONS}}`, and `{{MEMORY_CONTRACT}}` render as the empty string,
-placed so that every shipped prompt is the same bytes as before memory existed; an override without them still serves.
-Memory's result fields are parsed apart from the result and never stored in `result_json`, so what a worker sends anyway
-is stored nowhere. `canopy memory` says memory is off, the web UI shows no memory page or readout, no memory attention
-item arises, and no run records a memory row. The one footprint is empty tables and an empty search index: migrations
-are not conditional, and a second database file would cost a second schema lifecycle and the foreign keys to `runs` and
-`tickets`.
+Each tier has its own private key (§12, T7), since the tiers carry different risk: `off`, `record`, or `use`. `record`
+writes and serves nothing, so the operator can judge a tier before it reaches a prompt; `use` writes and serves, what
+was recorded too. Turning a key down deletes nothing. A run keeps the modes its prompt was rendered under (§8, step 3).
+With both off, every shipped prompt is as before memory existed, and what a worker sends of memory is stored nowhere.
 
 ### The contract
 
-`{{MEMORY_CONTRACT}}` follows the result line of every `implement` and `resume` prompt, public and private,
-since the literal JSON line cannot carry fields that come and go with the config. It asks for each field only while
-the tier that owns it allows it, so tiers at different modes need no rule of their own:
-
-```json
-{"notes":[{"key":"ci-flake","text":"..."}],"drop_notes":["old-key"],
- "proposals":[{"key":"bazel-cache","text":"...","repo":"api"}],"memory_used":[12],"memory_wrong":[9]}
-```
-
-- `notes` while ticket notes are not off; `drop_notes` only at `use`.
-- `proposals` while proposals are not off.
-- `memory_used` and `memory_wrong` while either tier is at `use`, citing only ids rendered into that run's prompt. A
-  worker shown no memory has no key to drop and no id to cite.
-
-A note ends with its ticket (Retention), so the contract asks for one only about what is true of its ticket alone: what
-causes its problem, what was tried and failed, how to check it. What would hold for another ticket too, such as what the
-environment's tools or access cannot do, it sends to the proposals, or nowhere while proposals are off: filed as a note,
-a lesson is served to one ticket and forgotten when it is done. Rejected: note kinds for commands and environment
-quirks, which steered workers to file such lessons as notes.
-
-The contract gives each entry a shape, so notes and proposals read the same from run to run, for the next worker and
-for the operator who judges them. A note's key starts with its kind (`cause-`, `dead-end-`, `check-`), so a later run
-that learns more about the same thing reuses the key and supersedes the note, rather than writing a second one beside
-it. Its text says what holds, the evidence a later run can check it by, and what to do next. The contract asks
-for nothing the summary, the branch, or its commits already say, since those reach the next run anyway. A proposal
-says what any worker should do, why, and when it applies, and only what the run itself showed and the repository's own
-docs do not say. The harness checks none of this shape: a text that departs from it is held to the bounds alone.
-Rejected: evidence and next step as fields of their own, each needing bounds, for what one line carries.
-
-Every field is optional. A field the run's modes did not ask for changes nothing. Once a key is not off, a prompt
-override without the placeholders its mode needs is `bad_prompt`, as for the standing instructions and the notice:
-`{{MEMORY_CONTRACT}}` for a tier at `record`, and that tier's digest placeholder too at `use`.
+The `implement` and `resume` prompts ask, after the result line, for each optional memory field only while its tier
+allows it: `notes` and `proposals` while their tier is not off; `drop_notes`, `memory_used`, and `memory_wrong` at
+`use`. A prompt override that lacks what its mode needs is refused. At `use` they carry the ticket's notes, capped,
+framed as its previous runs are: data to check against the branch, kept off the tracker, the PRs, and commits.
 
 ### Writing
 
-`_run` writes a run's memory in the transaction that closes it (§8, step 7), only from a valid result line, for the
-run's own ticket, read from its journal row, never from the result, so no run writes another ticket's notes.
-
-- A note under a key already in force supersedes it; nothing is edited in place, and the old note stays, superseded.
-  Notes from runs that ended `failed` or `blocked` are kept: a dead end is what a retry most needs.
-- `memory_wrong` retires a note it cites; on a lesson it only records the report, which raises `lesson_wrong`, since a
-  lesson is the operator's word. `memory_used` renews what it cites, and pushes a lesson's review date out 90 days.
-  `drop_notes` retires a shown note by key. Only memories rendered into the run's own prompt count, so a worker cannot
-  renew or retire what it never saw.
-- What a run had refused is recorded with it, in the harness's words, never the text, for the operator to read.
+A run's memory is written in the transaction that closes it (§8, step 7), only from a valid result line, and only for
+the run's own ticket as its journal row names it, so no run writes another ticket's notes. Memory is never stored with
+the result, so `purge` can reach it. A new note under a key supersedes the old, and notes from failed or blocked runs
+are kept: a dead end is what a retry most needs. A report of a note wrong retires it; of a lesson, it only records the
+report. Only memories rendered into the run's own prompt count, so a worker cannot renew or retire what it never saw.
+What a run had refused is recorded in the harness's words, never its text.
 
 ### Bounds
 
-In code, at write, for a note and a proposal alike, and for a lesson's text at promotion. Each entry is refused alone,
-never cut or cleaned, so one bad entry costs only itself.
-
-- A key is lowercase words joined by hyphens, at most 40 characters, as a branch's slug is (§8). A note is at most 400
-  characters and 5 a run; a proposal at most 600 and 3 a run, so one run cannot fill the queue.
-- A text is one line of plain text. Every control, format, surrogate, private-use, unassigned, and line or paragraph
-  separator character is refused, which takes in zero-width, bidi, and Unicode tag characters: each hides text from
-  the operator that a model still reads.
-- A text that looks like a secret is refused: a known credential's shape, or a long word of a base64 or URL-safe
-  alphabet that mixes upper and lower case and digits, switches between them often, and repeats few characters.
-  Hexadecimal words are never taken for one, since notes name commits.
-- A text equal, once casefolded and its whitespace collapsed, to a note of the same ticket in force, or to a pending
-  proposal or a lesson, is refused as a repeat.
-
-### Ticket notes in prompts
-
-At `use`, `{{TICKET_MEMORY}}` is in the `implement` and `resume` prompts, public and private, beside
-`{{PREVIOUS_RUNS}}`, and framed as it is: data to check against the branch and PR, kept off the tracker, the PRs, and
-commit messages. Each note shows its id and key, the run that wrote it and how it ended, how many runs ago, and the head
-it was written against, so a worker can judge whether it still holds. The section is capped at 3 KiB; past the cap the
-least recently used are left out of the prompt, not the journal, and counted. A ticket with no note says so, since the
-worker was told memory exists.
+Enforced in code at write, and for a lesson's text at promotion. Each entry is refused alone, never cut or cleaned, so
+one bad entry costs only itself. Texts and their number a run are bounded, so one run cannot fill the queue. A text is
+one line of plain text, with no character that can hide text from the operator while a model still reads it. A text
+that looks like a secret is refused (a hexadecimal word never does, since notes name commits), and so is one that
+repeats a note in force, a pending proposal, or a lesson.
 
 ### Retention
 
-- A ticket's notes are invalidated when it is marked done and on `canopy forget`, matching `{{PREVIOUS_RUNS}}`' "since
-  any forget". `canopy stop` keeps them: a stopped ticket may be started again.
-- A pending proposal nobody reviews expires 14 days after it was written, by the tick's reconcile (§6, step 3), in
-  every mode.
-- M47's pass (§26) deletes the text of notes and proposals no longer in force after `retention.memory_days`, keeping
-  the row. A lesson never lapses: it is the operator's word, and so is each version an edit replaced, whose text stays
-  until the operator forgets it. Forgetting a version leaves the others' text, and `forget` names the versions that
-  keep theirs, since a secret an edit took out of a lesson is still in the version before it.
+A ticket's notes are invalidated when it is marked done and on `canopy forget`, as its previous runs are; `canopy stop`
+keeps them, since a stopped ticket may start again. A pending proposal nobody reviews expires (§6, step 3). §26's pass
+deletes the text of notes and proposals no longer in force, keeping the row; a lesson, and each version an edit
+replaced, keeps its text until the operator forgets it.
 
 ### Proposals and lessons
 
-- A pending proposal is rendered into no prompt, at any mode. At most 20 are pending: past it a new one is refused, so
-  a flood cannot push older ones out.
-- `canopy memory promote ID [--text TEXT] [--repo REPO]` makes a pending proposal a lesson in the operator's name,
-  with their text if given, under the same bounds, for `REPO` if given; a lesson in force under its key is superseded.
-  `canopy memory reject ID` ends a proposal. Both work at `record` as at `use`, so the operator can build the lessons up
-  before any is served.
-- `canopy memory edit ID [--text TEXT] [--repo REPO | --every-repo]` writes a lesson in force anew, under the same
-  bounds and in the operator's name (M59). The new version supersedes the lesson and is made from it, so nothing is
-  edited in place: the old words stay as the lesson's history, which no run is served or finds, and what runs read of
-  each version, and said of it, stays with the words they read. The new version is due for review 90 days on, with
-  any run's report that the lesson is wrong cleared: in writing it, the operator vouched for it. An edit that changes
-  neither the words nor the repository is refused `unchanged`. Rejected: an edit in place, which would leave a run's
-  citations naming words it never read; and a table of versions beside `memories`, which `memory_reads` would have to
-  cite as well.
-- A memory's versions are the chain `supersedes` links, both ways: a lesson's edits and the lessons promoted over it
-  under its key, and a note's under a key its ticket's later runs reused. `canopy memory history ID` lists them, newest
-  first, each with how it was made. A lesson forgotten, or a note dropped, ends its chain: one written under its key
-  after starts another.
-- `promote` takes a ticket's note too, whatever its status while it keeps its text, since what a ticket taught is
-  often clearest once it is done and its notes invalidated. The note stays its ticket's, unchanged; its lesson is for
-  every repository unless `--repo` names one, since a note names none. Promoting a note or a proposal from a private
-  ticket's run in its own words warns that its text may hold what the operator kept off the tracker.
-- At `use`, `{{WORKSPACE_LESSONS}}` is in every worker prompt that carries `{{STANDING_INSTRUCTIONS}}`, every kind but
-  a split's (§8), beside them and framed as the operator's words that the prompt's obligations come before. Capped at
-  2 KiB: past it the lessons longest since promoted, renewed, or used are left out and counted, and the rest render in
-  key order, so with many lessons the ones the operator or a run last vouched for are served, not the first by name. A
-  lesson naming a repository renders only in runs that lease it. A plan hears lessons but carries no contract, so it
-  cites none.
-- A lesson comes up for review 90 days after it was promoted or last used: the operator renews it
-  (`canopy memory renew ID`), graduates it into a repository's AGENTS.md or a skill through a ticket and a PR they
-  merge, or forgets it.
-
-### Attention items
-
-The harness raises three (§14), the operator's alone: they are harness reasons, so the overseer's view of the list
-leaves them out and no tick spends a decision on them. None arises while `memory.proposals` is off.
-
-- `memory_proposal`, about a ticket marked done whose runs' proposals wait, so the operator reviews lessons whose work a
-  merge has checked.
-- At `use` only, one `lesson_review` naming the lessons due, longest overdue first, and one `lesson_wrong` naming the
-  lessons a run reported wrong since their last renewal. No run reads a lesson at `record`, so none is raised there;
-  once the key is `use`, every lesson past its date comes up together at the first tick, in one item, the review the
-  operator wants before an old lesson is served. An item names ten at most and counts the rest, so hundreds of lessons
-  due still make one line.
+- Past a cap on pending proposals a new one is refused, so a flood cannot push older ones out.
+- The operator promotes a proposal or a note into a lesson, under the same bounds, or rejects a proposal; both work at
+  `record`. Promoting a private ticket's run's own words warns that they may hold what was kept off the tracker.
+- An edit writes a lesson anew, the old words kept as history and served to no run. Rejected: an edit in place, which
+  would leave a run's citations naming words it never read.
+- At `use`, lessons are in every worker prompt that carries the standing instructions, every kind but a split's (§8),
+  framed as the operator's words that the prompt's obligations come before; capped, and a lesson naming a repository
+  only in runs that lease it.
+- A lesson unused for a while comes up for review: the operator renews it, graduates it into a repository's AGENTS.md
+  or a skill through a PR they merge, or forgets it.
+- The attention items (§14), none while proposals are off: `memory_proposal` once a ticket is done, so proposals are
+  judged after a merge checked the work, and at `use`, `lesson_review` and `lesson_wrong`.
 
 ### Search
 
-The digests are capped, and a note that a later one under its key replaced leaves them, so `canopy memory search WORDS`
-finds the rest by their words, best match first: SQLite's full-text index over each memory's key and text, ranked with
-bm25(), a word in a key weighing more than one in a text. A query is read as words, never as the index's query syntax,
-so nothing a worker types is an error. It adds to what is pushed into the prompt and replaces none of it.
-
-- In a worker's run, which `CANOPY_RUN_ID` names, it finds only what that run's prompt could be served, each tier only
-  while the journal says it was at `use` for the run: its ticket's notes in force and those they replaced, and the
-  lessons for the repositories it leased. Never another ticket's notes, an invalidated note, or a pending proposal. A
-  run that has ended finds nothing, a review or a chore no memory at all, and the overseer is refused, since it reads
-  no memory.
-- What it finds is framed as the digests frame it, a note as data to check and a lesson as the operator's word, both
-  kept off the tracker and the PRs, with every hidden character named. It is not rendered into the prompt, so a run
-  cites none of it in `memory_used` or `memory_wrong`.
-- A digest names the command where it helps: the ticket's whenever it has notes, the lessons' when its cap left some
-  out. A run told nothing of memory is told nothing of search, and with memory off every prompt stays the same bytes.
-- In the operator's shell it finds every memory that still has its text, proposals and every ticket's notes included.
-- Both worker definitions allow it, the one `canopy` command they do (§13). A sandboxed worker cannot run it: the
-  journal is in the part of `.canopy/` its policy denies (§24), so it has its digests.
-- The index holds no copy of a text: `forget` and `purge` leave no word of what they deleted in it. It needs SQLite
-  built with FTS5, which every journal's migrations create and `make install-check` checks.
-- T1 is unchanged: a run reaches its own ticket's notes and the lessons a run in its repositories is served. A steered
-  worker that names another run's id, or clears `CANOPY_RUN_ID` to search as the operator does, reaches no more than
-  its bash could read from the journal anyway (T1's residual, D076): its bash allows every command but a few, so an
-  unsandboxed worker can open the journal itself, and the definitions' rules are defense in depth (T4).
-
-Rejected for search: embeddings, a runtime dependency and weakest on facts that changed, which is canopy's usual case;
-and a search as the only way to read memory, since agents skip tools they are not made to use.
+`canopy memory search` finds memories by their words, past what the digests' caps leave out, and replaces none of
+them. In a worker's run it finds only what that run's prompt could be served: its ticket's notes and its leased
+repositories' lessons, each tier only at `use`. An ended run finds nothing, a review or a chore no memory, and the
+overseer is refused. The operator finds every memory that keeps its text; the index holds no copy of one. It is the one
+`canopy` command the worker definitions allow (§13); a sandboxed worker's policy denies the journal (§24). A steered
+worker that searches as another run reaches no more than its bash could read anyway (D076), so the definitions' rules
+are defense in depth (T4). Rejected: embeddings, weakest on facts that changed.
 
 ### Commands
 
-`canopy memory` lists ticket notes (`list`), the proposals waiting with where each came from (`proposals`), and the
-lessons with their review dates and reports (`lessons`), each after every tier's mode in words; `list` and `lessons`
-also print the digest a run would get, labelled as served or as what `use` would serve. `promote`, `reject`, `renew`,
-and `edit` make and keep lessons, and `history ID` lists a lesson's or a note's versions. `search WORDS` finds
-memories by their words (Search). `forget ID` deletes one memory's text and `purge` many (a ticket's runs', a run's, or
-all), leaving the rows; a forgotten lesson is retired. They delete with
-`secure_delete` on and checkpoint the write-ahead log after, so a purged poison or a leaked secret does not survive in
-free pages. Every one that writes refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice`
-does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
+`canopy memory` lists every tier with its mode, and its verbs make, keep, and forget memories. `forget` and `purge`
+delete text, leaving no copy in free pages, so a purged poison or leaked secret is gone. Every verb that writes refuses
+inside a tick or a run (T1).
 
-The web UI searches as the operator's shell does (`GET /api/memory/search`, the same function, every memory that keeps
-its text), the memory page for the ticket notes in force that hold every word, as its filter keeps its rows, though
-each as a whole word, its English endings aside, where the filter's may be part of one. It takes `promote`, `reject`,
-`renew`, and `forget` (M52), and `edit` (M59), through the same functions, so with the same guards and refusals,
-logged with channel `web` (§22); `GET /api/memory/{id}/history` reads a memory's versions as `history` does. Promote
-takes the CLI's options, the lesson's words and its repository, and before the save names the lesson in force under
-the key it would replace, and warns while the text is still a private ticket's run's own words, as the CLI warns
-after. So a proposal whose key a lesson in force has, or a private ticket's run's, is never promoted in one click: its
-promote opens that form, and an attention item, which has no form, reads the lessons in force to tell before its
-Promote as written is enabled. Edit takes `edit`'s options, starting as the lesson's own, and saves nothing unchanged.
-The form reads the lessons in force and the workspace's repositories from the memory overview when it opens, rather
-than every ticket's memory carrying them: a ticket's page reads them only when the operator promotes from it. Forget
-cannot be undone, so it carries the memory's
-ref typed out (`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge`
-stays the CLI's: a verb over many memories at once is not a click, so the memory page shows its command, to copy, and
-not a button. The verbs show where the memories do: Promote,
-Reject, and Forget on each proposal, Renew, Edit, and Forget on each lesson, and Promote and Forget on each of a
-ticket's notes that keeps its text, on the memory page and, done or invalidated ones too, on its ticket's page; a
-memory with more than one version says which it is and opens its versions under it, read only then, with Forget on
-each version out of force that keeps its text wherever its row has verbs; Forget is how a leaked secret leaves from
-where the operator sees it; and on the attention list, Promote as written and Reject on a
-`memory_proposal`'s proposals, Renew on the lessons a `lesson_review` is about, and the way to the lessons from a
-`lesson_wrong`. With `memory.proposals` off, only Forget shows, on each of a ticket's notes that keeps its text while
-ticket notes are on, since forgetting a note needs no lesson and a leaked secret should leave from where the operator
-sees it (operator's decision, 2026-10-18); and a tier that is off shows no panel on the memory page.
-
-### Showing memory
-
-Wherever memory shows, the operator must never take recorded memory for memory in use, or the reverse: each tier's
-mode is said in words, never by color alone, and the two modes never share a label. The web UI's header names whether
-any memory is in use while a tier is on; its memory page, a ticket's page, and a run's page say for each tier what reads
-it, what a run wrote and read, and what it would be served, with the operator's verbs on them (Commands). How it looks
-is `ui/DESIGN.md`'s. While `memory.proposals` is on, the web UI's nav counts the proposals waiting beside the memory
-page, on every page, so a queue that expires in 14 days is not found only by visiting it.
-
-The journal keeps what each run said of each memory rendered into its prompt, relied on or wrong, not only the count,
-so where a memory was used shows both ways: a memory names the latest runs that relied on it, five at most, and counts
-the rest, those from before the journal named them among them; a run's page marks, among what it read, what it relied
-on and what it reported wrong.
-
-The memory page can also list, when asked, the latest proposals and lessons no longer pending or in force, as `canopy
-memory list --all` does for notes, so a rejected proposal or a replaced lesson can be looked back on. The memory page
-leads with the proposals waiting on the operator, the one queue memory has and the one that expires, then the lessons,
-then the tickets with notes, which have nothing to decide there. A busy workspace holds thousands of notes and hundreds
-of lessons, so the memory page lists the tickets with notes in force, one row each with its count, and reads a ticket's
-notes only when the operator opens its row; the lessons come reported wrong first, then by review date, so what calls
-for the operator heads the list. Wherever a list shows a memory in force that its digest's cap leaves out, its row says
-so, as left out of the prompt at `use` and as what would be left out while recording.
-
-What a worker wrote is shown as plain text, never Markdown or a link, unlike other journal text (D113): a link in a note
-would be a worker's link the operator reads as canopy's. Every character the bounds refuse is shown by its code point,
-in the CLI and the web UI alike, whatever was written to the journal by hand.
-
-Rejected:
-
-- A memory tool the worker calls in place of the digests: agents skip tools they are not made to use.
-- Embeddings: see Search.
-- Notes in `result_json`: `purge` could not reach them without rewriting every run's result.
-
-### Trust model changes
-
-Approved by the operator (2026-10-17), in the PRs that build each tier's `use`:
-
-- T1, ticket notes: a worker may write notes its own ticket's later runs read as data, the same exposure as its reports
-  in `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
-  ticket's life and by `forget`.
-- T1, lessons: workspace memory is operator text; agents only propose it, and `promote` refuses in any run, like
-  `notice`. The residual is D076's: until workers are sandboxed (M26), a steered worker's bash runs as the operator and
-  could insert a lesson into the journal, as it could a notice.
-- T7: `memory.*` is private.
-
-With M52, approved by the operator in merging its PR:
-
-- T8: the web channel promotes, rejects, renews, and forgets, through the CLI's functions. Its residual gains that a
-  stolen session could make a lesson that reaches every worker at `use`, as a notice set that way does, and that
-  outlives a new secret until the operator forgets it.
-
-With M59, approved by the operator in merging its PR:
-
-- T1 and T8: `edit` writes a lesson anew in the operator's shell or from the web channel, through one function that
-  refuses in any run, as `promote` does. It reaches workers no further than a promote over the lesson would: the
-  version it replaces is served to no run and found by no run's search. The residual is a promote's.
+The web UI takes every verb but `purge` through the same functions and guards, as the web channel (§22, T8). A promote
+that would replace a lesson in force or publish a private ticket's run's own words is never one click. Forget shows on
+a ticket's notes even with proposals off, so a leaked secret can leave from where the operator sees it (operator's
+decision, 2026-10-18). Recorded memory never reads as memory in use, and a worker's text shows as plain text, never
+Markdown or a link (D113), every character the bounds refuse named.
 
 ### Open
 
-- Agent-written workspace facts with code citations the harness checks at read. A citation proves the code exists, not
-  that the advice about it is true, so it is a staleness control, not an integrity one.
 - Whether promoted lessons and the standing-instructions file become one surface the operator edits.
-- Whether a ticket reopened from `recently_done` gets its notes back.
 - A chore that drafts proposals from transcripts, only if workers' own proposals prove too few.

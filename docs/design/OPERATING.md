@@ -14,919 +14,286 @@ the map. Previous: [The loop](LOOP.md). Next: [Trackers and workspaces](WORKSPAC
 ## 11. State model
 
 The journal records the loop's own facts (§4 principle 1): what each tick saw, decided, and dispatched, and what came
-back. The schema is in `migrations/`: `0001_init.sql` is the whole schema as of v0.1, and a journal that applied the
-pre-squash migrations is not upgraded (D068). Each later change is a new migration.
+back. The schema is in `migrations/`, squashed once for v0.1; a journal from before the squash is not upgraded (D068).
 
 What it records, and why:
 
-- **Ticks**: each tick's status (`running`, `ok`, `skipped`, `canopy_unavailable`, `overseer_failed`,
-  `reconcile_failed`, or `abandoned`), summary, and what it read up to (§6 step 3). Its cost is its overseer's alone;
-  each run it dispatched records its own. On a tick `canopy loop` ran, whether it was idle and what ended the wait
-  before it (§6, Idle pacing), so spend can be split by what it bought. A tick that cannot take the lock writes no row.
-- **Tickets and units**: each ticket seen, with its last derived phase, its branch (named by its first implement),
-  whether it is done or forgotten (§22), and the cursors that make ticks incremental; each unit, a ticket's work in one
-  repository (§18), with its branch, PR, phase, and cursors (§7).
-- **Runs**: each worker, split, and plan run, and each review and chore run (§21, §19), with its processes, status, and
-  a summary of its result, and each slot it leased with the base it started from. A worker run's status is `running`,
-  one the worker reports (`done`, `blocked`, `failed`), or one the harness sets (`unknown`, `timeout`, `unpushed`,
-  `crashed`, `stopped`). Runs are the source for capacity, crash detection, attempt counts, and the CI cooldown,
-  which are derived from them, never stored (D030); a unit's limit adds the operator's grants.
-- **Cost**: for a tick's overseer and every run, what the runtime reported (§13), nothing when it reported nothing.
-- **Grants** of attempts, plan runs, and review runs (§21, §22, §25), and the tickets a split created, written only
-  from a validated split result (§18). Grants are only added to.
-- **`decisions`**: each overseer decision and its rationale. The audit log, the attention list's source (§14), and the
+- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), and, for a tick `canopy loop` ran, what woke
+  it (§6), so spend can be split by what it bought. A tick that cannot take the lock writes nothing.
+- **Tickets and units**: each ticket seen, with its derived phase, its branch, whether it is done or forgotten (§22),
+  and its cursors; each unit, a ticket's work in one repository (§18), with its branch, PR, phase, and cursors (§7).
+- **Runs**: every worker, split, plan, review, and chore run (§19, §21), with its status, a summary of its result, and
+  each slot it leased. Capacity, crash detection, attempt counts, and the CI cooldown are derived from runs, never
+  stored (D030); a unit's limit adds the operator's grants.
+- **Cost**: what the runtime reported for each tick's overseer and each run (§13), nothing when it reported nothing.
+- **Grants** of attempts, plan runs, and review runs (§21, §22, §25), only ever added to; and the tickets a split
+  created, written only from a validated split result (§18).
+- **Decisions**: each overseer decision and its rationale. The audit log, the attention list's source (§14), and the
   prompt-evaluation corpus.
-- **`notifications`** and the sinks' outbox: what each sink was told, so an open item is notified once per sink (§14),
-  and the events, cursors, and failures of each sink (§20).
-- **`messages`**: each subject's conversation (§22), mirrored tracker comments among them. Ids never repeat.
-- **`starts`**: each subject the operator started privately (§22). Never deleted: a stopped ticket stays private.
-- **`pause`**: present while the operator has paused the loop (§6); a resume deletes it.
-- **`notices`**: each notice to workers (§8). At most one is in force; rows are never deleted.
-- **Plan threads**: the operator's comments on a plan, written only by the web channel (§25).
-- **Agent memory**: each ticket note, proposal, and lesson, and for each run rendered while a tier was on, the modes it
-  was rendered under and what was rendered into it (§28). Empty while memory is off.
+- **Notifications**: what each sink was told, so an open item is notified once per sink (§14, §20).
+- **Messages** (§22), **starts** (§22, never deleted: a stopped ticket stays private), the **pause** (§6), **notices**
+  (§8, at most one in force), **plan threads** (§25), and **agent memory** (§28, empty while memory is off).
 
-Rules: the journal never stores credentials or raw CI logs (token counts are usage, not credentials). A run's result
-is a summary.
+The journal never stores credentials or raw CI logs, and a run's result is kept only as a summary.
 
-`canopy decisions [TICK]` prints a tick, the latest by default, with its overseer's cost and its decisions: the way to
-read a dry run's plan. The web UI shows the same (§22).
+`canopy decisions [TICK]` prints a tick's overseer cost and decisions: the way to read a dry run's plan.
 
-`canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window (7 days by default,
-today's so far included), so that comparing two windows tells whether spending more bought more: each kind's cost, a
-triage before a plan (§25) a kind of its own, the ticks by what they bought and what woke them, the tickets done and
-the spend per ticket done, the plans triage waived, each ticket's and PR's own cost, and which tools put the most into
-context. The web UI's spend page shows it (§22). What it counts:
+`canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window, so that comparing two
+windows tells whether spending more bought more. Every figure counts a run on the day it started. A ticket counts as
+done by its newest `done` decision in the window, `merged` and `closed` alike, since a tracker that closes a ticket
+when its PR merges closes most before the loop sees the merge. Spend per ticket done divides the window's whole spend,
+overseer and chores included. A tool's share of context is measured in characters it returned, since the runtime does
+not attribute tokens to tool results, and is labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
 
-- Every figure is by start: a run counts on the day it started, within the window, all read at one moment.
-- A ticket is done in the window by its newest `done` decision there (§7), if still done and not forgotten. That is
-  `merged` and `closed` alike: a tracker that closes a ticket when its PR merges closes most that landed before the loop
-  sees the merge, so leaving `closed` out would undercount. A ticket closed unworked counts too, marked as such.
-- Spend per ticket done divides the window's whole spend, overseer, chores, and open tickets included, since that is
-  what getting those tickets done cost.
-- A ticket's or PR's own cost is its worker, split, and review runs in the window; the overseer's is no ticket's. A
-  PR's runs are those whose result names it, so a joint run counts on each of its PRs, and one still running on none.
-- Tools: most of a run's context after the fixed prefix is tool results, which each later call reads again
-  (MEASUREMENTS 2026-10-13 F6, F14). A tool is measured by the characters it returned, since the runtime does not say
-  which tokens were its result; four to a token is a rule of thumb, labeled an estimate wherever it is shown.
-- First calls: a run's fixed overhead is all in its first call (§13), so what it was sent, less canopy's prompt, is the
-  kind's overhead, and a change of snapshot (D040) shows as a step; an OpenCode upgrade does not change the snapshot,
-  so a re-measurement splits by start for one. A first call that wrote more than half of what it was sent to the cache
-  started cold, a heuristic; the journal keeps both counts.
-- The overseer's tools and first calls include dry runs'.
-
-`canopy health` reads the same window for how the runs in it ended: each kind's runs by sort and status, with what they
-cost, the newest that failed with a note on each, and the overseer's asks a guard refused, by guard. A failure is a run
-that did not do what it was started for: a tick that did not close `ok`, or a worker, triage (§25), chore, or review
-run that ended `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`; a worker that asked a question or that the
-operator stopped did. Beside `canopy spend --json`, it is what a chore that looks at canopy itself reads (`examples/chores/`).
+`canopy health` reads the same window for how runs ended: each kind's runs by status and cost, the newest failures,
+and the overseer's asks a guard refused. A failure is a run that did not do what it was started for: a tick not closed
+`ok`, or a run ended `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. With `canopy spend --json`, it is what a
+chore that looks at canopy itself reads (`examples/chores/`).
 
 ## 12. Configuration
 
 Configuration is layered. Each layer overrides the one before it, key by key:
 
 1. Built-in defaults.
-2. **Workspace file**, `canopy-workspace.toml` at the workspace root (§18). Shared by everyone who runs canopy on the
+2. **Workspace file**, `canopy-workspace.toml` at the workspace root (§18): shared by everyone who runs canopy on the
    workspace, and committed when the workspace is itself a repository. canopy reads no config from a code repository:
    there is no `canopy.toml` (D016).
-3. **User file**, `$XDG_CONFIG_HOME/canopy/config.toml` (default `~/.config/canopy/config.toml`). Personal, never
-   committed, and optional. It serves every workspace, so it holds what is the same in all of them: the runtime
-   templates, the comment marks, the commit trailer, notification sinks.
-4. **Private file**, `<state_dir>/config.toml`, the workspace's own file for the operator alone, never committed. It
-   holds what belongs to one workspace: its queue labels, its authorized repliers and trusted reviewers (each in its
-   tracker's identity format), `review.query`, `runtime.setup_cmd` and `runtime.pr_skill`, `tracker.mcp_server`, its
-   chores, its loop's pacing, its capacity (each workspace's journal counts its own), and its web UI's port, so that
-   two workspaces' loops do not collide.
+3. **User file**, `$XDG_CONFIG_HOME/canopy/config.toml`: personal, never committed, optional. It serves every
+   workspace, so it holds what is the same in all of them.
+4. **Private file**, `<state_dir>/config.toml`: the workspace's own file for the operator alone, never committed. It
+   holds what belongs to one workspace, such as its queue labels, its repliers and reviewers, and its capacity.
 
-At least one of the user file and the private file must exist; with neither, the error names the private file and
-`canopy init`.
+At least one of the user file and the private file must exist. `examples/config.toml` lists every key.
 
-Every key has a scope. A **shared** key may be set in any file. A **private** key may be set in the user file or the
-private file, never in the workspace file; a workspace file that sets one is a config error that names the key and the
-private file, and canopy refuses to run. No key is held to the user file: a workspace whose team marks agent work its
-own way sets its own comment marks and trailer. Unknown keys are errors in every file. A removed key, such as
-`paths.state_dir`, is an error that says what to do instead. A validation error names the file the bad value came from,
-or, for a missing key, every file it may be set in. `[chores]` comes whole from the last file that sets it.
-
-The private file is under the workspace root, which may be a checkout of a shared repository, and its keys run
-commands. The state directory being private to the operator (§18, D053) says nothing of where it came from: a
-`.canopy/` checked out under umask 077 passes that check. So whenever config is loaded, canopy runs one
-`git ls-files` at the workspace root and refuses a state directory any of whose files git tracks, the journal
-included; when the root is in no repository, nothing is tracked and git does not run, and when git fails otherwise,
-canopy refuses too. The private file itself is opened without following a symlink, and must be a regular file of the
-operator's that no one else can write. A sandboxed run can neither read nor write it (§24); an unsandboxed one can, as
-it can the user file.
-
-What is not a key stays in the user config directory, as files: the secrets (`listener-secret`, `slack-webhook`,
-`slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share. The prompt
-overrides default to `prompts/` there too.
-
-| Key | Scope | Why |
-|---|---|---|
-| `tracker.provider` | shared | a property of the repository's tracker |
-| `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
-| `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
-| `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
-| `tracker.labels` | private | defines this operator's queue |
-| `tracker.mcp_server`, `tracker.read_tools` | private | what a private ticket's worker may call (§22) |
-| `tracker.private` | private | turns a queue label into a start record (§22) |
-| `tracker.query_every_minutes` | private | how often the overseer pays to run the query (§7): the operator's spend |
-| `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
-| `policy.plan_triage`, `policy.trivial` | private | triage loosens the operator's plan gate (§25, TRUST_MODEL T7) |
-| `trust.branch_prefix` | shared | team conventions for spotting agent work |
-| `trust.authorized_repliers` | private | who may steer this operator's workers |
-| `trust.trusted_reviewers` | private | whose review feedback reaches a worker without the operator's go-ahead (§7) |
-| `trust.comment_prefix`, `trust.comment_suffix` | private | they silence the comments that carry them (§8) |
-| `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | private | whether and whom the operator's commits credit (§8) |
-| `trust.rebase` | private | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
-| `trust.review_replies` | private | decides what is said in the operator's name (§29) |
-| `capacity.*` | private | the operator's machine and spend |
-| `pools.backend` | private | which program makes worktrees on the operator's machine (§18) |
-| `loop.*` | private | how often the overseer runs: the operator's spend |
-| `runtime.*` | private | commands run on the operator's machine |
-| `notify.*` | private | a command run on the operator's machine |
-| `paths.*` | private | where prompts and state are read from |
-| `chores.*` | private | a chore runs a command and a prompt, and spends money (§19) |
-| `review.*` | private | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
-| `serve.*` | private | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
-| `memory.*` | private | what workers may write into later runs' prompts (§28, TRUST_MODEL T7) |
-| `connect.*` | private | commands run with the operator's credentials, that post as them (§29) |
-
+**Scope.** Every key is shared or private. A shared key may be set in any file; a private key only in the user file or
+the private file, and a workspace file that sets one is a config error naming the key, so canopy refuses to run.
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
-choose prompts, spend money, or authorize anyone; those keys are private (TRUST_MODEL T7).
+choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
+guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
+`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, and `loop` key, the queue labels, the repliers and trusted
+reviewers, the comment marks and commit trailer, `trust.rebase`, and the plan triage. Unknown keys are errors in every
+file, and a removed key is an error that says what to do instead.
 
-Workspace file, beside the map (§18):
+**The private file's provenance.** The private file is under the workspace root, which may be a checkout of a shared
+repository, and its keys run commands. So whenever config is loaded, canopy refuses a state directory any of whose
+files git tracks, and refuses when git cannot say; the private file must be a regular file of the operator's, not a
+symlink, that no one else can write (§18, D053). A sandboxed run can neither read nor write it (§24).
 
-```toml
-[tracker]
-provider = "jira"            # jira | github | linear | any name; selects tracker-<provider> skill
-needs_human_label = "needs-human"
-query = 'project = PROJ AND statusCategory != Done'
-ticket_url = ""              # optional; a ticket's page, with {key} for its key, for the web UI to link (§17)
-
-[policy]
-max_implement_attempts = 2
-max_resume_attempts = 6      # every resume of a unit, whatever its reasons, an old fix-ci run among them (§8)
-ci_cooldown_minutes = 30     # how long a resume for CI alone waits after the unit's last run that worked on CI (§8)
-max_split_attempts = 1       # per ticket (§18)
-max_plan_attempts = 3        # per ticket (§25)
-plan = "off"                 # off | approve (§25); "approve" is stricter
-stacking = "auto"            # auto | never (§10); "never" is stricter
-
-[trust]
-branch_prefix = "agent/"
-```
-
-Private keys, in the user file or the private file; any of them may be in either, and the private file wins:
-
-```toml
-[tracker]
-labels = ["agent-ready-yourname"]
-mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
-# read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
-private = false         # optional; true starts a labeled ticket privately on its first dispatch (§22)
-query_every_minutes = 0 # the least time between ticks that run the query; 0 runs it every tick (§7)
-
-[policy]
-plan_triage = "off"     # optional; "on" lets a triage waive a plan for trivial work (§25), with trivial set
-# trivial = """A typo in docs or comments; one config value changed."""   # plain language for the triage agent
-
-[capacity]
-max_workers = 2
-
-[pools]
-backend = "treehouse"   # or "canopy": canopy's own pool makes the worktrees (§18, ROADMAP M45)
-
-[runtime]
-overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
-    --thinking --title={title} {prompt}'''
-worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
-    --thinking --title={title} {prompt}'''
-split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
-    --thinking --title={title} {prompt}'''
-plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
-    --thinking --title={title} {prompt}'''
-plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage --format json
-    --thinking --title={title} {prompt}'''   # point it at a cheaper model than plan_cmd's (§25)
-plan_triage_timeout_minutes = 10
-worker_cmd_prefix = ""  # optional; words before every command a worker run starts, such as a sandbox wrapper (§24)
-worker_cmd_suffix = ""  # optional; words after them
-overseer_timeout_minutes = 15
-worker_timeout_minutes = 45
-pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
-setup_cmd = ""          # optional; runs in each slot at the run's branch, before the worker (§9)
-setup_timeout_minutes = 30
-# private_worker_cmd: worker_cmd with `--agent canopy-worker-private`, for a ticket started with `canopy start` (§22)
-
-[loop]
-interval_minutes = 15   # `canopy loop` waits this long after each tick ends
-idle_max_minutes = 120  # and up to this long after idle ticks in a row (§6, Idle pacing)
-min_gap_minutes = 1     # and no tick starts sooner than this after the last one began (§6)
-
-[trust]
-authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
-trusted_reviewers = ["github-login", "canopy:review"]   # whose PR feedback a worker addresses unasked (§7)
-comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
-comment_suffix = ""          # and ends with this, if set
-commit_trailer = true                            # a worker adds this trailer when the runtime adds none (§8)
-commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
-commit_trailer_email = "noreply@canopy.invalid"  # at this address
-rebase = false               # true: workers rebase and push with a lease, never merge a base in (§8)
-review_replies = "post"      # or "approve": workers draft their comments for the operator to send (§29)
-
-[paths]
-prompt_overrides = "~/.config/canopy/prompts"
-# worktree_include = "~/.config/canopy/worktreeinclude"   # optional; replaces the committed .worktreeinclude (§9)
-# worker_instructions = "~/.config/canopy/worker-instructions.md"   # optional; in every worker's prompt (below)
-
-[notify]
-cmd = ""   # optional; receives the attention diff on stdin: the sink `default` (§20)
-
-[notify.sinks.desktop]         # optional; any number up to 5 (§20)
-cmd = "canopy-notify-desktop"
-events = ["attention", "loop", "runs"]
-
-[connect.sources.github]   # optional; unset, the vcs source is canopy's own GitHub programs (§29)
-kind = "vcs"
-cmd = "canopy-connect-github"
-post_cmd = "canopy-post-github"
-timeout_minutes = 2
-
-[serve]                 # the web UI `canopy loop` serves (§22)
-enabled = true
-bind = "127.0.0.1"      # loopback, or a private address; never a wildcard or public one
-port = 8765
-base_path = ""          # a path prefix such as "/canopy", for a proxy
-
-[memory]                # agent memory (§28); each tier off, record, or use
-ticket_notes = "off"    # notes a ticket's runs write for its later runs
-proposals = "off"       # lessons workers propose, which reach runs once you promote them
-
-[retention]             # how long canopy keeps its own history (§26); 0 keeps a kind forever
-run_files_days = 30     # a run's, chore run's, or review's files, once it ended this long ago
-tick_files_days = 7     # a tick's files; a tick not `ok` keeps them for run_files_days
-journal_days = 90       # harness attention rows, past the window the attention list reads
-log_max_mib = 50        # canopy.log is rotated past this
-log_keep = 3            # and this many rotated files are kept
-memory_days = 30        # the text of a note or proposal no longer in force (§28)
-```
-
-Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
-default and must be set; `trust.authorized_repliers` defaults to empty (nobody can resume blocked work), and so does
-`trust.trusted_reviewers` (every review waits for the operator).
-
-Validation:
-
-- A trusted reviewer is `canopy:review` or a login of at most 100 characters with no whitespace, colon, or backtick.
-- `trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter
-  or digit, no backtick, and no surrounding spaces, and at least one is set.
-- `trust.commit_trailer_name` is one line of at most 80 characters, with a letter or digit, no backtick or angle
-  bracket, and no surrounding spaces; `trust.commit_trailer_email` is at most 254 characters, with one `@` and no
-  whitespace, backtick, or angle bracket.
-- `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
-  each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
-- `tracker.ticket_url` is empty (no links) or a plain `https://` URL of at most 500 characters with `{key}` exactly
-  once and no other braces, such as `https://acme.atlassian.net/browse/{key}`. The web UI puts it in an `href`.
-
-The commit trailer keys make the `Co-authored-by` trailer a worker adds when the agent runtime adds no attribution of
-its own (§8, TRUST_MODEL T5). Name agent work the way the team's tooling expects, such as a team's bot address, never a
-person: the trailer is how a reader tells the work is an agent's. Turned off, a worker keeps the runtime's trailer and
-adds none, so with a runtime that adds none only the branch prefix and the PR mark the work. The keys are private
-because the commits are the operator's: a shared file must not credit agent work to a person.
-
-`trust.rebase` is for repositories whose host or CI refuses merge commits: a worker rebases onto a base branch instead
-of merging it, and pushes with `git push --force-with-lease`, the one force its definition allows, while `canopy
-_run`'s own push takes a lease on the commit the run started from (§8, TRUST_MODEL T1). It applies to every repository
-the operator works on, and is private because it lets a worker replace a branch's history.
+Secrets (the listener secret, Slack credentials) and the sandbox templates are files in the user config directory, not
+keys, shared by every workspace's runs.
 
 Rules:
 
-- **Queues are per operator.** `tracker.labels` is a non-empty list; a ticket carrying any of them is in this
-  operator's queue. Two operators must never share a label: the guards (one worker per ticket, attempt limits,
-  cooldowns) see only the local journal. canopy cannot detect sharing; it is the operator's responsibility
-  (TRUST_MODEL §7).
-- **The repository may only tighten policy.** A repository `policy.*` value is used only if stricter than the built-in
-  default: a lower attempt limit, a longer cooldown, or `stacking = "never"`. Otherwise the default stands. The user
-  file may set any value, including a looser one; the rule only stops a commit from loosening limits for operators who
-  never set them (TRUST_MODEL §3). Scope and tighten checks run per file, so an error names the file that caused it.
-- `canopy init` sets up a workspace in the current directory, or fills in the one it is inside (§18). A new workspace
-  is never the home directory, where every later init below it would land, and never a directory that already has a
-  `.canopy/`, which may be an earlier canopy's journal. In a git checkout it refuses unless given `--workspace`:
-  canopy writes nothing into a code repository (a repository at the home directory is the operator's dotfiles, and
-  needs no flag). The refusal names a `canopy.toml` at the checkout's root as not read.
-- `canopy init` writes the private file if missing, readable only by the operator, with a queue label of
-  `agent-ready-<$USER>` and empty repliers and reviewers to fill in, where the user file does not set them, and the
-  workspace file if there is none. It never writes the user file, never overwrites a file, and installs nothing else
-  (§13). No file gets a key whose default serves: a default written into a file is pinned there, and a later canopy's
-  never reaches it. It warns about copies of canopy's agent definitions in the OpenCode config, which stop runs (§13),
-  and, unless `worker_cmd` is already sandboxed, prints a `worker_cmd_prefix` to add: the sandbox is opt-in (§24).
-- `canopy sandbox setup` needs no workspace. It copies the sandbox's policy templates to `<user config dir>/sandbox/`
-  (0700), never over one that is there; installs the `srt` version the wrapper's lockfile pins, with npm's install
-  scripts off; and checks what it cannot install because it needs root: on Linux bubblewrap (0.5.0 or later, able to
-  make a user namespace), socat, ripgrep, and a machine `srt` ships its seccomp filter for, without which a sandboxed
-  command can connect to any Unix socket it sees; on macOS ripgrep; and that canopy is not root. Anything missing
-  would leave a sandbox weaker than §24 says, so it exits 1 while a thing is left to do. It writes no config (D117).
-- `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
-  Unset (the default) leaves pools unmanaged. Private, so a team's map cannot grow the operator's disk use.
-- `pools.backend` names the pool that makes the workspace's worktrees: treehouse or canopy's own (§18). Switching is
-  safe with runs in flight; `canopy workspace sync` carries the idle slots over.
-- Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.
-  `canopy workspace sync`, which `canopy init` runs for the URLs it is given, warns naming every push URL git would
-  reach over SSH, after git's URL rewrites. Only a warning: nothing else checks the remote.
+- **Queues are per operator.** A ticket carrying any of `tracker.labels` is in this operator's queue. Two operators
+  must never share a label: the guards (one worker per ticket, attempt limits, cooldowns) see only the local journal.
+  canopy cannot detect sharing; it is the operator's responsibility (TRUST_MODEL §7).
+- **The repository may only tighten policy.** A workspace file's `policy.*` value is used only if stricter than the
+  built-in default; the user and private files may set any value. This stops a commit from loosening limits for
+  operators who never set them (TRUST_MODEL §3). Scope and tighten checks run per file, so an error names its file.
+- Values that reach git's argv, a prompt, or the web UI's links (`trust.branch_prefix`, the comment marks, the commit
+  trailer, `tracker.ticket_url`) are validated at load.
+- The commit trailer keys set the `Co-authored-by` trailer a worker adds when the runtime adds no attribution of its
+  own (§8, TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
+- `trust.rebase` lets workers rebase and push with `--force-with-lease` instead of merging a base in, for hosts that
+  refuse merge commits; `_run`'s own push leases the commit the run started from (§8, TRUST_MODEL T1).
+- `canopy init` sets up a workspace in the current directory or fills in the one it is inside (§18). Never in the home
+  directory or one that already has a `.canopy/`, and in a git checkout only with `--workspace`: canopy writes nothing
+  into a code repository. It writes the private file, readable only by the operator, and a workspace file where
+  missing, never the user file, never over a file, and no key whose default serves, since a written default is pinned
+  and a later canopy's never reaches it. It warns about copies of canopy's agent definitions in the OpenCode config
+  (§13) and, unless `worker_cmd` is sandboxed, prints the prefix to add: the sandbox is opt-in (§24).
+- `canopy sandbox setup` copies the sandbox templates to the user config directory, never over one there, installs the
+  pinned `srt`, and checks what needs root to install; it exits 1 while anything left would make the sandbox weaker
+  than §24 says. It writes no config (D117).
+- Pool sizes (`capacity.slots_per_repo`, `[capacity.repo_slots]`) are private, so a team's map cannot grow the
+  operator's disk use; unset leaves pools unmanaged (§18). `pools.backend` may be switched with runs in flight.
+- Remotes should be HTTPS with a credential helper: a sandboxed worker cannot reach the SSH agent socket. `canopy
+  workspace sync` warns about push URLs over SSH; nothing else checks the remote.
 
-A command template is split into words with `shlex`, then `{prompt}` and `{definitions_dir}` are replaced inside each
-word in one pass. No shell runs, so the prompt is always exactly one argument (D023). Every agent template must contain
-`{prompt}` exactly once and `{definitions_dir}` (the definitions directory, §13) at least once; a template without it
-is a config error that prints the line to write instead. The check cannot tell where the runtime reads the value: a
-custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it, or OpenCode runs its default
-agent, which allows everything (D040). `env` in the default templates is the ordinary program, not a shell.
-`notify.cmd` is split the same way, gets its input on stdin, and must not contain `{prompt}`.
+**Command templates.** A template is split into words with `shlex`, and `{prompt}`, `{definitions_dir}`, and
+`{title}` are replaced inside each word. No shell runs, so the prompt is always exactly one argument (D023). Every
+agent template contains `{prompt}` exactly once and `{definitions_dir}` (§13) at least once. canopy cannot tell where
+the runtime reads it: a custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it, or
+OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
+`{prompt}`. `runtime.worker_cmd_prefix` and `worker_cmd_suffix` wrap every command a worker run starts (worker, private
+worker, split, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; they may not hold `{prompt}`. The
+overseer's, a chore's, a review's, and a triage's templates are not wrapped: each takes a different sandbox role, or
+none.
 
-`runtime.worker_cmd_prefix` and `worker_cmd_suffix` go before and after each command a worker run starts:
-`worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, all four from one key, so a sandbox wrapper (§24) or a
-model option cannot miss one. Each is split on its own and may name `{definitions_dir}` and `{title}`, but not
-`{prompt}`, which stays the template's to place. Empty, the default, adds nothing. The overseer's, a chore's, the
-reviewer's, and a triage's (§25) templates are not wrapped: each takes a different sandbox role, or none.
+**Prompt overrides** in `paths.prompt_overrides` replace files of the same name in `prompts/`. An override must keep
+what the guards rely on: an overseer override passes `--label` on every `canopy dispatch`, and a worker override
+includes `{{LABELS}}` and the authorization check that uses it, or the dispatch is refused as `bad_prompt` (§8, D051).
+In the user file, `paths.*` values must be absolute or start with `~`, since a relative path would let a shared
+workspace supply them; in the private file a relative value resolves against the state directory, never the workspace
+root (TRUST_MODEL T7). The state directory is always `<workspace>/.canopy/` (§18), written `<state_dir>` here.
 
-Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An overseer override goes into the
-overseer's definition in a snapshot of its own (§13), so a change to it reaches the next tick, and one canopy cannot
-read as UTF-8 refuses the snapshot. An override must keep what the guards rely on: an overseer override must pass
-`--label` on every `canopy dispatch`, and a worker override must include `{{LABELS}}` and the authorization check that
-uses it (§8, D051); a worker override without it is refused as `bad_prompt`. An empty value means the default. In the
-user file, `paths.*` values must be absolute or start with `~`, since canopy runs from the workspace root and a
-relative path would let a shared workspace supply them (TRUST_MODEL T7). In the private file a relative value resolves
-against the state directory, never the workspace root, so it stays private and under the provenance check above. There
-is no key for the state directory: it is always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
-
-`paths.worker_instructions` names a file of the operator's standing instructions, habits every worker should keep,
-rendered into every worker prompt but a split's, after the obligations (§8). Prefer it to an override for anything a
-few lines can say, and a skill for know-how a worker loads when it needs it (§13). It is at most 4 KiB of UTF-8; a
-file canopy cannot use refuses the dispatch as `bad_prompt` rather than running a worker without it. A passing
-condition, such as a CI outage, belongs in a notice to workers (§8): it lapses, and the overseer and reviews hear it.
+`paths.worker_instructions` names a short file of the operator's standing instructions, rendered into every worker
+prompt but a split's, after the obligations (§8). Prefer it to an override, and a skill for know-how (§13). A file
+canopy cannot use refuses the dispatch as `bad_prompt` rather than running a worker without it. A passing condition,
+such as a CI outage, belongs in a notice to workers (§8).
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, and the one use canopy makes of it is to give that skill, when it ships one, to the overseer in its definition,
-so it need not be loaded on every tick (§13). `tracker.query` is how the overseer finds candidates: in the tracker's
-search syntax where it has one (JQL, GitHub issue search), otherwise plain language. It finds tickets; it does not
-authorize them (§17). The repository's query usually omits the label; an operator can override it in the private file
-to include their labels and save the overseer reads. It is shared though the overseer reads every ticket it returns
-before it checks labels, an exposure stated in TRUST_MODEL T7's residual.
+skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
+does not authorize them (§17). It is shared though the overseer reads every ticket it returns before checking labels,
+an exposure stated in TRUST_MODEL T7's residual.
 
 ## 13. Agent runtime
 
 OpenCode. The harness depends on one capability: run a named agent non-interactively in a given cwd with a prompt and
-read its stdout, `opencode run --agent <name>`. MCP connectivity, OAuth, and tool permissions are the runtime's job.
+read its stdout. MCP connectivity, OAuth, and tool permissions are the runtime's job. The runtime is swappable by
+editing the command templates (§12). No interface.
 
-Agent definitions ship in `agents/`; agent runs load them from a directory canopy owns (below):
+Agent definitions ship in `agents/`:
 
 - `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
-  workspace (`external_directory: deny`), and one command per bash call: an `ask`, such as a `cd` out of the
-  workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a `deny`
-  costs only the call. MCP: the tracker, GitHub.
-- `canopy-worker`: edit and bash within the worktree. OpenCode checks a `cd` against where its command starts, never
-  where an earlier `cd` left it, so `cd app && cd ../lib` reads as leaving the worktree and is refused; the worker
-  prompts say so, and to name a directory by its path from the worktree. MCP: the tracker (ticket comments, and labels
-  through its issue edit tool), GitHub (open/update PR, read reviews and checks); merge, review submission, closing,
-  transition, ticket creation, delete, fork, API file and branch writes, and other agents or workflow runs denied by
-  name (D084).
-- `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
-  tools only; commenting anywhere, submitting a review, pushing, writing files, labels, and edits denied by name
-  (§21).
-- `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19). A chore that runs the operator's
-  own tools uses the operator's own copy of it.
-- `canopy-splitter`: read-only file tools in its desk; no edit, shell, or subagents. MCP: the tracker
-  (create and link tickets, comment), with tools for labels, assignees, edits, PRs, branches, and files denied by name
-  (§18).
+  workspace, one command per bash call. Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021)
+  and loses every decision not yet recorded. MCP: the tracker, GitHub.
+- `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels), GitHub (open and update a
+  PR, read reviews and checks); merge, review submission, closing, transition, ticket creation, delete, fork, API file
+  and branch writes, and other agents or workflow runs denied by name (D084).
+- `canopy-reviewer`: no edits, shell, or subagents; MCP read tools only (§21).
+- `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19).
+- `canopy-splitter`: read-only file tools; MCP: the tracker's create, link, and comment tools only (§18).
 
 None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 
-When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
-the command templates. No interface.
-
 ### What a run prints
 
-Every agent's output is read the same way. A template either prints the agent's text on stdout, or asks OpenCode for
-`--format json`, which prints one JSON event per line; then the agent's text is that of its `text` events. Every result
-contract (the overseer's done token, §8, §18, §19, §21) is read from that text, so a template may switch formats
-without changing a prompt. The agent's final message is the last `text` event's text; plain stdout does not say where
-a message ends, so all of it is the final message.
+Every agent's output is read the same way, whether the template asks for plain text or JSON events. A JSON result
+contract (§8, §18, §19, §21) is the last line of the text that starts with `{`; lines after it that do not are passed
+over, since a runtime or plugin may print after the agent's last word. A last object that does not validate is no
+result: canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
+The overseer's done token is a plain line anywhere in its final message (§6).
 
-A JSON contract (§8, §18, §19, §21) is the last line of the text that starts with `{`, and lines after it that do not
-are passed over: a runtime, or a plugin the operator must load, may print a notice after the agent's last word. A last
-object that does not validate is no result; canopy never falls back to an earlier one, which may be an example the
-agent quoted or a result it took back. The overseer's done token is plain text, a line anywhere in its final message
-(§6).
+From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the
+tool calls by tool, and records them on the tick or run (§11) with the digest of the definitions it loaded, so a prompt
+or definition change splits runs into before and after. Figures that do not validate make the run report no cost
+rather than too little, and a template that asks for no events records no cost.
 
-From events the harness also reads, each validated (D026):
-
-- the session id, with which the operator opens the transcript in OpenCode's own tools (`opencode export <id>`, or
-  `opencode --session <id>` in the run's directory).
-- the cost: dollars and tokens by kind (input, output, reasoning, cache read, cache write), summed over the model
-  calls. If one call's figures do not validate, the run reports no cost rather than too little. A run killed mid-call
-  (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own session's, and not
-  counted.
-- the peak context: the most one call was sent, so how large the run's context grew.
-- the first call: what it was sent, and what it wrote to the cache. All of a run's fixed overhead (the system prompt,
-  the agent's body, the tool schemas) is in its first call, and the cache write says whether the provider had that
-  prefix cached (MEASUREMENTS 2026-10-13 F11, F12).
-- the tool calls, rolled up by tool: how many, how many ended in an error, and the characters they returned. A run
-  keeps a bounded number of tools, the rest counted together, so output no runtime printed cannot fill the journal.
-
-The harness records these on the tick or run (§11), with the digest of the definitions snapshot the run loaded, so a
-change to a prompt, an override, or a definition splits the runs into before and after; the digest only when the
-runtime reported something, since a template that prints plain text may not load the snapshot at all. Every default
-template asks for events, so every agent run canopy starts records what it cost, a running worker's so far, and the
-web UI's spend (§22) sums them all. A template of the operator's that asks for no events records nothing, and its runs
-are missing from the spend. A tick's output file and a run log hold the events as printed, and the web UI reads one
-session's back from them as its transcript (§22).
-
-Wherever canopy prints what a run or a tick cost, the CLI and the web UI alike, it says it as
-`$0.25, 3.5k tokens, 5.5k peak context`. The tokens are every kind but cache reads. Each call reads again what the
-calls before it were sent, so cache reads summed grow with the square of a session's length and dwarf the rest,
-saying nothing about what the run did; the peak context says what the sum hid, how large the context got. Each kind is
-still kept apart in the journal, and a transcript shows each call's (§22).
-
-### Session titles
-
-Every runtime template may name `{title}`, the run's session title, and the defaults pass it as
-`opencode run --title={title}`, so OpenCode's session list names each session as canopy does:
-
-- a worker or split run: `<KEY> <kind>: <the ticket's title>` (§7), or `<KEY> <kind>` before the overseer names it;
-- a tick's overseer: `tick <id> · <what started it> · <what it faces>`, such as `tick 412 · run ended · 2 tickets, 1
-  running, 1 needs you`;
-- a chore: `chore:<name>`; a review: `review <PR URL>`.
-
-Ticks outnumber every other session, and their titles are fixed before the overseer decides anything, so a tick's says
-what it can know then. What started it is the loop's `ticks.woken_by` (§6): `timer`, `gate`, `run ended`, `message`,
-`asked`, and the rest, or `by hand` for `canopy tick`. What it faces is counted as it starts: the open tickets and the
-worker runs still running, as its state block lists them, and the attention list's items (§14), the harness's own
-included, though the state block leaves those out; or `nothing open`. A quiet stretch reads alike, tick
-after tick, so the ticks something reached stand out.
-
-The title is read when the run starts, so a rename shows in canopy at once and in the runtime from the ticket's next
-run. canopy names sessions rather than reading OpenCode's own titles because those are not in the events: reading one
-back would take an OpenCode-only command after every run, where the runtime is otherwise only a command template (§12),
-and its model writes it from canopy's prompt, which is mostly the same for every run of a kind.
-Like `{prompt}`, `{title}` is replaced inside a word after the template is split. The defaults keep `--title=` and the
-title in one word, and every title starts with a letter or digit, so a title is never read as an option.
+The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
+what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.
 
 ### Where the runtime finds canopy's definitions
 
-Rationale in D040 and D044.
+canopy snapshots its bundled agents and skills into the state directory, named for a digest of their contents, and the
+templates point the runtime at it (§12). The snapshot is written whole, never changed, and readable only by the
+operator, so overlapping runs never load a partial set; one that is a symlink, someone else's, or open to others is
+refused, failing the tick or making the run `crashed` (D040). Two definitions are rendered from config, so a change to
+their inputs makes a new snapshot:
 
-canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents. Two definitions are rendered from config first, so a change to what they are rendered from makes a new
-snapshot rather than changing one:
+- `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
+- `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, then the shipped
+  `tracker-<provider>` skill if any. The body is the system prompt the provider caches across ticks; a tick's message
+  is its state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather
+  than running without the prompt.
 
-- `canopy-worker-private` gets the tracker's MCP server and the tools of it a private worker may call (§22).
-- `canopy-overseer` gets the overseer's prompt, the operator's override if there is one (§12), as its body, followed by
-  the shipped `tracker-<provider>` skill when canopy ships one. OpenCode sends an agent's body as its system prompt,
-  which the provider caches across ticks with the tool schemas; a tick's message is its state block alone (§6). The
-  skill stays in `skills/` too, for the workers. An override canopy cannot read refuses the snapshot, which fails the
-  tick and every run started from it: a run without its definitions would run without the prompt. A definition canopy
-  did not render, such as the shipped file loaded by hand, tells the overseer to print `no prompt supplied` and exit.
+Nothing is installed into repositories. OpenCode merges canopy's definitions after the repository's config, so a
+repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where
+the config in its start directory defines one of canopy's agents: the overseer's refusal fails the tick, and a
+worker's is a `crashed` run whose slot is returned. A private run (§22) is also refused where that config names any
+tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
 
-A snapshot is written to a temporary directory, renamed into place, and never changed, so overlapping runs never load a
-partial set. The overseer run and each `_run` use the installed canopy's snapshot, creating it if missing. A snapshot
-canopy made is readable only by the operator; one that is a symlink, someone else's, or open to others (for example
-from a checkout of a shared workspace, §18) is refused: the overseer's refusal fails the tick, a worker's is a
-`crashed` run. When no run is live, reconcile removes other snapshots and temporary directories over an hour old;
-a live run may be an earlier canopy's, still loading its snapshot. OpenCode writes a `.gitignore` and `node_modules/`
-into each config directory it loads, the snapshot included.
-
-Command templates name the current snapshot with `{definitions_dir}` (§12), required in every template that runs a
-canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §25's `plan_cmd`, §19's
-`chore_cmd`, §21's `review_cmd`), as the defaults in §12 show.
-
-Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
-`OPENCODE_CONFIG_DIR` after the repository's config, so a repository's definition of a canopy agent is merged into
-canopy's and could loosen its bash rules (D044). Before starting an agent, the harness checks the OpenCode config in the
-agent's start directory (the workspace root for the overseer, the worktree on the run's branch for a worker) and
-refuses if it defines one of canopy's agents: a file named for one under `.opencode/{agent,agents,mode,modes}/`, or an
-`opencode.json` or `opencode.jsonc` at the root or in `.opencode/` whose text names one. The overseer's refusal fails
-the tick (`overseer_failed`, summary naming the files); a worker's is a `crashed` run whose note names them, and its
-slot is returned. `canopy init` warns about the same files. A private run (§22) is also refused where that config
-names any tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
-
-Customizing canopy is adding skills where the runtime already looks: the repository (`.agents/skills/`,
-`.claude/skills/`, `.opencode/skill/`) or the operator's home (`~/.agents/skills/`, `~/.claude/skills/`,
-`~/.config/opencode/skill/`). canopy turns none of these off. Give a custom skill its own name; same-named skills do not
-reliably override each other. A `$HOME` skill that workers use must be a single `SKILL.md`: the worker's
-`external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
-also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). A skill only adds to what
-a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
-names the skill and the prompt then says to use it (§8). Prefer that to a prompt override.
+Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
+turns none off. A repository can also define its own agents under other names, MCP servers, and permissions
+(TRUST_MODEL T7). `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
 ### What OpenCode does with a plugin
 
-canopy ships no plugin yet. ROADMAP M57 would ship one in the snapshot, to tell a running agent the minutes left on its
-tool calls, and rests on what follows, read from OpenCode's source at 1.19.3 and `srt`'s at 0.0.79 (2026-10-19). A later
-OpenCode is read again before it is built.
+canopy ships no plugin. One in the snapshot would rest on this, read from OpenCode's source at 1.19.3 (2026-10-19) and
+read again before one is built: OpenCode loads plugins from every config directory, the snapshot's last, so a
+repository's run first; a hook that throws fails the tool call after the tool has run; an MCP tool's result is
+truncated after the hook, keeping the head. With any plugin configured, OpenCode waits on an npm install into every
+writable config directory it loads, so a snapshot that ships a plugin must be unwritable. A variable canopy sets for a
+run reaches a sandboxed agent unchanged.
 
-- **Where plugins load from.** `ConfigPlugin.load` (`packages/opencode/src/config/plugin.ts`) globs
-  `{plugin,plugins}/*.{ts,js}` in each config directory, symlinks followed, and `ConfigPaths.directories` lists
-  `OPENCODE_CONFIG_DIR` last of them. `opencode run` without `--attach` serves itself in process, and its bootstrap
-  (`project/bootstrap.ts`) runs `plugin.init()` before the session starts. With `OPENCODE_PURE` set, no plugin from
-  config loads (`plugin/index.ts`).
-- **Shape and failure.** A file plugin is a default export `{ id, server }`, refused without `id`, or a module whose
-  every export is a plugin function. One that fails to load is logged and skipped, and the run goes on without it.
-  Hooks run in turn, config plugins in config order, so a repository's plugins run before the snapshot's.
-  `Plugin.trigger` runs each hook through `Effect.promise`, so a hook that throws fails the tool call, after the tool
-  has run.
-- **Which calls.** `session/tools.ts` triggers `tool.execute.after` after every built-in tool (bash, read, edit, write,
-  patch, task, skill, and the rest), the MCP resource tools, and every MCP tool, once the tool returns. A call that
-  fails triggers none: a refused permission, a tool's error, an MCP result with `isError`, which `mcp/catalog.ts` turns
-  into an error. A bash command that exits non-zero has not failed; its output says the status. A subagent's calls
-  run in the same process and trigger it too, under the subagent's `sessionID`.
-- **What the model reads next.** A built-in tool's hook gets the object the call returns, already truncated by the
-  wrapper `Tool.define` puts around every tool (`tool/tool.ts`); its `output` is the part's output
-  (`session/processor.ts`), and that is the tool result the next call sends (`session/message-v2.ts`). So text
-  appended to `output.output` is what the model reads next. An MCP tool's hook gets the MCP result itself,
-  `{ content: [...] }`, not the `{ title, output, metadata }` the hook's type names. OpenCode joins `content`'s text
-  after the hook and truncates it then, keeping the head, 2,000 lines or 50 KiB by default (`tool/truncate.ts`). So
-  for an MCP tool a line goes into `content`, first, or a long result loses it; an `output` set there is ignored.
-- **Network.** Loading a file plugin fetches nothing: `plugin/shared.ts` stats the file, reads a `package.json` beside
-  it if there is one, and imports it, and a module with no imports resolves nothing else. But for every config
-  directory it loads, OpenCode writes a `.gitignore` and starts installing `@opencode-ai/plugin` at its own version
-  there, in the background (`Config.loadInstanceState`). With any plugin configured, the plugin service waits for every
-  one of those installs before loading plugins (`config.waitForDependencies()`), with no timeout of its own; a failed
-  install is only logged. `Npm.install` (`packages/core/src/npm.ts`) returns at once for a directory
-  `access(dir, W_OK)` refuses, and does nothing where `node_modules/` exists and the lock holds the package; otherwise
-  arborist fetches it from the registry. So a plugin in the snapshot makes every run wait, before its session, for:
-  - the snapshot's own install, from the registry, on the first run that loads a new snapshot writable, most often the
-    overseer's, outside any sandbox. A snapshot no one can write, owner included, is skipped everywhere, and the
-    `.gitignore` write's `PermissionDenied` is ignored.
-  - a worktree's `.opencode/`, when the repository has one. It is writable inside the sandbox, so a slot without its
-    `node_modules/` waits on the registry, which succeeds only where the template allows it. How long a refused fetch
-    takes to fail is not in OpenCode's source.
+### Each agent's model
 
-  In a sandboxed run on Linux the snapshot and `~/.config/opencode` are read-only binds, which `access` refuses, so
-  neither waits. On macOS, whether `access` reports a Seatbelt write deny is not settled by the source.
-- **The environment.** The plugin runs in OpenCode's process, which has the command's environment. `procs` merges a
-  run's variables over canopy's own, as it does `CANOPY_GIT_OBJECTS`. `canopy-sandbox` drops only what points git at
-  another repository, `BASH_ENV`, `ENV`, and relative `PATH` entries, and runs `srt` with the rest. `srt` spawns with
-  its own environment and unsets only the variables a policy's `credentials.envVars` deny (`--unsetenv` for bubblewrap,
-  `env -u` before `sandbox-exec`), and no shipped template has `credentials`. So a variable canopy sets for a run
-  reaches a sandboxed agent unchanged.
+Designed, not built (REQUIREMENTS R23). Until it lands, an agent runs on OpenCode's default unless its template passes a
+model, and the journal cannot say which.
 
-### What OpenCode does with a model
+The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
+and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
+promises:
 
-canopy chooses no model yet: a run gets OpenCode's default unless its template passes one (§12). ROADMAP M58 would have
-canopy choose each agent's (Each agent's model, below), and rests on what follows, read from OpenCode's source at
-1.19.3 (2026-10-19). A later OpenCode is read again before it is built.
+- **The operator alone chooses.** A run's model is its ticket's override for its agent, else that agent's default in
+  `[runtime.models]`, else the runtime's default, fixed when the run starts. `runtime.models` is private (T7): a model
+  is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
+  operator's `canopy model`, refused inside an agent run (T1); the overseer, a dispatch, and ticket text choose none.
+- **What is recorded is what runs.** canopy writes the model into the agent's rendered definition, so each set of
+  models gets its own snapshot (D040). A template's model option would override it unseen, so any `runtime` template,
+  prefix, or suffix that passes one is a config error. Each run, review, chore run, and tick records the model asked
+  for, and `canopy spend` breaks cost down by it.
+- **No silent fallback.** Before a run starts, canopy checks its model against the list OpenCode would look it up in.
+  An unlisted model, or a list that cannot be read, refuses the run with an attention item, spending no attempt and
+  leasing no slot, so the work resumes once the model is back. It never falls back to the default, since a canary's run
+  on a model nobody chose would read as the canary's.
 
-- **Which model a run uses.** `opencode run` sends its `--model` with the prompt, and the session
-  (`packages/opencode/src/session/prompt.ts`) takes that, else the agent's `model:`, else the session's last, else
-  the default (`Provider.defaultModel`, `provider/provider.ts`): config's `model`, else the model the operator last
-  picked in OpenCode's own TUI (`model.json` in its state directory) while it is still listed, else the first of the
-  first provider by OpenCode's own ranking. So a template's `--model` beats the definition's `model:`, and the
-  definition beats a repository's `model`; with neither, the default moves when the operator picks another model in
-  the TUI. A definition's frontmatter is read as its config (`config/agent.ts`), and `OPENCODE_CONFIG_DIR` merges
-  last. A subagent takes its own agent's `model:`, else its caller's (`tool/task.ts`), and compaction likewise
-  (`session/compaction.ts`), so one session can hold more than one model.
-- **A model OpenCode does not list.** Nothing checks an agent's model when it loads. The session looks it up before
-  the first call, and one the list does not hold publishes `Model not found: provider/model.`, with suggestions, as a
-  session error, which `--format json` prints as an `error` event; the run exits 1 having called no model. OpenCode
-  never falls back to another.
-- **What `opencode models` prints.** One `provider/model` per line, sorted, OpenCode's own providers first
-  (`cli/cmd/models.ts`). The model part may hold more slashes, so the provider is what comes before the first.
-  `--verbose` adds each model's JSON after its line. `opencode models PROVIDER` prints one provider's, and exits 1 with
-  `Provider not found` for one not listed. It reads the same provider list a run looks its model up in, so a model it
-  lists is one a run started in the same directory and environment accepts, and one it does not is refused.
-- **Which providers.** The catalog is models.dev's. The list keeps the catalog's providers that have a key in the
-  environment (a variable the catalog names), a key or login stored by `opencode auth`, or an entry in config, and
-  OpenCode's own `opencode` provider, whose free models need no key, so the list is never empty. Config's
-  `enabled_providers` and `disabled_providers`, a provider's `whitelist` and `blacklist`, and the catalog's
-  `deprecated` status (and `alpha`, unless experimental models are on) take models out, and a provider left with none
-  is not listed. `opencode models` loads its directory's config as a run does, so a repository's `opencode.json` can
-  change the list for its own worktrees.
-- **A provider that cannot be reached.** Listing calls no provider for most: a key is listed whether or not it works,
-  and a provider that is down is listed all the same. A few ask their provider for its models while listing, each with
-  a timeout of its own, and on failure list the catalog's (GitHub Copilot with a login, 5 seconds) or none (Modal, 3
-  seconds); GitLab and DigitalOcean do the same when configured. The command still exits 0. So the list says what
-  OpenCode will try, not what will answer: a provider that is down or a key that is wrong fails the run when it calls.
-- **Network.** The catalog is read from OpenCode's cache (`models.json`), else from the copy built into the binary
-  (`packages/core/src/models-dev.ts`), so the list needs no network. Each start also refreshes the cache from
-  models.opencode.ai in the background once it is five minutes old, with a 10-second timeout and failures only logged;
-  the command exits without waiting for it, and `OPENCODE_DISABLE_MODELS_FETCH` turns it off. `--refresh` fetches
-  first and prints `Models cache refreshed` even when the fetch failed. The command starts an instance as a run does,
-  plugins included, so it waits on the plugin installs a run waits on (above).
-- **What names the model a call went to.** No `--format json` event does. The events are `step_start`,
-  `step_finish`, `text`, `reasoning`, `tool_use`, and `error` (`cli/cmd/run.ts`); a step's part carries only its ids
-  and snapshot, and at its finish the reason, cost, and tokens (`packages/schema/src/v1/session.ts`), as issue #275
-  found. Every part names its `messageID`, and the session stores each assistant message with its `providerID` and
-  `modelID`, and each user message with the model it asked for; `opencode export <session>` prints them all, looked up
-  by id in OpenCode's database. That is the model OpenCode sent the call to, by OpenCode's name for it: nothing keeps a
-  model the provider reports back. Without `--format json`, `opencode run` writes `> <agent> · <model>` to stderr at
-  the first reply, without the provider.
-
-### Each agent's model (M58)
-
-Designed, not built (ROADMAP M58, REQUIREMENTS R23). Until it lands, an agent runs on OpenCode's default unless its
-template passes a model, and the journal cannot say which (above). This part says what changes in §8, §11, §12, §14,
-§21, §22, and §25.
-
-The operator wants to canary a model: run one ticket's workers on another model, and compare what they did and cost,
-before every worker takes it. And each agent's model is a choice of its own: the reviewer on a model other than the
-worker's (§21), the triage on a cheaper one than the planner's (§25). So canopy chooses every agent's model itself,
-from a default per agent and an override per ticket that only the operator sets, checks it against the models
-OpenCode has before a run starts, and records it on the run.
-
-**Which agents.** Every agent canopy defines, each under a name of its own (the operator, 2026-10-19):
-
-| Name | Definition | Runs |
-|---|---|---|
-| `worker` | `canopy-worker`, `canopy-worker-private` | `implement`, `resume` |
-| `planner` | `canopy-planner` | `plan` |
-| `splitter` | `canopy-splitter` | `split`, while one exists (M46 removes it) |
-| `plan_triage` | `canopy-plan-triage` | `needs-plan` |
-| `reviewer` | `canopy-reviewer` | reviews (§21) |
-| `overseer` | `canopy-overseer` | each tick's overseer |
-| `chore` | `canopy-chore` | chores on `runtime.chore_cmd` (§19) |
-
-A public and a private ticket's workers share `worker`: a canary compares a ticket's runs, whichever kind of ticket it
-is. A future agent gets a name in the same PR that defines it.
-
-**Which model.** A run's model is its ticket's override for its agent if one is set, else the agent's default, else
-none: the runtime's default, as today, which is OpenCode config's `model` or the model the operator last picked in
-OpenCode's TUI (above). The overseer and chores work on no one ticket, so only the default reaches them; nor does an
-override reach a review of a PR no ticket of canopy's owns (§21). A run's model is fixed when it starts and recorded
-on it, so a running run keeps its model whatever is set after.
-
-**The defaults.** `[runtime.models]`, one key per agent name above, each a `provider/model` id, empty by default:
-
-```toml
-[runtime.models]
-worker = "provider-a/large"
-reviewer = "provider-b/large"
-plan_triage = "provider-a/small"
-```
-
-Private, as every `runtime` key is (§12): a model is what the operator's spend buys, and the provider it names is sent
-the ticket and the code, so a shared workspace file must choose neither (TRUST_MODEL T7). An unknown name is a config
-error, as any unknown key is. An id, here and in an override, is one line of at most 200 characters, a provider and a
-model joined by its first `/`, each non-empty, with no whitespace, control character, quote, or backtick. canopy
-writes it quoted, so no id can add a key to a definition. Config load checks its shape and never reads OpenCode's list
-(below), so it stays fast; a run's start checks the rest.
-
-**The definition, not the template.** When canopy renders a snapshot (Where the runtime finds canopy's definitions,
-above), it writes each agent's model as `model:` in the frontmatter of that agent's definitions, and no key for none.
-The digest covers the rendered text, so each set of models gets a snapshot of its own, immutable (D040), and a run's
-snapshot names the model it asked for: the overseer and every run without an override load the one rendered from
-`[runtime.models]`, and a run with an override one rendered with its ticket's overrides in place. Reconcile removes
-a snapshot no live run uses (§26), so overrides add snapshots on disk only while their runs are live. The definition's
-`model:` beats a repository's `model` and the default, and a repository cannot define a canopy agent to change it,
-since the shadowing check refuses that (above). A subagent an agent calls runs on that agent's model unless its own
-definition names one (above).
-
-The templates stay the operator's: every `runtime` template and the worker prefix and suffix are unchanged, so custom
-and sandboxed templates keep working. But a template's `--model` beats the definition's `model:` (above): a template
-that passed one would override every model canopy chooses for its agent, while the run's record named another, and
-spoil the canary unseen. So a `--model` word, or one starting `--model=`, in any `runtime` template (`overseer_cmd`,
-`worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd`, `plan_triage_cmd`, `chore_cmd`, `review_cmd`) or in
-`worker_cmd_prefix` or `worker_cmd_suffix` is a config error naming the key and saying which `runtime.models` key to
-set instead. The short `-m` is not looked for, since a wrapper ahead of the runtime may take one of its own, and a
-wrapper script that adds `--model` itself is past the check, as it is past §12's `{definitions_dir}` check. Refused
-rather than warned about: a warning on every config load reaches a log nobody reads, and a refusal costs one edit,
-once. §12's example, §21's advice to point `review_cmd` at another model, and §25's to point `plan_triage_cmd` at a
-cheaper one become `runtime.models` keys in the PR that builds this. A chore's own `cmd` (§19) is the operator's
-program, outside the check as a wrapper script is; its runs record no model.
-
-**What OpenCode has.** Models come and go with a provider's key or config and the catalog's marks (above), so canopy
-holds no list of its own. It reads `opencode models` through `infra/procs.py`, in the workspace root, with
-`OPENCODE_CONFIG_DIR` the current snapshot and a timeout of 30 seconds. Each line is validated as an id (D026) and one
-that is not is passed over; a read that exits non-zero, times out, or leaves no id has failed, since OpenCode's list is
-never empty (above). Being offline is no failure: the list comes from OpenCode's cache or the catalog built into it.
-canopy never passes `--refresh`, which fetches from the network; OpenCode refreshes its cache on its own. A listed model
-can still fail when called, since listing reaches no provider for most (above): the run then fails as any run does.
-
-- **In the workspace root,** where the overseer's OpenCode already runs outside any sandbox, so the read loads no
-  config canopy does not load there already. A repository's own config can change the list for its worktrees (above),
-  and that difference goes unseen: a model a repository's config takes out passes the check, and OpenCode refuses the
-  run before its first call, which ends `unknown`, raises `unknown_result` (§14), and shows OpenCode's error on the run
-  page (§22). Rejected: reading in the repository's primary clone, which would run the repository's plugins outside
-  any sandbox, as nothing else canopy runs does (§24); reading in the leased slot from `_run`, which costs the lease
-  and the setup the check exists to save.
-- **At each start** of a run whose agent has a model: each dispatch, once the guards that read only the journal have
-  passed, each review and chore canopy starts, and each tick before its overseer. Each is its own check, so a list kept
-  between them would be a cache canopy must keep fresh, over the one OpenCode keeps, and a tick starts few runs.
-  Rejected: once a tick, the same cache, read minutes before the run it checks.
-
-`canopy models` prints the list as a run's start reads it, one id a line, and exits 1 saying why when the read fails.
-Reading it refuses nothing.
-
-**A run's start.** Two guards join §8 step 1's, last, for a run whose agent has a model, and a review, a chore, and a
-tick's overseer check the same before they start:
-
-- `model_missing`: the list does not hold the run's model: gone since it was set, or never there for a default.
-- `model_list_failed`: the list could not be read.
-
-A dispatch refused so records an attention item of its own name about the ticket, as an `attempt_limit` refusal does,
-lasting as long as the overseer keeps asking (§14). A review or chore not started so records the same item about its
-PR or chore, and the next tick tries again. A tick whose overseer's model is refused starts no overseer, as a tick
-whose `canopy --version` check failed does not (§6), ends with a status of its own, and raises the item as a harness
-item, as `canopy_unavailable` is: until the operator fixes `runtime.models.overseer` or the provider, no tick decides
-anything, which the item says. Config load checks only the id's shape, so a model gone is found at the next tick.
-Each item's detail names the model, where it came from (the ticket's override or the
-`runtime.models` key), and for `model_list_failed` why the read failed. A refusal spends no attempt and leases no slot,
-and the next start reads the list again, so the work goes on by itself once the provider is back in OpenCode's config,
-the operator names another model, or the read works. A refused `needs-plan` is no failed triage: the ticket waits on the
-item rather than being planned, since the operator chose that triage's model (§25).
-
-Neither falls back to the default: a canary's run on a model nobody chose would read as the canary's. OpenCode never
-falls back either, so the check changes how a gone model fails, not whether: an attention item and a kept slot, rather
-than a run that leases, sets up, and fails before its first call. A failed read fails closed for the same reason. A run
-let through unchecked would still ask for its model, and so fall back to nothing either, but on an OpenCode that cannot
-list its models it would most likely fail, spend an attempt, and wait for a reply (§14), where a refusal is retried
-next tick at no cost. A dry run reads the list and refuses alike (D036): the read is a guard's, which starts no agent,
-leases nothing, and changes nothing the next live tick reads.
-
-`canopy dispatch` takes no model, and the state block carries none: a model is not the overseer's to weigh, its own
-included.
-
-**The override.** `canopy model KEY provider/model` sets the model of the ticket's workers, `--agent NAME` that of
-another of its agents (`planner`, `splitter`, `plan_triage`, or `reviewer`), and `--clear` removes one, or with no
-`--agent` every override the ticket has. `canopy model KEY` prints, for each of the ticket's agents, the model its next
-run would get and where it comes from. An override is a journal fact on the ticket and agent, with when and through
-which channel it was set. It covers every run of that agent for the ticket until it is cleared, so a canary stays on
-one model across its `implement` and every `resume`, and one equal to the default keeps the ticket there when the
-default changes. It takes a ticket, public or private, and:
-
-- refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `stop`, `reply`, and `grant` do, so no
-  agent chooses a model (TRUST_MODEL T1): a model sets what a run costs and which provider reads the ticket and the
-  code, and an agent steered by ticket text must choose neither.
-- refuses `bad_model` for an id of the wrong shape or an agent name it does not take, and, reading the list as a run's
-  start does, `model_missing` for a model it does not hold and `model_list_failed` when it cannot be read. `--clear`
-  reads no list.
-- takes a ticket canopy has not seen yet, its key checked as every key is (§17), so the operator can set the model
-  before labeling the ticket and its first run takes it. The override alone does not make a ticket a candidate.
-- leaves a running run alone: it keeps its model, and the override reaches the agent's next run for the ticket.
-- outlasts `canopy forget` (§22), as the start record does: it is the operator's setting for the ticket, not its work.
-
-**From the web UI.** The ticket's page (§22) has a Model panel: each of the ticket's agents, the model its next run
-would get, and where that comes from, with a control to set or clear the override. Its choices are the list as a
-run's start reads it, served by a read the panel makes when the operator opens the control, not on every page load,
-since each read is an OpenCode process; an id typed by hand is checked against the same list. The write goes through
-the function `canopy model` calls, refusing as it does, and the journal records the web channel (T8). `[runtime.models]`
-shows read-only on the settings page with the rest of the loop's settings: the defaults are config, and the config
-files stay the operator's to edit, as every setting is until M41's settings page writes them.
-
-**Recorded on the run.** A migration adds `model` to `runs`, `review_runs`, `chore_runs`, and `ticks`: the id canopy
-asked for, empty for the runtime's default. Rows from before it are empty too, whatever their template chose.
-
-- `canopy status` names a run's model beside its kind, and nothing for an empty one, so a workspace that sets none
-  reads as today. `canopy show KEY` names the ticket's overrides and each run's model. The web UI's run, review, chore,
-  and tick pages show theirs, and the ticket's page its Model panel.
-- `canopy spend` (§11) breaks each kind's cost down by model, empty ones as `default`, the overseer's and chores'
-  included, and the web UI's spend page shows the same, so a canary's runs read against the rest. Comparing more than
-  cost, such as how many resumes a PR took, is the operator's, from the runs and PRs: issue #418 leaves comparison
-  reports out.
-
-**What served.** canopy records what it asked for, not what the session says served. No event names the model a call
-went to (above); the session's own record does, read with `opencode export`. With a template's `--model` refused, that
-record names the model asked for, or the run failed before its first call, since OpenCode never falls back. It can
-differ only for a subagent whose own definition names a model, whose calls are its own session's and not counted
-(above). The operator who wants to see it reads it with `opencode export`, by the session id on the run. A run on the
-runtime's default leaves its model unknown, so a canary sets its agent's default for its baseline, and every run it
-compares names its model. Rejected: `opencode export` after every run, the first OpenCode-only command canopy would run
-after each (Session titles turned one down, above). It would be a second runtime process outside any sandbox, printing
-the whole session to read two fields from a store a sandboxed worker can write (§24), in a format canopy would have to
-follow (§22 turned it down for transcripts).
-
-**Trust model changes.** Proposed, for M58's PR:
-
-- T1: every agent's model is the operator's choice alone, from `runtime.models` or `canopy model`, which refuses
-  `inside_run`, and the ticket page's control. No dispatch flag, label, or state block field lets an agent choose one,
-  the overseer's own included, and a model OpenCode does not list refuses the run rather than falling back.
-- T5: a run records the model canopy asked for; the session's record says what served.
-- T7: `runtime.models` is private, as every `runtime` key is.
-- T8: the web UI's writes gain the override, through `canopy model`'s function, and its reads the model list, an
-  `opencode models` process in the workspace root, started only by the operator's session.
-
-Rejected:
-
-- A model chosen by the overseer, a flag on `canopy dispatch`, or a ticket's labels (issue #418): ticket text would
-  then choose the spend and the provider (T1). M55's triage chooses none either (§25).
-- canopy adding `--model` to the templates: it would rewrite the operator's templates, wrappers included, where the
-  definitions are canopy's to render (D040).
-- A list of models shipped with canopy, or read at config load: models come and go, and every command loads config.
-- One model for every agent, or one override covering every agent of a ticket: the reviewer is recommended a model
-  other than the worker's (§21), the triage a cheaper one than the planner's (§25), and a canary of the worker's model
-  would otherwise move its review and triage with it.
-- Two models side by side on one ticket (issue #418): one worker per ticket stays.
-
-Follows from this, not designed here: the commit trailer naming the run's model (issue #275, §8), which needs no
-change to the shipped prompts once canopy knows the model before the run starts.
+The PR that builds it proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or ticket labels
+(T1); a list of models shipped with canopy; one override for all of a ticket's agents.
 
 ### The operator's skill
 
-`canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI and the
-state directory, how to read the journal read-only, and how to look into what canopy did and found. canopy installs it
-only when asked: `canopy skill --install [DIR]` saves it as `canopy/SKILL.md` in `DIR`, `~/.agents/skills` unless
-given, and the operator runs it again after upgrading. It is not in the definitions snapshot, where it would help no
-run. It tells an agent started by canopy to follow its prompt instead, and grants nothing: the overseer's and worker's
-bash rules apply either way.
-
-### Shell completion
-
-`canopy completion SHELL` prints the script that completes canopy in bash, zsh, or fish, for the operator's shell
-startup file. It completes commands, options, choices, and the workspace's repository and chore names, but not ticket
-keys, which would open the journal on every Tab, and not the commands only the overseer runs inside a tick, which
-would refuse the operator anyway.
+`canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the
+journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing. Shell completion
+leaves out ticket keys, which would open the journal on every Tab, and the commands only the overseer runs.
 
 ## 14. Attention list
 
-After every tick the list is rendered to `<state_dir>/attention.md`, readable only by the operator: grouped by reason,
-one line per item with ticket key, age, and detail (usually a link). Items disappear when their cause is gone; there is
-no manual dismissal. `canopy status` prints it too, with the last tick, a pause or notice in force (§6, §8), the tickets
-the operator started (§22), the running workers, and the runs that ended most recently.
+After every tick the list is rendered to `<state_dir>/attention.md`, readable only by the operator, one line per item
+grouped by reason. Items disappear when their cause is gone; there is no manual dismissal. `canopy status` prints it
+too, with the loop's state and the running and recent runs.
 
-Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-`attempt_limit`, `fix_ci_override` (§8: every `resume` is refused while an override of a retired fix-ci prompt
-exists), a private ticket's `awaiting_reply` (§22) and a planner's (§25), the overseer's `plan_review` and
-`plan_changed` (§25), `canopy_unavailable` (§6 step 5), and in a workspace
-`repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
-`chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
-`review_limit`, about a PR (§21). A notice to workers adds the overseer's `notice_rerun`: a check failed while a notice
-was in force, the notice has ended, and no newer run of the check exists, so the operator reruns it (§8). Agent memory
-adds the harness's `memory_proposal`, about a done ticket whose runs' proposals wait on the operator, and
-`lesson_review` and `lesson_wrong`, about the workspace, each one item naming every lesson it is about; none while
-`memory.proposals` is off, and the last two only at `use` (§28). Review replies add the harness's `drafts_waiting`,
-about a unit whose PR has drafts unsent, or a ticket with its own draft unsent (§29). Triage before a plan adds the
-harness's `not_trivial`, about a unit whose PR a review judged `high` impact while a triage's waiver of its ticket's
-plan is in force (§25). An item about one unit of a
-ticket names its repository and is shown as `KEY (repo)`.
+Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
+raise them define: `canopy_unavailable` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`, `multi_repo`,
+`split_unlabeled`, and `split_self_labeled` (§18), `chore_failed` and chore findings (§19), `review_failed` and
+`review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and `not_trivial` (§25),
+`memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and `drafts_waiting` (§29). An item about one unit names
+its repository, shown as `KEY (repo)`.
 
-The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest
-run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to
-`unknown_result`, `failed` to `worker_failed`. The detail names the run, the harness note or the worker's summary, and
-the run log. The cause is gone when a newer run starts for the ticket or the ticket is marked done. The overseer does
-not dispatch such a ticket again until an authorized replier comments after the run ended; that is how a human says
-"try again". An operator message after the run ended says it too (§22, D093), the only way on a private ticket.
-`blocked` and `stopped` raise nothing here. Nor does a ticket the operator stopped (§22), whatever its latest run: nothing
-dispatches it, so no reply could answer the item, and stopping it says they have seen to it. An `unpushed` run's commits
-stay where `canopy show` names them. Started again, the ticket raises its item again.
+**Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
+reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The
+cause is gone when a newer run starts or the ticket is done. The overseer does not dispatch such a ticket again until
+an authorized replier comments, or the operator sends a message, after the run ended (§22, D093): that is how a human
+says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
+raises `awaiting_reply` for a started ticket's or a planner's unanswered question (§22, §25), `repo_missing` for a
+mapped repository with no clone (§18), and `canopy_unavailable` for a tick whose `canopy --version` check failed (§6
+step 5).
 
-The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
-message after it (§22), and for each public ticket, not done, whose latest plan run ended `blocked` with its question
-unanswered: the planner writes nothing to the ticket, so its question is canopy's to raise (§25). Its detail is the
-question and how to answer it. Its cause is gone once the operator replies, and the item with it at the next `ok` tick;
-until then the web UI marks it answered.
+**Recorded by the overseer.** The overseer records an item with `canopy attention <KEY> <reason> --detail ...`, every
+tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
+decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
+`skipped` tick leaves the previous list standing; `canopy_unavailable` is added to it while it is the latest tick's.
+The state block lists the overseer's open items (§6 step 4), so it records each again until it sees the cause gone. An
+item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when the state
+block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while the
+overseer keeps asking.
 
-The harness also raises `repo_missing` every tick for each repository in the workspace map with no clone at
-`repos/<name>`. It has no ticket key and is shown under the repository's name. Its cause is gone once
-`canopy workspace sync` (or anything else) puts the clone there.
-
-A tick raises `canopy_unavailable` when `canopy --version` fails from the overseer's environment, and runs no overseer
-(§6 step 5). It is about neither a ticket nor a repository, and is shown as `-`. Its detail says why, and its cause is
-gone at the first tick that ends otherwise.
-
-The overseer records an item with `canopy attention <KEY> <reason> --detail "<link or text>"`, naming the unit's
-repository when it is about one, every tick the cause holds. The item is stored as a decision, not in a separate table
-(D020). The current list is the attention decisions of the latest `ok` tick: an item disappears the first tick that
-does not record it, and a failed or `skipped` tick leaves the previous list standing. A `canopy_unavailable` tick adds
-its one item to that list while it is the latest tick to have ended. The overseer's state block lists its own open
-items (§6 step 4), so it records each again until it sees the cause gone. Dry-run ticks count like live ones. An item's
-age runs from the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
-
-`attempt_limit` is raised two ways: the overseer records it when the state block shows a ticket at its limit for the
-work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
-overseer keeps asking for that work. The refusal's item names the unit at its limit.
-
-Notification. An item is identified by its ticket, reason, and repository if it has one, so two units at their
-resume limit are two items; rewording its detail does not make it new. Each notification sink (§20), `notify.cmd`
-among them, keeps its own record of what it was told. When `notify.cmd` is set, each tick compares the list with that
-record: unrecorded items are new, and recorded ones no longer listed are resolved. If either exists, the command gets
-one message on stdin: a summary line, a `+ KEY reason: detail` line per new item, a `- KEY reason` line per resolved
-one, and the path of `attention.md`. Only when it exits 0 within 60 seconds is the record updated. So a failed
-notification is retried next tick, an open item is never notified twice, and an item that returns after going away is
-new again.
+**Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it
+new. Each sink (§20), `notify.cmd` among them, keeps its own record of what it was told, and each tick sends it the new
+and resolved items, updating the record only when the sink succeeds. So a failed notification is retried next tick, an
+open item is never notified twice, and an item that returns after going away is new again.
 
 ## 15. Failure handling
 
-- Worker crash: detected in reconcile; what is left of the worker is killed; every slot tidied as `_run`'s step 6
-  tidies it (§8) and returned; the run's object directory and a joint run's desk removed; ticket goes to attention with
-  `crashed`. Not auto-redispatched: the harness never restarts a run, and the overseer prompt waits for an authorized
-  reply (§14). Every kind has an attempt limit in code, so an overseer that redispatches anyway stops at
-  `policy.max_<kind>_attempts` (D030).
+- Worker crash: detected in reconcile; what is left of the worker is killed, every slot tidied (§8 step 6) and
+  returned, and the ticket goes to attention with `crashed`. The harness never restarts a run; the overseer waits for an
+  authorized reply (§14), and every kind's attempt limit in code stops an overseer that redispatches anyway (D030).
 - Worker exits without a result, times out, reports `failed`, or leaves commits unpushed: `_run` returns the slot and
   records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.
-- treehouse unavailable or failing in reconcile: tick closes with `reconcile_failed`; the overseer does not run.
-- `canopy --version` fails from the overseer's environment: tick closes with `canopy_unavailable`, the overseer does
-  not run, and the item of that name is on the attention list until a tick ends otherwise (§6 step 5).
-- Overseer timeout or bad output: tick closes with `overseer_failed`; nothing is dispatched; next tick retries. Three
-  consecutive ticks that end other than `ok` produce a `loop.failing` notification for sinks that take `loop`, once per
-  streak, and `loop.recovered` at the next `ok` tick (§20). There is no attention item for this: the attention list is
-  the latest `ok` tick's, so a failing loop cannot add to it; `canopy_unavailable`, above, is the one exception.
-- Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes with
-  `overseer_failed`, its summary naming each one (§6 step 5). What it dispatched stands; the attention list stays as it
-  was, and the next tick owes the same duties.
-- MCP unavailable: the overseer reports it with a tick-wide `skip`; the tick closes as `skipped` and `canopy tick`
-  exits 1; no decisions are made on partial data, and the attention list stays as it was.
+- treehouse unavailable or failing in reconcile: the tick closes `reconcile_failed`; the overseer does not run.
+- `canopy --version` fails from the overseer's environment: the tick closes `canopy_unavailable`, the overseer does not
+  run, and the item of that name stays until a tick ends otherwise (§6 step 5).
+- Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.
+  Three consecutive ticks not `ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next
+  `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
+- Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
+  `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- MCP unavailable: the overseer records a tick-wide `skip`; the tick closes `skipped`, no decisions are made on partial
+  data, and the attention list stays as it was.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.
-- An error the tick code does not handle, in a tick `canopy loop` runs: the tick ends as `error` in the loop's output,
-  the traceback is logged, and the loop goes on. The next tick closes the row as `abandoned` (§6).
+- An unhandled error in a tick `canopy loop` runs: the traceback is logged and the loop goes on; the next tick closes
+  the row as `abandoned` (§6).
 
 ## 16. Open questions
 

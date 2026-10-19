@@ -87,12 +87,25 @@ What treehouse does that canopy relies on or works around, from its source at th
 
 - Goes: treehouse's implementation, `pools.backend` (a config still setting it is warned about, then ignored), the
   fake and its fixture, `make treehouse` and the CI job, README's install step, and the mock's pool hashes.
-- Stays: finishing the move without treehouse, for a workspace that skipped the release where sync moved its slots.
-  A lease the journal says treehouse made is returned by canopy's own forced return of that worktree (its processes
-  ended, reset to its base, ignored files kept), with no treehouse call, so no tick fails on one. Sync finds each
-  worktree of a clone under `.treehouse/` with `git worktree list` and moves it into `pools/` as stage 3's switch
-  does; one with changes or a process in it stays, and sync says so and exits 1. `.treehouse/` goes once it holds no
-  worktree. A test upgrades a journal and workspace with both left over.
+- Stays: finishing the move without treehouse, for a workspace that skipped the release where sync moved its slots
+  (DESIGN §18, Upgrading past treehouse; proposed, #813). A lease the journal says treehouse made is returned by
+  canopy's own forced return of that worktree (its processes ended, reset to its base, ignored files kept), with no
+  treehouse call; a return that fails is logged and leaves the worktree for sync, so no tick fails on one. Sync finds
+  each worktree of a clone under `.treehouse/` with `git worktree list` and moves it into `pools/` as stage 3's switch
+  does, what treehouse seeded in it recorded as seeded; one a running run or review holds waits, and one with changes,
+  a process in it, or a damaged link stays, and sync says so and exits 1. `.treehouse/` goes once it holds no
+  worktree. `'treehouse'` stays a value of the journal's lease columns.
+- Test: a scenario that upgrades. A journal from the release before holds a running run's `'treehouse'` lease whose
+  `_run` is gone, a running run's and a running review's that are live, and a finished run's; real worktrees under
+  `.treehouse/` hold an ignored cache and a seeded file, one with changes, one with a process in it, and one with a
+  damaged link; the config still sets `pools.backend = "treehouse"`; and no `treehouse` is on `PATH`. Expect the tick
+  to end ok, warning about the key, with the dead run closed `crashed` and its slot reset in place; sync to move the
+  idle worktrees with their caches (same inode), keep the rest, and exit 1; once the runs end and the worktrees are
+  cleaned, a second sync to move the rest, remove `.treehouse/`, and exit 0; and the next lease to reuse a moved slot,
+  seeding it afresh with no quarantine. A forced return that fails, its process outliving its signals, leaves a tick
+  that ends ok.
+- Check, live: SCENARIOS S53 on the toy workspace, an upgrade from the release before with treehouse slots and leases
+  left over (the M45 test plan's phase F), before the stage's last PR merges.
 - Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §6, §8, §9, §18, §22,
   and §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, TRUST_MODEL, and where the web UI's guide and the
   worktrees API's descriptions name treehouse.

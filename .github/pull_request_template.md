@@ -24,9 +24,10 @@ goes in docs/SCENARIOS.md; a live measurement a milestone cites, in docs/MEASURE
 ## Docs
 
 <!--
-The design section that states this behavior, and what changed in it; or why none does. Also README.md if the install
-path or daily surface changed, the milestone's Status line in docs/roadmap/ if this meets its acceptance criteria,
-and docs/DECISIONS.md only if the change passes the bar at the top of that file. Delete what does not apply.
+The design sentence this changes, if it states a promise this PR changes; most PRs change none (docs/design/README.md,
+"What belongs here"). Also README.md if the install path or daily surface changed, the milestone's Status line in
+docs/roadmap/ if this meets its acceptance criteria, and docs/DECISIONS.md only if the change passes the bar at the top
+of that file. Delete what does not apply.
 -->
 
 ## Screenshots

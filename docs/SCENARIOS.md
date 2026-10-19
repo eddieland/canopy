@@ -298,6 +298,23 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
      no `/tmp/outside.local`: seeding never writes through a link in the slot.
   4. Point `paths.worktree_include` at a path with no file, and start a run. Expect `no_slot` naming the include file
      (`failed to read include file`), with no slot leased, reset, or quarantined. Put the setting back.
+- **S53. Upgrading past treehouse** (M45 stage 4, DESIGN §18's Upgrading past treehouse). Run it once stage 4 is
+  built, on a fresh toy workspace with this group's first three steps done, not after S45 to S52: it starts on the
+  release before, under treehouse, with `toy-calc = 3` synced and `cache/warm.bin` written in each slot of
+  `.treehouse/`, its inodes noted.
+  1. Start run A and `kill -9` its `_run`. Start run B and leave its worker working. In the idle slot,
+     `touch stray.txt`.
+  2. Install the stage 4 build with `uv tool install`, take `treehouse` off `PATH`, and leave `pools.backend =
+     "treehouse"` set. `canopy tick`. Expect a warning that `pools.backend` is ignored and the tick ending ok; A
+     closed `crashed`, its slot still under `.treehouse/`, `git status --porcelain` in it printing nothing, HEAD at
+     its base, and `cache/warm.bin` at its inode; and no `canopy lease with no running worker` line for B's slot.
+  3. `canopy workspace sync --dry-run`: A's slot to move, B's waiting, the idle one kept for its changes, nothing
+     changed on disk. `canopy workspace sync`: A's slot moved into `pools/toy-calc/`, its cache at the same inode and
+     its row's `seeded` naming `settings.local`; B's slot waiting; the idle one kept, named with `stray.txt`; exit 1.
+  4. Remove `stray.txt`, and `canopy stop --now` B. Expect its slot returned in place, as A's was. Sync: both moved,
+     `.treehouse/` gone, `slots: 3 of 3`, exit 0.
+  5. Start a run. Expect it to reuse a moved slot, `settings.local` reading `v1`, no quarantine, and `cache/warm.bin`
+     at its first inode. Remove `pools.backend` from the config: the warning stops.
 
 ## Measurements
 
@@ -328,12 +345,13 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
 - **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17). After an OpenCode
-  upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each canopy agent
-  against a recorder on loopback and split its first request by source, as MEASUREMENTS' 2026-10-17 section says
-  (Re-measuring the first request), on the operator's machine with their MCP servers. Expect OpenCode's own prompt
-  absent and the agent's body first; no schema for a tool a definition denies outright; and, against that section, a
-  difference only where the change made one. A body the split cannot find means OpenCode moved it. Record the tables
-  in `MEASUREMENTS.md`.
+  upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each agent
+  `.agents/agents/` ships against a recorder on loopback and split its first request by source, as MEASUREMENTS'
+  2026-10-17 section says (Re-measuring the first request), on the operator's machine with their MCP servers: the
+  tracker's server has been in no run yet, and `split.py` gives each server's tools a row of their own. Expect
+  OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
+  against the latest such section (2026-10-19), a difference only where the change made one. A body the split cannot
+  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`.
 
 ## Retired
 
