@@ -10,12 +10,11 @@ from unittest import mock
 import pytest
 from pydantic import ValidationError
 
-from canopy.cli.main import main
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core import db, workspace
 from canopy.core.config import CHORE_DAYS, Chore, load
-from tests.canopy.helpers import InlineRunner, chore_decisions, chore_toml, in_tick
+from tests.canopy.helpers import chore_decisions, chore_toml
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
@@ -118,13 +117,11 @@ def test_outside_its_window_a_chore_is_refused_and_not_due(scenario: Scenario, c
     [section] = scenario.state()["chores"]
     assert (section["due"], section["due_at"]) == (False, next_midnight())
 
-    with in_tick(scenario.conn) as tick_id:
-        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
-        [(name, action, rationale)] = chore_decisions(scenario.conn, tick_id)
-        assert (name, action) == ("build-health", "refused:outside_hours")
-        assert rationale == (
-            f"build-health starts only {','.join(closed_today())} all day UTC; next at {next_midnight()}"
-        )
+    with scenario.ticking() as tick_id:
+        scenario.overseer("chore", "run", "build-health", code=1)
+    [(name, action, rationale)] = chore_decisions(scenario.conn, tick_id)
+    assert (name, action) == ("build-health", "refused:outside_hours")
+    assert rationale == f"build-health starts only {','.join(closed_today())} all day UTC; next at {next_midnight()}"
 
 
 def test_a_run_waits_out_every_minutes_and_then_its_window(canopy_env: CanopyEnv, closed: Path) -> None:

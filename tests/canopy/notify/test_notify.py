@@ -94,10 +94,8 @@ def test_notify_cmd_is_the_sink_named_default(scenario: Scenario, sink_script: P
     rows = [tuple(r) for r in conn.execute("SELECT sink, ticket_key, reason FROM notifications")]
     assert rows == [("default", "PROJ-3", "needs_reviewer")]
 
-    # Renamed to a sink of its own, it is new there and hears about every open item once. A key `configures` sets
-    # stays set, so the rename is written into the file.
-    env = scenario.env
-    env.write_user(env.user_file.read_text().replace("[notify]\ncmd", "[notify.sinks.mine]\nformat = 'text'\ncmd"))
+    # Renamed to a sink of its own, it is new there and hears about every open item once.
+    scenario.configures(notify={"cmd": None, "sinks": {"mine": {"format": "text", "cmd": f"{sink_script} {out}"}}})
     scenario.tick(*needing_reviewers("PROJ-3"))
     [message] = messages(out)
     assert "+ PROJ-3 needs_reviewer: PROJ-3 detail\n" in message
@@ -153,8 +151,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
 
 def titled(key: str, title: str, scenario: Scenario) -> None:
     """Record `key`'s title, as an overseer does once it has read the ticket, in a tick of its own."""
-    with in_tick(scenario.conn, ends_ok=True):
-        assert main(["ticket", "set", key, "--title", title]) == 0
+    scenario.overseer("ticket", "set", key, "--title", title)
 
 
 def test_without_sinks_no_event_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
@@ -386,7 +383,6 @@ def test_removed_sinks_are_forgotten_and_passed_events_pruned(
     scenario: Scenario, sink_script: Path, tmp_path: Path
 ) -> None:
     conn = scenario.conn
-    before = scenario.env.user_file.read_text()
     add_sink(scenario, sink_script, "s", tmp_path / "s.txt", events=["attention", "runs"])
     scenario.tick(*needing_reviewers("PROJ-1"))
     db.record_event(conn, db.Event("runs", "run.started", {"ticket": "PROJ-1"}))
@@ -396,8 +392,7 @@ def test_removed_sinks_are_forgotten_and_passed_events_pruned(
     conn.execute("UPDATE notify_events SET at = ?", (week_ago,))
     scenario.tick(*needing_reviewers("PROJ-1"))
     assert conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
-    # A key `configures` sets stays set, so the sink goes as the file is put back.
-    scenario.env.write_user(before)
+    scenario.configures(notify={"sinks": {"s": None}})
     scenario.tick(*needing_reviewers("PROJ-1"))
     assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 0
