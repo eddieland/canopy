@@ -5,10 +5,10 @@ import json
 import os
 import shutil
 import threading
-from collections.abc import Callable, Generator, Iterable, Mapping
+from collections.abc import Generator, Iterable, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Protocol, override
 from unittest import mock
 
 import canopy_notify_slack as slack
@@ -480,6 +480,7 @@ def test_the_name_and_icon_are_checked(
         ["--username", "canopy"],
         ["--icon-emoji", ":robot_face:"],
         ["--threads"],
+        ["--channel", "C0123ABCD", "--broadcast", "plan"],
     ],
 )
 def test_a_token_and_a_webhook_are_not_mixed(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
@@ -504,12 +505,22 @@ def _run(ticket: str, run: int, status: str | None = None) -> dict[str, Any]:
     return {"id": run, "kind": "run.ended", "ticket": ticket, "run": run, "run_kind": "implement", "status": status}
 
 
+class _Threaded(Protocol):
+    """Run the sink with `--threads` and any more `flags` on `delivery`, returning its exit code."""
+
+    def __call__(self, delivery: str, *flags: str) -> int: ...
+
+
 @pytest.fixture
-def threaded(api: str, tmp_path: Path) -> Generator[Callable[[str], int]]:
-    """Run the sink with `--threads`, its state under `tmp_path`. Yields the call: a delivery in, the exit code out."""
+def threaded(api: str, tmp_path: Path) -> Generator[_Threaded]:
+    """Run the sink with `--threads`, its state under `tmp_path`. Yields the call."""
     argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path)), "--threads"]
+
+    def deliver(delivery: str, *flags: str) -> int:
+        return slack.run([*argv, *flags], io.StringIO(delivery), api_url=api)
+
     with mock.patch.dict(os.environ, {"XDG_STATE_HOME": str(tmp_path / "state")}):
-        yield lambda delivery: slack.run(argv, io.StringIO(delivery), api_url=api)
+        yield deliver
 
 
 def _posts() -> list[tuple[str | None, bool, list[str]]]:
@@ -517,9 +528,7 @@ def _posts() -> list[tuple[str | None, bool, list[str]]]:
     return [(p.get("thread_ts"), p.get("reply_broadcast", False), _texts(p["blocks"])) for _, p in _Api.received]
 
 
-def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(
-    threaded: Callable[[str], int], tmp_path: Path
-) -> None:
+def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Threaded, tmp_path: Path) -> None:
     first = [
         _run("PROJ-1", 1),
         {"id": 2, "kind": "chore.ended", "chore": "deps", "run": 2, "status": "done", "findings": 0},
@@ -545,9 +554,9 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(
     ]
     added = [{"ticket": "chore:deps", "reason": "lodash", "detail": "CVE"}]
     assert threaded(_delivery("2026-09-24T12:31:00Z", later, added)) == 0
-    # The same day: replies in each thread, those holding a question or a new attention item shown in the channel.
-    # The chore's thread first: attention items come before events.
-    assert [(ts, shown) for ts, shown, _ in _posts()] == [("1790.000003", True), ("1790.000002", True), (None, False)]
+    # The same day: replies in each thread, none shown in the channel unasked. The chore's thread first: attention
+    # items come before events.
+    assert [(ts, shown) for ts, shown, _ in _posts()] == [("1790.000003", False), ("1790.000002", False), (None, False)]
     assert _posts()[0][2] == [
         ":bell: *chore:deps* · lodash\nCVE",
         ":x: *chore:deps* · run 6 ended *failed* · 1 finding",
@@ -566,7 +575,32 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(
     }
 
 
-def test_a_threaded_delivery_refused_partway_posts_the_rest_on_retry(threaded: Callable[[str], int]) -> None:
+@pytest.mark.parametrize(
+    ("flags", "shown"),
+    [
+        ([], [False, False, False]),
+        (["--broadcast", "blocked"], [True, False, False]),
+        (["--broadcast", "attention", "--broadcast", "plan"], [False, True, True]),
+    ],
+)
+def test_a_reply_is_shown_in_the_channel_only_for_what_broadcast_names(
+    threaded: _Threaded, flags: list[str], shown: list[bool]
+) -> None:
+    started = [_run("PROJ-1", 1), _run("PROJ-2", 2), _run("PROJ-3", 3)]
+    assert threaded(_delivery("2026-09-24T12:30:00Z", started), *flags) == 0
+    _Api.received.clear()
+    later = [
+        _run("PROJ-1", 4, "blocked"),
+        {"id": 5, "kind": "plan.proposed", "ticket": "PROJ-2", "run": 2, "plan": 1},
+    ]
+    added = [{"ticket": "PROJ-3", "reason": "ci_red", "detail": "lint"}]
+    assert threaded(_delivery("2026-09-24T12:31:00Z", later, added), *flags) == 0
+    assert {ts: on for ts, on, _ in _posts()} == dict(
+        zip(["1790.000001", "1790.000002", "1790.000003"], shown, strict=True)
+    )
+
+
+def test_a_threaded_delivery_refused_partway_posts_the_rest_on_retry(threaded: _Threaded) -> None:
     delivery = _delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1), _run("PROJ-2", 2), _run("PROJ-3", 3)])
     _Api.refuse = {2}
     assert threaded(delivery) == 1
@@ -580,7 +614,7 @@ def test_a_threaded_delivery_refused_partway_posts_the_rest_on_retry(threaded: C
     assert len(_Api.received) == 7
 
 
-def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: Callable[[str], int], tmp_path: Path) -> None:
+def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: _Threaded, tmp_path: Path) -> None:
     path = tmp_path / "state" / "canopy" / "slack-threads.json"
     path.parent.mkdir(parents=True)
     scope = '["C0123ABCD", "/r/api"]'
@@ -596,7 +630,7 @@ def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: Callable[[st
 
 
 def test_a_threads_file_that_cannot_be_used_refuses_before_posting(
-    threaded: Callable[[str], int], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    threaded: _Threaded, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     path = tmp_path / "state" / "canopy" / "slack-threads.json"
     path.parent.mkdir(parents=True)
