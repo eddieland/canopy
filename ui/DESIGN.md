@@ -261,9 +261,11 @@ Rules:
   reserved while the lessons are read; the CLI's warning in `status-blocked` while the text is still a private ticket's
   run's own words; and `Promote memory:5` with a ghost `Cancel`. **Forget** asks for the memory's ref typed out, in the
   same form as a ticket's Forget asks for its key (`ForgetForm`). A row can leave once its verb is done, so what it did
-  is said once, in the CLI's words, under the panel's header or band, and only a refusal stays under the row; proposals
-  all decided from the page say so in the accent. On the attention list, a `memory_proposal` item lists its proposals
-  with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
+  is said once, in the CLI's words, under the panel's header or band, and only a refusal stays under the row, but one
+  saying the memory changed under it (`not_pending`, `forgotten`, `unknown`, decided from the attention list or the
+  CLI), which reads memory again, so its row may leave, and is said under the list too; proposals all decided from the
+  page say so in the accent. On the attention list, a `memory_proposal` item lists its proposals with `Promote as
+  written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never

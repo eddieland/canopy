@@ -172,9 +172,10 @@ Each item leaves at the next tick once you've dealt with what it names, as an an
 deletes its text and keeps its row, so the history still says something was there: a forgotten lesson is retired, and a
 forgotten proposal leaves the queue. Reject is enough for a proposal you just don't want; Forget is for one whose words
 shouldn't stay. It can't be undone, so the page asks you to type the memory's ref, `memory:42`, before the button wakes
-up. `canopy memory purge`, in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`,
-everything. Neither leaves a word of what it deleted in the search index or the journal's free pages. That's the point,
-if what you're deleting is a leaked secret.
+up. A lesson from a note comes back if you promote the note again, while the note keeps its text; one from a proposal
+doesn't, since promoting it used the proposal up. `canopy memory purge`, in your shell alone, does the same for many: a
+ticket's runs', a run's, or, with `--all`, everything. Neither leaves a word of what it deleted in the search index or
+the journal's free pages. That's the point, if what you're deleting is a leaked secret.
 
 ## Search
 
