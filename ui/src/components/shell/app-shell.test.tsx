@@ -64,6 +64,7 @@ async function renderShell(session: Session | undefined, at = '/attention') {
         routeTree: root.addChildren([
             createRoute({ getParentRoute: () => root, path: '/attention', component: () => <h1>What needs you</h1> }),
             createRoute({ getParentRoute: () => root, path: '/runs', component: () => <h1>Runs</h1> }),
+            createRoute({ getParentRoute: () => root, path: '/guide', component: () => <h1>The guide</h1> }),
         ]),
         history: createMemoryHistory({ initialEntries: [at] }),
     })
@@ -125,6 +126,17 @@ describe('AppShell', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Open the rail' }))
             expect(screen.getByRole('dialog', { name: 'Rail' })).toBeDefined()
             expect(screen.getByRole('searchbox', { name: 'Search the journal' })).toBeDefined()
+        })
+
+        it("opens the guide from the strip's foot in one click, the sheet left closed", async () => {
+            stubWidth(false)
+            const router = await renderShell(SIGNED_IN)
+            await act(async () => {
+                fireEvent.click(screen.getByRole('link', { name: 'Guide' }))
+                await Promise.resolve()
+            })
+            expect(router.state.location.pathname).toBe('/guide')
+            expect(screen.queryByRole('dialog', { name: 'Rail' })).toBeNull()
         })
 
         it('opens the rail on `/`, landing in its search box', async () => {

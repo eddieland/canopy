@@ -705,6 +705,8 @@ test('the shortcut and the bubble over a selection both open a comment on it', a
     await expect(page.getByRole('form', { name: 'Comment' })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('form', { name: 'Comment' })).toBeHidden()
+    // Further down than the window shows, under the sticky foot: in view, as a passage the operator selects is.
+    await plan(page).getByText('template cache').scrollIntoViewIfNeeded()
     await select(page, 'template cache')
     await page.getByTestId('plan-bubble').getByRole('button', { name: 'Comment' }).click()
     await expect(page.getByRole('form', { name: 'Comment' })).toBeVisible()

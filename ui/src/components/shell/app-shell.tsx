@@ -25,7 +25,7 @@ import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
 import { Nav } from './nav'
 import { NewerBuild } from './newer-build'
-import { RailFooter, RailSpend, RailWorking } from './rail'
+import { RailFooter, RailSpend, RailWorking, StripGuide } from './rail'
 import { Rave } from './rave'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
@@ -48,9 +48,9 @@ export const PAGE_SCROLLER = 'page'
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
  *
- * Under `lg` the rail is a strip of the nav's icons (`useRailMode`): the button atop it opens the whole rail as a sheet
- * over the page, as does `/`, which lands in its search box. A link followed or a search sent from the sheet closes
- * it.
+ * Under `lg` the rail is a strip of the nav's icons (`useRailMode`), with the guide at its foot: the button atop it
+ * opens the whole rail as a sheet over the page, as does `/`, which lands in its search box. A link followed or a
+ * search sent from the sheet closes it.
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
@@ -150,12 +150,23 @@ export function AppShell() {
                                 </div>
                             </aside>
                         )}
+                        {/* The strip sticks the same way, its guide at the window's foot as the rail's footer is. */}
                         {mode === 'strip' && (
                             <aside className="border-r bg-surface/60" data-testid="rail-strip">
-                                <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
-                                    <RailButton />
-                                    <div className="w-full">
-                                        <Nav compact />
+                                <div
+                                    className={cn(
+                                        'sticky top-0 flex h-[calc(100dvh-3rem)] flex-col pt-2',
+                                        'print:static print:h-auto',
+                                    )}
+                                >
+                                    <div className="panel-scroll flex min-h-0 flex-col items-center">
+                                        <RailButton />
+                                        <div className="w-full">
+                                            <Nav compact />
+                                        </div>
+                                    </div>
+                                    <div className="mx-2 mt-auto border-t pt-1 pb-2">
+                                        <StripGuide />
                                     </div>
                                 </div>
                             </aside>

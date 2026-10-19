@@ -11,13 +11,14 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
 const LINK = 'text-accent underline underline-offset-4 hover:decoration-2'
 
 /**
- * A page of the guide laid out as a documentation site's article (`src/lib/guide.ts`): headings, each with its anchor
- * as its id and a `#` link to itself on hover, paragraphs, lists, code, and links. Its lines wrap as prose does, so a
- * paragraph written across lines reads as one. Every piece is a React element, never HTML.
+ * A page of the guide laid out as a documentation site's article (`src/lib/guide.ts`), in a document's type as a plan
+ * is (`document-text` in `src/index.css`): headings, each with its anchor as its id and a `#` link to itself on hover,
+ * paragraphs, lists, code, and links. Its lines wrap as prose does, so a paragraph written across lines reads as one.
+ * Every piece is a React element, never HTML.
  */
 export function GuideText({ blocks, page }: { blocks: Block<GuidePiece>[]; page: string }) {
     return (
-        <div className="flex min-w-0 flex-col gap-4 text-base/7 wrap-break-word">
+        <div className="flex min-w-0 flex-col gap-4 document-text wrap-break-word">
             {blocks.map((block, i) => (
                 <BlockView key={i} block={block} page={page} />
             ))}
@@ -65,7 +66,7 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
                 <h2
                     id={id}
                     className={cn(
-                        'group mt-4 scroll-mt-6 border-t pt-6 text-lg font-semibold tracking-tight',
+                        'group mt-4 scroll-mt-6 border-t pt-6 document-section',
                         'first:mt-0 first:border-t-0 first:pt-0',
                     )}
                 >
@@ -73,7 +74,7 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
                     {self}
                 </h2>
             ) : (
-                <h3 id={id} className="group mt-2 scroll-mt-6 text-base font-semibold">
+                <h3 id={id} className="group mt-2 scroll-mt-6 document-subsection">
                     <LineView line={block.line} />
                     {self}
                 </h3>

@@ -87,6 +87,19 @@ test.describe('on half a monitor', () => {
         expect(label.x + label.width).toBeLessThanOrEqual(chart.x + chart.width + 1)
     })
 
+    test("the guide is one click from every page, at the strip's foot", async ({ page }) => {
+        const guide = page.getByTestId('rail-strip').getByRole('link', { name: 'Guide', exact: true })
+        for (const route of ROUTES) {
+            await page.goto(route)
+            await expect(guide, route).toBeInViewport({ ratio: 1 })
+        }
+        await page.goto('tickets/ABC-105/plan')
+        await guide.click()
+        await expect(page).toHaveURL(/\/guide\/overview$/u)
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('The web UI')
+        await expect(page.getByRole('dialog', { name: 'Rail' })).toHaveCount(0)
+    })
+
     test('/ opens the rail in its search box, and a search sent closes it', async ({ page }) => {
         await page.goto('attention')
         await settled(page)
