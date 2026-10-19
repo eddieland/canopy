@@ -7,9 +7,10 @@ a PR, so this is the only place, besides `canopy review show`, you'll read them.
 
 [Pull requests](/pull-requests) lists the loop's own PRs, every PR canopy reviewed, and every PR you asked it to
 review, most recent activity first. Each row shows where the PR stands (a run working it, or its latest review's
-verdict), the PR as `org/repo#123`, its phase, its ticket and title, and how long since anything happened. The name
-opens canopy's page for the PR; the small icon beside it opens the PR itself. The PR column is only as wide as the
-longest name in the list, and in a narrow window the phase goes first, then the age, so the title keeps the room.
+verdict), the PR as `org/repo#123`, its phase, its ticket and title, and how long since anything happened. A PR canopy
+only reviews has no ticket, so it shows `none` there; hover it for why. The name opens canopy's page for the PR; the
+small icon beside it opens the PR itself. The PR column is only as wide as the longest name in the list, and in a
+narrow window the phase goes first, then the age, so the title keeps the room.
 
 The title is the PR's own, as the worker that opened it or canopy's last review of it read it, so it says what the PR
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
