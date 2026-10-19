@@ -82,8 +82,8 @@ runs `canopy memory search` for you, the same search your shell gets, and lists 
 the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. The count in the
 Ticket notes header counts those notes while you search. It stops at the best fifty, and says so; another word narrows
 them faster than scrolling would. The repository chips don't narrow Ticket notes: a
-note is read by its own ticket's runs, whatever the repository. The **history** chip in the Proposals and Lessons
-headers lists what's no longer pending or in force under them: proposals rejected, lapsed, promoted, or forgotten, and
+note is read by its own ticket's runs, whatever the repository. The **history** chip at the end of the filter
+bar lists what's no longer pending or in force under each panel: proposals rejected, lapsed, promoted, or forgotten, and
 lessons replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory

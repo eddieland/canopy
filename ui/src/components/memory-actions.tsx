@@ -241,15 +241,20 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
         },
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
-    // A lesson that asks nothing keeps its verbs' room but shows them only on its row's hover or focus, as a row's copy
-    // button does, so a list of hundreds is not a wall of buttons. A touch screen, with no hover, always shows them.
+    // A lesson that asks nothing shows its verbs only on its row's hover or focus, as a row's copy button does, so a
+    // list of hundreds is not a wall of buttons, and at rest they take no room: they show over the row's end, on the
+    // panel's ground, so nothing under the row moves. A touch screen, with no hover, keeps them in the row's flow.
     const shown = asked || confirming || renew.error !== null
     return (
         <RowLine
             from="key"
             className={cn(
                 'flex flex-col gap-2',
-                !shown && 'opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100',
+                !shown && [
+                    'pointer-fine:absolute pointer-fine:right-3 pointer-fine:bottom-1.5 pointer-fine:bg-surface',
+                    'pointer-fine:pl-2 opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100',
+                    'pointer-coarse:opacity-100',
+                ],
             )}
         >
             <span className="flex flex-wrap items-center gap-2">

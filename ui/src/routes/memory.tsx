@@ -229,7 +229,6 @@ function Proposals({
         <Panel data-testid="memory-proposals">
             <PanelHeader label="Proposals">
                 <span className="flex items-center gap-x-3">
-                    <HistoryToggle />
                     {proposals.length > 1 && <OrderToggle list="memory-proposals" />}
                     <span
                         className={cn('readout text-xs', total > 0 ? 'text-status-blocked' : 'text-muted-foreground')}
@@ -296,7 +295,6 @@ function Lessons({
         <Panel data-testid="memory-lessons">
             <PanelHeader label="Lessons">
                 <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                    <HistoryToggle />
                     {modes.lessons === 'use' && (
                         <nav aria-label="Filter lessons by where they stand" className="flex items-center gap-1">
                             <FilterLink change={{ show: undefined }} selected={filter.show === undefined}>
@@ -369,7 +367,8 @@ function Past({
 
 /**
  * The toggle that shows each panel's history, kept in `?history=true`, as a filter chip is: on, the page reads the
- * latest memories no longer pending or in force, and lists them under the rest.
+ * latest memories no longer pending or in force, and lists them under the rest. One, in the filter bar, since it acts
+ * on every panel.
  */
 function HistoryToggle() {
     const search = Route.useSearch()
@@ -517,7 +516,8 @@ function TicketNotesPanel({
 
 /**
  * The page's filter, over every panel: a field for words, kept in `?q=` as the tickets page keeps its own, narrowing
- * as the operator types and replacing the history entry; and a chip for each repository, kept in `?repo=`.
+ * as the operator types and replacing the history entry; a chip for each repository, kept in `?repo=`; and the toggle
+ * that lists what is no longer pending or in force.
  */
 function FilterBar({ repos }: { repos: string[] }) {
     const filter = Route.useSearch()
@@ -566,6 +566,7 @@ function FilterBar({ repos }: { repos: string[] }) {
                     ))}
                 </nav>
             )}
+            <HistoryToggle />
         </search>
     )
 }
