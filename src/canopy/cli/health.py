@@ -16,7 +16,7 @@ from canopy.core import health, spend
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from canopy.core.health import Failure, Health
+    from canopy.core.health import Failure, Health, Waiver
 
 _KIND_WIDTH = 10
 _WHAT_WIDTH = 18
@@ -43,7 +43,7 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, triages before a plan,
     chores by name, and reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or
-    `canopy show`, and the overseer's asks a guard refused, by guard.
+    `canopy show`, the overseer's asks a guard refused, by guard, and the plans triage waived, with what came of each.
     """
     ctx = open_context(click_ctx)
     found = health.report(ctx.conn, datetime.now(UTC), days)
@@ -72,6 +72,8 @@ def render(found: Health) -> list[str]:
         for o in found.outcomes
     )
     lines.extend(["", *_failures(found.failures), "", *_refusals(found)])
+    if found.waivers:
+        lines.extend(["", *_waivers(found.waivers)])
     return lines
 
 
@@ -118,4 +120,17 @@ def _refusals(found: Health) -> list[str]:
         f"{'s' if r.ticks != 1 else ''}, last in tick {r.last_tick}"
         for r in found.refusals
     )
+    return lines
+
+
+# Each waiver, with where it stands and what came of its ticket; none at all with triage off, so no line says so.
+def _waivers(waivers: Sequence[Waiver]) -> list[str]:
+    lines = ["Plans triage waived:"]
+    for w in waivers:
+        failed = sum(r.failed for r in w.runs)
+        runs = f"{len(w.runs)} run{'s' if len(w.runs) != 1 else ''}" + (f", {failed} failed" if failed else "")
+        state = [w.standing.replace("_", " "), *(["done"] if w.done else []), runs]
+        if w.impact is not None:
+            state.append(f"review {w.review_id} {w.impact}")
+        lines.extend([f"  {w.ticket}  run:{w.run_id}  {', '.join(state)}", f"    {w.reason}"])
     return lines

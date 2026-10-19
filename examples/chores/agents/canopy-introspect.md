@@ -2,9 +2,9 @@
 # OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
 # Rules follow D021: the last matching rule wins, and `deny` is enforced under `opencode run`. Scalars are used where a
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
-# The agent of the example chores that look at canopy itself, canopy-health and canopy-efficiency. `canopy chore
-# install` copies it into the workspace beside the chore's prompt, and the chore's `cmd` loads that copy, which stays as
-# installed until the chore is installed again. It is `canopy-chore` with a shell for canopy's own read-only commands. A
+# The agent of the example chores that look at canopy itself, canopy-health, canopy-efficiency, and plan-waivers.
+# `canopy chore install` copies it into the workspace beside the chore's prompt, and the chore's `cmd` loads that copy,
+# which stays as installed until the chore is installed again. It is `canopy-chore` with a shell for canopy's own read-only commands. A
 # chore reads and reports (DESIGN §19, TRUST_MODEL T6): its only output is its result line. Everything but bash is
 # `canopy-chore`'s; keep the two in step.
 description: canopy chore that reads canopy's own health, spend, and runs. Reports findings, changes nothing.

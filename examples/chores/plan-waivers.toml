@@ -1,0 +1,11 @@
+# It has nothing to judge until policy.plan_triage is "on". Keep this chore out of the sandbox; its agent comes with it:
+# https://github.com/eddieland/canopy/blob/main/examples/chores/README.md#worked-example-plan-waivers
+[chores.plan-waivers]
+prompt = "~/.config/canopy/chores/plan-waivers.md"
+cmd = 'opencode run --agent canopy-introspect --format json --title={title} {prompt}'
+cwd = "~"
+every_minutes = 1440
+days = ["mon"]
+hours = "08:00-12:00"
+when = "Skip it when the last run found nothing and no plan was waived since."
+timeout_minutes = 15

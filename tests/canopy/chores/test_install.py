@@ -58,7 +58,7 @@ def test_an_example_that_runs_an_agent_of_canopys_naming_comes_with_it_and_runs_
         assert copied.read_text() == (resources.example_chores_dir() / "agents" / copied.name).read_text()
         assert config.load(canopy_env.root).chores[name].cmd == f"env OPENCODE_CONFIG_DIR={agent_dir} {cmd}"
         came_with += 1
-    assert came_with == 3
+    assert came_with == 4
 
 
 def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
