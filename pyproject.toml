@@ -96,6 +96,11 @@ path = "hatch_build.py"
 [tool.hatch.build.targets.sdist]
 exclude = ["ui/node_modules", "ui/dist", "ui/test-results", "ui/playwright-report"]
 
+# The public demo over mock data (D122): Vercel installs canopy from uv.lock, whose wheel bundles the UI, and serves
+# this app. vercel.json sets the framework.
+[tool.vercel]
+entrypoint = "vercel_app:app"
+
 # The repository is a uv workspace: canopy at the root, separate programs it ships under packages/ (D041).
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -266,6 +271,7 @@ exclude_also = ["if TYPE_CHECKING:", "assert_never\\("]
 preset = "strict"
 project-includes = [
     "src",
+    "vercel_app.py",
     "packages",
     "tests",
     "tests/fakes/agent",
