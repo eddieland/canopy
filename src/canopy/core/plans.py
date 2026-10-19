@@ -6,9 +6,10 @@ by: the plan's status, the file's hash as written, and the hash the operator app
 that is not superseded, its current plan, waiting (`proposed`) or `approved`.
 
 Whether a ticket needs a plan is its own setting, set only by the operator (`ask`, `skip`), or with none
-`policy.plan` (`needed`). The operator's verbs here, asking for a plan, skipping it, and approving one, are every
-channel's: each refuses inside one of canopy's own runs, and holds the dispatch lock, so a dispatch reads a ticket's
-plans either before the verb or after it.
+`policy.plan` (`needed`), unless a triage waived it (`waiver`, M55): a `needs-plan` run's validated `trivial` verdict,
+recorded as a journal fact in force while the ticket's setting is unset and no forget came after it. The operator's
+verbs here, asking for a plan, skipping it, and approving one, are every channel's: each refuses inside one of canopy's
+own runs, and holds the dispatch lock, so a dispatch reads a ticket's plans either before the verb or after it.
 
 A file is written once and never overwritten or deleted: under a temporary name in the ticket's directory, then linked
 to its own, which fails if the name is taken. `plans/` and each ticket's directory are operator-only, and one that is
@@ -25,7 +26,7 @@ import re
 import secrets
 import stat
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, Literal, TypedDict
+from typing import IO, TYPE_CHECKING, Literal, NotRequired, TypedDict
 
 from canopy.core import conversation, db, records
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Callable
     from pathlib import Path
+
+    from canopy.core.config import Policy
 
 # What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
 MAX_CHARS = 100_000
@@ -51,6 +54,8 @@ WRITTEN = ".canopy-new-plan.md"
 # `MAX_HEADING` characters (DESIGN §25, Workers follow the plan).
 MAX_OUTLINE = 200
 MAX_HEADING = 200
+#: A triage's reason is one line, cut at this many characters: its run's report, and its waiver's reason (DESIGN §25).
+MAX_TRIAGE_REASON = 300
 # The most bytes `MAX_CHARS` characters of UTF-8 can take: one more and the file is over the bound however it decodes.
 _MAX_BYTES = 4 * MAX_CHARS
 _CHUNK = 64 * 1024
@@ -95,12 +100,100 @@ def needed(policy: str, setting: PlanSetting | None) -> bool:
     return setting is PlanSetting.PLAN or (setting is None and policy == "approve")
 
 
+def needs_plan(conn: sqlite3.Connection, policy: str, ticket: records.Ticket | None) -> bool:
+    """Whether a ticket waits on an approved plan before its implement: `needed`, and no triage waived it (§25).
+
+    Returns:
+        True when `needed` says so for the ticket's own setting and `policy`, `policy.plan`, and no waiver is in force.
+    """
+    if ticket is None:
+        return needed(policy, None)
+    return needed(policy, ticket.plan_setting) and waiver(conn, ticket) is None
+
+
+def waiver(conn: sqlite3.Connection, ticket: records.Ticket) -> records.PlanWaiver | None:
+    """The waiver a triage gave the ticket's plan, while it is in force (DESIGN §25, Triage before a plan).
+
+    It is in force while the ticket's own setting is unset, so asking for a plan undoes it and `--skip` puts the
+    operator's own word in its place, and while no forget came after its triage run, so `canopy forget` ends it. Derived
+    from the journal each time it is read; nothing updates a waiver.
+
+    Returns:
+        The waiver's row, or None when the ticket has none in force.
+    """
+    if ticket.plan_setting is not None:
+        return None
+    return records.fetch_one(
+        conn,
+        records.PlanWaiver,
+        "SELECT * FROM plan_waivers WHERE ticket_key = ? AND run_id > ? ORDER BY id DESC LIMIT 1",
+        (ticket.key, ticket.forgotten_run_id or 0),
+    )
+
+
+def record_waiver(conn: sqlite3.Connection, key: str, run_id: int, reason: str) -> None:
+    """Record that the triage run `run_id` waived `key`'s plan for `reason`. Call inside the run's closing transaction.
+
+    Only `_run` calls it, from a triage's validated `done` `trivial` result (DESIGN §25): no agent and no command writes
+    a waiver.
+    """
+    conn.execute(
+        "INSERT INTO plan_waivers (ticket_key, run_id, reason, at) VALUES (?, ?, ?, ?)", (key, run_id, reason, db.now())
+    )
+
+
+def triage_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tuple[str, str] | None:  # noqa: PLR0911
+    """Return the guard and reason that refuse a triage of `key` now, or None when one is due (DESIGN §25).
+
+    A triage is due when triage is on, the ticket needs a plan by the policy alone, and it has no branch, no plan run,
+    no triage run, and no split's children. So a ticket is triaged at most once, before its first plan, and the bound
+    is derived from its runs and never reset (D030), not even by `canopy forget`.
+
+    Returns:
+        `triage_off`, `triaged`, or `bad_triage` with why, or None.
+    """
+    if policy.plan_triage != "on":
+        return "triage_off", 'policy.plan_triage is not "on": dispatch plan for a ticket that needs one'
+    triaged = _first_run(conn, key, RunKind.NEEDS_PLAN)
+    if triaged is not None:
+        return "triaged", f"{key} had triage run {triaged}; a ticket is triaged once, however that ended"
+    ticket = db.get_ticket(conn, key)
+    setting = ticket.plan_setting if ticket is not None else None
+    if setting is PlanSetting.PLAN:
+        return "bad_triage", f"the operator asked for {key}'s plan, so it is planned, whatever a triage would say"
+    if setting is PlanSetting.SKIP:
+        return "bad_triage", f"the operator skipped {key}'s plan, so there is nothing to triage"
+    if policy.plan != "approve":
+        return "bad_triage", f'policy.plan is not "approve", so {key} needs no plan to triage'
+    if ticket is not None and ticket.branch:
+        return "bad_triage", f"{key} already has work on {ticket.branch}; a started ticket is not triaged"
+    planned = _first_run(conn, key, RunKind.PLAN)
+    if planned is not None:
+        return "bad_triage", f"{key} had plan run {planned}; a ticket with a plan is not triaged"
+    split_into = db.children_of(conn, key)
+    if split_into:
+        return "bad_triage", f"{key} was split into {', '.join(split_into)}; triage those instead"
+    return None
+
+
+def _first_run(conn: sqlite3.Connection, key: str, kind: RunKind) -> int | None:
+    """The id of `key`'s first run of `kind`, before any forget too.
+
+    Returns:
+        The run's id, or None if the ticket has had no run of `kind`.
+    """
+    found = conn.execute("SELECT min(id) FROM runs WHERE ticket_key = ? AND kind = ?", (key, kind)).fetchone()[0]
+    return int(found) if found is not None else None
+
+
 @dataclass(frozen=True)
 class Asked:
     """What `ask` or `skip` did: the plan it superseded, if any, and whether the ticket's setting was already so."""
 
     superseded: int | None
     already: bool
+    #: The triage run whose waiver the verb undid, or replaced with the operator's own `skip` (DESIGN §25).
+    waived: int | None = None
 
 
 def ask(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
@@ -127,10 +220,11 @@ def ask(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
                 f"{key} already has work on {ticket.branch}; a started ticket is not planned, but --skip drops its "
                 "plan",
             )
+        waived = waiver(conn, ticket)
         superseded = supersede(conn, key)
         already = ticket.plan_setting is PlanSetting.PLAN and superseded is None
         conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.PLAN, key))
-    return Asked(superseded=superseded, already=already)
+    return Asked(superseded=superseded, already=already, waived=waived.run_id if waived is not None else None)
 
 
 def skip(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
@@ -150,10 +244,11 @@ def skip(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
         ticket = _ticket(conn, key)
         _not_planning(conn, key)
+        waived = waiver(conn, ticket)
         superseded = supersede(conn, key)
         already = ticket.plan_setting is PlanSetting.SKIP and superseded is None
         conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.SKIP, key))
-    return Asked(superseded=superseded, already=already)
+    return Asked(superseded=superseded, already=already, waived=waived.run_id if waived is not None else None)
 
 
 def _ticket(conn: sqlite3.Connection, key: str) -> records.Ticket:
@@ -207,18 +302,24 @@ class PlanState(TypedDict):
     newest: NewestPlan | None
     changes_asked: bool
     blocked: bool
+    #: With `policy.plan_triage` on, whether a triage is due (`triage_refusal`), so the overseer compares nothing.
+    triage_due: NotRequired[bool]
+    #: The triage run whose waiver is in force; the ticket then needs no plan (DESIGN §25, Triage before a plan).
+    waived: NotRequired[int]
 
 
 def state_section(
-    conn: sqlite3.Connection, policy: str, ticket: records.Ticket, *, attempts: int, limit: int
+    conn: sqlite3.Connection, policy: Policy, ticket: records.Ticket, *, attempts: int, limit: int
 ) -> PlanState | None:
     """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
 
     A ticket that needs no plan, has none, and had no plan run has no `plan` key, so with `policy.plan` off the block
-    is as it was before plans (DESIGN §25, Off unless configured).
+    is as it was before plans (DESIGN §25, Off unless configured). Triage's facts are there only while triage touches
+    the ticket: `triage_due` while it is on, and `waived` while a waiver is in force, which makes the plan not needed.
     """
     key = ticket.key
-    needed_now = needed(policy, ticket.plan_setting)
+    waived = waiver(conn, ticket)
+    needed_now = needed(policy.plan, ticket.plan_setting)
     newest = records.fetch_one(
         conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
     )
@@ -237,8 +338,8 @@ def state_section(
         and run["status"] == "blocked"
         and (replied is None or run["ended_at"] is None or replied <= str(run["ended_at"]))
     )
-    return {
-        "needed": needed_now,
+    section: PlanState = {
+        "needed": needed_now and waived is None,
         "attempts": attempts,
         "limit": limit,
         "newest": None
@@ -247,6 +348,11 @@ def state_section(
         "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
     }
+    if policy.plan_triage == "on":
+        section["triage_due"] = triage_refusal(conn, policy, key) is None
+    if waived is not None:
+        section["waived"] = waived.run_id
+    return section
 
 
 def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | None:

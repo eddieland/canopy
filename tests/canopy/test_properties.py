@@ -190,6 +190,10 @@ def test_every_config_key_declares_a_scope() -> None:
         "trust.comment_prefix",
         "runtime.split_cmd",
         "runtime.plan_cmd",
+        "runtime.plan_triage_cmd",
+        # Triage loosens the plan gate: only the operator turns it on, and says what is trivial (DESIGN §25).
+        "policy.plan_triage",
+        "policy.trivial",
         "runtime.chore_cmd",
         "capacity.max_chores",
         "chores",

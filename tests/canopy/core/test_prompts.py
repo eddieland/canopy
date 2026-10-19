@@ -401,12 +401,14 @@ def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
 
 
 def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_split_and_plan_a_private_one() -> None:
-    # A split never runs for a private ticket, and a plan's one prompt serves both (DESIGN §22, §25). `fix-ci` is
-    # dispatched no more, and its prompts went with it (DESIGN §8).
-    dispatched = set(vocab.RunKind) - {vocab.RunKind.FIX_CI}
-    assert set(prompts.WORKER) == dispatched
-    assert set(prompts.WORKER_PRIVATE) == dispatched - {vocab.RunKind.SPLIT, vocab.RunKind.PLAN}
+    # A split never runs for a private ticket, and a plan's one prompt serves both (DESIGN §22, §25). A triage is no
+    # worker run: its one prompt, for both too, is its own, and hears neither the standing instructions nor the notice.
+    # `fix-ci` is dispatched no more, and its prompts went with it (DESIGN §8).
+    workers = set(vocab.RunKind) - {vocab.RunKind.FIX_CI, vocab.RunKind.NEEDS_PLAN}
+    assert set(prompts.WORKER) == workers
+    assert set(prompts.WORKER_PRIVATE) == workers - {vocab.RunKind.SPLIT, vocab.RunKind.PLAN}
     shipped = {p.name for p in resources.prompts_dir().iterdir()}
+    assert prompts.TRIAGE in shipped
     assert shipped.isdisjoint(prompts.RETIRED_WORKER)
 
 

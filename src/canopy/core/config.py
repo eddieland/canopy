@@ -452,6 +452,16 @@ class Tracker(Section):
         return TrackerTools(server, tuple(allowed))
 
 
+#: The most `policy.trivial` may say: it is in every triage prompt (DESIGN §25).
+MAX_TRIVIAL = 2000
+
+
+def _trivial(value: str) -> str:
+    if len(value) > MAX_TRIVIAL:
+        raise ValueError(f"must be at most {MAX_TRIVIAL} characters")
+    return value
+
+
 class Policy(Section):
     """The `[policy]` table: attempt limits and cooldowns. A limit counts every run of that kind a ticket has had."""
 
@@ -470,8 +480,24 @@ class Policy(Section):
     # Whether a ticket waits on a plan the operator approved before its implement (DESIGN §25): a guard in code. A
     # ticket's own setting, `canopy plan KEY` or `--skip`, overrides it.
     plan: Annotated[Literal["off", "approve"], Scope.SHARED, Tighten.LATER] = "off"
+    #: Whether a cheaper agent first judges a ticket the policy would plan, and waives its plan for work `trivial`
+    #: describes (DESIGN §25, Triage before a plan). Private, unlike the rest of the table: it loosens the operator's
+    #: plan gate, which a shared file must not (TRUST_MODEL T7).
+    plan_triage: Annotated[Literal["off", "on"], Scope.PRIVATE] = "off"
+    #: Plain language for the triage agent: what the operator counts as trivial. Without it nothing is.
+    trivial: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trivial)] = ""
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
+
+    @model_validator(mode="after")
+    def _trivial_when_triaged(self) -> Policy:
+        # With nothing trivial, every triage would answer `plan` and cost a run for nothing.
+        if self.plan_triage == "on" and not self.trivial.strip():
+            raise ValueError(
+                'policy.trivial must say what counts as trivial when policy.plan_triage is "on"; without it every '
+                "triage would answer plan"
+            )
+        return self
 
 
 class Trust(Section):
@@ -595,6 +621,12 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json --thinking "
         "--title={title} {prompt}"
     )
+    #: The triage agent, which judges whether a ticket's work needs a plan (DESIGN §25, Triage before a plan): point it
+    #: at a cheaper model than `plan_cmd`'s. It is no worker run, so `worker_cmd_prefix` does not wrap it.
+    plan_triage_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage --format json --thinking "
+        "--title={title} {prompt}"
+    )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking "
@@ -612,6 +644,8 @@ class Runtime(Section):
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45
+    #: How long a triage may run: it ends `timeout` after this, and the ticket is planned (DESIGN §25).
+    plan_triage_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 10
     # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8). Private: it
     # chooses what workers are told to do, which a shared workspace file must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_skill_name)] = ""

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
 from canopy.core import chore_view, contract, conversation, db, memory
 from canopy.core.items import Item, age, fingerprint, one_line, subject
-from canopy.core.vocab import RunStatus, TickStatus
+from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.notify import deliver
 from canopy.runs import drafted
@@ -276,14 +276,15 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
 
     The cause holds until a newer run starts for the ticket, the ticket is marked done, or the operator forgets its
     work. It is set aside while the operator has stopped the ticket, which nothing dispatches, so no reply could answer
-    it, and holds again once they start it (DESIGN §14, §22).
+    it, and holds again once they start it (DESIGN §14, §22). A triage raises none, however it ended: the ticket is
+    planned next, as if triage were off (DESIGN §25, Triage before a plan).
     """
     done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
     stopped = set(conversation.stopped(conn))
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):
         reason = run_reason(RunStatus(run["status"]))
-        if reason is None or key in done or key in stopped:
+        if reason is None or key in done or key in stopped or run["kind"] == RunKind.NEEDS_PLAN:
             continue
         items.append(RunItem(key, reason, _detail(run)))
     return items
