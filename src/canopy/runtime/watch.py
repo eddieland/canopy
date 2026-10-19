@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.runtime import events, transcript
+from canopy.runtime.implementation import watch
 
 if TYPE_CHECKING:
     from canopy.runtime.report import Usage
@@ -25,7 +25,7 @@ class Change:
     started: bool
     #: What the run has spent so far, when this line ended a model call and every call so far could be read.
     usage: Usage | None
-    #: The tool call this line ended: its tool, and what it did (`transcript.did`).
+    #: The tool call this line ended: its tool, and what it did, on one line each.
     did: tuple[str, str] | None
 
 
@@ -34,7 +34,7 @@ class Watch:
 
     def __init__(self) -> None:
         """Start with nothing printed: no session, nothing spent."""
-        self._tally = events.Tally()
+        self._lines = watch.Lines()
 
     def read(self, line: str) -> Change | None:
         """Read `line`, the next one the agent printed.
@@ -43,16 +43,12 @@ class Watch:
             What it changed, or None when it changed nothing: it is not an event, no session has been named yet, or it
             neither names the session first, ends a model call whose cost can be read, nor ends a tool call.
         """
-        event = events.parse_event(line)
-        if event is None:
+        seen = self._lines.session_id
+        printed = self._lines.read(line)
+        session = self._lines.session_id
+        if printed is None or session is None:
             return None
-        seen = self._tally.session_id
-        self._tally.add(event)
-        session = self._tally.session_id
-        if session is None:
+        usage = self._lines.usage if printed.ended_call else None
+        if session == seen and usage is None and printed.did is None:
             return None
-        usage = self._tally.usage if event["type"] == events.STEP_FINISH else None
-        did = transcript.did(event)
-        if session == seen and usage is None and did is None:
-            return None
-        return Change(session, started=seen is None, usage=usage, did=did)
+        return Change(session, started=seen is None, usage=usage, did=printed.did)

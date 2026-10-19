@@ -13,6 +13,8 @@ import pytest
 from canopy.core import config, definitions, plans
 from canopy.infra import resources
 from canopy.runtime import agents
+from canopy.runtime import definitions as runtime_definitions
+from canopy.runtime.opencode import definitions as opencode_definitions
 from tests.conftest import CanopyEnv
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
@@ -21,16 +23,16 @@ PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
     snapshot = definitions.ensure(tmp_path)
     assert snapshot == tmp_path / "runtime" / definitions.digest()
-    for name in agents.agent_names():
+    for name in runtime_definitions.agent_names():
         bundled = resources.agents_dir() / f"{name}.md"
         assert (snapshot / "agents" / f"{name}.md").read_text() == bundled.read_text()
     for skill in resources.skills_dir().iterdir():
         assert (snapshot / "skills" / skill.name / "SKILL.md").read_text() == (skill / "SKILL.md").read_text()
-    assert "canopy-worker" in agents.agent_names()
-    assert "canopy-overseer" in agents.agent_names()
+    assert "canopy-worker" in runtime_definitions.agent_names()
+    assert "canopy-overseer" in runtime_definitions.agent_names()
 
 
-@pytest.mark.parametrize("name", agents.agent_names())
+@pytest.mark.parametrize("name", runtime_definitions.agent_names())
 def test_no_agent_has_web_tools(name: str) -> None:
     # Fetched and searched pages are text anyone can shape (TRUST_MODEL T1, D077). Scalars, so a repository's config
     # cannot loosen them (D044).
@@ -39,7 +41,7 @@ def test_no_agent_has_web_tools(name: str) -> None:
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
-@pytest.mark.parametrize("name", agents.agent_names())
+@pytest.mark.parametrize("name", runtime_definitions.agent_names())
 def test_no_bundled_agent_sets_a_temperature(name: str) -> None:
     # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
     # that sets one. The overseer's, the triage agent's, and the reviewer's come from `runtime`, rendered into the
@@ -274,14 +276,16 @@ def test_the_private_worker_may_create_follow_ups_and_write_nothing_else_to_the_
     # Its follow-ups are the one thing it writes there (DESIGN §18, §22): the create tools are allowed by name, whole,
     # after the server's wildcard deny; every other write of the server stays denied by it.
     bundled = (resources.agents_dir() / f"{agents.PRIVATE_WORKER}.md").read_text()
-    rendered = agents.render_private(bundled, config.DEFAULT_TRACKER_TOOLS[provider])
+    rendered = opencode_definitions.render_private(bundled, config.DEFAULT_TRACKER_TOOLS[provider])
     assert _allowed(_rules_in(rendered), tool) is allowed
 
 
 @pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
 def test_the_planner_and_triage_get_no_create_tool(agent: str) -> None:
     bundled = (resources.agents_dir() / f"{agent}.md").read_text()
-    rendered = agents.render_private(bundled, config.DEFAULT_TRACKER_TOOLS["github"], f"agents/{agent}.md")
+    rendered = opencode_definitions.render_private(
+        bundled, config.DEFAULT_TRACKER_TOOLS["github"], f"agents/{agent}.md"
+    )
     assert not _allowed(_rules_in(rendered), "github_issue_write")
 
 
@@ -556,7 +560,7 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
-    head = agents.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
+    head = opencode_definitions.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
     assert text.startswith(head)
     body = text.removeprefix(head)
     prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")

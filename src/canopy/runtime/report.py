@@ -1,11 +1,15 @@
 """What an agent run reports, whatever runtime ran it (DESIGN §13): its text, session, cost, and tool calls.
 
-The harness reads these and nothing else of a run's output. `canopy.runtime.events` makes them from what the runtime
-printed; a runtime that prints no events reports text alone.
+The harness reads these and nothing else of a run's output. The runtime's implementation makes them from what it
+printed (`canopy.runtime.stdout`); a template that asks for no events reports text alone. What holds whatever the
+runtime is lives here, for the implementation to build on: a session id canopy prints, the sum of the model calls, and
+the bounded rollup of the tool calls.
 """
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -17,6 +21,16 @@ MAX_COST_USD = 10**6
 
 #: A count of tokens a runtime reported, within `MAX_TOKENS`.
 Count = Annotated[StrictInt, Field(ge=0, le=MAX_TOKENS)]
+
+#: Printed by `canopy status` and pasted into a shell, so nothing a terminal or a shell would read as anything else.
+SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
+
+#: How many distinct tools one run's rollup keeps, and how long a tool's name may be: far more than a runtime offers,
+#: and few enough that output no runtime printed cannot fill the journal. The calls of any tool past the first
+#: `MAX_TOOLS` count under `OTHER_TOOLS`, which no runtime names a tool.
+MAX_TOOLS = 200
+MAX_TOOL_NAME = 200
+OTHER_TOOLS = "(other tools)"
 
 
 @dataclass(frozen=True)
@@ -93,6 +107,89 @@ class AgentOutput:
     session_id: str | None = None
     usage: Usage | None = None
     tools: tuple[ToolUse, ...] = ()
+
+
+@dataclass(frozen=True)
+class Call:
+    """One model call, as the runtime reported it: what it cost, and its tokens by kind."""
+
+    cost_usd: float
+    input: int
+    output: int
+    reasoning: int
+    cache_read: int
+    cache_write: int
+
+    @property
+    def sent(self) -> int:
+        """What the call was sent: its input, from the cache or not."""
+        return self.input + self.cache_read + self.cache_write
+
+
+@dataclass(frozen=True)
+class Printed:
+    """What one line a running agent printed was, of what a running run's row records (`canopy.runtime.watch`)."""
+
+    #: The line ended a model call, so what the run has spent may have changed.
+    ended_call: bool
+    #: The tool call the line ended: its tool, and what it did, on one line each.
+    did: tuple[str, str] | None
+
+
+def session_id(value: object) -> str | None:
+    """Return `value` if it is a session id canopy prints (`SESSION_ID_RE`), else None."""
+    return value if isinstance(value, str) and SESSION_ID_RE.fullmatch(value) else None
+
+
+def total(calls: Sequence[Call]) -> Usage:
+    """What a run's model calls cost together.
+
+    Returns:
+        Their summed cost and tokens, the most one call was sent as the peak context, and what the first call was sent
+        and wrote to the cache; those two None when there was no call.
+    """
+    first = calls[0] if calls else None
+    return Usage(
+        cost_usd=sum(c.cost_usd for c in calls),
+        input=sum(c.input for c in calls),
+        output=sum(c.output for c in calls),
+        reasoning=sum(c.reasoning for c in calls),
+        cache_read=sum(c.cache_read for c in calls),
+        cache_write=sum(c.cache_write for c in calls),
+        peak_context=max((c.sent for c in calls), default=0),
+        first_call=first.sent if first is not None else None,
+        first_cache_write=first.cache_write if first is not None else None,
+    )
+
+
+class Tools:
+    """A run's tool calls rolled up by tool as they end, within `MAX_TOOLS` tools whose names are `MAX_TOOL_NAME`."""
+
+    def __init__(self) -> None:
+        """Start with no tool called."""
+        self._tools: dict[str, ToolUse] = {}
+
+    def add(self, tool: str, *, error: bool, said: str | None) -> None:
+        """Count one call of `tool` that ended, in an error if `error`, having returned `said`, its output or error.
+
+        The tool's name is kept as the runtime gave it but for control characters, on one line and cut to
+        `MAX_TOOL_NAME`, or `?` when nothing is left; past `MAX_TOOLS` tools, a new one counts under `OTHER_TOOLS`.
+        """
+        name = " ".join("".join(c for c in tool if c.isprintable()).split())[:MAX_TOOL_NAME] or "?"
+        if name not in self._tools and len(self._tools) >= MAX_TOOLS:
+            name = OTHER_TOOLS
+        was = self._tools.get(name, ToolUse(name, 0, 0, 0))
+        self._tools[name] = ToolUse(
+            tool=name,
+            calls=was.calls + 1,
+            errors=was.errors + int(error),
+            result_chars=was.result_chars + len(said or ""),
+        )
+
+    @property
+    def rolled_up(self) -> tuple[ToolUse, ...]:
+        """The calls so far by tool, in the order each tool was first called."""
+        return tuple(self._tools.values())
 
 
 def count_text(n: int) -> str:

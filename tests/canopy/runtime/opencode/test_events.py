@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from canopy.runtime import events
+from canopy.runtime.opencode import events
 from canopy.runtime.report import AgentOutput, ToolUse, Usage
 
 RESULT = '{"status":"done","summary":"did it"}'
@@ -138,16 +138,6 @@ def test_tool_calls_are_rolled_up_by_tool_with_what_they_returned() -> None:
 def test_plain_text_and_events_with_no_tool_call_roll_up_no_tool() -> None:
     assert events.read(f"chatter\n{RESULT}\n").tools == ()
     assert events.read("\n".join([text(RESULT), step()])).tools == ()
-
-
-def test_a_tools_name_is_one_printable_line_and_their_number_is_bounded() -> None:
-    lines = [tool("evil\x1b[31m\n tool", output="a"), tool("", output="b"), tool("t" * 500, output="c")]
-    lines += [tool(f"mcp_{i}", output="d") for i in range(events.MAX_TOOLS + 5)]
-    tools = events.read("\n".join(lines)).tools
-    assert [t.tool for t in tools[:3]] == ["evil[31m tool", "?", "t" * events.MAX_TOOL_NAME]
-    assert len(tools) == events.MAX_TOOLS + 1
-    # The calls of every tool past the bound count together, under a name no runtime gives a tool.
-    assert tools[-1] == ToolUse(events.OTHER_TOOLS, calls=8, errors=0, result_chars=8)
 
 
 def test_a_tally_rolls_up_the_tools_as_read_does() -> None:

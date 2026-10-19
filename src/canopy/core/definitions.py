@@ -24,6 +24,7 @@ from canopy.core.config import NO_TEMPERATURE
 from canopy.core.vocab import ReplyMode, RunKind
 from canopy.infra import logs
 from canopy.runtime import agents
+from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.agents import DefinitionsError
 
 if TYPE_CHECKING:
@@ -49,8 +50,8 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
     Raises:
         DefinitionsError: The overseer's prompt cannot be read, or a shipped definition cannot be rendered.
     """
-    found = agents.bundled()
-    return found if config is None else agents.render(found, rules(config))
+    found = runtime_definitions.bundled()
+    return found if config is None else runtime_definitions.render(found, rules(config))
 
 
 def rules(config: Config) -> agents.Rules:

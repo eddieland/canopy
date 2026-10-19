@@ -13,33 +13,24 @@ per line. canopy reads three kinds of event and one field of every event, each v
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
-template without `--format json` or another runtime, and reports no session and no cost. Its final message is all of
-it: plain text does not say where one message ends.
+template without `--format json`, and reports no session and no cost. Its final message is all of it: plain text does
+not say where one message ends.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
-import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Annotated, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
-from canopy.runtime.report import MAX_COST_USD, AgentOutput, Count, ToolUse, Usage
+from canopy.runtime import report
+from canopy.runtime.report import MAX_COST_USD, AgentOutput, Call, Count, ToolUse, Usage
 
-#: Printed by `canopy status` and pasted into a shell, so nothing a terminal or a shell would read as anything else.
-SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
-
-#: How many distinct tools one run's rollup keeps, and how long a tool's name may be: far more than a runtime offers,
-#: and few enough that output no runtime printed cannot fill the journal. The calls of any tool past the first
-#: `MAX_TOOLS` count under `OTHER_TOOLS`, which no runtime names a tool.
-MAX_TOOLS = 200
-MAX_TOOL_NAME = 200
-OTHER_TOOLS = "(other tools)"
-
-#: The event that ends a model call, and the one that ends a tool call.
+#: The event that starts a model call, the one that ends it, and the one that ends a tool call.
+STEP_START = "step_start"
 STEP_FINISH = "step_finish"
 TOOL_USE = "tool_use"
 
@@ -125,36 +116,39 @@ class Tally:
     def __init__(self) -> None:
         """Start with no event: no session, nothing spent, and no tool called."""
         self.session_id: str | None = None
-        self._steps: list[_StepFinish] = []
+        self._calls: list[Call] = []
         self._complete = True
-        self._tools: dict[str, ToolUse] = {}
+        self._tools = report.Tools()
 
     def add(self, event: Mapping[str, object]) -> None:
         """Count `event`: its session, and its model call's cost or its tool call, if it is either.
 
         The session is the first valid one an event names.
         """
-        self.session_id = self.session_id or session_of(event)
+        self.session_id = self.session_id or report.session_id(event["sessionID"])
         if event["type"] == TOOL_USE:
             self._add_tool(event)
             return
         if event["type"] != STEP_FINISH:
             return
         try:
-            self._steps.append(_StepFinish.model_validate(event.get("part")))
+            step = _StepFinish.model_validate(event.get("part"))
         except ValidationError:
             # A step canopy cannot read makes the total wrong, so the run reports no cost rather than too little.
             self._complete = False
+            return
+        t = step.tokens
+        self._calls.append(Call(float(step.cost), t.input, t.output, t.reasoning, t.cache.read, t.cache.write))
 
     @property
     def usage(self) -> Usage | None:
         """The steps' total usage so far, or None when a step could not be read."""
-        return _total(self._steps) if self._complete else None
+        return report.total(self._calls) if self._complete else None
 
     @property
     def tools(self) -> tuple[ToolUse, ...]:
         """The tool calls so far, rolled up by tool, in the order each tool was first called."""
-        return tuple(self._tools.values())
+        return self._tools.rolled_up
 
     # A call canopy cannot read is left out: it says nothing of which tool it was, or what it returned.
     def _add_tool(self, event: Mapping[str, object]) -> None:
@@ -162,24 +156,9 @@ class Tally:
             part = _ToolPart.model_validate(event.get("part"))
         except ValidationError:
             return
-        name = _tool_name(part.tool)
-        if name not in self._tools and len(self._tools) >= MAX_TOOLS:
-            name = OTHER_TOOLS
         state = part.state
-        said = state.output if state.status == "completed" else state.error
-        was = self._tools.get(name, ToolUse(name, 0, 0, 0))
-        self._tools[name] = ToolUse(
-            tool=name,
-            calls=was.calls + 1,
-            errors=was.errors + int(state.status == "error"),
-            result_chars=was.result_chars + len(said or ""),
-        )
-
-
-def session_of(event: Mapping[str, object]) -> str | None:
-    """Return the session `event` names, or None when its `sessionID` is not one canopy prints (`SESSION_ID_RE`)."""
-    found = event["sessionID"]
-    return found if isinstance(found, str) and SESSION_ID_RE.fullmatch(found) else None
+        error = state.status == "error"
+        self._tools.add(part.tool, error=error, said=state.error if error else state.output)
 
 
 def parse_event(line: str) -> dict[str, object] | None:
@@ -197,29 +176,3 @@ def parse_event(line: str) -> dict[str, object] | None:
     if not isinstance(event.get("type"), str) or "sessionID" not in event:
         return None
     return event
-
-
-def _total(steps: Sequence[_StepFinish]) -> Usage:
-    first = steps[0].tokens if steps else None
-    return Usage(
-        cost_usd=sum(float(s.cost) for s in steps),
-        input=sum(s.tokens.input for s in steps),
-        output=sum(s.tokens.output for s in steps),
-        reasoning=sum(s.tokens.reasoning for s in steps),
-        cache_read=sum(s.tokens.cache.read for s in steps),
-        cache_write=sum(s.tokens.cache.write for s in steps),
-        peak_context=max((_sent(s.tokens) for s in steps), default=0),
-        first_call=_sent(first) if first is not None else None,
-        first_cache_write=first.cache.write if first is not None else None,
-    )
-
-
-# A tool's name on one line, as the runtime gave it but for control characters, cut to `MAX_TOOL_NAME`; `?` for one
-# with nothing left.
-def _tool_name(name: str) -> str:
-    return " ".join("".join(c for c in name if c.isprintable()).split())[:MAX_TOOL_NAME] or "?"
-
-
-# What one model call was sent: its input, from the cache or not.
-def _sent(tokens: _Tokens) -> int:
-    return tokens.input + tokens.cache.read + tokens.cache.write

@@ -22,7 +22,7 @@ from canopy.core import chore_view as view
 from canopy.core import conversation, db, notice, outbox
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
-from canopy.runtime import events
+from canopy.runtime import stdout
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -194,7 +194,7 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         },
         timeout=prepared.chore.timeout_minutes * 60,
     )
-    return execute.outcome_of(done, events.read(done.stdout), prepared.chore)
+    return execute.outcome_of(done, stdout.read(done.stdout), prepared.chore)
 
 
 def _crash(ctx: Context, run: records.ChoreRun, e: Exception) -> str:

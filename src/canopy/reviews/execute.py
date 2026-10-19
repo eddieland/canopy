@@ -23,7 +23,7 @@ from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import start
-from canopy.runtime import events, project_config
+from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -150,10 +150,10 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     cwd = start.run_dir(ctx, run.id)
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
-    # The reviewer's own directory is canopy's, but OpenCode may read config above it, as in a workspace's checkout.
-    shadowing = [found for place in (cwd, ctx.workspace.root) for found in project_config.shadowing(place)]
-    if shadowing:
-        raise _SetupError(project_config.shadowing_message(shadowing))
+    # The reviewer's own directory is canopy's, but the runtime may read config above it, as in a workspace's checkout.
+    refused = project_config.refusal((cwd, ctx.workspace.root))
+    if refused is not None:
+        raise _SetupError(refused)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run.pr_url}")
@@ -175,7 +175,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = events.read(done.stdout)
+    output = stdout.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools

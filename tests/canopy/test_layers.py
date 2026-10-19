@@ -1,6 +1,6 @@
 """The package layers of DESIGN §5 (D041), checked on every import in `src/canopy`, `TYPE_CHECKING` ones included;
-the runtime confined to its package (D009); and the tests' two rules of the same kind: a test module imports from no
-other, and sits parallel to what it tests."""
+the runtime confined to its implementation, behind the runtime package's surface (D009); and the tests' two rules of
+the same kind: a test module imports from no other, and sits parallel to what it tests."""
 
 import ast
 import re
@@ -31,6 +31,11 @@ SEPARATE = frozenset({"canopy_github", "canopy_notify_slack"})
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
 RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
+# Within it, the implementation that alone names the runtime; the one module that imports it; and the modules of what
+# any runtime reports, the only others of the package the implementation may import.
+IMPLEMENTATION = PACKAGE / RUNTIME / "opencode"
+BINDING = PACKAGE / RUNTIME / "implementation.py"
+NEUTRAL = frozenset({"canopy.runtime.report", "canopy.runtime.entries", "canopy.runtime.agents"})
 # Modules outside it allowed to name the runtime, with why: none knows how it behaves.
 NAMES_RUNTIME = {
     # The web UI's demo: its made-up runs print what the runtime prints, which the runtime package reads.
@@ -120,18 +125,79 @@ if TYPE_CHECKING:
     ]
 
 
-def test_only_the_runtime_package_names_the_runtime() -> None:
-    """No string outside `canopy.runtime` names OpenCode: not its commands, variables, files, or events (D009).
+def test_only_the_implementation_names_the_runtime() -> None:
+    """No string outside `canopy.runtime.opencode` names OpenCode: not its commands, variables, files, or events (D009).
 
-    A docstring or comment may still say why code is so; what the code acts on comes from the runtime package.
+    Not even the rest of `canopy.runtime`, whose surface is what a new runtime implements. A docstring or comment may
+    still say why code is so; what the code acts on comes from the implementation.
     """
     found = [
         v
         for path in modules()
-        if package_of(path) != RUNTIME and path.relative_to(PACKAGE).as_posix() not in NAMES_RUNTIME
+        if not path.is_relative_to(IMPLEMENTATION) and path.relative_to(PACKAGE).as_posix() not in NAMES_RUNTIME
         for v in naming_runtime(path, path.read_text())
     ]
     assert not found, "\n".join(found)
+
+
+def test_only_the_binding_imports_the_implementation() -> None:
+    """Only `canopy.runtime.implementation` imports the implementation, which imports only what any runtime reports.
+
+    So the rest of canopy reaches the runtime through the surface alone, and a new runtime is bound in one place.
+    """
+    found = [v for path in modules() for v in implementation_imports(path, path.read_text())]
+    assert not found, "\n".join(found)
+
+
+def implementation_imports(path: Path, source: str) -> list[str]:
+    """Each import in `source`, the text of the module at `path`, that crosses the implementation's boundary."""
+    where = path.relative_to(PACKAGE.parent)
+    inside = path.is_relative_to(IMPLEMENTATION)
+    prefix = ".".join(("canopy", *IMPLEMENTATION.relative_to(PACKAGE).parts))
+    found: list[str] = []
+    for line, name in imported_modules(ast.parse(source, filename=str(path))):
+        into = name == prefix or name.startswith(f"{prefix}.")
+        if into and not inside and path != BINDING:
+            found.append(f"{where}:{line}: imports {name}, which only {BINDING.relative_to(PACKAGE.parent)} may")
+        elif inside and not into and name.startswith(f"canopy.{RUNTIME}") and name not in NEUTRAL:
+            found.append(f"{where}:{line}: imports {name}, which the implementation may not: it is the surface's")
+    return found
+
+
+def imported_modules(tree: ast.Module) -> list[tuple[int, str]]:
+    """Every canopy module an import statement names, with its line: `from canopy.runtime import report` names
+    `canopy.runtime.report`, where `imported` names the package it is imported from."""
+    names: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.extend((node.lineno, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            for alias in node.names:
+                below = PACKAGE.parent.joinpath(*node.module.split("."), alias.name)
+                is_module = below.with_suffix(".py").is_file() or below.is_dir()
+                names.append((node.lineno, f"{node.module}.{alias.name}" if is_module else node.module))
+    return names
+
+
+def test_the_check_catches_an_import_across_the_implementations_boundary() -> None:
+    outside = """
+from canopy.runtime import stdout
+from canopy.runtime.opencode import events
+import canopy.runtime.opencode.transcript
+"""
+    inside = """
+from canopy.runtime import report, transcript
+from canopy.runtime.entries import Text
+from canopy.runtime.opencode import events
+"""
+    found = implementation_imports(PACKAGE / "runs" / "example.py", outside)
+    found += implementation_imports(BINDING, outside)
+    found += implementation_imports(IMPLEMENTATION / "example.py", inside)
+    assert [v.split(": ", 1)[1] for v in found] == [
+        "imports canopy.runtime.opencode.events, which only canopy/runtime/implementation.py may",
+        "imports canopy.runtime.opencode.transcript, which only canopy/runtime/implementation.py may",
+        "imports canopy.runtime.transcript, which the implementation may not: it is the surface's",
+    ]
 
 
 def naming_runtime(path: Path, source: str) -> list[str]:
@@ -145,7 +211,7 @@ def naming_runtime(path: Path, source: str) -> list[str]:
                 docstrings.add(id(first.value))
     where = path.relative_to(PACKAGE.parent)
     return [
-        f"{where}:{node.lineno}: names the runtime, which only canopy.{RUNTIME} may: {node.value[:60]!r}"
+        f"{where}:{node.lineno}: names the runtime, which only its implementation may: {node.value[:60]!r}"
         for node in ast.walk(tree)
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)

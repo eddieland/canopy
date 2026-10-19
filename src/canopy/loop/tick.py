@@ -33,7 +33,7 @@ from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import drafted, policy, reconcile
-from canopy.runtime import events, project_config
+from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -396,10 +396,9 @@ def _run_overseer(
     Returns:
         Why it failed, None on success, and what it cost if the runtime reported it.
     """
-    # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
-    shadowing = project_config.shadowing(ctx.repo_root)
-    if shadowing:
-        failure = project_config.shadowing_message(shadowing)
+    # The runtime reads the repository's config too: it must not define an agent of canopy's (D044).
+    failure = project_config.refusal([ctx.repo_root])
+    if failure is not None:
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure, None
     try:
@@ -431,7 +430,7 @@ def _run_overseer(
             return str(e), None
         out.write(f"\n--- stderr ---\n{result.stderr}")
 
-    output = events.read(result.stdout)
+    output = stdout.read(result.stdout)
     db.set_tick_report(
         ctx.conn, tick_id, output.session_id, output.usage, digest=definitions_dir.name, tools=output.tools
     )
