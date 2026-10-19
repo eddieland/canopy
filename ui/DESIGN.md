@@ -110,10 +110,12 @@ Rules:
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
-- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows, and `text-2xs` (11px, defined
-  in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and spend windows, and a
-  `panel-label`. Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no
-  arbitrary sizes (`text-[0.625rem]`).
+- Sizes: `text-xl` page titles and the spend's totals, `text-sm` body, `text-xs` secondary and data-dense rows, and
+  `text-2xs` (11px, defined in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and
+  spend windows, and a `panel-label`. A document, long-form prose (a guide page, a plan), has one step of its own,
+  `text-base`, through its utilities alone (A document, under Primitives), so that is the only place it appears.
+  Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no arbitrary sizes
+  (`text-[0.625rem]`).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
   `sm` size, which sets it; 12px (`size-3`) beside `text-xs` or smaller, in an `xs` or `icon-xs` button and a segmented
   control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box,
@@ -502,6 +504,15 @@ side.
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
   a PR with its other reviews under it), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
+- **A document** is long-form prose set to be read rather than scanned: a guide page (`GuideText`) and a plan
+  (`.plan-doc`). It takes its type from three utilities in `src/index.css` and nothing else, so the guide and a plan
+  read alike: `document-text`, the body, `text-base` on a 1.75rem line, a step up from the app's `text-sm`;
+  `document-section`, a `#` or `##` heading, the page title's `text-xl` semibold; and `document-subsection`, a `###`
+  or `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
+  subsection apart from it by weight alone; the guide's page title is its header's, so its body starts at a section.
+  Code sits a step down, `text-sm`. Its measure is fixed, 48rem at most (`max-w-3xl`) on both surfaces. The plan's
+  style menu previews each style in its utility. What lays a document out, the guide's rules between sections or a
+  plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
@@ -909,12 +920,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   the accent on an accent stroke, once the pane holds it and the article's whole measure (62.5rem, a container query
   as the plan editor's, so the rail's width counts); short of that the same list folds into a `Guide pages` toggle
   above the page. In the middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead,
-  then the body at `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each
-  heading a `#` link to itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's
-  order. On the right, once the pane holds that too (76.5rem), `On this page`, its `##` headings. So the article never
-  narrows as the window widens: a column comes in only where the article keeps its measure. The sidebar and contents
-  stick as the article scrolls. `/guide` opens the first page. It reads what rich text reads, `##` and `###` headings
-  as real headings, each with its anchor as its id,
+  then the body in a document's type (Primitives) with soft line breaks read as spaces, each `##` a section under a
+  hairline and each heading a `#` link to itself on hover, and at its foot Previous and Next, the pages either side
+  in the sidebar's order. On the right, once the pane holds that too (76.5rem), `On this page`, its `##` headings. So
+  the article never narrows as the window widens: a column comes in only where the article keeps its measure. The
+  sidebar and contents stick as the article scrolls. `/guide` opens the first page. It reads what rich text reads,
+  `##` and `###` headings as real headings, each with its anchor as its id,
   and labelled links in the accent, underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this
   page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
   and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
@@ -945,12 +956,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the comments
   whose passage is gone and the resolved ones follow the last; the cards move with their passages as the plan is edited,
   and with each other as one grows. Under the plan, the comments are rows split by hairlines, as before. The plan is
-  laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to `max-w-3xl`, headings at `text-xl`,
-  `text-base`, and `text-sm` semibold, code as rich text sets it, a table in hairlines with its header row on
-  `surface-raised` at half, a quote muted behind a hairline. What the plan holds as characters (HTML, an image) is muted
-  monospace; a link is underlined in `muted-foreground` with its address on hover, never a link. The toolbar (`Toolbar`,
-  below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the paragraph's style, the marks and the
-  blocks (each on or off, raised while on at the cursor), then `Comment`, enabled while text is selected. Each control's
+  laid out as a document (`.plan-doc` in `src/index.css`), in a document's type (A document, under Primitives), a
+  table in hairlines with its header row on `surface-raised` at half, a quote muted behind a hairline. What the plan
+  holds as characters (HTML, an image) is muted monospace; a link is underlined in `muted-foreground` with its address
+  on hover, never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and
+  redo, the paragraph's style, the marks and the blocks (each on or off, raised while on at the cursor), then
+  `Comment`, enabled while text is selected. Each control's
   tooltip names it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere),
   and declares the same keys as `aria-keyshortcuts`. The paragraph's style is a menu, as a document's is: its button
   names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4, each set as the plan sets it, with its
@@ -1000,8 +1011,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
   implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
   hover. What an action did goes under that line. At 820px the foot is two lines at rest. The editor keeps what it
-  scrolls into view 128px clear of the foot. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`,
-  over a sample plan on mock data only, with what the planner would read and the plan's Markdown under it.
+  scrolls into view 128px clear of the foot. A ticket's plan opens on its page, `/tickets/$key/plan`; `/plan-editor`
+  is kept as the editor's bench, linked from nowhere: over a sample plan on mock data only, with what the planner would
+  read and the plan's Markdown under it, and outside mock, an `Empty` saying a ticket's plan opens on its page. The
+  editor's Playwright tests and screenshot run against it, so its behavior is tried without a ticket's state.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
