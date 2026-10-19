@@ -2,12 +2,12 @@
 
 SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version` four
 times a second: it changes whenever another connection commits. Only then, or when the loop has read its config again
-(`Backend.use`), does the stream read the attention list, the runs, the tickets, the chores, the last day's and 30 days'
-spend, the latest tick, and the loop's pause again, and it sends each that differs from what it sent last, plus
-`ticket.changed` for each ticket whose summary changed. A reload commits nothing, but the chores and the attention list
-are read through the config: a chore added to it shows without a journal write. The stream never writes, so its own
-reads never move `data_version`. Each such read is one snapshot of the journal, in a read transaction, so a commit
-landing partway through cannot pair one list's old rows with another's new ones.
+(`Backend.use`), does the stream read the attention list, the runs, the tickets, the chores, the review runs, the last
+day's and 30 days' spend, the latest tick, and the loop's pause again, and it sends each that differs from what it sent
+last, plus `ticket.changed` for each ticket whose summary changed. A reload commits nothing, but the chores and the
+attention list are read through the config: a chore added to it shows without a journal write. The stream never writes,
+so its own reads never move `data_version`. Each such read is one snapshot of the journal, in a read transaction, so a
+commit landing partway through cannot pair one list's old rows with another's new ones.
 
 The connection is opened, read, and closed on a thread of the stream's own, never on the server's event loop: on a
 journal with months of history one read of the lists takes tens of milliseconds, every open stream reads them on each
@@ -27,13 +27,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.infra import logs
-from canopy.serve import views
+from canopy.serve import reviews, views
 from canopy.serve.schema import (
     AttentionUpdated,
     ChoresUpdated,
     LastTick,
     LoopState,
     LoopUpdated,
+    ReviewsUpdated,
     RunsUpdated,
     Spend,
     SpendUpdated,
@@ -160,6 +161,7 @@ class _Sent:
         self.attention: AttentionUpdated | None = None
         self.runs: RunsUpdated | None = None
         self.chores: ChoresUpdated | None = None
+        self.reviews: ReviewsUpdated | None = None
         self.tickets: dict[str, TicketSummary] | None = None
         self.spend: Spend | None = None
         self.tick: LastTick | None = None
@@ -206,6 +208,10 @@ class _Sent:
         if chores != self.chores:
             self.chores = chores
             found.append(StreamEvent(chores))
+        reviewed = ReviewsUpdated(reviews=reviews.reviews(ctx))
+        if reviewed != self.reviews:
+            self.reviews = reviewed
+            found.append(StreamEvent(reviewed))
         # Sent when a cost changes, not a window: the windows move with the clock on every read.
         spend = views.spend(backend, ctx)
         if self.spend is None or _costs(spend) != _costs(self.spend):

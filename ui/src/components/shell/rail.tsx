@@ -3,32 +3,43 @@ import { Link } from '@tanstack/react-router'
 import { BookOpen, SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { metaQuery, runsQuery, spendQuery } from '@/api/queries'
-import type { SpendWindow } from '@/api/types'
+import { choresQuery, metaQuery, reviewsQuery, runsQuery, spendQuery } from '@/api/queries'
+import type { RunState, SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLoopDown } from '@/hooks/use-loop-down'
-import { runRef } from '@/lib/refs'
-import { railRuns } from '@/lib/run-state'
+import { pullRequestLabel } from '@/lib/pull-request-label'
+import { choreRunRef, reviewRef, runRef } from '@/lib/refs'
+import { railWork } from '@/lib/run-state'
+import type { RailItem } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 // Where the version links: every release's notes, newest first.
 const RELEASES = 'https://github.com/eddieland/canopy/releases'
 
 // Rows the rail lists before `+N more`: with the nav and the spend, four keep the sticky part within an 800px window.
-const RAIL_RUNS = 4
+const RAIL_ROWS = 4
+
+// What `+N more` says on hover, by the page it opens.
+const MORE_TITLE = {
+    '/runs': 'Every run, on the runs page',
+    '/reviews': 'Every review, on the reviews page',
+    '/chores': 'Every chore, on the chores page',
+} as const
 
 /**
- * Under the nav, on every page: the runs working now, those running first and then those waiting on the operator's
- * answer, each opening its page. The runs come whole from the stream, so a row appears when a run starts and leaves
- * when it ends.
+ * Under the nav, on every page: what is working now, each row opening its page. The worker runs, the reviews of PRs,
+ * and the chore runs running come first, then the worker runs waiting on the operator's answer. All three come whole
+ * from the stream, so a row appears when its run starts and leaves when it ends.
  */
 export function RailWorking() {
     const runs = useQuery(runsQuery).data
-    const { shown, more } = railRuns(runs ?? [], RAIL_RUNS)
+    const reviews = useQuery(reviewsQuery).data
+    const chores = useQuery(choresQuery).data
+    const { shown, more, moreAt } = railWork({ runs: runs ?? [], reviews, chores }, RAIL_ROWS)
     // While the loop isn't answering, these are only what it last said: dimmed, as stale search hits are.
     const stale = useLoopDown().offline
     return (
@@ -41,43 +52,19 @@ export function RailWorking() {
             {runs === undefined ? (
                 <Skeleton className="mx-2.5 h-8" />
             ) : shown.length === 0 ? (
-                <p className="px-2.5 text-xs text-muted-foreground">no runs now</p>
+                <p className="px-2.5 text-xs text-muted-foreground">nothing working now</p>
             ) : (
                 <ul className="flex flex-col gap-0.5">
-                    {shown.map((run) => (
-                        <li key={run.id}>
-                            <Link
-                                to="/runs/$id"
-                                params={{ id: String(run.id) }}
-                                title={`${runRef(run.id)} ${run.kind}`}
-                                className="flex flex-col gap-0.5 rounded-sm px-2.5 py-1.5 hover:bg-surface-raised"
-                                data-testid={`rail-run-${run.id}`}
-                            >
-                                <span className="flex items-center gap-2 font-mono text-xs">
-                                    <RunDot state={run.state} />
-                                    <span className="shrink-0 text-foreground">{run.ticket_key}</span>
-                                    <span className="ml-auto">
-                                        {run.state === 'blocked' ? (
-                                            <span className="font-sans whitespace-nowrap text-status-blocked">
-                                                waiting on you
-                                            </span>
-                                        ) : (
-                                            <Age at={run.started_at} />
-                                        )}
-                                    </span>
-                                </span>
-                                <TicketTitle
-                                    title={run.ticket_title}
-                                    className="pl-4 text-xs font-normal text-muted-foreground"
-                                />
-                            </Link>
+                    {shown.map((item) => (
+                        <li key={itemKey(item)}>
+                            <WorkingRow item={item} />
                         </li>
                     ))}
                     {more > 0 && (
                         <li>
                             <Link
-                                to="/runs"
-                                title="Every run, on the runs page"
+                                to={moreAt}
+                                title={MORE_TITLE[moreAt]}
                                 className="block px-2.5 py-1 font-mono text-xs text-accent hover:underline"
                             >
                                 +{more} more
@@ -90,8 +77,107 @@ export function RailWorking() {
     )
 }
 
+// Unique across the three kinds, whose ids are each their own table's.
+function itemKey(item: RailItem): string {
+    switch (item.kind) {
+        case 'run': {
+            return `run-${item.run.id}`
+        }
+        case 'review': {
+            return `review-${item.review.id}`
+        }
+        case 'chore': {
+            return `chore-${item.chore}-${item.run.id}`
+        }
+    }
+}
+
 /**
- * Under the working runs: what the last 24 hours and the last 30 days cost. Either opens the spend page, the week's or
+ * One row of what is working, opening its page: a dot in its state's color, what it works on (a ticket's key, a PR, a
+ * chore), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the review, the run.
+ */
+function WorkingRow({ item }: { item: RailItem }) {
+    switch (item.kind) {
+        case 'run': {
+            const { run } = item
+            return (
+                <Link
+                    to="/runs/$id"
+                    params={{ id: String(run.id) }}
+                    title={`${runRef(run.id)} ${run.kind}`}
+                    className={ROW}
+                    data-testid={`rail-run-${run.id}`}
+                >
+                    <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
+                    <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
+                </Link>
+            )
+        }
+        case 'review': {
+            const { review } = item
+            const pr = pullRequestLabel(review.pr_url)
+            return (
+                <Link
+                    to="/reviews/$id"
+                    params={{ id: String(review.id) }}
+                    title={`${reviewRef(review.id)} of ${pr}`}
+                    className={ROW}
+                    data-testid={`rail-review-${review.id}`}
+                >
+                    <RowHead state={review.state} subject={pr} started={review.started_at} />
+                    <Under>
+                        {review.ticket_key === null
+                            ? reviewRef(review.id)
+                            : `${reviewRef(review.id)} · ${review.ticket_key}`}
+                    </Under>
+                </Link>
+            )
+        }
+        case 'chore': {
+            const { chore, run } = item
+            return (
+                <Link
+                    to="/chores/$name/runs/$id"
+                    params={{ name: chore, id: String(run.id) }}
+                    title={choreRunRef(chore, run.id)}
+                    className={ROW}
+                    data-testid={`rail-chore-${chore}`}
+                >
+                    <RowHead state={run.state} subject={chore} started={run.started_at} />
+                    <Under>{`chore run #${run.id}`}</Under>
+                </Link>
+            )
+        }
+    }
+}
+
+// A working row's link: its head line over what goes under it.
+const ROW = 'flex flex-col gap-0.5 rounded-sm px-2.5 py-1.5 hover:bg-surface-raised'
+
+/** A working row's head line: its dot, what it works on, and how long it has run, or `waiting on you`. */
+function RowHead({ state, subject, started }: { state: RunState; subject: string; started: string }) {
+    return (
+        <span className="flex items-center gap-2 font-mono text-xs">
+            <RunDot state={state} />
+            <span className="min-w-0 truncate text-foreground">{subject}</span>
+            <span className="ml-auto shrink-0">
+                {state === 'blocked' ? (
+                    <span className="font-sans whitespace-nowrap text-status-blocked">waiting on you</span>
+                ) : (
+                    <Age at={started} />
+                )}
+            </span>
+        </span>
+    )
+}
+
+/** The line under a review's or a chore run's head line, where a worker run's ticket title goes. */
+function Under({ children }: { children: string }) {
+    return <span className="min-w-0 truncate pl-4 font-mono text-xs text-muted-foreground">{children}</span>
+}
+
+/**
+ * Under what is working: what the last 24 hours and the last 30 days cost. Either opens the spend page, the week's or
  * the 30 days' breakdown by day and by what it bought.
  */
 export function RailSpend() {
