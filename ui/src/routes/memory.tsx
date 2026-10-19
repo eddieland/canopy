@@ -146,14 +146,18 @@ function Tiers({ overview, state, pastRead }: { overview: MemoryOverview; state:
     return (
         <>
             <FilterBar repos={overview.repos} />
-            {/* Wide, the queue keeps the width and the tickets with notes sit beside it, last as when narrow. */}
+            {/* Wide, the tickets with notes sit beside the queue, last as when narrow, in the width their opened notes'
+                columns need; only from 120rem, where the queue beside them still keeps a proposal's verbs on one line.
+                Narrower, they stack under it, and the queue has the page's width. */}
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
                     // Two columns only while both tiers show a panel: with one off, the other has the width alone.
                     acting &&
-                        state.ticket_notes.mode !== 'off' &&
-                        '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
+                        state.ticket_notes.mode !== 'off' && [
+                            'min-[120rem]:grid min-[120rem]:items-start',
+                            'min-[120rem]:grid-cols-[minmax(0,1fr)_minmax(0,34rem)]',
+                        ],
                 )}
             >
                 {/* A tier that is off shows no panel: the page holds what is on (DESIGN §28). */}
