@@ -117,7 +117,8 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         (2, True, "timer"),
         (1, False, "start"),
     ]
-    assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "chores", "reviews"]
+    assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "triage", "chores", "reviews"]
+    assert (today["triage"], found["waived"]) == (None, 0)  # the mock triaged no ticket
     # What each ticket's and PR's own runs cost, the costliest first; the mock marked no ticket done.
     assert [(t["key"], t["runs"], t["reviews"], t["cost_usd"]) for t in found["tickets"]][:2] == [
         ("ABC-099", 2, 2, pytest.approx(3.5)),

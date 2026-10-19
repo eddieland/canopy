@@ -1,4 +1,4 @@
-"""A ticket's plans as the API sends them (DESIGN §25): the newest as its file stands, the earlier ones, the comments.
+"""A ticket's plans as the API sends them (DESIGN §25): the newest, the earlier ones, the comments, and the triage.
 
 A plan's text is read from its file every time, bounded and never through a link, as `canopy show` reads it; the
 journal holds only its status and hashes. The text is model-written, and the UI draws it in the plan editor, which keeps
@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, plan_threads, plans
+from canopy.core import conversation, db, plan_threads, plans
 from canopy.core.vocab import PlanStatus, RunKind
-from canopy.serve.schema import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, TicketPlans
+from canopy.serve.schema import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, PlanTriage, TicketPlans
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -37,10 +37,37 @@ def ticket_plans(ctx: Context, key: str) -> TicketPlans | None:
         setting=ticket.plan_setting.value if ticket.plan_setting is not None else None,
         policy=ctx.config.policy.plan,
         planning=planning,
+        triage=triage_view(ctx, ticket),
         changes_asked=db.parse_time(asked) if asked is not None else None,
         newest=plan_file(ctx, found[-1]) if found else None,
         plans=[plan_summary(p) for p in found],
         threads=[thread_view(t) for t in plan_threads.threads(ctx.conn, key)],
+    )
+
+
+def triage_view(ctx: Context, ticket: records.Ticket) -> PlanTriage | None:
+    """The ticket's triage before its plan, as `canopy show` names its waiver (DESIGN §25).
+
+    Returns:
+        Its run, how it ended, its verdict and reason on one line, and whether its waiver is in force; None when the
+        ticket has had no triage.
+    """
+    found = plans.triage(ctx.conn, ticket.key)
+    if found is None:
+        return None
+    waiver = plans.waiver(ctx.conn, ticket)
+    waived = waiver is not None and waiver.run_id == found.run_id
+    said = waiver.reason if waiver is not None and waived else found.reason
+    # One line, as the card shows it, and cut as a triage's reason is: a harness's note may run longer.
+    reason = " ".join(conversation.printable(said).split())[: plans.MAX_TRIAGE_REASON]
+    return PlanTriage(
+        run_id=found.run_id,
+        status=found.status.value,
+        verdict=found.verdict,
+        reason=reason or None,
+        waived=waived,
+        undoable=waived and ticket.branch is None,
+        at=db.parse_time(found.at),
     )
 
 

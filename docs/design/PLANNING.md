@@ -355,9 +355,9 @@ The schema is in `migrations/`.
 ### Triage before a plan (M55)
 
 Partly built (ROADMAP M55, REQUIREMENTS R22). Built: the configuration, the run and its prompt, dispatch's guards,
-the waiver, what the state block and `canopy show` say of them, and the overseer prompt's row. Not yet: the ticket's
-plan card in the web UI; the reviewer's second opinion; the spend page's kind; and feedback rounds. Until each lands,
-§8, §12, §14, and §21 describe canopy as it is there. This part says what changes in each.
+the waiver, what the state block, `canopy show`, and the ticket's plan card in the web UI say of them, the overseer
+prompt's row, the reviewer's second opinion, and the spend page's kind. Not yet: feedback rounds. Until they land, §8,
+§12, §14, and §21 describe canopy as it is there. This part says what changes in each.
 
 With plans on, a typo fix or a one-line config change still costs a planner run, and the operator's reading and
 approval of a plan nobody needed. A **triage** is a cheaper run that reads the ticket and the code first and judges, by
@@ -491,7 +491,8 @@ and is in force only while the ticket's own setting is unset:
 - `canopy forget` ends it, as it supersedes a plan, so a forgotten ticket under `"approve"` is planned again. It is
   not triaged again, since its triage run still counts.
 - `canopy show KEY` and the ticket's plan card in the web UI say the plan was waived, by which run, why, and how to
-  undo it.
+  undo it. The card offers asking for a plan only while that would undo the waiver, before the ticket has a branch, and
+  shows a triage that waived nothing too, running or ended, since what came before a plan is part of its story.
 
 A waiver goes ahead without the operator's glance: a change that fits the operator's words for trivial usually is, and
 waiting on the operator would give back the time triage saves (the operator, 2026-10-17). No attention item names it.
@@ -514,8 +515,9 @@ nothing to edit: no edit, shell, web fetch, or subagent tools, and reads only in
 the tracker's read tools only, rendered as the private worker's are (§22), with a plan's `no_read_tools` refusal, and
 other servers' write tools denied by name.
 
-**Spend.** The spend page (§11, ROADMAP M33) shows triage runs as a kind of their own, with how many plans they waived,
-so their cost reads against the planner runs they saved.
+**Spend.** `canopy spend` and the spend page (§11, ROADMAP M33) show triage runs as a kind of their own, with how
+many plans they waived, so their cost reads against the planner runs they saved. `canopy health` counts them apart from
+the workers too.
 
 **Feedback rounds (with M54).** Feedback plans (ROADMAP M54) are not designed yet, so triage before one is designed
 with them. What this part fixes for it:

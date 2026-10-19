@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { triage } from '@/api/mocks'
 import type { Limit, ReviewSummary, TicketPlans } from '@/api/types'
 
 import {
@@ -125,6 +126,7 @@ describe('ticketDescription', () => {
         needed: false,
         newest: null,
         planning: null,
+        triage: null,
         plans: [],
         policy: 'off',
         setting: null,
@@ -139,6 +141,12 @@ describe('ticketDescription', () => {
 
     it('says a plan is needed only while it has none and needs one', () => {
         expect(ticketDescription(IDLE, { ...NO_PLAN, needed: true })).toBe('plan needed')
+    })
+
+    it("says a triage's waiver while it is in force, and the plan needed once it is undone", () => {
+        expect(ticketDescription(IDLE, { ...NO_PLAN, needed: true, triage: triage() })).toBe('plan waived')
+        const undone = { ...NO_PLAN, needed: true, setting: 'plan', triage: triage({ waived: false }) } as const
+        expect(ticketDescription(IDLE, undone)).toBe('plan needed')
     })
 
     it("says its plan's status, as its card's chip says it", () => {

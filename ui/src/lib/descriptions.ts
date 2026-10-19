@@ -3,7 +3,7 @@
 
 import type { ChoreRun, Limit, PullRequest, ReviewSummary, Run, Tick, TicketPlans, TicketSummary } from '@/api/types'
 import { stuck } from '@/lib/limits'
-import { planWaits } from '@/lib/plan-state'
+import { planWaits, planWaived } from '@/lib/plan-state'
 import { reviewRef, runRef } from '@/lib/refs'
 import { verdictText } from '@/lib/reviews'
 import { NO_TICKET, readable, runKind } from '@/lib/words'
@@ -84,6 +84,9 @@ function line(...parts: (string | null)[]): string {
 // A plan's status in words, as its card's chip says it, or null for a ticket that has no plan and needs none.
 function planWords(plans: TicketPlans): string | null {
     const newest = plans.newest?.plan
+    if (newest === undefined && planWaived(plans)) {
+        return 'plan waived'
+    }
     if (newest === undefined) {
         return plans.needed ? 'plan needed' : null
     }

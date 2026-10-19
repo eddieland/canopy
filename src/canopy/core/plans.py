@@ -28,9 +28,9 @@ import stat
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, Literal, NotRequired, TypedDict
 
-from canopy.core import conversation, db, records
+from canopy.core import contract, conversation, db, records
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
-from canopy.core.vocab import PlanSetting, PlanStatus, RunKind
+from canopy.core.vocab import PlanSetting, PlanStatus, RunKind, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -140,6 +140,57 @@ def record_waiver(conn: sqlite3.Connection, key: str, run_id: int, reason: str) 
     conn.execute(
         "INSERT INTO plan_waivers (ticket_key, run_id, reason, at) VALUES (?, ?, ?, ?)", (key, run_id, reason, db.now())
     )
+
+
+@dataclass(frozen=True)
+class Triage:
+    """A ticket's triage run (DESIGN §25) as the web UI's plan card tells it: how it ended and what it judged."""
+
+    #: The `needs-plan` run. A ticket is triaged at most once, so this is its only one.
+    run_id: int
+    #: How it ended, or `running` while it reads.
+    status: RunStatus
+    #: What a run that ended `done` judged; None while it runs, or for one that ended otherwise, whatever it printed.
+    verdict: Literal["trivial", "plan"] | None
+    #: Its one-sentence reason, or the harness's note for a run that judged nothing: model text, from the ticket.
+    reason: str
+    #: When it ended, or when it started while it runs.
+    at: str
+
+
+def triage(conn: sqlite3.Connection, key: str) -> Triage | None:
+    """The ticket's triage run, before a forget too, as its stored result says it ended.
+
+    Returns:
+        The triage, or None when the ticket has had none.
+    """
+    row = conn.execute(
+        "SELECT id, status, started_at, ended_at, result_json FROM runs WHERE ticket_key = ? AND kind = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (key, RunKind.NEEDS_PLAN),
+    ).fetchone()
+    if row is None:
+        return None
+    run_id, status, started, ended, result_json = row
+    stored = contract.stored_object(result_json)
+    ended_as = RunStatus(status)
+    return Triage(
+        run_id=int(run_id),
+        status=ended_as,
+        verdict=_verdict(stored.get("verdict")) if ended_as is RunStatus.DONE else None,
+        reason=contract.stored_note(stored),
+        at=str(ended or started),
+    )
+
+
+def _verdict(value: object) -> Literal["trivial", "plan"] | None:
+    match value:
+        case "trivial":
+            return "trivial"
+        case "plan":
+            return "plan"
+        case _:
+            return None
 
 
 def triage_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tuple[str, str] | None:  # noqa: PLR0911

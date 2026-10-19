@@ -41,9 +41,9 @@ _FAILURES = 10
 def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     """Print how the ticks and runs of the last days ended, the newest failures, and what the guards refused.
 
-    Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, chores by name, and
-    reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or `canopy show`, and
-    the overseer's asks a guard refused, by guard.
+    Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, triages before a plan,
+    chores by name, and reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or
+    `canopy show`, and the overseer's asks a guard refused, by guard.
     """
     ctx = open_context(click_ctx)
     found = health.report(ctx.conn, datetime.now(UTC), days)
@@ -99,7 +99,7 @@ def _ref(f: Failure) -> str:
     match f.kind:
         case "overseer":
             return f"tick {f.id} ({f.what})"
-        case "workers":
+        case "workers" | "triage":
             return f"run:{f.id} {f.what} of {f.subject}"
         case "chores":
             return f"chore:{f.what} run {f.id}"

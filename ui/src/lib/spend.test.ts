@@ -20,6 +20,7 @@ const NONE: SpendCosts = {
     idle: null,
     dry_run: null,
     workers: null,
+    triage: null,
     chores: null,
     reviews: null,
     total: null,
@@ -95,6 +96,14 @@ describe('spend', () => {
     it('names each series once, the same in the totals, the legend, and the table', () => {
         const labels = SERIES.map((s) => s.label)
         expect(new Set(labels).size).toBe(labels.length)
-        expect(labels).toEqual(['idle ticks', 'overseer', 'workers and splits', 'chores', 'reviews', 'dry runs'])
+        expect(labels).toEqual([
+            'idle ticks',
+            'overseer',
+            'workers and splits',
+            'plan triage',
+            'chores',
+            'reviews',
+            'dry runs',
+        ])
     })
 })

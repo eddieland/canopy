@@ -53,9 +53,10 @@ is a summary.
 read a dry run's plan. The web UI shows the same (§22).
 
 `canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window (7 days by default,
-today's so far included), so that comparing two windows tells whether spending more bought more: each kind's cost, the
-ticks by what they bought and what woke them, the tickets done and the spend per ticket done, each ticket's and PR's
-own cost, and which tools put the most into context. The web UI's spend page shows it (§22). What it counts:
+today's so far included), so that comparing two windows tells whether spending more bought more: each kind's cost, a
+triage before a plan (§25) a kind of its own, the ticks by what they bought and what woke them, the tickets done and
+the spend per ticket done, the plans triage waived, each ticket's and PR's own cost, and which tools put the most into
+context. The web UI's spend page shows it (§22). What it counts:
 
 - Every figure is by start: a run counts on the day it started, within the window, all read at one moment.
 - A ticket is done in the window by its newest `done` decision there (§7), if still done and not forgotten. That is
@@ -76,9 +77,9 @@ own cost, and which tools put the most into context. The web UI's spend page sho
 
 `canopy health` reads the same window for how the runs in it ended: each kind's runs by sort and status, with what they
 cost, the newest that failed with a note on each, and the overseer's asks a guard refused, by guard. A failure is a run
-that did not do what it was started for: a tick that did not close `ok`, or a worker, chore, or review run that ended
-`failed`, `unknown`, `unpushed`, `crashed`, or `timeout`; a worker that asked a question or that the operator stopped
-did. Beside `canopy spend --json`, it is what a chore that looks at canopy itself reads (`examples/chores/`).
+that did not do what it was started for: a tick that did not close `ok`, or a worker, triage (§25), chore, or review
+run that ended `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`; a worker that asked a question or that the
+operator stopped did. Beside `canopy spend --json`, it is what a chore that looks at canopy itself reads (`examples/chores/`).
 
 ## 12. Configuration
 
