@@ -259,12 +259,14 @@ def test_a_tickets_draft_posts_through_the_trackers_command_and_is_settled_by_th
 
 @pytest.mark.usefixtures("git_pool")
 def test_list_and_show_print_each_draft_with_its_thread_and_hash(scenario: Scenario, github_state: Path) -> None:
-    run_id = drafted_run(scenario, github_state, [thread(501), thread(999)])
+    reply = "Renamed.\n\nThe old name stays an alias."
+    run_id = drafted_run(scenario, github_state, [thread(501, text=reply), thread(999)])
     out = scenario.operator("draft", "list").out
     assert "Review replies: approve." in out
     assert f"run:{run_id} 1  waiting  a reply to comment 501 on {PR} (changed)" in out
     assert f"> alice at {OLD}: Rename this." in out
-    assert f"hash {drafts_manage.hash_of('Renamed.')}:\n    Renamed." in out
+    # Each line of a draft prints as a line, never as a named line feed.
+    assert f"hash {drafts_manage.hash_of(reply)}:\n    Renamed.\n    \n    The old name stays an alias.\n" in out
     assert "comment 999" not in out
     out = scenario.operator("draft", "show", f"run:{run_id}").out
     assert f"2: unknown_thread: {PR} has no review comment 999" in out

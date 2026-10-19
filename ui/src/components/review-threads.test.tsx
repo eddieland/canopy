@@ -64,6 +64,19 @@ describe('ThreadCard', () => {
         )
         expect(within(card).getByTestId('draft').dataset['status']).toBe('waiting')
     })
+
+    it("shows a comment's and a draft's paragraphs as their lines, not as named characters", async () => {
+        const [comment] = reviewThread().comments
+        const thread = reviewThread({
+            comments: comment === undefined ? [] : [{ ...comment, body: 'Rename this.\r\n\r\nIt reads better.' }],
+            drafts: [draft({ text: 'Renamed.\n\nThanks.' })],
+        })
+        await renderRouted(<ThreadCard thread={thread} onChange={changed} />)
+        const card = screen.getByTestId('review-thread')
+        expect(within(card).getByTestId('thread-comment').textContent).toContain('Rename this.\n\nIt reads better.')
+        expect(within(card).getByTestId('draft').textContent).toContain('Renamed.\n\nThanks.')
+        expect(card.textContent).not.toContain('<U+')
+    })
 })
 
 describe('DraftCard', () => {
