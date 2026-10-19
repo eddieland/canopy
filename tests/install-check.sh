@@ -138,7 +138,12 @@ if command -v npm >/dev/null; then
     if echo "$loop" | grep -q 'not built'; then fail "the web UI is not built into this install"; fi
 fi
 
-# The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
+# The example chores ship in the wheel too: installing one copies its prompt and writes its table to the private file.
+canopy chore install build-health >/dev/null || fail "canopy chore install build-health failed"
+[ -s "$workspace/.canopy/chore-prompts/build-health.md" ] || fail "canopy chore install did not copy the prompt"
+grep -q '^\[chores\.build-health\]$' "$private" || fail "canopy chore install did not write the table to $private"
+
+# The migrations, prompts, agent definitions, skills, and example chores came from the wheel, not from this checkout.
 state="$workspace/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
 "$UV_TOOL_DIR/canopy/bin/python" -c '
@@ -146,7 +151,13 @@ import sys
 from pathlib import Path
 from canopy.infra import resources
 tool = Path(sys.argv[1]).resolve()  # resources resolves symlinks, such as macOS /var -> /private/var
-for found in (resources.migrations_dir(), resources.prompts_dir(), resources.agents_dir(), resources.skills_dir()):
+for found in (
+    resources.migrations_dir(),
+    resources.prompts_dir(),
+    resources.agents_dir(),
+    resources.skills_dir(),
+    resources.example_chores_dir(),
+):
     if not found.is_relative_to(tool):
         sys.exit(f"install-check: {found} is outside the installed tool")
 ' "$UV_TOOL_DIR"
