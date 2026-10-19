@@ -16,9 +16,13 @@ The chips filter by the latest run's state: `running`, `waiting on you` (the wor
 
 ## A run's page
 
-The **Run** panel has the facts: the ticket, the branch, when it started and ended, its summary and PRs, its worktrees,
-and the path of its log, which only you can read. **spent** gives its cost, the tokens it used, and its peak context,
-the most one model call was sent.
+The line under the title says how the run ended, its kind, and its ticket, whose key opens the ticket's page. Each
+of those is said there and nowhere else on the page, so the panels under it can get on with the rest.
+
+The **Run** panel leads with its summary, the run's own account of what it did, then its PRs, then **when**: when it
+started and ended and how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m` while it runs. **spent** gives its
+cost, the tokens it used, and its peak context, the most one model call was sent. Last come the places: the branch,
+its worktrees, and the path of its log, which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
@@ -47,12 +51,18 @@ entry, drawn or not, so a search beats clicking the fold nineteen times; to star
 to newest first. All open opens only the rows drawn, and following an addition in the chart, or the error a run
 ended on, draws down to its row first.
 
-The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`.
+The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`. A
+transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
+`no events yet`); hover it for the whole reason.
 
 Under the transcript, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
 stderr, and how it exited. The transcript shows only the session's events, so a run that died in `pnpm install`, or
 crashed before its first event, has an empty transcript and its whole story here. **Show output** opens it at its end,
 where the errors live.
+
+Under that, while agent memory is on, **Memory** counts what the run wrote and read (`wrote 2 · read none`), each
+tier's mode on hover. **Show memory** opens the notes themselves; [Memory](memory#on-a-ticket-and-a-run) says what they
+mean.
 
 ## Context
 

@@ -20,14 +20,14 @@ function renderField(field: ReactNode) {
 }
 
 describe('TicketField', () => {
-    it('opens the ticket, then says the run’s kind and the ticket’s title', async () => {
-        await renderField(<TicketField ticketKey="ABC-101" title="Sign in with SSO" kind="fix_ci" />)
+    it('opens the ticket, then says the ticket’s title', async () => {
+        await renderField(<TicketField ticketKey="ABC-101" title="Sign in with SSO" />)
         expect(screen.getByRole('term').textContent).toBe('ticket')
         expect(screen.getByRole('link', { name: 'ABC-101' }).getAttribute('href')).toBe('/tickets/ABC-101')
-        expect(screen.getByRole('definition').textContent).toBe('ABC-101fix ciSign in with SSO')
+        expect(screen.getByRole('definition').textContent).toBe('ABC-101Sign in with SSO')
     })
 
-    it('says untitled for a ticket the overseer has not named, and no kind when the page is not a run’s', async () => {
+    it('says untitled for a ticket the overseer has not named', async () => {
         await renderField(<TicketField ticketKey="ABC-101" title={null} />)
         expect(screen.getByRole('definition').textContent).toBe('ABC-101untitled')
     })

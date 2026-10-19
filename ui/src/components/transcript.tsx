@@ -72,20 +72,19 @@ const NO_CALLS: readonly Call[] = []
  * input or output holds it. A long transcript draws a page of its rows, or of its calls By call, and a fold after them
  * draws more (`TRANSCRIPT_BUDGET`). All of it is agent output, rendered as text. `running` says the session has not
  * ended: its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header
- * names the session, but for `session={false}`, on a page whose identity panel names it already. A page that shows a
- * row from outside the panel passes the `view` it holds (`useTranscriptView`).
+ * names the session, on every page that shows one. With no events, it is its header alone, which says why in a few
+ * words (`log gone`), the whole reason on hover. A page that shows a row from outside the panel passes the `view` it
+ * holds (`useTranscriptView`).
  */
 export function TranscriptPanel({
     transcript,
     running,
     page,
-    session = true,
     view,
 }: {
     transcript: Transcript | undefined
     running: boolean
     page: TranscriptPage
-    session?: boolean
     view?: TranscriptView
 }) {
     const own = useTranscriptView()
@@ -139,11 +138,14 @@ export function TranscriptPanel({
     // All open stays on while the calls stand open together: it was turned on, or a search opened what it found.
     const allOpen = opened.open || (!callView && shown.some((n) => searchOpens(n.hits)))
     const lines = shown.reduce((sum, n) => sum + (n.hits === null ? 0 : n.hits.row + n.hits.body), 0)
+    // Why there is nothing to show, once read: the header says it, and the panel is that header alone.
+    const why = transcript !== undefined && entries.length === 0 ? empty(transcript, running) : null
     return (
-        <Panel className="min-h-40" data-testid="transcript">
+        // Its space is held only while it is read (No layout shift): read, it is as tall as what it holds.
+        <Panel className={cn(transcript === undefined && 'min-h-40')} data-testid="transcript">
             <PanelHeader label="Transcript">
                 <span className="flex flex-wrap items-center gap-3">
-                    {session && transcript?.session_id && (
+                    {transcript?.session_id && (
                         <Copyable
                             text={transcript.session_id}
                             label="session id"
@@ -154,7 +156,12 @@ export function TranscriptPanel({
                             </span>
                         </Copyable>
                     )}
-                    {session && transcript?.session_id && (entries.length > 1 || groups || tools) && (
+                    {why !== null && (
+                        <span className="readout text-xs text-muted-foreground" title={why.reason}>
+                            {why.short}
+                        </span>
+                    )}
+                    {transcript?.session_id && (entries.length > 1 || groups || tools) && (
                         // The session is what the transcript is; the modes after the rule are how it is shown.
                         <span aria-hidden className="hidden h-4 w-px bg-border @lg:inline" />
                     )}
@@ -187,9 +194,7 @@ export function TranscriptPanel({
             </PanelHeader>
             {transcript === undefined ? (
                 <PanelSkeleton />
-            ) : entries.length === 0 ? (
-                <Empty>{empty(transcript, running)}</Empty>
-            ) : (
+            ) : entries.length === 0 ? null : (
                 <>
                     <div
                         className={cn(
@@ -298,20 +303,24 @@ function Fold({ label, onShow }: { label: string; onShow: () => void }) {
     )
 }
 
-function empty(transcript: Transcript, running: boolean): string {
+/** Why a transcript shows no events: in a few words for its header, and whole for their hover. */
+function empty(transcript: Transcript, running: boolean): { short: string; reason: string } {
     if (running) {
         // Its session is recorded at its first event, so before then there is none.
-        return 'no events yet: they show here as the agent prints them'
+        return { short: 'no events yet', reason: 'no events yet: they show here as the agent prints them' }
     }
     switch (transcript.status) {
         case 'no_session': {
-            return 'the runtime reported no session: a template without --format json prints no events'
+            return {
+                short: 'no session',
+                reason: 'the runtime reported no session: a template without --format json prints no events',
+            }
         }
         case 'no_log': {
-            return 'its log is gone, or is not a file canopy reads'
+            return { short: 'log gone', reason: 'its log is gone, or is not a file canopy reads' }
         }
         case 'read': {
-            return 'the log holds none of the session’s events'
+            return { short: 'no events', reason: 'the log holds none of the session’s events' }
         }
     }
 }

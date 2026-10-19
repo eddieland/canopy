@@ -4,30 +4,27 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { loopQuery, runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run, Transcript } from '@/api/types'
-import { Age } from '@/components/age'
 import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
+import { FoldPanel } from '@/components/fold-panel'
 import { MemoryRows } from '@/components/memory'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
 import { RunDoing } from '@/components/run-doing'
-import { Chip, RunDot, Word } from '@/components/status'
-import { TicketField } from '@/components/ticket-field'
-import { Timestamp } from '@/components/timestamp'
+import { Chip } from '@/components/status'
+import { TicketLink } from '@/components/ticket-link'
 import { RunOutputPanel } from '@/components/raw-output'
 import { TranscriptPanel } from '@/components/transcript'
+import { WhenField } from '@/components/when-field'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { runDescription } from '@/lib/descriptions'
 import { runRef } from '@/lib/refs'
-import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { readNothingText } from '@/lib/memory'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
-import { cn } from '@/lib/utils'
-import { runKind } from '@/lib/words'
 import { None } from '@/components/none'
 
 // What every run's page shows, on its title's hover: its description is the run's state.
@@ -78,7 +75,8 @@ function Loaded({ id }: { id: number }) {
                 help={HELP}
                 chips={data.private && <Chip>private</Chip>}
             >
-                {runDescription(data)}
+                {/* Its state, kind, and ticket, each said here alone: the ticket's key opens it. */}
+                {runDescription(data)} · <TicketLink ticketKey={data.ticket_key} className="align-baseline" />
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
@@ -101,6 +99,11 @@ function NoRun({ title, children }: { title: string; children: string }) {
     )
 }
 
+/**
+ * The run's facts, in the order every identity panel of a run, tick, or chore run keeps (ui/DESIGN.md, "A detail page
+ * has one skeleton"): its answer, what came of it, when, what it spent, then where its files are. Its state, kind,
+ * ticket, and title are the page's header, so none is said here again.
+ */
 function RunPanel({
     run,
     transcript,
@@ -112,34 +115,15 @@ function RunPanel({
 }) {
     return (
         <Panel>
-            <PanelHeader label="Run">
-                <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
-                    <RunDot state={run.state} />
-                    <Word word={run.status} />
-                </span>
-            </PanelHeader>
+            <PanelHeader label="Run" />
             <Fields>
-                {/* Private is the page's chip, beside its title: said once. */}
-                <TicketField ticketKey={run.ticket_key} title={run.ticket_title} kind={runKind(run)} />
-                <Field label="branch" mono>
-                    {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
-                </Field>
-                <Field label="started" mono>
-                    <span className="flex items-baseline gap-2">
-                        <Timestamp at={run.started_at} />
-                        <Age at={run.started_at} variant="ago" />
-                    </span>
-                </Field>
-                <Field label="ended" mono>
-                    {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
-                </Field>
+                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
+                <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
                 {run.activity && (
                     <Field label="last call">
                         <RunDoing activity={run.activity} />
                     </Field>
                 )}
-                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
-                <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
                 {run.prs.length > 0 && (
                     <Field label="pull requests" mono>
                         <span className="flex flex-wrap gap-x-4">
@@ -149,9 +133,13 @@ function RunPanel({
                         </span>
                     </Field>
                 )}
+                <WhenField started={run.started_at} ended={run.ended_at} />
                 <Field label="spent" mono>
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
+                </Field>
+                <Field label="branch" mono>
+                    {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>
                 {run.worktrees.length > 0 && (
                     <Field label="worktrees" mono>
@@ -174,8 +162,9 @@ function RunPanel({
 
 /**
  * What the run wrote and read of agent memory (DESIGN §28), and what it had refused; only for a run rendered while a
- * tier was on. A run rendered while recording read `none, recording only`: nothing was served, which is not an empty
- * digest.
+ * tier was on. It arrives folded: its header counts what it wrote and read, each tier's mode for the run on hover, and
+ * `Show memory` opens the rows. A run rendered while recording read `none, recording only`: nothing was served, which
+ * is not an empty digest.
  */
 function RunMemoryPanel({ id }: { id: number }) {
     const { data } = useQuery(runMemoryQuery(id))
@@ -187,13 +176,24 @@ function RunMemoryPanel({ id }: { id: number }) {
         return null
     }
     const served = rendered.ticket_notes === 'use' || rendered.lessons === 'use'
+    const tiersNow = `ticket notes: ${words(rendered.ticket_notes)}, lessons: ${words(rendered.lessons)}`
+    const said = [
+        `wrote ${data.wrote.length === 0 ? 'none' : data.wrote.length}`,
+        `read ${data.read.length === 0 ? readNothingText(served) : data.read.length}`,
+        ...(data.refused.length > 0 ? [`refused ${data.refused.length}`] : []),
+    ].join(' · ')
     return (
-        <Panel data-testid="run-memory">
-            <PanelHeader label="Memory">
-                <span className="readout text-xs text-muted-foreground">
-                    ticket notes: {words(rendered.ticket_notes)}, lessons: {words(rendered.lessons)}
+        <FoldPanel
+            label="Memory"
+            what="memory"
+            readout={
+                <span className="readout text-xs text-muted-foreground" title={tiersNow} data-testid="run-memory-said">
+                    {said}
+                    <span className="sr-only">; {tiersNow}</span>
                 </span>
-            </PanelHeader>
+            }
+            data-testid="run-memory"
+        >
             <h3 className="px-3 pt-2 panel-label">Wrote</h3>
             {data.wrote.length === 0 ? (
                 <Empty>none</Empty>
@@ -222,7 +222,7 @@ function RunMemoryPanel({ id }: { id: number }) {
                     </ul>
                 </>
             )}
-        </Panel>
+        </FoldPanel>
     )
 }
 

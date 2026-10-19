@@ -90,7 +90,12 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await page.goto('runs/40')
     await settled(page)
     const run = page.getByTestId('run-memory')
-    await expect(run).toContainText('ticket notes: in use, lessons: recording')
+    // Folded on arrival: its header counts what it wrote and read, each tier's mode for the run on hover.
+    const said = run.getByTestId('run-memory-said')
+    await expect(said).toContainText('wrote 2 · read 1 · refused 1')
+    await expect(said).toHaveAttribute('title', 'ticket notes: in use, lessons: recording')
+    await expect(run.getByTestId('memory-2')).toHaveCount(0)
+    await run.getByRole('button', { name: 'Show memory' }).click()
     await expect(run.getByTestId('memory-2')).toBeVisible()
     await expect(run.getByTestId('memory-1')).toContainText('this run relied on it')
     await expect(run.getByTestId('memory-1')).not.toContainText('used in')
@@ -100,7 +105,7 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
 
     await page.goto('runs/37')
     await settled(page)
-    await expect(page.getByTestId('run-memory')).toContainText('none, recording only')
+    await expect(page.getByTestId('run-memory-said')).toContainText('read none, recording only')
 
     // Rendered with memory off: no panel at all.
     await page.goto('runs/41')

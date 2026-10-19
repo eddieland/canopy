@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { age, stamp, useNow } from './time'
+import { age, endStamp, lasted, stamp, useNow } from './time'
 
 describe('age', () => {
     const now = Date.parse('2026-10-08T12:30:00Z')
@@ -25,6 +25,24 @@ describe('stamp', () => {
         const hh = String(local.getHours()).padStart(2, '0')
         const mm = String(local.getMinutes()).padStart(2, '0')
         expect(stamp(iso)).toMatch(new RegExp(`^\\S+ ${local.getDate()} ${hh}:${mm}$`, 'u'))
+    })
+})
+
+describe('endStamp', () => {
+    it('is the local time alone when it ended the day it started, else the whole stamp', () => {
+        // Noon local, so 29 minutes on is the same local day and 26 hours on is not, in any time zone.
+        const started = new Date(2026, 9, 8, 12, 0).toISOString()
+        const sameDay = new Date(2026, 9, 8, 12, 29).toISOString()
+        expect(endStamp(started, sameDay)).toBe('12:29')
+        const nextDay = new Date(2026, 9, 9, 14, 5).toISOString()
+        expect(endStamp(started, nextDay)).toBe(stamp(nextDay))
+    })
+})
+
+describe('lasted', () => {
+    it('says how long something ran in the largest whole unit, as an age does', () => {
+        expect(lasted('2026-10-08T06:30:00Z', '2026-10-08T06:59:30Z')).toBe('29m')
+        expect(lasted('2026-10-08T06:30:00Z', '2026-10-08T06:30:40Z')).toBe('40s')
     })
 })
 

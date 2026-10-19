@@ -12,8 +12,10 @@ import { RunOutputPanel, TickOutputPanel } from './raw-output'
 const PATH = '/home/op/.canopy/ticks/7.out'
 const TEXT = '{"type":"result","ok":true}\n--- stderr ---\nrate limited once'
 
-// The paths the panel read, and what the server stand-in answers each.
+// The paths the panel read, and what the server stand-in answers each. A path's copy button reads the server's meta
+// for the workspace root, which is not the file.
 let read: string[] = []
+const outputs = () => read.filter((path) => path.endsWith('/output'))
 let answer: RawOutput = { status: 'read', text: TEXT, size: 2048, truncated: false }
 
 const server: Middleware = {
@@ -35,10 +37,10 @@ afterEach(() => {
     localStorage.clear()
 })
 
-function renderPanel(path: string | null, running = false) {
+function renderPanel(path: string | null) {
     return render(
         <QueryClientProvider client={new QueryClient()}>
-            <TickOutputPanel id={7} path={path} running={running} />
+            <TickOutputPanel id={7} path={path} />
         </QueryClientProvider>,
     )
 }
@@ -55,28 +57,24 @@ async function show() {
 }
 
 describe('TickOutputPanel', () => {
-    it.each([
-        ['while the tick runs, that its overseer has not started', true, 'no output yet: the overseer has not started'],
-        ['once it ended, that none was kept', false, 'no output kept'],
-    ] as const)('with no file says, %s, and offers nothing to show', (_, running, says) => {
-        renderPanel(null, running)
-        expect(screen.getByText(says)).toBeDefined()
-        expect(screen.queryByRole('button')).toBeNull()
+    it('is not there with no file: the transcript, read from the same file, says why', () => {
+        const { container } = renderPanel(null)
+        expect(container.textContent).toBe('')
         expect(read).toEqual([])
     })
 
     it('names its file while hidden, and reads it only once shown', async () => {
         renderPanel(PATH)
-        expect(screen.getByText('as written: stdout, then stderr').textContent).toBe(
+        expect(screen.getByText(/as written: stdout, then stderr/u).textContent).toBe(
             `${PATH} as written: stdout, then stderr`,
         )
-        expect(read).toEqual([])
+        expect(outputs()).toEqual([])
 
         await show()
         expect((await screen.findByRole('region', { name: "the overseer's output" })).textContent).toBe(TEXT)
         expect(screen.getByText('2.0 KiB')).toBeDefined()
-        expect(screen.queryByText('as written: stdout, then stderr')).toBeNull()
-        expect(read).toEqual(['/api/ticks/7/output'])
+        expect(screen.queryByText(/as written: stdout, then stderr/u)).toBeNull()
+        expect(outputs()).toEqual(['/api/ticks/7/output'])
     })
 
     it.each([
