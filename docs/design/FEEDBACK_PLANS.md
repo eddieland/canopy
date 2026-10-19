@@ -18,7 +18,8 @@ checked in code, rather than the reviewer's name, checked by the overseer and th
 
 `policy.feedback_plan` is `"off"`, which changes nothing, or `"approve"`. It is private (§12, TRUST_MODEL T7),
 unlike `policy.plan`: it is stricter for a trusted reviewer's feedback, which then waits for the operator, and looser
-for anyone else's, which starts a plan run that reads only, without the operator's go-ahead.
+for anyone else's, which starts a plan run that reads only, without the operator's go-ahead. The quiet period before
+a plan is written again (Planning again) is `policy.feedback_quiet_minutes`.
 
 ### What a plan covers
 
@@ -76,11 +77,11 @@ naming what changed; approving it again approves it, and what changed waits for 
 
 ### The overseer's part
 
-In §7's table, under `approve`, each phase whose next action is a `resume`, but `pushed_no_pr`, dispatches a feedback
-plan first, and the `resume` once it is approved. While the unit's plan waits it is `plan_proposed`, with
-`plan_review` naming its PR (§14). The state block gives each unit's plan status, attempts, and facts the harness
-computes, whether it is stale and whether its quiet period has passed, so the overseer compares no times; never the
-plan's text.
+In §7's table, under `approve`, each phase whose next action is a `resume`, but `pushed_no_pr`, whose `resume` has the
+reason `no_pr`, dispatches a feedback plan first, and the `resume` once it is approved. While the unit's plan waits it
+is `plan_proposed`, with `plan_review` naming its PR (§14). The state block gives each unit's plan status, attempts, and
+facts the harness computes, whether it is stale and whether its quiet period has passed, so the overseer compares no
+times; never the plan's text.
 
 ### On the PR, and the drafts after
 

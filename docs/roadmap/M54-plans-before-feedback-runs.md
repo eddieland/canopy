@@ -3,7 +3,7 @@
 REQUIREMENTS R21, DESIGN §7, §21, §25, and §32, TRUST_MODEL T1, T3, T7, and T8, D089. Needs M44, M53, and M56.
 Asked for by the operator (2026-10-17): plan each `resume` before it runs, so that the operator accepts planned fixes
 rather than first sorting the feedback into trusted and untrusted reviewers' (D089), and plan again as new feedback or
-a new CI state reaches the PR before they accept. Sketch only; the design comes first, in §25 beside M44's plans.
+a new CI state reaches the PR before they accept. The design is DESIGN §32, beside M44's plans in §25.
 
 - **The setting.** `policy.feedback_plan`, `"off"` or `"approve"`. Private, unlike `policy.plan`: it is stricter for a
   trusted reviewer's feedback, which waits for the operator, and looser for anyone else's, which starts a read-only
