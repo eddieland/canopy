@@ -513,8 +513,9 @@ def move_slots(source: pools.Pool, into: pool.CanopyPool, repo: workspace.Repo, 
 def incoming(source: pools.Pool, *, dry_run: bool) -> Incoming:
     """Count what treehouse's pool, `source`, holds for canopy's after a switch: its idle slots and the rest.
 
-    Read after `move_slots`: a real sync has moved the idle slots by then, and every slot left waits for a later sync.
-    A dry run moved nothing, so its idle slots are the ones its move would bring in.
+    Read after `move_slots`. Only a busy slot waits for a later sync: an idle one a real sync left behind is one its
+    move refused, which no later sync moves either, so canopy's pool makes up for it. A dry run moved nothing, so its
+    idle slots are the ones its move would bring in.
 
     Returns:
         The slots moving now and waiting; none when treehouse's pool cannot be read, which `move_slots` reports.
@@ -523,8 +524,8 @@ def incoming(source: pools.Pool, *, dry_run: bool) -> Incoming:
         slots = source.status()
     except pools.PoolError:
         return Incoming()
-    idle = sum(s.status == pools.AVAILABLE for s in slots) if dry_run else 0
-    return Incoming(moving=idle, waiting=len(slots) - idle)
+    idle = sum(s.status == pools.AVAILABLE for s in slots)
+    return Incoming(moving=idle if dry_run else 0, waiting=len(slots) - idle)
 
 
 def drop_idle(source: pools.Pool, repo: workspace.Repo, *, dry_run: bool) -> Checked | None:

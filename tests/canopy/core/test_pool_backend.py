@@ -284,6 +284,21 @@ def test_a_treehouse_slot_busy_at_the_switch_moves_in_at_a_later_sync(
     assert [path for _, path, _ in canopy_rows(conn)][1] == str(moved)
 
 
+def test_an_idle_treehouse_slot_the_move_refuses_is_made_up_in_canopy_s_pool(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old = treehouse_worktree(ws, treehouse_state, "api")
+    (old / "scratch.txt").write_text("not committed\n")
+    use(canopy_env, "canopy", slots="api = 2")
+    # The move refuses it, and no later sync would move it either, so it does not hold a place in canopy's pool.
+    assert main(["workspace", "sync"]) == 1
+    out = capsys.readouterr().out
+    assert "api: kept: moved 0 of 1 idle treehouse slots into pools/; slot 1 stays in treehouse's pool: " in out
+    assert "api: slots: 2 of 2, made 2\n" in out
+    assert "later sync" not in out
+    assert len(canopy_rows(ws.journal())) == 2
+
+
 def test_a_switch_s_dry_run_counts_the_slots_its_move_brings_in(
     ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
