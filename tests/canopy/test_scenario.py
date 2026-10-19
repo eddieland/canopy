@@ -10,8 +10,8 @@ from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
 from tests.canopy.helpers import waits
-from tests.canopy.scenario_helpers import Printed, Scenario, dispatches, pushes, raises
-from tests.conftest import GitPool
+from tests.canopy.scenario_helpers import Printed, Scenario, asks, dispatches, fails, pushes, raises
+from tests.conftest import GitPool, git
 
 
 def test_the_story_tells_each_move_and_what_canopy_did_with_it(scenario: Scenario, git_pool: GitPool) -> None:
@@ -78,6 +78,31 @@ def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario:
         "5. run 2, implement of PROJ-2: its `canopy _run` dies, its worker still at work",
         "The attention list now: nothing.",
     ]
+
+
+def test_each_ticket_a_tick_dispatches_plays_its_own_worker(scenario: Scenario, git_pool: GitPool) -> None:
+    ticked = scenario.tick(dispatches(), dispatches("PROJ-2"), worker=pushes())
+    # One script for both, each run playing it as made for its ticket: its own branch, message, and PR.
+    assert [(r.key, r.status, r.branch) for r in ticked.runs] == [
+        ("PROJ-1", "done", "agent/PROJ-1-work"),
+        ("PROJ-2", "done", "agent/PROJ-2-work"),
+    ]
+    assert git("log", "-1", "--format=%s", "agent/PROJ-2-work", cwd=git_pool.origin) == "PROJ-2: the change"
+    resumed = scenario.run(dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.CI]))
+    assert "PR: https://example.test/pr/2." in resumed.prompt  # the PR PROJ-2's own implement reported
+
+    # And a ticket `workers` names plays the script it gives instead.
+    first, second = (dispatches(key, RunKind.RESUME, reasons=[ResumeReason.REVIEW]) for key in ("PROJ-1", "PROJ-2"))
+    ticked = scenario.tick(first, second, workers={"PROJ-2": fails()})
+    assert [(r.key, r.status) for r in ticked.runs] == [("PROJ-1", "done"), ("PROJ-2", "failed")]
+
+
+def test_a_held_run_plays_its_tickets_own_worker_once_it_finishes(scenario: Scenario, git_pool: GitPool) -> None:
+    held = scenario.tick(dispatches(), dispatches("PROJ-2"), hold=True, worker=fails(), workers={"PROJ-2": asks()})
+    assert [w.finishes().status for w in held.working] == ["failed", "blocked"]
+    pushed = scenario.starts(dispatches("PROJ-3"), worker=pushes())
+    assert pushed.finishes().branch == "agent/PROJ-3-work"
+    assert git_pool.remote_head("agent/PROJ-3-work") is not None
 
 
 def test_a_command_canopy_refuses_is_a_move_and_what_it_printed_is_the_operators_to_read(scenario: Scenario) -> None:
