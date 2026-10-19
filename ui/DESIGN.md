@@ -1345,8 +1345,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
-  `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain
-  and every hidden character named, never Markdown or a link. A draft's card (`DraftCard`, `surface`, a
+  `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
+  its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
+  same. A draft's card (`DraftCard`, `surface`, a
   `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and its number, its status as a chip
   (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
   plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
