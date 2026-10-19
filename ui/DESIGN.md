@@ -140,16 +140,18 @@ Rules:
   then a small box on `surface` at the page's top left. It moves the focus to the page's `main`, so the next Tab is the
   page's own first stop rather than the rail's search, a dozen nav items, its runs, and its spend. It moves the focus
   by script: `#main` under the base path would be another page's address.
-- **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
+- **The rail** holds, top to bottom: the search box, the nav, what is working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
   `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
   and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item is height
   the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds, and each
   spend window what it covers, as a native `title`; a spend window opens the spend page over its week or month. Each
-  block under the nav is a hairline and a `panel-label` over its content. The working runs are those running first, then
-  those waiting on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color,
-  the ticket's key, how long it has run (or `waiting on you` in `status-blocked`), and the ticket's title under it,
-  opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window. The
+  block under the nav is a hairline and a `panel-label` over its content. What is working is every agent run running,
+  worker runs, reviews of PRs, and chore runs alike, then the worker runs waiting on the operator's answer, each oldest
+  first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the PR, the
+  chore), how long it has run (or `waiting on you` in `status-blocked`), and under it the ticket's title, the review's
+  reference and ticket, or `chore run #N`, opening the run's page; at most four, then `+N more` to the page of
+  the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it is shown
   nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
   version, a link out to canopy's releases on GitHub, with the width to itself and cut short only past a long build's

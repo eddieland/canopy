@@ -116,7 +116,7 @@ test.describe('in a narrow window', () => {
         const sheet = page.getByRole('dialog', { name: 'Rail' })
         // The rail's first item is the search box, so the sheet opens in it.
         await expect(sheet.getByRole('searchbox', { name: 'Search the journal' })).toBeFocused()
-        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(3)
+        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(4)
         await expect(sheet.getByTestId('rail-spend-24h')).toBeVisible()
 
         // A link followed leaves the page the sheet covered: it closes.

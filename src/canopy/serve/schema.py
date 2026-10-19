@@ -2117,6 +2117,15 @@ class ChoresUpdated(_Model):
     """The chores, as `GET /chores` returns them."""
 
 
+class ReviewsUpdated(_Model):
+    """The review runs changed: one started or ended. The payload is the whole list, as `GET /reviews` returns it."""
+
+    type: Literal["reviews.updated"] = "reviews.updated"
+    """What the event is."""
+    reviews: list[ReviewSummary]
+    """The latest review runs, as `GET /reviews` returns them."""
+
+
 class TicketChanged(_Model):
     """Something about one ticket changed: a page showing it reads it again."""
 
@@ -2177,6 +2186,7 @@ class StreamEvent(
             | TicketsUpdated
             | TicketChanged
             | ChoresUpdated
+            | ReviewsUpdated
             | SpendUpdated
             | TickUpdated
             | LoopUpdated
