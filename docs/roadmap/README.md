@@ -93,7 +93,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M54. Plans before feedback runs](M54-plans-before-feedback-runs.md): not started.
 - [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): not started.
 - [M56. Fixing CI is part of resume](M56-fixing-ci-is-part-of-resume.md): in progress.
-- [M57. A clock for running agents](M57-a-clock-for-running-agents.md): not started.
+- [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 
