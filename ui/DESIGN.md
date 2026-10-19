@@ -415,6 +415,12 @@ Rules:
   findings, which report rather than block (`blocking` in `src/lib/attention.ts`): a count that never falls to zero
   while PRs sit in review would stop meaning anything. The name is the header's title when that is plain text, else
   its `tab`; the sign-in page's is `Sign in`.
+- **The tab's icon** is the header's mark in the accent, since a pinned tab shows no title. While anything blocks
+  work, the items the title counts, a dot on its top right corner, cut out of the ring, wears the most severe one's
+  color: `status-failed` for something broken, `status-blocked` for something waiting on the operator's answer, muted
+  for the rest (`faviconDot` in `src/lib/favicon.ts`). Signed in, the page draws it from the theme's tokens
+  (`Favicon`); `public/favicon.svg`, the plain mark in each theme's accent, is the icon before sign-in and the API
+  docs'. It is static: a tab that moves pulls the eye from whatever the operator is reading.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.

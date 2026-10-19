@@ -32,6 +32,10 @@ counters don't say it again; one page saying a number five times doesn't make it
 the items that block work, so a glance at the tab says whether to look. Findings, `needs reviewer`, and
 `ready to merge` don't count there: they're news, not blockers.
 
+The tab's icon says it too, for when you've pinned the tab and its title is gone: a dot on its corner while anything
+blocks, red for something broken, amber for something waiting on your answer, grey for the rest. No dot, no reason to
+switch tabs. It's the one notification that never makes a sound.
+
 ## An item
 
 Click an item to open it beside the list. The first one open is the worst item about a ticket. The address keeps the
