@@ -38,8 +38,8 @@ type Standing = Literal["in_force", "planned", "skipped", "forgotten"]
 IMPACTS = ("low", "normal", "high")
 
 # The statuses each kind of run ends in when it did not do what it was started for. A worker that asked a question
-# (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A triage before a plan (§25) is a run
-# of the `runs` table, and fails as a worker does.
+# (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A triage before a plan and a plan run
+# (§25) are runs of the `runs` table, and fail as a worker does.
 _WORKER_FAILED = frozenset(
     {RunStatus.FAILED, RunStatus.UNKNOWN, RunStatus.UNPUSHED, RunStatus.CRASHED, RunStatus.TIMEOUT}
 )
@@ -47,20 +47,22 @@ _FAILED: dict[Kind, frozenset[str]] = {
     "overseer": frozenset(TickStatus) - {TickStatus.RUNNING, TickStatus.OK},
     "workers": _WORKER_FAILED,
     "triage": _WORKER_FAILED,
+    "plans": _WORKER_FAILED,
     "chores": frozenset(ChoreRunStatus) - {ChoreRunStatus.RUNNING, ChoreRunStatus.OK},
     "reviews": frozenset(ReviewRunStatus) - {ReviewRunStatus.RUNNING, ReviewRunStatus.DONE},
 }
-# Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a worker's or a triage's kind, a
-# chore's name, or `review`), its status, when it started, what it was about, its note, and its cost. A triage is a row
-# of `runs` of its own kind, as `canopy spend` counts it. The tables are fixed, never input.
+# Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
+# `review`), its status, when it started, what it was about, its note, and its cost. A triage and a plan run are rows of
+# `runs`, each a kind of its own, as `canopy spend` counts them. The tables are fixed, never input.
 _RUN_ROWS = (
     "SELECT id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd FROM runs"
 )
 _ROWS: dict[Kind, str] = {
     "overseer": "SELECT id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
     "NULL AS subject, summary AS note, cost_usd FROM ticks",
-    "workers": f"{_RUN_ROWS} WHERE kind != '{RunKind.NEEDS_PLAN.value}'",
+    "workers": f"{_RUN_ROWS} WHERE kind NOT IN ('{RunKind.NEEDS_PLAN.value}', '{RunKind.PLAN.value}')",
     "triage": f"{_RUN_ROWS} WHERE kind = '{RunKind.NEEDS_PLAN.value}'",
+    "plans": f"{_RUN_ROWS} WHERE kind = '{RunKind.PLAN.value}'",
     "chores": "SELECT id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd "
     "FROM chore_runs",
     "reviews": "SELECT id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd "

@@ -1657,10 +1657,10 @@ type SpendGroup = Annotated[
     ),
 ]
 type SpendKind = Annotated[
-    Literal["overseer", "workers", "triage", "chores", "reviews"],
+    Literal["overseer", "workers", "triage", "plans", "chores", "reviews"],
     Field(
         description="A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan "
-        "(`needs-plan`, DESIGN §25), chore runs, review runs."
+        "(`needs-plan`, DESIGN §25), plan runs (`plan`, §25), chore runs, review runs."
     ),
 ]
 
@@ -1678,6 +1678,8 @@ class SpendCosts(_Model):
     """Worker and split runs."""
     triage: float | None = None
     """Triage runs, which judge whether a ticket needs its plan (`needs-plan`, DESIGN §25)."""
+    plans: float | None = None
+    """Plan runs, which write a ticket's plan (`plan`, DESIGN §25): what a waived plan would have cost."""
     chores: float | None = None
     """Chore runs, the operator's tries included."""
     reviews: float | None = None
@@ -1803,7 +1805,7 @@ class SpendBreakdown(_Model):
     woken: list[SpendWoken]
     """The loop's live ticks by what woke them, the most common first."""
     unpriced: list[SpendUnpriced]
-    """A row per kind of run, in a fixed order: overseer, workers, triage, chores, reviews."""
+    """A row per kind of run, in a fixed order: overseer, workers, triage, plans, chores, reviews."""
     idle_share: float | None = None
     """Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
     no cost, so there is nothing to share."""
