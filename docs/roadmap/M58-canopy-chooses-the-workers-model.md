@@ -63,20 +63,19 @@ run used. Designed in §13, beside where the runtime finds canopy's definitions.
   run of its agent for the ticket until cleared, and no other agent's; `canopy model KEY` printing each agent's next
   model and where it comes from; `canopy model` refusing a model not listed, an unknown agent, and `inside_run`; a
   dispatch whose model has gone refused `model_missing` with its attention item and no fallback, and a review, a chore,
-  and a tick's overseer not started so; a failed or timed-out list read refused `model_list_failed`; any template,
-  prefix, or suffix passing `--model` a config error; the web API's override write refusing as the CLI does, and the
-  ticket page's Model panel (Vitest and Playwright); the run's `model` in `canopy status`, a snapshot, and in the spend
-  split by model.
+  and a tick's overseer not started so, the tick ending with a status of its own in `core/vocab.py`; a failed or
+  timed-out list read refused `model_list_failed`; any template, prefix, or suffix passing `--model` a config error; the
+  web API's override write refusing as the CLI does, and the ticket page's Model panel (Vitest and Playwright); the
+  run's `model` in `canopy status`, a snapshot, and in the spend split by model.
 - **Follows from this, not built here.** Issue #275: once canopy knows a worker's model before the run starts, the
   commit trailer (§8, `trust.commit_trailer_name`) can name it, with no change to the shipped prompts.
 
 Accept: Stage 0 recorded, and the design written before work starts. Live, once built: with `runtime.models.worker`
 empty, the operator sets one labeled ticket to a model other than the default from its page in the web UI; its
-`implement`,
-and a `resume` after a review comment, both run on that model, their records name it, and each session's own record
-agrees; `canopy spend` shows their cost under that model; a model not in `opencode models` is refused when set, and one
-dropped from the provider config after it was set refuses the ticket's next dispatch with an attention item; with
-`runtime.models.reviewer` set, the PR's review runs on that model and names it.
+`implement`, and a `resume` after a review comment, both run on that model, their records name it, and each session's
+own record agrees; `canopy spend` shows their cost under that model; a model not in `opencode models` is refused when
+set, and one dropped from the provider config after it was set refuses the ticket's next dispatch with an attention
+item; with `runtime.models.reviewer` set, the PR's review runs on that model and names it.
 
 Status: in progress. Stage 0's source read is done (2026-10-19, OpenCode 1.19.3, §13 What OpenCode does with a
 model). A `model:` in the definition is the model `opencode run --agent` uses, and `opencode models` prints, offline,

@@ -672,7 +672,8 @@ writes it quoted, so no id can add a key to a definition. Config load checks its
 above), it writes each agent's model as `model:` in the frontmatter of that agent's definitions, and no key for none.
 The digest covers the rendered text, so each set of models gets a snapshot of its own, immutable (D040), and a run's
 snapshot names the model it asked for: the overseer and every run without an override load the one rendered from
-`[runtime.models]`, and a run with an override one rendered with its ticket's overrides in place. The definition's
+`[runtime.models]`, and a run with an override one rendered with its ticket's overrides in place. Reconcile removes
+a snapshot no live run uses (§26), so overrides add snapshots on disk only while their runs are live. The definition's
 `model:` beats a repository's `model` and the default, and a repository cannot define a canopy agent to change it,
 since the shadowing check refuses that (above). A subagent an agent calls runs on that agent's model unless its own
 definition names one (above).
@@ -723,7 +724,9 @@ A dispatch refused so records an attention item of its own name about the ticket
 lasting as long as the overseer keeps asking (§14). A review or chore not started so records the same item about its
 PR or chore, and the next tick tries again. A tick whose overseer's model is refused starts no overseer, as a tick
 whose `canopy --version` check failed does not (§6), ends with a status of its own, and raises the item as a harness
-item, as `canopy_unavailable` is. Each item's detail names the model, where it came from (the ticket's override or the
+item, as `canopy_unavailable` is: until the operator fixes `runtime.models.overseer` or the provider, no tick decides
+anything, which the item says. Config load checks only the id's shape, so a model gone is found at the next tick.
+Each item's detail names the model, where it came from (the ticket's override or the
 `runtime.models` key), and for `model_list_failed` why the read failed. A refusal spends no attempt and leases no slot,
 and the next start reads the list again, so the work goes on by itself once the provider is back in OpenCode's config,
 the operator names another model, or the read works. A refused `needs-plan` is no failed triage: the ticket waits on the
