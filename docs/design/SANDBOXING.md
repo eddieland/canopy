@@ -6,52 +6,35 @@ CI](FLAKY_CI.md). Next: [Plans](PLANNING.md).
 
 ## 24. Sandboxed runs
 
-Opt-in, and not yet proven on the operator's machines. A worker runs as the operator, reads text other people wrote,
-and is assumed to follow injected instructions some of the time (TRUST_MODEL §3). Without a sandbox its limits are
-OpenCode permissions, which are defense in depth (T4, D021), and its shell reaches `~/.ssh`, the user config, the
-journal, the pool's shared git directory, and any host. The sandbox bounds that for each run it wraps.
+Opt-in, and not yet proven on the operator's machines. A worker runs as the operator and is assumed to follow
+injected instructions some of the time (TRUST_MODEL §3); without a sandbox its limits are OpenCode permissions, defense
+in depth (T4, D021). The sandbox is the boundary for each run it wraps; T4's and T6's residuals hold what it leaves
+open. Options weighed: [HOST_ISOLATION](../HOST_ISOLATION.md). Guide: [SANDBOX.md](../SANDBOX.md).
 
 It is a prefix on the command templates, nothing more (D118). The harness never learns whether a run is sandboxed: it
 passes every run `CANOPY_GIT_OBJECTS`, which an unsandboxed run ignores, and runs on the host only what reads nothing a
-sandboxed run can write. It defends TRUST_MODEL T4 and T6, and leaves open the shared kernel, the unwrapped overseer and
-harness calls, `/tmp/claude`, which every process `srt` sandboxes can write, and exfiltration through an allowed host.
-Options weighed: [HOST_ISOLATION](../HOST_ISOLATION.md) §1 to §3. The operator's guide: [SANDBOX.md](../SANDBOX.md).
-
-The sandbox is Anthropic's `sandbox-runtime` (`srt`): bubblewrap on Linux, `sandbox-exec` on macOS, and all network
-traffic through a local proxy that enforces a domain allowlist. It is a beta, so canopy pins the version this section was
-checked against (D117). Rejected for now: a container or microVM, which needs an image carrying every toolchain and,
-for Firecracker, has no shared filesystem for leases and `_run`'s push check.
+sandboxed run can write. The sandbox is Anthropic's `sandbox-runtime` (`srt`): bubblewrap on Linux, `sandbox-exec` on
+macOS, and all network traffic through a local proxy that enforces a domain allowlist. It is a beta, so canopy pins the
+version this section was checked against (D117).
 
 ### The wrapper
 
-The operator sets a prefix for each command, or `worker_cmd_prefix` for the four a worker run starts, in the user file
-or the workspace's private file (§12), never the workspace file. The prefix runs `canopy-sandbox`, a short program canopy
-installs beside itself, not harness code (D041, D117), with a role, `worker`, `setup`, `chore`, or `review`, that picks
-a policy template in `~/.config/canopy/sandbox/`. It:
-
-- drops what would point git at another repository, relative `PATH` entries, and `BASH_ENV` and `ENV`;
-- refuses a worker or setup outside a linked worktree, whose HEAD and index every slot would share, a desk or review
-  directory with a `.git`, which a branch could commit, and a template with no `denyRead` or no network allowlist;
-- gives the run a policy and a temp directory of its own, which other runs cannot read, the role's cache (Filesystem
-  policy), and, for a worker or setup, its own `git` first on `PATH` (Git state).
-
-Because `runtime.*` keys are private (TRUST_MODEL T7), a repository cannot remove the prefix; because the sandbox denies
-writes to `~/.config/canopy`, a worker cannot either. Nothing canopy runs writes the prefix into the config (§12).
+The prefix runs `canopy-sandbox`, a program canopy installs beside itself, not harness code (D041, D117), with a role
+that picks the operator's policy template. The prefix is private config (§12, T7), so no repository can remove it, and
+the sandbox denies writes to canopy's config, so no worker can; nothing canopy runs writes it. The wrapper strips the
+environment that would point git elsewhere or run a startup file; refuses a worker or setup outside a linked worktree,
+a desk or review directory that is a git checkout, and a template with no read denials or no network allowlist; and
+gives each run a policy, a private temp directory, the role's cache, and, for a worker or setup, its own `git`. The
+prompt passes through `srt`'s quoted shell string byte for byte (D023's revisit clause). Timeouts still end everything;
+on macOS a process that calls `setsid` escapes, as it would unsandboxed.
 
 ### What is wrapped
 
-| Command | Role | Why |
-| --- | --- | --- |
-| `worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd` | `worker` | The work. |
-| `runtime.setup_cmd` | `setup` | It runs the branch's code in the slot just before the worker (§9). |
-| `runtime.chore_cmd`, a chore's `cmd` | `chore` | A chore using the operator's own tools has a shell for them (§19). |
-| `review_cmd` | `review` | It reads the most hostile text the loop meets, a diff by anyone `review.query` matches (T1). |
-| `overseer_cmd` | none | It acts through `canopy`, which needs the journal, the lock, and the operator's config. |
-| `plan_triage_cmd` | none yet | It reads primary clones, which no role expects; which role holds it is open (§25). |
-| `notify.cmd`, `git`, `treehouse` | none | The harness's own calls; what they read of a run is below. |
-
-The overseer's sandbox would have to allow exactly what the policy denies; it has no write tools and its bash is limited
-to `canopy *` and `treehouse status*` (§13), so revisit if that changes.
+The `worker` role wraps `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`; `setup` wraps
+`runtime.setup_cmd`, which runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a
+chore's `cmd` (§19); `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). Unwrapped: the
+overseer, which acts through `canopy` and needs the journal, lock, and config the policy denies; `plan_triage_cmd`,
+which reads primary clones no role expects (§25, T6); and the harness's own `notify.cmd`, `git`, and `treehouse`.
 
 ### Filesystem policy
 
@@ -65,92 +48,59 @@ a deny list of secret paths, which always misses one.
 | The git common dir, except this slot's own directory | yes | no | Shared by every slot (Git state). |
 | This slot's own directory, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its HEAD, index, reflog. |
 | The run's object directory, its temp directory, the role's cache | yes | yes | Commits (§8), scratch, caches. |
-| The runtime's data and state (`~/.local/share/opencode`, ...) | yes | yes | Sessions and tokens (Open). |
+| The runtime's data and state | yes | yes | Sessions and tokens (Open). |
 | Toolchains, the runtime's config, canopy's agent definitions | yes | no | Tests; a worker must not rewrite its permissions (D040). |
-| The operator's own caches (`~/.cache`, `~/.npm`, ...) | no | no | The host runs what is in them. |
-| `~/.config/canopy`, the workspace's `.canopy/`, the rest of `$HOME` | no | no | Config, journal, secrets. |
+| The operator's own caches | no | no | The host runs what is in them. |
+| canopy's config, the workspace's `.canopy/`, the rest of `$HOME` | no | no | Config, journal, secrets. |
 
-A write refused under a denied directory can look as if it worked, so the canary checks writes on the host. A chore's
-default `cwd`, inside `.canopy/`, is re-allowed, writable only for a chore that writes; the journal stays denied. A
-review reads the checkout and its git directories and writes none of them, since what it reads was written by the PR's
-author (§21); it gets no object directory, no wrapper `git`, and no `github.com`.
-
-A cache is code the host runs later, by the unsandboxed overseer's OpenCode or a package manager, so no run writes the
-operator's caches. Each role has a cache of its own instead; setup shares the worker's (§9), and no role reads
-another's, though a role's runs, private and public, can poison theirs for one another. Rejected: a cache per run, which
-fetches everything every run, and one for every role, which hands what a review left to a worker.
+A chore's default working directory, inside `.canopy/`, is writable only for a chore that writes. A review writes none
+of its checkout or git directories (§21) and gets no object directory, no wrapper `git`, and no GitHub. Each role has
+a cache of its own, setup sharing the worker's (§9); no role reads another's.
 
 ### Git state
 
-Every slot in a pool shares one common directory: refs, objects, hooks, config, and every other slot's metadata. Path
-rules cannot give a worker its own branch alone, and a worker that can write refs can move another running worker's
-branch, which that worker then pushes as its own. So a sandboxed worker writes no shared git state:
-
-- `_run` checks the branch out detached, so HEAD, the index, and the reflog are the slot's alone, and the worker pushes
-  `HEAD:refs/heads/<branch>` (§8, D109).
-- New objects go to the run's object directory, with the shared one as an alternate (§8).
-- A plain `git fetch` fails, since it updates a shared ref; `_run` fetches just before the worker starts.
-
-The slot's `.git` link, `config.worktree`, `commondir`, and `gitdir` cannot be written, renamed, or removed: a rewritten
-`commondir` would make every git the host runs in the slot read the worker's config and hooks.
-
-The wrapper's own `git`, which the run cannot write, sets git's object variables from `CANOPY_GIT_OBJECTS` only when
-git acts on one of the run's worktrees; set for a whole process tree, they would lose every cache repository's objects.
-A git run by its absolute path gets none, and fails rather than writing where it should not.
+A pool's slots share one common directory, refs, hooks, and config included, so a worker that can write refs can move
+another running worker's branch, which that worker then pushes as its own. A sandboxed worker writes no shared git
+state: it works on a detached HEAD and pushes by refspec (§8, D109), puts new objects in the run's own object
+directory (§8), and leaves fetching to `_run`. It cannot touch the slot's `.git` link, `config.worktree`, `commondir`,
+or `gitdir`, which would point the host's git at its config and hooks. The wrapper's `git` sends objects to the run's
+directory only in the run's worktrees; a git run by its absolute path fails rather than writing where it should not.
 
 ### Network policy
 
-Everything is denied except an allowlist in the operator's template: the model provider, GitHub, the tracker's and any
-internal MCP endpoints, and the package registries the build needs. `srt` also refuses to connect an allowed name to
-loopback, link-local, metadata, or the host's own addresses, except behind a parent proxy, whose rules then decide. No
-Unix sockets, the SSH agent's and the Docker daemon's included, so sandboxed runs push over HTTPS, and
-`canopy workspace sync` warns about SSH remotes (§12). The residual is exfiltration through an allowed host: with
-`github.com` and the operator's token in reach, a worker can still push or post anywhere the operator can (T6, Open).
+Everything is denied but the operator's allowlist: the model provider, GitHub, MCP endpoints, and the build's package
+registries. An allowed name never connects to loopback, link-local, metadata, or the host's own addresses, except
+behind a parent proxy. No Unix socket is reachable, the SSH agent's included, so sandboxed runs push over HTTPS (§12).
 
 ### What the harness runs around a sandboxed run
 
-After the worker exits, `_run` and then treehouse run git on the host in files a worker wrote. These hold with or
-without a sandbox:
+`_run` and then treehouse run git on the host in files a worker wrote, so these hold with or without a sandbox:
 
-1. Every git the harness runs has hooks, filesystem monitors, submodule fetches, and the `ext::` transport off (§8,
-   D107). That does not stop a command the shared config names; under the sandbox, a worker cannot write that config.
-2. `_run` reads each slot's `.git` link before any git step, and checks it and `commondir` when the worker exits; a
-   changed one makes the run `crashed`, runs no git in its slots, and is put back before the slot is returned (§8 steps
-   2, 5, and 6). Reconcile does the same for a killed `_run` (§15). This catches a template that forgot to deny them.
-3. The run's object directory is tidied away on every exit path, the slots first, so nothing on the host names an
-   object only it held (§8 step 6, §15).
-4. `treehouse return --force` runs plain git in the slot, without D107's flags, after the tidy step. A sandboxed worker
-   writes nothing that git would run. So a new step in a slot keeps D107's flags and runs after the `commondir` check
-   (D118).
-
-The prompt reaches the runtime byte for byte, though `srt` passes it through one quoted `bash -c` string, a second
-parser on ticket-written text; if that becomes a problem, D023's revisit clause applies. Timeouts still end everything;
-on macOS a process that calls `setsid` escapes, as it would unsandboxed.
+1. Every git the harness runs has hooks, filesystem monitors, submodule fetches, and `ext::` off (§8, D107).
+2. A slot whose `.git` link or `commondir` changed makes the run `crashed`, runs no git in it, and is put back before
+   the slot is returned (§8 steps 2, 5, and 6; reconcile for a killed `_run`, §15).
+3. The run's object directory is tidied away on every exit path, the slots first (§8 step 6, §15).
+4. treehouse's return runs plain git after the tidy step, and a sandboxed worker writes nothing it would run. A new
+   step in a slot keeps D107's flags and runs after the `commondir` check (D118).
 
 ### The canary
 
-The sandbox needs no model to test (unlike D021): a script run through the real prefix, with the shipped templates and
-the machine set up as SANDBOX.md says, is the test. Writes are checked on the host. Every attempt must fail:
+A script through the real prefix and shipped templates, no model (unlike D021), is the test; writes are checked on
+the host. Every attempt must fail:
 
-- Read a fake SSH key or anything under `$HOME` outside the policy; write under `$HOME`, `~/.config/canopy`, the
+- Read a fake SSH key or anything under `$HOME` outside the policy; write under `$HOME`, canopy's config, the
   operator's runtime cache, or the state directory; read or write another role's cache.
-- Move another slot's branch or any ref; write the common directory's config or hooks, or the slot's `.git` link,
-  `config.worktree`, `commondir`, or `gitdir`.
-- Connect off the allowlist, to a metadata address, the host's loopback, or a host Unix socket, through `srt`'s proxy
-  and around it, refused the way that route refuses. As `review`, write the checkout or its git directories.
+- Move any ref; write the common directory's config or hooks, or the slot's `.git` link, `config.worktree`,
+  `commondir`, or `gitdir`; as `review`, write the checkout or its git directories.
+- Connect off the allowlist, to a metadata address, the host's loopback, or a host Unix socket, by the proxy or not.
 
-Positive controls must succeed, so a sandbox that blocks everything cannot pass: commit in the slot, its objects only
-in the run's directory, and in a tool's cache repository; keep the role's cache; read the checkout as a review; reach
-an allowed host; run under the system temp directory; receive any prompt byte for byte; die at a timeout, leaving no
-process behind.
+Positive controls must succeed, so a sandbox that blocks everything cannot pass: commit in the slot, objects only in
+the run's directory, and in a tool's cache repository; keep the role's cache; read the checkout as a review; reach an
+allowed host; use the system temp directory; receive any prompt byte for byte; die at a timeout, leaving no process.
 
 ### Open
 
-- SSH pushes: lift the socket block, push from the host, or leave SSH to unsandboxed runs.
-- The runtime's data directory is a way out: writable for sessions and tokens, and read outside any sandbox by the
-  overseer's OpenCode and the operator's own, where what a run wrote there can run code. Closing it means data of the
-  sandbox's own; how sandboxed runs then get credentials is the operator's call.
+- The runtime's data directory is a way out: read outside any sandbox by the overseer's OpenCode and the operator's.
+  Closing it needs data of the sandbox's own, once the operator settles how sandboxed runs get credentials.
 - Bazel's caches: a sandboxed run may not write them, so it builds cold until it has caches of its own.
-- `sandbox-exec` is deprecated on macOS; Apple's `container` is the fallback.
 - Credential scoping: a GitHub token limited to the pool's repositories closes most of the network residual.
-- Making the sandbox the default, once the canary passes on the operator's machines and a day of sandboxed runs (D118).
