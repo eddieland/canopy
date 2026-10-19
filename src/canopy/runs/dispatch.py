@@ -983,8 +983,8 @@ def _spawn_triage(ctx: Context, *, tick_id: int, key: str, plan: Plan, attempt: 
     """Render a triage's prompt, record the run with the repositories it reads, and spawn its `canopy _run` (§25).
 
     It leases no slot: `_run` links each repository's primary clone from its desk. Its prompt carries the key, the
-    repositories, `policy.trivial`, and the operator's messages, never the standing instructions or the notice, which
-    are for runs that change code or read CI.
+    repositories, `policy.trivial` if set, and the operator's messages, never the standing instructions or the notice,
+    which are for runs that change code or read CI.
 
     Returns:
         The run that started, with no slots and the repositories it reads.
@@ -1000,7 +1000,7 @@ def _spawn_triage(ctx: Context, *, tick_id: int, key: str, plan: Plan, attempt: 
         "SLOT": str(desk),
         "REPOSITORIES": _triage_repositories_note(ctx, plan.repos, desk),
         "AUTHORIZATION": prompts.triage_authorization(key, cfg.tracker.labels, private=plan.private),
-        "TRIVIAL": cfg.policy.trivial,
+        "TRIVIAL": cfg.policy.trivial.strip() or "None: judge by the measure above.",
         # One prompt for public and private tickets, as a plan's: a private one's conversation holds the operator's
         # messages, and a triage's own report is never in it.
         "OPERATOR_MESSAGES": (

@@ -1,8 +1,9 @@
 """Triage before a plan (DESIGN §25, ROADMAP M55): a `needs-plan` run, and the waiver its `trivial` verdict writes.
 
 A triage leases no slot: it reads each repository's primary clone through a link in its desk, writes nothing, and
-judges by the operator's words for trivial whether the ticket needs a plan. Only a validated `done` `trivial` result
-waives the plan; anything else leaves the ticket to be planned at once, with no attention item and no retry.
+judges whether the ticket needs a plan, by its prompt's measure of trivial or the operator's words for it. Only a
+validated `done` `trivial` result waives the plan; anything else leaves the ticket to be planned at once, with no
+attention item and no retry.
 """
 
 import json
@@ -481,3 +482,18 @@ def test_a_triage_is_never_wrapped_as_a_worker_run(
     [triage] = agent_runs(agent_log)
     assert "CANOPY_X" not in json.dumps(triage["env"])
     assert prompt_of(canopy_env, int(run["id"])).startswith("# canopy triage: plan\n")
+
+
+def test_a_triage_without_the_operators_words_judges_by_its_prompts_own_measure(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    # The operator need not say what is trivial; the prompt's own measure is the one it judges by (DESIGN §25).
+    approve_policy(canopy_env)
+    canopy_env.append_user('\n[policy]\nplan_triage = "on"\n')
+    with triage_reports(verdict("trivial")):
+        run = dispatch_and_run(conn, *TRIAGE)
+    assert run["status"] == RunStatus.DONE
+    prompt = prompt_of(canopy_env, int(run["id"]))
+    assert "Work is trivial when a plan would only restate the ticket" in prompt
+    assert "The operator's own words for it, if they gave any:\n\nNone: judge by the measure above.\n" in prompt
+    assert present(plans.waiver(conn, present(db.get_ticket(conn, KEY)))).reason == REASON
