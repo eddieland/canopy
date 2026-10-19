@@ -58,7 +58,7 @@ function tops(ids: readonly string[]): number[] {
     return ids.map((id) => document.querySelector(`[data-testid=${id}]`)?.getBoundingClientRect().top ?? 0)
 }
 
-test('a refused Stop says why and moves nothing below the Work panel', async ({ page }) => {
+test('a refused Stop says why and moves nothing below its actions', async ({ page }) => {
     // Panels rise into place as a page opens; with motion reduced they rest where they end, and nothing moves alone.
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.route('**/api/tickets/ABC-102/stop', (route) =>
@@ -66,10 +66,10 @@ test('a refused Stop says why and moves nothing below the Work panel', async ({ 
     )
     await page.goto('tickets/ABC-102')
     await settled(page)
-    const ids = ['ticket-actions', 'ticket-conversation'] as const
+    const ids = ['ticket-actions', 'ticket-runs'] as const
     const below = async () => {
-        const [actions = 0, conversation = 0] = await page.evaluate(tops, ids)
-        return conversation - actions
+        const [actions = 0, runs = 0] = await page.evaluate(tops, ids)
+        return runs - actions
     }
     const before = await below()
 

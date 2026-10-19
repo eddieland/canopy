@@ -105,6 +105,19 @@ describe('AppShell', () => {
         expect(FakeEventSource.instances.map((source) => source.url)).toEqual(['/api/events'])
     })
 
+    it('takes the keyboard past the rail to the page from its first stop under the header', async () => {
+        stubWidth(true)
+        await renderShell(SIGNED_IN)
+        const skip = screen.getByRole('link', { name: 'Skip to content' })
+        const search = screen.getByRole('searchbox', { name: 'Search the journal' })
+        // Before the rail in the page's order, so the first Tab from a fresh load, or from the header, reaches it.
+        expect(skip.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        const main = screen.getByRole('main')
+        fireEvent.click(skip)
+        expect(document.activeElement).toBe(main)
+        expect(main.contains(screen.getByRole('heading', { name: 'What needs you' }))).toBe(true)
+    })
+
     it('shows Sprig in the rail once Settings turns it on, and leaves it out once told not to show tips', async () => {
         stubWidth(true)
         await renderShell(SIGNED_IN)

@@ -82,6 +82,21 @@ export function bySeverity(items: AttentionItem[]): AttentionItem[] {
     })
 }
 
+/**
+ * The item to move on to once the operator has answered `current`: the next in `items`, the list in its order, that
+ * waits on their answer and is not `done` (answered already), searching on from `current` and then from the top.
+ * Null when no other waits on them.
+ */
+export function nextWaiting(
+    items: readonly AttentionItem[],
+    current: string,
+    done: (item: AttentionItem) => boolean,
+): AttentionItem | null {
+    const at = items.findIndex((item) => item.id === current)
+    const around = [...items.slice(at + 1), ...items.slice(0, Math.max(at, 0))]
+    return around.find((item) => item.id !== current && severity(item) === 'waiting' && !done(item)) ?? null
+}
+
 /** One part of the attention list's count: what is broken, what waits on the operator's answer, or the rest. */
 export interface BreakdownPart {
     /** Which part: the failure color's, the operator's, or the muted rest, chores' findings among them. */

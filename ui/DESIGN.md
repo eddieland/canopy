@@ -135,6 +135,11 @@ Rules:
   stopped short of its edge. The side rail runs the full height of the page, and what it holds sticks: a column as
   tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
   screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
+- **Skip to content** is the first stop the keyboard reaches under the header (`SkipToContent`), from a fresh load,
+  where the page's scroller holds the focus, or from the header's last control: a link, unseen until it has the focus,
+  then a small box on `surface` at the page's top left. It moves the focus to the page's `main`, so the next Tab is the
+  page's own first stop rather than the rail's search, a dozen nav items, its runs, and its spend. It moves the focus
+  by script: `#main` under the base path would be another page's address.
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
   `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
@@ -357,21 +362,23 @@ Rules:
   tick's output, whose path its Output panel names.
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
-  Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
+  Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content,
+  but for a ticket's, which follow its reply (The answer, below).
   What runs and ends, a run, a tick, a chore run, keeps one order there, the page's answer first: `summary`; then what
   came of it (a failed run's `ended on`, a running run's `last call`, a run's PRs, a chore run's `harness` note; a
   chore run's findings are counted in its description and listed under the panel); `when` (`WhenField`), started,
   ended, and how long it took in one field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it
   runs); `spent`; then a tick's canopy version; then the paths, a run's branch, worktrees, and log, a chore run's
   log.
-  Then the thread the operator came to answer, with its form: a ticket's conversation and the reply. A page with no
+  Then the thread the operator came to answer, with its form: a ticket's conversation and the reply, then the
+  ticket's actions. A page with no
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
   lists: runs, decisions, spend. So in a narrow window a ticket's reply is reached before its runs and
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
-  what its reason asks for first (below, "The attention detail"), any limit it is stuck at, then its conversation and
-  the reply. An action over a whole list
+  what its reason asks for first (below, "The attention detail"), then its conversation, the reply, and the ticket's
+  actions. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
@@ -761,7 +768,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   description is the pools' state, `3 pools · 7 slots · read 4s ago` (`poolsLine`): read on a timer, the page says how
   fresh its read is. What the page shows on every visit is its title's help. Idle slots fold as
   they lie in the whole pool, so a filtered line never spans a slot in another state.
-- **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
+- **The attention list is an inbox**: one list, most severe first, beside the selected item while the page is at
+  least 48rem wide (a container query, `@3xl`). Under that, on half a monitor, the list and the item take turns, each
+  the page's whole width: the list shows until an item is chosen, which opens in its place with `Back to the list`
+  (a ghost button with a left chevron) as its first stop, where the focus goes, since the row went with the list; back
+  on the list, its row is chosen and focused. An item the URL names opens so too. A reply that answers its item
+  (`awaiting_reply`, `untrusted_review`) moves on: the next item that waits on the operator's answer and is not
+  answered yet, after it in the list and then from the top (`nextWaiting`), is chosen and its row focused, the list in
+  view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
+  its `answered` chip. With nothing else waiting the item stays, its form's line saying what the reply did. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
@@ -795,15 +810,26 @@ sliver beside four others; and its axis names short call numbers without measuri
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
   `bare`). An item about nothing the page shows
   whose detail names a `canopy` command to run (`repo_missing`): the command,
-  `Copyable`, and nothing to answer. A ticket's item then shows what it is stuck at (below), its conversation, and the
-  reply form; on the reasons above the ticket's own verbs (Start or Stop, Forget) are a quiet row under the thread,
-  Start and Stop as ghost buttons, and on any other reason they lead, under the head, as they foot a ticket page's Work
-  panel. An item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
+  `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as
+  what it asks for. A ticket's item then shows its answer (below): its conversation, the reply form, and on the
+  reasons above the ticket's own verbs (Start or Stop, Forget) and any other limit as a quiet row under the reply,
+  Start and Stop as ghost buttons; on any other reason the verbs and the limit lead, under the head, as what it asks.
+  An item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
   the chore's notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in
   place of its detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says
   of itself, then its link on its own line, where the item's detail runs title and link together; an item about none of
   them shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every
   page, is the one, so one count of them shows at a time.
+- **The answer** (`TicketAnswer`, `src/components/ticket-answer.tsx`) is where a ticket is answered, one component on
+  its page and on its attention item: its conversation, the reply form right under it, then the ticket's verbs and
+  any limit it is stuck at (`TicketVerbs`), each under a hairline. So the reply is the first stop the keyboard reaches
+  after the conversation, and Stop, Forget, or Allow one more never stands between them. On a ticket's page it is the
+  Conversation panel, beside its Work panel when wide; on an attention item its header wears the ticket's `private` or
+  `public` chip and its phase, which the page says by its title and in its Work panel, and the verbs lead instead
+  where they are what the item asks (The attention detail, above). When one of the ticket's attention items clears
+  while its page shows it, a leaf drifts off the conversation's header, as a cleared row drops one in the list (Fun):
+  the reward is for the item clearing, wherever it was answered. The attention page's answer drops none, its row
+  dropping its own.
 - **The reply form is open only where a reply is awaited** (`ReplyForm`): a question waiting, an untrusted review
   waiting on the go-ahead, and any private ticket, whose workers hear the operator only there. A public ticket with
   nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a reply nothing
@@ -1117,7 +1143,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
   reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
   it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
-  too, and a refusal is still a `Notice`. `main.tsx` renders the one `Toaster`, around the router, so a toast
+  too, and a refusal is still a `Notice`. A reply that moves the attention page on (The attention list is an inbox,
+  above) takes its form with it, so its toast says what it did, and its item's row and conversation keep it.
+  `main.tsx` renders the one `Toaster`, around the router, so a toast
   outlives the page it came from.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
@@ -1165,8 +1193,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
-- **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above) or under its
-  form, with one line under it (`Notice`): what the action did, in the CLI's words, or its refusal in
+- **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
+  ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in
+  the CLI's words, or its refusal in
   `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
@@ -1181,9 +1210,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   on hover. A public ticket
   has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
   `Public: remove its queue label to stop it, or start it privately.`
-- **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, in its Work panel's foot on its
-  page and under the item's head on its attention item, above the conversation either way, and in the foot of a PR's
-  Pull request panel, under the operator's review request. While something is stuck it is a block on the
+- **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
+  on its attention item (The answer, above), but under the run on a broken run's item, which asks for another try
+  first, and in the foot of a PR's Pull request panel, under the operator's review request. While something is stuck
+  it is a block on the
   `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
   led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
   monospace (`resume in web`, `reviews of web#88`, just `reviews` on the PR's own page), its runs against it in
