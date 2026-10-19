@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { keys } from '@/api/queries'
 import type { ReviewSummary } from '@/api/types'
-import { renderRouted } from '@/test-utils'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { ReviewsTable } from './reviews-table'
 
@@ -52,7 +52,7 @@ describe('ReviewsTable', () => {
         await renderReviews([REVIEW])
         expect(screen.getByRole('link', { name: 'ABC-101' }).getAttribute('href')).toBe('/tickets/ABC-101')
         expect(screen.getByRole('link', { name: 'acme/web#88' })).toBeDefined()
-        expect(screen.getByText('3f9c2a1').title).toBe('3f9c2a1b7d0e')
+        expect(tipOf(screen.getByText('3f9c2a1'))).toBe('3f9c2a1b7d0e')
     })
 
     it('says why a PR canopy only reviews has no ticket', async () => {
