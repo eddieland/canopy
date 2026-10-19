@@ -278,20 +278,22 @@ def test_a_running_review_takes_worker_capacity(reviewing: CanopyEnv, scenario: 
     assert held.finishes().status == "done"
 
 
-def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv) -> None:
-    conn = reviewing.journal()
-    with in_tick(conn, dry_run=True) as tick_id:
-        runner = InlineRunner()
-        assert main(reviews("a" * 40)[1:], runner=runner) == 0
-        assert main(reviews("a" * 40)[1:], runner=runner) == 1
-        assert main(reviews("a" * 40, f"{PR}0")[1:], runner=runner) == 1
+def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv, scenario: Scenario) -> None:
+    conn = scenario.conn
+    with (
+        mock.patch.object(procs.SubprocessRunner, "spawn", autospec=True) as spawn,
+        scenario.ticking(dry_run=True) as tick_id,
+    ):
+        scenario.overseer(*reviews("a" * 40)[1:])
+        scenario.overseer(*reviews("a" * 40)[1:], code=1)
+        scenario.overseer(*reviews("a" * 40, f"{PR}0")[1:], code=1)
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [
             ("dispatch:review", f"dry run: not dispatched; would review {'a' * 40}"),
             ("refused:running", "this dry run already reviewed this PR"),
             ("refused:review_capacity", "1 of 1 review runs are running"),
         ]
-        assert runner.spawned == []
-        assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert not spawn.called
+    assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize(

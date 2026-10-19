@@ -16,14 +16,13 @@ from canopy.loop import attention
 from tests.canopy.helpers import (
     KEY,
     context,
-    in_tick,
     journal_at,
     present,
     versions_after,
     waits,
 )
 from tests.canopy.scenario_helpers import Scenario
-from tests.conftest import CanopyEnv, Journals
+from tests.conftest import Journals
 
 AUTHOR = "5b10ac8d82e05b22cc7d4ef5"
 AT = "2026-10-08T10:05:13.000+0000"
@@ -140,17 +139,18 @@ def test_a_tick_mirrors_at_most_its_limit(scenario: Scenario) -> None:
         assert mirror_cursor(conn) == "3"
 
 
-def test_a_dry_run_records_the_mirror_and_moves_no_cursor(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with in_tick(conn, dry_run=True, ends_ok=True) as tick_id:
-        assert main(mirror(*comment())) == 0
+def test_a_dry_run_records_the_mirror_and_moves_no_cursor(scenario: Scenario) -> None:
+    conn = scenario.conn
+    with scenario.ticking(dry_run=True) as tick_id:
+        scenario.overseer(*mirror(*comment()))
         assert len(mirrored(conn)) == 1
         assert mirror_cursor(conn) is None
         [(_, action, rationale)] = decisions(conn, tick_id)
         assert action == "mirror"
         assert rationale.endswith("; dry run, mirror cursor not advanced")
-        # The live tick that follows finds it mirrored, and moves the cursor.
-    with in_tick(conn):
-        assert main(mirror(*comment())) == 0
+    # The live tick that follows finds it mirrored, and moves the cursor.
+    with scenario.ticking():
+        scenario.overseer(*mirror(*comment()))
         assert len(mirrored(conn)) == 1
         assert mirror_cursor(conn) == "10234"
 

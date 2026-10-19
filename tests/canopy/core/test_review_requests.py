@@ -12,7 +12,7 @@ from canopy.core import conversation, db, review_requests
 from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
-from tests.canopy.helpers import context, in_tick, operator
+from tests.canopy.helpers import context, operator
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -97,9 +97,8 @@ def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
     conn = scenario.conn
     scenario.operator("start", PR, "--review")
     assert "no tick is running" in scenario.operator("review", "end", "--pr", PR, "--reason", "closed", code=1).err
-    # A dry run's tick, which `ticking` does not hold.
-    with in_tick(conn, dry_run=True, ends_ok=True) as tick_id:
-        assert main(["review", "end", "--pr", PR, "--reason", "closed"]) == 0
+    with scenario.ticking(dry_run=True) as tick_id:
+        scenario.overseer("review", "end", "--pr", PR, "--reason", "closed")
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [("review:end", "dry run: not ended; closed")]
     assert requests_of(conn) == [(PR, "cli", None)]
     other = f"{PR}0"
