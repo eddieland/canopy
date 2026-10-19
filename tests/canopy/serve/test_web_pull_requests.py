@@ -163,3 +163,25 @@ def test_a_draft_sent_from_the_mock_posts_nothing_and_reads_as_sent(backend: Bac
     [posted] = sent.json()["posted"]
     assert (posted["number"], posted["status"]) == (1, "sent")
     assert posted["sent_url"].startswith(f"{mock_reviews.PR_88}#discussion_r")
+
+
+def test_drafts_staged_from_the_mock_stay_staged_on_the_next_read(backend: Backend) -> None:
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+    url = {"url": mock_reviews.PR_88}
+    found = c.get("/api/pull-request/threads", params=url).json()
+
+    def refs(thread: int) -> list[dict[str, object]]:
+        return [{"run": d["run"], "number": d["number"], "hash": d["hash"]} for d in found["threads"][thread]["drafts"]]
+
+    with mock.patch.object(procs.SubprocessRunner, "run", autospec=True) as ran:
+        staged = c.post("/api/drafts/stage", json={"drafts": refs(2)}, headers=headers)
+        assert staged.status_code == 200, staged.text
+        # A second stage reads the PR first: the stand-in's reader shows the review pending, as GitHub shows it to its
+        # author, so the draft stays staged and the second is refused.
+        again = c.post("/api/drafts/stage", json={"drafts": refs(0)}, headers=headers)
+    ran.assert_not_called()
+    assert again.status_code == 409, again.text
+    assert "staged" in again.text
+    [draft] = c.get("/api/pull-request/threads", params=url).json()["threads"][2]["drafts"]
+    assert draft["status"] == "staged"

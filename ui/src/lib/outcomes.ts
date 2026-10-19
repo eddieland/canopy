@@ -22,6 +22,7 @@ import type {
     Stopped,
 } from '@/api/types'
 import { currentClock } from '@/lib/clock'
+import { REACTION_LOOKS } from '@/lib/drafts'
 import { localTime } from '@/lib/time'
 import type { NewToast } from '@/lib/toasts'
 
@@ -181,7 +182,52 @@ export function draftsSentText(sent: DraftsSent): string {
                 `Run ${d.run}'s draft ${d.number} may have been posted: the post ended without saying. A read of its ` +
                 'PR settles it; canopy sends it no other time.',
         ),
+        ...sent.staged.map((d) => `Staged run ${d.run}'s draft ${d.number} in a review for you to submit on GitHub.`),
     ].join(' ')
+}
+
+/**
+ * What a stage did, as `canopy draft stage` says it: each draft in the review, each reaction that went on its comment
+ * at once, since GitHub can't keep one pending, and whatever a send would say of the rest.
+ */
+export function draftsStagedText(sent: DraftsSent): string {
+    const reacted = [...sent.posted, ...sent.staged].flatMap((d) => (d.reacted === null ? [] : [{ d, r: d.reacted }]))
+    return [
+        ...sent.staged.map((d) => `Staged run ${d.run}'s draft ${d.number} in a review for you to submit on GitHub.`),
+        ...reacted.map(
+            ({ d, r }) =>
+                `Run ${d.run}'s draft ${d.number} put ${REACTION_LOOKS[r].label.toLowerCase()} on its comment now, ` +
+                "not in the review: GitHub can't keep a reaction pending.",
+        ),
+        draftsSentText({ ...sent, posted: [], staged: [] }),
+    ]
+        .filter((line) => line !== '')
+        .join(' ')
+}
+
+/**
+ * The toast a stage shows: how many drafts wait in the pending review, with where to finish it, `url`'s files page,
+ * where GitHub's own submit is, and how many reactions went on GitHub at once. A check only when every draft is in
+ * the review or, a reaction alone, on its comment.
+ */
+export function draftsStagedToast(sent: DraftsSent, url: string): NewToast {
+    const total =
+        sent.staged.length + sent.posted.length + sent.already.length + sent.failed.length + sent.unconfirmed.length
+    const n = sent.staged.length
+    const k = [...sent.posted, ...sent.staged].filter((d) => d.reacted !== null).length
+    const staged = n === 1 ? 'Staged 1 draft in a review on GitHub' : `Staged ${n} drafts in a review on GitHub`
+    const reactions = k === 1 ? '1 reaction' : `${k} reactions`
+    let title = 'Staged nothing'
+    if (n > 0) {
+        title = k > 0 ? `${staged}, and added ${reactions} now` : staged
+    } else if (k > 0) {
+        title = `Added ${reactions} now`
+    }
+    return {
+        title,
+        ...(n > 0 && { detail: `${url}/files` }),
+        tone: n + sent.posted.length === total ? 'done' : 'failed',
+    }
 }
 
 /**
