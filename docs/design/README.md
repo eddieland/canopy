@@ -96,6 +96,9 @@ not go in the middle of the sequence.
   - [30. Connectors](CONNECTORS.md#30-connectors)
 - [Personas](PERSONAS.md): the voice a planner, a reviewer, or a worker writes in, and who chooses it.
   - [31. Personas](PERSONAS.md#31-personas)
+- [Feedback plans](FEEDBACK_PLANS.md): a plan for what comes back to a PR, approved by the operator before the
+  `resume` that acts on it.
+  - [32. Plans before feedback runs](FEEDBACK_PLANS.md#32-plans-before-feedback-runs)
 
 ## 1. Problem
 
