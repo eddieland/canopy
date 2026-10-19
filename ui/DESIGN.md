@@ -528,6 +528,31 @@ side.
   `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
   of its rows.
 
+## Charts
+
+What every chart follows (`src/lib/chart.ts`), so a new one needs no rules of its own; each chart's entry under
+Patterns names what is its own.
+
+- **Bars from zero**, in fill tokens of their own (Tokens), never a state's color. The plot's top is the peak and a
+  quarter more (`HEADROOM`), so the tallest bar stops short of the edge, and the peak's value sits over its bar as a
+  `readout`: the scale reads without hovering. Over the first or last bar it is flush with the bar's outer edge, since
+  it is wider than a narrow bar and would overhang the chart's padding.
+- **A bar's width is capped**, the row centered, so a sparse window draws narrow bars rather than slabs.
+- **Stacked segments are 2px apart**, the surface between them, and any segment with a value is 2px tall at least, so a
+  sliver still shows; the top segment's corners are rounded.
+- **The axis** names its marks by one helper, `axisStep`: every mark of a short axis, every fifth of a long one, back
+  from the last, so the latest is always named, and fewer where names that often would touch. A name is centered under
+  its bar and may be wider than it; it is never cut to fit.
+- **The legend**'s words are `muted-foreground` beside a swatch of the fill.
+- **A value is on hover**, with its unit: `$1.50`, `30.2k sent`.
+- **No data is `Empty`**, saying what there was none of: never an empty plot under a legend.
+- **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
+  to see.
+
+The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
+reader, so no table repeats them; a call's added part is 1px at least, since it is one of two segments and never a
+sliver beside four others; and its axis names short call numbers without measuring, every one up to twelve.
+
 ## Patterns
 
 - **Lists are rows in a panel** (`ListRow`), divided by hairlines, and every row reads in one order: its **state**,
@@ -639,12 +664,18 @@ side.
   Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
-- **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
-  overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
+- **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
+  order, each segment its series' share of the day, the whole as tall as the day's share of the chart's top. Idle
+  overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the two read as
+  one; at real costs it is a sliver beside a worker's, so its trend across days is read from the table, not the bars.
+  A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column gone missing.
   A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`, and scrolls past a week (`PanelScroll`). A week names
-  every day on the axis; 30 days every fifth, back from today. The window is a segmented control (`ToggleGroup`) in
-  the totals' panel header, kept in `?days=`.
+  holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one before, and
+  scrolls past a week (`PanelScroll`), sideways when the pane is too narrow for its columns. A week names every day on
+  the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in place of
+  the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent nothing,
+  and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
+  header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.

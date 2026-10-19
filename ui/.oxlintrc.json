@@ -244,7 +244,10 @@
         "eslint/no-await-in-loop": "off",
         "playwright/consistent-spacing-between-blocks": "error",
         // A screenshot is an assertion: the helpers that take one compare it with its baseline.
-        "playwright/expect-expect": ["error", { "assertFunctionNames": ["screenshotMain", "screenshotWhole"] }],
+        "playwright/expect-expect": [
+          "error",
+          { "assertFunctionNames": ["screenshotMain", "screenshotWhole", "expectSpendAxisWhole"] }
+        ],
         "playwright/max-nested-describe": "error",
         "playwright/missing-playwright-await": "error",
         // A test made in a loop, over routes or themes, may branch on its case, and assert what only that case shows;
