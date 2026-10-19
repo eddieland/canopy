@@ -1,3 +1,4 @@
+import { useClock } from '@/lib/clock'
 import { Tip } from '@/components/tip'
 import { age, localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -38,11 +39,12 @@ type AgeProps = Since | Span
  * beside the fixed-width number.
  */
 export function Age(props: AgeProps) {
+    const clock = useClock()
     const now = useNow()
     const at = props.variant === 'span' ? (props.ended ?? props.started) : props.at
     const [before, after] = words(props)
     return (
-        <Tip fact={localTime(at)}>
+        <Tip fact={localTime(at, clock)}>
             <time dateTime={at} className={cn('text-xs whitespace-nowrap text-muted-foreground', props.className)}>
                 {before}
                 <span className="readout">{age(at, now)}</span>

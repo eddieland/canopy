@@ -31,10 +31,16 @@ prompt file, and these keys turn behavior on:
 
 `capacity.max_chores` caps chore runs at once, apart from `max_workers`.
 
+`canopy chore install NAME` sets up one of the example chores canopy ships in a workspace: its prompt, and the agent it
+comes with if any, in the state directory, which its table in the private file names. They stay as installed when
+canopy is upgraded. The command owns them, so installing again replaces them whole with the shipped ones, and leaves
+every other line of the file as it was or writes nothing.
+
 canopy ships `canopy-chore` (§13): no edits, no subagents, no bash but reading its own chore's history, and no MCP write
 tools where the runtime can deny them by name. A chore using the operator's own read-only tools gets its own copy, in
 the operator's runtime config (never the repository's), with bash allowed for exactly those tools. Their credentials are
-the tools' (§4, principle 5); canopy never sees them and knows nothing of any CI system.
+the tools' (§4, principle 5); canopy never sees them and knows nothing of any CI system. The example chores that read
+canopy's own journal come with such a copy, allowing exactly the read-only canopy commands its prompt runs.
 
 ### Delegation
 
@@ -59,7 +65,7 @@ Result contract, one JSON line, last line of the agent's text (§13), validated 
 `unknown`, with no findings recorded:
 
 ```json
-{"status":"ok|failed","summary":"one paragraph",
+{"status":"ok|failed","summary":"a paragraph, line breaks sparingly",
  "findings":[{"id":"flaky/checkout-service/test_retry","title":"one line","detail":"a paragraph","link":"https://..."}],
  "more_findings":0}
 ```
@@ -255,8 +261,8 @@ sent to fix code its PR did not touch. Rejected: a second agent verifying each f
 Result contract, the last line of the reviewer's text (§13), validated (D026); anything else is `unknown`:
 
 ```json
-{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",
- "pr_title":"the PR's title as it stands",
+{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",
+ "summary":"a paragraph, line breaks sparingly","pr_title":"the PR's title as it stands",
  "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
 ```
 

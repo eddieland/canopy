@@ -40,6 +40,9 @@ max_chores = 1
 # {title}, optional, is the session's title: `<KEY> <kind>: <the ticket's title>` for a worker (DESIGN §13).
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
     --title={title} {prompt}'''
+# The overseer's temperature: -1 sends none, for when overseer_cmd names a model that refuses one, such as OpenAI's
+# reasoning models. plan_triage_temperature and review_temperature, below, do the same for theirs.
+# overseer_temperature = 0.1
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
     --title={title} {prompt}'''
 # A ticket you started with `canopy start` runs `private_worker_cmd`: worker_cmd's default with
@@ -58,8 +61,10 @@ plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 # plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage
 #     --format json --title={title} {prompt}'''
 # plan_triage_timeout_minutes = 10
-# The reviewer's temperature (DESIGN §21): -1 sends none, for when review_cmd names a model that refuses one, such as
-# OpenAI's reasoning models.
+# plan_triage_temperature = 0.1
+# The reviewer's temperature (DESIGN §21): -1, the default, sends none, since the reviewer often runs on a model that
+# refuses one, such as OpenAI's reasoning models. Set a low one when review_cmd names a model that takes it: each new
+# commit is reviewed again, and a cooler reviewer's findings wander less from one commit to the next.
 # review_temperature = 0.1
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
@@ -162,7 +167,8 @@ cmd = ""
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.
 # examples/chores/build-health.md is a prompt to start from: it needs only the shipped agent and a GitHub MCP server.
-# Copy it, name your repositories, and run `canopy chore try build-health` until its findings are the ones you want.
+# `canopy chore install build-health` copies it into .canopy/ and writes this table to the private file; name your
+# repositories in the copy, and run `canopy chore try build-health` until its findings are the ones you want.
 # [chores.build-health]
 # prompt = "~/.config/canopy/chores/build-health.md"
 # every_minutes = 120

@@ -55,7 +55,7 @@ test('under reduced motion the rave holds still, the lights off', async ({ page 
 })
 
 test.describe('with Sprig on', () => {
-    // Tall enough that the rail has room for Sprig under the mock's three working runs.
+    // Tall enough that the rail has room for Sprig under the mock's four working rows.
     test.use({ viewport: { width: 1280, height: 1200 } })
 
     test('Sprig dances to it, waving its glow sticks, and holds still under reduced motion', async ({ page }) => {

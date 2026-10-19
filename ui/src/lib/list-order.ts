@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
  * Which way each list runs: oldest first or newest first. Every list in time has the order it reads in by default (a
@@ -91,15 +91,15 @@ export function parseOrders(raw: string | null): Orders {
     return orders
 }
 
-/** The chosen orders with `list` set to `order`, as stored: a list back in its own order is left out. */
-export function withOrder(orders: Orders, list: ListName, order: Order): string {
+/** The chosen orders with `list` set to `order`: a list back in its own order is left out. */
+export function withOrder(orders: Orders, list: ListName, order: Order): Orders {
     const next: Orders = { ...orders }
     if (order === LISTS[list]) {
         delete next[list]
     } else {
         next[list] = order
     }
-    return JSON.stringify(next, Object.keys(next).toSorted())
+    return next
 }
 
 /** `items`, as the server sent them for `list`, in `order`: reversed when that is not the list's own. */
@@ -109,64 +109,17 @@ export function ordered<T>(list: ListName, order: Order, items: readonly T[]): T
 
 /** The order `list` runs in. Re-renders on a change from this tab or another. */
 export function useListOrder(list: ListName): Order {
-    return useSyncExternalStore(subscribe, getSnapshot)[list] ?? LISTS[list]
+    return useStoredSetting(setting)[list] ?? LISTS[list]
 }
 
 /** Sets the order `list` runs in, stores it, and applies it now. */
 export function setListOrder(list: ListName, order: Order): void {
-    const raw = withOrder(snapshot, list, order)
-    try {
-        globalThis.localStorage.setItem(STORAGE_KEY, raw)
-    } catch {
-        // Not persisted, but still applied for this page.
-    }
-    announce(raw)
+    setting.set(withOrder(setting.get(), list, order))
 }
 
-function readRaw(): string | null {
-    try {
-        return globalThis.localStorage.getItem(STORAGE_KEY)
-    } catch {
-        // Storage can be unavailable (privacy modes).
-        return null
-    }
-}
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseOrders, serialize: serializeOrders })
 
-let stored = readRaw()
-let snapshot = parseOrders(stored)
-const listeners = new Set<() => void>()
-
-function announce(raw: string | null): void {
-    if (raw === stored) {
-        return
-    }
-    stored = raw
-    snapshot = parseOrders(raw)
-    for (const listener of listeners) {
-        listener()
-    }
-}
-
-function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) {
-        announce(readRaw())
-    }
-}
-
-function subscribe(listener: () => void): () => void {
-    listeners.add(listener)
-    if (listeners.size === 1) {
-        globalThis.addEventListener('storage', onStorage)
-        announce(readRaw())
-    }
-    return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-            globalThis.removeEventListener('storage', onStorage)
-        }
-    }
-}
-
-function getSnapshot(): Orders {
-    return snapshot
+// The orders as stored, the lists in alphabetical order, so the same choices are always stored alike.
+function serializeOrders(orders: Orders): string {
+    return JSON.stringify(orders, Object.keys(orders).toSorted())
 }

@@ -10,6 +10,12 @@ A chore is an agent run about no ticket: no worktree, no branch, no push. You de
 and set `capacity.max_chores` above 0. The overseer decides when a due chore runs, each tick, within the hours you
 allowed it. The schedule is a floor, not an alarm clock: "at most every 120 minutes" means no sooner, not on the dot.
 
+You don't have to start from a blank page. `canopy chore install` lists the chores canopy ships, and
+`canopy chore install NAME` copies one's prompt, its table, and the agent it runs if it comes with one into this
+workspace, then says what's left to set up. The copies stay put when canopy is upgraded. The command owns them, though:
+running it again puts the shipped version back over your edits. Steer an installed
+chore with notes instead (below), which it leaves alone.
+
 [Chores](/chores) lists each chore: whether it's running, when it last ran ok, when it's due, its open findings, its
 schedule, and what its runs cost over the last day and month. To run one now instead of waiting for the overseer, use
 **Try now** on its page, below.

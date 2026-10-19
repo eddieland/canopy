@@ -14,6 +14,7 @@ from typing import override
 import click
 from click.shell_completion import CompletionItem
 
+from canopy.chores import install
 from canopy.core import config, contract, db, workspace
 from canopy.runs import dispatch
 
@@ -184,6 +185,8 @@ REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name", repo_names)
 CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
+# One of the example chores canopy ships, which `canopy chore install` sets up.
+EXAMPLE_CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
 PR_URL = PrUrlType()
 # A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
 COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")

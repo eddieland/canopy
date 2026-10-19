@@ -284,6 +284,38 @@ describe('ReviewThreads', () => {
         expect(within(screen.getByTestId('threads-elsewhere')).getByText('Threads')).toBeTruthy()
     })
 
+    it('lists every draft with a link to its card, in the order the cards show', async () => {
+        const body = draft({ kind: 'pr', number: 2, stance: null, comment_id: null, text: '\nThanks, all.\nMore.' })
+        const loose = draft({ run: 46, number: 1, status: 'unchecked', text: 'On the cache.' })
+        answer = () => Response.json(pullRequestThreads({ pr_drafts: [body], unplaced: [loose] }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        const list = await screen.findByTestId('draft-list')
+        const rows = within(list).getAllByRole('listitem')
+        expect(rows.map((row) => row.textContent)).toEqual([
+            "waitingrun:45 2Thanks, all.the review's body",
+            'waitingrun:45 1Moved it into a `finally`.src/search/useSearch.ts:16',
+            'uncheckedrun:46 1On the cache.not on a thread',
+        ])
+        for (const [name, anchor] of [
+            ['Thanks, all.', 'draft-45-2'],
+            ['Moved it into a `finally`.', 'draft-45-1'],
+            ['On the cache.', 'draft-46-1'],
+        ] as const) {
+            const link = within(list).getByRole('link', { name })
+            expect(link.getAttribute('href')).toMatch(new RegExp(`^/pull-requests/pr\\?url=.+#${anchor}$`, 'u'))
+            expect(document.querySelector<HTMLElement>(`#${anchor}`)?.dataset['testid']).toBe('draft')
+        }
+    })
+
+    it('names a reaction sent alone by its reaction in the list, so its link is never empty', async () => {
+        const alone = draft({ run: 46, number: 1, status: 'unchecked', text: '', reaction: '+1' })
+        answer = () => Response.json(pullRequestThreads({ unplaced: [alone] }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        const list = await screen.findByTestId('draft-list')
+        const link = within(list).getByRole('link', { name: 'Thumbs up, alone' })
+        expect(link.getAttribute('href')).toMatch(/#draft-46-1$/u)
+    })
+
     it("says when the PR's head is past the diff the page shows", async () => {
         answer = () =>
             Response.json(

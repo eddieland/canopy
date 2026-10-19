@@ -51,6 +51,26 @@ export const THEMES = ['light', 'dark'] as const
 /** Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run. */
 export const NOW = new Date('2026-10-08T12:30:00Z')
 
+/**
+ * An ISO time as the page writes it on hover with the clock at its default (src/lib/time.ts `localTime`): the
+ * browser's local date and 24-hour time to the second, `10/8/2026, 12:00:00` in en-US.
+ */
+export function hoverTime(page: Page, iso: string): Promise<string> {
+    return page.evaluate(
+        (at) =>
+            new Intl.DateTimeFormat(undefined, {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hourCycle: 'h23',
+            }).format(new Date(at)),
+        iso,
+    )
+}
+
 /** Stores `theme` before any page script runs, as if chosen on an earlier visit. */
 export async function storeTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
     await page.addInitScript(
@@ -323,6 +343,52 @@ function holdsCursor(element: Element): boolean {
     }
     const { view } = root.editor
     return element.contains(view.domAtPos(view.state.selection.head).node)
+}
+
+/**
+ * Clicks just past the last character of `target`, an element in the plan, as the operator would to write on after it,
+ * and waits for the editor to hold its cursor at the element's end. Not `clickIn` and End: End stops at the end of the
+ * line the click lands on, which in an element that wraps need not be its last, and the editor reads the cursor End
+ * moves on `selectionchange`, as it does a selection `select` makes, so a loaded machine can put it back where the
+ * click left it. This clicks again until the editor holds it.
+ */
+export async function clickAtEnd(target: Locator): Promise<void> {
+    await expect(async () => {
+        await target.click({ position: await target.evaluate(endPoint) })
+        await expect.poll(() => target.evaluate(holdsCursorAtEnd), { timeout: 250 }).toBe(true)
+    }).toPass({ timeout: 5000 })
+}
+
+// Where in `element`, from its top left corner, a click puts the cursor after its last character: the last character's
+// right half, on its line.
+function endPoint(element: Element): { x: number; y: number } {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let last: Text | null = null
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        if ((node.textContent ?? '') !== '') {
+            last = node as Text
+        }
+    }
+    if (last === null) {
+        throw new Error('the element has no text to click after')
+    }
+    const range = document.createRange()
+    range.setStart(last, last.length - 1)
+    range.setEnd(last, last.length)
+    const char = range.getBoundingClientRect()
+    const box = element.getBoundingClientRect()
+    return { x: char.right - box.left - 1, y: char.top + char.height / 2 - box.top }
+}
+
+// Whether the plan's editor holds its cursor, and nothing selected, at the end of `element`'s content.
+function holdsCursorAtEnd(element: Element): boolean {
+    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    if (root === null) {
+        return false
+    }
+    const { view } = root.editor
+    const { from, to } = view.state.selection
+    return from === to && from === view.posAtDOM(element, element.childNodes.length)
 }
 
 /**

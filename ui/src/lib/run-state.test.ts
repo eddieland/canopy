@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { mockRuns } from '@/api/mocks'
-import type { Run } from '@/api/types'
+import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
+import type { ChoreSummary, ReviewSummary, Run } from '@/api/types'
 
-import { byTicket, railRuns, workingOn } from './run-state'
+import { byTicket, railWork, workingOn } from './run-state'
+import type { RailItem } from './run-state'
 
 const running = mockRuns[0] as Run
 
@@ -42,7 +43,22 @@ describe('workingOn', () => {
     })
 })
 
-describe('railRuns', () => {
+// Each row as its kind and id, for comparing an order.
+function ids(items: RailItem[]): string[] {
+    return items.map((item) => `${item.kind}:${item.kind === 'review' ? item.review.id : item.run.id}`)
+}
+
+function review(id: number, state: ReviewSummary['state'], started_at: string): ReviewSummary {
+    return { ...(mockReviews[0] as ReviewSummary), id, state, started_at }
+}
+
+function chore(name: string, id: number | null, started_at = '2026-10-08T12:00:00Z'): ChoreSummary {
+    const base = mockChores[0] as ChoreSummary
+    const run = id === null ? null : { ...(base.latest as NonNullable<ChoreSummary['latest']>), id, started_at }
+    return { ...base, name, running: run === null ? null : { ...run, status: 'running', state: 'running' } }
+}
+
+describe('railWork', () => {
     it('puts the running runs first, then the ones waiting on an answer, each oldest first', () => {
         const runs = [
             at(1, 'running', '2026-10-08T12:10:00Z'),
@@ -50,12 +66,19 @@ describe('railRuns', () => {
             at(3, 'running', '2026-10-08T12:00:00Z'),
             at(4, 'blocked', '2026-10-08T11:00:00Z'),
         ]
-        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([3, 1, 4, 2])
+        expect(ids(railWork({ runs }, 10).shown)).toEqual(['run:3', 'run:1', 'run:4', 'run:2'])
+    })
+
+    it('lists the reviews and chore runs running among the running runs, by when each started', () => {
+        const runs = [at(1, 'running', '2026-10-08T12:10:00Z'), at(2, 'blocked', '2026-10-08T11:00:00Z')]
+        const reviews = [review(7, 'running', '2026-10-08T12:05:00Z'), review(6, 'done', '2026-10-08T11:00:00Z')]
+        const chores = [chore('deps', 3, '2026-10-08T12:15:00Z'), chore('idle', null)]
+        expect(ids(railWork({ runs, reviews, chores }, 10).shown)).toEqual(['review:7', 'run:1', 'chore:3', 'run:2'])
     })
 
     it('leaves out the runs that ended', () => {
         const runs = [at(1, 'done', '2026-10-08T12:00:00Z'), at(2, 'failed', '2026-10-08T12:00:00Z')]
-        expect(railRuns([...runs, ...mockRuns], 10).shown.map((r) => r.id)).toEqual([41, 42])
+        expect(ids(railWork({ runs: [...runs, ...mockRuns] }, 10).shown)).toEqual(['run:41', 'run:42'])
     })
 
     it("leaves out a blocked run a later run of its ticket followed, and lists each ticket's latest once", () => {
@@ -65,7 +88,7 @@ describe('railRuns', () => {
             at(4, 'blocked', '2026-10-08T10:30:00Z', 'B'),
             at(1, 'blocked', '2026-10-08T10:00:00Z', 'B'),
         ]
-        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([3, 4])
+        expect(ids(railWork({ runs }, 10).shown)).toEqual(['run:3', 'run:4'])
     })
 
     it('leaves out a blocked run whose ticket the operator stopped, and keeps a running one, which still works', () => {
@@ -74,12 +97,22 @@ describe('railRuns', () => {
             { ...at(2, 'blocked', '2026-10-08T11:00:00Z'), ticket_stopped: true },
             at(3, 'blocked', '2026-10-08T10:00:00Z'),
         ]
-        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([1, 3])
+        expect(ids(railWork({ runs }, 10).shown)).toEqual(['run:1', 'run:3'])
     })
 
-    it('counts the runs past the limit', () => {
+    it('counts the rows past the limit, and opens the page of their kind, or the runs page for a mix', () => {
         const runs = Array.from({ length: 6 }, (_, i) => at(i, 'running', `2026-10-08T12:0${i}:00Z`))
-        expect(railRuns(runs, 4)).toEqual({ shown: runs.slice(0, 4), more: 2 })
-        expect(railRuns(runs.slice(0, 2), 4).more).toBe(0)
+        expect(railWork({ runs }, 4)).toEqual({
+            shown: runs.slice(0, 4).map((run) => ({ kind: 'run', run })),
+            more: 2,
+            moreAt: '/runs',
+        })
+        expect(railWork({ runs: runs.slice(0, 2) }, 4).more).toBe(0)
+
+        const reviews = [review(8, 'running', '2026-10-08T13:00:00Z'), review(9, 'running', '2026-10-08T13:01:00Z')]
+        expect(railWork({ runs: runs.slice(0, 4), reviews }, 4).moreAt).toBe('/reviews')
+        const chores = [chore('deps', 3, '2026-10-08T13:00:00Z')]
+        expect(railWork({ runs: runs.slice(0, 4), chores }, 4).moreAt).toBe('/chores')
+        expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/runs')
     })
 })

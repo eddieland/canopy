@@ -67,6 +67,52 @@ export function placeThreads(threads: PullRequestThreads): Placed<ReviewThread> 
     return place(threads.threads, (t) => ({ file: t.file, line: t.diff_line }), threads.diff !== null)
 }
 
+/** A draft as the head of a PR's threads lists it: where its card sits, so a link can jump to it. */
+export interface ListedDraft {
+    /** The draft as the server sent it. */
+    draft: Draft
+    /** Where it goes, in words: its thread's file and line, the review's body, or no thread yet. */
+    where: string
+    /** The index in the diff of the file its card sits on, or null when it sits on none. */
+    file: number | null
+}
+
+/**
+ * Every draft for the PR in the order the page shows their cards: the review's body, the threads on the diff file by
+ * file, those under a file's header before those on a line, then the threads off the diff, then the drafts no read has
+ * placed on a thread.
+ */
+export function listDrafts(threads: PullRequestThreads, placed: Placed<ReviewThread>): ListedDraft[] {
+    const listed: ListedDraft[] = threads.pr_drafts.map((draft) => ({ draft, where: "the review's body", file: null }))
+    const files = [...new Set([...placed.files.keys(), ...placed.lines.keys()])].toSorted((a, b) => a - b)
+    for (const file of files) {
+        const onLines = [...(placed.lines.get(file) ?? [])].toSorted(([a], [b]) => a - b)
+        for (const thread of [...(placed.files.get(file) ?? []), ...onLines.flatMap(([, onLine]) => onLine)]) {
+            listed.push(...threadDrafts(thread, file))
+        }
+    }
+    for (const thread of placed.elsewhere) {
+        listed.push(...threadDrafts(thread, null))
+    }
+    for (const draft of threads.unplaced) {
+        listed.push({ draft, where: 'not on a thread', file: null })
+    }
+    return listed
+}
+
+/** Where a thread is, as its card heads with it: its file and line, its file alone, or null when it names no file. */
+export function threadWhere(thread: Pick<ReviewThread, 'path' | 'line'>): string | null {
+    if (thread.path === null) {
+        return null
+    }
+    return thread.line === null ? thread.path : `${thread.path}:${thread.line}`
+}
+
+/** The element id a draft's card has on the page, which the head of the PR's threads links to. */
+export function draftAnchor(draft: Pick<Draft, 'run' | 'number'>): string {
+    return `draft-${draft.run}-${draft.number}`
+}
+
 /**
  * The PR's head when its diff is not the run's, which the page says, since the threads may sit on lines it no longer
  * has: the head as last read, or null when the two agree or either is not known.
@@ -80,4 +126,10 @@ export function movedHead(threads: Pick<PullRequestThreads, 'head_sha' | 'diff_h
 export function draftChars(text: string): number {
     // oxlint-disable-next-line typescript/no-misused-spread -- code points are what the bound counts, as Python's len.
     return [...text].length
+}
+
+// A thread's drafts as listed, on the file of the diff its card sits on, or null.
+function threadDrafts(thread: ReviewThread, file: number | null): ListedDraft[] {
+    const where = threadWhere(thread) ?? 'a thread'
+    return thread.drafts.map((draft) => ({ draft, where, file }))
 }

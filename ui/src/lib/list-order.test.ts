@@ -36,17 +36,18 @@ describe('parseOrders', () => {
 
 describe('withOrder', () => {
     it('sets one list and leaves the others as they were', () => {
-        expect(withOrder({ ticks: 'oldest' }, 'conversation', 'newest')).toBe(
-            '{"conversation":"newest","ticks":"oldest"}',
-        )
+        expect(withOrder({ ticks: 'oldest' }, 'conversation', 'newest')).toEqual({
+            conversation: 'newest',
+            ticks: 'oldest',
+        })
     })
 
     it('leaves out a list put back in its own order, so a change to that order reaches it', () => {
         expect(LISTS.conversation).toBe('oldest')
-        expect(withOrder({ conversation: 'newest', ticks: 'oldest' }, 'conversation', 'oldest')).toBe(
-            '{"ticks":"oldest"}',
-        )
-        expect(withOrder({}, 'runs', 'newest')).toBe('{}')
+        expect(withOrder({ conversation: 'newest', ticks: 'oldest' }, 'conversation', 'oldest')).toEqual({
+            ticks: 'oldest',
+        })
+        expect(withOrder({}, 'runs', 'newest')).toEqual({})
     })
 })
 

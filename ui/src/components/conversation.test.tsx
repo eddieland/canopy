@@ -72,6 +72,23 @@ describe('Conversation', () => {
         expect(within(item(5)).getByText('reply via cli')).toBeDefined()
     })
 
+    it("heads canopy's note on a tick with who wrote it and the message it answers, never as unread", async () => {
+        const note = message({
+            id: 6,
+            kind: 'note',
+            source: 'canopy',
+            channel: 'tick',
+            answers: 5,
+            body: 'Tick 12 read message 5: started run 57 (resume).',
+        })
+        await renderRouted(<Conversation messages={[LATER, note]} />, { client: knowing(4) })
+        expect(within(item(6)).getByText('canopy')).toBeDefined()
+        expect(within(item(6)).getByText('note answering #5')).toBeDefined()
+        expect(within(item(6)).getByText('Tick 12 read message 5: started run 57 (resume).')).toBeDefined()
+        // Only the operator's own messages wait on a tick; canopy's note is what a tick said.
+        expect(within(item(6)).queryByText('waiting for the next tick')).toBeNull()
+    })
+
     it('marks a tracker comment as data that authorizes nothing, with its author and whether it was cut', async () => {
         const comment = message({
             id: 6,
@@ -106,6 +123,14 @@ describe('Conversation', () => {
         expect(within(item(5)).getByText('waiting for the next tick')).toBeDefined()
     })
 
+    it("marks the operator's messages a tick has read as seen, and never another's", async () => {
+        await renderRouted(<Conversation messages={[QUESTION, REPLY, LATER]} />, { client: knowing(4) })
+        expect(within(item(3)).queryByText('seen')).toBeNull()
+        expect(within(item(4)).getByText('seen')).toBeDefined()
+        expect(within(item(4)).queryByText('waiting for the next tick')).toBeNull()
+        expect(within(item(5)).queryByText('seen')).toBeNull()
+    })
+
     it("says what a chore's notes wait for instead, when told", async () => {
         const pending = {
             label: 'waiting for the next run',
@@ -116,6 +141,7 @@ describe('Conversation', () => {
         expect(within(item(4)).getByText('waiting for the next run')).toBeDefined()
         expect(within(item(5)).queryByText('waiting for the next run')).toBeNull()
         expect(screen.queryByText('waiting for the next tick')).toBeNull()
+        expect(screen.queryByText('seen')).toBeNull()
     })
 
     it('shows every body as text, markup kept as its characters and only its web addresses linked', async () => {
