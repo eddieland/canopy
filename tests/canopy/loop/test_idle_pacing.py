@@ -35,6 +35,7 @@ from tests.canopy.helpers import (
     overseer_titles,
     titled_overseer,
 )
+from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 PR = "https://example.test/pr/1"
@@ -883,9 +884,7 @@ def test_the_tick_now_key_takes_a_web_request_with_it(
     assert time.slept == [0.5]
 
 
-def test_a_tick_run_by_hand_records_nothing_of_the_loop(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-        assert recorded(canopy_env) == [(None, None)]
+def test_a_tick_run_by_hand_records_nothing_of_the_loop(scenario: Scenario) -> None:
+    ticked = scenario.tick(dry_run=True)
+    assert (ticked.tick.idle, ticked.tick.woken_by) == (None, None)
+    assert recorded(scenario.env) == [(None, None)]

@@ -205,6 +205,8 @@ class Ran:
     row: sqlite3.Row
     reasons: tuple[ResumeReason, ...]
     prompt_file: Path
+    #: What its `canopy _run` printed, the run log among it, when the scenario ran it in this process (`Scenario.run`).
+    printed: Printed = Printed("", "")
 
     @property
     def id(self) -> int:
@@ -387,18 +389,21 @@ class Scenario:
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
 
-    def run(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Ran:
+    def run(
+        self, command: list[str] | None = None, *, worker: Worker | None = None, runner: InlineRunner | None = None
+    ) -> Ran:
         """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
         process, its worker doing `worker`, made for the ticket `command` names.
 
-        The overseer is not run, so a run's story can start without a tick's.
+        The overseer is not run, so a run's story can start without a tick's. `runner` runs its processes, one that
+        times a worker out, say, or a plain `InlineRunner` if None.
 
         Returns:
-            The run, closed.
+            The run, closed, with what its `canopy _run` printed.
         """
         command = command or dispatches()
         assert command[:2] == ["canopy", "dispatch"], command
-        runner = InlineRunner()
+        runner = runner or InlineRunner()
         with ExitStack() as stack:
             if worker is not None:
                 stack.enter_context(_made_for(worker, command[2]))
@@ -409,8 +414,8 @@ class Scenario:
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
-                exited = main(["_run", str(run_id)], runner=runner)
-        ran = self.ran(present(db.get_run(self.conn, run_id)))
+                exited, printed = _printing(lambda: main(["_run", str(run_id)], runner=runner))
+        ran = replace(self.ran(present(db.get_run(self.conn, run_id))), printed=printed)
         self.story.append(str(ran) if exited == 0 else f"{ran}, and `canopy _run` exits {exited}")
         assert exited == 0, ran
         return ran
@@ -473,7 +478,8 @@ class Scenario:
         ).fetchall()
         for (table,) in tables:
             for column in self.conn.execute("SELECT name FROM pragma_table_info(?)", (table,)).fetchall():
-                if column[0].endswith(("_at", "_since", "_until")):
+                # An event's, a message's, or a forget's time is its plain `at`.
+                if column[0] == "at" or column[0].endswith(("_at", "_since", "_until")):
                     _shift(self.conn, table, column[0], f"-{seconds} seconds")
 
     def operator(self, *args: str, code: int = 0) -> Printed:
@@ -647,8 +653,9 @@ def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str |
 # What a worker does in its run: each is a block, for `Scenario.tick` and `Scenario.run`.
 
 
-def pushes(branch: str | None = None, message: str | None = None) -> Script:
-    """The worker commits `message`, pushes `branch`, and reports it done with a PR.
+def pushes(branch: str | None = None, message: str | None = None, **reported: object) -> Script:
+    """The worker commits `message`, pushes `branch`, and reports it done with a PR, its result carrying `reported`
+    too: `pushes(notes=[...])`.
 
     What is left out is its ticket's own: the branch an `implement` without a slug pushes, `agent/<KEY>-work`; the
     message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. Made for KEY until a run of
@@ -658,6 +665,7 @@ def pushes(branch: str | None = None, message: str | None = None) -> Script:
     def made(key: str) -> Script:
         pushed = branch or f"agent/{key}-work"
         result = json.loads(WORKER_DONE) | {"branch": pushed, "pr": f"https://example.test/pr/{key.rpartition('-')[2]}"}
+        result |= reported
         return worker_does(*commit_and_push(pushed, message or f"{key}: the change"), result=json.dumps(result))
 
     return replace(made(KEY), per_ticket=made)

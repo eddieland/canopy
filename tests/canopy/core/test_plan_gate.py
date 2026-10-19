@@ -12,16 +12,13 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
-from canopy.core.vocab import PlanSetting, PlanStatus, RunStatus
+from canopy.core.vocab import PlanSetting, PlanStatus, ResumeReason, RunKind, RunStatus
 from tests.canopy.helpers import (
     KEY,
     LABEL,
-    WORK,
     approve_policy,
     context,
-    dispatch_and_run,
     dispatch_in_tick,
-    dispatch_refused,
     in_run,
     last_run,
     operator,
@@ -30,133 +27,112 @@ from tests.canopy.helpers import (
     present,
     seen,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
 PLAN = ("--label", LABEL, "--kind", "plan")
-RESUME = ("--label", LABEL, "--kind", "resume", "--reason", "review")
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 # `canopy plan KEY`, asking for a plan, and its two flags.
 VERBS: tuple[tuple[str, ...], ...] = ((), ("--skip",), ("--approve",))
 UNPLANNED = "PROJ-1 needs a plan before its implement, and {}; dispatch `plan` or wait for it"
+#: The workspace's policy, asking for a plan the operator approves before any `implement` (DESIGN §25).
+APPROVE = {"plan": "approve"}
+#: The overseer dispatches KEY's implement on its `work` branch.
+IMPLEMENT = dispatches(slug="work")
+#: The overseer dispatches a resume of KEY for review.
+RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
 
 
-def planned(conn: sqlite3.Connection) -> int:
+def planned(scenario: Scenario) -> int:
     """Run a planner that writes TEXT; returns the plan's run id."""
-    with planner_does(plan=TEXT):
-        run = dispatch_and_run(conn, *PLAN)
-    assert run["status"] == RunStatus.DONE, Path(run["log_path"]).read_text()
-    return int(run["id"])
+    run = scenario.run(dispatches(kind=RunKind.PLAN), worker=planner_does(plan=TEXT))
+    assert run.status == RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    return run.id
 
 
-def close_last_run(env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    """End the run a dispatch left running, as its `_run` would have: done."""
-    conversation.close_run(conn, context(env).config, last_run(conn), RunStatus.DONE, None)
+def test_with_plans_off_nothing_waits_on_one(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.run(IMPLEMENT)
 
 
-def test_with_plans_off_nothing_waits_on_one(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
-) -> None:
-    assert dispatch_in_tick(conn, *WORK).code == 0
-
-
-def test_under_approve_an_implement_waits_on_an_approved_plan(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    approve_policy(canopy_env)
-    assert dispatch_refused(conn, *WORK) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
-    run_id = planned(conn)
+def test_under_approve_an_implement_waits_on_an_approved_plan(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    assert scenario.refuses(IMPLEMENT) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
+    run_id = planned(scenario)
     waiting = UNPLANNED.format("its plan waits on the operator's approval")
-    assert dispatch_refused(conn, *WORK) == [("refused:unplanned", waiting)]
+    assert scenario.refuses(IMPLEMENT) == [("refused:unplanned", waiting)]
 
     # The operator's edit before approving is what is approved.
-    plan_file(canopy_env, run_id).write_text(TEXT + "\nRed, not blue.\n")
-    capsys.readouterr()
-    assert operator("plan", KEY, "--approve") == 0
-    path = plan_file(canopy_env, run_id)
-    assert f"Plan 1 of {KEY} is approved as {path} stands now." in capsys.readouterr().out
-    plan = present(plans.current(conn, KEY))
+    plan_file(scenario.env, run_id).write_text(TEXT + "\nRed, not blue.\n")
+    approved = scenario.operator("plan", KEY, "--approve")
+    path = plan_file(scenario.env, run_id)
+    assert f"Plan 1 of {KEY} is approved as {path} stands now." in approved.out
+    plan = present(plans.current(scenario.conn, KEY))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "cli")
-    assert plans.approved_text(canopy_env.state_dir, plan) == TEXT + "\nRed, not blue.\n"
-    assert dispatch_in_tick(conn, *WORK).code == 0
+    assert plans.approved_text(scenario.env.state_dir, plan) == TEXT + "\nRed, not blue.\n"
+    scenario.run(IMPLEMENT)
 
 
-def test_skip_lets_the_implement_through_and_supersedes_the_plan(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    approve_policy(canopy_env)
-    run_id = planned(conn)
-    capsys.readouterr()
-    assert operator("plan", KEY, "--skip") == 0
-    out = capsys.readouterr().out
+def test_skip_lets_the_implement_through_and_supersedes_the_plan(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    run_id = planned(scenario)
+    out = scenario.operator("plan", KEY, "--skip").out
     assert "Plan 1 of PROJ-1 is superseded; its file stays." in out
     assert "PROJ-1's plan is skipped: its implement goes ahead without one." in out
-    assert [p.status for p in plans.history(conn, KEY)] == [PlanStatus.SUPERSEDED]
-    assert plan_file(canopy_env, run_id).read_text() == TEXT
-    ticket = present(db.get_ticket(conn, KEY))
+    assert [p.status for p in plans.history(scenario.conn, KEY)] == [PlanStatus.SUPERSEDED]
+    assert plan_file(scenario.env, run_id).read_text() == TEXT
+    ticket = present(db.get_ticket(scenario.conn, KEY))
     assert ticket.plan_setting is PlanSetting.SKIP
-    assert dispatch_in_tick(conn, *WORK).code == 0
+    scenario.run(IMPLEMENT)
 
 
-def test_asking_for_a_plan_gates_a_ticket_whatever_the_policy(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    seen(conn, canopy_env)
-    assert operator("plan", KEY) == 0
-    assert "the next tick dispatches a planner" in capsys.readouterr().out
-    assert dispatch_refused(conn, *WORK) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
-    planned(conn)
-    assert operator("plan", KEY, "--approve") == 0
+def test_asking_for_a_plan_gates_a_ticket_whatever_the_policy(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.seen()
+    assert "the next tick dispatches a planner" in scenario.operator("plan", KEY).out
+    assert scenario.refuses(IMPLEMENT) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
+    planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
 
     # Asking again makes a new plan: the approved one is superseded, and the implement waits again.
-    capsys.readouterr()
-    assert operator("plan", KEY) == 0
-    assert "Plan 1 of PROJ-1 is superseded" in capsys.readouterr().out
-    assert plans.current(conn, KEY) is None
-    assert dispatch_refused(conn, *WORK) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
-    assert operator("plan", KEY) == 0
-    assert "already waits on a plan" in capsys.readouterr().out
+    assert "Plan 1 of PROJ-1 is superseded" in scenario.operator("plan", KEY).out
+    assert plans.current(scenario.conn, KEY) is None
+    assert scenario.refuses(IMPLEMENT) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
+    assert "already waits on a plan" in scenario.operator("plan", KEY).out
 
 
-def test_an_edit_after_approval_holds_the_implement_until_approved_again(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
-) -> None:
-    approve_policy(canopy_env)
-    run_id = planned(conn)
-    assert operator("plan", KEY, "--approve") == 0
-    path = plan_file(canopy_env, run_id)
+def test_an_edit_after_approval_holds_the_implement_until_approved_again(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    run_id = planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    path = plan_file(scenario.env, run_id)
     path.write_text(TEXT + "\nAnd a test.\n")
     changed = (
         f"plan 1 of {KEY}, {path}, is no longer the text the operator approved; they approve it again, or ask for a "
         "new one or skip it"
     )
-    assert dispatch_refused(conn, *WORK) == [("refused:plan_changed", changed)]
-    assert operator("plan", KEY, "--approve") == 0
-    assert dispatch_in_tick(conn, *WORK).code == 0
+    assert scenario.refuses(IMPLEMENT) == [("refused:plan_changed", changed)]
+    scenario.operator("plan", KEY, "--approve")
+    scenario.run(IMPLEMENT)
 
 
-def test_a_missing_plan_holds_a_resume_until_skipped(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    approve_policy(canopy_env)
-    run_id = planned(conn)
-    assert operator("plan", KEY, "--approve") == 0
-    assert dispatch_in_tick(conn, *WORK).code == 0
-    close_last_run(canopy_env, conn)
-    path = plan_file(canopy_env, run_id)
+def test_a_missing_plan_holds_a_resume_until_skipped(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    run_id = planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    scenario.run(IMPLEMENT)
+    path = plan_file(scenario.env, run_id)
     path.unlink()
     changed = (
         f"plan 1 of {KEY}, {path}, is no longer the text the operator approved; they approve it again, or ask for a "
         "new one or skip it"
     )
-    assert dispatch_refused(conn, *RESUME) == [("refused:plan_changed", changed)]
+    assert scenario.refuses(RESUME) == [("refused:plan_changed", changed)]
     # A file that is gone cannot be approved, and a ticket with a branch is not planned again: --skip is the way past.
-    capsys.readouterr()
-    assert operator("plan", KEY, "--approve") == 1
-    assert f"plan refused (bad_plan): plan 1's file {path} is missing" in capsys.readouterr().err
-    assert operator("plan", KEY) == 1
-    assert "plan refused (bad_plan): PROJ-1 already has work on agent/PROJ-1-work" in capsys.readouterr().err
-    assert operator("plan", KEY, "--skip") == 0
-    assert dispatch_in_tick(conn, *RESUME).code == 0
+    refused = scenario.operator("plan", KEY, "--approve", code=1)
+    assert f"plan refused (bad_plan): plan 1's file {path} is missing" in refused.err
+    refused = scenario.operator("plan", KEY, code=1)
+    assert "plan refused (bad_plan): PROJ-1 already has work on agent/PROJ-1-work" in refused.err
+    scenario.operator("plan", KEY, "--skip")
+    scenario.run(RESUME)
 
 
 def test_the_operators_plan_verbs_refuse_inside_a_run(
@@ -171,39 +147,31 @@ def test_the_operators_plan_verbs_refuse_inside_a_run(
     assert ticket.plan_setting is None
 
 
-def test_the_plan_verbs_refuse_while_a_plan_run_is_running(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    approve_policy(canopy_env)
-    planned(conn)
-    assert dispatch_in_tick(conn, *PLAN).code == 0
-    running = last_run(conn)["id"]
+def test_the_plan_verbs_refuse_while_a_plan_run_is_running(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    planned(scenario)
+    # A plan run still running: dispatched, its worker not yet started.
+    assert dispatch_in_tick(scenario.conn, *PLAN).code == 0
+    running = last_run(scenario.conn)["id"]
     for flags in VERBS:
-        assert operator("plan", KEY, *flags) == 1
+        refused = scenario.operator("plan", KEY, *flags, code=1)
         reason = f"plan run {running} for {KEY} is running; wait for it to end, then decide on its plan"
-        assert f"plan refused (bad_plan): {reason}" in capsys.readouterr().err
-    assert [p.status for p in plans.history(conn, KEY)] == [PlanStatus.PROPOSED]
+        assert f"plan refused (bad_plan): {reason}" in refused.err
+    assert [p.status for p in plans.history(scenario.conn, KEY)] == [PlanStatus.PROPOSED]
 
 
-def test_the_plan_verbs_need_a_ticket_canopy_knows(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    assert operator("plan", KEY) == 1
-    assert "plan refused (unknown): canopy has no record of PROJ-1" in capsys.readouterr().err
-    assert operator("plan", "chore:build") == 1
-    assert "plan refused (unsupported): chore:build is a chore" in capsys.readouterr().err
-    assert operator("plan", KEY, "--skip", "--approve") == 2
-    assert "--approve and --skip are each a decision of their own" in capsys.readouterr().err
+def test_the_plan_verbs_need_a_ticket_canopy_knows(scenario: Scenario) -> None:
+    assert "plan refused (unknown): canopy has no record of PROJ-1" in scenario.operator("plan", KEY, code=1).err
+    assert "plan refused (unsupported): chore:build is a chore" in scenario.operator("plan", "chore:build", code=1).err
+    refused = scenario.operator("plan", KEY, "--skip", "--approve", code=2)
+    assert "--approve and --skip are each a decision of their own" in refused.err
 
 
-def test_start_with_plan_starts_a_private_ticket_planned(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    assert operator("start", KEY, "--plan") == 0
-    assert "It is planned first" in capsys.readouterr().out
-    ticket = present(db.get_ticket(conn, KEY))
+def test_start_with_plan_starts_a_private_ticket_planned(scenario: Scenario) -> None:
+    assert "It is planned first" in scenario.operator("start", KEY, "--plan").out
+    ticket = present(db.get_ticket(scenario.conn, KEY))
     assert ticket.plan_setting is PlanSetting.PLAN
-    assert conversation.is_started(conversation.start_of(conn, KEY))
+    assert conversation.is_started(conversation.start_of(scenario.conn, KEY))
     assert plans.needed("off", ticket.plan_setting)
 
 
@@ -217,30 +185,26 @@ def test_start_with_plan_refuses_a_ticket_with_a_branch(
     assert conversation.start_of(conn, KEY) is None
 
 
-def test_start_with_plan_refuses_while_a_plan_run_is_running(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    approve_policy(canopy_env)
-    assert dispatch_in_tick(conn, *PLAN).code == 0
-    running = last_run(conn)["id"]
-    capsys.readouterr()
-    assert operator("start", KEY, "--plan") == 1
-    assert f"start refused (bad_plan): plan run {running} for {KEY} is running" in capsys.readouterr().err
-    assert conversation.start_of(conn, KEY) is None
+def test_start_with_plan_refuses_while_a_plan_run_is_running(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    # A plan run still running: dispatched, its worker not yet started.
+    assert dispatch_in_tick(scenario.conn, *PLAN).code == 0
+    running = last_run(scenario.conn)["id"]
+    refused = scenario.operator("start", KEY, "--plan", code=1)
+    assert f"start refused (bad_plan): plan run {running} for {KEY} is running" in refused.err
+    assert conversation.start_of(scenario.conn, KEY) is None
 
 
-def test_grant_plan_raises_the_tickets_plan_limit(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    canopy_env.append_shared("\n[policy]\nmax_plan_attempts = 1\n")
-    planned(conn)
+def test_grant_plan_raises_the_tickets_plan_limit(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy={"max_plan_attempts": 1})
+    planned(scenario)
     reason = "PROJ-1 has had 1 plan runs and the limit is 1"
-    assert dispatch_refused(conn, *PLAN) == [("refused:attempt_limit", reason), ("attention:attempt_limit", reason)]
-    assert operator("grant", KEY, "plan", "--repo", "repo") == 1
-    assert "grant refused (bad_repo): a plan's limit is the ticket's own; leave out --repo" in capsys.readouterr().err
-    assert operator("grant", KEY, "plan") == 0
-    assert "PROJ-1 has had 1 plan runs, and may now have 2." in capsys.readouterr().out
-    assert dispatch_in_tick(conn, *PLAN).code == 0
+    plan = dispatches(kind=RunKind.PLAN)
+    assert scenario.refuses(plan) == [("refused:attempt_limit", reason), ("attention:attempt_limit", reason)]
+    refused = scenario.operator("grant", KEY, "plan", "--repo", "repo", code=1)
+    assert "grant refused (bad_repo): a plan's limit is the ticket's own; leave out --repo" in refused.err
+    assert "PROJ-1 has had 1 plan runs, and may now have 2." in scenario.operator("grant", KEY, "plan").out
+    planned(scenario)
 
 
 def test_grant_plan_refuses_inside_a_run_and_an_unknown_ticket(

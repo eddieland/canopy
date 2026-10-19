@@ -2,7 +2,6 @@
 
 import json
 import os
-import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -16,30 +15,26 @@ from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
-from tests.canopy.helpers import (
-    LABEL,
-    WORKER_DONE,
-    InlineRunner,
-    chore_reports,
-    in_tick,
-    messages,
-    overseer_does,
-    overseer_records,
-    worker_does,
-)
+from tests.canopy.helpers import InlineRunner, canopy, chore_reports, in_tick, messages, waits, worker_does
+from tests.canopy.scenario_helpers import Scenario, asks, dispatches, raises
 from tests.conftest import CanopyEnv, GitPool
 
+#: The line an overseer that gave up ends on, in place of the one that ends a tick.
+GAVE_UP = "gave up"
 
-def add_sink(env: CanopyEnv, script: Path, name: str, out: Path, *, extra: str = "") -> None:
-    env.append_user(f"\n[notify.sinks.{name}]\ncmd = '{script} {out} {out}.exit'\n{extra}")
+
+def add_sink(scenario: Scenario, script: Path, name: str, out: Path, **settings: object) -> None:
+    """Configure the sink `name`, with `settings`: `script` appends to `out`, failing with the number in `out`.exit."""
+    scenario.configures(notify={"sinks": {name: {"cmd": f"{script} {out} {out}.exit", **settings}}})
 
 
 def json_messages(out: Path) -> list[dict[str, Any]]:
     return [json.loads(m) for m in messages(out)]
 
 
-def tick(*, ok: bool = True) -> None:
-    assert main(["tick"]) == (0 if ok else 1)
+def needing_reviewers(*keys: str) -> list[list[str]]:
+    """The overseer raises each of `keys` on the attention list as needing a reviewer."""
+    return [raises(key, "needs_reviewer") for key in keys]
 
 
 @pytest.mark.parametrize(
@@ -84,66 +79,45 @@ def test_a_repository_cannot_add_a_sink(canopy_env: CanopyEnv) -> None:
         load(canopy_env.root, canopy_env.user_file)
 
 
-def test_notify_cmd_is_the_sink_named_default(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-) -> None:
+def test_notify_cmd_is_the_sink_named_default(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
     """`notify.cmd` is the sink `default`: what was notified as `default` is not notified again."""
-    conn = canopy_env.journal()
+    conn = scenario.conn
     conn.execute(
         "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
         "VALUES ('default', ?, 'PROJ-3', 'needs_reviewer', NULL, 'x')",
         (fingerprint("PROJ-3", "needs_reviewer"),),
     )
     out = tmp_path / "notified.txt"
-    canopy_env.append_user(f"\n[notify]\ncmd = '{sink_script} {out}'\n")
-    with overseer_records(("PROJ-3", "needs_reviewer")):
-        tick()
-        assert messages(out) == []
-        rows = [tuple(r) for r in conn.execute("SELECT sink, ticket_key, reason FROM notifications")]
-        assert rows == [("default", "PROJ-3", "needs_reviewer")]
+    scenario.configures(notify={"cmd": f"{sink_script} {out}"})
+    scenario.tick(*needing_reviewers("PROJ-3"))
+    assert messages(out) == []
+    rows = [tuple(r) for r in conn.execute("SELECT sink, ticket_key, reason FROM notifications")]
+    assert rows == [("default", "PROJ-3", "needs_reviewer")]
 
-        # Renamed to a sink of its own, it is new there and hears about every open item once.
-        canopy_env.write_user(
-            canopy_env.user_file.read_text().replace("[notify]\ncmd", "[notify.sinks.mine]\nformat = 'text'\ncmd")
-        )
-        tick()
+    # Renamed to a sink of its own, it is new there and hears about every open item once. A key `configures` sets
+    # stays set, so the rename is written into the file.
+    env = scenario.env
+    env.write_user(env.user_file.read_text().replace("[notify]\ncmd", "[notify.sinks.mine]\nformat = 'text'\ncmd"))
+    scenario.tick(*needing_reviewers("PROJ-3"))
     [message] = messages(out)
     assert "+ PROJ-3 needs_reviewer: PROJ-3 detail\n" in message
     assert [tuple(r) for r in conn.execute("SELECT sink FROM notifications")] == [("mine",)]
 
 
-def test_a_json_sink_hears_about_runs(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-) -> None:
+def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path) -> None:
     out = tmp_path / "slack.txt"
-    add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "loop", "runs"]\n')
-    with overseer_does():
-        tick()  # the sink's first publish: from here on it hears every event
-    conn = canopy_env.journal()
+    add_sink(scenario, sink_script, "slack", out, events=["attention", "loop", "runs"])
+    scenario.tick()  # the sink's first publish: from here on it hears every event
     question = "Should the retry be per request or per session?\nThe ticket says both."
     blocked = json.dumps({"status": "blocked", "branch": "agent/PROJ-1-work", "summary": "x", "question": question})
-    with in_tick(conn, ends_ok=True), worker_does(result=blocked):
-        assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
-        runner = InlineRunner()
-        assert (
-            main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
-        )
-        assert main(["_run", "1"], runner=runner) == 0
-    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
-        tick()
+    titled("PROJ-1", "Retry failed checkouts", scenario)
+    scenario.run(worker=worker_does(result=blocked))
+    scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
 
     [message] = json_messages(out)
     assert message["version"] == 1
     assert message["sink"] == "slack"
-    assert message["repo"] == str(canopy_env.root)
+    assert message["repo"] == str(scenario.env.root)
     assert message["attention"]["added"] == [
         {
             "ticket": "PROJ-9",
@@ -173,56 +147,46 @@ def test_a_json_sink_hears_about_runs(
     assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 needs_reviewer: PROJ-9 detail\n> ")
 
     # Delivered events are not sent again.
-    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
-        tick()
+    scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1
 
 
-def test_without_sinks_no_event_is_recorded(canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
-    conn = canopy_env.journal()
-    with in_tick(conn), worker_does():
-        runner = InlineRunner()
-        assert (
-            main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
-        )
-        assert main(["_run", "1"], runner=runner) == 0
-        assert conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
+def titled(key: str, title: str, scenario: Scenario) -> None:
+    """Record `key`'s title, as an overseer does once it has read the ticket, in a tick of its own."""
+    with in_tick(scenario.conn, ends_ok=True):
+        assert main(["ticket", "set", key, "--title", title]) == 0
+
+
+def test_without_sinks_no_event_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.run(worker=worker_does())
+    assert scenario.conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
 
 
 def test_a_failing_sink_does_not_hold_back_another_and_catches_up(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    scenario: Scenario, sink_script: Path, tmp_path: Path
 ) -> None:
     """M10's acceptance against the fakes: one sink down for several ticks, the other reports it, then it catches up."""
     slack, desk = tmp_path / "slack.txt", tmp_path / "desk.txt"
-    add_sink(canopy_env, sink_script, "desk", desk, extra="format = 'text'\n")
-    add_sink(canopy_env, sink_script, "slack", slack)
+    add_sink(scenario, sink_script, "desk", desk, format="text")
+    add_sink(scenario, sink_script, "slack", slack)
     (Path(f"{slack}.exit")).write_text("1")
     for i in range(1, 5):
-        with overseer_records(*((f"PROJ-{n}", "needs_reviewer") for n in range(1, i + 1))):
-            tick()
+        scenario.tick(*needing_reviewers(*(f"PROJ-{n}" for n in range(1, i + 1))))
     # Every delivery to slack failed, so it was told nothing; desk heard each change and, once, that slack is failing.
-    conn = canopy_env.journal()
+    conn = scenario.conn
     assert conn.execute("SELECT count(*) FROM notifications WHERE sink = 'slack'").fetchone()[0] == 0
     desk_messages = messages(desk)
     assert len(desk_messages) == 4
     failing = [m for m in desk_messages if "! sink slack has failed 3 deliveries in a row" in m]
     assert len(failing) == 1
     assert "exited 1: sink down" in failing[0]
-    capsys.readouterr()
-    assert main(["status"]) == 0
-    status = capsys.readouterr().out
+    status = scenario.operator("status").out
     assert "  slack  never delivered; 1 events waiting; 4 failed in a row: exited 1: sink down\n" in status
     assert "  desk  last delivered " in status
 
     # Back up: one message with the net change, all four items.
     Path(f"{slack}.exit").unlink()
-    with overseer_records(*((f"PROJ-{n}", "needs_reviewer") for n in range(1, 5))):  # as the last tick left them
-        tick()
+    scenario.tick(*needing_reviewers(*(f"PROJ-{n}" for n in range(1, 5))))  # as the last tick left them
     *_, caught_up = json_messages(slack)
     assert [a["ticket"] for a in caught_up["attention"]["added"]] == ["PROJ-1", "PROJ-2", "PROJ-3", "PROJ-4"]
     # It takes `loop`, so it hears that it was failing.
@@ -231,117 +195,75 @@ def test_a_failing_sink_does_not_hold_back_another_and_catches_up(
     assert tuple(row) == (0, None)
 
 
-def test_loop_failing_and_recovered_are_sent_once_each(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-) -> None:
+def test_loop_failing_and_recovered_are_sent_once_each(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
     out = tmp_path / "phone.txt"
-    add_sink(canopy_env, sink_script, "phone", out, extra='format = "text"\nevents = ["loop"]\n')
-    with overseer_does(result="gave up"):
-        for _ in range(5):
-            tick(ok=False)
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    for _ in range(5):
+        scenario.tick(result=GAVE_UP, code=1)
     [failing] = messages(out)
     assert failing.startswith("canopy: 1 event\n! loop failing: 3 ticks in a row ended other than ok; latest tick 3 ")
-    with overseer_does():
-        tick()
-        tick()
-    listing = f"Full list: {canopy_env.state_dir / 'attention.md'}\n"
+    scenario.tick()
+    scenario.tick()
+    listing = f"Full list: {scenario.env.state_dir / 'attention.md'}\n"
     assert messages(out)[1] == f"canopy: 1 event\n! loop recovered after 5 failed ticks\n{listing}"
     assert len(messages(out)) == 2
 
 
-def test_a_long_failing_streak_is_one_streak(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-) -> None:
+def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
     """Pruning keeps the streak's `loop.failing`, and the recovery counts every failed tick, however many."""
     out = tmp_path / "phone.txt"
-    add_sink(canopy_env, sink_script, "phone", out, extra='format = "text"\nevents = ["loop"]\n')
-    with overseer_does(result="gave up"):
-        for _ in range(3):
-            tick(ok=False)
-        assert len(messages(out)) == 1
-        conn = canopy_env.journal()
-        conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
-        conn.executemany(
-            "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, 'overseer_failed')",
-            [(db.now(), db.now())] * 1100,
-        )
-        tick(ok=False)
-        tick(ok=False)
-        assert len(messages(out)) == 1
-    with overseer_does():
-        tick()
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    for _ in range(3):
+        scenario.tick(result=GAVE_UP, code=1)
+    assert len(messages(out)) == 1
+    conn = scenario.conn
+    # The events alone age past pruning, not the ticks of the streak. An event's time is its `at`.
+    conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
+    conn.executemany(
+        "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, 'overseer_failed')",
+        [(db.now(), db.now())] * 1100,
+    )
+    scenario.tick(result=GAVE_UP, code=1)
+    scenario.tick(result=GAVE_UP, code=1)
+    assert len(messages(out)) == 1
+    scenario.tick()
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
 
 def test_a_digest_arrives_on_its_interval_even_when_quiet(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
+    scenario: Scenario, sink_script: Path, tmp_path: Path
 ) -> None:
     out = tmp_path / "digest.txt"
-    add_sink(canopy_env, sink_script, "daily", out, extra='format = "text"\nevents = []\ndigest_every_minutes = 60\n')
-    with overseer_does():
-        tick()
-        [first] = messages(out)
-        assert first.startswith("canopy digest\nDigest since ")
-        assert ": 1 ticks (ok 1)\n  nothing ran\n  nothing needs you\n  workers running: 0\n" in first
-        tick()
-        assert len(messages(out)) == 1  # not due again yet
-        conn = canopy_env.journal()
-        earlier = db.format_time(datetime.now(UTC) - timedelta(minutes=61))
-        conn.execute("UPDATE notify_sinks SET last_digest_at = ?", (earlier,))
-        tick()
+    add_sink(scenario, sink_script, "daily", out, format="text", events=[], digest_every_minutes=60)
+    scenario.tick()
+    [first] = messages(out)
+    assert first.startswith("canopy digest\nDigest since ")
+    assert ": 1 ticks (ok 1)\n  nothing ran\n  nothing needs you\n  workers running: 0\n" in first
+    scenario.tick()
+    assert len(messages(out)) == 1  # not due again yet
+    scenario.time_passes(minutes=61)
+    [earlier] = scenario.conn.execute("SELECT last_digest_at FROM notify_sinks").fetchone()
+    scenario.tick()
     second = messages(out)[1]
-    assert f"Digest since {earlier}: 3 ticks (ok 3)" in second
-
-
-def run_worker(conn: sqlite3.Connection, ticket: str, *, result: str = WORKER_DONE) -> None:
-    """Dispatch and run one implement worker on `ticket` in a tick of its own, recording its run's events."""
-    with in_tick(conn, ends_ok=True), worker_does(result=result):
-        runner = InlineRunner()
-        assert main(["dispatch", ticket, "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
-        run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
-        assert main(["_run", str(run_id)], runner=runner) == 0
+    assert f"Digest since {earlier}: 2 ticks (ok 2)" in second
 
 
 def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
 ) -> None:
     out = tmp_path / "slack.txt"
-    add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "runs"]\nbatch_minutes = 30\n')
-    with overseer_records(("PROJ-9", "needs_reviewer")):
-        tick()  # the first delivery goes at once
+    add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
+    scenario.tick(*needing_reviewers("PROJ-9"))  # the first delivery goes at once
     assert len(messages(out)) == 1
-    conn = canopy_env.journal()
-    run_worker(conn, "PROJ-1")
-    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
-        tick()
+    scenario.run(worker=worker_does())
+    scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1  # held: a run started and ended, and nothing needs the operator
-    capsys.readouterr()
-    assert main(["status"]) == 0
-    assert "  slack  last delivered " in capsys.readouterr().out
+    assert "  slack  last delivered " in scenario.operator("status").out
 
-    run_worker(conn, "PROJ-2")
-    earlier = db.format_time(datetime.now(UTC) - timedelta(minutes=31))
-    conn.execute("UPDATE notify_sinks SET last_delivery_at = ?", (earlier,))
+    scenario.run(dispatches("PROJ-2"), worker=worker_does())
+    scenario.time_passes(minutes=31)
     # PROJ-9 resolved meanwhile: resolving is not urgent either, but the window is over.
-    with overseer_records(waiting=("PROJ-1", "PROJ-2", "PROJ-9")):
-        tick()
+    scenario.tick(*waits("PROJ-1", "PROJ-2", "PROJ-9"))
     [_, batch] = json_messages(out)
     assert [(e["kind"], e["ticket"]) for e in batch["events"]] == [
         ("run.started", "PROJ-1"),
@@ -350,38 +272,27 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
         ("run.ended", "PROJ-2"),
     ]
     assert [r["ticket"] for r in batch["attention"]["resolved"]] == ["PROJ-9"]
-    with overseer_records(waiting=("PROJ-1", "PROJ-2", "PROJ-9")):
-        tick()
+    scenario.tick(*waits("PROJ-1", "PROJ-2", "PROJ-9"))
     assert len(messages(out)) == 2  # nothing new, and the cursor moved past what the batch sent
 
 
 @pytest.mark.parametrize("urgent", ["attention", "blocked"])
 def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-    urgent: str,
+    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path, urgent: str
 ) -> None:
     out = tmp_path / "slack.txt"
-    add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "runs"]\nbatch_minutes = 30\n')
-    with overseer_records(("PROJ-9", "needs_reviewer")):
-        tick()
-    conn = canopy_env.journal()
-    run_worker(conn, "PROJ-1")
-    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
-        tick()
+    add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
+    scenario.tick(*needing_reviewers("PROJ-9"))
+    scenario.run(worker=worker_does())
+    scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1
+    attention = needing_reviewers("PROJ-9")
     if urgent == "blocked":
-        blocked = json.dumps({"status": "blocked", "branch": "agent/PROJ-2-work", "summary": "x", "question": "Which?"})
-        run_worker(conn, "PROJ-2", result=blocked)
-        attention: tuple[tuple[str, str], ...] = (("PROJ-9", "needs_reviewer"),)
+        scenario.run(dispatches("PROJ-2"), worker=asks("Which?"))
     else:
-        run_worker(conn, "PROJ-2")
-        attention = (("PROJ-9", "needs_reviewer"), ("PROJ-8", "ready_to_merge"))
-    with overseer_records(*attention, waiting=("PROJ-1", "PROJ-2")):
-        tick()
+        scenario.run(dispatches("PROJ-2"), worker=worker_does())
+        attention.append(raises("PROJ-8", "ready_to_merge"))
+    scenario.tick(*attention, *waits("PROJ-1", "PROJ-2"))
     [_, sent] = json_messages(out)
     assert [(e["kind"], e["ticket"]) for e in sent["events"]] == [
         ("run.started", "PROJ-1"),
@@ -393,116 +304,78 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
 
 
 def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
+    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
 ) -> None:
     out = tmp_path / "desk.txt"
-    add_sink(canopy_env, sink_script, "desk", out, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n')
-    with overseer_records(("PROJ-9", "needs_reviewer")):
-        tick()
-    run_worker(canopy_env.journal(), "PROJ-1")
-    with overseer_does(result="gave up"):
-        tick(ok=False)
-        tick(ok=False)
-        assert len(messages(out)) == 1  # the runs are held
-        tick(ok=False)
+    add_sink(scenario, sink_script, "desk", out, events=["attention", "loop", "runs"], batch_minutes=30)
+    scenario.tick(*needing_reviewers("PROJ-9"))
+    scenario.run(worker=worker_does())
+    scenario.tick(result=GAVE_UP, code=1)
+    scenario.tick(result=GAVE_UP, code=1)
+    assert len(messages(out)) == 1  # the runs are held
+    scenario.tick(result=GAVE_UP, code=1)
     [_, sent] = json_messages(out)
     assert [e["kind"] for e in sent["events"]] == ["run.started", "run.ended", "loop.failing"]
 
 
 def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
+    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
 ) -> None:
     down, desk = tmp_path / "alerts.txt", tmp_path / "desk.txt"
-    add_sink(canopy_env, sink_script, "alerts", down)  # before desk in name order, so desk hears it the same tick
-    add_sink(
-        canopy_env, sink_script, "desk", desk, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n'
-    )
+    add_sink(scenario, sink_script, "alerts", down)  # before desk in name order, so desk hears it the same tick
+    add_sink(scenario, sink_script, "desk", desk, events=["attention", "loop", "runs"], batch_minutes=30)
     Path(f"{down}.exit").write_text("1")
-    with overseer_records(("PROJ-9", "needs_reviewer")):
-        tick()
-    run_worker(canopy_env.journal(), "PROJ-1")
-    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
-        tick()
-        assert len(messages(desk)) == 1  # the runs are held
-        tick()  # alerts' third failure in a row
+    scenario.tick(*needing_reviewers("PROJ-9"))
+    scenario.run(worker=worker_does())
+    scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
+    assert len(messages(desk)) == 1  # the runs are held
+    scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))  # alerts' third failure in a row
     [_, sent] = json_messages(desk)
     assert [e["kind"] for e in sent["events"]] == ["run.started", "run.ended", "loop.sink_failing"]
 
 
 def test_a_json_digest_names_each_ticket_by_its_title(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
+    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
 ) -> None:
     out = tmp_path / "digest.txt"
-    add_sink(canopy_env, sink_script, "daily", out, extra="events = []\ndigest_every_minutes = 60\n")
-    conn = canopy_env.journal()
-    blocked = json.dumps({"status": "blocked", "summary": "x", "question": "Which?"})
-    with in_tick(conn, ends_ok=True), worker_does(result=blocked):
-        assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
-        runner = InlineRunner()
-        assert (
-            main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
-        )
-        assert main(["_run", "1"], runner=runner) == 0
-    with overseer_records(waiting=("PROJ-1",)):
-        tick()
+    add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
+    titled("PROJ-1", "Retry failed checkouts", scenario)
+    scenario.run(worker=worker_does(result=json.dumps({"status": "blocked", "summary": "x", "question": "Which?"})))
+    scenario.tick(*waits("PROJ-1"))
 
     [message] = json_messages(out)
     assert message["digest"]["blocked"] == [{"ticket": "PROJ-1", "title": "Retry failed checkouts", "run": 1}]
     assert "  blocked PROJ-1\n" in message["text"]  # the text format shows the key alone
 
 
-def test_bounds_count_what_they_leave_out(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-) -> None:
+def test_bounds_count_what_they_leave_out(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
     out = tmp_path / "out.txt"
-    add_sink(canopy_env, sink_script, "s", out, extra='format = "text"\n')
-    with overseer_records(*((f"PROJ-{n:02}", "needs_reviewer") for n in range(25))):
-        tick()
+    add_sink(scenario, sink_script, "s", out, format="text")
+    scenario.tick(*needing_reviewers(*(f"PROJ-{n:02}" for n in range(25))))
     [message] = messages(out)
     lines = message.splitlines()
     assert lines[0] == "canopy attention: 25 new, 0 resolved"
     assert sum(line.startswith("+ ") for line in lines) == 20
-    assert lines[-2] == f"... and 5 more: see {canopy_env.state_dir / 'attention.md'} and `canopy status`"
-    conn = canopy_env.journal()
-    assert conn.execute("SELECT count(*) FROM notifications WHERE sink = 's'").fetchone()[0] == 25
+    assert lines[-2] == f"... and 5 more: see {scenario.env.state_dir / 'attention.md'} and `canopy status`"
+    assert scenario.conn.execute("SELECT count(*) FROM notifications WHERE sink = 's'").fetchone()[0] == 25
 
 
 def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
+    scenario: Scenario, sink_script: Path, tmp_path: Path
 ) -> None:
-    conn = canopy_env.journal()
+    conn = scenario.conn
     old = tmp_path / "old.txt"
-    add_sink(canopy_env, sink_script, "old", old, extra='events = ["runs"]\n')
-    with overseer_does():
-        tick()  # creates the sink's row at the newest event
-        day_ago = db.format_time(datetime.now(UTC) - timedelta(hours=25))
-        for n in range(3):
-            event = db.Event("runs", "run.started", {"ticket": f"PROJ-{n}", "run": n, "run_kind": "implement"})
-            db.record_event(conn, event)
-        conn.execute("UPDATE notify_events SET at = ? WHERE id = 1", (day_ago,))
-        new = tmp_path / "new.txt"
-        add_sink(canopy_env, sink_script, "new", new, extra='events = ["runs"]\n')
-        tick()
+    add_sink(scenario, sink_script, "old", old, events=["runs"])
+    scenario.tick()  # creates the sink's row at the newest event
+    day_ago = db.format_time(datetime.now(UTC) - timedelta(hours=25))
+    for n in range(3):
+        event = db.Event("runs", "run.started", {"ticket": f"PROJ-{n}", "run": n, "run_kind": "implement"})
+        db.record_event(conn, event)
+    # Only the first of the three is a day old. An event's time is its `at`.
+    conn.execute("UPDATE notify_events SET at = ? WHERE id = 1", (day_ago,))
+    new = tmp_path / "new.txt"
+    add_sink(scenario, sink_script, "new", new, events=["runs"])
+    scenario.tick()
     [message] = json_messages(old)
     assert [e["ticket"] for e in message["events"]] == ["PROJ-1", "PROJ-2"]
     assert message["omitted"] == 1
@@ -510,51 +383,42 @@ def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
 
 
 def test_removed_sinks_are_forgotten_and_passed_events_pruned(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
+    scenario: Scenario, sink_script: Path, tmp_path: Path
 ) -> None:
-    conn = canopy_env.journal()
-    before = canopy_env.user_file.read_text()
-    add_sink(canopy_env, sink_script, "s", tmp_path / "s.txt", extra='events = ["attention", "runs"]\n')
-    with overseer_records(("PROJ-1", "needs_reviewer")):
-        tick()
-        db.record_event(conn, db.Event("runs", "run.started", {"ticket": "PROJ-1"}))
-        tick()
-        week_ago = db.format_time(datetime.now(UTC) - timedelta(days=8))
-        conn.execute("UPDATE notify_events SET at = ?", (week_ago,))
-        tick()
-        assert conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
-        canopy_env.write_user(before)
-        tick()
-        assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
-        assert conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 0
+    conn = scenario.conn
+    before = scenario.env.user_file.read_text()
+    add_sink(scenario, sink_script, "s", tmp_path / "s.txt", events=["attention", "runs"])
+    scenario.tick(*needing_reviewers("PROJ-1"))
+    db.record_event(conn, db.Event("runs", "run.started", {"ticket": "PROJ-1"}))
+    scenario.tick(*needing_reviewers("PROJ-1"))
+    # The events alone age past pruning. An event's time is its `at`.
+    week_ago = db.format_time(datetime.now(UTC) - timedelta(days=8))
+    conn.execute("UPDATE notify_events SET at = ?", (week_ago,))
+    scenario.tick(*needing_reviewers("PROJ-1"))
+    assert conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
+    # A key `configures` sets stays set, so the sink goes as the file is put back.
+    scenario.env.write_user(before)
+    scenario.tick(*needing_reviewers("PROJ-1"))
+    assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
+    assert conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 0
 
 
 def test_notify_test_sends_now_and_changes_nothing(
-    canopy_env: CanopyEnv,
-    sink_script: Path,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    scenario: Scenario, sink_script: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     a, b = tmp_path / "a.txt", tmp_path / "b.txt"
-    add_sink(canopy_env, sink_script, "a", a)
-    add_sink(canopy_env, sink_script, "b", b, extra="format = 'text'\n")
+    add_sink(scenario, sink_script, "a", a)
+    add_sink(scenario, sink_script, "b", b, format="text")
     Path(f"{b}.exit").write_text("3")
-    assert main(["notify", "test"]) == 1
-    assert capsys.readouterr().out == "a: delivered\nb: failed: exited 3: sink down\n"
+    assert scenario.operator("notify", "test", code=1).out == "a: delivered\nb: failed: exited 3: sink down\n"
     [message] = json_messages(a)
     assert message["events"][0]["kind"] == "test"
     assert message["attention"] is None
     assert messages(b)[0].startswith("canopy: 1 event\n* canopy test message for ")
-    assert main(["notify", "test", "a"]) == 0
-    assert main(["notify", "test", "nope"]) == 1
-    assert "no sink named 'nope'; configured: a, b" in capsys.readouterr().err
-    conn = canopy_env.journal()
-    assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
-    # Neither the overseer nor a worker, review, or chore it started may page the operator.
+    scenario.operator("notify", "test", "a")
+    assert "no sink named 'nope'; configured: a, b" in scenario.operator("notify", "test", "nope", code=1).err
+    assert scenario.conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
+    # Neither the overseer nor a worker, review, or chore it started may page the operator: not the operator's shell.
     for name in ("CANOPY_TICK_ID", "CANOPY_RUN_ID"):
         with mock.patch.dict(os.environ, {name: "1"}):
             assert main(["notify", "test"]) == 1
@@ -562,32 +426,21 @@ def test_notify_test_sends_now_and_changes_nothing(
     assert (len(messages(a)), len(messages(b))) == (2, 1)
 
 
-def test_chore_runs_reach_a_sink_that_takes_chores(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    sink_script: Path,
-    tmp_path: Path,
-) -> None:
-    prompt = canopy_env.home / "chore.md"
+def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
+    prompt = scenario.env.home / "chore.md"
     prompt.write_text("Check.\n")
-    canopy_env.append_user(
-        f"\n[chores.check]\nprompt = '{prompt}'\nevery_minutes = 60\n"
-        "cmd = 'agent run --agent canopy-chore {prompt}'\n"
-    )
+    chore_cmd = "agent run --agent canopy-chore {prompt}"
+    scenario.configures(chores={"check": {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd}})
     out = tmp_path / "chores.txt"
-    add_sink(canopy_env, sink_script, "s", out, extra='format = "text"\nevents = ["chores"]\n')
-    wait = [["canopy", "chore", "wait", "check", "--rationale", "not needed yet"]]
-    with overseer_does(*wait):
-        tick()
-    conn = canopy_env.journal()
+    add_sink(scenario, sink_script, "s", out, format="text", events=["chores"])
+    scenario.tick(canopy("chore", "wait", "check", "--rationale", "not needed yet"))
     chore: dict[str, object] = {"status": "ok", "summary": "all clear", "findings": []}
     # The chore's result stays set through the next tick, as the overseer's does.
-    with overseer_does(), chore_reports(chore):
-        with in_tick(conn, ends_ok=True):
+    with chore_reports(chore):
+        with in_tick(scenario.conn, ends_ok=True):
             assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
-        tick()
+        scenario.tick()
     [message] = messages(out)
     assert "< chore:check run 1 ended ok (0 findings): all clear\n" in message
 
