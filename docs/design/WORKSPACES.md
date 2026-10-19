@@ -372,6 +372,8 @@ Harness attention items for runs (§14) stay per ticket, their detail naming the
 
 ### Splitting
 
+ROADMAP M46 replaces splitting with follow-up tickets (below) once it is built; until then this is what canopy does.
+
 canopy splits a ticket in the tracker only when asked, in an authorized replier's comment rather than by a label anyone
 who can label could add, and never schedules what it split: children start without a queue label, so a human
 authorizes each (TRUST_MODEL T1).
@@ -417,6 +419,147 @@ authorizes each (TRUST_MODEL T1).
 - A child is an ordinary one-repository ticket. `canopy dispatch` for a recorded split child refuses any `--repo` but
   the recorded one (`unknown_repo`), so editing its `canopy-repo` line changes nothing, and refuses another split
   (`bad_split`). A ticket split by hand has no such record; the overseer chooses its repository as for any ticket.
+
+### Follow-up tickets
+
+Designed for ROADMAP M46, not built. The PR that builds it puts this in place of Splitting, above, and edits §7, §8,
+§11, §12, §14, §17, §22, §24, §25, §28, and §29 where they name splits, the split's checks, or the queue label as a
+ticket's only authorization.
+
+A worker that finds work outside its ticket files it as a follow-up ticket, and canopy works it under its ticket's
+authorization. The line T1 drew moves: a human's queue label on a ticket authorizes it and the follow-ups its runs
+file, since that work happens on a branch in a leased worktree and lands only through a PR a human reviews and merges.
+Humans still authorize everything that lands, and canopy still never merges (TRUST_MODEL §6). Splitting stops being a
+kind of its own: its worker, whose only output was tickets, never ran live (SCENARIOS S15), and a split becomes a run
+that files follow-ups on request.
+
+**Filing.**
+
+- An `implement` or `resume` worker on a public ticket that is not itself a follow-up may file them. A private ticket's
+  worker writes nothing to the tracker (§22) and files none; nor do plans, reviews, chores, or the overseer, none of
+  which writes there.
+- A follow-up is work outside the ticket, found while doing it: a TODO the change leaves, a fix the worker saw and did
+  not make, a next step the change makes possible. The ticket's own work the worker does itself, and moves into
+  follow-ups only when asked to split (below), so `multi_repo` stays for a ticket nobody asked to split. A ticket that
+  filed follow-ups is otherwise unchanged: it goes on to its PRs and is done when they merge, whatever its follow-ups'
+  state.
+- It is created in the ticket's project, linked to the ticket as its parent the way the provider skill says, with no
+  assignee and no labels, a queue label and `needs_human_label` included. Its body says what it covers and, when one
+  repository applies, names it on a line `canopy-repo: web`, for people; dispatch reads the journal's record, never the
+  body. A follow-up that must land after another ticket, its parent among them, gets the tracker's blocker relation,
+  so ordering and stacking apply (§10). The worker's comment on its ticket lists the follow-ups it filed.
+- §17's contract gains an optional row, creating a ticket linked to a parent and reading that link (worker); on a
+  tracker without it, workers file none.
+
+**The result.** The result line (§8) gains `"created": {"PROJ-14": "web", "PROJ-15": null}`: every ticket the run
+created, also when it ends `blocked` or `failed`, each with the repository it is for, or null to leave that to the
+overseer. It is optional, and absent means none. `_run` checks each entry alone, in step 7's transaction, and records
+those that pass:
+
+- a valid ticket key (§17), not the run's own ticket, and new to the journal: no ticket row and no follow-up record;
+- a repository in the map, or null;
+- at most `policy.max_follow_ups` from one run, the first in the result's order;
+- none from a run whose ticket is itself a follow-up, or from a private run.
+
+An entry refused is not recorded, and the run's harness note says why; the run's status stays the worker's, since a
+side output must not cost the run its PRs. A run with no valid result line records none: what it created are ordinary
+tickets, and its `unknown_result` item (§14) is the operator's cue.
+
+**The journal** records each follow-up as a fact of the loop's: its key, its parent, the run that reported it, its
+repository or none, and when. It is written only from a validated result, and generalizes the split children record,
+whose rows the migration carries over as follow-ups of their parents, reported by their split runs. A split child was
+filed by a labeled ticket's run at an authorized replier's request, so the new line authorizes it as it does any
+follow-up.
+
+**Working a follow-up.**
+
+- A recorded follow-up is a candidate without a queue label: its authorization is its parent's. The state block
+  carries each one not done, with its parent, repository, and the run that filed it, in place of the split children, so
+  the overseer reads it with the block's tickets whatever the query returns. From there it is an ordinary ticket, with
+  its own phases, units, and attempt limits, and a plan when §25 asks for one.
+- `canopy dispatch` for a recorded follow-up needs no `--label`: its record is checked instead, in code. It is refused
+  `parent_withdrawn` while the parent's start record is stopped (§22), or when the parent was forgotten after the
+  follow-up was recorded; a withdrawn follow-up also leaves the state block. With a `--label`, it is dispatched as any
+  labeled ticket, so a human's queue label on a follow-up authorizes it whatever became of its parent. `unknown_repo`
+  refuses any repository but the recorded one, or more than one, as it did a split child's.
+- The worker's re-read (D051) of a follow-up dispatched without `--label` is that the ticket is open and links the
+  parent its prompt names, in place of the label check; otherwise it reports `failed`, `not authorized:`, and changes
+  nothing. The check renders as `{{AUTHORIZATION}}`, as in the planner's prompt (§25), whose check on a follow-up is the
+  same. A prompt override without it is `bad_prompt` for a follow-up's run, rather than spend an attempt on a label
+  check that must fail.
+- `tracker.private` leaves a follow-up public: the switch turns a queue label into a start record (D119), and a
+  follow-up dispatched on its parent's authorization names none. Its parent was worked in public too, or it would have
+  filed nothing.
+- `canopy forget` of a parent no longer refuses: it withdraws the follow-ups recorded before it, and names each, for
+  the operator to close or label.
+
+**Bounds, in code.** At most `policy.max_follow_ups` recorded per run, default 5, and one generation deep: a follow-up's
+runs record none. `policy.*` is shared and the repository may only tighten it (§12), so a repository may lower it; at
+0, workers are told to file none and nothing is recorded. The bounds keep a well-meaning worker from fanning out. They
+do not stop a steered one, which can already add a queue label to any ticket it reaches, and M46 does not try: every
+label check is agent judgment (TRUST_MODEL T1), so the split's label-history checks go rather than generalize. What
+bounds an agent that authorizes its own work is the harness's guards (capacity, attempt limits, cooldowns, never
+merge) and a human reviewing every PR before it lands.
+
+A ticket a run reported and the journal did not record is an ordinary ticket, worked only with a queue label. The
+harness raises `follow_up_unrecorded` for it every tick, about the run's ticket, as it raises the run reasons (§14):
+the detail names the run and each such ticket, counting rather than naming a key that is not valid, and says a queue
+label starts one. Its cause is gone when the ticket is marked done or forgotten.
+
+**Splitting as guidance.** An authorized replier's comment or an operator message asking for a split is guidance to the
+ticket's next run: the `implement` of a ticket with no branch, or a `resume` for the reply. That run files the pieces
+as follow-ups, each naming its repository, ordered with the tracker's blocker relation, and does whatever of the work
+it keeps. Removed:
+
+- `--kind split`, refused `bad_kind` saying a split is a run that files follow-ups, as `fix-ci` is refused naming
+  `resume`; `--request`, `bad_request`, and `bad_split`;
+- the `split` phase, `split_unlabeled`, and `split_self_labeled`;
+- `runtime.split_cmd` and `policy.max_split_attempts`, removed keys whose errors say what replaced them;
+- the `canopy-splitter` definition and its sandbox role, `prompts/worker-split.md`, and SCENARIOS S2 and S15;
+- `canopy forget`'s `split` refusal, and §25's `bad_plan` for a split's parent.
+
+Old runs of kind `split` stay as history, and the kind stays in the vocabulary only to read them. The detached desk a
+split ran in stays, since the planner runs in one (§25).
+
+**What else changes**, in the PR that builds it. `canopy-worker` allows the tracker's tools that create and link
+tickets, which it denies by name today (D084). On GitHub, `issue_write` already creates issues and only the prompt
+kept the worker from it (TRUST_MODEL T6), so the line this moves was mostly prompt-deep already.
+`canopy-worker-private` is unchanged. TRUST_MODEL T1 (a worker may file follow-ups to its ticket, worked under its
+ticket's authorization; authorization checks on tickets are best effort, and the backstops are the guards in code and
+review of what lands), T3 (the bounds above), and T6 (a worker's write scope adds creating and linking tickets in its
+ticket's project); a decision entry for the new line, and D084's; and the overseer's and workers' prompts.
+
+Rejected:
+
+- Keeping the split kind beside follow-ups: a run kind, prompt, definition, and phase for what any worker can now do.
+- Follow-ups that wait for a queue label, as split children did: the operator moved the line, since the work lands
+  only through a PR a human reviews.
+- Checking that a follow-up was created during its parent's run, by the tracker's times: the harness reads no tracker
+  (D003), and a worker's check of it would be agent judgment again, as the label-history checks were.
+- A `canopy` verb a worker runs to record a follow-up: the result line is the one output `_run` validates and records
+  with its run, and a verb would let anything with a shell record one.
+- Refusing the whole result over one bad entry, as a split's was: a side output would cost the run its PRs.
+- Follow-ups of follow-ups: fan-out compounds with each generation, and one keeps every follow-up a labeled ticket's.
+
+Open, for the operator:
+
+- The parent's phase once a split request has moved its work into follow-ups and its run pushed nothing. As written it
+  reads `ready` again and gets another `implement`. It could wait until every follow-up is closed (the `split` phase
+  under another name), be marked done once its run ended `done` with follow-ups and no branch on origin, or be left to
+  a human with an attention item.
+- Whether a private ticket's worker should file journal-only follow-ups, which would be canopy's first subject with no
+  ticket in the tracker. Until then its report says what is left.
+- Whether an operator who wants the old line needs a switch of their own. `policy.max_follow_ups = 0`, which any config
+  file may set, has workers file none; a private switch that records follow-ups but makes them wait for a queue label
+  would be new.
+- Whether a parent that loses its queue label before it is done withdraws its follow-ups. As written only canopy's own
+  acts withdraw them, `stop` and `forget`, which the harness can check; the overseer could read the label, as judgment.
+- Whether `max_follow_ups` should bound a ticket rather than a run: a ticket in one repository that spends all its
+  `implement` and `resume` attempts could file 40 at the defaults.
+- How long `follow_up_unrecorded` stands: until the ticket is done or forgotten, as written, since the harness cannot
+  see the operator label or close the tickets it names; or only until the ticket's next run ends, if that proves noisy.
+- Whether, under `trust.review_replies = "approve"` (§29), a follow-up waits as a draft for the operator to file. As
+  written it is filed, read as a PR's title and body are: text that describes work, not the operator's words.
 
 ### Journal
 
