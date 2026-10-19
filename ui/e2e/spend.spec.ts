@@ -202,11 +202,19 @@ test('a week of one priced day draws one narrow bar, its segments apart, and the
     // The other six days are a 1px stub each, on the baseline the priced bar stands on.
     const stubs = chart.getByTestId('spend-stub')
     await expect(stubs).toHaveCount(6)
-    const barBottom = await bar.evaluate((el) => el.getBoundingClientRect().bottom)
-    for (const stub of await stubs.all()) {
-        const box = await stub.boundingBox()
-        expect(box?.height).toBe(1)
-        expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) - barBottom)).toBeLessThanOrEqual(1)
+    // One read of the layout for the bar and every stub: read apart, a shift above the chart between reads moves one
+    // and not the other.
+    const { barBottom, stubBoxes } = await chart.evaluate((el) => ({
+        barBottom: el.querySelector('[data-testid="spend-bar-2026-10-08"]')?.getBoundingClientRect().bottom ?? 0,
+        stubBoxes: [...el.querySelectorAll('[data-testid="spend-stub"]')].map((stub) => {
+            const box = stub.getBoundingClientRect()
+            return { height: box.height, bottom: box.bottom }
+        }),
+    }))
+    expect(stubBoxes).toHaveLength(6)
+    for (const box of stubBoxes) {
+        expect(box.height).toBe(1)
+        expect(Math.abs(box.bottom - barBottom)).toBeLessThanOrEqual(1)
     }
 
     // Every series with a cost that day is at least 2px tall, idle's few cents included, and 2px from the next.
