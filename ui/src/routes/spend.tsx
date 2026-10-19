@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
 
 import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
@@ -14,6 +13,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { TickRow } from '@/components/tick-row'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useMeasure } from '@/hooks/use-measure'
 import { axisNames, axisStep, HEADROOM } from '@/lib/chart'
 import type { AxisRoom } from '@/lib/chart'
 import { costText } from '@/lib/cost-total'
@@ -387,22 +387,11 @@ function ByDay({ days }: { days: SpendDay[] }) {
  * that often would touch, it names fewer days (`axisStep`).
  */
 function Chart({ days }: { days: SpendDay[] }) {
-    const [room, setRoom] = useState<AxisRoom | undefined>(undefined)
+    // The same room is the same state: a new object each time would render again for nothing.
+    const [measure, room] = useMeasure(axisRoom, undefined, { same: sameRoom })
     const top = chartTop(days) * HEADROOM
     const dearest = dearestDay(days)
     const step = axisStep(days.length, AXIS_ALL, room)
-    const measure = (chart: HTMLDivElement | null) => {
-        if (chart === null) {
-            return () => {}
-        }
-        const observer = new ResizeObserver(() => {
-            const next = axisRoom(chart)
-            // The same room is the same state: a new object each time would render again for nothing.
-            setRoom((was) => (was?.pitch === next?.pitch && was?.label === next?.label ? was : next))
-        })
-        observer.observe(chart)
-        return () => observer.disconnect()
-    }
     return (
         <div ref={measure} aria-hidden className="flex flex-col gap-1.5 px-3" data-testid="spend-chart">
             <div className="flex h-48 items-end justify-center gap-1">
@@ -454,6 +443,11 @@ function axisRoom(chart: HTMLElement): AxisRoom | undefined {
         pitch: second === undefined ? Number.POSITIVE_INFINITY : Math.round(second.left - first.left),
         label: Math.ceil((width / chars) * AXIS_NAME_CHARS) + AXIS_GAP,
     }
+}
+
+// Whether two measures of the axis leave it the same room.
+function sameRoom(before: AxisRoom | undefined, after: AxisRoom | undefined): boolean {
+    return before?.pitch === after?.pitch && before?.label === after?.label
 }
 
 /**

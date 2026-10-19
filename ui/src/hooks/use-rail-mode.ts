@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useMediaQuery } from '@/hooks/use-media-query'
 
 /** How the side rail shows: whole, or as a strip of the nav's icons. */
 export type RailMode = 'full' | 'strip'
@@ -11,17 +11,5 @@ const FULL = '(min-width: 64rem)'
  * `lg` a whole rail leaves a list too little room in a narrow window.
  */
 export function useRailMode(): RailMode {
-    return useSyncExternalStore(subscribe, railMode)
-}
-
-function subscribe(listener: () => void): () => void {
-    const query = globalThis.matchMedia(FULL)
-    query.addEventListener('change', listener)
-    return () => {
-        query.removeEventListener('change', listener)
-    }
-}
-
-function railMode(): RailMode {
-    return globalThis.matchMedia(FULL).matches ? 'full' : 'strip'
+    return useMediaQuery(FULL) ? 'full' : 'strip'
 }
