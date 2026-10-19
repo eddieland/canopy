@@ -14,7 +14,7 @@ from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
 from tests.canopy.conftest import Ws
-from tests.canopy.helpers import DRAFTS_PR, InlineRunner, agent_runs, last_tick, waits
+from tests.canopy.helpers import DRAFTS_PR, InlineRunner, agent_runs, last_tick, present, waits
 from tests.canopy.review_helpers import CLEAN, PR, head, reviewer_reports
 from tests.canopy.scenario_helpers import (
     Printed,
@@ -336,3 +336,14 @@ def test_the_overseer_runs_a_command_in_a_tick_of_its_own_or_in_one_held_open(sc
         f"4. the overseer runs canopy attention PROJ-2 needs_human --detail two in tick {tick_id}, which exits 0",
         f"5. tick {tick_id} ends ok",
     ]
+
+
+def test_the_overseer_acts_in_a_dry_run_tick_as_in_any_other(scenario: Scenario) -> None:
+    with scenario.ticking(dry_run=True) as tick_id:
+        # Still running while the block lasts, so the test may look at it.
+        assert present(db.get_tick(scenario.conn, tick_id)).ended_at is None
+        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "dry")
+    assert present(db.get_tick(scenario.conn, tick_id)).dry_run
+    scenario.overseer("decide", "PROJ-2", "wait", "--rationale", "dry too", dry_run=True)
+    assert present(db.get_tick(scenario.conn, last_tick(scenario.conn).id)).dry_run
+    assert scenario.story[0] == f"dry-run tick {tick_id} begins, for the overseer's commands"

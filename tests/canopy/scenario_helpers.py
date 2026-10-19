@@ -694,9 +694,9 @@ class Scenario:
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
         return printed
 
-    def overseer(self, *args: str, code: int = 0) -> Printed:
+    def overseer(self, *args: str, code: int = 0, dry_run: bool = False) -> Printed:
         """Run one of the overseer's commands, `canopy ARGS`, in the tick `ticking` holds open, or in a tick of its own
-        that ends ok; it must exit `code`.
+        that ends ok, a dry run with `dry_run`; it must exit `code`.
 
         Returns:
             What it printed, as the overseer would read it.
@@ -705,7 +705,9 @@ class Scenario:
         with ExitStack() as stack:
             tick_id = self.open_tick
             if tick_id is None:
-                tick_id = stack.enter_context(in_tick(self.conn, ends_ok=True))
+                tick_id = stack.enter_context(in_tick(self.conn, dry_run=dry_run, ends_ok=True))
+            else:
+                assert not dry_run, "a command in the tick `ticking` holds open runs as that tick does"
             exited, printed = _printing(lambda: main(list(args)))
         said = f"the overseer runs {command} in tick {tick_id}, which exits {exited}"
         self.story.append("\n".join([said, *printed.told()]))
@@ -713,16 +715,18 @@ class Scenario:
         return printed
 
     @contextmanager
-    def ticking(self) -> Iterator[int]:
-        """Hold a tick open for the overseer's commands: each `overseer` move inside the block runs in it, and it ends
-        ok as the block does, as one whose overseer finished, so what they raised is the attention list.
+    def ticking(self, *, dry_run: bool = False) -> Iterator[int]:
+        """Hold a tick open for the overseer's commands, a dry run with `dry_run`: each `overseer` move inside the block
+        runs in it, the test may look at the tick while it is still running, and it ends ok as the block does, as one
+        whose overseer finished, so what they raised is the attention list.
 
         Yields:
             The tick's id.
         """
         assert self.open_tick is None, f"tick {self.open_tick} is open already"
-        with in_tick(self.conn, ends_ok=True) as tick_id:
-            self.story.append(f"tick {tick_id} begins, for the overseer's commands")
+        with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
+            dry = "dry-run " if dry_run else ""
+            self.story.append(f"{dry}tick {tick_id} begins, for the overseer's commands")
             self.open_tick = tick_id
             try:
                 yield tick_id
