@@ -62,8 +62,9 @@ plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 #     --format json --title={title} {prompt}'''
 # plan_triage_timeout_minutes = 10
 # plan_triage_temperature = 0.1
-# The reviewer's temperature (DESIGN §21): -1 sends none, for when review_cmd names a model that refuses one, such as
-# OpenAI's reasoning models.
+# The reviewer's temperature (DESIGN §21): -1, the default, sends none, since the reviewer often runs on a model that
+# refuses one, such as OpenAI's reasoning models. Set a low one when review_cmd names a model that takes it: each new
+# commit is reviewed again, and a cooler reviewer's findings wander less from one commit to the next.
 # review_temperature = 0.1
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45

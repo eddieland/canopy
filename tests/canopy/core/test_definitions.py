@@ -219,13 +219,25 @@ TEMPERATURES = [
 ]
 
 
+@pytest.mark.parametrize(
+    ("agent", "rendered"), [("canopy-reviewer", None), ("canopy-overseer", "0.1"), ("canopy-plan-triage", "0.1")]
+)
+def test_an_agent_gets_its_default_temperature(canopy_env: CanopyEnv, agent: str, rendered: str | None) -> None:
+    """The reviewer sets none, since it often runs on a model that refuses one, such as OpenAI's reasoning models."""
+    text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    frontmatter = text.split("---")[1]
+    if rendered is None:
+        assert "\ntemperature:" not in frontmatter
+    else:
+        assert f"\ntemperature: {rendered}\n" in frontmatter
+
+
 @pytest.mark.parametrize(("agent", "key"), TEMPERATURES)
-@pytest.mark.parametrize(("setting", "rendered"), [(None, "0.1"), ("0.7", "0.7"), ("0", "0.0")])
+@pytest.mark.parametrize(("setting", "rendered"), [("0.1", "0.1"), ("0.7", "0.7"), ("0", "0.0")])
 def test_an_agent_gets_its_configured_temperature(
-    canopy_env: CanopyEnv, agent: str, key: str, setting: str | None, rendered: str
+    canopy_env: CanopyEnv, agent: str, key: str, setting: str, rendered: str
 ) -> None:
-    if setting is not None:
-        _set_runtime(canopy_env, f"{key} = {setting}")
+    _set_runtime(canopy_env, f"{key} = {setting}")
     text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
     assert f"\ntemperature: {rendered}\n" in text.split("---")[1]
 
@@ -233,12 +245,15 @@ def test_an_agent_gets_its_configured_temperature(
 @pytest.mark.parametrize(("agent", "key"), TEMPERATURES)
 def test_a_temperature_of_minus_one_sets_none(canopy_env: CanopyEnv, agent: str, key: str) -> None:
     """-1 leaves the model's own, for a model that refuses a request that sets one; a new snapshot says so."""
-    default = config.load(canopy_env.root, canopy_env.user_file)
+    user = canopy_env.user_file.read_text()
+    _set_runtime(canopy_env, f"{key} = 0.1")
+    sets_one = config.load(canopy_env.root, canopy_env.user_file)
+    canopy_env.write_user(user)
     _set_runtime(canopy_env, f"{key} = -1")
     unset = config.load(canopy_env.root, canopy_env.user_file)
     frontmatter = definitions.sources(unset)[f"agents/{agent}.md"].decode().split("---")[1]
     assert "\ntemperature:" not in frontmatter
-    assert definitions.digest(unset) != definitions.digest(default)
+    assert definitions.digest(unset) != definitions.digest(sets_one)
 
 
 @pytest.mark.parametrize("agent", [agent for agent, _ in TEMPERATURES])

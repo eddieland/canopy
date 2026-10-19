@@ -84,6 +84,14 @@ becomes a refactor nobody asked for.
 
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once.
 
+The reviewer runs its own command, `runtime.review_cmd`, so point it at another model than your workers': a second
+model misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
+(`runtime.review_temperature = -1`, the default), because OpenAI's reasoning models refuse a request that sets one, and
+a review that never starts finds nothing. If your reviewer's model takes one, set it low, such as `0.1`. Each new commit
+is reviewed again, and a reviewer sampling hot finds something fresh every time in code nobody touched; with the
+reviewer trusted, each of those sends a worker back. A cool one says much the same thing twice, which is also how
+you'll learn whether it deserves that trust.
+
 canopy treats its own reviewer as it treats anyone else's. With `canopy:review` in `trust.trusted_reviewers`, findings
 on a loop PR send a worker back to address them, and the PR's phase is `review findings`. Without it, the findings wait
 as `untrusted review` on your attention list until you say which to act on. Untrusted is the default, and a sound
