@@ -1,10 +1,10 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17 on
-2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17), and where canopy stands on each. The design
-(`design/`) is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed
-under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
-(AGENTS.md).
+2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17, R23 on 2026-10-19), and where canopy
+stands on each. The design (`design/`) is how canopy meets them; this file is what it must meet. Where the two
+disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
+doc stays normative until then (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -282,6 +282,16 @@ operator's approval. As an option, a smaller, cheaper agent should judge a chang
 for what that means, and let it go ahead unplanned, without asking the operator first. When it is unsure, or fails,
 the work is planned as before. A waived change canopy's own reviewer judges high impact is called out to the operator;
 its size alone is not, since size says little about risk.
+
+### R23. Canary a model on one ticket
+
+Gap (M58). Written down 2026-10-19, from issue #418. The operator wants to try a model change on one ticket before
+every worker takes it, by running that ticket's workers on another model and comparing the result. Today a worker's
+model is OpenCode's default unless the operator's command template names one, which then applies to every worker run,
+and the journal does not record which model a run used. canopy should choose the model itself: a default the operator
+sets, and an override per ticket that only the operator can set, never the overseer or a worker, checked against the
+models OpenCode has. Each run should record the model it was given, and the one that served it where OpenCode says so,
+and spend should split by model, so that the canary can be compared.
 
 ## Nice to have
 
