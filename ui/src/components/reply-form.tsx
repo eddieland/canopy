@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Command, CornerDownLeft, Send } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { KeyboardEvent, SubmitEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
@@ -11,6 +11,7 @@ import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Kbd } from '@/components/ui/kbd'
+import { onScreen, usePageKey } from '@/hooks/use-page-key'
 import { notedText, repliedText } from '@/lib/outcomes'
 import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
 import { isApple, sends, sendShortcut, useSendKey } from '@/lib/send-key'
@@ -61,6 +62,10 @@ export type ReplyTarget =
  *
  * `onReplied` hears each reply recorded, after the form has said what it did, with that line: the attention page moves
  * on to the next item that waits on the operator.
+ *
+ * `r` from anywhere on the page puts the focus in the box, opening it first if it is folded, while the form is shown
+ * (ui/DESIGN.md, "Keys"). Its way in, the box or the `Disclosure` while folded, carries `data-reply-entry`, for a page
+ * that shows the form only once a key asks for it.
  */
 export function ReplyForm({
     target,
@@ -88,6 +93,22 @@ export function ReplyForm({
     if (awaited && !open) {
         setOpen(true)
     }
+    const root = useRef<HTMLDivElement>(null)
+    const box = useRef<HTMLTextAreaElement | null>(null)
+    // Whether `r` opened the form, so the box takes the focus once it is drawn.
+    const focusWhenDrawn = useRef(false)
+    usePageKey('reply', () => {
+        if (!onScreen(root.current)) {
+            return false
+        }
+        if (box.current === null) {
+            focusWhenDrawn.current = true
+            setOpen(true)
+        } else {
+            box.current.focus()
+        }
+        return true
+    })
     const mutation = useMutation({
         mutationFn: (text: string): Promise<Replied> =>
             target.kind === 'ticket'
@@ -143,9 +164,10 @@ export function ReplyForm({
     }
 
     return (
-        <Collapsible open={open} onOpenChange={setOpen} className="border-t">
+        <Collapsible ref={root} open={open} onOpenChange={setOpen} className="border-t">
             {!awaited && (
                 <Disclosure
+                    data-reply-entry={open ? undefined : ''}
                     open={open}
                     what={chore ? 'a note for its next runs' : 'a note for its next worker'}
                     className="m-2"
@@ -160,7 +182,16 @@ export function ReplyForm({
                     <label className="flex flex-col gap-1.5">
                         <span className="panel-label">{label}</span>
                         <Textarea
+                            ref={(element) => {
+                                box.current = element
+                                if (element !== null && focusWhenDrawn.current) {
+                                    focusWhenDrawn.current = false
+                                    element.focus()
+                                }
+                            }}
                             name="body"
+                            data-reply-entry=""
+                            aria-keyshortcuts="r"
                             value={body}
                             maxLength={MAX_REPLY}
                             onChange={(event) => {

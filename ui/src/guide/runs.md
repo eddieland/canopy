@@ -40,8 +40,10 @@ The **Transcript** is the run's session, from its log, oldest first:
 - any runtime error, tinted red.
 
 The tally above it counts the tool calls, how many failed or were refused, and the model calls. **Find lines**
-searches the transcript and opens the calls that match. **By call** groups the events by model call instead, each call
-one row that opens to the same input and output; a session of one call has nothing to group, so it has no By call.
+searches the transcript and opens the calls that match; press `f` from anywhere on the page to get there. **By call**
+groups the events by model call instead, each call one row that opens to the same input and output; a session of one
+call has nothing to group, so it has no By call. Find works there too, keeping the model calls whose output holds what
+you typed, opened to it.
 **All open** opens every call at once, for when you'd rather scroll than click.
 
 A long session draws its first 100 rows, and a fold at the bottom, **Show 100 of 1,900 more rows**, draws the next

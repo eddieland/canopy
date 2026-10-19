@@ -99,12 +99,39 @@ test('a search keeps the rows with a line that holds it, marked, and opens the c
     await expect(transcript.locator('mark')).toHaveCount(0)
     await expect(transcript.locator('details[open]')).toHaveCount(0)
 
-    // By call keeps its own rows, whole: the search waits for the events in order.
+    // By call searches too: it keeps the calls with a line that holds the query, each opened to it, marked.
     await find.fill('debounce')
     await transcript.getByRole('button', { name: 'By call' }).click()
-    await expect(find).toBeHidden()
-    await expect(transcript.getByTestId('transcript-call')).toHaveCount(3)
-    await expect(transcript.locator('mark')).toHaveCount(0)
+    await expect(find).toBeVisible()
+    await expect(transcript.getByTestId('transcript-found')).toContainText(/ calls?$/u)
+    const calls = transcript.getByTestId('transcript-call')
+    await expect(calls.first().getByTestId('transcript-call-body')).toBeVisible()
+    await expect(calls.first().locator('mark').first()).toHaveText(/^debounce$/iu)
+    await find.fill('push.origin')
+    await expect(transcript).toContainText('no call holds “push.origin”')
+    await find.press('Escape')
+    await expect(calls).toHaveCount(3)
+})
+
+test('f puts the focus in the transcript’s search from anywhere on the page, in order and By call', async ({
+    page,
+}) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
+    await page.getByRole('main').focus()
+    await page.keyboard.press('f')
+    await expect(find).toBeFocused()
+    // Typed into the field, f is a letter.
+    await page.keyboard.press('f')
+    await expect(find).toHaveValue('f')
+    await find.press('Escape')
+
+    await transcript.getByRole('button', { name: 'By call' }).click()
+    await page.getByRole('main').focus()
+    await page.keyboard.press('f')
+    await expect(find).toBeFocused()
 })
 
 test('by call, each model call opens to what it was sent and what it did, as text', async ({ page }) => {
@@ -138,7 +165,7 @@ test('by call, each model call opens to what it was sent and what it did, as tex
     await expect(returned).toContainText('call 1’s input and output, then what its tools returned:')
     await expect(returned).toContainText('return <input value={query}')
     await expect(returned).toContainText('File not found:')
-    await expect(transcript.locator('input')).toHaveCount(0)
+    await expect(transcript.getByTestId('transcript-calls').locator('input')).toHaveCount(0)
     await expect(second.getByRole('region', { name: 'call 2 output' })).toContainText('There is no search hook yet.')
 
     // All open, turned on and off, opens every call and then closes them all, the two opened by hand included.
@@ -234,9 +261,9 @@ test("a transcript's chart names what grew each call's context, and shows the la
 
     // By call says each call's step on its line.
     const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
-    await find.fill('push')
     await transcript.getByRole('button', { name: 'By call' }).click()
     await expect(transcript.getByTestId('transcript-call').nth(2)).toContainText('30.2k in (+4.3k) · ')
+    await find.fill('push')
 
     // One click from the chart shows the row in order, whatever the view and the search: opened, scrolled to, focused.
     await largest.getByRole('button').click()

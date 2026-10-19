@@ -252,6 +252,48 @@ test('after a reply, the next item waiting on you is chosen, its row focused, an
     await expect(page.getByTestId('toast')).toContainText('Recorded message 12 on ABC-102, answering message 5.')
 })
 
+test('j and k step through the list, as the arrows do from a row, and r goes to the reply', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const rows = page.getByTestId('attention-list').getByRole('link')
+    const detail = page.getByTestId('attention-detail')
+    // The most severe item is chosen; the next is a key away, its row focused and the URL saying so.
+    await page.keyboard.press('j')
+    await expect(rows.nth(1)).toBeFocused()
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'page')
+    await expect(page).toHaveURL(/\/attention\?item=/u)
+    await expect(detail.getByTestId('attention-drafts')).toBeVisible()
+    await page.keyboard.press('j')
+    await expect(rows.nth(2)).toBeFocused()
+    await page.keyboard.press('k')
+    await expect(rows.nth(1)).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(rows.nth(2)).toHaveAttribute('aria-current', 'page')
+    await expect(rows.nth(2)).toBeFocused()
+
+    // The question's item: r puts the focus in its reply, where r is a letter like any other.
+    await page.keyboard.press('r')
+    const reply = detail.getByRole('textbox', { name: 'Reply to message 5' })
+    await expect(reply).toBeFocused()
+    await page.keyboard.press('j')
+    await expect(reply).toHaveValue('j')
+    await expect(rows.nth(2)).toHaveAttribute('aria-current', 'page')
+})
+
+test('? lists the keys, and Escape puts the focus back', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.keyboard.press('?')
+    const dialog = page.getByRole('dialog', { name: 'Keys' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('The next or the previous item, on Attention')
+    // The list's keys are not the page's while it is open.
+    await page.keyboard.press('j')
+    await expect(page).not.toHaveURL(/item=/u)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+})
+
 test.describe('on half a monitor', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -291,6 +333,32 @@ test.describe('on half a monitor', () => {
         const row = list.getByRole('link').filter({ hasText: 'awaiting reply' })
         await expect(row).toBeFocused()
         await expect(row).toHaveAttribute('aria-current', 'page')
+    })
+
+    test('j and k step through the list, and r opens the chosen item at its reply', async ({ page }) => {
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const detail = page.getByTestId('attention-detail')
+        const rows = list.getByRole('link')
+        await page.keyboard.press('j')
+        await page.keyboard.press('j')
+        // The list stays, its chosen row focused: the item waits for the operator to open it.
+        await expect(rows.nth(2)).toBeFocused()
+        await expect(detail).toBeHidden()
+
+        await page.keyboard.press('r')
+        await expect(list).toBeHidden()
+        const reply = detail.getByRole('textbox', { name: 'Reply to message 5' })
+        await expect(reply).toBeFocused()
+        await expect(reply).toBeInViewport()
+
+        // With an item open in the list's place, the next opens there too, the focus on the way back.
+        await page.getByRole('button', { name: 'Back to the list' }).focus()
+        await page.keyboard.press('j')
+        await expect(detail.getByText('api is in the workspace map but has no clone')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Back to the list' })).toBeFocused()
+        await expect(list).toBeHidden()
     })
 
     test('an item linked to opens in place of the list', async ({ page }) => {

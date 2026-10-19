@@ -12,6 +12,7 @@ import {
     endedOn,
     findQueryOf,
     hitsIn,
+    hitsInCall,
     moreLabel,
     outcome,
     pretty,
@@ -317,6 +318,22 @@ describe('byCall', () => {
             [2, null],
         ])
         expect(byCall([text('no calls marked', null)]).calls).toEqual([])
+    })
+})
+
+describe('hitsInCall', () => {
+    it('counts the lines of what a call printed, never what it was sent, so a line counts once', () => {
+        const { calls } = byCall([
+            text('listing the file', 1),
+            shell('ls', 'README\nthe file'),
+            step(1),
+            text('done: file', 2),
+        ])
+        const [first, second] = calls
+        expect(first && hitsInCall(first, 'file')).toBe(2)
+        // The second call was sent the listing, which the first printed.
+        expect(second && hitsInCall(second, 'file')).toBe(1)
+        expect(second && hitsInCall(second, 'zebra')).toBe(0)
     })
 })
 

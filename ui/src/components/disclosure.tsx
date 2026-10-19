@@ -19,6 +19,7 @@ export function Disclosure({
     what: string
     className?: string
     'data-testid'?: string
+    'data-reply-entry'?: string
 }) {
     return (
         <CollapsibleTrigger asChild>

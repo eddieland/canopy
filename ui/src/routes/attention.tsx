@@ -39,10 +39,12 @@ import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { onScreen, usePageKey } from '@/hooks/use-page-key'
 import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
 import { ask, bySeverity, commandOf, nextWaiting, pullRequestOf, severity, shownDetail } from '@/lib/attention'
 import type { Ask, Severity } from '@/lib/attention'
+import { stepped } from '@/lib/keys'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
@@ -76,13 +78,19 @@ const TONE: Record<Severity, Tone> = {
 // over, so the row is folded shut before it goes.
 const LEAVE_MS = 700
 
+// The arrows that step through the list from one of its rows, as `j` and `k` do from anywhere.
+const ARROWS: Partial<Record<string, 1 | -1>> = { ArrowDown: 1, ArrowUp: -1 }
+
 // The page's width under which the list and an item take turns rather than sit side by side: Tailwind's `@3xl`, the
 // `@max-3xl:` and `@3xl:` classes below.
 const TURNS_REM = 48
 
-// The ids the page moves the focus to: the button back to the list, and an item's row.
+// The ids the page moves the focus to: the button back to the list, and an item's row; and what it is moved to as a
+// selector, for `useFocusOnce`, which also takes the item's way into its reply (`ReplyForm`).
 const BACK = 'attention-back'
 const rowId = (item: string): string => `attention-row-${item}`
+const byId = (id: string): string => `#${CSS.escape(id)}`
+const REPLY_ENTRY = '[data-testid="attention-detail"] [data-reply-entry]'
 
 function AttentionPage() {
     const { item: wanted } = Route.useSearch()
@@ -105,14 +113,14 @@ function AttentionPage() {
         setListFor(undefined)
         // Narrow, the row is gone with the list: the focus goes to the item's first stop, the way back.
         if (narrow(pane.current)) {
-            focusOnce(item, BACK)
+            focusOnce(item, byId(BACK))
         }
     }
 
     function back() {
         if (selected !== undefined) {
             setListFor(selected.id)
-            focusOnce(selected.id, rowId(selected.id))
+            focusOnce(selected.id, byId(rowId(selected.id)))
         }
     }
 
@@ -129,9 +137,36 @@ function AttentionPage() {
         }
         toast({ title: said, tone: 'done' })
         setListFor(next.id)
-        focusOnce(next.id, rowId(next.id))
+        focusOnce(next.id, byId(rowId(next.id)))
         void navigate({ search: { item: next.id } })
     }
+
+    // `j` and `k`, or an arrow from a row, choose the next or the previous item and focus its row; narrow, with an item
+    // open in the list's place, the next item opens there instead, the focus on its way back (ui/DESIGN.md, "Keys").
+    function step(by: 1 | -1): boolean {
+        const to = items === undefined ? null : stepped(items, selected?.id, by)
+        if (to === null) {
+            return false
+        }
+        const inPlace = open && narrow(pane.current)
+        setListFor(inPlace ? undefined : to.id)
+        focusOnce(to.id, byId(inPlace ? BACK : rowId(to.id)))
+        void navigate({ search: { item: to.id } })
+        return true
+    }
+    usePageKey('next', () => step(1))
+    usePageKey('previous', () => step(-1))
+    // `r` with the list in the item's place, narrow: the item opens, the focus on its way into its reply. Wherever the
+    // item is shown, its form takes the key itself.
+    usePageKey('reply', () => {
+        if (selected === undefined || open || !narrow(pane.current)) {
+            return false
+        }
+        setListFor(undefined)
+        focusOnce(selected.id, REPLY_ENTRY)
+        void navigate({ search: { item: selected.id } })
+        return true
+    })
 
     return (
         <>
@@ -172,6 +207,7 @@ function AttentionPage() {
                                                     selected={item.id === selected?.id}
                                                     done={answered(item, tickets)}
                                                     onChoose={choose}
+                                                    onStep={step}
                                                 />
                                             ),
                                         )}
@@ -251,26 +287,26 @@ function narrow(pane: HTMLElement | null): boolean {
 }
 
 /**
- * Moves the focus once the page shows an item: `focusOnce(item, id)` focuses the element with `id` after the first
- * render that has `item` chosen and the element on screen, so a row or button the same change brings back is the one
- * focused, once.
+ * Moves the focus once the page shows an item: `focusOnce(item, selector)` focuses the element `selector` finds after
+ * the first render that has `item` chosen and the element on screen, so a row or button the same change brings back is
+ * the one focused, once.
  */
-function useFocusOnce(wanted: string | undefined): (item: string, id: string) => void {
-    const pending = useRef<{ item: string; id: string } | null>(null)
+function useFocusOnce(wanted: string | undefined): (item: string, selector: string) => void {
+    const pending = useRef<{ item: string; selector: string } | null>(null)
     // After every render: the change that brings the element back may be the URL's or the page's own.
     useEffect(() => {
         const want = pending.current
         if (want === null || want.item !== wanted) {
             return
         }
-        const target = document.querySelector<HTMLElement>(`#${CSS.escape(want.id)}`)
-        if (target !== null && target.getClientRects().length > 0) {
+        const target = document.querySelector(want.selector)
+        if (onScreen(target)) {
             pending.current = null
             target.focus()
         }
     })
-    return (item, id) => {
-        pending.current = { item, id }
+    return (item, selector) => {
+        pending.current = { item, selector }
     }
 }
 
@@ -300,11 +336,13 @@ function Row({
     selected,
     done,
     onChoose,
+    onStep,
 }: {
     item: AttentionItem
     selected: boolean
     done: boolean
     onChoose: (item: string) => void
+    onStep: (by: 1 | -1) => boolean
 }) {
     return (
         <li>
@@ -313,6 +351,12 @@ function Row({
                 search={{ item: item.id }}
                 id={rowId(item.id)}
                 onClick={() => onChoose(item.id)}
+                onKeyDown={(event) => {
+                    const by = ARROWS[event.key]
+                    if (by !== undefined && !event.altKey && !event.ctrlKey && !event.metaKey && onStep(by)) {
+                        event.preventDefault()
+                    }
+                }}
                 aria-current={selected ? 'page' : undefined}
                 data-testid={`attention-item-${item.id}`}
                 className={cn(

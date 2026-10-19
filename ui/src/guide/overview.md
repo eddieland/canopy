@@ -94,6 +94,16 @@ narrow window the rail folds to icons; **Open the rail** brings it back.
 From the keyboard, the first Tab on any page lands on **Skip to content**, which hides until then. Press Enter and the
 next Tab is the page's own, not the rail's dozen or so stops. Your Tab key has better things to do.
 
+A few keys work from anywhere but a text field. Press `?` for the list:
+
+- `j` and `k` step to the next and the previous item on [Attention](attention); from a row, the arrows do too.
+- `r` puts you in the page's reply box, or its note box on a chore, opening it if it's folded.
+- `f` puts you in a transcript's **Find lines**, in order or By call.
+- `/` jumps to the search box (below).
+
+In a text field they're just letters, which is what you want when the reply is about a `j` key. Ctrl and ⌘ keep doing
+whatever your browser does with them.
+
 ## Search
 
 Press `/` from anywhere but a text field to jump to the search box, and type. The results open after a short pause,
