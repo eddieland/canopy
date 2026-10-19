@@ -134,6 +134,9 @@ When `reply` is among the reasons above, remove the `{{NEEDS_HUMAN_LABEL}}` labe
 ticket after reading it. Change labels with the tracker's MCP tool for editing the ticket, changing nothing but its
 labels. Time limit {{TIMEOUT_MINUTES}} minutes.
 
+`gh api` is refused, so do not try it. Read GitHub through the GitHub MCP server, or `gh`'s own commands such as
+`gh pr view`, `gh pr checks`, and `gh run view`.
+
 Each shell command starts in {{SLOT}}, whatever an earlier one changed directory to, and a `cd` is checked against
 where its command starts, even after another `cd` in the same command: `cd app && cd ../lib` is refused as leaving
 {{SLOT}}. To work in a directory inside it, set the command's working directory to it, or `cd` by its path from
