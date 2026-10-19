@@ -18,10 +18,8 @@ from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,
     LABEL,
-    WORK,
     InlineRunner,
     agent_runs,
-    dispatch_and_run,
     in_tick,
     pool,
     slot_of,
@@ -85,9 +83,7 @@ class SetupTimesOut(InlineRunner):
 # The setup command
 
 
-def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
-    scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(scenario: Scenario, git_pool: GitPool) -> None:
     """M16 acceptance, against the fakes: setup sees the branch a continued run checks out, unlike `post_create`."""
     seed = git_pool.slots[1]
     git("checkout", "--quiet", "-b", BRANCH, "origin/main", cwd=seed)
@@ -98,8 +94,7 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
     run = scenario.run(dispatches(slug="work"), worker=worker_does(["test", "-e", ".setup-done"]))
 
     assert run.status == "done"
-    # An inline run prints its log where the test's output goes, which no move reads.
-    out = capsys.readouterr().out
+    out = run.printed.out
     assert f"setup on {BRANCH} in repo, run {run.id}: earlier work\n" in out
     assert "--- setup repo exit 0 ---" in out  # in the run log, beside the worker's output
     [w] = agent_runs(scenario.agent_log)
@@ -110,25 +105,24 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
 
 
 def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
 ) -> None:
     scenario.configures(runtime={"setup_cmd": "sh -c 'echo cannot fetch >&2; exit 3'"})
     run = scenario.run(dispatches(slug="work"))
 
     assert run.status == "crashed"
     assert json.loads(run.row["result_json"]) == {"harness": "repo: setup exited 3; see the run log"}
-    assert "cannot fetch" in capsys.readouterr().out
+    assert "cannot fetch" in run.printed.out
     assert agent_runs(scenario.agent_log) == []  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_a_setup_that_times_out_crashes_the_run(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     scenario.configures(runtime={"setup_cmd": "sh -c 'sleep 3600'", "setup_timeout_minutes": 5})
-    # A scenario's run takes no runner of its own, and this one times the setup out.
-    run = dispatch_and_run(scenario.conn, *WORK, runner=SetupTimesOut())
+    run = scenario.run(dispatches(slug="work"), runner=SetupTimesOut())
 
-    assert run["status"] == "crashed"
-    assert json.loads(run["result_json"]) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
+    assert run.status == "crashed"
+    assert json.loads(run.row["result_json"]) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
     assert agent_runs(scenario.agent_log) == []
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 

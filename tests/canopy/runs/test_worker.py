@@ -22,11 +22,9 @@ from canopy.core import config, db, definitions
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.runs import worker
 from tests.canopy.helpers import (
-    WORK,
     InlineRunner,
     agent_runs,
     commit_and_push,
-    dispatch_and_run,
     in_tick,
     pool,
     present,
@@ -42,9 +40,7 @@ from tests.canopy.scenario_helpers import Scenario, asks, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, git
 
 
-def test_worker_that_pushes_is_done(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     run = scenario.run(worker=pushes())
 
     assert run.status == "done"
@@ -83,8 +79,7 @@ def test_worker_that_pushes_is_done(
     assert git("rev-parse", "HEAD~1", cwd=slot) == git_pool.remote_head("main")
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert unit_of(scenario.conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
-    # What `canopy _run` printed, which the scenario leaves to the test's own output.
-    assert "run 1: done" in capsys.readouterr().out
+    assert "run 1: done" in run.printed.out
 
 
 @pytest.mark.parametrize(
@@ -332,15 +327,10 @@ def test_result_text_is_bounded(scenario: Scenario, git_pool: GitPool) -> None:
     assert "extra" not in stored
 
 
-def test_timeout(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    run = dispatch_and_run(conn, *WORK, runner=InlineRunner(timeout_agent=True))
-    assert run["status"] == "timeout"
-    assert json.loads(run["result_json"]) == {"harness": "the worker timed out after 45 minutes"}
+def test_timeout(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
+    run = scenario.run(runner=InlineRunner(timeout_agent=True))
+    assert run.status == "timeout"
+    assert json.loads(run.row["result_json"]) == {"harness": "the worker timed out after 45 minutes"}
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
@@ -468,9 +458,7 @@ def test_a_worker_records_the_session_and_cost_it_reported(scenario: Scenario, g
     assert f"\n    did it\n    session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  log {row['log_path']}\n" in out
 
 
-def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(
-    scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario: Scenario, git_pool: GitPool) -> None:
     """What the worker reports is on its row as it prints it, so its second command sees what its first did."""
     root = scenario.env.root
     status = ["sh", "-c", f"cd {root} && canopy status"]
@@ -488,8 +476,7 @@ def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(
     # Once it ends, its row has its whole report, and its log what it printed in the same shape as ever.
     assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("done", "ses_w1", 0.25)
     assert (run.row["activity_tool"], run.row["activity"]) == ("bash", f"sh -c cd {root} && canopy status")
-    # What `canopy _run` printed, which the scenario leaves to the test's own output.
-    out = capsys.readouterr().out
+    out = run.printed.out
     assert re.search(r"--- worker stdout ---\n(\{.*\}\n)+\n--- worker stderr ---\n\n--- worker exit 0 ---\n", out)
 
 
@@ -507,19 +494,17 @@ def test_a_journal_that_refuses_a_progress_write_does_not_stop_the_worker(
     assert (run.status, run.row["session_id"], run.row["cost_usd"]) == ("done", "ses_w1", 0.25)
 
 
-def test_a_timed_out_worker_records_what_it_reported_before_the_kill(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
-) -> None:
+def test_a_timed_out_worker_records_what_it_reported_before_the_kill(scenario: Scenario, git_pool: GitPool) -> None:
     tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
     events = [
         {"type": "step_finish", "sessionID": "ses_slow", "part": {"cost": 0.5, "tokens": tokens}},
         {"type": "text", "sessionID": "ses_slow", "part": {"type": "text", "text": "still going"}},
     ]
     stdout = "".join(json.dumps(e) + "\n" for e in events)
-    with report_events(canopy_env):
-        run = dispatch_and_run(conn, *WORK, runner=InlineRunner(timeout_agent=True, timeout_stdout=stdout))
-    assert run["status"] == "timeout"
-    assert (run["session_id"], run["cost_usd"], run["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
+    with report_events(scenario.env):
+        run = scenario.run(runner=InlineRunner(timeout_agent=True, timeout_stdout=stdout))
+    assert run.status == "timeout"
+    assert (run.row["session_id"], run.row["cost_usd"], run.row["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
 
 
 def test_a_worker_without_events_reports_no_session(scenario: Scenario, git_pool: GitPool) -> None:
