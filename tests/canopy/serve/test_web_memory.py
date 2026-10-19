@@ -340,7 +340,7 @@ def test_memory_search_finds_what_a_note_says_as_the_cli_does(backend: Backend) 
     found = c.get("/api/memory/search", params={"q": "lockfile"}).json()["entries"]
     assert [(m["id"], m["ticket_key"]) for m in found] == [(3, "ABC-100")]
     assert c.get("/api/memory/search", params={"q": "!!"}).json() == {"entries": []}
-    # With notes, only ticket notes in force: the lesson and the proposal that say the word are left out.
+    # With notes, only ticket notes in force: the lesson and the proposals that say the word are left out.
     billing = c.get("/api/memory/search", params={"q": "billing"}).json()["entries"]
-    assert sorted(m["scope"] for m in billing) == ["lesson", "proposal"]
+    assert sorted(m["scope"] for m in billing) == ["lesson", "proposal", "proposal"]
     assert c.get("/api/memory/search", params={"q": "billing", "notes": "true"}).json() == {"entries": []}
