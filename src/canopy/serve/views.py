@@ -56,6 +56,7 @@ from canopy.serve.schema import (
     RawOutput,
     Run,
     RunActivity,
+    RunsSince,
     RunState,
     SearchHit,
     SearchResults,
@@ -512,6 +513,29 @@ def runs(ctx: Context) -> list[Run]:
         *(run(r, root, [shown_path(str(s["slot_path"]), root) for s in slots[int(r["id"])]]) for r in running),
         *(run(r, root) for r in db.recent_runs(ctx.conn, RECENT_RUNS)),
     ]
+
+
+def runs_since(ctx: Context, since: datetime) -> RunsSince:
+    """What the runs did since `since`: how many ended, and how many PRs they opened.
+
+    A PR counts as opened when a run that ended since names it and no run that ended before does, so a resume naming
+    its ticket's PR again opens nothing.
+
+    Returns:
+        The counts, from every run the journal holds, not only the recent ones the runs list carries.
+    """
+    cut = db.format_time(since)
+    ended = 0
+    named_before: set[str] = set()
+    named_since: set[str] = set()
+    for row in db.ended_run_results(ctx.conn):
+        prs = contract.stored_prs(contract.stored_object(row["result_json"]))
+        if str(row["ended_at"]) >= cut:
+            ended += 1
+            named_since.update(prs)
+        else:
+            named_before.update(prs)
+    return RunsSince(ended=ended, prs_opened=len(named_since - named_before))
 
 
 def shown_path(path: str, root: Path) -> str:

@@ -11,6 +11,8 @@ export type Session = Schemas['Session']
 export type AttentionItem = Schemas['AttentionItem']
 /** One worker or split run (`run:ID`). */
 export type Run = Schemas['Run']
+/** What the runs did since a moment: how many ended, and how many PRs they opened first. */
+export type RunsSince = Schemas['RunsSince']
 /** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */
 export type RunActivity = Schemas['RunActivity']
 /** A run's status in the five groups the UI colors (DESIGN §22): `failed` is every ending a human must look at. */

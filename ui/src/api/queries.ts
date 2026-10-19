@@ -15,6 +15,7 @@ export const keys = {
     attention: ['attention'] as const,
     runs: ['runs'] as const,
     run: (id: number) => ['run', id] as const,
+    runsSince: (since: string) => ['runs-since', since] as const,
     // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
     runTranscript: (id: number) => ['transcript', 'run', id] as const,
     runOutput: (id: number) => ['transcript', 'run', id, 'output'] as const,
@@ -95,6 +96,18 @@ export const runsQuery = queryOptions({
     queryKey: keys.runs,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
 })
+
+/**
+ * What the runs did since `since`, counted over the whole journal rather than the runs list's recent few: the note
+ * on coming back to a tab left hidden (`useAwayNote`). Not on the stream: read once, when the tab is shown again.
+ */
+export function runsSinceQuery(since: string) {
+    return queryOptions({
+        queryKey: keys.runsSince(since),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/since', { params: { query: { since } }, signal })),
+    })
+}
 
 /** One run, as the runs list shows it. The stream writes a run it lists into this key when a page holds it. */
 export function runQuery(id: number) {

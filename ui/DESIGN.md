@@ -1174,6 +1174,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   above) takes its form with it, so its toast says what it did, and its item's row and conversation keep it.
   `main.tsx` renders the one `Toaster`, around the router, so a toast
   outlives the page it came from.
+- **The note of what changed while away** is the one toast no action shows (`useAwayNote`, `src/lib/away.ts`).
+  Shown again after it was hidden 10 minutes or more, the tab says in one line what changed meanwhile: what newly
+  blocks work first (`blocking`, as the tab's count), then the items cleared, the PRs opened, and the runs ended
+  (`Since 14:05: 1 new item needs you, 3 items cleared, 2 PRs opened`), each count of none left out, and nothing at
+  all when every count is none. A `History` in the accent, no line under it, and 8 seconds before it closes, since it
+  is read on coming back rather than seen as a click lands. Every count is read after the return, never told from
+  what the tab held: the attention list as the stream sends it again, against the one the tab held as it was hidden,
+  and the runs counted over the whole journal (`GET /api/runs/since`), not the runs list's recent few. With no fresh
+  list within 30 seconds, as while the loop is down, it says nothing. A tab never hidden, as on a second monitor,
+  never shows it.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:

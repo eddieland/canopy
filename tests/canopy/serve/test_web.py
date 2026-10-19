@@ -791,3 +791,26 @@ def test_a_web_reply_is_the_same_submission_only_with_the_same_id(ctx: Context) 
     assert two.new
     with pytest.raises(conversation.Refused, match="bad_submission"):
         conversation.reply(ctx.conn, ref, "yes", channel="web", submission="short")
+
+
+def test_runs_since_counts_the_runs_that_ended_since_and_the_prs_none_before_them_named(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    since = datetime(2026, 10, 8, 12, tzinfo=UTC)
+    old_pr, new_pr = "https://example.test/pr/1", "https://example.test/pr/2"
+    ended = [
+        (since - timedelta(hours=1), RunStatus.DONE, {"summary": "opened", "pr": old_pr}),
+        (since + timedelta(minutes=5), RunStatus.DONE, {"summary": "fixed CI", "pr": old_pr}),
+        (since + timedelta(minutes=9), RunStatus.DONE, {"summary": "opened", "prs": {"repo": new_pr}}),
+        (since + timedelta(minutes=12), RunStatus.FAILED, {"summary": "gave up"}),
+    ]
+    for at, status, result in ended:
+        run = present(db.get_run(ctx.conn, running_run(ctx, KEY, private=False)))
+        assert conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"status": status, **result}))
+        ctx.conn.execute("UPDATE runs SET ended_at = ? WHERE id = ?", (db.format_time(at), run["id"]))
+    running_run(ctx, KEY, private=False)  # still running: it ended nothing
+    ctx.conn.commit()
+
+    got = c.get("/api/runs/since", params={"since": since.isoformat()}).json()
+    # The resume naming PR 1 again opened nothing; PR 2 is new, and the failed run counts as ended.
+    assert got == {"ended": 3, "prs_opened": 1}
+    assert c.get("/api/runs/since", params={"since": "yesterday"}).status_code == 422
