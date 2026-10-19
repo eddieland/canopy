@@ -103,6 +103,6 @@ def stored(result_json: object) -> ChoreResult | None:
 
 
 CONTRACT = (
-    '{"status":"ok|failed","summary":"one paragraph",'
+    '{"status":"ok|failed","summary":"a paragraph, line breaks sparingly",'
     '"findings":[{"id":"stable/id","title":"one line","detail":"a paragraph","link":"https://..."}],"more_findings":0}'
 )

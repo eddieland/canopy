@@ -47,6 +47,6 @@ instructions.
   ],
   "max_findings": 5,
   "history": "canopy chore history build-health",
-  "result_contract": "{\"status\":\"ok|failed\",\"summary\":\"one paragraph\",\"findings\":[{\"id\":\"stable/id\",\"title\":\"one line\",\"detail\":\"a paragraph\",\"link\":\"https://...\"}],\"more_findings\":0}"
+  "result_contract": "{\"status\":\"ok|failed\",\"summary\":\"a paragraph, line breaks sparingly\",\"findings\":[{\"id\":\"stable/id\",\"title\":\"one line\",\"detail\":\"a paragraph\",\"link\":\"https://...\"}],\"more_findings\":0}"
 }
 ```

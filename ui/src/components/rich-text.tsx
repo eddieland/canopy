@@ -20,7 +20,8 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
 /**
  * Agent-written text laid out as it was written: line breaks, lists, headings, and code (`src/lib/rich-text.ts`). It is
  * untrusted, so every piece is React text, never HTML; a URL outside code is a link to itself (`LinkedText`, D113).
- * With `lines`, text longer than that shows its first lines and a toggle for the rest.
+ * With `lines`, text longer than that shows its first lines and a toggle for the rest; a long line counts as the lines
+ * it wraps to, so one long paragraph folds too.
  */
 export function RichText({ text, lines, className }: { text: string; lines?: number; className?: string }) {
     const [open, setOpen] = useState(false)
