@@ -119,7 +119,8 @@ recording. A worker can still find it with `canopy memory search`.
 ## On a ticket and a run
 
 A ticket's page has a **Memory** panel while ticket notes are on: every note its runs wrote, those superseded or
-invalidated included, and the text its next run would be served. A run's page has one too, for a run started while
+invalidated included, and the text its next run would be served. It arrives folded under its band, **Show 3 notes**,
+and with no notes it is its header alone. A run's page has one too, for a run started while
 either tier was on, folded to a count in its header (`wrote 2 · read none`), each tier's mode for that run on hover.
 **Show memory** opens it: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's
 words, not the worker's. A run started while recording read `none, recording only`, which isn't the same as reading

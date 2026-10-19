@@ -558,6 +558,7 @@ test("a ticket's note is forgotten from the memory page, where it shows", async 
 test("a ticket's note is promoted from its page for one repository, and the lesson forgotten", async ({ page }) => {
     await page.goto('tickets/ABC-102')
     const panel = page.getByTestId('ticket-memory')
+    await panel.getByRole('button', { name: 'Show 1 note' }).click()
     const note = panel.getByTestId('memory-4')
     await note.getByRole('button', { name: 'Promote' }).click()
     const form = note.getByRole('form', { name: 'Promote memory:4' })

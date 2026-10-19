@@ -475,6 +475,24 @@ export function MemoryDigestView({
 }
 
 /**
+ * What a run would be served of a tier, folded at its panel's foot until the operator asks to read it: `Show what
+ * <who> is served`, or `would be served at use` while recording, opening the digest under it. `who` names the runs it
+ * goes to (`every run`, `its next run`).
+ */
+export function MemoryDigestFold({ digest, who }: { digest: MemoryDigest; who: string }) {
+    const [open, setOpen] = useState(false)
+    const what = digest.served ? `what ${who} is served` : `what ${who} would be served at use`
+    return (
+        <Collapsible open={open} onOpenChange={setOpen} className="border-t px-3 py-1.5">
+            <Disclosure open={open} what={what} className="-ml-2" data-testid="memory-digest-toggle" />
+            <CollapsibleContent className="-mx-3 -mb-1.5">
+                <MemoryDigestView digest={digest} served={`served to ${who}`} labelled={false} />
+            </CollapsibleContent>
+        </Collapsible>
+    )
+}
+
+/**
  * What a proposal's line of provenance adds, after the run that wrote it (`MemoryRows`' `facts`): how its run ended,
  * whether its ticket is done, and, for a private ticket's run, a `private` chip that says why on hover. When it lapses
  * is its standing's (`MemoryRows`' `lapses`).

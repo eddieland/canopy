@@ -274,18 +274,26 @@ test("a ticket's page puts its reply before its runs and decisions in a narrow w
         .boundingBox()
     const runs = await box('ticket-runs')
     const decisions = await box('ticket-decisions')
-    // What it is, then the conversation, the reply, and its actions, then the lists that support them.
+    const memory = await box('ticket-memory')
+    // What it is, then the conversation, the reply, and its actions, then the lists that support them, memory last.
     expect(reply).not.toBeNull()
     expect(conversation.y).toBeLessThan(reply?.y ?? 0)
     expect((reply?.y ?? Infinity) + (reply?.height ?? 0)).toBeLessThan(actions.y)
     expect(actions.y).toBeLessThan(runs.y)
     expect(runs.y).toBeLessThan(decisions.y)
+    expect(decisions.y).toBeLessThan(memory.y)
 
-    // Wide, the conversation sits beside the rest, its top level with the Work panel's, the actions in its foot.
+    // Wide, the conversation sits beside the rest, its top level with the Work panel's, the actions in its foot, and
+    // memory stays in the left column under the decisions rather than spanning the page.
     await page.setViewportSize({ width: 1600, height: 900 })
     const wide = await box('ticket-conversation')
-    expect(wide.x).toBeGreaterThan((await box('ticket-runs')).x)
+    const runsWide = await box('ticket-runs')
+    expect(wide.x).toBeGreaterThan(runsWide.x)
     expect(wide.y).toBeLessThan((await box('ticket-actions')).y)
+    const memoryWide = await box('ticket-memory')
+    expect(Math.abs(memoryWide.x - runsWide.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(memoryWide.width - runsWide.width)).toBeLessThanOrEqual(1)
+    expect(memoryWide.y).toBeGreaterThan((await box('ticket-decisions')).y)
 })
 
 test("a ticket's reply is the first stop after its conversation, and Stop and Forget come after it", async ({
