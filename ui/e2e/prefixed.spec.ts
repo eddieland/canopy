@@ -484,8 +484,9 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     const ask = page.getByRole('form', { name: 'Ask for changes' })
     await ask.getByRole('button', { name: /Ask for changes/u }).click()
     await expect(said).toContainText('the next tick asks the planner for a new plan')
-    // The page says so until a planner reads it, and another request is asking again.
-    await expect(state).toContainText('You asked for changes')
+    // A band under the page's header says so until a planner reads it, and another request is asking again.
+    await expect(page.getByRole('region', { name: 'Changes asked' })).toContainText('You asked for changes')
+    await expect(panel.getByText('changes asked', { exact: true })).toBeVisible()
     await expect(ask.getByRole('button', { name: 'Ask again' })).toBeVisible()
 
     // An edit, saved and approved in one: the approval takes the file as saved.

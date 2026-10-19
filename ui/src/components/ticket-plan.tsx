@@ -122,8 +122,8 @@ function emptyText(plans: TicketPlans): string {
 
 /**
  * The plan's state in a sentence or two, its page's description: the run that wrote it, its approval, what changed in
- * its file since, and what comes next. Its status and age are its panel's header; with no plan, its panel says what
- * comes, and this says nothing.
+ * its file since, and what comes next. Its status and age are its panel's header, and changes asked are the band under
+ * the page's header (`ChangesAsked`); with no plan, its panel says what comes, and this says nothing.
  */
 export function PlanState({ plans }: { plans: TicketPlans }) {
     const newest = plans.newest
@@ -143,12 +143,6 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
             {newest.edited && ', edited since the planner wrote it'}
             {newest.changed_since_approval && ', changed since it was approved'}.{' '}
             {plans.planning !== null && `Run ${plans.planning} is writing a new plan.`}
-            {plans.planning === null && plans.changes_asked !== null && (
-                <>
-                    You asked for changes <Age at={plans.changes_asked} variant="ago" className="text-sm" />: the next
-                    tick asks the planner for a new plan.
-                </>
-            )}
             {planWaits(plans) && 'It waits on you: read it, comment, then approve it or ask for changes.'}
             {plan.status === 'superseded' && !plans.needed && (
                 <span title={planNeededWhy(plans)}>Its ticket needs no plan now.</span>

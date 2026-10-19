@@ -195,4 +195,19 @@ describe('PlanCard', () => {
         expect(card.textContent).toContain('Run 7 is judging whether it needs a plan at all.')
         expect(card.textContent).not.toContain('triage said')
     })
+
+    it('says changes you asked for in a band of their own, until a planner starts on them', async () => {
+        await renderCard({ changes_asked: '2026-10-08T11:40:00Z' })
+        const band = await screen.findByRole('region', { name: 'Changes asked' })
+        expect(band.textContent).toMatch(
+            /^You asked for changes \S+ ago: the next tick asks the planner for a new plan\.$/u,
+        )
+        expect(screen.getByText('changes asked')).toBeTruthy()
+        expect(screen.queryByText('waiting on you')).toBeNull()
+        cleanup()
+
+        await renderCard({ changes_asked: '2026-10-08T11:40:00Z', planning: 51 })
+        expect((await screen.findByTestId('plan-card')).textContent).toContain('Run 51 is writing a new plan.')
+        expect(screen.queryByRole('region', { name: 'Changes asked' })).toBeNull()
+    })
 })

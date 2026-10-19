@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Check, FileText, Undo2 } from 'lucide-react'
+import { Check, FileText, MessageSquareReply, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { decidePlan, refreshTicket } from '@/api/mutations'
@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { planText } from '@/lib/outcomes'
 import { planApprovable, planNeededWhy, planWaits, planWaived, triageWord } from '@/lib/plan-state'
 import { planRef } from '@/lib/refs'
+import { cn } from '@/lib/utils'
 
 /**
  * A ticket's plan in brief (docs/design/PLANNING.md §25): where the plan stands, which plan it is, the run that wrote
@@ -49,6 +50,7 @@ export function PlanCard({
     const open = plans.threads.filter((thread) => !thread.resolved).length
     const approvable = planApprovable(plans)
     const { triage } = plans
+    const note = cardNote(plans, open)
     const parts = (
         <>
             <PanelHeader label="Plan">
@@ -89,6 +91,7 @@ export function PlanCard({
                     </Field>
                 )}
             </Fields>
+            <ChangesAsked plans={plans} className="mx-3 mb-3" />
             <PanelFooter>
                 <div className="flex flex-wrap items-center gap-2">
                     {approvable && (
@@ -119,7 +122,7 @@ export function PlanCard({
                             Open plan
                         </Link>
                     </Button>
-                    <span className="text-xs text-muted-foreground">{cardNote(plans, open)}</span>
+                    {note !== null && <span className="text-xs text-muted-foreground">{note}</span>}
                 </div>
                 <Notice error={decide.error} reserve>
                     {said}
@@ -152,17 +155,60 @@ export function PlanChip({ plans }: { plans: TicketPlans }) {
             </span>
         )
     }
-    return planWaits(plans) ? <Chip tone="blocked">waiting on you</Chip> : <Chip>{newest.status}</Chip>
+    if (planWaits(plans)) {
+        return <Chip tone="blocked">waiting on you</Chip>
+    }
+    return changesAsked(plans) && newest.status === 'proposed' ? (
+        <Chip tone="running">changes asked</Chip>
+    ) : (
+        <Chip>{newest.status}</Chip>
+    )
 }
 
-// What comes next for the plan, in a line beside its actions: a planner or a triage at work, a waiver in force, a
-// request the planner has yet to read, or what the operator's word on it does.
-function cardNote(plans: TicketPlans, open: number): string {
+/**
+ * The band that says the operator asked for changes no planner has read yet, and when: until the next tick sends the
+ * planner back, the plan's word is the loop's, not theirs. It heads the plan's page and sits in its card, in the
+ * running tone, since the loop acts on it next, and leaves once a planner starts.
+ */
+export function ChangesAsked({ plans, className }: { plans: TicketPlans; className?: string }) {
+    if (!changesAsked(plans)) {
+        return null
+    }
+    return (
+        <section
+            aria-label="Changes asked"
+            data-testid="changes-asked"
+            className={cn(
+                'flex items-start gap-3 rounded-md border px-3 py-2',
+                'border-status-running/40 bg-status-running/8',
+                className,
+            )}
+        >
+            <MessageSquareReply aria-hidden className="mt-0.5 size-4 shrink-0 text-status-running" />
+            <p className="text-sm break-words">
+                <span className="font-medium text-status-running">
+                    You asked for changes{' '}
+                    <Age at={plans.changes_asked} variant="ago" className="text-sm text-status-running" />:
+                </span>{' '}
+                the next tick asks the planner for a new plan.
+            </p>
+        </section>
+    )
+}
+
+// Whether the operator asked for changes that no planner has started on yet.
+function changesAsked(plans: TicketPlans): plans is TicketPlans & { changes_asked: string } {
+    return plans.changes_asked !== null && plans.planning === null
+}
+
+// What comes next for the plan, in a line beside its actions: a planner or a triage at work, a waiver in force, or
+// what the operator's word on it does. Nothing while changes asked wait on a planner, which the card's band says.
+function cardNote(plans: TicketPlans, open: number): string | null {
     if (plans.planning !== null) {
         return `Run ${plans.planning} is writing a new plan.`
     }
     if (plans.changes_asked !== null) {
-        return 'You asked for changes: the next tick asks the planner for a new plan.'
+        return null
     }
     if (plans.newest === null && plans.triage?.status === 'running') {
         return `Run ${plans.triage.run_id} is judging whether it needs a plan at all.`

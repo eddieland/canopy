@@ -113,5 +113,6 @@ Approving doesn't send open comments. The implement reads the plan alone, so a c
 acts on. While any are open, the line under the buttons counts them and says so, every time, until you resolve them
 or send them.
 
-After you ask, the plan's page says "You asked for changes" until the next planner starts, and the button reads
+After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
+starts; the ticket's Plan card carries the same band, and the plan's chip reads `changes asked`. The button reads
 **Ask again**, so you never send a second request without knowing about the first.

@@ -234,12 +234,10 @@ describe('TicketPlan', () => {
             )
         })
 
-        it('says which run writes the next plan, or that you asked for one', async () => {
+        it('says which run writes the next plan, and leaves changes you asked for to their band', async () => {
             expect(await state({ planning: 51 })).toBe('Written by run:50. Run 51 is writing a new plan.')
             cleanup()
-            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toMatch(
-                /^Written by run:50\. You asked for changes \S+ ago: the next tick asks the planner for a new plan\.$/u,
-            )
+            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toBe('Written by run:50. ')
         })
 
         it('says nothing with no plan, whose panel says what comes', async () => {
