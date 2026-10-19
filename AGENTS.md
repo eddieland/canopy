@@ -118,6 +118,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   where `in` is a substring test. A parameter stays concrete when the function mutates, stores, or returns it, or hands
   it to `json.dumps` or `isinstance`; a click command's parameters stay the tuple click passes. No linter checks this,
   so review does.
+- A frozen dataclass holds no mutable collection type: a field is typed `Sequence`, `Collection`, `Mapping`, or
+  `Set` (as `AbstractSet` where imported so) by what its readers need, as a parameter is, so the type checker refuses
+  a change through it. A class that keeps state it changes is not frozen. `tests/canopy/test_frozen.py` fails on a
+  `list`, `dict`, or `set` field.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
   Nothing else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if
@@ -211,6 +215,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   runner of its own, one that times its worker out. `scenario.refuses(...)` is a dispatch canopy turns down, as the
   decisions it made instead, and `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an
   `UPDATE` of one table's times.
+  A review is the overseer's move as a dispatch is: `scenario.review(reviews(sha, ticket=KEY), reviewer=...)` starts one
+  in a tick of its own and does it in this process, giving back a `Reviewed`, and `scenario.refuses(reviews(...))` is
+  one canopy turns down.
   The config is set the same way: `scenario.configures(policy={"max_resume_attempts": 2})` merges keys into the user
   file, or into the `"workspace"` or `"private"` file named first, never TOML appended to whatever table is last.
   A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, until the
@@ -218,6 +225,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   The operator is played whole too: `scenario.operator("grant", KEY, "fix-ci", code=1)` is a command canopy refuses,
   and it and a tick give back what canopy printed (`.out`, `.err`; a tick's `.printed`), read from the move rather
   than from `capsys`.
+  A story in the workspace of two repositories, `api` and `web`, is told the same way through `ws_scenario`, whose
+  pools are seeded: each dispatch names its repositories, `dispatches(repo=("api", "web"))`, and a joint run's worker
+  `pushes(repos=("api", "web"))` in each.
   A scenario keeps the story as it played, and a failed test's report prints it, a numbered step for each move; a step
   the scenario cannot record stays out of it, so prefer a verb where one fits. A step the verbs do not cover is written
   with the helpers above, in the same test; a verb two tests need goes there.

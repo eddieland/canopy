@@ -1,5 +1,6 @@
 """The scenario DSL's own story: what a `Scenario` records of each move, for a failed test's report."""
 
+import shlex
 import sys
 import tomllib
 from datetime import timedelta
@@ -10,8 +11,10 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
+from tests.canopy.conftest import Ws
 from tests.canopy.helpers import InlineRunner, waits
-from tests.canopy.scenario_helpers import Printed, Scenario, asks, dispatches, fails, pushes, raises
+from tests.canopy.review_helpers import CLEAN, PR, head, reviewer_reports
+from tests.canopy.scenario_helpers import Printed, Scenario, asks, dispatches, fails, pushes, raises, reviews
 from tests.conftest import GitPool, git
 
 
@@ -189,3 +192,46 @@ def test_a_run_takes_a_runner_of_its_own_and_gives_back_what_it_printed(scenario
     assert timed_out.status == "timeout"
     assert "run 1: timeout" in timed_out.printed.out
     assert scenario.story == [str(timed_out)]
+
+
+def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_each(
+    ws_scenario: Scenario, ws: Ws
+) -> None:
+    both = ("api", "web")
+    assert dispatches(repo=both)[:6] == ["canopy", "dispatch", "PROJ-1", "--repo", "api", "--repo"]
+    joint = ws_scenario.run(dispatches(repo=both), worker=pushes(repos=both))
+    assert (joint.status, joint.branch) == ("done", "agent/PROJ-1-work")
+    assert all(ws.remote_head(name, "agent/PROJ-1-work") is not None for name in both)
+    assert {u["repo"]: u["pr_url"] for u in db.units(ws_scenario.conn, "PROJ-1")} == {
+        "api": "https://example.test/api/pr/1",
+        "web": "https://example.test/web/pr/1",
+    }
+    # A ticket in one repository of the two pushes there alone, as a run in one slot does.
+    alone = ws_scenario.run(dispatches("PROJ-2", repo="web"), worker=pushes())
+    assert alone.status == "done"
+    assert ws.remote_head("web", "agent/PROJ-2-work") is not None
+    assert ws.remote_head("api", "agent/PROJ-2-work") is None
+    assert ws_scenario.told().splitlines()[:2] == [
+        "1. run 1, implement of PROJ-1: done: did it",
+        "2. run 2, implement of PROJ-2: done: did it",
+    ]
+
+
+def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git_pool: GitPool) -> None:
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    scenario.configures(runtime={"review_cmd": template}, review={"agent_prs": True})
+    db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
+    sha = head(git_pool)
+    assert reviews(sha, ticket="PROJ-1")[-2:] == ["--ticket", "PROJ-1"]
+
+    reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN))
+    assert (reviewed.status, reviewed.row.sha, reviewed.row.pr_url) == ("done", sha, PR)
+    assert reviewed.prompt.startswith("# canopy reviewer\n")
+    assert f"review run {reviewed.id}" in reviewed.printed.out
+    [(action, _)] = scenario.refuses(reviews(sha))
+    assert action == "refused:reviewed"
+    _, review_step, refused_step, _ = scenario.told().split("\n", 3)
+    # What canopy noted of the report is told with it.
+    noted = "reported low impact, but review.low_impact is not set; recorded as normal"
+    assert review_step == f"2. review run 1 of {PR} at {sha[:7]}: done: clean: Nothing found.: {noted}"
+    assert refused_step == f"3. tick 2 refuses {shlex.join(reviews(sha))}"

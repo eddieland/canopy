@@ -28,7 +28,10 @@ implement, start it from the CLI with `canopy start KEY --plan`, or run `canopy 
 ## A ticket's page
 
 At the top, the key, the title, and whether the ticket is public or private, with links out to the tracker, its PRs,
-and its branches. Below:
+and its branches. The line under the title is where the ticket stands: the run working it, a question waiting on you,
+its plan's status, and when it was last active. Hover the `public` or `private` chip for what that means: a public
+ticket's comments stay on the tracker, and a reply you send from here stays in canopy either way, for its next worker.
+Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
   repository), and what the ticket has cost so far.

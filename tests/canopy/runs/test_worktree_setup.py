@@ -11,20 +11,16 @@ from typing import override
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import config
+from canopy.core.vocab import RunKind
 from canopy.infra import procs
-from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,
-    LABEL,
     InlineRunner,
     agent_runs,
-    in_tick,
     pool,
     slot_of,
     splitter_reports,
-    wait_for_run,
     worker_does,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
@@ -43,16 +39,6 @@ def configure(canopy_env: CanopyEnv, *, runtime: str = "", paths: str = "") -> N
     text = user_toml()
     text = text.replace("[runtime]\n", f"[runtime]\n{runtime}\n").replace("[paths]\n", f"[paths]\n{paths}\n")
     canopy_env.write_user(text)
-
-
-def setup_is(canopy_env: CanopyEnv, command: str, *extra: str) -> None:
-    configure(canopy_env, runtime="\n".join((f"setup_cmd = '''{command}'''", *extra)))
-
-
-def dispatch(*args: str, kind: str = "implement") -> list[str]:
-    """`canopy dispatch` for PROJ-1, in the only repository unless `args` name others."""
-    repos = () if "--repo" in args else ("--repo", "repo")
-    return ["dispatch", "PROJ-1", *repos, "--label", LABEL, "--kind", kind, *args]
 
 
 def treehouse_calls(treehouse_state: Path) -> list[list[str]]:
@@ -136,48 +122,29 @@ def test_a_setup_that_cannot_start_crashes_the_run(scenario: Scenario, git_pool:
     assert agent_runs(scenario.agent_log) == []
 
 
-def test_a_joint_run_sets_up_every_slot_each_naming_its_repository(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    seed_pools(ws, treehouse_state)
-    setup_is(canopy_env, SETUP)
-    conn = ws.journal()
-    with in_tick(conn), worker_does(["test", "-e", "api/.setup-done"], ["test", "-e", "web/.setup-done"]):
-        assert main(dispatch("--repo", "api", "--repo", "web")) == 0
-        run = wait_for_run(conn, 1)
+def test_a_joint_run_sets_up_every_slot_each_naming_its_repository(ws_scenario: Scenario) -> None:
+    ws_scenario.configures(runtime={"setup_cmd": SETUP})
+    worker = worker_does(["test", "-e", "api/.setup-done"], ["test", "-e", "web/.setup-done"])
+    run = ws_scenario.run(dispatches(repo=("api", "web")), worker=worker)
 
-        log = Path(run["log_path"]).read_text()
-        assert f"setup on {BRANCH} in api, run 1: initial api\n" in log
-        assert f"setup on {BRANCH} in web, run 1: initial web\n" in log
-        [w] = agent_runs(agent_log)
-        commands = w["commands"]
-        assert isinstance(commands, list)
-        assert [c["returncode"] for c in commands] == [0, 0]
+    log = run.printed.out
+    assert f"setup on {BRANCH} in api, run 1: initial api\n" in log
+    assert f"setup on {BRANCH} in web, run 1: initial web\n" in log
+    [w] = agent_runs(ws_scenario.agent_log)
+    commands = w["commands"]
+    assert isinstance(commands, list)
+    assert [c["returncode"] for c in commands] == [0, 0]
 
 
-def test_a_split_runs_no_setup(ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+def test_a_split_runs_no_setup(ws_scenario: Scenario) -> None:
     # The splitter reads its desk and has no shell to use what setup would install (DESIGN §18).
-    seed_pools(ws, treehouse_state)
-    setup_is(canopy_env, "sh -c 'exit 1'")
-    conn = ws.journal()
+    ws_scenario.configures(runtime={"setup_cmd": "sh -c 'exit 1'"})
     result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
-    with in_tick(conn), splitter_reports(result):
-        split = [
-            "dispatch",
-            "PROJ-12",
-            "--label",
-            LABEL,
-            "--kind",
-            "split",
-            "--request",
-            "1",
-            "--repo",
-            "api",
-        ]
-        assert main([*split, "--repo", "web"]) == 0
-        run = wait_for_run(conn, 1)
-        assert run["status"] == "done", Path(run["log_path"]).read_text()
-        assert "--- setup" not in Path(run["log_path"]).read_text()
+    split = dispatches("PROJ-12", RunKind.SPLIT, repo=("api", "web"), request="1")
+    run = ws_scenario.run(split, worker=splitter_reports(result))
+    assert run.status == "done", run.printed.out
+    assert "--- worker exit 0 ---" in run.printed.out  # the run log, which shows no setup
+    assert "--- setup" not in run.printed.out
 
 
 @pytest.mark.parametrize(
@@ -249,17 +216,13 @@ def test_a_missing_include_file_refuses_the_dispatch_and_leases_nothing(
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_sync_seeds_the_slots_it_makes_from_the_include_file(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
-) -> None:
+def test_sync_seeds_the_slots_it_makes_from_the_include_file(ws_scenario: Scenario, treehouse_state: Path) -> None:
     # So `post_create`, which runs after seeding, sees during sync the files a run's lease will seed.
-    manifest = canopy_env.home / "worktreeinclude"
+    manifest = ws_scenario.env.home / "worktreeinclude"
     manifest.write_text("user.bazelrc\n")
-    configure(canopy_env, paths=f"worktree_include = '{manifest}'")
-    canopy_env.append_user("\n[capacity]\nslots_per_repo = 2\n")
-    seed_pools(ws, treehouse_state)
+    ws_scenario.configures(paths={"worktree_include": str(manifest)}, capacity={"slots_per_repo": 2})
 
-    assert main(["workspace", "sync"]) == 0
+    ws_scenario.operator("workspace", "sync")
     gets = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
     assert len(gets) == 4  # two in each pool
     assert all(c[c.index("--include-file") + 1] == str(manifest) for c in gets)

@@ -58,7 +58,7 @@ test("a broken run's item leads with the run, and grants another try without lea
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
     await detail.getByRole('button', { name: 'Show a note for its next worker' }).click()
     const field = detail.getByRole('form', { name: 'Reply' }).getByRole('textbox')
-    await expect(field).toHaveAttribute('placeholder', /next worker reads it/u)
+    await expect(field).toHaveAttribute('placeholder', /^For its next worker, as an instruction\./u)
     await expect(field).not.toHaveAttribute('placeholder', /untrusted/u)
 })
 

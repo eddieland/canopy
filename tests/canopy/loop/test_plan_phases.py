@@ -8,6 +8,7 @@ sinks a plan waits, without its text.
 import json
 
 from canopy.core import db, plans
+from canopy.core.config import Policy
 from canopy.core.vocab import Phase, PlanStatus, RunKind, RunStatus
 from canopy.loop import attention
 from canopy.notify import message
@@ -96,7 +97,7 @@ def test_an_approval_after_a_reply_wins(scenario: Scenario, git_pool: GitPool) -
     scenario.operator("reply", KEY, "Make it blue.")
     scenario.operator("plan", KEY, "--approve")
     ticket = present(db.get_ticket(scenario.conn, KEY))
-    section = present(plans.state_section(scenario.conn, "approve", ticket, attempts=1, limit=3))
+    section = present(plans.state_section(scenario.conn, Policy(plan="approve"), ticket, attempts=1, limit=3))
     newest = present(section["newest"])
     assert newest["status"] == PlanStatus.APPROVED
 

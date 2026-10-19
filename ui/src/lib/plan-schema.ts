@@ -7,8 +7,9 @@
 // only to itself (D113). A line the source wraps inside a paragraph is a soft break of its own, drawn as a space and
 // written back as the wrap it was. Text pasted as Markdown is read as Markdown, through the same parser, and what is
 // copied out of more than one block is written as Markdown.
-import { Extension, getTextBetween, getTextSerializersFromSchema, Node } from '@tiptap/core'
+import { Extension, getTextBetween, getTextSerializersFromSchema, mergeAttributes, Node } from '@tiptap/core'
 import type { AnyExtension, JSONContent, MarkdownToken } from '@tiptap/core'
+import { Heading } from '@tiptap/extension-heading'
 import { Link } from '@tiptap/extension-link'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TableKit } from '@tiptap/extension-table'
@@ -31,11 +32,12 @@ const MARKDOWN_INLINE = /\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\)/u
 export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
     return [
         StarterKit.configure({
-            // Markdown has no underline, and a link is ours (below).
+            // Markdown has no underline, a link is ours, and so is a heading (below).
             underline: false,
             link: false,
-            heading: { levels: [1, 2, 3, 4] },
+            heading: false,
         }),
+        PlanHeading.configure({ levels: [...PLAN_LEVELS] }),
         PlanLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false }),
         TaskList,
         PlanTaskItem.configure({ nested: true }),
@@ -121,6 +123,29 @@ export function spanOf(positions: number[], from: number, to: number): { start: 
     }
     return { start, end }
 }
+
+// The heading levels a plan has, `#` to `####`.
+const PLAN_LEVELS = [1, 2, 3, 4] as const
+// A plan sits in its page's Plan panel, whose title is an h2 under the page's h1, so its `#` is drawn as an h3 and
+// each level under it a step lower, to `####` as an h6: the page's outline skips no level. The level the Markdown
+// says rides on `data-level`, so what the editor copies reads back at the level it was.
+const PLAN_DEPTH = 2
+
+const PlanHeading = Heading.extend({
+    parseHTML() {
+        return [1, 2, 3, 4, 5, 6].map((tag) => ({
+            tag: `h${tag}`,
+            getAttrs: (element: HTMLElement) => {
+                const level = Number(element.dataset['level'] ?? tag)
+                return PLAN_LEVELS.some((l) => l === level) ? { level } : false
+            },
+        }))
+    },
+    renderHTML({ node, HTMLAttributes }) {
+        const level = Number(node.attrs['level'])
+        return [`h${level + PLAN_DEPTH}`, mergeAttributes(HTMLAttributes, { 'data-level': level }), 0]
+    },
+})
 
 // A link, kept with its address so it writes back as it was read, shown as underlined text with the address on
 // hover. The editor never navigates, and nothing here is an anchor element.

@@ -8,7 +8,7 @@ to say which failures recur and what they cost.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -17,7 +17,7 @@ from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus, TickSt
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from datetime import datetime
 
     from canopy.core.spend import Kind
@@ -108,9 +108,9 @@ class Health:
     since: str
     until: str
     days: int
-    outcomes: list[Outcome] = field(default_factory=list[Outcome])
-    failures: list[Failure] = field(default_factory=list[Failure])
-    refusals: list[Refusal] = field(default_factory=list[Refusal])
+    outcomes: Sequence[Outcome] = ()
+    failures: Sequence[Failure] = ()
+    refusals: Sequence[Refusal] = ()
 
 
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:

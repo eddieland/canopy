@@ -67,6 +67,14 @@ Controls:
   for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
   before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
   approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
+- A triage's verdict (DESIGN §25, Triage before a plan) is an agent's judgment that ticket text can steer, and a
+  `trivial` one lifts the plan gate for its ticket: but only where the operator turned `policy.plan_triage` on, and
+  only for a plan the policy asked for. The operator's own `plan` setting for a ticket stands, and so does D089's gate
+  on feedback. Only a validated `done` `trivial` result writes the waiver, and its reason, model text written from the
+  ticket, reaches no worker's prompt. The PR's review is the backstop. Residual, accepted by the operator: a ticket's
+  text can talk a triage into `trivial`, and its work then goes to a PR unplanned. And a primary clone may lag its base
+  branch, so a `trivial` verdict can rest on code that has since changed; only the PR's review catches that until the
+  reviewer's second opinion (`not_trivial`, ROADMAP M55) is built.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -152,12 +160,14 @@ Controls:
   propose them, with `memory.proposals` not off: a proposal is stored pending, bounded as a note is, at most 3 a run and
   20 waiting, and reaches no prompt at any mode. Only `canopy memory promote`, in the operator's shell, makes one, or
   a ticket's note, a lesson, in the operator's name and words, and it refuses when `CANOPY_TICK_ID` or
-  `CANOPY_RUN_ID` is set, as `notice` does; so do `reject` and `renew`. A lesson reaches workers only at `use`, framed
-  as the operator's words that the prompt's obligations come before; reviews, chores, splits, and the overseer hear
-  none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the operator. The proposals
-  list, and `promote` of a proposal or a note in its own words, warn on one from a private ticket's run, whose text
-  may hold what the operator kept off the tracker. Residual, D076's: until workers are sandboxed (M26), a steered
-  worker's bash runs as the operator and could insert a `lesson` row into the journal, as it could a `notices` row.
+  `CANOPY_RUN_ID` is set, as `notice` does; so do `reject`, `renew`, and `edit`, which writes a lesson anew in the
+  operator's words and keeps the version it replaces, served to no run, as its history. A lesson reaches workers only
+  at `use`, framed as the operator's words that the prompt's obligations come before; reviews, chores, splits, and the
+  overseer hear none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the
+  operator. The proposals list, and `promote` of a proposal or a note in its own words, warn on one from a private
+  ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers are
+  sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal, as it
+  could a `notices` row.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -262,6 +272,11 @@ Controls in code, not prompts:
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
   an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
   asks for, and only the operator's channels ask for, skip, or approve a plan.
+- Triage: one `needs-plan` run per ticket, before its first plan, never reset and never granted (`triaged`), with its
+  own `runtime.plan_triage_timeout_minutes`, and counted within `capacity.max_workers` though it leases no slot. A
+  triage that ends any way but `done` is not run again, and raises no attention item, since the plan follows at once.
+  A waiver is written only by `_run` from a validated result, never by an agent or a command, and `unplanned` stays a
+  guard in code (DESIGN §25).
 
 ### T4. Damage to the operator's machine
 
@@ -379,6 +394,14 @@ Controls:
   private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
   still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
+- The triage agent (DESIGN §25, Triage before a plan) writes nothing: its definition, `canopy-plan-triage`, is the
+  planner's with nothing to edit, so it has no edit, shell, web, or subagent tools, and of the tracker only its read
+  tools, rendered as the planner's are. A triage is refused (`no_read_tools`) without them. It reads each repository
+  it names through a link in its desk to that repository's primary clone, which the shadowing check covers, as does the
+  check for the tracker server's tools. Residual: no sandbox holds it. `worker_cmd_prefix` does not wrap
+  `plan_triage_cmd`, and no sandbox role exists for it yet (DESIGN §24), so with M26's sandbox on, a triage still runs
+  outside the OS sandbox, reading ticket text anyone can write and the primary clones; its definition's tool denials
+  are its only bound.
 - With `trust.review_replies = "approve"`, a worker's comments leave the machine only as the operator sent them: its
   prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the GitHub
   server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker source
@@ -462,7 +485,9 @@ Controls, in code:
 - Those keys are private (DESIGN §12) and are read only from the operator's own files: the user file, in the user
   config directory, and the workspace's private file, in its state directory. A workspace file that sets one is a
   config error and the tick does not run.
-- `policy.*` values from the workspace file apply only when stricter than the built-in defaults.
+- `policy.*` values from the workspace file apply only when stricter than the built-in defaults. `policy.plan_triage`
+  and `policy.trivial` are private instead: triage loosens the operator's plan gate, so a shared file can neither turn
+  it on nor say what counts as trivial (DESIGN §25).
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
@@ -578,8 +603,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
-  proposal, renew a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
-  `reject`, `renew`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
+  proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
+  `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
   `drop`, and `send` do (DESIGN §29), ask the loop to read its config files again as SIGHUP does, and ask it for a
   tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a

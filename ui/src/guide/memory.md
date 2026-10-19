@@ -65,9 +65,9 @@ memory in use never share a label, so you never mistake one for the other.
   whether its ticket is done, and when it lapses if you leave it, and Promote, Reject, and Forget under it. None reaches
   a run until you promote it. The nav counts them beside **Memory** on every page, and so does the panel, so a proposal
   doesn't quietly expire at 14 days because you never came looking. Clear the lot and the panel says so.
-- **Lessons** are the ones you promoted, each with Renew and Forget, the ones a run reported wrong first, then by review
-  date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run is served
-  from your lessons, or would be served at use while recording.
+- **Lessons** are the ones you promoted, each with Renew, Edit, and Forget, the ones a run reported wrong first, then
+  by review date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run
+  is served from your lessons, or would be served at use while recording.
 - **Ticket notes** lists the tickets with notes in force, one row each with its title, how many notes it has, and how
   many a run relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has thousands, so the
   page reads a ticket's notes only once you ask. It flips between the newest note first and the oldest, and on a wide
@@ -79,12 +79,14 @@ runs, a lesson for every repository included, since those runs read it too. Whil
 has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
 keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. For what notes say, the page
 runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold every word under
-the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. The count in the
-Ticket notes header counts those notes while you search. It stops at the best fifty, and says so; another word narrows
-them faster than scrolling would. The repository chips don't narrow Ticket notes: a
-note is read by its own ticket's runs, whatever the repository. The **history** chip at the end of the filter
-bar lists what's no longer pending or in force under each panel: proposals rejected, lapsed, promoted, or forgotten, and
-lessons replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
+the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. One difference:
+the rows match part of a word and the search matches whole ones, endings aside, so `time` keeps a row about a timeout
+but finds no note that only says `timeout`, while `retry` finds one that says `retries`. The count in the Ticket notes
+header counts those notes while you search. It stops at the best fifty, and says so; another word narrows them faster
+than scrolling would. The repository chips don't narrow Ticket notes: a note is read by its own ticket's runs,
+whatever the repository. The **history** chip at the end of the filter bar lists what's no longer pending or in force
+under each panel: proposals rejected, lapsed, promoted, or forgotten, and lessons replaced or forgotten, the latest
+fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
 
@@ -100,7 +102,10 @@ has; and how long ago it was written.
 Under that, what it says, and one line of where it came from: the run that wrote it, with the commit it was written
 against on hover; for a proposal, how its run ended, whether its ticket is done, and `private` if its run worked a
 private ticket; for a lesson, what it was promoted from, when it comes up for review, and any run that reported it
-wrong, and when.
+wrong, and when. A memory with more than one version says which it is, `version 2`, and a lesson you edited names the
+one it was edited from. **Show versions** opens them all under its row, newest first, each with how it was made and
+what it said then. The versions are read only when you open them, so a long list doesn't pay for history it isn't
+showing.
 
 A worker's text is shown as plain text, never as Markdown or a link, unlike everything else a worker writes: a link in
 a note would be a worker's link you'd read as canopy's. Any character that hides text from you but not from a model,
@@ -180,6 +185,21 @@ Three attention items keep you honest, all yours and never the overseer's, and n
 
 Each item leaves at the next tick once you've dealt with what it names, as an answered question does.
 
+## Editing a lesson
+
+**Edit**, under each lesson on the memory page, or `canopy memory edit ID --text TEXT`, rewrites a lesson: its words,
+starting as they stand and held to the same 600 characters, and the repositories whose runs read it (`--repo R`, or
+`--every-repo` to widen it). Nothing is edited in place. The new words are a new version with an id of their own, and
+the old one stays, superseded, with its words, so you can always see what a lesson used to say and which runs read
+that. Only the version in force reaches a run or its search. The new version comes up for review 90 days on, and a
+run's report that the lesson was wrong is cleared, since an edit is usually your answer to one. An edit that changes
+nothing is refused `unchanged`; Edit stays disabled until you change something.
+
+A note's versions work the same way, except that you don't write them: a run that learns more about something reuses
+its note's key, and the newer note supersedes the older. **Show versions** on either, or `canopy memory history ID`,
+lists the whole chain. Forgetting a lesson, or a run dropping a note, ends the chain; one written under the key after
+starts a new one.
+
 ## Forgetting
 
 **Forget**, at the end of any memory's line of buttons, muted until you point at its row, or `canopy memory forget ID`,
@@ -187,9 +207,12 @@ deletes its text and keeps its row, so the history still says something was ther
 forgotten proposal leaves the queue. Reject is enough for a proposal you just don't want; Forget is for one whose words
 shouldn't stay. It can't be undone, so the page asks you to type the memory's ref, `memory:42`, before the button wakes
 up. A lesson from a note comes back if you promote the note again, while the note keeps its text; one from a proposal
-doesn't, since promoting it used the proposal up. `canopy memory purge`, in your shell alone, does the same for many: a
-ticket's runs', a run's, or, with `--all`, everything. Neither leaves a word of what it deleted in the search index or
-the journal's free pages. That's the point, if what you're deleting is a leaked secret.
+doesn't, since promoting it used the proposal up. Forget deletes one version's words, not the others': if you edited a
+leaked secret out of a lesson, the version before still has it. Open the lesson's versions, where each one out of force
+has its own Forget, or run `canopy memory history ID`; `canopy memory forget` names the versions that keep their words.
+`canopy memory purge`, in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`,
+everything. Neither leaves a word of what it deleted in the search index or the journal's free pages. That's the
+point, if what you're deleting is a leaked secret.
 
 ## Search
 

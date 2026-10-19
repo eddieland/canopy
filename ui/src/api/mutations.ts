@@ -12,6 +12,8 @@ import type {
     Granted,
     Limit,
     LoopState,
+    LessonEditRequest,
+    MemoryEdited,
     MemoryForgotten,
     MemoryPromoted,
     MemoryRejected,
@@ -39,8 +41,8 @@ import type {
  * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
  * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
  * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, and `forget`, and `draft edit`, `drop`, and `send`, or as `t` at the loop's
- * terminal, with the same guards; a refusal is an ApiError naming its guard.
+ * `memory promote`, `reject`, `renew`, `edit`, and `forget`, and `draft edit`, `drop`, and `send`, or as `t` at the
+ * loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -323,6 +325,17 @@ export async function rejectMemory(id: number): Promise<MemoryRejected> {
 /** `canopy memory renew ID`: the lesson comes up for review later, and a run's report that it is wrong is cleared. */
 export async function renewMemory(id: number): Promise<MemoryRenewed> {
     return unwrap(await api.POST('/api/memory/{memory_id}/renew', { params: { path: { memory_id: id } } }))
+}
+
+/**
+ * `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]`: a new version of a lesson in force, the old one
+ * kept as its history. A `text` of null keeps the lesson's words, and a `repo` of null its repository, unless
+ * `every_repo`.
+ */
+export async function editMemory(id: number, request: LessonEditRequest): Promise<MemoryEdited> {
+    return unwrap(
+        await api.POST('/api/memory/{memory_id}/edit', { params: { path: { memory_id: id } }, body: request }),
+    )
 }
 
 /** `canopy memory forget ID`, with the memory's ref as typed: refused `not_confirmed` unless it matches. */

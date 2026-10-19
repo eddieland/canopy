@@ -528,7 +528,8 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      each with its kind, how it ended, and its report and question (step 7). Each run starts a fresh session (below), so
      this is how a worker learns what the runs before it concluded. A report is worker text, so the prompt calls it data
      to check against the branch and PR, and keeps it off the ticket and PRs, since it may repeat the operator's
-     messages. A private ticket's prompt has the same reports in its conversation. An override without it still renders.
+     messages. A private ticket's prompt has the same reports in its conversation. A triage's report is in neither
+     (§25). An override without it still renders.
    - Every `implement` and `resume` prompt says how to attribute commits: keep the runtime's trailer, or add
      the one from `trust.commit_trailer_name` and `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off,
      add none.

@@ -2,7 +2,18 @@ import { describe, expect, it } from 'vitest'
 
 import type { SpendCosts, SpendDay } from '@/api/types'
 
-import { chartTop, dayHint, dayLabel, dearestDay, doneText, seriesCost, SERIES, shareText, spendWindow } from './spend'
+import {
+    chartTop,
+    dayHint,
+    dayLabel,
+    dearestDay,
+    doneText,
+    seriesCost,
+    SERIES,
+    shareText,
+    spendLine,
+    spendWindow,
+} from './spend'
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -35,7 +46,7 @@ describe('spend', () => {
 
     it('says a day on hover with each series it has', () => {
         expect(dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, total: 1.5 }))).toBe(
-            'Oct 7: $1.50, idle ticks $0.25, other ticks $0.75, reviews $0.50',
+            'Oct 7: $1.50, overseer $1.00 (idle ticks $0.25), reviews $0.50',
         )
         expect(dayHint(day('2026-10-02', {}))).toBe('Oct 2: nothing reported')
     })
@@ -72,5 +83,18 @@ describe('spend', () => {
         expect(doneText({ done: 'merged', done_at: '2026-10-07T23:30:00Z' })).toBe('Oct 7, merged')
         expect(doneText({ done: 'closed', done_at: '2026-10-08T00:10:00Z' })).toBe('Oct 8, closed')
         expect(doneText({ done: null, done_at: null })).toBe('')
+    })
+
+    it("says the window's state: what it cost and what it got done", () => {
+        expect(spendLine({ days: 7, done: 2, totals: { ...NONE, total: 10.512 } })).toBe(
+            '$10.51 over 7 days · 2 tickets done',
+        )
+        expect(spendLine({ days: 30, done: 0, totals: NONE })).toBe('– over 30 days · no tickets done')
+    })
+
+    it('names each series once, the same in the totals, the legend, and the table', () => {
+        const labels = SERIES.map((s) => s.label)
+        expect(new Set(labels).size).toBe(labels.length)
+        expect(labels).toEqual(['idle ticks', 'overseer', 'workers and splits', 'chores', 'reviews', 'dry runs'])
     })
 })

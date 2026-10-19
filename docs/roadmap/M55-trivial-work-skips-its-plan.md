@@ -15,7 +15,7 @@ first, in §25.
 - **When it runs.** Only for a plan the policy asks for: a ticket whose own setting says `plan` (`canopy plan KEY`, or
   `start --plan`) is planned whatever triage would say, since that is the operator's word for that ticket. Before the
   first `plan` of such a ticket, with no branch, no plan run, and no triage run yet, and not a split's parent, the
-  overseer dispatches a `triage-plan` run, once per ticket: a second is refused `triaged` however the first ended, and
+  overseer dispatches a `needs-plan` run, once per ticket: a second is refused `triaged` however the first ended, and
   one not due `bad_triage`. Under M54, before a feedback plan too, once per round of feedback.
 - **The run.** A read-only run with a verdict, as M25's `triage-ci` is (DESIGN §23): it leases no slot, reads the ticket
   through the tracker's read tools and the named repositories' primary clones, linked from a directory of canopy's,
@@ -69,4 +69,11 @@ open: when a triage is due and the guards that hold it to once per ticket; that 
 primary clones through links, as a plan's desk links slots; that only a validated result writes the waiver, which
 `unplanned` reads in code and `canopy forget` ends; and that `not_trivial` lasts until the ticket is done or
 forgotten. Open for the operator: the feedback half, which M54's design settles; the sandbox role for
-`plan_triage_cmd`; and whether a waiver sends an event to the sinks.
+`plan_triage_cmd`; and whether a waiver sends an event to the sinks. Built 2026-10-19, against the fakes: the four
+private keys; the `needs-plan` run, slotless in a desk linking the primary clones, with `canopy-plan-triage`, one
+prompt for public and private tickets, and its result validated; dispatch's `triage_off`, `triaged`, and `bad_triage`,
+counted within capacity; the waiver, which only a validated `done` `trivial` result writes, `unplanned` reads,
+`canopy plan KEY` undoes, and `canopy forget` ends; the state block's `triage_due` and `waived`; `canopy show` naming
+it; and the TRUST_MODEL lines. Until the open three are settled, a triage runs in no sandbox and a waiver sends no event
+of its own. Left: the overseer prompt's triage row, without which the loop dispatches `plan` where a triage is due;
+the web UI's plan card; the reviewer's `not_trivial`; the spend page's kind; and the feedback half (M54).

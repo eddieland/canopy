@@ -25,6 +25,7 @@ import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
+import { ticketDescription } from '@/lib/descriptions'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
@@ -37,6 +38,16 @@ import { None } from '@/components/none'
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
 })
+
+// What every ticket's page shows, on its title's hover.
+const HELP =
+    "A ticket's page: its work and your actions on it, its conversation and the box to reply in, then its runs and " +
+    'the decisions each tick made about it.'
+
+// What a public ticket's chip means, on hover: where its comments and a reply sent here go, as the reply box says it.
+const PUBLIC_HINT =
+    'Public: its queue label authorizes it. Its comments stay on the tracker; a reply you send here stays in canopy, ' +
+    'for its next worker.'
 
 function TicketPage() {
     const { key } = Route.useParams()
@@ -91,18 +102,26 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     if (planLeads === undefined && plans !== undefined) {
         setPlanLeads(plans.newest?.plan.status === 'proposed' && plans.planning === null)
     }
-    const how = ticket.private
-        ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
-        : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
+    const state = ticketDescription(ticket, plans)
     return (
         <>
             <PageHeader
-                chips={<Chip>{ticket.private ? 'private' : 'public'}</Chip>}
+                chips={
+                    // What public or private means is the chip's, on hover and to a screen reader: the description is
+                    // the ticket's state.
+                    <span title={accessHint(ticket)} className="inline-flex">
+                        <Chip>{ticket.private ? 'private' : 'public'}</Chip>
+                        <span className="sr-only">{accessHint(ticket)}</span>
+                    </span>
+                }
                 title={ticket.key}
                 subject={ticket.title}
+                help={HELP}
                 links={<TicketLinks tracker={tracker} units={units} branches={branches} />}
             >
-                {how}
+                {state}
+                {state === '' ? '' : ' · '}
+                active <Age at={ticket.active_at} variant="ago" />
             </PageHeader>
             {planned && planLeads === true && <PlanCard ticketKey={ticket.key} plans={plans} />}
             {/* The detail skeleton (DESIGN.md): what it is, its conversation and its answer, then its lists. */}
@@ -115,11 +134,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 )}
             >
                 <Panel className="2xl:col-start-1 2xl:row-start-1">
-                    <PanelHeader label="Work">
-                        <span className="text-xs text-muted-foreground">
-                            active <Age at={ticket.active_at} variant="ago" />
-                        </span>
-                    </PanelHeader>
+                    <PanelHeader label="Work" />
                     {/* Three field lists spaced as one: a ticket across many repositories scrolls its units in */}
                     {/* place, so its total stays in reach. */}
                     <Fields className="pb-0">
@@ -232,6 +247,7 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
                         entries={data.notes}
                         digest={data.digest}
                         below={below}
+                        onVersionSaid={setSaid}
                         modes={
                             memory
                                 ? { ticket_notes: memory.ticket_notes.mode, lessons: memory.lessons.mode }
@@ -243,6 +259,17 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
             {data?.digest && <MemoryDigestView digest={data.digest} served="served to its next run" />}
         </Panel>
     )
+}
+
+/**
+ * What the ticket's `public` or `private` chip means, on hover: what authorizes it, and where its conversation and a
+ * reply sent here go, in the words the reply box uses.
+ */
+function accessHint(ticket: TicketDetail['ticket']): string {
+    if (ticket.private) {
+        return `Private, ${ticket.start ?? 'started'}: its conversation stays in canopy; nothing reaches the ticket.`
+    }
+    return PUBLIC_HINT
 }
 
 function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; phase: string | null }) {

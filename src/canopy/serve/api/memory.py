@@ -1,7 +1,7 @@
-"""Agent memory (DESIGN §28): every tier's memory, a ticket's notes, a run's, and promote, reject, renew, and forget.
+"""Agent memory (DESIGN §28): every tier's memory, a ticket's notes, a run's, a memory's versions, and the verbs.
 
-The verbs are `canopy memory`'s, through `canopy.core.memory_manage`, so with its refusals. Purging many at once stays
-the CLI's, in the operator's shell.
+The verbs, promote, reject, renew, edit, and forget, are `canopy memory`'s, through `canopy.core.memory_manage`, so
+with its refusals. Purging many at once stays the CLI's, in the operator's shell.
 """
 
 from __future__ import annotations
@@ -10,15 +10,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from canopy.core import conversation, db, memory_manage
+from canopy.core import conversation, db, memory, memory_manage
 from canopy.infra import logs
 from canopy.serve import memory_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, MemoryId, RefusedError, RunId, TicketKey, not_found, ticket_ref
 from canopy.serve.schema import (
+    LessonEditRequest,
+    MemoryEdited,
     MemoryForgetRequest,
     MemoryForgotten,
     MemoryFound,
+    MemoryHistory,
     MemoryOverview,
     MemoryPromoted,
     MemoryRejected,
@@ -52,11 +55,11 @@ def overview(
 
 @router.get("/memory/search", operation_id="searchMemory", summary="Search agent memory")
 def search(
-    q: Annotated[str, Query(max_length=200, description="The words to find, any of them, as canopy memory search.")],
+    q: Annotated[str, Query(max_length=200, description="The words to find: any of them, or with every, all.")],
     backend: BackendDep,
     *,
     notes: Annotated[bool, Query(description="Only ticket notes in force, the 50 best of them.")] = False,
-    every: Annotated[bool, Query(description="Only what holds every word, as the memory page's filter keeps.")] = False,
+    every: Annotated[bool, Query(description="Only what holds every word, each a whole word, endings aside.")] = False,
 ) -> MemoryFound:
     """`canopy memory search Q` in the operator's shell: every memory that keeps its text, best match first, at most 50.
 
@@ -94,6 +97,21 @@ def run_memory(run_id: RunId, backend: BackendDep) -> RunMemory:
         found = memory_views.run_memory(ctx, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no run {run_id}")
+    return found
+
+
+@router.get(
+    "/memory/{memory_id}/history",
+    operation_id="getMemoryHistory",
+    summary="Get a memory's versions",
+    responses=not_found("memory"),
+)
+def history(memory_id: MemoryId, backend: BackendDep) -> MemoryHistory:
+    """`canopy memory history ID`: every version of a lesson or a note, newest first, those out of force included."""
+    with backend.open() as ctx:
+        found = memory_views.history(ctx, memory_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"no memory {memory_id}")
     return found
 
 
@@ -159,6 +177,40 @@ def renew(memory_id: MemoryId, backend: BackendDep) -> MemoryRenewed:
             raise RefusedError(r) from None
     _log.info("lesson renewed", extra={"lesson": memory_id, "channel": WEB})
     return MemoryRenewed(id=memory_id, review_at=db.parse_time(due))
+
+
+@router.post("/memory/{memory_id}/edit", operation_id="editMemory", summary="Edit a lesson", responses=REFUSED)
+def edit(memory_id: MemoryId, body: LessonEditRequest, backend: BackendDep) -> MemoryEdited:
+    """`canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]`: a new version of a lesson in force.
+
+    The old version stays, superseded, as the lesson's history. Refused as the CLI refuses it: `off` while proposals
+    are off, `unknown`, `unknown_repo`, `bad_text`, and `unchanged` for an edit that changes nothing; `bad_request`
+    for `repo` with `every_repo`.
+    """
+    if body.repo is not None and body.every_repo:
+        raise RefusedError(conversation.Refused("bad_request", "name one repository or every repository, not both"))
+    with backend.open() as ctx:
+        try:
+            repos = [r.name for r in ctx.ws.repos]
+            edited = memory_manage.edit(
+                ctx.conn,
+                ctx.config,
+                memory_id,
+                text=body.text,
+                repo=body.repo,
+                every_repo=body.every_repo,
+                repos=repos,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        lesson = edited.lesson
+        _log.info("lesson edited", extra={"lesson": memory_id, "into": lesson.id, "channel": WEB})
+        replaced = memory.get(ctx.conn, memory_id) or edited.replaced
+        return MemoryEdited(
+            lesson=memory_views.entry(ctx, lesson),
+            replaced=memory_views.entry(ctx, replaced),
+            served=edited.served,
+        )
 
 
 # Forgetting cannot be undone, so the request carries the memory's ref as the operator typed it, and a mismatch is

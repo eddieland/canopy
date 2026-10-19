@@ -808,17 +808,18 @@
     .plan-doc {
         @apply flex min-h-72 max-w-3xl flex-col gap-3 document-text break-words text-foreground outline-none;
 
-        & :is(h1, h2) {
+        /* Styled by the level its Markdown says (`data-level`), not its tag, which sits two under it (PlanHeading). */
+        & :is([data-level='1'], [data-level='2']) {
             @apply mt-2 document-section;
         }
         /* The empty plan's prompt (Placeholder in plan-editor.tsx), where its first line's text would start. */
         & p.is-editor-empty:first-child::before {
             @apply pointer-events-none float-left h-0 text-muted-foreground content-[attr(data-placeholder)];
         }
-        & :is(h3, h4) {
+        & :is([data-level='3'], [data-level='4']) {
             @apply mt-1 document-subsection;
         }
-        & :is(h1, h2, h3, h4):first-child {
+        & [data-level]:first-child {
             @apply mt-0;
         }
         & ul {

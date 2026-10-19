@@ -277,8 +277,8 @@ def test_review_dates_raise_one_lesson_review_once_lessons_are_in_use(
     assert str(fresh.id) not in item.detail.split(" are due")[0]
 
 
-@pytest.mark.parametrize("args", [["promote", "1"], ["reject", "1"], ["renew", "1"]])
-def test_promote_reject_and_renew_refuse_inside_a_run(
+@pytest.mark.parametrize("args", [["promote", "1"], ["reject", "1"], ["renew", "1"], ["edit", "1", "--text", "x"]])
+def test_promote_reject_renew_and_edit_refuse_inside_a_run(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, args: list[str]
 ) -> None:
     with_memory(canopy_env, proposals="use")
@@ -367,6 +367,156 @@ def test_promoting_a_private_tickets_note_in_its_own_words_warns(
     assert "Every run dispatched from now on reads it." in out
     assert main(["memory", "promote", str(note), "--text", "Run `make lint` twice."]) == 0
     assert "Warning" not in capsys.readouterr().out
+
+
+def test_edit_writes_a_new_version_and_keeps_the_old_one_as_the_lessons_history(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, proposals="use")
+    first = promoted(conn, canopy_env)
+    # A run reported it wrong: the edit is the operator's answer, so the new version carries no report.
+    reporter = present(memory.get(conn, present(first.promoted_from))).run_id
+    conn.execute("UPDATE memories SET wrong_at = ?, wrong_run_id = ? WHERE id = ?", (db.now(), reporter, first.id))
+    words = "Run the API's tests with `make test-api`, which loads its fixtures."
+    assert main(["memory", "edit", str(first.id), "--text", f"  {words} "]) == 0
+    lesson = memories(conn)[-1]
+    assert capsys.readouterr().out == (
+        f"Lesson {first.id} is edited into lesson {lesson.id} (`api-tests`), version 2, due for review at "
+        f"{lesson.review_at}. Lesson {first.id} stays in its history.\n"
+        "Every run dispatched from now on reads the new version.\n"
+    )
+    assert (lesson.key, lesson.body, lesson.status, lesson.author) == ("api-tests", words, "active", "operator")
+    assert (lesson.supersedes, lesson.promoted_from, lesson.wrong_at, lesson.use_count) == (first.id, first.id, None, 0)
+    assert memory.edited(lesson)
+    assert not memory.edited(first)
+    old = present(memory.get(conn, first.id))
+    assert (old.status, old.why, old.body) == (MemoryStatus.SUPERSEDED, f"edited into lesson {lesson.id}", LESSON)
+    # Runs are served the new words alone.
+    assert memory.lessons_digest(conn, None, cite=True).ids == (lesson.id,)
+    # The lesson still names the proposal it was promoted from, past the edit.
+    proposal = present(memory.origin(conn, lesson))
+    assert (proposal.scope, proposal.id) == (MemoryScope.PROPOSAL, first.promoted_from)
+    assert main(["memory", "lessons"]) == 0
+    assert f"edited from lesson {first.id} at {lesson.approved_at} from proposal {proposal.id};" in (
+        capsys.readouterr().out
+    )
+    assert main(["memory", "history", str(first.id)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("Lesson `api-tests`: 2 versions, newest first.\n")
+    assert out.index(f"v2  {lesson.id}  active;") < out.index(f"v1  {first.id}  superseded, edited into lesson")
+    assert f"v1  {first.id}  superseded, edited into lesson {lesson.id}; promoted at" in out
+    assert out.count("  <-") == 1
+
+
+def test_edit_moves_a_lesson_between_repositories_and_a_promote_over_it_is_its_next_version(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    first = promoted(conn, canopy_env)
+    narrowed = memory_manage.edit(conn, cfg, first.id, repo="repo", repos=["repo"])
+    assert (narrowed.lesson.repo, narrowed.lesson.body, narrowed.version, narrowed.served) == ("repo", LESSON, 2, False)
+    widened = memory_manage.edit(conn, cfg, narrowed.lesson.id, every_repo=True)
+    assert (widened.lesson.repo, widened.version) == (None, 3)
+    again = memory_manage.promote(conn, cfg, proposed(conn, "Different words."))
+    assert again.superseded == widened.lesson.id
+    assert not memory.edited(again.lesson)
+    versions = memory.history(conn, narrowed.lesson.id)
+    assert [m.id for m in versions] == [again.lesson.id, widened.lesson.id, narrowed.lesson.id, first.id]
+    assert [memory.version(conn, m) for m in versions] == [4, 3, 2, 1]
+    # A lesson forgotten ends its history: one promoted under its key after starts another.
+    memory_manage.forget(conn, again.lesson.id)
+    fresh = memory_manage.promote(conn, cfg, proposed(conn, "Third words.")).lesson
+    assert [m.id for m in memory.history(conn, fresh.id)] == [fresh.id]
+    assert len(memory.history(conn, first.id)) == 4
+
+
+@pytest.mark.parametrize(
+    ("args", "refusal"),
+    [
+        (["--text", f" {LESSON}"], "(unchanged): lesson {id} already says that, to every run"),
+        (["--every-repo"], "(unchanged): lesson {id} already says that, to every run"),
+        (["--repo", "nowhere"], "(unknown_repo): 'nowhere' is not a repository in this workspace (repo)"),
+        (["--text", "x" * 601], "(bad_text): the lesson's its text is 601 characters, over 600"),
+        (["--text", "bad\u202etext"], "(bad_text): the lesson's its text holds U+202E"),
+    ],
+)
+def test_edit_refuses_what_changes_nothing_or_breaks_the_bounds(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+    args: list[str],
+    refusal: str,
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    lesson = promoted(conn, canopy_env)
+    capsys.readouterr()
+    assert main(["memory", "edit", str(lesson.id), *args]) == 1
+    assert f"edit refused {refusal.format(id=lesson.id)}" in capsys.readouterr().err
+    assert [m.id for m in memory.history(conn, lesson.id)] == [lesson.id]
+
+
+def test_edit_takes_only_a_lesson_in_force_and_needs_proposals_on(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    first = promoted(conn, canopy_env)
+    assert main(["memory", "edit", str(first.id)]) == 2
+    assert "name what changes: --text, --repo, or --every-repo" in capsys.readouterr().err
+    assert main(["memory", "edit", str(first.id), "--repo", "repo", "--every-repo"]) == 2
+    capsys.readouterr()
+    assert main(["memory", "edit", str(first.id), "--text", "Newer words."]) == 0
+    capsys.readouterr()
+    # The old version is history now: an edit names the version in force.
+    assert main(["memory", "edit", str(first.id), "--text", "Newest words."]) == 1
+    assert (
+        f"edit refused (unknown): no lesson in force has id {first.id}: superseded, edited into lesson"
+        in capsys.readouterr().err
+    )
+    assert main(["memory", "edit", str(first.promoted_from), "--text", "A proposal."]) == 1
+    assert f"no lesson in force has id {first.promoted_from}" in capsys.readouterr().err
+    with_memory(canopy_env, ticket_notes="use")
+    assert main(["memory", "edit", str(memories(conn)[-1].id), "--text", "Off."]) == 1
+    assert "edit refused (off): memory.proposals is off" in capsys.readouterr().err
+
+
+def test_forgetting_a_lesson_names_the_versions_that_keep_their_text(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    first = promoted(conn, canopy_env)
+    lesson = memory_manage.edit(conn, cfg, first.id, text="Newer words.").lesson
+    assert main(["memory", "forget", str(lesson.id)]) == 0
+    assert (
+        f"Its other versions keep their text ({first.id}): forget each too if the words must go. "
+        f"`canopy memory history {lesson.id}` shows them.\n"
+    ) in capsys.readouterr().out
+    assert main(["memory", "forget", str(first.id)]) == 0
+    assert "other versions" not in capsys.readouterr().out
+    assert [m.body for m in memory.history(conn, lesson.id)] == [None, None]
+
+
+def test_a_notes_history_is_each_note_under_its_key(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, ticket_notes="use")
+    first = noted(conn, "The lint step fails on a stale cache.", status="superseded")
+    with in_tick(conn) as tick_id:
+        cur = conn.execute(
+            "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, supersedes, "
+            "created_at) VALUES ('ticket', ?, 'lint', 'Clearing the cache fixed lint.', 'active', 'worker', "
+            "(SELECT run_id FROM memories WHERE id = ?), ?, ?, ?)",
+            (KEY, first, tick_id, first, db.now()),
+        )
+    second = int(cur.lastrowid or 0)
+    assert [m.id for m in memory.history(conn, first)] == [second, first]
+    assert main(["memory", "history", str(second)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith(f"Note `lint` of {KEY}: 2 versions, newest first.\n")
+    assert f"v2  {second}  active; by run" in out
+    assert main(["memory", "history", "999"]) == 1
+    assert "no memory has id 999" in capsys.readouterr().err
 
 
 def test_reject_ends_a_proposal(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

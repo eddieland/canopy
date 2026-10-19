@@ -8,6 +8,7 @@ import {
     draftDroppedText,
     draftEditedText,
     draftsSentText,
+    editedText,
     failedText,
     forgotText,
     grantedText,
@@ -252,6 +253,8 @@ describe('outcomes', () => {
             wrong_run_id: null,
             promoted_from: 2,
             origin: null,
+            version: 1,
+            edited: false,
             private: false,
         } as const
         const note = { ...lesson, id: 2, scope: 'ticket', ticket_key: 'ABC-1', repo: null, review_at: null } as const
@@ -265,6 +268,18 @@ describe('outcomes', () => {
         expect(recorded).toContain("Warning: its text is from a private ticket's run")
         expect(recorded).toMatch(
             /It is recorded, not served: memory\.proposals is record, so no run reads it until it is use\.$/u,
+        )
+        const edit = {
+            lesson: { ...lesson, id: 10, promoted_from: 9, version: 3, edited: true },
+            replaced: { ...lesson, status: 'superseded' as const, why: 'edited into lesson 10' },
+            served: true,
+        }
+        expect(editedText(edit)).toBe(
+            `Lesson 9 is edited into lesson 10 (\`web-tests\`) for web, version 3, due for review at ${due}. ` +
+                'Lesson 9 stays in its history. Every run dispatched from now on reads the new version.',
+        )
+        expect(editedText({ ...edit, served: false })).toMatch(
+            /It is recorded, not served: memory\.proposals is record/u,
         )
         expect(rejectedText(5)).toBe('Proposal 5 is rejected.')
         expect(renewedText({ id: 9, review_at: '2027-01-06T12:00:00Z' })).toBe(
