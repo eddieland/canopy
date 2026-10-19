@@ -78,6 +78,18 @@ export async function settled(page: Page): Promise<void> {
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
 }
 
+/** The narrowest window the whole rail takes its place in (`src/hooks/use-rail-mode.ts`); narrower, it is a strip. */
+export const FULL_RAIL = 1024
+
+/**
+ * Sets the window `width` wide and waits for the rail to take its shape there, a strip under FULL_RAIL and whole from
+ * it, so what is measured next is in the pane the rail leaves.
+ */
+export async function windowWidth(page: Page, width: number): Promise<void> {
+    await page.setViewportSize({ width, height: page.viewportSize()?.height ?? 900 })
+    await expect(page.getByTestId('rail-strip')).toHaveCount(width < FULL_RAIL ? 1 : 0)
+}
+
 /** Screenshots the whole page as `name`, the header and the rail included. */
 export async function screenshotWhole(page: Page, name: string): Promise<void> {
     await growToPage(page)
@@ -353,4 +365,37 @@ export async function select(page: Page, text: string): Promise<void> {
         }
         throw new Error(`no text node holds ${wanted}`)
     }, text)
+}
+
+/**
+ * Checks the spend chart's axis on the page shown: each day it names whole, as `Sep 13` rather than `Sep…`, centered
+ * under its bar within a pixel, and clear of the next name, at least `minimum` of them.
+ */
+export async function expectSpendAxisWhole(page: Page, minimum: number): Promise<void> {
+    const chart = page.getByTestId('spend-chart')
+    await expect(chart.getByTestId(/^spend-axis-/u).first()).toBeVisible()
+    const names = await chart.getByTestId(/^spend-axis-/u).evaluateAll((elements) =>
+        elements.map((el) => {
+            const day = (el as HTMLElement).dataset['testid']?.replace('spend-axis-', '') ?? ''
+            const box = el.getBoundingClientRect()
+            const bar = document.querySelector(`[data-testid="spend-bar-${day}"]`)?.getBoundingClientRect()
+            return {
+                text: el.textContent,
+                left: box.left,
+                right: box.right,
+                offCenter: Math.abs((box.left + box.right) / 2 - ((bar?.left ?? 0) + (bar?.right ?? 0)) / 2),
+                cut: el.scrollWidth > el.clientWidth,
+            }
+        }),
+    )
+    expect(names.length).toBeGreaterThanOrEqual(minimum)
+    for (const [i, name] of names.entries()) {
+        expect(name.text).toMatch(/^[A-Z][a-z]{2} \d{1,2}$/u)
+        expect(name.cut).toBe(false)
+        expect(name.offCenter).toBeLessThanOrEqual(1)
+        const next = names[i + 1]
+        if (next !== undefined) {
+            expect(next.left).toBeGreaterThan(name.right)
+        }
+    }
 }

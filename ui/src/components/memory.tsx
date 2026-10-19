@@ -98,7 +98,8 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
 
 /**
  * Memories, one row each, in the order every list reads: where it stands, a dot and a word, so a lesson reported wrong
- * or due for review shows at the left edge; its id; with `ticket`, its ticket, for a list across tickets; its
+ * or due for review shows at the left edge; its id; with `ticket`, its ticket, for a list across tickets, or with
+ * `across` that list's columns with the ticket's left empty, so lists stacked on one page line up; its
  * repository; its key; how many runs relied on it, once any has; and when it was written. Then what it says, plain,
  * and one line of where it came from. `facts` adds to that line by a row's id, such as how a proposal's run ended;
  * `below` adds what goes under a row, such as its verbs; `ownRun` leaves out the run whose page it is; `digest` is
@@ -110,6 +111,7 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
 export function MemoryRows({
     entries,
     ticket = false,
+    across = false,
     facts,
     below,
     ownRun,
@@ -120,6 +122,7 @@ export function MemoryRows({
 }: {
     entries: MemoryEntry[]
     ticket?: boolean
+    across?: boolean
     facts?: ReadonlyMap<number, ReactNode>
     below?: ReadonlyMap<number, ReactNode>
     ownRun?: number
@@ -137,7 +140,7 @@ export function MemoryRows({
                 return (
                     <ListRow
                         key={entry.id}
-                        kind={ticket ? 'memory-across' : 'memory'}
+                        kind={ticket || across ? 'memory-across' : 'memory'}
                         className="group/copy"
                         data-testid={`memory-${entry.id}`}
                     >
@@ -152,9 +155,9 @@ export function MemoryRows({
                             <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
                             <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
                         </span>
-                        {ticket && (
+                        {(ticket || across) && (
                             <span className="min-w-0">
-                                {entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
+                                {ticket && entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
                             </span>
                         )}
                         <span className="flex min-w-0">

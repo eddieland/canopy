@@ -214,19 +214,22 @@ make and keep lessons. `search WORDS` finds memories by their words (Search). `f
 free pages. Every one that writes refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice`
 does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
 
-The web UI takes `promote`, `reject`, `renew`, and `forget` (M52) through the same functions, so with the same guards
-and refusals, logged with channel `web` (§22). Promote takes the CLI's options, the lesson's words and its repository,
-and before the save names the lesson in force under the key it would replace, and warns while the text is still a
-private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the workspace's
-repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a ticket's page
-reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's ref typed out
-(`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge` stays the CLI's: a
-verb over many memories at once is not a click. The verbs show where the memories do: Promote, Reject, and Forget on
-each proposal, Renew and Forget on each lesson, and Promote and Forget on each of a ticket's notes that keeps its text,
-on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked secret leaves from
-where the operator sees it; and on the attention list, Promote as written and Reject on a `memory_proposal`'s proposals,
-Renew on the lessons a `lesson_review` is about, and the way to the lessons from a `lesson_wrong`. With
-`memory.proposals` off, none shows.
+The web UI searches as the operator's shell does (`GET /api/memory/search`, the same function, every memory that keeps
+its text), and takes `promote`, `reject`, `renew`, and `forget` (M52) through the same functions, so with the same
+guards and refusals, logged with channel `web` (§22). Promote takes the CLI's options, the lesson's words and its
+repository, and before the save names the lesson in force under the key it would replace, and warns while the text is
+still a private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the
+workspace's repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a
+ticket's page reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's
+ref typed out (`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge`
+stays the CLI's: a verb over many memories at once is not a click. The verbs show where the memories do: Promote,
+Reject, and Forget on each proposal, Renew and Forget on each lesson, and Promote and Forget on each of a ticket's notes
+that keeps its text, on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked
+secret leaves from where the operator sees it; and on the attention list, Promote as written and Reject on a
+`memory_proposal`'s proposals, Renew on the lessons a `lesson_review` is about, and the way to the lessons from a
+`lesson_wrong`. With `memory.proposals` off, only Forget shows, on each of a ticket's notes that keeps its text while
+ticket notes are on, since forgetting a note needs no lesson and a leaked secret should leave from where the operator
+sees it (operator's decision, 2026-10-18); and a tier that is off shows no panel on the memory page.
 
 ### Showing memory
 
@@ -242,12 +245,14 @@ so where a memory was used shows both ways: a memory names the latest runs that 
 the rest, those from before the journal named them among them; a run's page marks, among what it read, what it relied
 on and what it reported wrong.
 
-The memory page leads with the proposals waiting on the operator, the one queue memory has and the one that expires,
-then the lessons, then the tickets with notes, which have nothing to decide there. A busy workspace holds thousands of
-notes and hundreds of lessons, so the memory page lists the tickets with notes in force, one row each with its count,
-and reads a ticket's notes only when the operator opens its row; the lessons come reported wrong first, then by review
-date, so what calls for the operator heads the list. Wherever a list shows a memory in force that its digest's cap
-leaves out, its row says so, as left out of the prompt at `use` and as what would be left out while recording.
+The memory page can also list, when asked, the latest proposals and lessons no longer pending or in force, as `canopy
+memory list --all` does for notes, so a rejected proposal or a replaced lesson can be looked back on. The memory page
+leads with the proposals waiting on the operator, the one queue memory has and the one that expires, then the lessons,
+then the tickets with notes, which have nothing to decide there. A busy workspace holds thousands of notes and hundreds
+of lessons, so the memory page lists the tickets with notes in force, one row each with its count, and reads a ticket's
+notes only when the operator opens its row; the lessons come reported wrong first, then by review date, so what calls
+for the operator heads the list. Wherever a list shows a memory in force that its digest's cap leaves out, its row says
+so, as left out of the prompt at `use` and as what would be left out while recording.
 
 What a worker wrote is shown as plain text, never Markdown or a link, unlike other journal text (D113): a link in a note
 would be a worker's link the operator reads as canopy's. Every character the bounds refuse is shown by its code point,

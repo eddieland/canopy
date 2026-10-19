@@ -83,13 +83,16 @@ def search(
     *,
     scope: RunScope | None,
     ticket: str | None = None,
+    kind: MemoryScope | None = None,
+    in_force: bool = False,
     limit: int = DEFAULT_LIMIT,
 ) -> list[records.Memory]:
     """Return the memories whose key or text holds any word of `query`, best match first, at most `limit`.
 
     With `scope`, only what that run reaches; without it, as the operator, every memory with a text, or with `ticket`
-    only that ticket's notes and proposals. Each word is matched as a word, its English endings aside, never as
-    FTS5's query syntax, so no query a worker writes is an error.
+    only that ticket's notes and proposals. With `kind`, only memories of that scope, and with `in_force` only those in
+    force, so the limit is spent on what the caller shows, not on what it would drop. Each word is matched as a word,
+    its English endings aside, never as FTS5's query syntax, so no query a worker writes is an error.
 
     Returns:
         The memories found, ranked with bm25(), a word in a key weighing more than one in a text.
@@ -108,8 +111,9 @@ def search(
         records.Memory,
         "SELECT m.* FROM memories_fts JOIN memories m ON m.id = memories_fts.rowid "  # noqa: S608
         f"WHERE memories_fts MATCH ? AND m.body IS NOT NULL AND ({where}) "
+        "AND (? IS NULL OR m.scope = ?) AND (? = 0 OR m.status = ?) "
         f"ORDER BY bm25(memories_fts, {_KEY_WEIGHT}, 1.0), m.id DESC LIMIT ?",
-        (match, *params, max(1, min(limit, MAX_LIMIT))),
+        (match, *params, kind, kind, in_force, MemoryStatus.ACTIVE, max(1, min(limit, MAX_LIMIT))),
     )
 
 

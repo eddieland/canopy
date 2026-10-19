@@ -31,9 +31,10 @@ from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, git, user_toml
 
 
-def use(canopy_env: CanopyEnv, backend: str) -> None:
-    """Name `backend` in the operator's user file."""
-    canopy_env.write_user(user_toml() + f'\n[pools]\nbackend = "{backend}"\n')
+def use(canopy_env: CanopyEnv, backend: str, *, slots: str = "") -> None:
+    """Name `backend` in the operator's user file, and declare `slots`, lines of `[capacity.repo_slots]`, if any."""
+    declared = f"\n[capacity.repo_slots]\n{slots}\n" if slots else ""
+    canopy_env.write_user(user_toml() + f'\n[pools]\nbackend = "{backend}"\n' + declared)
 
 
 def implement(repo: str) -> list[str]:
@@ -164,6 +165,18 @@ def treehouse_worktree(ws: Ws, treehouse_state: Path, name: str) -> Path:
     return slot
 
 
+def set_status(treehouse_state: Path, ws: Ws, name: str, status: str) -> None:
+    """Set repository `name`'s one treehouse slot to `status`, leased to a run when `status` is `leased`."""
+    state = json.loads(treehouse_state.read_text())
+    [slot] = state["pools"][str(ws.clone(name))]["slots"]
+    slot["status"] = status
+    for key in ("lease_id", "lease_holder", "leased_at"):
+        slot.pop(key, None)
+    if status == "leased":
+        slot |= {"lease_id": "id-1", "lease_holder": "canopy:PROJ-9", "leased_at": "2026-10-07T00:00:00Z"}
+    treehouse_state.write_text(json.dumps(state))
+
+
 def test_switching_to_canopy_moves_idle_treehouse_slots_with_their_caches(
     ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -240,6 +253,63 @@ def test_a_treehouse_slot_that_cannot_move_stays_and_sync_says_why(
     assert "has changes" in out
     assert (old / "scratch.txt").exists()
     assert not (ws.root / pool.POOLS_DIR / "api" / "1").exists()
+
+
+def test_a_treehouse_slot_busy_at_the_switch_moves_in_at_a_later_sync(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old = treehouse_worktree(ws, treehouse_state, "api")
+    set_status(treehouse_state, ws, "api", "leased")
+    use(canopy_env, "canopy", slots="api = 2")
+    waits = "1 left in treehouse's pool, moved in by a later sync"
+    assert main(["workspace", "sync", "--dry-run"]) == 0
+    assert f"api: slots: 0 of 2, would make 1; {waits}\n" in capsys.readouterr().out
+
+    # Sync makes only the slot the move cannot supply, so the busy one still fits once it is idle.
+    assert main(["workspace", "sync"]) == 0
+    assert f"api: slots: 1 of 2, made 1; {waits}\n" in capsys.readouterr().out
+    conn = ws.journal()
+    assert len(canopy_rows(conn)) == 1
+    assert old.is_dir()
+
+    # The run ends and its lease goes back to treehouse; the next sync moves the slot, caches and all.
+    set_status(treehouse_state, ws, "api", "available")
+    assert main(["workspace", "sync"]) == 0
+    out = capsys.readouterr().out
+    assert "api: moved: moved 1 of 1 idle treehouse slots into pools/\n" in out
+    assert "api: slots: 2 of 2\n" in out
+    moved = ws.root / pool.POOLS_DIR / "api" / "2" / "api"
+    assert not old.exists()
+    assert (moved / "cache.local").read_text() == "warm\n"
+    assert [path for _, path, _ in canopy_rows(conn)][1] == str(moved)
+
+
+def test_an_idle_treehouse_slot_the_move_refuses_is_made_up_in_canopy_s_pool(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old = treehouse_worktree(ws, treehouse_state, "api")
+    (old / "scratch.txt").write_text("not committed\n")
+    use(canopy_env, "canopy", slots="api = 2")
+    # The move refuses it, and no later sync would move it either, so it does not hold a place in canopy's pool.
+    assert main(["workspace", "sync"]) == 1
+    out = capsys.readouterr().out
+    assert "api: kept: moved 0 of 1 idle treehouse slots into pools/; slot 1 stays in treehouse's pool: " in out
+    assert "api: slots: 2 of 2, made 2\n" in out
+    assert "later sync" not in out
+    assert len(canopy_rows(ws.journal())) == 2
+
+
+def test_a_switch_s_dry_run_counts_the_slots_its_move_brings_in(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    treehouse_worktree(ws, treehouse_state, "api")
+    use(canopy_env, "canopy", slots="api = 1")
+    assert main(["workspace", "sync", "--dry-run"]) == 0
+    dry = [line for line in capsys.readouterr().out.splitlines() if line.startswith("api: slots: ")]
+    assert main(["workspace", "sync"]) == 0
+    real = [line for line in capsys.readouterr().out.splitlines() if line.startswith("api: slots: ")]
+    assert dry == real == ["api: slots: 1 of 1"]
+    assert len(canopy_rows(ws.journal())) == 1
 
 
 def test_switching_back_keeps_a_canopy_slot_with_work_in_it(

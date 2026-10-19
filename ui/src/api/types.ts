@@ -207,6 +207,8 @@ export type MemoryState = Schemas['MemoryState']
 export type MemoryEntry = Schemas['MemoryEntry']
 /** What a lesson was promoted from: a proposal, or a ticket's note. */
 export type MemoryOrigin = Schemas['MemoryOrigin']
+/** What canopy memory search finds as the operator: every memory that keeps its text, best match first. */
+export type MemoryFound = Schemas['MemoryFound']
 /** A proposal waiting on the operator, with where it came from. */
 export type MemoryProposal = Schemas['MemoryProposal']
 /** What a run would be served of one tier, as its prompt would carry it. */
