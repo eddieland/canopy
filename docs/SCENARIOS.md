@@ -328,12 +328,13 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
 - **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17). After an OpenCode
-  upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each canopy agent
-  against a recorder on loopback and split its first request by source, as MEASUREMENTS' 2026-10-17 section says
-  (Re-measuring the first request), on the operator's machine with their MCP servers. Expect OpenCode's own prompt
-  absent and the agent's body first; no schema for a tool a definition denies outright; and, against that section, a
-  difference only where the change made one. A body the split cannot find means OpenCode moved it. Record the tables
-  in `MEASUREMENTS.md`.
+  upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each agent
+  `.agents/agents/` ships against a recorder on loopback and split its first request by source, as MEASUREMENTS'
+  2026-10-17 section says (Re-measuring the first request), on the operator's machine with their MCP servers: the
+  tracker's server has been in no run yet, and `split.py` gives each server's tools a row of their own. Expect
+  OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
+  against the latest such section (2026-10-19), a difference only where the change made one. A body the split cannot
+  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`.
 
 ## Retired
 
