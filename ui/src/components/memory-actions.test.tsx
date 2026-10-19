@@ -158,7 +158,7 @@ describe('ProposalActions', () => {
 
     it("warns while the text is still a private ticket's run's own words, as canopy memory promote does", () => {
         renderIn(<ProposalActions proposal={{ ...ENTRY, private: true }} onSaid={vi.fn<(said: string) => void>()} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Edit and promote' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
         expect(screen.getByTestId('promote-private').textContent).toMatch(/^Warning: its text is from a private/u)
         fireEvent.change(screen.getByRole('textbox', { name: 'The lesson, in your words' }), {
             target: { value: 'In my own words.' },
@@ -227,6 +227,29 @@ describe('ProposalActions refused', () => {
         await vi.waitFor(() => {
             expect(onSaid).toHaveBeenCalledWith('refused (not_pending): proposal 5 is superseded: promoted to lesson 9')
         })
+    })
+})
+
+describe('ProposalActions private', () => {
+    it('never promotes a private ticket’s proposal in one click: its first button opens the form, which warns', () => {
+        renderIn(<ProposalActions proposal={{ ...ENTRY, private: true }} onSaid={vi.fn<(said: string) => void>()} />)
+        expect(screen.queryByRole('button', { name: 'Promote as written' })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+        expect(screen.getByRole('form', { name: 'Promote memory:5' })).toBeDefined()
+        expect(sent).toEqual([])
+    })
+
+    it('sends a private one to the memory page from an attention item, which has no form', () => {
+        renderIn(
+            <ProposalActions
+                proposal={{ ...ENTRY, private: true }}
+                edit={false}
+                forget={false}
+                onSaid={vi.fn<(said: string) => void>()}
+            />,
+        )
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Reject'])
+        expect(screen.getByTestId('promote-private-elsewhere').textContent).toContain('memory page')
     })
 })
 
