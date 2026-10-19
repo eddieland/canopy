@@ -121,6 +121,16 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
         'notes staging-login: its text looks like it holds a secret',
     )
 
+    // What it wrote and read, each under its kind.
+    await expect(run.getByRole('region', { name: 'ticket notes' }).getByTestId(/^memory-\d+$/u)).toHaveCount(3)
+
+    // A run that wrote a note and proposed a lesson lists each under its own kind.
+    await page.goto('runs/42')
+    await settled(page)
+    await page.getByTestId('run-memory').getByRole('button', { name: 'Show memory' }).click()
+    await expect(page.getByRole('region', { name: 'ticket notes' }).getByTestId('memory-4')).toBeVisible()
+    await expect(page.getByRole('region', { name: 'proposals' }).getByTestId('memory-6')).toBeVisible()
+
     await page.goto('runs/37')
     await settled(page)
     await expect(page.getByTestId('run-memory-said')).toContainText('read none, recording only')
