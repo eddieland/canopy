@@ -36,6 +36,7 @@ function renderWith(status: Tick['status'] | null, inline = false) {
     const client = new QueryClient()
     // Nothing is fetched: the latest tick is what the test seeds.
     client.setQueryDefaults(keys.tick, { enabled: false })
+    client.setQueryDefaults(keys.meta, { enabled: false })
     client.setQueryData(keys.tick, { tick: status === null ? null : ({ id: 7, status } as Tick), acknowledged: null })
     return render(
         <QueryClientProvider client={client}>
@@ -48,6 +49,8 @@ describe('TickNow', () => {
     it("waits while the loop isn't answering, and says why", async () => {
         const client = new QueryClient()
         client.setQueryDefaults(keys.tick, { enabled: false })
+        client.setQueryDefaults(keys.meta, { enabled: false })
+        client.setQueryDefaults(keys.meta, { enabled: false })
         client.setQueryData(keys.tick, { tick: null, acknowledged: null })
         render(
             <QueryClientProvider client={client}>
@@ -96,6 +99,8 @@ describe('TickNow', () => {
     it('waits from the click until the tick it asked for starts, and that tick ends', async () => {
         const client = new QueryClient()
         client.setQueryDefaults(keys.tick, { enabled: false })
+        client.setQueryDefaults(keys.meta, { enabled: false })
+        client.setQueryDefaults(keys.meta, { enabled: false })
         client.setQueryData(keys.tick, { tick: { id: 7, status: 'ok' } as Tick, acknowledged: null })
         render(
             <QueryClientProvider client={client}>

@@ -12,9 +12,9 @@ import { cn } from '@/lib/utils'
  * The header's Tick now: `t` at the loop's terminal (docs/DESIGN.md §6). The loop's wait ends at once, before its
  * least gap and while it is paused, which it stays. While the latest tick runs, the button waits for it, and from the
  * click until the tick it asked for starts: the tick starting and ending is the state the readouts beside it show, so
- * it has no `Notice`. A failure colors the button and
- * says why on hover and to a screen reader. While the loop isn't answering, it waits, and says so on hover. `inline`,
- * it is a link's words in an `Empty`'s sentence that names it as the next step, and does the same.
+ * it has no `Notice`. A failure colors the button and says why on hover and to a screen reader. While the loop isn't
+ * answering, it waits, and says so on hover. `inline`, it is a link's words in an `Empty`'s sentence that names it as
+ * the next step, and does the same.
  */
 export function TickNow({
     inline = false,

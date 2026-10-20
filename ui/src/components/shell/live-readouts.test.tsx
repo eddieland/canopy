@@ -67,9 +67,15 @@ function renderReadouts(
         tick = null,
         memory = null,
         downSince = null,
-    }: { meta?: Meta; tick?: Tick | null; memory?: MemoryState | null; downSince?: number | null } = {},
+        client = new QueryClient(),
+    }: {
+        meta?: Meta
+        tick?: Tick | null
+        memory?: MemoryState | null
+        downSince?: number | null
+        client?: QueryClient
+    } = {},
 ) {
-    const client = new QueryClient()
     // Nothing is fetched: each readout's data is what the test seeds, as the stream would send it.
     for (const key of [keys.meta, keys.tick, keys.loop]) {
         client.setQueryDefaults(key, { enabled: false })
@@ -147,8 +153,10 @@ describe('LiveReadouts', () => {
 
     it('says the tick Tick now asked for is starting until its row lands, then shows it', async () => {
         const client = new QueryClient()
-        client.setQueryDefaults(keys.tick, { enabled: false })
-        client.setQueryDefaults(keys.loop, { enabled: false })
+        for (const key of [keys.meta, keys.tick, keys.loop]) {
+            client.setQueryDefaults(key, { enabled: false })
+        }
+        client.setQueryData(keys.meta, META)
         client.setQueryData(keys.tick, { tick: TICK, acknowledged: null })
         await renderRouted(
             <StreamContext value={{ status: 'open', downSince: null }}>
@@ -179,6 +187,22 @@ describe('LiveReadouts', () => {
         await waitFor(() => {
             expect(screen.getByTestId('last-tick').textContent).toBe('tick:13 running · for 0s')
         })
+    })
+
+    it('says no tick is starting over the mock journal, where no loop runs to start one', async () => {
+        const client = new QueryClient()
+        await renderReadouts('open', { meta: { ...META, mock: true }, tick: TICK, client })
+        await act(async () => {
+            await client
+                .getMutationCache()
+                .build(client, { mutationKey: keys.tickNow, mutationFn: () => Promise.resolve({ after_tick: false }) })
+                .execute(12)
+            // Query batches what it tells the page into the next task: let that land before looking.
+            await new Promise((resolve) => {
+                setTimeout(resolve, 0)
+            })
+        })
+        expect(screen.getByTestId('last-tick').textContent).toBe('tick:12 · 3m ago')
     })
 
     it("names the latest tick as `canopy status` does, its summary on hover, and opens the tick's page", async () => {
