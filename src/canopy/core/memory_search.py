@@ -18,7 +18,6 @@ from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus, RunStatus
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection
 
 # A query's words past these are not searched for.
 MAX_WORDS = 8
@@ -133,11 +132,6 @@ def _reach(scope: RunScope | None, ticket: str | None) -> tuple[str, tuple[objec
         clauses.append("(m.scope = ? AND m.ticket_key = ? AND m.status IN (?, ?))")
         params += [MemoryScope.TICKET, scope.ticket_key, MemoryStatus.ACTIVE, MemoryStatus.SUPERSEDED]
     if scope.lessons:
-        clauses.append(f"(m.scope = ? AND m.status = ? AND (m.repo IS NULL OR m.repo IN ({_marks(scope.repos)})))")
+        clauses.append(f"(m.scope = ? AND m.status = ? AND (m.repo IS NULL OR m.repo IN ({db.marks(scope.repos)})))")
         params += [MemoryScope.LESSON, MemoryStatus.ACTIVE, *sorted(scope.repos)]
     return " OR ".join(clauses) or "0", tuple(params)
-
-
-def _marks(values: Collection[str]) -> str:
-    # `IN ()` is not SQL; NULL matches no repository.
-    return ",".join("?" * len(values)) or "NULL"

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Generator, Iterable, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -175,6 +175,17 @@ def transaction(conn: sqlite3.Connection) -> Generator[None]:
         conn.execute("ROLLBACK")
         raise
     conn.execute("COMMIT")
+
+
+def marks(values: Collection[object]) -> str:
+    """Return a `?` per value, for an `IN (...)` list whose values are bound parameters.
+
+    No values give an empty list, `IN ()`, which SQLite reads as matching nothing.
+
+    Returns:
+        The placeholders, comma-separated.
+    """
+    return ", ".join("?" * len(values))
 
 
 def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
@@ -1298,9 +1309,7 @@ def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | N
 def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[records.ReviewRun]]:
     """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
     found: dict[str, list[records.ReviewRun]] = {}
-    marks = ", ".join("?" * len(pr_urls))
-    query = f"SELECT * FROM review_runs WHERE pr_url IN ({marks}) ORDER BY id DESC"  # noqa: S608  (only `?`s)
-    # SQLite takes an empty list, `IN ()`, as matching nothing.
+    query = f"SELECT * FROM review_runs WHERE pr_url IN ({marks(pr_urls)}) ORDER BY id DESC"  # noqa: S608  (only `?`s)
     for run in records.fetch_all(conn, records.ReviewRun, query, tuple(pr_urls)):
         found.setdefault(run.pr_url, []).append(run)
     return found

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, Group, open_context
-from canopy.core import conversation, drafts, drafts_manage, records, replies
+from canopy.core import conversation, db, drafts, drafts_manage, records, replies
 from canopy.core.memory_text import visible
 from canopy.core.vocab import DraftKind, DraftStatus, Reaction, ReviewItem
 from canopy.infra import logs
@@ -65,8 +65,7 @@ def cmd_list(click_ctx: click.Context, subject: str | None) -> int:
     Each comes with its thread as last read, its text, and its hash.
     """
     ctx = open_context(click_ctx)
-    marks = ", ".join("?" * len(_OPEN))
-    where = f"status IN ({marks})"
+    where = f"status IN ({db.marks(_OPEN)})"
     params: list[object] = list(_OPEN)
     if subject is not None:
         where += " AND (ticket_key = ? OR pr_url = ?)"
