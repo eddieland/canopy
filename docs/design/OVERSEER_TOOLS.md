@@ -6,9 +6,10 @@ runs through bash. Sections are numbered across the whole design; the [README](R
 
 ## 27. The overseer's tools
 
-Designed, not built (ROADMAP M48). Until its second stage lands, the overseer runs the `canopy` CLI through bash, and
-§6, §13, §22, and TRUST_MODEL T1 describe canopy as it is. This section says what changes: the overseer acts through
-MCP tools canopy serves, not by running `canopy` in a shell. The CLI's overseer verbs stay until nothing needs them.
+The server and its tools are built; nothing gives them to the overseer yet (ROADMAP M48). Until its second stage
+lands, the overseer runs the `canopy` CLI through bash, and §6, §13, §22, and TRUST_MODEL T1 describe canopy as it is.
+This section says what changes: the overseer acts through MCP tools canopy serves, not by running `canopy` in a shell.
+The CLI's overseer verbs stay until nothing needs them.
 
 ### Why
 
@@ -80,8 +81,8 @@ Read from OpenCode 1.19.3's source (2026-10-16), and read again before stage 2. 
 
 ### What changes elsewhere, in stage 2
 
-The overseer's prompt and definition, §6, §13, §22, TRUST_MODEL T1 and T7, D020 and D081, and a new decision: canopy
-serves MCP itself, over stdio only, to the overseer only. M37 retires mirroring, and with it the `mirror` tool.
+The overseer's prompt and definition, §6, §13, §22, TRUST_MODEL T1 and T7, and D020 and D081. D124 already holds that
+canopy serves MCP itself, over stdio only, to the overseer only. M37 retires mirroring, and with it the `mirror` tool.
 
 ### Open
 

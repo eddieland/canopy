@@ -1,23 +1,20 @@
-"""What every command shares: the object `main` passes down, refusals, opening the journal, and the running tick."""
+"""What every command shares: the object `main` passes down, refusals, and opening the journal."""
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 import click
 
-from canopy.core import config, conversation, db, workspace
-from canopy.core.context import Context, db_path
-from canopy.core.vocab import TickStatus
-from canopy.infra import logs, procs, resources
+from canopy.core import context
 
 if TYPE_CHECKING:
     from click.shell_completion import CompletionItem
 
-    from canopy.core import records
+    from canopy.core.context import Context
+    from canopy.infra import procs
 
 
 class CliError(click.ClickException):
@@ -71,18 +68,9 @@ def open_context(click_ctx: click.Context, *, migrate: bool = True, start: Path 
     Raises:
         RuntimeError: The command was not run through `canopy.cli.main`, so there is no `Obj` to read.
     """
-    runner = runner_of(click_ctx)
-    ws = workspace.find(start or Path.cwd())
-    cfg = config.load(ws.root, runner=runner)
-    # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
-    workspace.ensure_state_dir(ws.state_dir)
-    logs.configure(ws.state_dir)
-    conn = db.connect(db_path(ws))
-    click_ctx.call_on_close(conn.close)
-    if migrate:
-        # The tick migrates under its lock; everything else migrates on open, which is a no-op inside a tick.
-        db.migrate(conn, resources.migrations_dir())
-    return Context(config=cfg, conn=conn, runner=runner, ws=ws)
+    ctx = context.open_at(start or Path.cwd(), runner_of(click_ctx), migrate=migrate)
+    click_ctx.call_on_close(ctx.conn.close)
+    return ctx
 
 
 def runner_of(click_ctx: click.Context) -> procs.Runner:
@@ -98,30 +86,3 @@ def runner_of(click_ctx: click.Context) -> procs.Runner:
     if obj is None:
         raise RuntimeError("canopy commands run through canopy.cli.main")
     return obj.runner
-
-
-def optional_tick(ctx: Context) -> records.Tick | None:
-    """Return the tick this command runs inside, named by CANOPY_TICK_ID, or None outside a tick.
-
-    Raises:
-        CliError: CANOPY_TICK_ID is set but does not name a running tick.
-    """
-    raw = os.environ.get(conversation.TICK_ID_ENV)
-    if not raw:
-        return None
-    row = db.get_tick(ctx.conn, int(raw)) if raw.isdigit() else None
-    if row is None or row.status != TickStatus.RUNNING:
-        raise CliError(f"{conversation.TICK_ID_ENV}={raw} does not name a running tick")
-    return row
-
-
-def require_tick(ctx: Context) -> records.Tick:
-    """Return the tick this command runs inside; refuse outside a tick.
-
-    Raises:
-        CliError: CANOPY_TICK_ID is not set, or does not name a running tick.
-    """
-    row = optional_tick(ctx)
-    if row is None:
-        raise CliError(f"no tick is running ({conversation.TICK_ID_ENV} is not set); this command runs inside a tick")
-    return row

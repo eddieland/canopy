@@ -1,7 +1,8 @@
-"""Validated click parameter types for what the overseer passes in: ticket keys, reasons, slugs, cursors, and text.
+"""Validated click parameter types for what the overseer passes in, and how a command does one of its verbs.
 
-Keys, slugs, and cursor ids reach branch names, paths, argv, and prompts, so they are checked before any command runs.
-Repository and chore names also complete in the shell, from the config of the workspace the shell is in.
+Keys, slugs, and cursor ids reach branch names, paths, argv, and prompts, so they are checked before any command runs,
+by the same checks the verbs' requests make (`loop.tools`). Repository and chore names also complete in the shell, from
+the config of the workspace the shell is in.
 """
 
 from __future__ import annotations
@@ -9,57 +10,84 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import override
+from typing import TYPE_CHECKING, override
 
 import click
 from click.shell_completion import CompletionItem
+from pydantic import ValidationError
 
 from canopy.chores import install
-from canopy.core import config, contract, db, workspace
+from canopy.cli.common import CliError, open_context
+from canopy.core import config, workspace
+from canopy.loop import tools
+from canopy.loop.tools import (
+    CURSOR_VALUE_RE,
+    KEY_RE,
+    MAX_PR_URL,
+    MAX_TEXT,
+    MAX_TITLE,
+    REASON_RE,
+    REVIEW_CURSOR_RE,
+    truncate,
+    valid_key,
+    valid_review_cursor,
+)
 from canopy.runs import dispatch
 
-KEY_RE = dispatch.KEY_RE
-REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
-CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
-# A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7).
-REVIEW_CURSOR_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
-MAX_TEXT = 2000
-# A ticket's title is a name, shown beside its key and in its runs' session titles (DESIGN §13).
-MAX_TITLE = 80
-MAX_PR_URL = 300
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+    from canopy.core.context import Context
+
+__all__ = [
+    "CURSOR_VALUE_RE",
+    "KEY_RE",
+    "MAX_PR_URL",
+    "MAX_TEXT",
+    "MAX_TITLE",
+    "REASON_RE",
+    "REVIEW_CURSOR_RE",
+    "truncate",
+    "valid_key",
+    "valid_review_cursor",
+]
 
 
-def valid_key(value: str) -> bool:
-    """Keys reach branch names, lease holders, paths, and argv (DESIGN §17).
+def verb[R: BaseModel](
+    click_ctx: click.Context, do: Callable[[Context, R], str], request: type[R], **fields: object
+) -> int:
+    """Do one of the overseer's verbs (`loop.tools`) as its command: build its request, do it, and print what it says.
 
     Returns:
-        True when `value` matches `KEY_RE` in full.
+        0, once it has printed what the verb said.
+
+    Raises:
+        click.UsageError: The request does not validate: misuse, exit 2.
+        CliError: The verb refused: exit 1.
     """
-    return KEY_RE.fullmatch(value) is not None
-
-
-def valid_review_cursor(value: str) -> bool:
-    """A review cursor names a real moment in one fixed form, so cursors compare as strings (DESIGN §7).
-
-    Returns:
-        True when `value` is in the form `YYYY-MM-DDTHH:MM:SSZ` and names a real time.
-    """
-    if REVIEW_CURSOR_RE.fullmatch(value) is None:
-        return False
+    built = validated(click_ctx, request, **fields)
+    ctx = open_context(click_ctx)
     try:
-        db.parse_time(value)
-    except ValueError:
-        return False
-    return True
+        said = do(ctx, built)
+    except tools.Refused as e:
+        raise CliError(str(e)) from None
+    click.echo(said)
+    return 0
 
 
-def truncate(value: str) -> str:
-    """Bound free text the overseer writes to the journal.
+def validated[R: BaseModel](click_ctx: click.Context, request: type[R], **fields: object) -> R:
+    """Build one of the overseer's requests from a command's parameters.
 
     Returns:
-        `value` unchanged when it fits in `MAX_TEXT`, else cut to it and ended with "...".
+        The request, validated.
+
+    Raises:
+        click.UsageError: It does not validate, saying why as its tool would.
     """
-    return value if len(value) <= MAX_TEXT else value[: MAX_TEXT - 3] + "..."
+    try:
+        return request.model_validate(fields)
+    except ValidationError as e:
+        raise click.UsageError(tools.explain(e), click_ctx) from None
 
 
 class PatternType(click.ParamType[str, object]):
@@ -100,9 +128,10 @@ class PrUrlType(click.ParamType[str, object]):
 
     @override
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
-        if not isinstance(value, str) or not contract.plain_url(value, MAX_PR_URL):
-            self.fail(f"must be a plain https:// URL of at most {MAX_PR_URL} characters", param, ctx)
-        return value
+        try:
+            return tools.pr_url(str(value))
+        except ValueError as e:
+            self.fail(str(e), param, ctx)
 
 
 class CursorType(click.ParamType[tuple[str, str], object]):
@@ -113,20 +142,10 @@ class CursorType(click.ParamType[tuple[str, str], object]):
     @override
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> tuple[str, str]:
         cursor_name, sep, cursor_id = str(value).partition("=")
-        if not sep or cursor_name not in db.CURSOR_COLUMNS:
-            self.fail(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}", param, ctx)
-        if not CURSOR_VALUE_RE.fullmatch(cursor_id):
-            self.fail(f"invalid cursor id {cursor_id!r}", param, ctx)
-        # A message cursor is a journal message id (DESIGN §22).
-        if cursor_name == "message" and not (cursor_id.isascii() and cursor_id.isdigit()):
-            self.fail(f"a message cursor is a message id, a number; got {cursor_id!r}", param, ctx)
-        if cursor_name == "review" and not valid_review_cursor(cursor_id):
-            self.fail(
-                f"a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got {cursor_id!r}",
-                param,
-                ctx,
-            )
-        return cursor_name, cursor_id
+        try:
+            return tools.cursor(cursor_name if sep else "", cursor_id)
+        except ValueError as e:
+            self.fail(str(e), param, ctx)
 
 
 class TextType(click.ParamType[str, object]):
@@ -136,10 +155,10 @@ class TextType(click.ParamType[str, object]):
 
     @override
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
-        text = str(value).strip()
-        if not text:
-            self.fail("must not be empty", param, ctx)
-        return truncate(text)
+        try:
+            return tools.clean_text(str(value))
+        except ValueError as e:
+            self.fail(str(e), param, ctx)
 
 
 class TitleType(click.ParamType[str, object]):
@@ -149,10 +168,10 @@ class TitleType(click.ParamType[str, object]):
 
     @override
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
-        title = " ".join("".join(c if c.isprintable() else " " for c in str(value)).split())
-        if not title:
-            self.fail("must not be empty", param, ctx)
-        return title if len(title) <= MAX_TITLE else title[: MAX_TITLE - 3] + "..."
+        try:
+            return tools.clean_title(str(value))
+        except ValueError as e:
+            self.fail(str(e), param, ctx)
 
 
 def repo_names() -> list[str]:

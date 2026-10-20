@@ -61,5 +61,10 @@ Status: in progress. Stage 0's source read is done (2026-10-16, OpenCode 1.19.3,
 changed the plan in three places: OpenCode sends SIGTERM to every descendant of a local server when the run ends, so
 a run a tool starts must be spawned through an intermediate or it dies with the tick; a local server's stderr is
 piped and never read, so the server writes none; and tool names hold no underscore, since `canopy_ticket` with a tool
-`set` would also be `canopy_ticket_set`. Inline config merges after the workspace's, as assumed. The baseline from
-the operator's tick logs remains.
+`set` would also be `canopy_ticket_set`. Inline config merges after the workspace's, as assumed. Stage 0's baseline,
+from the operator's tick logs, was waived by the operator for Stage 1 (2026-10-20); it is still to be measured before
+Stage 2's check, which is held to it. Stage 1 is built (2026-10-20): the verbs are requests and functions in
+`loop/tools.py`, which the commands and `canopy _mcp` both call; `procs` removes named variables from a child's
+environment and spawns through an intermediate. Its check: `make check`, and in a dry tick OpenCode 1.19.3's own client,
+given the server in its inline config and a stand-in model, listed the eleven tools as `canopy_<tool>` and called
+`canopy_decide`, which recorded its decision; with no running tick it was offered none.

@@ -61,6 +61,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "notify": ("notify", "notify_group"),
     "review": ("reviews", "review_group"),
     "_review": ("reviews", "cmd_review_process"),
+    "_mcp": ("mcp", "cmd_mcp"),
 }
 
 

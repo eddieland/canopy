@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sqlite3
+import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
@@ -699,6 +700,87 @@ def json_block(text: str) -> dict[str, Any]:
     """The first fenced JSON block in `text`, parsed."""
     block: dict[str, Any] = json.loads(text.split("```json\n", 1)[1].split("\n```", 1)[0])
     return block
+
+
+# The overseer's tools over MCP (DESIGN §27)
+
+#: How a test starts `canopy _mcp`, as the runtime starts it for the overseer: this interpreter's canopy, here.
+MCP_SERVER = (sys.executable, "-m", "canopy", "_mcp")
+#: What a client says first, and the notification it sends once the server has answered.
+MCP_OPENING: tuple[Mapping[str, object], ...] = (
+    {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "tests", "version": "0"},
+        },
+    },
+    {"jsonrpc": "2.0", "method": "notifications/initialized"},
+)
+#: A `tools/list` request, for `mcp_session`.
+LIST_TOOLS: Mapping[str, object] = {"method": "tools/list"}
+
+
+def tool_call(name: str, /, **arguments: object) -> dict[str, object]:
+    """A `tools/call` request of tool `name` with `arguments`, for `mcp_session`."""
+    return {"method": "tools/call", "params": {"name": name, "arguments": arguments}}
+
+
+class Said(NamedTuple):
+    """What a tool call came back with: its text, and whether it is a tool error."""
+
+    text: str
+    error: bool
+
+
+@dataclass(frozen=True)
+class Served:
+    """What `canopy _mcp` answered in one session, and how it ended."""
+
+    #: Each response, by the id of the request it answers: `initialize` is 0, the session's requests 1 on.
+    responses: Mapping[object, Mapping[str, Any]]
+    #: What the server wrote to stderr.
+    stderr: str
+    #: Its exit code, once its stdin closed.
+    returncode: int
+
+    def said(self, request_id: int = 1) -> Said:
+        """What tool call `request_id` came back with; fails the test if it was answered with a protocol error."""
+        response = self.responses[request_id]
+        assert "result" in response, response
+        [content] = response["result"]["content"]
+        return Said(content["text"], response["result"]["isError"])
+
+    def listed(self, request_id: int = 1) -> list[str]:
+        """The name of each tool `tools/list` request `request_id` was answered with."""
+        return [t["name"] for t in self.responses[request_id]["result"]["tools"]]
+
+
+def mcp_session(*requests: Mapping[str, object], raw: Sequence[str] = ()) -> Served:
+    """Talk to `canopy _mcp` as the runtime does for the overseer, here, in this environment: open the session, send
+    each of `requests` numbered from 1, then each line of `raw` as it is, and close the server's stdin.
+
+    The server answers one message at a time, and the session waits for it to exit, which it must on its own.
+    """
+    numbered = [{"jsonrpc": "2.0", "id": n, **request} for n, request in enumerate(requests, 1)]
+    lines = [*(json.dumps(m) for m in (*MCP_OPENING, *numbered)), *raw]
+    result = procs.SubprocessRunner().run(MCP_SERVER, stdin="".join(f"{line}\n" for line in lines), timeout=60)
+    assert not result.timed_out, f"canopy _mcp did not exit when its stdin closed: {result.stderr}"
+    answers = [json.loads(line) for line in result.stdout.splitlines()]
+    return Served({a["id"]: a for a in answers}, result.stderr, result.returncode)
+
+
+def ancestors(pid: int) -> list[int]:
+    """Each process `pid` descends from, its parent first, as /proc says now."""
+    found: list[int] = []
+    while pid > 1:
+        # The parent is the field after the state, which follows the parenthesized command name.
+        pid = int(Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[1])
+        found.append(pid)
+    return found
 
 
 # Notifications
