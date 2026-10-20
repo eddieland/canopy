@@ -465,10 +465,8 @@ def record(
         The plan's row.
     """
     with db.transaction(conn):
-        ticket = db.get_ticket(conn, key)
-        replaced = supersede(conn, key)
-        asked = replaced is not None or (ticket is not None and ticket.plan_setting is PlanSetting.PLAN)
-        reason = no_review if not asked else None
+        reason = no_review if planner_may_approve(conn, key) else None
+        supersede(conn, key)
         approved = reason is not None
         now = db.now()
         [plan] = records.fetch_all(
@@ -492,6 +490,17 @@ def record(
         if built is not None:
             db.record_event(conn, built)
     return plan
+
+
+def planner_may_approve(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether `key`'s next plan may be approved on its planner's word: the operator has had none on its plan yet.
+
+    Returns:
+        False when the ticket has a current plan, which they were asked to approve or approved, or its own setting
+        asks for a plan (`ask`).
+    """
+    ticket = db.get_ticket(conn, key)
+    return current(conn, key) is None and (ticket is None or ticket.plan_setting is not PlanSetting.PLAN)
 
 
 def current(conn: sqlite3.Connection, key: str) -> records.Plan | None:

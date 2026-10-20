@@ -1,3 +1,3 @@
--- sha256 of 0058_planner_approval.sql: 5edd401b400047299a0e1cdf0efc5b86137b5aa1fe188884901b5abebcdf98c4
+-- sha256 of 0058_planner_approval.sql: 291ed9a882ab224dd9669259ea11199c40beb7072b6aca8fb047a5bddb7669bc
 
 -- Creates no table, so seeds no row.

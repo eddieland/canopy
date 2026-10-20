@@ -273,9 +273,8 @@ def record(
         The plan's row.
     """
     with db.transaction(conn):
-        replaced = current(conn, key)
+        reason = no_review if planner_may_approve(conn, key) else None
         _supersede(conn, key)
-        reason = no_review if replaced is None or replaced.spent_run_id is not None else None
         approved = reason is not None
         now = db.now()
         [plan] = records.fetch_all(
@@ -309,6 +308,16 @@ def record(
         if built is not None:
             db.record_event(conn, built)
     return plan
+
+
+def planner_may_approve(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether `key`'s next feedback plan may be approved on its planner's word (DESIGN §32).
+
+    Returns:
+        False when it would replace one no `resume` has spent, which waited on the operator or was approved by them.
+    """
+    replaced = current(conn, key)
+    return replaced is None or replaced.spent_run_id is not None
 
 
 def current(conn: sqlite3.Connection, key: str) -> records.FeedbackPlan | None:

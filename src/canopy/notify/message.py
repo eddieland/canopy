@@ -38,7 +38,7 @@ def _line(text: object) -> str:
     return " ".join(str(text).split())
 
 
-def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, PLR0911  (one shape per kind)
+def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, PLR0911, PLR0912  (one shape per kind)
     """One line of text for an event, for a person.
 
     Returns:

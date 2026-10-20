@@ -304,6 +304,7 @@ def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_pla
     resume = scenario.run(RESUME, worker=pushes())
     assert resume.status == RunStatus.DONE
     assert present(feedback_plans.get(conn, plan.id)).spent_run_id == resume.id
+    assert "is the feedback plan its planner approved, saying it needs no review, where the operator" in resume.prompt
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -317,6 +318,7 @@ def test_a_feedback_plan_that_replaces_one_waiting_on_the_operator_waits_on_them
     result = {"status": "done", "review": "not_needed", "review_reason": "Small."}
     again = scenario.run(FEEDBACK_PLAN, worker=planner_does(plan="# Feedback plan, again\n", result=result))
     assert again.status == RunStatus.DONE
+    assert "## Whether the operator reviews this plan" not in again.prompt
     assert [(p.status, p.approved_channel) for p in feedback_plans.history(scenario.conn, KEY)] == [
         (PlanStatus.SUPERSEDED, None),
         (PlanStatus.PROPOSED, None),

@@ -270,6 +270,9 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, plans.PLANNER)
     assert plan.approved_sha256 == plan.sha256
     assert plan.approved_reason == "A one-line copy fix the ticket spells out."
+    # Every approval of the planner's carries its reason, and no other approval carries one.
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE plans SET approved_reason = NULL WHERE id = ?", (plan.id,))
     # The sinks hear of it with nothing waiting on the operator, and nothing of the plan's text.
     rows = conn.execute("SELECT kind, fields FROM notify_events ORDER BY id").fetchall()
     found = {str(r["kind"]): json.loads(str(r["fields"])) for r in rows}
@@ -285,12 +288,14 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
         f"+ {KEY} plan {plan.id} approved by its planner: A one-line copy fix the ticket spells out."
     )
     shown = scenario.operator("show", KEY).out
-    assert re.search(r"approved \d+s ago by the planner: A one-line copy fix the ticket spells out\.\n", shown)
+    assert re.search(r"approved \d+[smhd] ago by the planner: A one-line copy fix the ticket spells out\.\n", shown)
 
     # The implement goes ahead on it, no operator in between.
     implement = scenario.run(dispatches(slug="work"), worker=pushes())
     assert implement.status == RunStatus.DONE
     assert implement.row["plan_id"] == plan.id
+    # Its worker is told who approved the plan it follows: the planner, on the operator's leave.
+    assert "is the plan its planner approved, saying it needs no review, where the operator lets" in implement.prompt
 
     # An edit to its file needs the operator's approval, which is then theirs alone.
     plan_file(scenario.env, run.id).write_text(TEXT + "\nAnd the docs.\n")
@@ -332,9 +337,13 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
         (first.id, PlanStatus.SUPERSEDED),
         (second.id, PlanStatus.PROPOSED),
     ]
+    # The first planner was told how to say so; neither after it is, since its word would not count.
+    assert "## Whether the operator reviews this plan" in first.prompt
+    assert "## Whether the operator reviews this plan" not in second.prompt
     # One the operator asked for by name, with `canopy plan KEY`.
     scenario.operator("plan", KEY)
     third = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
+    assert "## Whether the operator reviews this plan" not in third.prompt
     assert present(plans.current(scenario.conn, KEY)).run_id == third.id
     assert present(plans.current(scenario.conn, KEY)).status is PlanStatus.PROPOSED
 
