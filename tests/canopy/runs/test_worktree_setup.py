@@ -18,9 +18,9 @@ from tests.canopy.helpers import (
     BRANCH,
     InlineRunner,
     agent_runs,
+    planner_does,
     pool,
     slot_of,
-    splitter_reports,
     worker_does,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
@@ -136,12 +136,11 @@ def test_a_joint_run_sets_up_every_slot_each_naming_its_repository(ws_scenario: 
     assert [c["returncode"] for c in commands] == [0, 0]
 
 
-def test_a_split_runs_no_setup(ws_scenario: Scenario) -> None:
-    # The splitter reads its desk and has no shell to use what setup would install (DESIGN §18).
+def test_a_plan_runs_no_setup(ws_scenario: Scenario) -> None:
+    # The planner reads its desk and has no shell to use what setup would install (DESIGN §8, §25).
     ws_scenario.configures(runtime={"setup_cmd": "sh -c 'exit 1'"})
-    result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
-    split = dispatches("PROJ-12", RunKind.SPLIT, repo=("api", "web"), request="1")
-    run = ws_scenario.run(split, worker=splitter_reports(result))
+    plan = dispatches("PROJ-12", RunKind.PLAN, repo=("api", "web"))
+    run = ws_scenario.run(plan, worker=planner_does(plan="# Plan for PROJ-12\n\n## api\n\nAdd the route.\n"))
     assert run.status == "done", run.printed.out
     assert "--- worker exit 0 ---" in run.printed.out  # the run log, which shows no setup
     assert "--- setup" not in run.printed.out

@@ -163,7 +163,7 @@ Controls:
   a ticket's note, a lesson, in the operator's name and words, and it refuses when `CANOPY_TICK_ID` or
   `CANOPY_RUN_ID` is set, as `notice` does; so do `reject`, `renew`, and `edit`, which writes a lesson anew in the
   operator's words and keeps the version it replaces, served to no run, as its history. A lesson reaches workers only
-  at `use`, framed as the operator's words that the prompt's obligations come before; reviews, chores, splits, and the
+  at `use`, framed as the operator's words that the prompt's obligations come before; reviews, chores, and the
   overseer hear none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the
   operator. The proposals list, and `promote` of a proposal or a note in its own words, warn on one from a private
   ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers are
@@ -187,15 +187,10 @@ Controls:
   project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the attention
   item names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it
   reaches, as it always could; every label check is agent judgment, and review of every PR is the backstop.
-- A split run (DESIGN §18), until follow-ups replace it, starts only from an authorized replier's comment asking for
-  it: the dispatch must name that comment, and the splitter reads it again and creates nothing unless its author is an
-  authorized replier. It creates at most one child ticket per
-  repository, with no labels and no assignee; a child starts only when a human adds a queue label to it, and only a
-  label added after the split run ended counts. The overseer reads that from the tracker's label history and records
-  `split_self_labeled` instead of dispatching a child labeled earlier; without label history it does not split. The
-  splitter's permissions deny tools whose names suggest labels, assignees, or edits to existing tickets, as defense in
-  depth: a tracker whose create tool also takes labels passes that check. The harness records each child's repository
-  from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
+- canopy splits no ticket itself: there is no split run (DESIGN §18). A request to split a ticket is an authorized
+  reply, or a private ticket's operator message, and only guidance to the ticket's next run, whose worker files the
+  pieces as follow-ups, bounded as any run's are (T3); each is authorized as any follow-up is, by a human's label or
+  start.
 - The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
   operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
   classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment.
@@ -217,13 +212,11 @@ Controls:
 
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
-risk with an interactive agent. canopy acts as the operator, so the tracker can say when a split child's label was added
-but not who added it, and the label-time check is the overseer's judgment: a steered overseer that ignores it can
-dispatch a self-labeled child, as it could dispatch an unlabeled ticket. That child's work is still a PR a human
-reviews. With ticket notes in use, a steered worker can write a note that misleads its own ticket's later runs until
-one of them reports it wrong, drops it, or the ticket ends; those runs are told to check it against the branch, and the
-PR's review remains. Under the PR exception, a steered overseer and worker that both skip their checks can
-push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
+risk with an interactive agent. With ticket notes in use, a steered worker can write a note that misleads its own
+ticket's later runs until one of them reports it wrong, drops it, or the ticket ends; those runs are told to check it
+against the branch, and the PR's review remains. Under the PR exception, a steered overseer and worker that both skip
+their checks can push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own
+review is the
 backstop, as it is for a coworker pushing there by hand. With `trust.rebase` set, a steered worker can replace its own
 branch's history, or one of those branches', with whatever it pushes: the lease stops it overwriting a push it has not
 fetched, not a rewrite it chose. The old commits stay in the PR's timeline and the host's reflog, and the PR's review
@@ -327,7 +320,7 @@ Controls now:
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
   that link; a canary like the desk's checks the reads (DESIGN §21).
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
-  operator prefixes `worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
+  operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
   it writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
@@ -401,10 +394,6 @@ Controls:
   public worker's definition does not deny the tracker's create tools, and the private worker's allows them by name,
   whole. A ticket's body is text the worker wrote, so a steered worker can publish what it read in one, as it can in a
   comment.
-- The splitter's write scope is creating tickets in the parent's project, linking them, and one comment on the parent.
-  It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
-  are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
-  nothing.
 - The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
   path but that file's name, and it has no shell, web, or subagent tools. Its definition is rendered
   as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are

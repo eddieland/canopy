@@ -198,8 +198,8 @@ def triage_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tuple[
     """Return the guard and reason that refuse a triage of `key` now, or None when one is due (DESIGN §25).
 
     A triage is due when triage is on, the ticket needs a plan by the policy alone, and it has no branch, no plan run,
-    no triage run, and no split's children. So a ticket is triaged at most once, before its first plan, and the bound
-    is derived from its runs and never reset (D030), not even by `canopy forget`.
+    and no triage run. So a ticket is triaged at most once, before its first plan, and the bound is derived from its
+    runs and never reset (D030), not even by `canopy forget`.
 
     Returns:
         `triage_off`, `triaged`, or `bad_triage` with why, or None.
@@ -222,9 +222,6 @@ def triage_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tuple[
     planned = _first_run(conn, key, RunKind.PLAN)
     if planned is not None:
         return "bad_triage", f"{key} had plan run {planned}; a ticket with a plan is not triaged"
-    split_into = db.children_of(conn, key)
-    if split_into:
-        return "bad_triage", f"{key} was split into {', '.join(split_into)}; triage those instead"
     return None
 
 

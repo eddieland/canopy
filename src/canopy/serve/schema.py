@@ -167,7 +167,7 @@ class RunActivity(_Model):
 
 
 class Run(_Model):
-    """One worker or split run (`run:ID`)."""
+    """One worker run (`run:ID`)."""
 
     id: int
     """The run's id."""
@@ -176,7 +176,7 @@ class Run(_Model):
     ticket_title: str | None = None
     """The ticket's title, as the overseer named it (DESIGN §13); None until it does."""
     kind: str
-    """implement | resume | split | plan, or fix-ci for a run from before a resume fixed CI (DESIGN §8)"""
+    """implement | resume | plan | needs-plan, or fix-ci or split for a run from before they were retired (DESIGN §8)"""
     reasons: list[str] = []
     """Why a resume ran, as its dispatch named them: ci, review, reply, conflict, no_pr, retarget (DESIGN §8)."""
     status: str

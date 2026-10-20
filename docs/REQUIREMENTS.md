@@ -313,12 +313,11 @@ adds or shadows them in private config. Each run records which persona it had, s
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
   pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
   D035). No wrapper script of the operator's is needed.
-- **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
-  request: an authorized replier's comment asks for the split. The split creates child tickets
-  in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
-  ROADMAP M46 replaces it (§18, Follow-up tickets): an `implement` or `resume` worker files follow-up tickets, which
-  authorize nothing, and canopy asks the operator to label or start each, built; a split becomes a run doing that on
-  request, not yet.
+- **N3. Planner agent that splits a larger ticket into worker tasks.** ROADMAP M46 built it as follow-up tickets
+  (§18, Follow-up tickets), live acceptance pending: an `implement` or `resume` worker files follow-up tickets, which
+  authorize nothing, and canopy asks the operator to label or start each. A split happens only on request: an
+  authorized reply asking for one is guidance to the ticket's next run, whose worker files the pieces as follow-ups,
+  blocked on each other in order, with no queue label. M8's split run is retired.
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).

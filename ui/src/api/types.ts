@@ -9,7 +9,7 @@ export type Meta = Schemas['Meta']
 export type Session = Schemas['Session']
 /** One item on the attention list (DESIGN §14): what needs the operator, and since when. */
 export type AttentionItem = Schemas['AttentionItem']
-/** One worker or split run (`run:ID`). */
+/** One worker run (`run:ID`). */
 export type Run = Schemas['Run']
 /** What the runs did since a moment: how many ended, and how many PRs they opened first. */
 export type RunsSince = Schemas['RunsSince']

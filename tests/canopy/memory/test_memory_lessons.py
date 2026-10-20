@@ -146,7 +146,7 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
 
 
 @pytest.mark.parametrize(("kind", "private"), PROMPTS)
-def test_at_use_a_lesson_reaches_every_worker_prompt_but_a_splits(
+def test_at_use_a_lesson_reaches_every_worker_prompt(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, kind: str, *, private: bool
 ) -> None:
     with_memory(canopy_env, proposals="use")
@@ -154,9 +154,6 @@ def test_at_use_a_lesson_reaches_every_worker_prompt_but_a_splits(
     proposed(conn, "A pending proposal that no prompt carries.", key="pending")
     cfg = load(canopy_env.root, canopy_env.user_file)
     rendered = memory.render(conn, cfg, key=KEY, kind=kind, repos=("repo",))
-    if kind == RunKind.SPLIT:
-        assert rendered is None
-        return
     assert rendered is not None
     assert rendered.ids == (lesson.id,)
     text = prompts.render_worker(cfg, kind, {**VALUES, **rendered.values}, private=private, required=rendered.required)

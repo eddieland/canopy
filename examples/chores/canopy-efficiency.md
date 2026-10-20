@@ -18,8 +18,7 @@ command will run.
 canopy's agents, the `kind` each one's runs have in `spend`, and the OpenCode agents each kind runs as:
 
 - the overseer (`overseer`): `canopy-overseer`.
-- workers, splits, and plans (`workers`): `canopy-worker`, `canopy-worker-private`, `canopy-splitter`, and
-  `canopy-planner`.
+- workers and plans (`workers`): `canopy-worker`, `canopy-worker-private`, and `canopy-planner`.
 - chores (`chores`): `canopy-chore`, and any agent a chore's own `cmd` names, such as yours.
 - the reviewer (`reviews`): `canopy-reviewer`.
 

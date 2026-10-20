@@ -40,7 +40,7 @@ Tiny and stdlib-only: nothing to install, so a slot needs no `setup_cmd` and CI 
 | Repository | What it is | Scenarios |
 | --- | --- | --- |
 | `toy-calc` | A Python CLI calculator: about five modules, `unittest` tests, a CHANGELOG | One repository: S8 to S12, S16, S18 to S21, S36 |
-| `toy-api` | A JSON "orders" schema and its validator; owns the contract | Several repositories: S13 to S15, S39 |
+| `toy-api` | A JSON "orders" schema and its validator; owns the contract | Several repositories: S13, S14, S39 |
 | `toy-web` | Renders orders from a vendored copy of `toy-api`'s schema, pinned by a version file | Several repositories, joint runs |
 | `toy-bazel` (optional) | One `py_binary` and its test under Bazel, with no CI | S7 |
 
@@ -130,7 +130,6 @@ blocked by. Each is small enough for a worker to finish in a few minutes.
 | S12 | "Add a `parse` module", then "Use `parse` in the CLI", blocked by the first (calc) |
 | S13 | One small issue in each of api and web |
 | S14 | "Add `currency` to orders": the schema in api and its rendering in web |
-| S15 | The same shape as S14, with a comment from the operator asking for a split |
 | S16 | Any issue the size of S8's, started with `canopy start` |
 | S18 | Any open toy PR, with a bot comment and an operator comment on it |
 | S19 to S21, S36 | Any toy PR, with `review.agent_prs` on |
@@ -164,7 +163,7 @@ Issue numbers never repeat, so a reset pairs with a fresh toy workspace (remove 
   Actions or Administration. Its MCP server cannot reach a real repository, and a real loop never sees a toy label.
   git in a slot still pushes with the operator's own git credentials, which the token does not narrow.
 - **The toy user config:** `max_workers = 1`, `max_chores = 0`, `loop.interval_minutes = 30`; a cheaper model,
-  `github-copilot/claude-haiku-5.5`, on `worker_cmd` and `split_cmd` with `--model` (the overseer keeps the real one,
+  `github-copilot/claude-haiku-5.5`, on `worker_cmd` with `--model` (the overseer keeps the real one,
   since its judgment is what the scenarios test); `[review]` off except in the review scenarios.
 - **Ticks on demand.** Prefer `canopy tick` or `canopy loop --ticks N` to a loop left running. An idle toy loop
   overnight is where money goes; S27 is the only scenario that needs one.
@@ -180,7 +179,7 @@ Issue numbers never repeat, so a reset pairs with a fresh toy workspace (remove 
 2. `toy-calc` alone: its template, CI, ruleset, bot workflow, about eight catalog issues, and the reset script. Prove
    it with S8 and S9, first `--dry-run`, then for real.
 3. `toy-api` and `toy-web`. Prove them with S13 and S14.
-4. The rest of the catalog (S10, S11, S12, S15, S18, S39), and the reset script's conflicting commit for S10.
+4. The rest of the catalog (S10, S11, S12, S18, S39), and the reset script's conflicting commit for S10.
 5. In `SCENARIOS.md`, name the toy and issue for each scenario.
 6. `toy-bazel`, only if S7 is wanted.
 

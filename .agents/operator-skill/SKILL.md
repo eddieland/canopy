@@ -181,16 +181,16 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `not_trivial` | A triage waived the ticket's plan, but a review judged its PR high impact: read the PR with that in mind. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
-| `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
-| `split_unlabeled` | A split's children have no queue label: label each one you want worked. |
-| `split_self_labeled` | A split child was labeled before its split ended: remove the label, add it again. |
+| `multi_repo` | Independent pieces in several repositories: decide. Ask for a split below. |
+| `follow_up_filed` | A ticket's workers filed follow-up tickets: label or `canopy start` each one you want worked. |
+| `follow_up_unrecorded` | A run reported tickets canopy did not record: read them in the tracker, and decide on each. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 
-To split a ticket that needs several repositories into one ticket per repository, an authorized replier comments on it
-asking for a split. In a workspace of several repositories, a later tick dispatches a splitter, which creates the
-children with no labels and comments on the ticket; label each child to start it. Without such a comment a ticket is
-never split.
+To split a ticket into separate tickets, an authorized replier comments on it asking for a split, saying how if it
+matters (on a ticket you started, reply in canopy). A later tick sends the request to the ticket's next run, whose
+worker files the pieces as follow-up tickets with no labels and asks what becomes of the ticket; label or start each
+piece to work it. Without such a request a ticket is never split.
 
 The overseer may record other reasons; the detail says what it wants.
 

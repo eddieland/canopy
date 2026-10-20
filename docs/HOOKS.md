@@ -15,7 +15,7 @@ Every git canopy itself runs has hooks turned off (D107). So a hook checks only 
 - **A worker's commits and pushes:** checked.
 - **canopy's fallback push:** not checked. When a worker ends with commits it did not push, canopy pushes them once,
   without hooks, so that its work is not lost (DESIGN §8, `_run` step 5). CI is still the check there.
-- **Reviews and splits:** nothing to check. Neither commits.
+- **Reviews and plans:** nothing to check. Neither commits.
 - **A joint run:** each repository's hooks apply in its own slot.
 
 A hook is not a guard: a worker can still commit with `--no-verify`, and canopy does not stop it (step 5 below).

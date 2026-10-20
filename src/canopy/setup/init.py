@@ -47,13 +47,13 @@ SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
 SANDBOX_SUGGESTION = """\
 Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Run
 `canopy sandbox setup` (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md), then set this in
-{user_file}, which prefixes worker_cmd, private_worker_cmd, split_cmd, and plan_cmd:
+{user_file}, which prefixes worker_cmd, private_worker_cmd, and plan_cmd:
   [runtime]
   {line}
 """
 # What `canopy sandbox setup` prints instead, having just done that.
 SANDBOX_NEXT = """\
-Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, split_cmd, and plan_cmd
+Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, and plan_cmd
 (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md, step 5):
   [runtime]
   {line}

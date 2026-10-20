@@ -31,7 +31,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     "max_implement_attempts": 2,
     "max_resume_attempts": 6,
     "ci_cooldown_minutes": 30,
-    "max_split_attempts": 1,
     "stacking": "auto"
   },
   "repositories": [
@@ -89,7 +88,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           }
         }
       ],
-      "split_attempts": 0,
       "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:40:00.000Z",
       "last_run": {
@@ -149,7 +147,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           "ci_cooldown_until": null
         }
       ],
-      "split_attempts": 0,
       "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:55:00.000Z",
       "last_run": {
@@ -194,7 +191,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           "ci_cooldown_until": null
         }
       ],
-      "split_attempts": 0,
       "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:00:00.000Z",
       "last_run": {
@@ -233,7 +229,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
         "mirror": null
       },
       "units": [],
-      "split_attempts": 1,
       "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:00:00.000Z",
       "last_run": {
@@ -259,22 +254,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     {
       "key": "PROJ-5",
       "done_at": "2026-10-16T09:00:00.000Z"
-    }
-  ],
-  "split_children": [
-    {
-      "child": "PROJ-7",
-      "parent": "PROJ-6",
-      "repo": "repo",
-      "split_run_id": 2,
-      "split_ended_at": "2026-10-16T09:20:00.000Z"
-    },
-    {
-      "child": "PROJ-8",
-      "parent": "PROJ-6",
-      "repo": "repo",
-      "split_run_id": 2,
-      "split_ended_at": "2026-10-16T09:20:00.000Z"
     }
   ],
   "chores": [

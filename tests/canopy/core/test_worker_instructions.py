@@ -1,5 +1,5 @@
-"""The operator's standing instructions (DESIGN §12): `paths.worker_instructions` is rendered into every worker prompt
-but a split's, and a file that cannot be used refuses the dispatch instead of dropping them."""
+"""The operator's standing instructions (DESIGN §12): `paths.worker_instructions` is rendered into every worker
+prompt, and a file that cannot be used refuses the dispatch instead of dropping them."""
 
 import sqlite3
 from pathlib import Path
@@ -107,15 +107,6 @@ def test_every_shipped_private_prompt_carries_the_instructions(canopy_env: Canop
     cfg = load(canopy_env.root, canopy_env.user_file)
     text = prompts.render_worker(cfg, kind, {**PROMPT_VALUES, "CONVERSATION": "No messages yet."}, private=True)
     assert f"{SECTION}{FIXUP}\n" in text
-
-
-def test_a_split_neither_needs_nor_carries_the_instructions(canopy_env: CanopyEnv) -> None:
-    # A splitter files child tickets and writes no code, so habits for workers have no place in its prompt, and a file
-    # it would not use cannot refuse it either.
-    instruct(canopy_env, FIXUP).unlink()
-    cfg = load(canopy_env.root, canopy_env.user_file)
-    text = prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT)
-    assert "Standing instructions" not in text
 
 
 def test_blank_instructions_read_as_none(canopy_env: CanopyEnv) -> None:

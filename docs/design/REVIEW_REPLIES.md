@@ -31,7 +31,7 @@ never waits on the drafts. Its result line carries the drafts, parsed apart from
   a draft too, and the run still reports `blocked`;
 - at most one comment a PR, and at most one a run on its ticket, only where a `tracker` source can post and never on a
   private ticket (§22). Without one, the worker posts its ticket comments itself, marked;
-- a PR's title and body, and a split's tickets, are not drafts: they describe the change, not the operator's words.
+- a PR's title and body are not drafts: they describe the change, not the operator's words.
 
 Each draft is refused alone, never cut or cleaned: past a count or a length, with text §28's bounds refuse or a
 secret's shape, or aimed at a PR or ticket the run may not speak on. The operator's edits are held to the same bounds,

@@ -19,7 +19,6 @@ PLANNER = "canopy-planner"
 PLAN_TRIAGE = "canopy-plan-triage"
 REVIEWER = "canopy-reviewer"
 OVERSEER = "canopy-overseer"
-SPLITTER = "canopy-splitter"
 CHORE = "canopy-chore"
 
 

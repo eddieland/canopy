@@ -28,7 +28,6 @@ from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     blocked_result,
-    canopy,
     commit_and_push,
     console,
     context,
@@ -217,12 +216,6 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(scenario:
     assert record.status == StartStatus.STOPPED
     scenario.operator("start", KEY)
     scenario.run(dispatches(label=None))
-
-
-def test_a_private_ticket_is_never_split(scenario: Scenario) -> None:
-    scenario.operator("start", KEY)
-    [(action, _)] = scenario.refuses(canopy("dispatch", KEY, "--repo", "repo", "--kind", "split", "--request", "c-1"))
-    assert action == "refused:private"
 
 
 def test_a_stop_that_commits_before_the_runs_insert_wins(

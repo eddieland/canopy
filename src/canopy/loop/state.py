@@ -39,7 +39,6 @@ class OverseerState(TypedDict):
     tickets: list[TicketState]
     stopped: list[str]
     recently_done: list[DoneTicket]
-    split_children: list[SplitChild]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
     notices: NotRequired[list[NoticeState]]
@@ -62,7 +61,6 @@ class TicketState(TypedDict):
     branch: str | None
     cursors: dict[str, str | int | None]
     units: list[UnitState]
-    split_attempts: int
     needs_human_since: str | None
     last_seen_at: str
     last_run: RunState | None
@@ -144,7 +142,6 @@ class PolicyState(TypedDict):
     max_implement_attempts: int
     max_resume_attempts: int
     ci_cooldown_minutes: int
-    max_split_attempts: int
     stacking: str
 
 
@@ -173,16 +170,6 @@ class DoneTicket(TypedDict):
 
     key: str
     done_at: str
-
-
-class SplitChild(TypedDict):
-    """A child of a split not yet done, with its split run's end (DESIGN §18)."""
-
-    child: str
-    parent: str
-    repo: str
-    split_run_id: int
-    split_ended_at: str | None
 
 
 class CapacityState(TypedDict):
@@ -242,8 +229,6 @@ def state_block(
     grants: Mapping[policy.Unit, Mapping[str, int]],
     ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
-    split_attempts: Mapping[str, int],
-    split_children: Iterable[sqlite3.Row],
     chores: list[ChoreSummary],
     reviews: ReviewsSection | None,
     notices: Sequence[Notice] = (),
@@ -262,10 +247,9 @@ def state_block(
     tracker still shows open (DESIGN §7). `units` are each ticket's units, and `run_slots` and `run_reasons` each
     running or latest run's slots and, for a `resume`, its reasons, by run id (DESIGN §8). `attempts`, `grants`, and
     `ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
-    §22). An old `fix-ci` run counts in a unit's `resume` attempts, and its kind is in none. `split_attempts` are
-    per ticket, and `split_children` are the children of splits not yet done, with their split run's end (DESIGN
-    §18). `chores` are the configured chores (DESIGN §19); with none, the block has no `chores` key, exactly as
-    before chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
+    §22). An old `fix-ci` run counts in a unit's `resume` attempts, and its kind is in none; an old `split` run counts
+    in no unit's. `chores` are the configured chores (DESIGN §19); with none, the block has no `chores` key, exactly
+    as before chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
     first; with none, the block has no `notices` key. `private` holds each private ticket's conversation state, by
     key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages
     newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `planned`
@@ -320,7 +304,6 @@ def state_block(
                 "mirror": t.last_mirrored_id,
             },
             "units": [unit_summary(key, u) for u in units.get(key, [])],
-            "split_attempts": split_attempts.get(key, 0),
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
             "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons),
@@ -357,7 +340,6 @@ def state_block(
             "max_implement_attempts": config.policy.max_implement_attempts,
             "max_resume_attempts": config.policy.max_resume_attempts,
             "ci_cooldown_minutes": config.policy.ci_cooldown_minutes,
-            "max_split_attempts": config.policy.max_split_attempts,
             "stacking": config.policy.stacking,
         },
         # The overseer runs at the workspace root, which is not a repository: each repository's leased slots stand in
@@ -381,17 +363,6 @@ def state_block(
         "stopped": list(stopped),
         # Tickets marked done lately: owed no decision while the tracker still shows them open (DESIGN §7).
         "recently_done": [{"key": str(t["key"]), "done_at": str(t["done_at"])} for t in recently_done],
-        # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).
-        "split_children": [
-            {
-                "child": c["child_key"],
-                "parent": c["parent_key"],
-                "repo": c["repo"],
-                "split_run_id": c["run_id"],
-                "split_ended_at": c["ended_at"],
-            }
-            for c in split_children
-        ],
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
         **({"reviews": reviews} if reviews is not None else {}),

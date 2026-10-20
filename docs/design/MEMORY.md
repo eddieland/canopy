@@ -18,8 +18,8 @@ memory comes in two tiers, split by who can make text reach another ticket:
 - **Workspace lessons**: workers only propose them, and a proposal reaches no prompt. A lesson is the operator's text,
   promoted from a proposal or a note, beside the standing instructions, and only the operator retires it.
 
-The overseer writes no memory and reads none, since it reads every ticket's text (T1). Reviews, chores, and splits get
-neither tier: a reviewer stays independent of the author's beliefs.
+The overseer writes no memory and reads none, since it reads every ticket's text (T1). Reviews and chores get neither
+tier: a reviewer stays independent of the author's beliefs.
 
 Each tier has its own private key (§12, T7), since the tiers carry different risk: `off`, `record`, or `use`. `record`
 writes and serves nothing, so the operator can judge a tier before it reaches a prompt; `use` writes and serves, what
@@ -64,7 +64,7 @@ replaced, keeps its text until the operator forgets it.
   `record`. Promoting a private ticket's run's own words warns that they may hold what was kept off the tracker.
 - An edit writes a lesson anew, the old words kept as history and served to no run. Rejected: an edit in place, which
   would leave a run's citations naming words it never read.
-- At `use`, lessons are in every worker prompt that carries the standing instructions, every kind but a split's (§8),
+- At `use`, lessons are in every worker prompt that carries the standing instructions (§8),
   framed as the operator's words that the prompt's obligations come before; capped, and a lesson naming a repository
   only in runs that lease it.
 - A lesson unused for a while comes up for review: the operator renews it, graduates it into a repository's AGENTS.md
