@@ -9,6 +9,7 @@ import type {
 } from '@/api/types'
 import { foldWords } from '@/lib/fold'
 import { indent, tokenize } from '@/lib/json-lines'
+import { WRAP } from '@/lib/rich-text'
 import { literal } from '@/lib/search'
 
 // A value longer than this is left out of a call's summary; a summary or outcome line is cut at `MAX_LINE`.
@@ -426,6 +427,43 @@ export function pretty(output: string): string {
 /** A tool call's output as its opened row shows it: `pretty`, or `no output`. */
 export function shownOutput(entry: TranscriptTool): string {
     return entry.output ? pretty(entry.output) : 'no output'
+}
+
+/** How many lines of an agent's thinking its row shows before the toggle for the rest, as a list's summary does. */
+export const THINKING_LINES = 4
+
+/**
+ * The first `max` lines of `text` and how many lines are left out, a line longer than `WRAP` counted as the lines it
+ * wraps to, as rich text's are (`clamp`). Text one line over is shown whole: a toggle to show a single line would take
+ * the line it saves. A line cut short ends where a word does, in an ellipsis.
+ */
+export function foldText(text: string, max: number): { shown: string; hidden: number } {
+    const lines = text.split('\n')
+    const total = lines.reduce((sum, line) => sum + wraps(line), 0)
+    if (total <= max + 1) {
+        return { shown: text, hidden: 0 }
+    }
+    const kept: string[] = []
+    let room = max
+    for (const line of lines) {
+        if (room <= 0) {
+            break
+        }
+        kept.push(wraps(line) <= room ? line : cutWords(line, room * WRAP))
+        room -= wraps(line)
+    }
+    return { shown: kept.join('\n'), hidden: total - max }
+}
+
+function wraps(line: string): number {
+    return Math.max(1, Math.ceil(line.length / WRAP))
+}
+
+// The first `chars` characters of `line`, the ellipsis among them, cut where a word ends when one does.
+function cutWords(line: string, chars: number): string {
+    const head = line.slice(0, chars - 1)
+    const end = head.search(/\s\S*$/u)
+    return `${(end > 0 ? head.slice(0, end) : head).trimEnd()}…`
 }
 
 /**

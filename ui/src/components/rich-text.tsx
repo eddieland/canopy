@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react'
 
 import { LinkedText } from '@/components/linked-text'
+import { MoreLines } from '@/components/more-lines'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RunLink } from '@/components/run-link'
 import { splitLinks } from '@/lib/links'
@@ -33,19 +34,7 @@ export function RichText({ text, lines, className }: { text: string; lines?: num
             {shown.map((block, i) => (
                 <BlockView key={i} block={block} />
             ))}
-            {cut.hidden > 0 && (
-                <button
-                    type="button"
-                    aria-expanded={open}
-                    onClick={() => setOpen(!open)}
-                    className={cn(
-                        'self-start rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
-                        'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
-                    )}
-                >
-                    {open ? 'show less' : `show ${cut.hidden} more ${cut.hidden === 1 ? 'line' : 'lines'}`}
-                </button>
-            )}
+            {cut.hidden > 0 && <MoreLines hidden={cut.hidden} open={open} onToggle={() => setOpen(!open)} />}
         </div>
     )
 }
