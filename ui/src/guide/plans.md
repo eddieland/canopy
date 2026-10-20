@@ -40,6 +40,11 @@ to the other end, and the comments' highlights step down to a thin underline so 
 but you can still see where your comments are. After asking for
 changes, that's how you check you got them without reading the whole plan again.
 
+The plans are compared section by section first, each heading paired with its namesake in the plan before, or with
+the section most like it when the heading was renamed. So a section the planner moved wears a small **moved** at its
+heading instead of being struck out in one place and pasted green in another, and one it dropped folds into a single
+**Section removed** line where it used to be. Open that line to read what went; it was probably the part you liked.
+
 **Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its
 section, and goes to the one you pick, with the cursor in it if you can edit. Every plan has the same headings (Goal,
 Acceptance, Context, and so on down to Risks), so after a few plans you'll know where Steps is without looking, and

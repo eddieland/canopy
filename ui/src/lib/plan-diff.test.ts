@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
 
-import { changesKey, diffWords, PlanChanges, textOf } from '@/lib/plan-diff'
+import { changesKey, diffPlans, diffWords, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import type { Change } from '@/lib/plan-diff'
 import { planExtensions } from '@/lib/plan-schema'
 
@@ -58,6 +58,73 @@ describe('diffWords', () => {
     })
 })
 
+// The changes a diff holds, without the words kept.
+function edits(changes: Change[]): Change[] {
+    return changes.filter((change) => change.kind !== 'same')
+}
+
+describe('diffPlans', () => {
+    const editor = new Editor({ extensions: planExtensions([PlanChanges]), content: '' })
+    const outline = (markdown: string) => outlineOf(editor, markdown)
+    const PLAN = '# Export\n\n## Goal\n\nShip the export.\n\n## Steps\n\nStream the rows.\n\n## Risks\n\nLarge tables.'
+
+    it('says a section that moved moved, the fewest that put the rest in order, and changed no word', () => {
+        const now = outline(
+            '# Export\n\n## Risks\n\nLarge tables.\n\n## Goal\n\nShip the export.\n\n## Steps\n\nStream the rows.',
+        )
+        const diff = diffPlans(outline(PLAN), now)
+        expect(edits(diff.changes)).toEqual([])
+        expect(diff.moved.map((at) => now.text.slice(at, at + 5))).toEqual(['Risks'])
+        expect(diff.removed).toEqual([])
+    })
+
+    it('folds a section dropped into one removal where the section after it now is, not struck words', () => {
+        const now = outline('# Export\n\n## Goal\n\nShip the export.\n\n## Risks\n\nLarge tables.')
+        const diff = diffPlans(outline(PLAN), now)
+        expect(edits(diff.changes)).toEqual([])
+        expect(diff.removed).toEqual([{ at: now.text.indexOf('Risks'), heading: 'Steps', body: 'Stream the rows.' }])
+        // One dropped from the end is removed at the end.
+        const end = diffPlans(
+            outline(PLAN),
+            outline('# Export\n\n## Goal\n\nShip the export.\n\n## Steps\n\nStream the rows.'),
+        )
+        expect(end.removed.map(({ heading }) => heading)).toEqual(['Risks'])
+        expect(end.removed[0]?.at).toBe(
+            outline('# Export\n\n## Goal\n\nShip the export.\n\n## Steps\n\nStream the rows.').text.length,
+        )
+    })
+
+    it('pairs a section renamed by its words, and one under a renamed heading by its own', () => {
+        const renamed = diffPlans(outline(PLAN), outline(PLAN.replace('## Steps', '## How')))
+        expect(edits(renamed.changes).map((change) => [change.kind, change.text.trim()])).toEqual([
+            ['del', 'Steps'],
+            ['add', 'How'],
+        ])
+        expect(renamed.removed).toEqual([])
+        const retitled = diffPlans(outline(PLAN), outline(PLAN.replace('# Export', '# Export as CSV')))
+        expect(edits(retitled.changes).map((change) => change.text.trim())).toEqual(['as CSV'])
+        expect(retitled.moved).toEqual([])
+        // One rewritten with its heading, sharing too few words to pair by, still pairs by where it is.
+        const rewritten = diffPlans(
+            outline(PLAN),
+            outline(PLAN.replace('## Risks\n\nLarge tables.', '## Dangers\n\nHuge exports.')),
+        )
+        expect(rewritten.removed).toEqual([])
+        expect(edits(rewritten.changes).map((change) => change.kind)).toEqual(['del', 'add', 'del', 'add'])
+    })
+
+    it('adds a section with no pair whole, and compares the words of the sections it pairs', () => {
+        const now = outline(
+            `${PLAN.replace('Stream the rows.', 'Stream the rows to the client.')}\n\n## Tests\n\nOne row.`,
+        )
+        const diff = diffPlans(outline(PLAN), now)
+        expect(edits(diff.changes).map((change) => [change.kind, change.text.trim()])).toEqual([
+            ['add', 'to the client'],
+            ['add', 'Tests\nOne row.'],
+        ])
+    })
+})
+
 describe('PlanChanges', () => {
     it("draws the new plan's added words and the old plan's removed ones, and nothing once told to stop", () => {
         const editor = new Editor({
@@ -65,7 +132,7 @@ describe('PlanChanges', () => {
             content: '# Plan\n\nStream the rows to the client.',
             contentType: 'markdown',
         })
-        const base = textOf(editor, '# Plan\n\nStream the rows to a file.')
+        const base = outlineOf(editor, '# Plan\n\nStream the rows to a file.')
         editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
         const added = [...editor.view.dom.querySelectorAll('ins.plan-ins')].map((node) => node.textContent)
         const removed = [...editor.view.dom.querySelectorAll('del.plan-del')].map((node) => node.textContent)
@@ -89,15 +156,43 @@ describe('PlanChanges', () => {
             content: '# Plan\n\nStream the rows to the client.\n\n## Risks\n\nA `job` may **fail** twice.',
             contentType: 'markdown',
         })
-        const base = textOf(editor, '# Plan\n\nStream the rows.')
+        const base = outlineOf(editor, '# Plan\n\nStream the rows.')
         editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
         const blocks = [...editor.view.dom.querySelectorAll('.plan-block-add')].map((node) => node.textContent)
         expect(blocks).toEqual(['Risks', 'A job may fail twice.'])
-        // The words diff matches the old plan's last stop to the new one's, so the old paragraph's stop is added here.
+        // The new section is compared with none of the old one's, so the old paragraph keeps its stop.
         const added = [...editor.view.dom.querySelectorAll('ins.plan-ins')].map((node) => node.textContent)
-        expect(added).toEqual(['to the client.'])
-        // The new blocks are one change with the words before them: they start where those do.
-        expect(changesKey.getState(editor.state)?.starts).toHaveLength(1)
+        expect(added).toEqual(['to the client'])
+        // The words added to the old paragraph are one change, and the section added whole another.
+        expect(changesKey.getState(editor.state)?.starts).toHaveLength(2)
+        editor.destroy()
+    })
+
+    it('marks a section that moved at its heading, and folds one removed where it was, its words struck inside', () => {
+        const editor = new Editor({
+            extensions: planExtensions([PlanChanges]),
+            content: '# Plan\n\n## Risks\n\nA job may fail.\n\n## Steps\n\nStream the rows.\n\n## Tests\n\nOne row.',
+            contentType: 'markdown',
+        })
+        const base = outlineOf(
+            editor,
+            '# Plan\n\n## Steps\n\nStream the rows.\n\n## Notes\n\nAsk ops.\n\n' +
+                '## Tests\n\nOne row.\n\n## Risks\n\nA job may fail.',
+        )
+        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
+        const moved = [...editor.view.dom.querySelectorAll('.plan-moved')].map(
+            (node) => node.parentElement?.textContent,
+        )
+        expect(moved).toEqual(['Risksmoved'])
+        const removed = [...editor.view.dom.querySelectorAll('details.plan-section-del')]
+        expect(removed.map((node) => node.querySelector('summary')?.textContent)).toEqual(['Section removed: Notes'])
+        expect(removed[0]?.querySelector('del')?.textContent).toBe('Ask ops.')
+        // Where it was: before the section that came after it then, and still does.
+        expect(removed[0]?.nextElementSibling?.textContent).toBe('Tests')
+        // No word of it is marked as words.
+        const marks = [...editor.view.dom.querySelectorAll('ins.plan-ins, del.plan-del, .plan-block-add')]
+        expect(marks.filter((node) => node.closest('details') === null)).toHaveLength(0)
+        expect(changesKey.getState(editor.state)?.starts).toHaveLength(2)
         editor.destroy()
     })
 
@@ -107,7 +202,7 @@ describe('PlanChanges', () => {
             content: '# Plan\n\n| File | Why |\n| --- | --- |\n| `job.py` | the job |\n| `menu.py` | the menu |',
             contentType: 'markdown',
         })
-        const base = textOf(editor, '# Plan\n\n| File | Why |\n| --- | --- |\n| `job.py` | the job |')
+        const base = outlineOf(editor, '# Plan\n\n| File | Why |\n| --- | --- |\n| `job.py` | the job |')
         editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
         const cells = [...editor.view.dom.querySelectorAll('.plan-cell-add')]
         expect(cells.map((node) => [node.nodeName, node.textContent])).toEqual([
