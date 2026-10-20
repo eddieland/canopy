@@ -115,7 +115,10 @@ def test_at_use_a_later_review_reads_its_tickets_notes_and_drops_what_no_longer_
     )
     section = second.prompt.split(f"{HEADING}\n\n", 1)[1].split("## What to do", 1)[0]
     kept, dropped = sorted(review_notes.notes(scenario.conn, every=True), key=lambda n: n.key)
-    assert f"Review note {kept.id}, `checked-retry-limit`, from review {first.id} of `{first.row.sha[:12]}`" in section
+    assert (
+        f"Review note {kept.id}, `checked-retry-limit`, from review {first.id} of `{first.row.sha[:12]}`, "
+        "1 review before this one:"
+    ) in section
     assert f"> {NOTE}" in section
     assert "No worker reads these notes, and they do not narrow this review" in section
     assert '"drop_review_notes"' in second.prompt
