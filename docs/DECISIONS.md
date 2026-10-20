@@ -481,3 +481,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: working a follow-up under its parent's label (a worker would authorize work for itself); a `canopy` verb
   that records one (anything with a shell could).
 - Revisit: if asking about each follow-up proves noise the operator wants gone; then bound them per ticket.
+
+## D124. canopy serves MCP itself, over stdio only, to the overseer only
+
+- `canopy _mcp` is a child of the overseer's run and opens no socket, so it is no listener (TRUST_MODEL T8). It lists
+  no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool and its command share
+  one request and one function (`loop/tools.py`), so they cannot drift apart.
+- Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
+  transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).
+- Revisit: if the overseer needs more of MCP than tools, or a runtime that cannot start a stdio server.

@@ -8,12 +8,11 @@ from datetime import UTC, datetime
 
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, open_context, require_tick
-from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, truncate
-from canopy.core import conversation, db, review_requests
-from canopy.infra import logs
-from canopy.loop import attention, tick
-from canopy.reviews import execute, findings, grants, start, view
+from canopy.cli.common import CliError, Group, OverseerCommand, open_context
+from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
+from canopy.core import db, review_requests
+from canopy.loop import tick, tools
+from canopy.reviews import execute, findings, view
 
 
 @click.group("review", cls=Group)
@@ -32,41 +31,7 @@ def cmd_review_run(
     click_ctx: click.Context, *, pr: str, sha: str, ticket: str | None, repo: str | None, context: str | None
 ) -> int:
     """Start a review of the PR at URL, at commit SHA, if its guards allow one now."""
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    tick_id = current.id
-    log = logs.for_tick(tick_id)
-    request = start.Request(pr=pr, sha=sha, ticket=ticket, repo=repo)
-    # A malformed URL is recorded cut short; the refusal says what was wrong with it.
-    pr_key = pr if len(pr) <= start.MAX_PR_URL else pr[: start.MAX_PR_URL]
-    try:
-        if current.dry_run:
-            start.check(ctx, tick_id=tick_id, request=request)
-            started = None
-        else:
-            started = start.start(ctx, tick_id=tick_id, request=request, context=context)
-    except start.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, ticket, f"refused:{r.guard}", r.reason, pr=pr_key)
-        if r.guard == "reviewed" and not current.dry_run and review_requests.answered(ctx.conn, pr):
-            # The head already has a `done` review: that answers a `once` request, which no new review would end.
-            log.info("review request answered", extra={"pr": pr_key})
-        if r.guard == "review_limit":
-            # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
-            action = f"{attention.ACTION_PREFIX}review_limit"
-            db.record_decision(ctx.conn, tick_id, ticket, action, f"{r.reason}; {grants.hint(pr_key)}", pr=pr_key)
-        log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
-        raise CliError(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    on_context = f"; context={context}" if context else ""
-    if started is None:
-        rationale = truncate(f"dry run: not dispatched; would review {sha}{on_context}")
-        db.record_decision(ctx.conn, tick_id, ticket, start.DISPATCH_ACTION, rationale, pr=pr)
-        click.echo(f"dry run: recorded review of {pr}; nothing was started")
-        return 0
-    rationale = truncate(f"review run {started.run_id}: {sha} in {started.slot}{on_context}")
-    db.record_decision(ctx.conn, tick_id, ticket, start.DISPATCH_ACTION, rationale, pr=pr)
-    log.info("review started", extra={"pr": pr, "review_run_id": started.run_id, "pid": started.pid})
-    click.echo(f"started review of {pr}: run {started.run_id}")
-    return 0
+    return verb(click_ctx, tools.review_run, tools.ReviewRun, pr=pr, sha=sha, ticket=ticket, repo=repo, context=context)
 
 
 @review_group.command("wait", cls=OverseerCommand)
@@ -78,17 +43,7 @@ def cmd_review_run(
 @click.pass_context
 def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, rationale: str) -> int:
     """Record that the PR at URL is not to be reviewed now, and why."""
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    if not review_requests.reviews_on(ctx.conn, ctx.config):
-        raise CliError("reviews are off: no [review] agent_prs or query, and no open review request")
-    db.record_decision(ctx.conn, current.id, ticket, "wait", rationale, pr=pr)
-    click.echo(f"recorded wait for {pr}")
-    return 0
-
-
-# The decision `canopy review end` records: the overseer ended a review request no review of could answer.
-END_ACTION = "review:end"
+    return verb(click_ctx, tools.review_wait, tools.ReviewWait, pr=pr, ticket=ticket, rationale=rationale)
 
 
 @review_group.command("end", cls=OverseerCommand)
@@ -97,23 +52,7 @@ END_ACTION = "review:end"
 @click.pass_context
 def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
     """End the operator's review request on the PR at URL: it merged or closed first, or is in no repository here."""
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    tick_id = current.id
-    dry_run = current.dry_run
-    try:
-        review_requests.end(ctx.conn, pr, reason, dry_run=dry_run)
-    except conversation.Refused as r:
-        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, pr=pr)
-        raise CliError(f"review end refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    if dry_run:
-        db.record_decision(ctx.conn, tick_id, None, END_ACTION, f"dry run: not ended; {reason}", pr=pr)
-        click.echo(f"dry run: recorded the end of {pr}'s review request; nothing was ended")
-        return 0
-    db.record_decision(ctx.conn, tick_id, None, END_ACTION, reason, pr=pr)
-    logs.for_tick(tick_id).info("review request ended", extra={"pr": pr, "reason": reason})
-    click.echo(f"ended the review request on {pr}: {reason}")
-    return 0
+    return verb(click_ctx, tools.review_end, tools.ReviewEnd, pr=pr, reason=reason)
 
 
 @review_group.command("show")

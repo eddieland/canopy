@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, open_context, optional_tick, require_tick
+from canopy.cli.common import CliError, Group, OverseerCommand, open_context
 from canopy.cli.params import (
     KEY_RE,
-    MAX_TEXT,
     PR_URL,
     REASON_RE,
     REPO,
@@ -19,16 +17,11 @@ from canopy.cli.params import (
     TextType,
     TitleType,
     valid_key,
+    validated,
+    verb,
 )
-from canopy.core import conversation, db, memory, vocab
-from canopy.infra import logs
-from canopy.loop import attention, duties
-from canopy.reviews import grants
-
-if TYPE_CHECKING:
-    from canopy.core.context import Context
-
-DECIDE_ACTIONS = ("wait", "skip", "done")
+from canopy.core import conversation
+from canopy.loop import tools
 
 
 @click.command("decide", cls=OverseerCommand)
@@ -47,35 +40,11 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
     if len(words) > 2:  # noqa: PLR2004
         raise click.UsageError(f"expected [KEY] ACTION, got {len(words)} arguments", click_ctx)
     key, action = (None, words[0]) if len(words) == 1 else words
-    if action not in DECIDE_ACTIONS:
-        raise click.UsageError(f"invalid action {action!r}: choose from {', '.join(DECIDE_ACTIONS)}", click_ctx)
+    if action not in tools.DECIDE_ACTIONS:
+        raise click.UsageError(f"invalid action {action!r}: choose from {', '.join(tools.DECIDE_ACTIONS)}", click_ctx)
     if key is not None and not valid_key(key):
         raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
-    if key is None and action != "skip":
-        raise click.UsageError(f"{action!r} needs a ticket key; only a tick-wide 'skip' may omit it", click_ctx)
-    # A skip's form is checked, not left to the overseer's guess: a tick-wide reason under a made-up key skips nothing
-    # and leaves the tick going on, and a ticket's skip without its key would close the whole tick `skipped`.
-    reasons = " or ".join(f"'{reason}: ...'" for reason in duties.TICK_WIDE_SKIPS)
-    if key is None and not duties.tick_wide(rationale):
-        raise click.UsageError(
-            f"a skip with no key skips the whole tick, so its rationale is {reasons}; "
-            "a skip about one ticket names its key",
-            click_ctx,
-        )
-    if key is not None and action == "skip" and duties.tick_wide(rationale):
-        raise click.UsageError(
-            f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick and names no key: "
-            "`canopy decide skip --rationale '...'`, only when the tick cannot go on; "
-            "otherwise decide each ticket under its own key",
-            click_ctx,
-        )
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    if key is not None:
-        db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current.id, key, action, rationale)
-    click.echo(f"recorded {action} for {key or 'this tick'}")
-    return 0
+    return verb(click_ctx, tools.decide, tools.Decide, key=key, action=action, rationale=rationale)
 
 
 @click.command("queried", cls=OverseerCommand)
@@ -87,34 +56,7 @@ def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
     Name none when it returned no open ticket. Every ticket named is owed a decision this tick, unless the state block
     lists it in `stopped` or `recently_done`. Record a long result in several calls.
     """
-    found = list(dict.fromkeys(keys))
-    rationale = duties.queried_rationale(found)
-    if len(rationale) > MAX_TEXT:
-        raise click.UsageError(f"{len(found)} keys do not fit in one call: name them in several", click_ctx)
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    # Into the journal at once, so the next tick's block carries each one even if this tick ends without deciding it.
-    for key in found:
-        db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current.id, None, duties.QUERIED_ACTION, rationale)
-    click.echo(f"recorded the query: {len(found)} open ticket(s)")
-    return 0
-
-
-def _unit(ctx: Context, repo: str | None) -> str | None:
-    """Return the repository `--repo` names, checked against the map, or None if it names none.
-
-    Raises:
-        CliError: `repo` is not a repository in this workspace.
-    """
-    ws = ctx.workspace
-    if repo is None:
-        return None
-    found = ws.repo(repo)
-    if found is None:
-        names = ", ".join(r.name for r in ws.repos) or "none yet"
-        raise CliError(f"{repo!r} is not a repository in this workspace ({names})")
-    return found.name
+    return verb(click_ctx, tools.queried, tools.Queried, keys=keys)
 
 
 @click.command("attention", cls=OverseerCommand)
@@ -137,17 +79,7 @@ def cmd_attention(
         raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
     if not REASON_RE.fullmatch(reason):
         raise click.UsageError(f"invalid reason {reason!r}: must match {REASON_RE.pattern}", click_ctx)
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    unit = _unit(ctx, repo)
-    if key is not None:
-        db.touch_ticket(ctx.conn, key, ctx.repo)
-    if reason == "review_limit" and pr is not None:
-        # However the overseer words it, the item names what lifts the limit (DESIGN §21).
-        detail = f"{detail}; {grants.hint(pr)}"
-    db.record_decision(ctx.conn, current.id, key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
-    click.echo(f"recorded attention {reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}")
-    return 0
+    return verb(click_ctx, tools.attend, tools.Attention, key=key, reason=reason, detail=detail, repo=repo, pr=pr)
 
 
 @click.group("ticket", cls=Group)
@@ -164,8 +96,7 @@ def ticket_group() -> None:
 )
 @click.option(
     "--phase",
-    # `split` is retired (M46): old tickets may still hold it, and nothing sets it.
-    type=click.Choice([p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT]),
+    type=click.Choice(tools.SETTABLE_PHASES),
     help="The ticket's phase, or a unit's with --repo: pushed_no_pr to merged are about a PR, so a unit's.",
 )
 @click.option(
@@ -198,40 +129,17 @@ def cmd_ticket_set(
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
     phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in.
     """
-    ctx = open_context(click_ctx)
-    unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
-    unit_phase = phase if phase in vocab.UNIT_PHASES else None
-    unit = _unit(ctx, repo)
-    if unit is None and (unit_pairs or unit_phase is not None):
-        what = f"a {unit_pairs[0][0]} cursor" if unit_pairs else f"the {unit_phase} phase"
-        raise click.UsageError(f"{what} belongs to one unit: name its repository with --repo")
-    current = optional_tick(ctx)
-    # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
-    # runs saw, or never see the ticket at all.
-    dry_run = current is not None and current.dry_run
-    ignored = [
-        *(["cursors not advanced"] if dry_run and cursor_pairs else []),
-        *(["not marked done"] if dry_run and done else []),
-    ]
-    ticket_cursors = {} if dry_run else {n: v for n, v in cursor_pairs if n in db.TICKET_CURSORS}
-    db.set_ticket(
-        ctx.conn,
-        key,
-        ctx.repo,
-        phase=None if phase is None or unit_phase is not None else vocab.Phase(phase),
-        cursors=ticket_cursors,
-        done=done and not dry_run,
+    return verb(
+        click_ctx,
+        tools.ticket_set,
+        tools.TicketSet,
+        key=key,
+        repo=repo,
+        phase=phase,
+        cursors=dict(cursor_pairs),
+        done=done,
         title=title,
     )
-    if done and not dry_run:
-        # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
-        memory.end_ticket_notes(ctx.conn, key, "ticket done")
-    unit_cursors: dict[str, str] = {} if dry_run else dict(unit_pairs)
-    if unit is not None and (unit_phase is not None or unit_cursors):
-        db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
-    note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
-    click.echo(f"updated {key if repo is None else attention.subject(key, unit)}{note}")
-    return 0
 
 
 @click.command("mirror", cls=OverseerCommand)
@@ -252,38 +160,22 @@ def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: s
     authorizes nothing.
     """
     ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    tick_id = current.id
-    log = logs.for_tick(tick_id)
-    key: str | None = None
     try:
-        subject = conversation.parse_ref(ref)
-        key = subject.id if subject.kind == conversation.TICKET else None
-        mirrored = conversation.mirror(
-            ctx.conn,
-            ctx.config,
-            subject,
-            tick_id=tick_id,
-            dry_run=current.dry_run,
-            repo=ctx.repo,
-            comment_id=comment_id,
-            author=author,
-            at=at,
-            body=body if body is not None else sys.stdin.read(),
+        # Refused outside a tick before stdin is read, which would wait on a terminal.
+        tools.running_tick(ctx)
+        said = tools.mirror(
+            ctx,
+            validated(
+                click_ctx,
+                tools.Mirror,
+                ref=ref,
+                comment=comment_id,
+                author=author,
+                at=at,
+                body=body if body is not None else sys.stdin.read(),
+            ),
         )
-    except conversation.Refused as r:
-        if key is not None:
-            db.touch_ticket(ctx.conn, key, ctx.repo)
-        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        log.info("mirror refused", extra={"ticket": key, "comment": comment_id[:100], "guard": r.guard})
-        raise CliError(f"mirror refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    log.info(
-        "comment mirrored",
-        extra={"ticket": key, "comment": comment_id, "message_id": mirrored.message_id, "new": mirrored.new},
-    )
-    if mirrored.new:
-        cut = ", truncated" if mirrored.truncated else ""
-        click.echo(f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})")
-    else:
-        click.echo(f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded")
+    except tools.Refused as e:
+        raise CliError(str(e)) from None
+    click.echo(said)
     return 0

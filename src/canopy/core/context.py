@@ -8,11 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import chore_view, db, pools, treehouse
+from canopy.core import chore_view, config, db, pools, treehouse, workspace
 from canopy.core.pool import CanopyPool
 from canopy.core.vocab import PoolKind
 from canopy.core.workspace import REPOS_DIR
-from canopy.infra import lock, procs
+from canopy.infra import lock, logs, procs, resources
 
 # Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
 DISPATCH_LOCK = "dispatch.lock"
@@ -20,6 +20,30 @@ DISPATCH_LOCK = "dispatch.lock"
 if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.workspace import Workspace
+
+
+def open_at(start: Path, runner: procs.Runner, *, migrate: bool = True) -> Context:
+    """Load the config of the workspace `start` is in and open its journal, as every command and tool call does.
+
+    The caller closes the context's connection.
+
+    Returns:
+        The context, its journal migrated unless `migrate` is false.
+    """
+    ws = workspace.find(start)
+    cfg = config.load(ws.root, runner=runner)
+    # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
+    workspace.ensure_state_dir(ws.state_dir)
+    logs.configure(ws.state_dir)
+    conn = db.connect(db_path(ws))
+    if migrate:
+        # The tick migrates under its lock; everything else migrates on open, which is a no-op inside a tick.
+        try:
+            db.migrate(conn, resources.migrations_dir())
+        except BaseException:
+            conn.close()
+            raise
+    return Context(config=cfg, conn=conn, runner=runner, ws=ws)
 
 
 @dataclass(frozen=True)
