@@ -14,6 +14,11 @@ an agent's text mentions it: the name still opens the PR's page, and the icon ta
 column is only as wide as the longest name in the list, and in a narrow window the phase goes first, then the age, so
 the title keeps the room.
 
+The field over the list keeps the PRs whose name, ticket, or title holds every word you type, in any case, so `web#88`
+or `debounce` finds the one you mean without scrolling. With PRs in more than one repository, a chip for each sits
+beside it, and **every repository** takes the chip back off. Both live in the URL, so a filtered list is a link you can
+keep.
+
 The title is the PR's own, as the worker that opened it or canopy's last review of it read it, so it says what the PR
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
 read when canopy looks at the PR, not live: rename one on GitHub and canopy catches up at its next run or review.
@@ -151,6 +156,10 @@ A PR you asked for that no review has started on yet leads the list as `requeste
 verdict, commit, or cost because nothing has read it yet. Once a tick starts its review, the review's own row takes its
 place. If that review fails, the request is still open, so the `requested` row comes back and the next tick tries
 again.
+
+The reviews list filters as the PRs do: a field for words in the PR, its ticket, or the commit (the first few characters
+of a sha will do), and a chip for each repository. A `requested` row drops out once you pick a repository, because
+which one holds its PR is the next tick's to work out, not the page's to guess.
 
 ## A review's page
 

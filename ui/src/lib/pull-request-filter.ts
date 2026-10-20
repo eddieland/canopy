@@ -1,0 +1,110 @@
+import type { PullRequest, RequestedReview, ReviewSummary } from '@/api/types'
+import { pullRequestLabel } from '@/lib/pull-request-label'
+
+/**
+ * The pull requests and reviews pages' filters (DESIGN.md, the PR and review filters): the repository a PR is in
+ * (`?repo=`), and words its row holds (`?q=`). Both go over the list the server sent.
+ */
+
+/** The longest text filter kept: longer than any PR, ticket, and title a row shows. */
+export const PR_QUERY_MAX = 200
+
+/** What a PR or review list is filtered by, its page's search: each undefined when it filters nothing. */
+export interface PullRequestFilter {
+    /** Words each shown row holds. */
+    q?: string | undefined
+    /** The repository each shown row's PR is in. */
+    repo?: string | undefined
+}
+
+/** A `?q=` as the pages filter by it: a string, cut to `PR_QUERY_MAX`, else undefined when it holds no word. */
+export function prQueryOf(raw: unknown): string | undefined {
+    if (typeof raw !== 'string') {
+        return undefined
+    }
+    const text = raw.slice(0, PR_QUERY_MAX)
+    return text.trim() === '' ? undefined : text
+}
+
+/** A `?repo=` as a repository's name, which the workspace map holds to lowercase letters, digits, and hyphens. */
+export function prRepoOf(raw: unknown): string | undefined {
+    return typeof raw === 'string' && /^[a-z0-9-]{1,64}$/u.test(raw) ? raw : undefined
+}
+
+/**
+ * The repositories a list's rows are in, by name, each a chip to filter by: the one `selected` too, so a `?repo=` no
+ * row is in still shows as chosen.
+ */
+export function reposOf(rows: Iterable<{ repo: string | null }>, selected: string | undefined): string[] {
+    const repos = new Set<string>()
+    for (const row of rows) {
+        if (row.repo !== null) {
+            repos.add(row.repo)
+        }
+    }
+    if (selected !== undefined) {
+        repos.add(selected)
+    }
+    return [...repos].toSorted()
+}
+
+/**
+ * Whether the pull requests page shows a PR: it is in `repo`, and its name, URL, repository, ticket's key and title, or
+ * own title holds every word of `q`, in any case and anywhere in a word, so `web#88` finds acme/web#88.
+ */
+export function pullRequestShown(
+    pr: Pick<PullRequest, 'url' | 'repo' | 'ticket_key' | 'ticket_title' | 'title'>,
+    filter: PullRequestFilter,
+): boolean {
+    const words = `${prWords(pr.url, pr.repo)} ${pr.ticket_key ?? ''} ${pr.ticket_title ?? ''} ${pr.title ?? ''}`
+    return inRepo(pr.repo, filter.repo) && holdsEvery(words, filter.q)
+}
+
+/**
+ * Whether the reviews page shows a review: its PR is in `repo`, and its PR's name or URL, repository, ticket, or
+ * commit holds every word of `q`.
+ */
+export function reviewShown(
+    review: Pick<ReviewSummary, 'pr_url' | 'repo' | 'ticket_key' | 'sha'>,
+    filter: PullRequestFilter,
+): boolean {
+    const words = `${prWords(review.pr_url, review.repo)} ${review.ticket_key ?? ''} ${review.sha}`
+    return inRepo(review.repo, filter.repo) && holdsEvery(words, filter.q)
+}
+
+/**
+ * Whether the reviews page shows a PR waiting on its review: its name or URL holds every word of `q`, and no `repo` is
+ * chosen, since which repository holds it is the overseer's reading at the next tick.
+ */
+export function requestShown(request: Pick<RequestedReview, 'pr_url'>, filter: PullRequestFilter): boolean {
+    return filter.repo === undefined && holdsEvery(prWords(request.pr_url, null), filter.q)
+}
+
+/** What a filtered list says of the filter that left nothing: ` in api with “retry”`. */
+export function filterWords(filter: PullRequestFilter): string {
+    const repo = filter.repo === undefined ? '' : ` in ${filter.repo}`
+    const q = filter.q === undefined ? '' : ` with “${filter.q.trim()}”`
+    return `${repo}${q}`
+}
+
+/** How many rows a list shows, and of how many when a filter left some out: `3 of 12`; blank until both are read. */
+export function countText(shown: number | undefined, total: number | undefined, filtered: boolean): string {
+    if (shown === undefined || total === undefined) {
+        return ''
+    }
+    return filtered ? `${shown} of ${total}` : String(total)
+}
+
+function prWords(url: string, repo: string | null) {
+    return `${pullRequestLabel(url)} ${url} ${repo ?? ''}`
+}
+
+function inRepo(repo: string | null, chosen: string | undefined) {
+    return chosen === undefined || repo === chosen
+}
+
+function holdsEvery(text: string, query: string | undefined) {
+    const haystack = text.toLowerCase()
+    const words = query?.toLowerCase().trim().split(/\s+/u) ?? []
+    return words.every((word) => haystack.includes(word))
+}

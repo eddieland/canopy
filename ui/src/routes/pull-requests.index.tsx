@@ -6,6 +6,7 @@ import type { PullRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PullRequestFilterBar } from '@/components/pull-request-filter'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
@@ -15,6 +16,8 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { countText, filterWords, prQueryOf, prRepoOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
+import type { PullRequestFilter } from '@/lib/pull-request-filter'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText, verdictTone } from '@/lib/reviews'
 import { fitColumn } from '@/lib/rows'
@@ -22,13 +25,24 @@ import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
 
-/** Every PR the journal knows, most recent activity first, whoever's it is. */
+/**
+ * Every PR the journal knows, most recent activity first, whoever's it is. `?repo=` keeps the PRs in that repository,
+ * and `?q=` those whose name, ticket, or title holds every word.
+ */
 export const Route = createFileRoute('/pull-requests/')({
+    // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
+    validateSearch: (search: Record<string, unknown>): PullRequestFilter => ({
+        repo: prRepoOf(search['repo']),
+        q: prQueryOf(search['q']),
+    }),
     component: PullRequestsPage,
 })
 
 function PullRequestsPage() {
+    const filter = Route.useSearch()
     const { data } = useQuery(pullRequestsQuery)
+    const shown = data?.filter((pr) => pullRequestShown(pr, filter))
+    const filtered = filter.repo !== undefined || filter.q !== undefined
     const order = useListOrder('pull-requests')
     return (
         <>
@@ -40,20 +54,32 @@ function PullRequestsPage() {
             <Panel>
                 <PanelHeader label="Pull requests">
                     <span className="flex items-center gap-2">
-                        {data !== undefined && data.length > 1 && <OrderToggle list="pull-requests" />}
-                        <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                        {shown !== undefined && shown.length > 1 && <OrderToggle list="pull-requests" />}
+                        <span className="readout text-xs text-muted-foreground" data-testid="pull-requests-count">
+                            {countText(shown?.length, data?.length, filtered)}
+                        </span>
                     </span>
                 </PanelHeader>
-                {data === undefined ? (
+                <PullRequestFilterBar
+                    to="/pull-requests"
+                    filter={filter}
+                    repos={reposOf(data ?? [], filter.repo)}
+                    label="Filter pull requests by PR, ticket, or title"
+                    placeholder="Filter by PR, ticket, or title"
+                />
+                {shown === undefined || data === undefined ? (
                     <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
                         no PRs yet: none of the loop&apos;s tickets has one, and nothing was reviewed
                     </Empty>
+                ) : shown.length === 0 ? (
+                    <Empty size="panel">{`no PRs${filterWords(filter)}`}</Empty>
                 ) : (
                     <ul
                         className="divide-y"
-                        // The PR column as wide as the longest name, and the name's icon beside it.
+                        // The PR column as wide as the longest name, and the name's icon beside it: every PR's, so the
+                        // columns hold still as the filter narrows the list.
                         style={fitColumn(
                             'pr',
                             data.map((pr) => pullRequestLabel(pr.url)),
@@ -61,7 +87,7 @@ function PullRequestsPage() {
                         )}
                         data-testid="pull-requests"
                     >
-                        {ordered('pull-requests', order, data).map((pr) => (
+                        {ordered('pull-requests', order, shown).map((pr) => (
                             <Row key={pr.url} pr={pr} />
                         ))}
                     </ul>

@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { ticketsQuery } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { Age } from '@/components/age'
-import { SearchField } from '@/components/input'
+import { FilterField } from '@/components/filter-field'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow } from '@/components/rows'
@@ -136,43 +135,19 @@ function FilterLink({ show, children }: { show: TicketShow | undefined; children
     )
 }
 
-/**
- * The text filter, kept in `?q=`: the list narrows as the operator types, replacing the history entry, so Back leaves
- * the page rather than stepping through each keystroke. Back or a link changing `?q=` shows the new text in the field.
- */
+/** The text filter, kept in `?q=` (`FilterField`). */
 function TextFilter() {
     const { q } = Route.useSearch()
     const navigate = Route.useNavigate()
-    const [value, setValue] = useState(q ?? '')
-    // What `?q=` was when the field last looked, so a change from outside it shows there.
-    const [seen, setSeen] = useState(q)
-    if (q !== seen) {
-        setSeen(q)
-        setValue(q ?? '')
-    }
-
-    function filter(text: string) {
-        const query = ticketQueryOf(text)
-        setValue(text)
-        setSeen(query)
-        void navigate({ search: (prev) => ({ ...prev, q: query }), replace: true })
-    }
-
     return (
         <search className="border-b px-3 py-2">
-            <SearchField
-                aria-label="Filter tickets by key or title"
+            <FilterField
+                q={q}
+                queryOf={ticketQueryOf}
+                onFilter={(query) => void navigate({ search: (prev) => ({ ...prev, q: query }), replace: true })}
+                label="Filter tickets by key or title"
                 placeholder="Filter by key or title"
                 maxLength={TICKET_QUERY_MAX}
-                value={value}
-                onChange={(event) => filter(event.target.value)}
-                onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                        event.currentTarget.blur()
-                    }
-                }}
-                onClear={() => filter('')}
-                clearLabel="Clear the filter"
             />
         </search>
     )
