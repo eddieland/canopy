@@ -2,6 +2,9 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 
+/** The window a spend breakdown reads: local days, by the day, or clock hours, by the hour. */
+export type SpendBreakdownRange = { days: number; hours?: undefined } | { hours: number; days?: undefined }
+
 /**
  * Query keys and fetchers, one place for each. The SSE stream writes into these same keys (live.ts), so a key used
  * here and there must come from `keys`.
@@ -39,7 +42,8 @@ export const keys = {
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
-    spendBreakdown: (days: number) => ['spend', 'breakdown', days] as const,
+    spendBreakdown: (range: SpendBreakdownRange) =>
+        ['spend', 'breakdown', range.hours === undefined ? `${range.days}d` : `${range.hours}h`] as const,
     tick: ['tick'] as const,
     search: (q: string) => ['search', q] as const,
     // The reviews list, the reviews waiting on a tick, and each review's page share a prefix, so one invalidation
@@ -175,14 +179,14 @@ export const spendQuery = queryOptions({
 })
 
 /**
- * What the last `days` UTC days cost, by day and by what the ticks bought, as `canopy spend --days` prints it. The
- * stream's `spend.updated` marks it stale.
+ * What the last `days` local days cost, by day and by what the ticks bought, as `canopy spend --days` prints it, or the
+ * last `hours` clock hours, by the hour. The stream's `spend.updated` marks it stale.
  */
-export function spendBreakdownQuery(days: number) {
+export function spendBreakdownQuery(range: SpendBreakdownRange) {
     return queryOptions({
-        queryKey: keys.spendBreakdown(days),
+        queryKey: keys.spendBreakdown(range),
         queryFn: async ({ signal }) =>
-            unwrap(await api.GET('/api/spend/breakdown', { params: { query: { days } }, signal })),
+            unwrap(await api.GET('/api/spend/breakdown', { params: { query: range }, signal })),
     })
 }
 

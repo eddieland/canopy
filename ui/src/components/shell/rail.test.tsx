@@ -148,7 +148,7 @@ describe('RailSpend', () => {
     })
 
     it.each([
-        ['24h', '/spend'],
+        ['24h', '/spend?hours=24'],
         ['30d', '/spend?days=30'],
     ])("opens the spend page's breakdown over the %s window", async (window, href) => {
         const { router } = await renderRouted(<RailSpend />, { client: seeded(keys.spend, SPEND) })

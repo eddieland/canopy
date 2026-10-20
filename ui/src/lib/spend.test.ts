@@ -6,6 +6,7 @@ import {
     chartTop,
     dayHint,
     dayLabel,
+    dayName,
     dearestDay,
     doneText,
     seriesCost,
@@ -13,6 +14,8 @@ import {
     shareText,
     spendLine,
     spendWindow,
+    windowId,
+    windowName,
 } from './spend'
 
 const NONE: SpendCosts = {
@@ -51,11 +54,18 @@ describe('spend', () => {
             'Oct 7: $1.50, overseer $1.00 (idle ticks $0.25), reviews $0.50',
         )
         expect(dayHint(day('2026-10-02', {}))).toBe('Oct 2: nothing reported')
+        expect(dayHint(day('2026-10-08T14', { workers: 2, total: 2 }))).toBe('Oct 8, 14:00: $2.00, workers $2.00')
     })
 
     it('names a day as the axis does, whatever the zone', () => {
         expect(dayLabel('2026-10-01')).toBe('Oct 1')
         expect(dayLabel('2026-12-31')).toBe('Dec 31')
+    })
+
+    it('names an hour by its time on the axis, and with its day in full', () => {
+        expect(dayLabel('2026-10-08T09')).toBe('09:00')
+        expect(dayName('2026-10-08T09')).toBe('Oct 8, 09:00')
+        expect(dayName('2026-10-08')).toBe('Oct 8')
     })
 
     it('finds the dearest day, the latest of equals, so its total is said over its bar', () => {
@@ -69,11 +79,23 @@ describe('spend', () => {
         expect(dearestDay([day('2026-10-08', {})])).toBe(-1)
     })
 
-    it('takes only the windows the page offers', () => {
-        expect(spendWindow('30')).toBe(30)
-        expect(spendWindow(7)).toBe(7)
-        expect(spendWindow('8')).toBeUndefined()
-        expect(spendWindow(undefined)).toBeUndefined()
+    it('takes only the windows the page offers, hours before days', () => {
+        expect(spendWindow({ days: '30' })).toEqual({ days: 30 })
+        expect(spendWindow({ days: 7 })).toEqual({ days: 7 })
+        expect(spendWindow({ hours: '24' })).toEqual({ hours: 24 })
+        expect(spendWindow({ hours: 24, days: 30 })).toEqual({ hours: 24 })
+        expect(spendWindow({ days: '8' })).toBeUndefined()
+        expect(spendWindow({ hours: 12 })).toBeUndefined()
+        expect(spendWindow({})).toBeUndefined()
+    })
+
+    it('names a window and gives it an id, in hours or in days', () => {
+        expect([windowName({ hours: 24 }), windowName({ days: 7 }), windowName({ days: 1 })]).toEqual([
+            '24 hours',
+            '7 days',
+            '1 day',
+        ])
+        expect([windowId({ hours: 24 }), windowId({ days: 30 })]).toEqual(['24h', '30'])
     })
 
     it('says a share as a whole percent', () => {
@@ -89,10 +111,13 @@ describe('spend', () => {
     })
 
     it("says the window's state: what it cost and what it got done", () => {
-        expect(spendLine({ days: 7, done: 2, totals: { ...NONE, total: 10.512 } })).toBe(
+        expect(spendLine({ days: 7, hours: null, done: 2, totals: { ...NONE, total: 10.512 } })).toBe(
             '$10.51 over 7 days · 2 tickets done',
         )
-        expect(spendLine({ days: 30, done: 0, totals: NONE })).toBe('– over 30 days · no tickets done')
+        expect(spendLine({ days: 30, hours: null, done: 0, totals: NONE })).toBe('– over 30 days · no tickets done')
+        expect(spendLine({ days: null, hours: 24, done: 1, totals: { ...NONE, total: 2 } })).toBe(
+            '$2.00 over 24 hours · 1 ticket done',
+        )
     })
 
     it('names each series once, the same in the totals, the legend, and the table', () => {

@@ -9,16 +9,21 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-test("the rail's counters open the spend page, whose total agrees with the 30 days'", async ({ page }) => {
+test("the rail's counters open the spend page over their own windows, whose totals agree with them", async ({
+    page,
+}) => {
     await page.goto('attention')
     await settled(page)
+    const day = await page.getByTestId('rail-spend-24h').textContent()
     const month = await page.getByTestId('rail-spend-30d').textContent()
 
     await page.getByTestId('rail-spend-link-24h').click()
-    await expect(page).toHaveURL(/\/spend$/u)
+    await expect(page).toHaveURL(/\/spend\?hours=24$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')
-    await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
-    await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(7)
+    await expect(page.getByTestId('spend-window-24h')).toHaveAttribute('data-state', 'on')
+    await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(24)
+    // Every run in the mock journal started within the 24 hours, so the window's total is the rail's.
+    await expect(page.getByTestId('spend-total-total')).toHaveText(day ?? '')
 
     await page.goto('attention')
     await page.getByTestId('rail-spend-link-30d').click()
@@ -83,6 +88,30 @@ test("each series has one name in the totals, the legend, and the table, and the
         'plans waived',
     ])
     await expect(page.getByText('other ticks')).toHaveCount(0)
+})
+
+test('24 hours read by the hour, each named by its time and in full in the table', async ({ page }) => {
+    await page.goto('spend')
+    await settled(page)
+    await page.getByTestId('spend-window-24h').click()
+    await expect(page).toHaveURL(/\/spend\?hours=24$/u)
+    await expect(page.getByTestId('spend-by-day').getByText('By hour')).toBeVisible()
+    await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(24)
+    await expect(page.getByTestId('spend-table').locator('thead th').first()).toHaveText('hour')
+    await expect(page.locator('main header p')).toContainText(' over 24 hours · ')
+    // The newest hour first in the table, with its day, and last on the axis by its time alone, in the server's zone.
+    await expect(page.getByTestId('spend-table').locator('tbody th').first()).toHaveText(/^Oct \d+, \d{2}:00$/u)
+    await expect(
+        page
+            .getByTestId('spend-chart')
+            .getByTestId(/^spend-axis-/u)
+            .last(),
+    ).toHaveText(/^\d{2}:00$/u)
+    await expectSpendAxisWhole(page, 5)
+
+    await page.getByTestId('spend-window-7').click()
+    await expect(page).toHaveURL(/\/spend$/u)
+    await expect(page.getByTestId('spend-by-day').getByText('By day')).toBeVisible()
 })
 
 test('a window the page does not offer reads as the week', async ({ page }) => {

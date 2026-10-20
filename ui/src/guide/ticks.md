@@ -44,11 +44,11 @@ opens at its end, where the errors are, since that's usually why you're reading 
 
 ## The spend page
 
-[Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **7 days** or **30 days**. The
-line under the title is the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for what the
-page holds. The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent, then the
-workers, plan triage, plans, chores, reviews, and dry runs. Beside them are the tickets the loop marked done in that
-window, what each cost on average, the overseer and chores included, and **plans waived**: how many of the window's
+[Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **24 hours**, **7 days**, or **30
+days**. The line under the title is the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for
+what the page holds. The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent,
+then the workers, plan triage, plans, chores, reviews, and dry runs. Beside them are the tickets the loop marked done in
+that window, what each cost on average, the overseer and chores included, and **plans waived**: how many of the window's
 triage runs judged their ticket trivial and skipped its plan. Hold that against **plan triage**, with **plans** to say
 what a planner run costs: if triage costs more than the planner runs it saved, it is a hobby, not a saving. With triage
 off, plan triage and plans waived stay at nothing (see [Plans](plans#triage-skipping-the-plan-for-trivial-work)).
@@ -63,7 +63,12 @@ has its total printed over its bar, so you can read the scale without hovering; 
 day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, under the
 rest of the overseer's spend in a deeper shade of its color, and at real prices they're a sliver beside a worker's run,
 so read their trend from the table. A window where nothing reported a cost says so in one line rather than draw you an
-empty chart. Then:
+empty chart.
+
+**24 hours** does the same by the hour: 24 clock hours ending with this one, so the newest bar fills in as the hour
+goes. That's the window the rail's **24h** counter opens, for when you want to know what the last hour cost rather than
+what the week did. The hour that started 24 hours ago is just outside it, so the total can read a little under the
+rail's. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned. Every later
