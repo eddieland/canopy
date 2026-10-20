@@ -3,6 +3,7 @@
 
 import type { SpendBreakdownRange } from '@/api/queries'
 import type { SpendBreakdown, SpendCosts, SpendDay, SpendGroup, SpendTicket } from '@/api/types'
+import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
 
@@ -144,7 +145,7 @@ export function dearestDay(days: SpendDay[]): number {
  * A day's bar on hover: its date, its total, and each series it has, by the names the legend gives them. The overseer
  * says its whole, as the totals do, with idle ticks' part of it after it: `overseer $1.00 (idle ticks $0.25)`.
  */
-export function dayHint(day: SpendDay): string {
+export function dayHint(day: SpendDay, clock: Clock): string {
     const said = (series: Series) => `${series.label} ${costText(day.costs[series.key])}`
     const idle = SERIES.find((series) => series.key === 'idle')
     const ofIt = idle !== undefined && (day.costs.idle ?? 0) > 0 ? ` (${said(idle)})` : ''
@@ -152,23 +153,36 @@ export function dayHint(day: SpendDay): string {
         series.key === 'overseer' ? `${said(series)}${ofIt}` : said(series),
     )
     const total = day.costs.total === null ? 'nothing reported' : costText(day.costs.total)
-    const name = dayName(day.day)
+    const name = dayName(day.day, clock)
     return parts.length === 0 ? `${name}: ${total}` : `${name}: ${total}, ${parts.join(', ')}`
 }
 
 /**
  * A day as the server names it, `2026-10-07`, as the chart's axis says it: `Oct 7`, whatever the browser's zone. An
- * hour, `2026-10-07T14`, is its time alone, `14:00`, as an axis of hours reads.
+ * hour, `2026-10-07T14`, is its time alone on the operator's clock, as an axis of hours reads: `14:00`, or `2 PM`.
  */
-export function dayLabel(day: string): string {
+export function dayLabel(day: string, clock: Clock): string {
     const hour = day.split('T')[1]
-    return hour === undefined ? dateLabel(day) : `${hour}:00`
+    return hour === undefined ? dateLabel(day) : hourLabel(hour, clock)
 }
 
-/** A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or with its time, `Oct 7, 14:00`. */
-export function dayName(day: string): string {
+/**
+ * A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or with its time on the operator's clock,
+ * `Oct 7, 14:00` or `Oct 7, 2 PM`.
+ */
+export function dayName(day: string, clock: Clock): string {
     const [date = day, hour] = day.split('T')
-    return hour === undefined ? dateLabel(date) : `${dateLabel(date)}, ${hour}:00`
+    return hour === undefined ? dateLabel(date) : `${dateLabel(date)}, ${hourLabel(hour, clock)}`
+}
+
+// An hour as the server names it, `14`, on the operator's clock. It is the wall time of the machine canopy runs on,
+// with no offset to say which zone that is, so it is written as it stands and never with a zone after it.
+function hourLabel(hour: string, clock: Clock): string {
+    if (clock.hours === '24') {
+        return `${hour}:00`
+    }
+    const n = Number(hour)
+    return `${n % 12 === 0 ? 12 : n % 12} ${n < 12 ? 'AM' : 'PM'}`
 }
 
 function dateLabel(day: string): string {

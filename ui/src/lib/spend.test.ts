@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SpendCosts, SpendDay } from '@/api/types'
+import type { Clock } from '@/lib/clock'
 
 import {
     chartTop,
@@ -17,6 +18,9 @@ import {
     windowId,
     windowName,
 } from './spend'
+
+const H24: Clock = { hours: '24', zone: false }
+const H12: Clock = { hours: '12', zone: false }
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -49,22 +53,32 @@ describe('spend', () => {
     })
 
     it('says a day on hover with each series it has', () => {
-        expect(dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, total: 1.5 }))).toBe(
+        expect(dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, total: 1.5 }), H24)).toBe(
             'Oct 7: $1.50, overseer $1.00 (idle ticks $0.25), reviews $0.50',
         )
-        expect(dayHint(day('2026-10-02', {}))).toBe('Oct 2: nothing reported')
-        expect(dayHint(day('2026-10-08T14', { workers: 2, total: 2 }))).toBe('Oct 8, 14:00: $2.00, workers $2.00')
+        expect(dayHint(day('2026-10-02', {}), H24)).toBe('Oct 2: nothing reported')
+        expect(dayHint(day('2026-10-08T14', { workers: 2, total: 2 }), H24)).toBe('Oct 8, 14:00: $2.00, workers $2.00')
+        expect(dayHint(day('2026-10-08T14', { workers: 2, total: 2 }), H12)).toBe('Oct 8, 2 PM: $2.00, workers $2.00')
     })
 
     it('names a day as the axis does, whatever the zone', () => {
-        expect(dayLabel('2026-10-01')).toBe('Oct 1')
-        expect(dayLabel('2026-12-31')).toBe('Dec 31')
+        expect(dayLabel('2026-10-01', H24)).toBe('Oct 1')
+        expect(dayLabel('2026-12-31', H12)).toBe('Dec 31')
     })
 
     it('names an hour by its time on the axis, and with its day in full', () => {
-        expect(dayLabel('2026-10-08T09')).toBe('09:00')
-        expect(dayName('2026-10-08T09')).toBe('Oct 8, 09:00')
-        expect(dayName('2026-10-08')).toBe('Oct 8')
+        expect(dayLabel('2026-10-08T09', H24)).toBe('09:00')
+        expect(dayName('2026-10-08T09', H24)).toBe('Oct 8, 09:00')
+        expect(dayName('2026-10-08', H24)).toBe('Oct 8')
+    })
+
+    it('names an hour on a 12-hour clock, midnight and noon as 12, and never with a zone', () => {
+        expect(dayLabel('2026-10-08T00', H12)).toBe('12 AM')
+        expect(dayLabel('2026-10-08T09', H12)).toBe('9 AM')
+        expect(dayLabel('2026-10-08T12', H12)).toBe('12 PM')
+        expect(dayLabel('2026-10-08T23', H12)).toBe('11 PM')
+        expect(dayName('2026-10-08T14', H12)).toBe('Oct 8, 2 PM')
+        expect(dayName('2026-10-08T14', { hours: '24', zone: true })).toBe('Oct 8, 14:00')
     })
 
     it('finds the dearest day, the latest of equals, so its total is said over its bar', () => {
