@@ -231,6 +231,26 @@ describe('DraftCard', () => {
         ])
     })
 
+    it('clears the text in a click once a reaction is picked, to send the reaction alone', async () => {
+        answer = () => Response.json(draft({ text: '', reaction: '+1', edited: true, hash: 'bbbbbbbbbbbb' }))
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        expect(screen.queryByRole('button', { name: 'Clear text' })).toBeNull()
+        const group = screen.getByRole('radiogroup', { name: 'Reaction' })
+        fireEvent.click(within(group).getByRole('radio', { name: 'Thumbs up' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Clear text' }))
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'In your words' }).value).toBe('')
+        expect(screen.queryByRole('button', { name: 'Clear text' })).toBeNull()
+        expect(screen.getByText('Sent alone, with no reply.')).toBeDefined()
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            "Run 45's draft 1 is in your words now, hash bbbbbbbbbbbb.",
+        )
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/runs/45/drafts/1/edit', body: { text: '', reaction: '+1' } },
+        ])
+    })
+
     it("offers no reaction on a draft for a PR's own comment", async () => {
         await renderRouted(
             <DraftCard draft={draft({ kind: 'pr', stance: null, comment_id: null })} onChange={changed} />,
