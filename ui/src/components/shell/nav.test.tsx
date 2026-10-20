@@ -1,16 +1,14 @@
 import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { mockAttention, mockCapacity, mockReviews } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, LoopState, MemoryState, ReviewSummary } from '@/api/types'
-import { STORAGE_KEY } from '@/lib/seen-reviews'
 import { renderRouted } from '@/test-utils'
 
 import { Nav } from './nav'
 
-beforeEach(() => localStorage.clear())
 afterEach(cleanup)
 
 const WAITING = mockAttention[0] as AttentionItem
@@ -24,7 +22,7 @@ const ITEMS: AttentionItem[] = [
 // A review run that ended with `fields`.
 function ended(id: number, fields: Partial<ReviewSummary>): ReviewSummary {
     const running = mockReviews[0] as ReviewSummary
-    return { ...running, id, status: 'ok', state: 'done', ended_at: '2026-10-08T12:05:00Z', ...fields }
+    return { ...running, id, status: 'ok', state: 'done', ended_at: '2026-10-08T12:05:00Z', seen: false, ...fields }
 }
 
 const TIER: MemoryState['lessons'] = { mode: 'record', words: 'recording', band: 'Recording only.' }
@@ -140,14 +138,13 @@ describe('Nav', () => {
         expect(screen.getByRole('link', { name: 'Memory' }).textContent).toBe('Memory')
     })
 
-    it("counts the reviews whose results are unopened beside Reviews, in their worst finding's color", async () => {
+    it("counts the reviews new to the operator beside Reviews, in their worst finding's color", async () => {
         // Review 3 was seen; 6 and 7 ended since, and 8 still runs.
-        localStorage.setItem(STORAGE_KEY, '[3]')
         const reviews = [
-            ended(8, { state: 'running', status: 'running', ended_at: null }),
+            ended(8, { state: 'running', status: 'running', ended_at: null, verdict: null }),
             ended(7, { verdict: 'clean' }),
             ended(6, { verdict: 'findings', findings: 2, worst: 'major', worst_count: 1 }),
-            ended(3, { verdict: 'findings', findings: 1, worst: 'blocking', worst_count: 1 }),
+            ended(3, { verdict: 'findings', findings: 1, worst: 'blocking', worst_count: 1, seen: true }),
         ]
         await renderNav({ at: '/runs', items: [], reviews })
         expect(screen.getByRole('link', { name: 'Reviews 2 new reviews to read' })).toBeDefined()
@@ -155,10 +152,9 @@ describe('Nav', () => {
         expect(screen.getByTestId('nav-reviews-count').className).toContain('text-status-blocked')
     })
 
-    it('takes the results in as seen the first time this browser reads the reviews', async () => {
-        await renderNav({ items: [], reviews: [ended(6, { verdict: 'clean' })] })
+    it('shows no count beside Reviews when every result is seen', async () => {
+        await renderNav({ items: [], reviews: [ended(6, { verdict: 'clean', seen: true })] })
         expect(screen.getByRole('link', { name: 'Reviews' }).textContent).toBe('Reviews')
-        expect(localStorage.getItem(STORAGE_KEY)).toBe('[6]')
     })
 
     it('names each icon in a compact nav, and gives Attention its total, said in words', async () => {

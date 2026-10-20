@@ -10,10 +10,10 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, review_diff
+from canopy.core import conversation, db, definitions, records, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import load
-from canopy.core.vocab import ResumeReason, RunKind
+from canopy.core.vocab import ResumeReason, RunKind, SeenKind
 from canopy.infra import procs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -654,12 +654,14 @@ def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Sc
     run_id = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer).id
     [line] = scenario.operator("review", "show").out.splitlines()
     assert line.startswith(f"{run_id}  ")
-    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}")
+    # New to the operator until they read it in full (DESIGN §22).
+    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}  new")
     shown = scenario.operator("review", "show", str(run_id)).out
     assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}\ndone, started ")
     assert "\x1b" not in shown
     assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
     scenario.operator("review", "show", "99", code=1)
+    assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}\n")
 
 
 def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
@@ -839,3 +841,46 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
     query = scenario.review(reviews(sha, other), reviewer=reviewer_reports(FINDINGS)).id
     purposes = {r["id"]: r["purpose"] for r in scenario.conn.execute("SELECT id, purpose FROM review_runs")}
     assert purposes == {own: "own", query: "query"}
+
+
+def test_a_review_is_new_to_the_operator_until_they_see_it(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`canopy seen review:ID` marks a review's result seen, as its page does; only the operator's (DESIGN §22)."""
+    sha = head(git_pool)
+    first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
+    second = scenario.review(reviews(sha, "https://github.com/acme/api/pull/9"), reviewer=reviewer_reports(CLEAN)).id
+    running = scenario.starts_review(reviews(sha, "https://github.com/acme/api/pull/10"))
+
+    def new() -> list[int]:
+        return [
+            int(line.split()[0])
+            for line in scenario.operator("review", "show").out.splitlines()
+            if line.endswith("  new")
+        ]
+
+    assert new() == [second, first]
+    # An agent cannot hide a review from the operator by marking it seen.
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "1"}):
+        assert main(["seen", f"review:{first}"]) == 1
+        assert "seen refused (inside_run)" in capsys.readouterr().err
+        # Nor by reading it in full: the show stands, and it stays new.
+        assert main(["review", "show", str(first)]) == 0
+    assert new() == [second, first]
+    for ref, guard in [
+        (f"review:{running.id}", "running"),
+        ("review:99", "unknown"),
+        ("PROJ-1", "unsupported"),
+        ("review:x", "bad_ref"),
+    ]:
+        assert f"seen refused ({guard})" in scenario.operator("seen", f"review:{first}", ref, code=1).err
+    # A refusal marks none of them.
+    assert new() == [second, first]
+
+    marked = scenario.operator("seen", f"review:{first}", f"review:{second}", f"review:{first}")
+    assert marked.out == f"review:{first}, review:{second} marked seen.\n"
+    assert new() == []
+    assert scenario.operator("seen", f"review:{second}").out == "already seen: nothing changed.\n"
+    [mark] = records.fetch_all(scenario.conn, records.Seen, "SELECT * FROM seen WHERE subject = ?", (str(first),))
+    assert (mark.kind, mark.channel) == (SeenKind.REVIEW, "cli")
+    running.finishes()

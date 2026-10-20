@@ -4,6 +4,7 @@ import { CheckCheck } from 'lucide-react'
 
 import { reviewRequestsQuery, reviewsQuery } from '@/api/queries'
 import { OrderToggle } from '@/components/order-toggle'
+import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestFilterBar } from '@/components/pull-request-filter'
 import { ReviewRequestForm } from '@/components/review-request'
@@ -20,14 +21,14 @@ import {
     reviewShown,
 } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
-import { markSeen, useUnseenReviews } from '@/lib/seen-reviews'
+import { unseenOf, useMarkSeen } from '@/lib/seen-reviews'
 
 /**
  * canopy's latest review runs, newest first: the shadow PR reviews it keeps instead of posting them. A PR the operator
  * asked to have reviewed is a row from the moment they ask, waiting on a tick, until its review starts. `?repo=` keeps
- * the reviews of PRs in that repository, and `?q=` those whose PR, ticket, or commit holds every word. A result the
- * operator has not opened is marked new, as the nav counts it, until its page shows it or the header's button marks
- * every one seen.
+ * the reviews of PRs in that repository, and `?q=` those whose PR, ticket, or commit holds every word. A result new to
+ * the operator is marked so, as the nav counts it, until its page shows it or the header's button marks every one seen,
+ * as `canopy seen` does.
  */
 export const Route = createFileRoute('/reviews/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
@@ -43,7 +44,8 @@ function ReviewsPage() {
     const { data: runs } = useQuery(reviewsQuery)
     const { data: requested } = useQuery(reviewRequestsQuery)
     const order = useListOrder('reviews')
-    const unseen = useUnseenReviews(runs)
+    const unseen = unseenOf(runs)
+    const seen = useMarkSeen()
     // Both lists, or none: a request alone in the list would jump down once the runs arrived under it.
     const data = runs === undefined || requested === undefined ? undefined : { runs, requested }
     const count = data === undefined ? 0 : data.runs.length + data.requested.length
@@ -73,8 +75,9 @@ function ReviewsPage() {
                             <Button
                                 variant="ghost"
                                 size="xs"
-                                title="Mark every new review seen"
-                                onClick={() => markSeen(unseen.map((review) => review.id))}
+                                title="Mark every new review seen, as canopy seen does"
+                                disabled={seen.pending}
+                                onClick={() => seen.mark(unseen.map((review) => review.id))}
                             >
                                 <CheckCheck />
                                 {`mark ${unseen.length} seen`}
@@ -86,6 +89,7 @@ function ReviewsPage() {
                         </span>
                     </span>
                 </PanelHeader>
+                <Notice error={seen.error} className="px-3 pt-2" />
                 <PullRequestFilterBar
                     to="/reviews"
                     filter={filter}
@@ -109,7 +113,6 @@ function ReviewsPage() {
                         reviews={ordered('reviews', order, shown.runs)}
                         requested={ordered('reviews', order, shown.requested)}
                         requestedLast={order === 'oldest'}
-                        unseen={new Set(unseen.map((review) => review.id))}
                     />
                 )}
             </Panel>

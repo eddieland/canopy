@@ -308,6 +308,28 @@ test("a review's finding is dismissed on its card, and kept again", async ({ pag
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
 })
 
+test('a review new to the operator is counted in the nav until its page shows it, as canopy seen marks it', async ({
+    page,
+}) => {
+    // The mock operator has seen every review but review 2 (canopy/serve/mock_reviews.py).
+    await page.goto('reviews')
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await expect(nav.getByRole('link', { name: 'Reviews 1 new review to read' })).toBeVisible()
+    const row = page.getByTestId('review-2')
+    await expect(row.getByText('new', { exact: true })).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'mark 1 seen' })).toBeVisible()
+
+    await row.getByRole('link', { name: 'review:2' }).click()
+    await expect(page).toHaveURL(/\/reviews\/2$/u)
+    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible()
+
+    // Kept in the journal, not the page: it is seen after a reload too.
+    await page.goto('reviews')
+    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible()
+    await expect(row.getByText('new', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^mark \d+ seen$/u })).toHaveCount(0)
+})
+
 test("a review's findings are sent to a worker from its list, as a reply on its ticket", async ({ page }) => {
     await page.goto('reviews/4')
     const send = page.getByTestId('send-findings')

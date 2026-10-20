@@ -28,6 +28,7 @@ const REVIEW: ReviewSummary = {
     cost_usd: 0.31,
     started_at: '2026-10-08T11:00:00Z',
     ended_at: '2026-10-08T11:04:00Z',
+    seen: true,
 }
 
 const REQUESTED: RequestedReview = {
@@ -36,10 +37,10 @@ const REQUESTED: RequestedReview = {
     channel: 'web',
 }
 
-function renderReviews(reviews: ReviewSummary[], pr?: boolean, unseen?: ReadonlySet<number>) {
+function renderReviews(reviews: ReviewSummary[], pr?: boolean) {
     const client = new QueryClient()
     client.setQueryDefaults(keys.meta, { enabled: false })
-    return renderRouted(<ReviewsTable reviews={reviews} pr={pr} unseen={unseen} />, { client })
+    return renderRouted(<ReviewsTable reviews={reviews} pr={pr} />, { client })
 }
 
 function renderRequested(requestedLast: boolean) {
@@ -100,10 +101,13 @@ describe('ReviewsTable', () => {
         expect(row.getByText('at 3f9c2a1')).toBeDefined()
     })
 
-    it('marks a review whose result the operator has not opened new, and no other', async () => {
-        await renderReviews([REVIEW, { ...REVIEW, id: 3 }], true, new Set([4]))
+    it('marks a review whose result the operator has not seen new, and no other', async () => {
+        const running = { ...REVIEW, id: 2, state: 'running', ended_at: null, verdict: null, seen: false } as const
+        await renderReviews([{ ...REVIEW, seen: false }, { ...REVIEW, id: 3 }, running])
         const fresh = within(screen.getByTestId('review-4')).getByText('new')
-        expect(tipOf(fresh)).toBe('new: you have not opened it yet')
+        expect(tipOf(fresh)).toBe('new: you have not seen it yet')
+        // Seen, or still running with no result to see.
         expect(within(screen.getByTestId('review-3')).queryByText('new')).toBeNull()
+        expect(within(screen.getByTestId('review-2')).queryByText('new')).toBeNull()
     })
 })

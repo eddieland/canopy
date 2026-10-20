@@ -54,9 +54,8 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
 - The private worker reads the tracker, and writes to it only to file follow-ups, which authorize nothing (§18): it
   is allowed the tracker tools config names as read tools, so a wrong list fails closed, the provider's tools that
   create a ticket, whole, and on GitHub, whose server its PR goes through, the PR tools, which the planner never
-  gets; with no read tools a private run is refused (TRUST_MODEL T6, D044). canopy's definition
-  allows the create tools by name, and OpenCode merges it after the operator's own config, whose last matching rule it
-  overrides (D021, D044), so a deny there cannot take them back. `policy.max_follow_ups = 0` has workers file none and
+  gets; with no read tools a private run is refused (TRUST_MODEL T6, D044), and a deny in the operator's own config
+  cannot take the create tools back (D021). `policy.max_follow_ups = 0` has workers file none and
   records none; only the MCP server's own tool selection, where it has one, takes the tools away. A follow-up a
   private run filed is a public ticket like any other, worked only once the operator labels or starts it.
 - Its phases (§7) come from the journal: `needs_human` after a `blocked` run with no operator message since,
@@ -74,6 +73,13 @@ old PR and branch are the operator's to close.
 `canopy grant` lets the loop keep working one unit at its `implement` or `resume` attempt limit (§8), or one PR at its
 review limit (§21), without raising the limit for every ticket. Grants are only ever added to the policy's limit, so
 lowering the policy lowers it too. A grant resets no count (D030) and dispatches nothing; the overseer still decides.
+
+### What the operator has seen
+
+A result is **new** to the operator until they see it in any channel: a review that ended with a verdict, on its page,
+with `canopy review show ID`, or marked with `canopy seen`. The journal keeps the mark by the subject's reference, so
+every channel agrees on what is new, and another kind of subject joins by its own (Open, below). A mark authorizes
+nothing and no agent reads it; only the operator writes one, so an agent cannot hide a result by marking it seen.
 
 ### Tracker comments in the journal
 
@@ -104,10 +110,13 @@ what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5,
 ### Trust model changes
 
 Private tickets and mirrored comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
-public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does.
+public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks added `seen` to
+T1's verbs that refuse inside a run.
 
 ### Open
 
 - Whether a private worker should have no tracker MCP server at all, and where it would read the ticket's text.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
 - Slack replies, through a bridge or the overseer's MCP (§20). Either needs a T1 change naming Slack user ids.
+- Seen marks beyond reviews: a plan waiting on the operator (§25), each new plan its own subject, then a chore's
+  findings and a run's drafts, each counted where the operator reads it.

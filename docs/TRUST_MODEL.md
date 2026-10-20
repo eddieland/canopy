@@ -138,7 +138,10 @@ Controls:
   dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
   So does `send`, which sends a review's findings to a worker as an operator message on its ticket (§21): an agent
   that could send them could start work in the operator's name. The message names findings by number and never quotes
-  them, so the reviewer's text stays data. So does `gc` (DESIGN §26): an agent that could remove history early
+  them, so the reviewer's text stays data. So does `seen`, which marks a review's result seen, so the web UI no longer
+  counts it new (DESIGN §22): an agent that could mark one could hide from the operator the review it was steered to
+  hide. `canopy review show ID` marks nothing inside a run, and the show stands.
+  So does `gc` (DESIGN §26): an agent that could remove history early
   could remove the transcript that shows what it did, and no flag of it shortens retention, which only the
   operator's private config sets. So does `notice`, when it sets or clears the operator's notice to workers
   (DESIGN §8): a notice reaches every later worker's, review's, and chore's prompt as the operator's words, so an agent
@@ -620,7 +623,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, try a chore as a recorded `canopy chore try` does,
   dismiss a chore's or a review's finding or take that
-  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
+  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, mark reviews seen as
+  `canopy seen` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a

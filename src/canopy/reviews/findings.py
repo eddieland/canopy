@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, db
 from canopy.core import review_result as result
 from canopy.core.conversation import printable
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import ReviewRunStatus, SeenKind
 
 if TYPE_CHECKING:
     import sqlite3
@@ -51,14 +51,23 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
 
 
 def listed(conn: sqlite3.Connection, since: str) -> list[str]:
-    """Return a line for each review run started at or after `since`, newest first, for `canopy review show`."""
+    """Return a line for each review run started at or after `since`, newest first, for `canopy review show`.
+
+    A run that ended with a verdict the operator has not seen ends its line with `new` (DESIGN §22).
+    """
     found: list[str] = []
-    for run in db.review_runs_since(conn, since):
+    runs = db.review_runs_since(conn, since)
+    seen = db.seen_among(conn, SeenKind.REVIEW, [str(run.id) for run in runs])
+    for run in runs:
         stored = result.stored(run.result_json)
         dismissed = len(db.review_dismissals(conn, run.id))
         kept = f" ({dismissed} dismissed)" if dismissed else ""
         verdict = f"{stored.verdict}, {len(stored.findings)} findings{kept}, impact {stored.impact}" if stored else "-"
-        found.append(f"{run.id}  {run.started_at}  {run.status}  {verdict}  {run.pr_url} @ {run.sha[:7]}")
+        fresh = (
+            run.ended_at is not None and stored is not None and stored.verdict is not None and str(run.id) not in seen
+        )
+        line = f"{run.id}  {run.started_at}  {run.status}  {verdict}  {run.pr_url} @ {run.sha[:7]}"
+        found.append(f"{line}  new" if fresh else line)
     return found
 
 

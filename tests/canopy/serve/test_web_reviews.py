@@ -1,7 +1,8 @@
 """The web UI's reviews (DESIGN §21, Reading reviews): canopy's shadow PR review, posted nowhere (D114).
 
 The findings, the diff, and the reviewer's transcript and log are untrusted text. The writes are dismissing a
-finding, as `canopy dismiss review:ID`, and sending some to a worker, as `canopy send review:ID`.
+finding, as `canopy dismiss review:ID`, sending some to a worker, as `canopy send review:ID`, and marking reviews
+seen, as `canopy seen review:ID`.
 """
 
 import json
@@ -245,3 +246,39 @@ def test_findings_sent_from_the_web_reach_the_ticket_as_the_cli_sends_them(backe
     # A retry of the same submission records nothing new.
     again = c.post(url, json=sent, headers=headers).json()
     assert (again["message_id"], again["new"]) == (recorded["message_id"], False)
+
+
+def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backend, tmp_path: Path) -> None:
+    """The mock operator has seen every review but review 2; a mark goes through `canopy seen`'s guards (DESIGN §22)."""
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+
+    def seen() -> list[tuple[int, bool]]:
+        return [(r["id"], r["seen"]) for r in c.get("/api/reviews").json()]
+
+    assert seen() == [(4, True), (3, True), (2, False), (1, True)]
+    assert c.get("/api/reviews/2").json()["review"]["seen"] is False
+    assert c.post("/api/seen", json={"refs": ["review:2"]}, headers={"origin": headers["origin"]}).status_code == 403
+    assert c.post("/api/seen", json={"refs": []}, headers=headers).status_code == 422
+    with backend.open() as ctx:
+        running = db.insert_review_run(
+            ctx.conn,
+            tick_id=1,
+            pr_url=mock_reviews.PR_95,
+            sha="abc1234",
+            ticket=None,
+            repo="web",
+            purpose="request",
+            logs_dir=tmp_path,
+        )
+    for ref, guard in [(f"review:{running}", "running"), ("review:99", "unknown"), ("ABC-099", "unsupported")]:
+        refused = c.post("/api/seen", json={"refs": ["review:2", ref]}, headers=headers)
+        assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
+    assert seen()[3] == (2, False)
+
+    marked = c.post("/api/seen", json={"refs": ["review:2", "review:4", "review:2"]}, headers=headers).json()
+    assert marked == {"refs": ["review:2", "review:4"], "new": ["review:2"]}
+    assert all(s for i, s in seen() if i != running)
+    with backend.open() as ctx:
+        row = ctx.conn.execute("SELECT channel FROM seen WHERE kind = 'review' AND subject = '2'").fetchone()
+        assert row["channel"] == "web"

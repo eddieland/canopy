@@ -8,35 +8,31 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Tip } from '@/components/tip'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import { isNew } from '@/lib/seen-reviews'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
 
 // No PR waiting on a tick: one array, as a default made in the signature would be a new one on every render.
 const NONE_REQUESTED: RequestedReview[] = []
-// No review new to the operator, for the same reason.
-const NONE_UNSEEN: ReadonlySet<number> = new Set()
 
 /**
  * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket,
  * its impact, its PR and the commit it read, cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR
  * are left out, as `RunsTable` leaves out a ticket on the ticket's page. The reviews page passes the PRs the operator
  * asked to have reviewed that no review of has started yet as `requested`, a row each, before the runs, or after them
- * with `requestedLast`: what comes next is the newest end of the list. A review in `unseen`, whose result the operator
- * has not opened (src/lib/seen-reviews.ts), has a dot in the accent after its verdict, said `new` on hover and to a
- * screen reader.
+ * with `requestedLast`: what comes next is the newest end of the list. A review whose result is new to the operator
+ * (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said `new` on hover and to a screen reader.
  */
 export function ReviewsTable({
     reviews,
     requested = NONE_REQUESTED,
     requestedLast = false,
-    unseen = NONE_UNSEEN,
     pr = true,
 }: {
     reviews: ReviewSummary[]
     requested?: RequestedReview[]
     requestedLast?: boolean
-    unseen?: ReadonlySet<number>
     pr?: boolean
 }) {
     const waiting = requested.map((request) => <RequestedRow key={`requested-${request.pr_url}`} request={request} />)
@@ -44,7 +40,7 @@ export function ReviewsTable({
         <ul className="divide-y" data-testid="reviews">
             {!requestedLast && waiting}
             {reviews.map((review) => (
-                <ReviewRow key={review.id} review={review} pr={pr} fresh={unseen.has(review.id)} />
+                <ReviewRow key={review.id} review={review} pr={pr} />
             ))}
             {requestedLast && waiting}
         </ul>
@@ -79,7 +75,7 @@ function RequestedRow({ request }: { request: RequestedReview }) {
     )
 }
 
-function ReviewRow({ review, pr, fresh }: { review: ReviewSummary; pr: boolean; fresh: boolean }) {
+function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
     const sha = (
         <Tip fact={review.sha} mono>
             <span className="readout shrink-0 text-xs text-muted-foreground">
@@ -98,8 +94,8 @@ function ReviewRow({ review, pr, fresh }: { review: ReviewSummary; pr: boolean; 
             <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
                 <Clipped text={verdictText(review)} />
-                {fresh && (
-                    <Tip fact="new: you have not opened it yet">
+                {isNew(review) && (
+                    <Tip fact="new: you have not seen it yet">
                         <span className="inline-flex size-1.5 shrink-0 rounded-full bg-accent">
                             <span className="sr-only">new</span>
                         </span>

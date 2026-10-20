@@ -1,10 +1,10 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, and the web UI)
-calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the command does
-not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is
-within its bound. Agents never write a message: `_run` records a run's report and question from its result line
-(`close_run`), and nothing else a worker can call does.
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `seen`, and the
+web UI) calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the
+command does not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows),
+and the body is within its bound. Agents never write a message: `_run` records a run's report and question from its
+result line (`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). The overseer records one other kind of message, a tracker comment it
@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, memory, outbox, records, review_result, sql
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
 from canopy.infra import lock
 from canopy.infra.text import printable
 
@@ -90,8 +90,8 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
-    # (DESIGN §21).
-    REVIEW: ("dismiss", "send"),
+    # (DESIGN §21), and to mark it seen (§22).
+    REVIEW: ("dismiss", "send", "seen"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -188,8 +188,8 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, plans, dismisses or sends findings, edits or sends drafts, "
-                "pauses, resumes, or collects garbage",
+                "stops, replies, forgets, grants attempts, plans, dismisses or sends findings, marks reviews seen, "
+                "edits or sends drafts, pauses, resumes, or collects garbage",
             )
 
 
@@ -451,6 +451,33 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
             raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
         for number in numbers:
             db.set_review_dismissal(conn, run_id, number, channel=channel)
+
+
+def see(conn: sqlite3.Connection, refs: Sequence[Ref], *, channel: str) -> list[Ref]:
+    """Mark each subject seen by the operator (DESIGN §22): a review run's result, once the run has ended.
+
+    A subject is new to the operator until they see it, on its page or in the CLI; a mark authorizes nothing and no
+    agent reads it. Seeing one again records nothing new. All of `refs` are marked, or none.
+
+    Returns:
+        The subjects not seen before, in the order given.
+
+    Raises:
+        Refused: `unsupported` for a subject whose kind takes no `seen`, `unknown` for a review run that does not exist,
+            and `running` for one that has not ended, which has no result to see yet.
+    """
+    for ref in refs:
+        check_verb(ref, "seen")
+    unique = list(dict.fromkeys(refs))
+    with db.transaction(conn):
+        for ref in unique:
+            run = db.get_review_run(conn, int(ref.id))
+            if run is None:
+                raise Refused("unknown", f"there is no review run {ref.id}")
+            if run.ended_at is None:
+                raise Refused("running", f"{ref} is still running: it has no result to see yet")
+        new = set(db.set_seen(conn, SeenKind.REVIEW, [ref.id for ref in unique], channel=channel))
+    return [ref for ref in unique if ref.id in new]
 
 
 @dataclass(frozen=True)

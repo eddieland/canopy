@@ -21,7 +21,7 @@ import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
 import { counted } from '@/lib/descriptions'
 import { verdictTone } from '@/lib/reviews'
-import { unseenText, useUnseenReviews, worstOf } from '@/lib/seen-reviews'
+import { unseenOf, unseenText, worstOf } from '@/lib/seen-reviews'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
 import { cn } from '@/lib/utils'
@@ -83,7 +83,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
     const attention = useQuery(attentionQuery)
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const waiting = useQuery(loopQuery).data?.memory?.proposals_waiting ?? 0
-    const unseen = useUnseenReviews(useQuery(reviewsQuery).data)
+    const unseen = unseenOf(useQuery(reviewsQuery).data)
     const section = useSection()
     const active = ITEMS.findIndex(({ to }) => to === section)
     // With no section active the highlight is hidden; it keeps a color so it fades rather than flashes.

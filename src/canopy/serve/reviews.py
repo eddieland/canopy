@@ -1,6 +1,7 @@
 """The reviews canopy keeps, as the web UI shows them (DESIGN §21): a shadow PR review, posted nowhere (D114).
 
-Reads only; dismissing a finding goes through `canopy.core.conversation`, as `canopy dismiss review:ID` does.
+Reads only; dismissing a finding goes through `canopy.core.conversation`, as `canopy dismiss review:ID` does, and so
+does marking one seen, as `canopy seen review:ID` does.
 Everything a review holds is untrusted: the reviewer read the PR, the diff is the PR's own text, and its transcript and
 log are the reviewer's output. Text goes out with
 control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.
@@ -8,13 +9,13 @@ control characters dropped, as every page's does, and the diff within `review_di
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, conversation, db, review_diff, review_requests
 from canopy.core import review_result as result
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import ReviewRunStatus, SeenKind
 from canopy.serve.schema import (
     DiffFile,
     DiffHunk,
@@ -32,6 +33,8 @@ from canopy.serve.schema import (
 from canopy.serve.views import lines, new_tokens, raw_output, session_transcript, shown_path, ticket_title
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -47,7 +50,7 @@ def reviews(ctx: Context) -> list[ReviewSummary]:
     Returns:
         At most `RECENT_REVIEWS` runs, each as the reviews list shows it.
     """
-    return [summary(r) for r in db.recent_review_runs(ctx.conn, RECENT_REVIEWS)]
+    return summaries(ctx.conn, db.recent_review_runs(ctx.conn, RECENT_REVIEWS))
 
 
 def requested(ctx: Context) -> list[RequestedReview]:
@@ -79,7 +82,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     diff = diff_view(found) if found is not None else None
     ticket = db.get_ticket(ctx.conn, row.ticket_key) if row.ticket_key else None
     return ReviewDetail(
-        review=summary(row),
+        review=summaries(ctx.conn, [row])[0],
         ticket_title=ticket_title(ticket.title) if ticket is not None else None,
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
@@ -88,7 +91,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         if stored is not None
         else [],
         diff=diff,
-        runs=[summary(r) for r in db.review_runs_of(ctx.conn, row.pr_url)],
+        runs=summaries(ctx.conn, db.review_runs_of(ctx.conn, row.pr_url)),
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
@@ -123,8 +126,18 @@ def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     return raw_output(Path(row.log_path))
 
 
-def summary(row: records.ReviewRun) -> ReviewSummary:
-    """One review run's row, as the reviews list shows it.
+def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> list[ReviewSummary]:
+    """Review runs' rows, as the reviews list shows them, each saying whether the operator has seen it.
+
+    Returns:
+        A summary of each, in their order.
+    """
+    seen = db.seen_among(conn, SeenKind.REVIEW, [str(row.id) for row in rows])
+    return [summary(row, seen=str(row.id) in seen) for row in rows]
+
+
+def summary(row: records.ReviewRun, *, seen: bool) -> ReviewSummary:
+    """One review run's row, as the reviews list shows it, `seen` when the operator has seen it.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
@@ -147,6 +160,7 @@ def summary(row: records.ReviewRun) -> ReviewSummary:
         started_at=db.parse_time(row.started_at),
         ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
         cost_usd=row.cost_usd,
+        seen=seen,
     )
 
 
