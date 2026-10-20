@@ -11,7 +11,7 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from canopy.core import db
+from canopy.core import db, records
 from canopy.core.items import Item, fingerprint, subject
 
 # Events every sink has passed are deleted once they are this old.
@@ -28,13 +28,12 @@ def newest_event_id(conn: sqlite3.Connection) -> int:
     return int(row[0]) if row is not None else 0
 
 
-def sink(conn: sqlite3.Connection, name: str) -> sqlite3.Row | None:
+def sink(conn: sqlite3.Connection, name: str) -> records.NotifySink | None:
     """Return sink `name`'s row, or None if it has never been published to."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM notify_sinks WHERE name = ?", (name,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.NotifySink, "SELECT * FROM notify_sinks WHERE name = ?", (name,))
 
 
-def ensure_sink(conn: sqlite3.Connection, name: str) -> sqlite3.Row:
+def ensure_sink(conn: sqlite3.Connection, name: str) -> records.NotifySink:
     """Return sink `name`'s row, creating it with its cursor at the newest event: a new sink gets no backlog.
 
     Raises:
@@ -69,14 +68,15 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
 
 def events_after(
     conn: sqlite3.Connection, cursor: int, groups: Sequence[str], upto: int | None = None
-) -> list[sqlite3.Row]:
+) -> list[records.NotifyEvent]:
     """Return the events after `cursor`, and up to `upto` if given, in `groups`, oldest first."""
     if not groups:
         return []
     # Only the placeholder count is interpolated; the groups are bound parameters.
     marks = ",".join("?" * len(groups))
     sql = f"SELECT * FROM notify_events WHERE id > ? AND id <= ? AND grp IN ({marks}) ORDER BY id"  # noqa: S608
-    return conn.execute(sql, [cursor, upto if upto is not None else newest_event_id(conn), *groups]).fetchall()
+    params = [cursor, upto if upto is not None else newest_event_id(conn), *groups]
+    return records.fetch_all(conn, records.NotifyEvent, sql, params)
 
 
 def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
@@ -191,7 +191,7 @@ def mark_failed(conn: sqlite3.Connection, sink_name: str, error: str) -> int:
         "UPDATE notify_sinks SET failures = failures + 1, last_error = ? WHERE name = ?", (error[-500:], sink_name)
     )
     row = sink(conn, sink_name)
-    return int(row["failures"]) if row is not None else 0
+    return row.failures if row is not None else 0
 
 
 def waiting(conn: sqlite3.Connection, cursor: int, groups: Sequence[str]) -> int:
