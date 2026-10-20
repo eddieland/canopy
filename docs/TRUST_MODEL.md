@@ -415,7 +415,9 @@ Controls:
   Jira), and on GitHub, whose server PRs go through too, the tools that open, update, and reply on its PR, are allowed
   by name, so a write tool missing from these lists fails closed; the tracker CLIs canopy
   knows (`gh`, `acli`, `jira`) are denied in its bash rules but for `gh pr view`, `gh pr checks`, `gh pr diff`, and
-  `gh run view`, which read a PR and its CI and never the ticket; and other MCP tools are denied by name as for
+  `gh run view`, which read a PR and its CI and never the ticket, and `gh pr edit`, which resolves no issue and so
+  writes only to a PR: its title, body, and base, as the PR update tool does, and its labels, assignees, reviewers,
+  milestone, and projects, which the prompt alone keeps it from; and other MCP tools are denied by name as for
   `canopy-worker` (D084). A run is refused where the worktree's OpenCode config names any of that server's tools,
   since a repository rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and
   to the tracker nothing but the follow-ups it files, and its report and question go to the journal, not the tracker.
