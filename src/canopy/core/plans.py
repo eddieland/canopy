@@ -200,8 +200,9 @@ class NewestPlan(TypedDict):
 class PlanState(TypedDict):
     """A ticket's `plan` key in the overseer's state block (DESIGN §25, Phases and the overseer's part).
 
-    `changes_asked` is an operator message newer than the newest plan and than the latest plan run's start: a reply the
-    planner has not read. `blocked` is the latest plan run ending `blocked` with no operator message since.
+    `changes_asked` is an operator message newer than the newest plan and than the latest plan run's start, while that
+    plan is not approved: a reply the planner has not read. `blocked` is the latest plan run ending `blocked` with no
+    operator message since.
     """
 
     needed: bool
