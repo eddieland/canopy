@@ -1022,25 +1022,18 @@ def _unit(ctx: Context, repo: str | None) -> str | None:
 
 
 def _where(started: dispatch.Started) -> str:
-    """Return where a dispatch's decision says the run works: its slots, or the clones a triage reads, and its desk."""
-    if started.slots:
-        where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
-    else:
-        # A triage leases no slot: it reads the primary clones (DESIGN §25).
-        where = " reading the primary clones"
+    """Return where a dispatch's decision says the run works: its slots, and its desk."""
+    where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
     return where + (f"; desk {started.desk}" if started.desk is not None else "")
 
 
 def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
     """Return what a dispatch's decision says the run works on: its branch, or for a kind counted per ticket, its key.
 
-    A plan or a triage works on no branch: it reads its repositories, and writes a plan, or judges whether the ticket
-    needs one.
+    A plan works on no branch: it reads its repositories, and writes a plan.
     """
     if kind == policy.PLAN:
         return f"plan {key} over {', '.join(repos)}"
-    if kind == policy.NEEDS_PLAN:
-        return f"triage {key}'s plan over {', '.join(repos)}"
     return f"{branch} on {base}" if base is not None else branch
 
 

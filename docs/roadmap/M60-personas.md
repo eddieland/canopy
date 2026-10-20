@@ -38,7 +38,7 @@ in a private directory.
   drop: `canopy`; `skeptic`, for a reviewer or a planner, which names the input that breaks a claim before accepting
   it; `minimalist`, for a worker, which keeps the diff and the PR's text as small as the ticket allows; and
   `explainer`, for a worker on a team's repository, whose PR says why as well as what, for coworkers new to the code.
-- **Out of scope:** a persona for the overseer, a triage, or a chore; a persona that names a model; a persona
+- **Out of scope:** a persona for the overseer or a chore; a persona that names a model; a persona
   per repository in the shared map; the overseer or a ticket's labels choosing one; comparison reports beyond what each
   run records. Whether a review request of a coworker's PR takes a persona of its own is open (§31).
 - **TRUST_MODEL**, in the PR that builds Stage 2: T1 (only the operator chooses a persona, and its text sits below the

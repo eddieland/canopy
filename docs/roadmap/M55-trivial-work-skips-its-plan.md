@@ -64,25 +64,6 @@ Accept: written with the design, before work starts. Live, once built: over a we
 spend page shows triage runs' cost against the planner runs they saved; every waived ticket's PR is one the operator
 agrees needed no plan, or that its review judged `high` and raised `not_trivial`.
 
-Status: in progress. Designed 2026-10-19 (DESIGN §25, Triage before a plan). The design settles what the sketch left
-open: when a triage is due and the guards that hold it to once per ticket; that it reads the named repositories'
-primary clones through links, as a plan's desk links slots; that only a validated result writes the waiver, which
-`unplanned` reads in code and `canopy forget` ends; and that `not_trivial` lasts until the ticket is done or
-forgotten. Open for the operator: the feedback half, which M54's design settles; the sandbox role for
-`plan_triage_cmd`; and whether a waiver sends an event to the sinks. Built 2026-10-19, against the fakes: the four
-private keys; the `needs-plan` run, slotless in a desk linking the primary clones, with `canopy-plan-triage`, one
-prompt for public and private tickets, and its result validated; dispatch's `triage_off`, `triaged`, and `bad_triage`,
-counted within capacity; the waiver, which only a validated `done` `trivial` result writes, `unplanned` reads,
-`canopy plan KEY` undoes, and `canopy forget` ends; the state block's `triage_due` and `waived`; `canopy show` naming
-it; and the TRUST_MODEL lines. Until the open three are settled, a triage runs in no sandbox and a waiver sends no event
-of its own. Then, 2026-10-19, the overseer prompt's triage row: `needs-plan` where `plan.triage_due` is true, before
-any `plan`, and after a failed triage the plan at once, with no `wait`. Then, 2026-10-19, the reviewer's second
-opinion: the harness raises `not_trivial` every tick about a unit whose PR any `done` review judged `high` while its
-ticket's waiver is in force, naming the review and the triage's reason, with no change to the reviewer's prompt or
-result. Then, 2026-10-19, the web UI's plan card, which shows a ticket's triage running, its waiver with the run
-and its reason and, until the implement starts, Ask for a plan to undo it, or the triage that left the ticket to be
-planned; and triage runs as a kind of their own in `canopy spend`, `canopy health`, and the spend page, with the plans
-they waived. Then, 2026-10-19, `policy.trivial` made optional (the operator: a model can tell trivial work without
-being told): the triage prompt carries its own measure, settled work with one reasonable way to do it, and the
-operator's words, where set, take its place; `"on"` without them is no longer a config error. Left: the feedback half
-(M54).
+Status: deferred 2026-10-20. In use, triage judged too few tickets trivial for its runs to save what they cost, so the
+operator chose to plan trivial tickets like any other (D126); what was built against the fakes was removed, and the
+bullets stand as the sketch for when the deferred list's trigger fires.

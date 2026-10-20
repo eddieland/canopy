@@ -181,7 +181,6 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
 | `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |
-| `not_trivial` | A triage waived the ticket's plan, but a review judged its PR high impact: read the PR with that in mind. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `disk_low` | The disk of `.canopy/` or the workspace is under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |

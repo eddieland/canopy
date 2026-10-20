@@ -1,10 +1,10 @@
 # Chores in practice
 
 What engineers may want to use chores for, with worked examples. `build-health.md`, `sentry-triage.md`,
-`canopy-health.md`, `canopy-efficiency.md`, `plan-waivers.md`, and `memory-tickets.md` in this directory are the
+`canopy-health.md`, `canopy-efficiency.md`, and `memory-tickets.md` in this directory are the
 prompts that ship; the rest are ideas to write your own from. The rules are in DESIGN §19.
 
-`canopy chore install <name>` sets up one of the six in the workspace you run it in. It copies the prompt to the
+`canopy chore install <name>` sets up one of the five in the workspace you run it in. It copies the prompt to the
 workspace's `.canopy/chore-prompts/<name>.md`, and the agent the example comes with, if any, from `agents/` here. It
 writes the `[chores.<name>]` table from `<name>.toml` here to its private config, `cwd` set to the workspace root
 where the chore reads canopy's journal, then prints what is left to do, such as the lists to fill in. The copies stay
@@ -100,7 +100,6 @@ Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is t
 | --- | --- | --- | --- | --- |
 | `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, `canopy health --json *` and canopy's other read-only commands allowed |
 | `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with `canopy agents` |
-| `plan-waivers` | Plans triage waived for work that was not trivial: a PR the reviewer judged high impact, a plan the operator asked for after, a worker that had to ask or try again; and triage as a whole too loose, or not worth its cost ([plan-waivers.md](plan-waivers.md)) | `waiver/<key>`, `triage/loose`, `triage/rarely-waives` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health` |
 | `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, `canopy memory lessons`, `proposals`, and `list` allowed with `--json`, tracker and GitHub MCP read tools |
 
 ## Writing a good chore
@@ -261,45 +260,6 @@ timeout_minutes = 15
 - **A finding is a recommendation.** Its title says which kind (`Tune:`, `Disable:`, `Fix:`, `Feature:`), and its
   detail the figures it rests on. Act on it, or answer it with `canopy reply chore:canopy-efficiency '<note>'` ("keep
   the jira server for workers; it is for private tickets"), and the next run leaves it out.
-
-### Worked example: `plan-waivers`
-
-With plans on and `policy.plan_triage = "on"` (DESIGN §25), a cheaper run judges each ticket before its plan, and a
-`trivial` verdict lets the implement go ahead without one. Nobody reads the ticket in between, so the only way to know
-whether triage draws the line where you would is to look at what came after. This weekly check does that, with the
-prompt in [plan-waivers.md](plan-waivers.md). It reads `canopy health --json`'s `waivers`: each plan a triage waived,
-where the waiver stands, the ticket's runs after it, and the highest impact a review judged its PR.
-
-```toml
-[chores.plan-waivers]
-prompt = "~/.config/canopy/chores/plan-waivers.md"
-cmd = 'opencode run --agent canopy-introspect --format json --title={title} {prompt}'
-cwd = "~/work/acme"       # the workspace root
-every_minutes = 1440
-days = ["mon"]
-hours = "08:00-12:00"
-when = "Skip it when the last run found nothing and no plan was waived since."
-timeout_minutes = 15
-```
-
-- **Triage on.** With `policy.plan_triage` off there are no waivers, and the chore says triage looks off.
-- **A four-week window.** A waiver's work takes days to reach a review and a merge, so the prompt reads 28 days and
-  leaves out a waiver whose ticket has no `implement` run yet. A ticket that started over (`canopy forget`), or whose
-  waiver you replaced with your own `canopy plan KEY --skip`, is left out too.
-- **What counts as wrong.** A PR the reviewer judged `high` impact (with `review.agent_prs` on; the `not_trivial`
-  attention item says the same while the ticket is open), a plan you asked for after the waiver, a worker that ended
-  `blocked`, and two or more `implement` runs or failed runs. Each is a `waiver/<key>` finding, with what to look at in
-  the PR before it merges.
-- **The line, tuned.** Three or more wrong waivers, or a quarter of them, raise `triage/loose`, which suggests a
-  sentence for `policy.trivial` in the chore's own words, or a stronger `runtime.plan_triage_cmd`. Triage that waives
-  fewer than one plan in five raises `triage/rarely-waives`: its runs cost more than the planner runs they save, and
-  `policy.plan_triage = "off"` is the cheaper setting.
-- **Its agent comes with it.** The same [`canopy-introspect`](agents/canopy-introspect.md) as canopy's own chores,
-  which `canopy chore install` copies into the workspace. Its prompt runs `canopy health`, `canopy spend`, and
-  `canopy show run:`, and no MCP server.
-- **Not sandboxed.** It reads the journal in `.canopy/`, which the sandbox hides, as for canopy's own chores.
-- **Disagree with a finding.** `canopy reply chore:plan-waivers '<note>'` ("PROJ-12's PR was high impact for the
-  release it rode in on, not for its change"), and the next run leaves it out.
 
 ### Worked example: `memory-tickets`
 

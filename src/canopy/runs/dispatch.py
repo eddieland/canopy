@@ -82,13 +82,11 @@ class Started:
     desk: Path | None = None
     #: Whether the run started its ticket privately, under `tracker.private` (DESIGN §22).
     starts: bool = False
-    #: The repositories a run that leases no slot reads, through their primary clones (DESIGN §25).
-    reads: tuple[str, ...] = ()
 
     @property
     def repos(self) -> tuple[str, ...]:
-        """The repositories the run works in, or reads."""
-        return tuple(s.repo or "" for s in self.slots) or self.reads
+        """The repositories the run works in."""
+        return tuple(s.repo or "" for s in self.slots)
 
 
 @dataclass(frozen=True)
@@ -103,8 +101,8 @@ class Leased:
 class Plan:
     """What a run would do: its branch, its base, its queue label, and its repositories."""
 
-    #: A plan or a triage has no branch (""): it reads the repositories it names and changes none of them, from a desk
-    #: however many it names (DESIGN §25).
+    #: A plan has no branch (""): it reads the repositories it names and changes none of them, from a desk however
+    #: many it names (DESIGN §25).
     branch: str
     #: The branch it stacks on, if `--base` named one.
     base: str | None
@@ -173,9 +171,6 @@ def start(
             cursors=cursors,
         )
         attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
-        if kind == policy.NEEDS_PLAN:
-            # It leases no slot: it reads the primary clones (DESIGN §25).
-            return _spawn_triage(ctx, tick_id=tick_id, key=key, plan=plan, attempt=attempt, limit=limit)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -249,10 +244,11 @@ def check(
 def check_kind(kind: str) -> None:
     """Refuse a retired kind, whose old runs still read.
 
-    `fix-ci` is replaced by a `resume` with the reason `ci` (DESIGN §8), and `split` by follow-up tickets (DESIGN §18).
+    `fix-ci` is replaced by a `resume` with the reason `ci` (DESIGN §8), `split` by follow-up tickets (DESIGN §18),
+    and `needs-plan`, a triage before a plan, by planning every ticket the policy plans (DESIGN §25).
 
     Raises:
-        Refusal: `bad_kind`, for `fix-ci` or `split`.
+        Refusal: `bad_kind`, for `fix-ci`, `split`, or `needs-plan`.
     """
     if kind == policy.RETIRED:
         raise Refusal("bad_kind", "fix-ci is retired: a resume fixes CI now; dispatch resume --reason ci")
@@ -262,6 +258,8 @@ def check_kind(kind: str) -> None:
             "split is retired: a worker files follow-up tickets now, so a request to split is guidance to the "
             "ticket's next implement or resume",
         )
+    if kind == policy.NEEDS_PLAN:
+        raise Refusal("bad_kind", "needs-plan is retired: a ticket that needs a plan is planned; dispatch plan")
 
 
 def runs_dir(ctx: Context) -> Path:
@@ -286,14 +284,12 @@ def desk_path(ctx: Context, key: str) -> Path:
 
 
 def in_desk(kind: str, repos: Sized) -> bool:
-    """Whether a `kind` run over `repos` works in a desk: a joint run, a plan, or a triage.
-
-    A plan's desk holds the plan it replaces; a triage's links the primary clones it reads.
+    """Whether a `kind` run over `repos` works in a desk: a joint run or a plan, whose desk holds the plan it replaces.
 
     Returns:
-        True for a run over several repositories, and for every plan and triage.
+        True for a run over several repositories, and for every plan.
     """
-    return len(repos) > 1 or kind in (policy.PLAN, policy.NEEDS_PLAN)
+    return len(repos) > 1 or kind == policy.PLAN
 
 
 def valid_slug(value: str) -> bool:
@@ -404,11 +400,8 @@ def _plan(
     starts = not private and _starts_privately(ctx, key)
     _check_reasons(kind, reasons, cursors, base=base)
     names = _check_repos(ctx, key, repos)
-    if kind in (policy.PLAN, policy.NEEDS_PLAN):
-        if kind == policy.PLAN:
-            _check_plan(ctx, key, slug=slug, base=base)
-        else:
-            _check_triage(ctx, key, slug=slug, base=base)
+    if kind == policy.PLAN:
+        _check_plan(ctx, key, slug=slug, base=base)
         return Plan(branch="", base=None, label=configured, repos=names, private=private or starts, starts=starts)
     _check_planned(ctx, key, kind)
     branch = _branch(ctx, key, kind, slug, names)
@@ -550,9 +543,8 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
     """Refuse a plan that would describe work already started or handed on, or that could not read its ticket (§25).
 
     Raises:
-        Refusal: a slug (`bad_slug`) or a base (`bad_base`) is given; the ticket (`bad_plan`) already has a branch; its
-            triage is due (`untriaged`); or (`no_read_tools`) no tracker read tools are known for the
-            planner.
+        Refusal: a slug (`bad_slug`) or a base (`bad_base`) is given; the ticket (`bad_plan`) already has a branch; or
+            (`no_read_tools`) no tracker read tools are known for the planner.
     """
     if slug is not None:
         raise Refusal("bad_slug", "a plan writes down the work and names no branch; leave out --slug")
@@ -562,36 +554,9 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
     if ticket is not None and ticket.branch:
         # Its first implement recorded the branch: a plan now would describe work already started (DESIGN §25, Open).
         raise Refusal("bad_plan", f"{key} already has work on {ticket.branch}; a started ticket is not planned")
-    if plans.triage_refusal(ctx.conn, ctx.config.policy, key) is None:
-        # The operator's own `canopy plan` sets the ticket's setting, so its triage is no longer due and this passes.
-        raise Refusal("untriaged", f"{key} is due a triage before its plan; dispatch `needs-plan` first")
     if ctx.config.tracker.tools() is None:
         raise Refusal(
             "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"
-        )
-
-
-def _check_triage(ctx: Context, key: str, *, slug: str | None, base: str | None) -> None:
-    """Refuse a triage that is not due, or that could not read its ticket (DESIGN §25, Triage before a plan).
-
-    A ticket is triaged once, before its first plan, and only for a plan the policy asks for: the operator's own
-    `plan` for a ticket is planned whatever a triage would say.
-
-    Raises:
-        Refusal: a slug (`bad_slug`) or a base (`bad_base`) is given; triage is off (`triage_off`); the ticket has had a
-            triage run, however it ended (`triaged`); no triage is due for another reason (`bad_triage`); or
-            (`no_read_tools`) no tracker read tools are known for the triage agent.
-    """
-    if slug is not None:
-        raise Refusal("bad_slug", "a triage judges the work and names no branch; leave out --slug")
-    if base is not None:
-        raise Refusal("bad_base", "a triage judges the work and starts from no branch; leave out --base")
-    refused = plans.triage_refusal(ctx.conn, ctx.config.policy, key)
-    if refused is not None:
-        raise Refusal(*refused)
-    if ctx.config.tracker.tools() is None:
-        raise Refusal(
-            "no_read_tools", "no tracker read tools are known for the triage; set tracker.mcp_server and read_tools"
         )
 
 
@@ -599,8 +564,7 @@ def _check_planned(ctx: Context, key: str, kind: str) -> None:
     """Refuse work a plan the operator approved should govern, but does not (DESIGN §25).
 
     A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
-    one and no triage waived it, and an `implement` or `resume` never follows a plan whose file is no longer the text
-    the operator approved.
+    one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
 
     Raises:
         Refusal: an `implement` for a ticket that needs a plan and has none approved (`unplanned`); an `implement` or
@@ -612,11 +576,12 @@ def _check_planned(ctx: Context, key: str, kind: str) -> None:
     ticket = db.get_ticket(ctx.conn, key)
     plan = plans.current(ctx.conn, key)
     approved = plan is not None and plan.status is PlanStatus.APPROVED
-    if kind == RunKind.IMPLEMENT and not approved and plans.needs_plan(ctx.conn, ctx.config.policy.plan, ticket):
+    setting = ticket.plan_setting if ticket is not None else None
+    if kind == RunKind.IMPLEMENT and not approved and plans.needed(ctx.config.policy.plan, setting):
         waiting = "its plan waits on the operator's approval" if plan is not None else "it has no plan approved"
-        due = plans.triage_refusal(ctx.conn, ctx.config.policy, key) is None
-        then = "dispatch `needs-plan`, as its triage is due" if due else "dispatch `plan` or wait for it"
-        raise Refusal("unplanned", f"{key} needs a plan before its implement, and {waiting}; {then}")
+        raise Refusal(
+            "unplanned", f"{key} needs a plan before its implement, and {waiting}; dispatch `plan` or wait for it"
+        )
     if plan is not None and approved and plans.approved_text(ctx.state_dir, plan) is None:
         path = plans.path_for(ctx.state_dir, key, plan.run_id)
         raise Refusal(
@@ -714,7 +679,7 @@ def _guard(
 
     Raises:
         Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit, or the ticket for a
-            plan or a triage, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`),
+            plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`),
             or the workers are at capacity (`capacity`). A refusal about one unit names its repository.
     """
     running = db.running_runs(ctx.conn, "runs")
@@ -724,7 +689,7 @@ def _guard(
     if key in planned:
         raise Refusal("running", f"this dry run already dispatched {key}")
     if kind in policy.TICKET_KINDS:
-        # A plan or a triage is the ticket's, not a unit's: its count is per ticket.
+        # A plan is the ticket's, not a unit's: its count is per ticket.
         done = policy.ticket_attempts(ctx.conn, kind).get(key, 0)
         ticket_limit = policy.ticket_limit(ctx.conn, ctx.config, key, kind)
         refused = policy.blocked(key, kind, counts={kind: done}, limit=ticket_limit, cooldown_until=None)
@@ -936,80 +901,6 @@ def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
         labels=ctx.config.tracker.labels,
         private=private,
     )
-
-
-def _spawn_triage(ctx: Context, *, tick_id: int, key: str, plan: Plan, attempt: int, limit: int) -> Started:
-    """Render a triage's prompt, record the run with the repositories it reads, and spawn its `canopy _run` (§25).
-
-    It leases no slot: `_run` links each repository's primary clone from its desk. Its prompt carries the key, the
-    repositories, `policy.trivial` if set, and the operator's messages, never the standing instructions or the notice,
-    which are for runs that change code or read CI.
-
-    Returns:
-        The run that started, with no slots and the repositories it reads.
-
-    Raises:
-        Refusal: `bad_prompt` when the prompt cannot be read or does not render, a refusal of the start record's check
-            again, or `spawn_failed`.
-    """
-    cfg = ctx.config
-    desk = desk_path(ctx, key)
-    values = {
-        "KEY": key,
-        "SLOT": str(desk),
-        "REPOSITORIES": _triage_repositories_note(ctx, plan.repos, desk),
-        "AUTHORIZATION": prompts.triage_authorization(key, cfg.tracker.labels, private=plan.private),
-        "TRIVIAL": cfg.policy.trivial.strip() or "None: judge by the measure above.",
-        # One prompt for public and private tickets, as a plan's: a private one's conversation holds the operator's
-        # messages, and a triage's own report is never in it.
-        "OPERATOR_MESSAGES": (
-            conversation.prompt_conversation(ctx.conn, key)
-            if plan.private
-            else conversation.prompt_operator_messages(ctx.conn, key)
-        ),
-        "TRACKER_PROVIDER": cfg.tracker.provider,
-        "TIMEOUT_MINUTES": str(cfg.runtime.plan_triage_timeout_minutes),
-        "MAX_REASON": str(plans.MAX_TRIAGE_REASON),
-    }
-    required = prompts.REQUIRED_OPERATOR if conversation.has_operator_messages(ctx.conn, key) else ()
-    try:
-        prompt = prompts.render_triage(cfg, values, required=required)
-    except (OSError, prompts.PromptError) as e:
-        raise Refusal("bad_prompt", str(e)) from e
-    run_id = db.insert_run(
-        ctx.conn,
-        tick_id=tick_id,
-        key=key,
-        kind=policy.NEEDS_PLAN,
-        branch="",
-        slots=(),
-        runs_dir=runs_dir(ctx),
-        works_units=False,
-        started=outbox.run_started(cfg, key=key, kind=policy.NEEDS_PLAN, branch="", attempt=attempt, limit=limit),
-        private=plan.private,
-        check=functools.partial(_check_start_again, ctx, key, plan),
-        reads=plan.repos,
-    )
-    pid = _launch(ctx, run_id, prompt)
-    return Started(
-        run_id=run_id, branch="", slots=(), pid=pid, label=plan.label, desk=desk, starts=plan.starts, reads=plan.repos
-    )
-
-
-def _triage_repositories_note(ctx: Context, repos: Sequence[str], desk: Path) -> str:
-    """Return a triage's `{{REPOSITORIES}}` section: each repository it reads, through a link to its primary clone."""
-    lines = [
-        (
-            f"`{desk}` is a desk, a directory holding one link per repository's primary clone, as the clone holds it "
-            "now, which may lag its base branch. Read each repository through its link. Change nothing in them."
-        ),
-        "",
-    ]
-    for name in repos:
-        found = ctx.workspace.repo(name)
-        summary = f" {found.summary}" if found is not None and found.summary else ""
-        lines.append(f"- `{name}` at `{desk / name}`.{summary}")
-    return "\n".join(lines)
 
 
 def _launch(ctx: Context, run_id: int, prompt: str) -> int:

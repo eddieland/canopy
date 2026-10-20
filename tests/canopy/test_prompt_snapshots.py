@@ -21,7 +21,6 @@ DEFINITION = "core/__snapshots__/test_definitions/test_each_agent_definition_as_
 #: agent only inside its definition, so the definition's snapshot holds it.
 HELD_BY: dict[str, str] = {
     "prompts/overseer.md": DEFINITION.format("canopy-overseer"),
-    "prompts/plan-triage.md": "runs/__snapshots__/test_plan_triage/test_the_triage_prompt[public].md",
     "prompts/reviewer.md": "reviews/__snapshots__/test_reviews/test_the_reviewer_prompt[defaults].md",
     **{
         f"prompts/worker-{kind}.md": (

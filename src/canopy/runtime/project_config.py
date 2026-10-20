@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 def refusal(places: Iterable[Path], *, tracker_server: str | None = None) -> str | None:
     """Why an agent may not start where the runtime reads config from `places`, or None when it may.
 
-    `tracker_server` is the tracker's MCP server, for a run that may call only its read tools: a private run, a plan,
-    or a triage. Shadowing is checked first, in every place, then the tracker's tools.
+    `tracker_server` is the tracker's MCP server, for a run that may call only its read tools: a private run or a plan.
+    Shadowing is checked first, in every place, then the tracker's tools.
 
     Returns:
         A message for the operator naming every file that refuses the run, or None.

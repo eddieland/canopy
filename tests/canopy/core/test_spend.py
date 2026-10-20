@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, plans, spend
+from canopy.core import db, spend
 from canopy.runtime.report import ToolUse, Usage
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
@@ -256,7 +256,6 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
     assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced] == [
         ("overseer", 8, 1),
         ("workers", 2, 1),  # the running fix-ci is not counted yet
-        ("triage", 0, 0),
         ("plans", 0, 0),
         ("chores", 2, 1),
         ("reviews", 1, 0),
@@ -293,11 +292,11 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     out = capsys.readouterr().out.splitlines()
     start = spend.window(now, 3)[0]
     assert out[0] == f"Spend over 3 days, since {start:%Y-%m-%d} UTC, as the runtime reported it."
-    header = ["day", "overseer", "idle", "workers", "triage", "plans", "chores", "reviews", "dry", "run", "total"]
+    header = ["day", "overseer", "idle", "workers", "plans", "chores", "reviews", "dry", "run", "total"]
     assert out[2].split() == header
     days = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
-    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
+    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
     words = [line.split() for line in out]
     assert ["idle", "3", "$0.50"] in words
     assert ["not", "idle", "2", "$1.50"] in words
@@ -454,7 +453,7 @@ def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
 def triage(
     conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None, status: str = "done"
 ) -> int:
-    """A triage before a plan (DESIGN §25): a `runs` row of kind `needs-plan`, with no branch."""
+    """An old triage before a plan (M55): a `runs` row of kind `needs-plan`, with no branch."""
     return branchless(conn, "needs-plan", tick_id, key, started, cost, status)
 
 
@@ -476,32 +475,26 @@ def branchless(
     return cursor.lastrowid
 
 
-def test_triage_and_plan_runs_are_kinds_of_their_own_beside_the_plans_triage_waived(
+def test_plan_runs_are_a_kind_of_their_own_with_old_triages_among_them(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """A triage before a plan (M55) was removed: its old runs count as plan runs, and no worker's."""
     now = noon_today()
     conn = canopy_env.journal()
     t = tick(conn, earlier(now, 0), 1.0)
-    for key in ("A-1", "A-2", "A-3", "A-4"):
+    for key in ("A-1", "A-2", "A-3"):
         ticket(conn, key)
     run(conn, t, "A-1", earlier(now, 0), 2.0, None)
-    plans.record_waiver(conn, "A-1", triage(conn, t, "A-1", earlier(now, 0, 1), 0.05), "One word.")
-    triage(conn, t, "A-2", earlier(now, 0, 1), 0.04)  # judged it needs its plan
+    triage(conn, t, "A-1", earlier(now, 0, 1), 0.05)
+    triage(conn, t, "A-2", earlier(now, 0, 1), 0.04)
     plan_run(conn, t, "A-2", earlier(now, 0, 1), 0.5)
     triage(conn, t, "A-3", earlier(now, 0, 1), None, status="failed")
-    # A waiver from before the window is not the window's, however long its ticket took.
-    plans.record_waiver(conn, "A-4", triage(conn, t, "A-4", earlier(now, 3), 0.05), "One value.")
 
     found = spend.breakdown(conn, now, 1)
-    assert (found.totals.workers, found.totals.triage, found.totals.plans) == (2.0, pytest.approx(0.09), 0.5)
+    assert (found.totals.workers, found.totals.plans) == (2.0, pytest.approx(0.59))
     assert found.totals.total == pytest.approx(3.59)  # each dollar once, in its own kind
-    assert found.waived == 1
-    assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced][1:4] == [
-        ("workers", 1, 0),
-        ("triage", 3, 1),
-        ("plans", 1, 0),
-    ]
-    # A ticket's own runs are all of them, its triage and its plan included.
+    assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced][1:3] == [("workers", 1, 0), ("plans", 4, 1)]
+    # A ticket's own runs are all of them, its old triage and its plan included.
     assert [(s.key, s.runs, s.cost_usd) for s in found.tickets if s.key in {"A-1", "A-2"}] == [
         ("A-1", 2, pytest.approx(2.05)),
         ("A-2", 2, pytest.approx(0.54)),
@@ -509,9 +502,8 @@ def test_triage_and_plan_runs_are_kinds_of_their_own_beside_the_plans_triage_wai
 
     assert main(["spend", "--days", "1"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[3].split()[3:6] == ["$2.00", "$0.09", "$0.50"]  # workers, then triage, then plans
-    assert "Triage waived 1 plan, each a planner run saved." in out
-    assert out[-1] == "No cost reported: 1 of 3 triage runs."
+    assert out[3].split()[3:5] == ["$2.00", "$0.59"]  # workers, then plans
+    assert out[-1] == "No cost reported: 1 of 4 plan runs."
 
 
 def first_call(sent: int, written: int) -> Usage:
@@ -639,7 +631,7 @@ def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, ki
     """The run table leads, by its `started_at` index, so the window's cost is its own runs', not the whole history's.
 
     A journal in a test is too small for a slow plan to show in its time, so the plan is what is held. Workers and
-    triages share `runs`, told apart by kind, which the index does not cover: each run in the window is read for it.
+    plans share `runs`, told apart by kind, which the index does not cover: each run in the window is read for it.
     """
     conn = journals.open(tmp_path / "canopy.db")
     table, which = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)

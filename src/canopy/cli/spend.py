@@ -26,7 +26,6 @@ GROUP_LABELS: dict[spend.Group, str] = {
 KIND_LABELS: dict[spend.Kind, str] = {
     "overseer": "overseer runs",
     "workers": "worker runs",
-    "triage": "triage runs",
     "plans": "plan runs",
     "chores": "chore runs",
     "reviews": "review runs",
@@ -36,7 +35,6 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("overseer", "overseer"),
     ("idle", "idle"),
     ("workers", "workers"),
-    ("triage", "triage"),
     ("plans", "plans"),
     ("chores", "chores"),
     ("reviews", "reviews"),
@@ -67,11 +65,10 @@ _TOOL_WIDTH = 32
 def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     """Print what agent runs cost per day, by kind, and the ticks by what they bought, beside what got done.
 
-    The overseer, workers, triages before a plan, plan runs, chores, and reviews, as the agent runtime
-    reported each; dry runs apart from the live ticks, and idle ticks' share of the overseer's spend. Then the tickets
-    marked done, the spend for each, the plans triage waived, and the costliest tickets, and the tools whose calls put
-    the most into context; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions
-    snapshot.
+    The overseer, workers, plan runs, chores, and reviews, as the agent runtime reported each; dry runs apart from the
+    live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each, and
+    the costliest tickets, and the tools whose calls put the most into context; --json adds every ticket, PR, and
+    tool, and each kind's first model calls by definitions snapshot.
     """
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
@@ -155,9 +152,6 @@ def _tickets(found: Breakdown) -> list[str]:
         lines = [f"{found.done} ticket{'s' if found.done != 1 else ''} marked done{each}."]
     else:
         lines = ["No ticket marked done."]
-    if found.waived:
-        plans = "plan" if found.waived == 1 else "plans"
-        lines.append(f"Triage waived {found.waived} {plans}, each a planner run saved.")
     if not found.tickets:
         return lines
     lines.append(f"{'ticket':<{_KEY_WIDTH}}{'runs':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}  done")

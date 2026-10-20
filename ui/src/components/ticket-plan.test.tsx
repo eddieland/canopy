@@ -5,7 +5,6 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import { triage } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { PlanFile, PlanSummary, PlanThreadView, TicketPlans } from '@/api/types'
 
@@ -37,7 +36,6 @@ const PLANS: TicketPlans = {
     policy: 'approve',
     setting: null,
     planning: null,
-    triage: null,
     changes_asked: null,
     threads: [],
     plans: [EARLIER, PLAN],
@@ -79,7 +77,7 @@ const server: Middleware = {
 function answer(method: string, path: string, text: string): unknown {
     if (path.endsWith('/plan')) {
         const { action } = JSON.parse(text) as { action: string }
-        return { action, already: false, plan: 2, superseded: null, waived: null }
+        return { action, already: false, plan: 2, superseded: null }
     }
     if (path.endsWith('/file')) {
         return { sha256: 'new-hash', size: 40 }
@@ -208,16 +206,6 @@ describe('TicketPlan', () => {
 
             renderPlan({ newest: null, plans: [], planning: 51 })
             expect(screen.getByText('no plan yet: run 51 is writing one')).toBeDefined()
-        })
-
-        it('says a triage is judging whether it needs a plan, or that its waiver means it gets none', () => {
-            const running = triage({ status: 'running', verdict: null, waived: false, undoable: false, reason: null })
-            const { unmount } = renderPlan({ newest: null, plans: [], triage: running })
-            expect(screen.getByText('no plan yet: run 7 is judging whether it needs one')).toBeDefined()
-            unmount()
-
-            renderPlan({ newest: null, plans: [], triage: triage() })
-            expect(screen.getByText('no plan: triage run 7 judged it trivial and waived it')).toBeDefined()
         })
     })
 

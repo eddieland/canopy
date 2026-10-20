@@ -11,7 +11,7 @@ from canopy.runtime.opencode import definitions
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 SKILL_MARKER = "  # canopy: skill rule\n"
 READS_MARKER = "  # canopy: tracker reads\n"
-TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER, agents.PLAN_TRIAGE]
+TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER]
 
 
 def test_the_bundled_files_are_the_agents_and_skills_by_their_place_in_a_config_directory() -> None:
