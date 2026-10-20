@@ -124,9 +124,7 @@ export function PlanCard({
                     </Button>
                     {note !== null && <span className="text-xs text-muted-foreground">{note}</span>}
                 </div>
-                <Notice error={decide.error} reserve>
-                    {said}
-                </Notice>
+                <Notice error={decide.error}>{said}</Notice>
             </PanelFooter>
         </>
     )

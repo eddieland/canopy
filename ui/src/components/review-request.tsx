@@ -92,9 +92,7 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     data-testid="review-request-notes"
                 />
             </div>
-            <Notice error={request.error} reserve>
-                {said}
-            </Notice>
+            <Notice error={request.error}>{said}</Notice>
         </form>
     )
 }
@@ -160,9 +158,7 @@ export function ReviewRequestStatus({
                     <p className="text-sm break-words whitespace-pre-wrap">{request.notes}</p>
                 </div>
             )}
-            <Notice error={stop.error} reserve>
-                {said}
-            </Notice>
+            <Notice error={stop.error}>{said}</Notice>
         </div>
     )
 }

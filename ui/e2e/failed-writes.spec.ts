@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 import { E2E_SECRET } from './secret.ts'
 import { settled, signIn } from './helpers.ts'
 
-// A write that fails says so in canopy's words, keeps what the operator wrote, and moves nothing on the page. Every
+// A write that fails says so in canopy's words, under what was clicked, and keeps what the operator wrote. Every
 // write here is answered by the route, so the root server's journal never changes.
 
 const REPLIES = '**/api/tickets/ABC-102/replies'
@@ -53,12 +53,7 @@ test('a reply that reaches no server, or a failed one, says so in words', async 
     await expect(said).toHaveText('canopy failed (502): it may not have been done')
 })
 
-// The page's top in one frame for each test id, so a scroll as a button is clicked moves them all alike.
-function tops(ids: readonly string[]): number[] {
-    return ids.map((id) => document.querySelector(`[data-testid=${id}]`)?.getBoundingClientRect().top ?? 0)
-}
-
-test('a refused Stop says why and moves nothing below its actions', async ({ page }) => {
+test('a refused Stop says why under its button, which stays where it was', async ({ page }) => {
     // Panels rise into place as a page opens; with motion reduced they rest where they end, and nothing moves alone.
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.route('**/api/tickets/ABC-102/stop', (route) =>
@@ -66,17 +61,20 @@ test('a refused Stop says why and moves nothing below its actions', async ({ pag
     )
     await page.goto('tickets/ABC-102')
     await settled(page)
-    const ids = ['ticket-actions', 'ticket-runs'] as const
-    const below = async () => {
-        const [actions = 0, runs = 0] = await page.evaluate(tops, ids)
-        return runs - actions
+    const actions = page.getByTestId('ticket-actions')
+    const stop = actions.getByRole('button', { name: 'Stop', exact: true })
+    // From the top of its panel, so a scroll as the button is clicked moves both alike.
+    const offset = async () => {
+        const [panel, button] = await Promise.all([actions.boundingBox(), stop.boundingBox()])
+        return (button?.y ?? 0) - (panel?.y ?? 0)
     }
-    const before = await below()
+    const before = await offset()
 
-    await page.getByTestId('ticket-actions').getByRole('button', { name: 'Stop', exact: true }).click()
-    await expect(page.getByTestId('ticket-actions').getByRole('alert')).toHaveText(
-        'refused (not_started): ABC-102 was not started',
-    )
+    await stop.click()
+    const said = actions.getByRole('alert')
+    await expect(said).toHaveText('refused (not_started): ABC-102 was not started')
     // Within a pixel: layout rounds the same place to a hair either side of it.
-    expect(await below()).toBeCloseTo(before, 0)
+    expect(await offset()).toBeCloseTo(before, 0)
+    const [button, line] = await Promise.all([stop.boundingBox(), said.boundingBox()])
+    expect(button !== null && line !== null && line.y >= button.y + button.height).toBe(true)
 })

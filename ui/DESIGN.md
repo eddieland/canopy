@@ -617,8 +617,7 @@ side.
   so a failure shows within about two seconds, and nothing refetches it after but the button or the stream. A page of
   many panels over one read (Spend) shows it once, in its first panel, and leaves out the rest.
 - **`PanelFooter`** (`src/components/panel.tsx`): a panel's foot, the mirror of its `PanelHeader`: its actions under a
-  hairline, default-size buttons in a line, then the line that says what they will do, then what one did (`Notice`,
-  with `reserve`).
+  hairline, default-size buttons in a line, then the line that says what they will do, then what one did (`Notice`).
   A `sticky` foot stays at the bottom of the page while its panel scrolls over it, as a sticky header stays at its
   top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
   what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
@@ -1302,13 +1301,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly. Until then Forget is the quietest of the row, a ghost
   button in `status-failed` text at its end, since the loudest button is the one clicked first. The line under the
-  actions is empty until one has said something: what the ticket is, private or public, is its chip. It is held at
-  one line while empty (`Notice` with `reserve`) wherever it sits under a panel's foot, so the first thing it says
-  moves nothing below it. A failure that is not a refusal says what happened in canopy's words, never the browser's
-  (`failedText` in `src/lib/outcomes.ts`): no answer at all is `canopy did not answer: is canopy loop running?`, and a
-  status with no words of its own says whether the action was done, `nothing was done` for a 4xx and
-  `it may not have been done` for a 5xx, which may come after the write. The header's Pause and Tick now say the same
-  on hover. A public ticket
+  actions is absent until one has said something: what the ticket is, private or public, is its chip. No empty line
+  is held for it, since a blank band at a panel's foot reads as a layout fault; it appears under the button that was
+  just clicked, so what moves is below the operator's eye. A failure that is not a refusal says what happened in
+  canopy's words, never the browser's (`failedText` in `src/lib/outcomes.ts`): no answer at all is
+  `canopy did not answer: is canopy loop running?`, and a status with no words of its own says whether the action was
+  done, `nothing was done` for a 4xx and `it may not have been done` for a 5xx, which may come after the write. The
+  header's Pause and Tick now say the same on hover. A public ticket
   has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
   `Public: remove its queue label to stop it, or start it privately.`
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
