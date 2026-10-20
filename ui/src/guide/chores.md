@@ -20,7 +20,7 @@ test as Tuesday, that three PRs are failing for one reason, and which of forty S
   is worth it, guided by a `when` line in your words, such as "skip it on weekends unless the last run found something".
 
 What it can't do is change anything. A chore edits no file, pushes no branch, posts no comment, and files no ticket;
-the agent it runs under has no tools for it. Its only output is its findings, and what to do about them is yours, or
+the agent it runs under has no write tools. Its only output is its findings, and what to do about them is yours, or
 a ticket's. That's deliberate: a chore reads text from people outside your queue, and an agent that reads strangers'
 words shouldn't hold a pen. When you already know what to change, that's a ticket, not a chore.
 
