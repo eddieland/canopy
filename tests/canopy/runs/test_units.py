@@ -58,7 +58,7 @@ def done(prs: dict[str, str], titles: dict[str, str] | None = None) -> str:
 
 
 def slots_of(conn: sqlite3.Connection, run_id: int) -> dict[str, Path]:
-    return {str(s["repo"]): Path(s["slot_path"]) for s in db.run_slots(conn, run_id)}
+    return {str(s.repo): Path(s.slot_path) for s in db.run_slots(conn, run_id)}
 
 
 def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
@@ -84,8 +84,8 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     for name in ("api", "web"):
         assert ws.remote_head(name, BRANCH) == git("rev-parse", "HEAD", cwd=slots[name])
     # Each unit has the ticket's branch and its own PR; a PR for a repository the run was not in is not recorded.
-    units = {u["repo"]: u for u in db.units(conn, "PROJ-1")}
-    assert {r: (u["branch"], u["pr_url"]) for r, u in units.items()} == {
+    units = {u.repo: u for u in db.units(conn, "PROJ-1")}
+    assert {r: (u.branch, u.pr_url) for r, u in units.items()} == {
         "api": (BRANCH, PRS["api"]),
         "web": (BRANCH, PRS["web"]),
     }
@@ -269,7 +269,7 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         )
         assert updated.out == "updated PROJ-1 (api)\n"
         [unit] = db.units(conn, "PROJ-1")
-        assert (unit["repo"], unit["phase"], unit["last_review_id"], unit["branch"]) == (
+        assert (unit.repo, unit.phase, unit.last_review_id, unit.branch) == (
             "api",
             "ci_red",
             reviewed,
@@ -283,7 +283,7 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human")
         ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase == "needs_human"
-        assert [u["phase"] for u in db.units(conn, "PROJ-1")] == ["ci_red"]
+        assert [u.phase for u in db.units(conn, "PROJ-1")] == ["ci_red"]
 
         ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "web", "--detail", PRS["web"])
         ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "api", "--detail", PRS["api"])
@@ -304,7 +304,7 @@ def test_a_merge_conflict_is_a_units_phase(ws_scenario: Scenario) -> None:
     assert "the conflicted phase belongs to one unit: name its repository with --repo" in refused.err
     ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted")
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
+    assert (unit.repo, unit.phase) == ("web", "conflicted")
     ticket = present(db.get_ticket(conn, "PROJ-1"))
     assert ticket.phase is None
 
@@ -316,7 +316,7 @@ def test_untrusted_review_is_a_units_phase(ws_scenario: Scenario) -> None:
     assert "the untrusted_review phase belongs to one unit: name its repository with --repo" in refused.err
     ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review")
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")
+    assert (unit.repo, unit.phase) == ("api", "untrusted_review")
     ticket = present(db.get_ticket(conn, "PROJ-1"))
     assert ticket.phase is None
 

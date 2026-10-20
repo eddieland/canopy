@@ -163,8 +163,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   migration, and applies every migration to a journal with data in it and fails on any row lost. Two PRs that take the
   same version conflict on the companion: the one merged second renumbers its migration and companion both.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
-  (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
-  it, and an old one when a PR already changes its queries. `tests/canopy/core/test_records.py` holds each row type to
+  (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. Every table has one, and a new table gets its row
+  type in the PR that adds it. `tests/canopy/core/test_records.py` holds each row type to
   its table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
   field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
   helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.

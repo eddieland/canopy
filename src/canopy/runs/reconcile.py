@@ -74,7 +74,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     returned = _close_dead_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    held = {str(s["lease_id"]) for slots in running_slots.values() for s in slots}
+    held = {s.lease_id for slots in running_slots.values() for s in slots}
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
@@ -165,8 +165,8 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
         "run_id": run["id"],
         "ticket": run["ticket_key"],
         "pid": run["pid"],
-        "slots": [s["slot_path"] for s in slots],
-        "repos": [s["repo"] for s in slots],
+        "slots": [s.slot_path for s in slots],
+        "repos": [s.repo for s in slots],
     }
     # `_run` is gone, but a worker it started may not be. Stop it before its slots go back to their pools.
     dead_runs.kill_agent("runs", run, log, fields)
@@ -176,25 +176,25 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
     objects = tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
     tidied = True
     for slot in slots:
-        where = {**fields, "slot": slot["slot_path"], "repo": slot["repo"]}
-        link = slot["git_link"]
+        where = {**fields, "slot": slot.slot_path, "repo": slot.repo}
+        link = slot.git_link
         if not tidy.tidy(
             ctx.runner,
-            Path(slot["slot_path"]),
+            Path(slot.slot_path),
             link=bytes(link) if link is not None else None,
-            base=str(slot["base_branch"]),
+            base=str(slot.base_branch),
             objects=objects,
             log=log,
             fields=where,
         ):
             tidied = False
-            returned.add(str(slot["lease_id"]))  # kept for the operator: not returned as a stale lease either
+            returned.add(slot.lease_id)  # kept for the operator: not returned as a stale lease either
             outcomes.append("kept")
             continue
-        outcome = ctx.pool_of(PoolKind(slot["pool"]), slot["repo"]).return_slot(
-            Path(slot["slot_path"]), lease_id=str(slot["lease_id"]), lease_holder=str(slot["lease_holder"])
+        outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
+            Path(slot.slot_path), lease_id=slot.lease_id, lease_holder=slot.lease_holder
         )
-        returned.add(str(slot["lease_id"]))
+        returned.add(slot.lease_id)
         outcomes.append(outcome.value)
     if tidied:
         tidy.remove_objects(objects, log)

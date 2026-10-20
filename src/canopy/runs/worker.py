@@ -54,6 +54,7 @@ from canopy.runtime import project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
@@ -347,18 +348,18 @@ class _Slot:
         return replace(self, git=_Git(ctx.runner, self.path, self.repo, env))
 
     @classmethod
-    def of(cls, ctx: Context, row: sqlite3.Row) -> _Slot:
-        repo = str(row["repo"])
-        path = Path(row["slot_path"])
+    def of(cls, ctx: Context, row: records.RunSlot) -> _Slot:
+        repo = str(row.repo)
+        path = Path(row.slot_path)
         return cls(
             repo,
             path,
-            str(row["lease_id"]),
-            str(row["lease_holder"]),
-            str(row["base_branch"]),
+            row.lease_id,
+            row.lease_holder,
+            str(row.base_branch),
             _Git(ctx.runner, path, repo),
             hostgit.read_link(path),
-            PoolKind(row["pool"]),
+            row.pool,
         )
 
 

@@ -85,13 +85,13 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
         assert main(implement("api"), runner=runner) == 0
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
-        assert slot["pool"] == PoolKind.CANOPY
-        assert Path(slot["slot_path"]) == ws.root / pool.POOLS_DIR / "api" / "1" / "api"
-        assert canopy_rows(conn) == [("api", slot["slot_path"], "canopy:PROJ-1")]
+        assert slot.pool == PoolKind.CANOPY
+        assert Path(slot.slot_path) == ws.root / pool.POOLS_DIR / "api" / "1" / "api"
+        assert canopy_rows(conn) == [("api", slot.slot_path, "canopy:PROJ-1")]
         assert main(["_run", "1"], runner=runner) == 0
     run = present(db.get_run(conn, 1))
     assert run["status"] == RunStatus.DONE
-    assert canopy_rows(conn) == [("api", slot["slot_path"], None)]
+    assert canopy_rows(conn) == [("api", slot.slot_path, None)]
     assert ws.remote_head("api", BRANCH) is not None
     # treehouse was never asked.
     assert not treehouse_state.exists()
@@ -107,7 +107,7 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
         assert main(implement("api"), runner=runner) == 0
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
-        assert slot["pool"] == PoolKind.TREEHOUSE
+        assert slot.pool == PoolKind.TREEHOUSE
         # The operator switches while the run is in flight.
         use(canopy_env, "canopy")
         assert main(["_run", "1"], runner=runner) == 0

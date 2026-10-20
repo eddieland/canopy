@@ -122,7 +122,7 @@ def test_dry_run_ticket_set_records_the_phase_only(scenario: Scenario) -> None:
     assert (row["phase"], row["done"]) == (None, 0)
     # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["phase"], unit["last_review_id"]) == ("merged", None)
+    assert (unit.phase, unit.last_review_id) == ("merged", None)
     assert [t.key for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
@@ -195,7 +195,7 @@ def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
     assert (row["last_comment_id"], row["done"]) == ("10001", 1)
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["repo"], unit["last_review_id"]) == ("repo", "2026-10-07T20:58:50Z")
+    assert (unit.repo, unit.last_review_id) == ("repo", "2026-10-07T20:58:50Z")
 
 
 def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool: GitPool) -> None:
@@ -240,7 +240,7 @@ def test_a_review_cursor_is_a_time(scenario: Scenario, value: str) -> None:
     assert "a review cursor is the newest handled item's time in UTC" in refused.err
     scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", REVIEWED)
     [unit] = db.units(scenario.conn, "PROJ-1")
-    assert unit["last_review_id"] == "2026-10-07T20:58:50Z"
+    assert unit.last_review_id == "2026-10-07T20:58:50Z"
 
 
 def test_status_and_attention_ages(scenario: Scenario) -> None:

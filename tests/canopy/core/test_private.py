@@ -68,8 +68,8 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
     assert "# canopy private worker: implement" in str(argv[-1])
     assert run.status == "blocked"
     [report, question] = db.messages_of(conn, conversation.TICKET, KEY, 10)
-    assert (report["kind"], report["body"], report["run_id"]) == ("report", "half done", run.id)
-    assert (question["kind"], question["body"]) == ("question", QUESTION)
+    assert (report.kind, report.body, report.run_id) == ("report", "half done", run.id)
+    assert (question.kind, question.body) == ("question", QUESTION)
 
     # The question is on the attention list, raised by the harness, and in `canopy show`.
     scenario.tick(*waits(KEY, rationale="waiting on the operator"))
@@ -77,12 +77,12 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
     [item] = [i for i in attention.listed(ctx) if i.reason == "awaiting_reply"]
     assert item.ticket_key == KEY
     # That tick read the question: the web UI marks only what came after it as waiting for a tick.
-    assert db.acknowledged_message_id(conn) == question["id"]
+    assert db.acknowledged_message_id(conn) == question.id
     assert QUESTION in item.detail
     shown = scenario.operator("show", KEY).out
     assert QUESTION in shown
-    assert f"Message {question['id']} waits on your answer" in shown
-    assert f"awaiting your reply to message {question['id']}" in scenario.operator("status").out
+    assert f"Message {question.id} waits on your answer" in shown
+    assert f"awaiting your reply to message {question.id}" in scenario.operator("status").out
 
     # `canopy reply` during the loop's wait ends it, and the next tick resumes the ticket with the reply.
     reply = "Blue, to match the header."
@@ -187,7 +187,7 @@ def test_reply_refuses_an_unknown_ticket_stop_a_public_one_and_reply_is_bounded_
     # The same reply again, after an uncertain result, is the same submission.
     assert "nothing new recorded" in scenario.operator("reply", KEY, "go ahead").out
     [message] = db.messages_of(scenario.conn, conversation.TICKET, KEY, 10)
-    assert (message["source"], message["kind"], message["channel"], message["body"]) == (
+    assert (message.source, message.kind, message.channel, message.body) == (
         "operator",
         "reply",
         "cli",
@@ -202,7 +202,7 @@ def test_a_reply_answers_the_latest_question(scenario: Scenario) -> None:
     with mock.patch.object(sys, "stdin", io.StringIO("B\n")):
         scenario.operator("reply", KEY)
     reply = present(db.get_message(conn, question + 1))
-    assert (reply["body"], reply["answers"]) == ("B", question)
+    assert (reply.body, reply.answers) == ("B", question)
     assert conversation.latest_question(conn, KEY) is None
 
 
@@ -354,7 +354,7 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     assert {s["status"] for s in pool(treehouse_state)} == {"available"}
     assert attention.from_runs(conn) == []
     [report] = db.run_messages(conn, int(run["id"]))
-    assert "canopy stop --now" in report["body"]
+    assert "canopy stop --now" in report.body
 
 
 def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
@@ -417,7 +417,7 @@ def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path, 
             (ended, status, result),
         )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(2)
-    found = [(m["run_id"], m["kind"], m["body"], m["source"]) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
+    found = [(m.run_id, m.kind, m.body, m.source) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
     assert found == [
         (2, "report", "ended blocked", "worker"),
         (2, "question", "Which one?", "worker"),
@@ -446,7 +446,7 @@ def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, con
     assert conversation.close_run(conn, cfg, run, RunStatus.BLOCKED, result)
     event = conn.execute("SELECT fields FROM notify_events WHERE kind = 'run.ended'").fetchone()
     question = db.messages_of(conn, "ticket", KEY, 10)[-1]
-    assert json.loads(event[0])["message"] == question["id"]
+    assert json.loads(event[0])["message"] == question.id
     assert outbox.run_ended(cfg, run, RunStatus.DONE, "{}")(None) is not None
 
 

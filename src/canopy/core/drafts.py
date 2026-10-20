@@ -123,7 +123,7 @@ def _run_prs(conn: sqlite3.Connection, run_id: int, key: str) -> dict[str, str]:
         Each PR's URL, to its repository.
     """
     repos = {str(r["repo"]) for r in conn.execute("SELECT repo FROM run_slots WHERE run_id = ?", (run_id,))}
-    return {str(u["pr_url"]): str(u["repo"]) for u in db.units(conn, key) if u["pr_url"] and u["repo"] in repos}
+    return {str(u.pr_url): str(u.repo) for u in db.units(conn, key) if u.pr_url and u.repo in repos}
 
 
 def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: JsonValue) -> None:

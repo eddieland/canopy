@@ -107,7 +107,7 @@ def test_a_trivial_verdict_waives_the_plan_and_the_implement_follows_unplanned(
     ticket = present(db.get_ticket(scenario.conn, KEY))
     waiver = present(plans.waiver(scenario.conn, ticket))
     assert (waiver.run_id, waiver.reason) == (ran.id, REASON)
-    assert [(m["kind"], m["body"]) for m in db.run_messages(scenario.conn, ran.id)] == [("report", REASON)]
+    assert [(m.kind, m.body) for m in db.run_messages(scenario.conn, ran.id)] == [("report", REASON)]
     assert plans.history(scenario.conn, KEY) == []
 
     # So `unplanned` lets the implement through, and its worker never hears the triage's reason.
@@ -372,7 +372,7 @@ def test_a_review_that_judges_a_waived_tickets_pr_high_raises_not_trivial(
     implement = scenario.run(worker=pushes())
     assert implement.status == RunStatus.DONE
     pr = "https://example.test/pr/1"
-    assert [u["pr_url"] for u in db.units(scenario.conn, KEY)] == [pr]
+    assert [u.pr_url for u in db.units(scenario.conn, KEY)] == [pr]
     report = {"status": "done", "verdict": "clean", "impact": impact, "summary": "It changes the retry policy."}
     reviewed = scenario.review(reviews(head(git_pool), pr, ticket=KEY), reviewer=reviewer_reports(report))
     assert "trivial" not in reviewed.prompt

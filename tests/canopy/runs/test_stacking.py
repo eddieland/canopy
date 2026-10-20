@@ -59,11 +59,11 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
     run = stacked(scenario)
 
     slot = slot_of(scenario.conn, run.id)
-    assert (run.status, run.branch, slot["base_branch"]) == ("done", "agent/PROJ-2-second", FIRST)
+    assert (run.status, run.branch, slot.base_branch) == ("done", "agent/PROJ-2-second", FIRST)
     assert decisions(scenario.conn, int(run.row["tick_id"])) == [
         (
             "dispatch:implement",
-            f"run 2: agent/PROJ-2-second on {FIRST} in repo at {slot['slot_path']}; label {LABEL}",
+            f"run 2: agent/PROJ-2-second on {FIRST} in repo at {slot.slot_path}; label {LABEL}",
         )
     ]
     assert subjects(git_pool, "agent/PROJ-2-second") == ["PROJ-2: stacked", "PROJ-1: the blocker", "initial"]
@@ -85,7 +85,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
     review = dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.REVIEW], base=FIRST)
     resume = scenario.run(review, worker=pushes(SECOND, "PROJ-2: review fix"))
-    assert (resume.status, slot_of(scenario.conn, resume.id)["base_branch"]) == ("done", FIRST)
+    assert (resume.status, slot_of(scenario.conn, resume.id).base_branch) == ("done", FIRST)
     assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in read(resume)
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
@@ -93,7 +93,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     retarget = scenario.run(
         merged, worker=worker_does(["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{SECOND}"])
     )
-    assert (retarget.status, slot_of(scenario.conn, retarget.id)["base_branch"]) == ("done", "main")
+    assert (retarget.status, slot_of(scenario.conn, retarget.id).base_branch) == ("done", "main")
     text = read(retarget)
     assert "This ticket is not stacked on another ticket's branch." in text
     assert ": branch `agent/PROJ-2-second` from `main`; PR: " in text
@@ -195,7 +195,7 @@ def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: Gi
         *waits("PROJ-1", rationale="ci_running"), dispatches("PROJ-2", slug="second", base=FIRST), worker=commits
     )
     [second] = then.runs
-    assert (second.status, slot_of(scenario.conn, second.id)["base_branch"]) == ("done", FIRST)
+    assert (second.status, slot_of(scenario.conn, second.id).base_branch) == ("done", FIRST)
 
     ticks = [int(r["id"]) for r in scenario.conn.execute("SELECT id FROM ticks ORDER BY id")]
     assert [[a for a, _ in decisions(scenario.conn, t)] for t in ticks] == [

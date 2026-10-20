@@ -10,7 +10,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db
+from canopy.core import conversation, db, records
 from canopy.infra import resources
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -39,7 +39,7 @@ def comment(comment_id: str = "10234", *, key: str = KEY, author: str = AUTHOR, 
     return [key, "--comment", comment_id, "--author", author, "--at", at]
 
 
-def mirrored(conn: sqlite3.Connection, key: str = KEY) -> list[sqlite3.Row]:
+def mirrored(conn: sqlite3.Connection, key: str = KEY) -> list[records.Message]:
     return db.messages_of(conn, conversation.TICKET, key, 100)
 
 
@@ -57,13 +57,13 @@ def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(scenario: Scenar
     with scenario.ticking() as tick_id:
         assert "mirrored comment 10234 on PROJ-1 as message 1 (tracker)" in scenario.overseer(*mirror(*comment())).out
         [message] = mirrored(conn)
-        assert (message["source"], message["kind"], message["channel"]) == ("tracker", "comment", "tracker")
-        assert (message["comment_id"], message["author"], message["commented_at"]) == (
+        assert (message.source, message.kind, message.channel) == ("tracker", "comment", "tracker")
+        assert (message.comment_id, message.author, message.commented_at) == (
             "10234",
             AUTHOR,
             "2026-10-08T10:05:13.000Z",
         )
-        assert (message["body"], message["truncated"], message["run_id"]) == (
+        assert (message.body, message.truncated, message.run_id) == (
             "Looks good, but the button should be blue.",
             0,
             None,
@@ -75,7 +75,7 @@ def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(scenario: Scenar
         assert "comment 10234 on PROJ-1 is already message 1; nothing new recorded" in again
     with scenario.ticking() as later:
         scenario.overseer(*mirror(*comment()))
-        assert [m["id"] for m in mirrored(conn)] == [1]
+        assert [m.id for m in mirrored(conn)] == [1]
         assert decisions(conn, tick_id) == [
             (KEY, "mirror", f"comment 10234 by {AUTHOR} at 2026-10-08T10:05:13.000Z: message 1, tracker"),
             (KEY, "mirror", "comment 10234: already message 1"),
@@ -95,8 +95,8 @@ def test_the_body_is_read_from_stdin_and_cut_to_its_bound(scenario: Scenario) ->
     with mock.patch.object(sys, "stdin", io.StringIO(f"\n{long}\n")):
         assert "(tracker, truncated)" in scenario.overseer(*mirror(*comment(), body=None)).out
         [message] = mirrored(scenario.conn)
-        assert message["body"] == "x" * conversation.MAX_MIRRORED
-        assert message["truncated"] == 1
+        assert message.body == "x" * conversation.MAX_MIRRORED
+        assert message.truncated is True
 
 
 def test_mirror_refuses_what_it_cannot_record_and_records_each_refusal(
@@ -132,7 +132,7 @@ def test_a_tick_mirrors_at_most_its_limit(scenario: Scenario) -> None:
             scenario.overseer(*mirror(*comment("1")))
             scenario.overseer(*mirror(*comment("2")))
             scenario.overseer(*mirror(*comment("3")), code=1)
-            assert [m["comment_id"] for m in mirrored(conn)] == ["1", "2"]
+            assert [m.comment_id for m in mirrored(conn)] == ["1", "2"]
             assert decisions(conn, tick_id)[-1][1] == "refused:mirror_limit"
             # The rest wait for the next tick, past the cursor.
             assert mirror_cursor(conn) == "2"
@@ -169,7 +169,7 @@ def test_worker_comments_are_mirrored_with_source_worker(scenario: Scenario) -> 
     with scenario.ticking():
         assert "(worker)" in scenario.overseer(*mirror(*comment("1"), body="CANOPY: Opened PR 7.")).out
         scenario.overseer(*mirror(*comment("2"), body="> CANOPY: Opened PR 7.\nThanks, merging."))
-    assert [(m["source"], m["kind"], m["run_id"]) for m in mirrored(scenario.conn)] == [
+    assert [(m.source, m.kind, m.run_id) for m in mirrored(scenario.conn)] == [
         ("worker", "comment", None),
         ("tracker", "comment", None),
     ]
@@ -220,7 +220,7 @@ def test_the_overseer_mirrors_through_a_heredoc_with_the_ticks_delimiter(scenari
         state = scenario.state()
         assert state["mirror"] == {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": delimiter}
         [message] = mirrored(scenario.conn)
-        assert message["body"] == body
+        assert message.body == body
         assert not pwned.exists()
         assert "mirror=1" in str(ticked.tick.summary)
 
@@ -250,4 +250,4 @@ def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path:
     # Its whole comment history is mirrored once, worker comments the comment cursor had passed included.
     assert mirror_cursor(conn, "OLD-1") is None
     [message] = mirrored(conn, "OLD-1")
-    assert (message["comment_id"], message["author"], message["truncated"]) == (None, None, 0)
+    assert (message.comment_id, message.author, message.truncated) == (None, None, False)

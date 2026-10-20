@@ -81,7 +81,7 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     proj1 = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert proj1["phase"] is None
     [unit] = db.units(conn, "PROJ-1")  # a phase about the PR is the unit's
-    assert (unit["phase"], unit["last_ci_run_id"]) == ("ci_running", None)  # a dry run never advances cursors
+    assert (unit.phase, unit.last_ci_run_id) == ("ci_running", None)  # a dry run never advances cursors
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0  # nothing was dispatched
     assert ticked.runs == []
     assert [c[0] for c in json.loads(treehouse_state.read_text())["calls"]] == ["status"]

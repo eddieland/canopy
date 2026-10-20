@@ -75,7 +75,7 @@ def test_a_sandboxed_workers_commits_are_pushed_from_the_run_directory_and_the_s
     assert pushed is not None  # `_run`'s own push read the commit from the run's directory
     # The commit was only ever in the run's directory: the shared one never had it.
     assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")  # back on origin/main
     assert git("for-each-ref", "refs/worktree", cwd=slot) == ""
     assert not objects_of(scenario.env, run.id).exists()
@@ -89,7 +89,7 @@ def test_an_unsandboxed_run_leaves_the_directory_empty_and_its_slot_alone(
     commits = worker_does(hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"))
     run = scenario.run(dispatches(slug="work"), worker=commits)
 
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     # Not tidied: HEAD stays on the worker's commit, which `_run` pushed, as before the object directory.
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head(BRANCH)
     assert not objects_of(scenario.env, run.id).exists()
@@ -118,7 +118,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     primary, _ = worktree_pool
     conn = scenario.conn
     run_id = dispatch(conn, InlineRunner())
-    slot = Path(slot_of(conn, run_id)["slot_path"])
+    slot = Path(slot_of(conn, run_id).slot_path)
     link = (slot / ".git").read_bytes()
     own = present(hostgit.own_git_dir(slot, link))
     sandboxed_worker_then_kill(scenario.env, conn, run_id, slot)
@@ -148,7 +148,7 @@ def test_without_tidying_the_run_directory_cannot_go(
     """The control for the tests above: deleting the run's objects as they are breaks `gc` in the primary clone."""
     primary, _ = worktree_pool
     run_id = dispatch(conn, InlineRunner())
-    slot = Path(slot_of(conn, run_id)["slot_path"])
+    slot = Path(slot_of(conn, run_id).slot_path)
     sandboxed_worker_then_kill(canopy_env, conn, run_id, slot)
     for path in sorted(objects_of(canopy_env, run_id).rglob("*"), reverse=True):
         path.unlink() if path.is_file() else path.rmdir()

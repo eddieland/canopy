@@ -103,7 +103,7 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
         branch=str(row["branch"]) if row["branch"] else None,
         phase=str(row["phase"]) if row["phase"] else None,
         active_at=db.parse_time(str(row["active_at"])),
-        running_run=int(running["id"]) if running is not None else None,
+        running_run=running.id if running is not None else None,
         reviews=len(reviews),
         latest_review=summary(reviews[0]) if reviews else None,
         review_request=review_request(request) if request is not None else None,

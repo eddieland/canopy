@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 def conversation_of(conn: sqlite3.Connection, key: str = KEY) -> list[tuple[str, str, str, int | None]]:
     """Each message on `key`, oldest first: who wrote it, what it is, its body, and the message it answers."""
     return [
-        (str(m["source"]), str(m["kind"]), str(m["body"]), m["answers"])
+        (str(m.source), str(m.kind), str(m.body), m.answers)
         for m in db.messages_of(conn, conversation.TICKET, key, 100)
     ]
 

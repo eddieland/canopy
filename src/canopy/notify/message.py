@@ -16,8 +16,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import quote
 
-from canopy.core import contract, db
+from canopy.core import contract, db, records
 from canopy.core.items import Item, age
+from canopy.core.vocab import RunStatus
 
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
@@ -142,19 +143,19 @@ class Event:
     fields: Mapping[str, object]
 
     @classmethod
-    def of(cls, row: sqlite3.Row) -> Event:
+    def of(cls, row: records.NotifyEvent) -> Event:
         """Read an outbox row.
 
         Returns:
             The event. Fields that do not parse as a JSON object are read as none.
         """
         try:
-            parsed: object = json.loads(str(row["fields"]))
+            parsed: object = json.loads(row.fields)
         except json.JSONDecodeError:
             parsed = None
         # The event's own keys come first in the `json` format; a field of the same name would shadow them.
         fields = {str(k): v for k, v in parsed.items() if k not in _OWN} if isinstance(parsed, dict) else {}
-        return cls(int(row["id"]), str(row["kind"]), str(row["at"]), fields)
+        return cls(row.id, row.kind, row.at, fields)
 
     @property
     def line(self) -> str:
@@ -300,18 +301,18 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
     """
     ticks = Counter(str(r[0]) for r in conn.execute("SELECT status FROM ticks WHERE started_at >= ?", (since,)))
     started = Counter(str(r[0]) for r in conn.execute("SELECT kind FROM runs WHERE started_at >= ?", (since,)))
-    ended_rows = conn.execute("SELECT * FROM runs WHERE ended_at >= ? ORDER BY id", (since,)).fetchall()
-    ended = Counter(str(r["status"]) for r in ended_rows)
+    ended_rows = records.fetch_all(conn, records.Run, "SELECT * FROM runs WHERE ended_at >= ? ORDER BY id", (since,))
+    ended = Counter(str(r.status) for r in ended_rows)
     named = titles(conn)
     done: list[DoneRun] = [
-        {"ticket": r["ticket_key"], "title": named.get(r["ticket_key"]), "run": r["id"], "pr": _pr(r["result_json"])}
+        {"ticket": r.ticket_key, "title": named.get(r.ticket_key), "run": r.id, "pr": _pr(r.result_json)}
         for r in ended_rows
-        if r["status"] == "done"
+        if r.status is RunStatus.DONE
     ]
     blocked: list[BlockedRun] = [
-        {"ticket": r["ticket_key"], "title": named.get(r["ticket_key"]), "run": r["id"]}
+        {"ticket": r.ticket_key, "title": named.get(r.ticket_key), "run": r.id}
         for r in ended_rows
-        if r["status"] == "blocked"
+        if r.status is RunStatus.BLOCKED
     ]
     oldest = min((i.since for i in items), default=None)
     return Digest(

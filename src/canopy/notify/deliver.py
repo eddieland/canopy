@@ -22,6 +22,7 @@ from canopy.infra import procs
 from canopy.notify import journal, message
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.items import Item
     from canopy.infra import logs
@@ -138,10 +139,10 @@ def status(ctx: Context) -> list[SinkStatus]:
         found.append(
             SinkStatus(
                 name,
-                row["last_delivery_at"],
-                int(row["failures"]),
-                row["last_error"],
-                journal.waiting(ctx.conn, int(row["cursor"]), groups),
+                row.last_delivery_at,
+                row.failures,
+                row.last_error,
+                journal.waiting(ctx.conn, row.cursor, groups),
             )
         )
     return found
@@ -201,13 +202,13 @@ def _deliver(
     groups = [g for g in sink.events if g in _POINT_GROUPS]
     # Read first: a detached `_run` may record an event while this sink is served, and the cursor must not pass it.
     cursor = journal.newest_event_id(ctx.conn)
-    events = [message.Event.of(e) for e in journal.events_after(ctx.conn, int(row["cursor"]), groups, cursor)]
+    events = [message.Event.of(e) for e in journal.events_after(ctx.conn, row.cursor, groups, cursor)]
     change = journal.diff(ctx.conn, name, items, dismissed) if "attention" in sink.events else None
     digest = None
     if _digest_due(row, sink, now) and sink.digest_every_minutes is not None:
         # The first digest covers one interval back.
         first = db.format_time(now - timedelta(minutes=sink.digest_every_minutes))
-        since = str(row["last_digest_at"] or first)
+        since = row.last_digest_at or first
         digest = message.digest(ctx.conn, items, since=since, now=now)
     msg = message.Message(
         name, ctx.repo, path, change, len(items), events, digest, now, titles=message.titles(ctx.conn), ui=ui
@@ -241,15 +242,15 @@ def _deliver(
     return Delivery(name, "failed", failure)
 
 
-def _batching(row: sqlite3.Row, sink: Sink, now: datetime) -> bool:
+def _batching(row: records.NotifySink, sink: Sink, now: datetime) -> bool:
     """Whether the sink is inside its batch window.
 
     Returns:
         True when it batches and its last delivery was less than `batch_minutes` ago; never before its first.
     """
-    if sink.batch_minutes is None or row["last_delivery_at"] is None:
+    if sink.batch_minutes is None or row.last_delivery_at is None:
         return False
-    return now - db.parse_time(str(row["last_delivery_at"])) < timedelta(minutes=sink.batch_minutes)
+    return now - db.parse_time(row.last_delivery_at) < timedelta(minutes=sink.batch_minutes)
 
 
 def _urgent(change: journal.Diff | None, events: Iterable[message.Event]) -> bool:
@@ -265,9 +266,9 @@ def _urgent(change: journal.Diff | None, events: Iterable[message.Event]) -> boo
     )
 
 
-def _digest_due(row: sqlite3.Row, sink: Sink, now: datetime) -> bool:
+def _digest_due(row: records.NotifySink, sink: Sink, now: datetime) -> bool:
     if sink.digest_every_minutes is None:
         return False
-    if row["last_digest_at"] is None:
+    if row.last_digest_at is None:
         return True
-    return now - db.parse_time(str(row["last_digest_at"])) >= timedelta(minutes=sink.digest_every_minutes)
+    return now - db.parse_time(row.last_digest_at) >= timedelta(minutes=sink.digest_every_minutes)

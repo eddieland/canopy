@@ -30,7 +30,7 @@ def ticket_plans(ctx: Context, key: str) -> TicketPlans | None:
         return None
     found = plans.history(ctx.conn, key)
     running = db.running_run_of(ctx.conn, key)
-    planning = int(running["id"]) if running is not None and running["kind"] == RunKind.PLAN else None
+    planning = running.id if running is not None and running.kind == RunKind.PLAN else None
     asked = plans.changes_asked(ctx.conn, ticket)
     return TicketPlans(
         needed=plans.needed(ctx.config.policy.plan, ticket.plan_setting),

@@ -65,7 +65,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           "repo": "repo",
           "branch": "agent/PROJ-1-retry",
           "pr_url": "https://example.test/acme/repo/pull/7",
-          "phase": "ci_failed",
+          "phase": "ci_red",
           "cursors": {
             "review": null,
             "ci": "5551"

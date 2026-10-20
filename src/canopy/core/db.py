@@ -530,16 +530,18 @@ def set_pr_title(conn: sqlite3.Connection, pr_url: str, title: str) -> None:
     )
 
 
-def units(conn: sqlite3.Connection, key: str) -> list[sqlite3.Row]:
+def units(conn: sqlite3.Connection, key: str) -> list[records.TicketUnit]:
     """Return `key`'s units, by repository."""
-    return conn.execute("SELECT * FROM ticket_units WHERE ticket_key = ? ORDER BY repo", (key,)).fetchall()
+    return records.fetch_all(
+        conn, records.TicketUnit, "SELECT * FROM ticket_units WHERE ticket_key = ? ORDER BY repo", (key,)
+    )
 
 
-def all_units(conn: sqlite3.Connection) -> dict[str, list[sqlite3.Row]]:
+def all_units(conn: sqlite3.Connection) -> dict[str, list[records.TicketUnit]]:
     """Return every ticket's units, by ticket key, each list by repository."""
-    found: dict[str, list[sqlite3.Row]] = {}
-    for row in conn.execute("SELECT * FROM ticket_units ORDER BY ticket_key, repo"):
-        found.setdefault(str(row["ticket_key"]), []).append(row)
+    found: dict[str, list[records.TicketUnit]] = {}
+    for row in records.fetch_all(conn, records.TicketUnit, "SELECT * FROM ticket_units ORDER BY ticket_key, repo"):
+        found.setdefault(row.ticket_key, []).append(row)
     return found
 
 
@@ -774,9 +776,9 @@ def reasons_in(row: sqlite3.Row) -> tuple[ResumeReason, ...]:
     return tuple(r for r in ResumeReason if r in named)
 
 
-def run_slots(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
+def run_slots(conn: sqlite3.Connection, run_id: int) -> list[records.RunSlot]:
     """Return the slots run `run_id` leased, by repository."""
-    return conn.execute("SELECT * FROM run_slots WHERE run_id = ? ORDER BY repo", (run_id,)).fetchall()
+    return records.fetch_all(conn, records.RunSlot, "SELECT * FROM run_slots WHERE run_id = ? ORDER BY repo", (run_id,))
 
 
 def run_reads(conn: sqlite3.Connection, run_id: int) -> list[str]:
@@ -787,18 +789,20 @@ def run_reads(conn: sqlite3.Connection, run_id: int) -> list[str]:
     return [r.repo for r in rows]
 
 
-def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, list[sqlite3.Row]]:
+def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, list[records.RunSlot]]:
     """Return the slots of each run in `run_ids`, by run id, each list by repository."""
-    found: dict[int, list[sqlite3.Row]] = {i: [] for i in run_ids}
+    found: dict[int, list[records.RunSlot]] = {i: [] for i in run_ids}
     if not run_ids:
         return found
     # Only the placeholder count is interpolated; the run ids are bound parameters.
-    rows = conn.execute(
+    rows = records.fetch_all(
+        conn,
+        records.RunSlot,
         f"SELECT * FROM run_slots WHERE run_id IN ({','.join('?' * len(run_ids))}) ORDER BY run_id, repo",  # noqa: S608
         list(run_ids),
     )
     for row in rows:
-        found[int(row["run_id"])].append(row)
+        found[row.run_id].append(row)
     return found
 
 
@@ -1062,14 +1066,16 @@ def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int, *, skip_kind: 
     return rows[::-1]
 
 
-def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
+def latest_runs(conn: sqlite3.Connection) -> dict[str, records.Run]:
     """Return each ticket's most recent run, by ticket key: none for a ticket forgotten since its latest run."""
-    rows = conn.execute(
+    rows = records.fetch_all(
+        conn,
+        records.Run,
         "SELECT r.* FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key "
         "WHERE r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key) "
-        "AND r.id > coalesce(t.forgotten_run_id, 0)"
-    ).fetchall()
-    return {str(r["ticket_key"]): r for r in rows}
+        "AND r.id > coalesce(t.forgotten_run_id, 0)",
+    )
+    return {r.ticket_key: r for r in rows}
 
 
 def record_decision(
@@ -1546,7 +1552,7 @@ def insert_message(
     if comment is not None:
         mirrored = mirrored_comment(conn, subject_kind, subject_id, comment.id)
         if mirrored is not None:
-            return int(mirrored["id"])
+            return mirrored.id
     cur = conn.execute(
         "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, run_id, body, answers, submission, "
         "comment_id, author, commented_at, truncated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1569,13 +1575,14 @@ def insert_message(
 
 def mirrored_comment(
     conn: sqlite3.Connection, subject_kind: str, subject_id: str, comment_id: str
-) -> sqlite3.Row | None:
+) -> records.Message | None:
     """Return the message a tracker comment was mirrored as, or None if it was not (DESIGN §22)."""
-    row: sqlite3.Row | None = conn.execute(
+    return records.fetch_one(
+        conn,
+        records.Message,
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND comment_id = ?",
         (subject_kind, subject_id, comment_id),
-    ).fetchone()
-    return row
+    )
 
 
 def set_mirror_cursor(conn: sqlite3.Connection, key: str, comment_id: str) -> None:
@@ -1589,26 +1596,27 @@ def count_decisions(conn: sqlite3.Connection, tick_id: int, action: str) -> int:
     return int(row[0])
 
 
-def get_message(conn: sqlite3.Connection, message_id: int) -> sqlite3.Row | None:
+def get_message(conn: sqlite3.Connection, message_id: int) -> records.Message | None:
     """Return the message with `message_id`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.Message, "SELECT * FROM messages WHERE id = ?", (message_id,))
 
 
 def messages_of(
     conn: sqlite3.Connection, subject_kind: str, subject_id: str, limit: int, *, after: int = 0
-) -> list[sqlite3.Row]:
+) -> list[records.Message]:
     """Return a subject's latest `limit` messages newer than message id `after`, oldest first."""
-    rows = conn.execute(
+    rows = records.fetch_all(
+        conn,
+        records.Message,
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? ORDER BY id DESC LIMIT ?",
         (subject_kind, subject_id, after, limit),
-    ).fetchall()
+    )
     return rows[::-1]
 
 
-def run_messages(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
+def run_messages(conn: sqlite3.Connection, run_id: int) -> list[records.Message]:
     """Return the messages a run reported, in order."""
-    return conn.execute("SELECT * FROM messages WHERE run_id = ? ORDER BY id", (run_id,)).fetchall()
+    return records.fetch_all(conn, records.Message, "SELECT * FROM messages WHERE run_id = ? ORDER BY id", (run_id,))
 
 
 def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, subject_kind: str | None = None) -> int:
@@ -1658,12 +1666,14 @@ def set_start(
             assert_never(status)
 
 
-def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+def running_run_of(conn: sqlite3.Connection, key: str) -> records.Run | None:
     """Return the run working `key` now, if one is."""
-    row: sqlite3.Row | None = conn.execute(
-        "SELECT * FROM runs WHERE ticket_key = ? AND status = 'running' ORDER BY id DESC LIMIT 1", (key,)
-    ).fetchone()
-    return row
+    return records.fetch_one(
+        conn,
+        records.Run,
+        "SELECT * FROM runs WHERE ticket_key = ? AND status = 'running' ORDER BY id DESC LIMIT 1",
+        (key,),
+    )
 
 
 def runs_of(conn: sqlite3.Connection, key: str, limit: int | None) -> list[sqlite3.Row]:

@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     import sqlite3
     from pathlib import Path
 
+    from canopy.core import records
     from canopy.core.context import Context
 
 T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
@@ -291,8 +292,8 @@ def _attention(ctx: Context) -> list[Item]:
     return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed]
 
 
-def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
-    current = db.get_run(ctx.conn, int(run["id"]))
+def _end_run(ctx: Context, run: records.Run) -> bool:
+    current = db.get_run(ctx.conn, run.id)
     if current is None or current["status"] != "running":
         return False
     note = json.dumps({"harness": "the operator stopped the ticket (mock: no process was killed)"})
