@@ -51,6 +51,39 @@ describe('diffWords', () => {
         expect(after(changes)).toBe(now)
     })
 
+    it('shows a passage rewritten around a few kept words as the old passage and the new, not shreds of both', () => {
+        const before = 'Steps\nAdd a route that reads the table and writes a CSV file to disk, then link to it.'
+        const now = 'Steps\nStream the table to the client as CSV from a new route, so no file is written to disk.'
+        expect(diffWords(before, now)).toEqual([
+            { kind: 'same', text: 'Steps\n', at: 0 },
+            {
+                kind: 'del',
+                text: 'Add a route that reads the table and writes a CSV file to disk, then link to it',
+                at: 6,
+            },
+            {
+                kind: 'add',
+                text: 'Stream the table to the client as CSV from a new route, so no file is written to disk',
+                at: 6,
+            },
+            { kind: 'same', text: '.', at: now.length - 1 },
+        ])
+    })
+
+    it('keeps the words between two changes that outnumber either, and those that end a block', () => {
+        const now = 'Run the export nightly, at an hour the operator picks, and mail it.'
+        const changes = diffWords('Run the export daily, at an hour the operator picks, and keep it.', now)
+        expect(changes.filter((change) => change.kind !== 'same').map((change) => change.text.trim())).toEqual([
+            'daily',
+            'nightly',
+            'keep',
+            'mail',
+        ])
+        // A change at the end of one block and another at the start of the next stay two, however short the break.
+        const blocks = diffWords('Plan one\nRisk one', 'Plan two\nRisk two')
+        expect(blocks.map((change) => change.kind)).toEqual(['same', 'del', 'add', 'same', 'del', 'add'])
+    })
+
     it('past its cap, shows the part that differs as removed and added whole', () => {
         const changes = diffWords('a b c d', 'w x y z', 2)
         expect(changes.map((change) => change.kind)).toEqual(['del', 'add'])
@@ -97,6 +130,23 @@ describe('PlanChanges', () => {
         const added = [...editor.view.dom.querySelectorAll('ins.plan-ins')].map((node) => node.textContent)
         expect(added).toEqual(['to the client.'])
         // The new blocks are one change with the words before them: they start where those do.
+        expect(changesKey.getState(editor.state)?.starts).toHaveLength(1)
+        editor.destroy()
+    })
+
+    it('draws a paragraph rewritten around a few kept words as the old one struck and the new one marked whole', () => {
+        const editor = new Editor({
+            extensions: planExtensions([PlanChanges]),
+            content: '# Plan\n\nStream the table to the client as CSV, so no file is written.',
+            contentType: 'markdown',
+        })
+        const base = textOf(editor, '# Plan\n\nRead all of the table and write a CSV file, then link to it.')
+        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
+        const removed = [...editor.view.dom.querySelectorAll('del.plan-del')].map((node) => node.textContent)
+        expect(removed).toEqual(['Read all of the table and write a CSV file, then link to it'])
+        const blocks = [...editor.view.dom.querySelectorAll('.plan-block-add')].map((node) => node.textContent)
+        expect(blocks).toEqual([`${removed[0] ?? ''}Stream the table to the client as CSV, so no file is written.`])
+        expect(editor.view.dom.querySelectorAll('ins.plan-ins')).toHaveLength(0)
         expect(changesKey.getState(editor.state)?.starts).toHaveLength(1)
         editor.destroy()
     })
