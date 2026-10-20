@@ -37,8 +37,6 @@ SKILL = "skill"
 _UNSAFE_RE = re.compile(r"[^a-zA-Z0-9_-]")
 # The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
 _SPECIAL_RE = re.compile(r"[.+^${}()|\[\]\\]")
-# The longest line of OpenCode's error output a failure quotes.
-_MAX_ERROR = 200
 
 
 class _Rule(BaseModel):
@@ -129,9 +127,8 @@ def _run(runner: procs.Runner, args: Sequence[str], cwd: Path, env: Mapping[str,
     if result.timed_out:
         raise _FailedError(f"`{command}` took over {TIMEOUT_SECONDS} seconds")
     if not result.ok:
-        lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
-        said = "".join(c for c in lines[-1] if c.isprintable())[:_MAX_ERROR] if lines else "no error output"
-        raise _FailedError(f"`{command}` exited {result.returncode}: {said}")
+        # Not what it printed: an error about the config may quote a value of it, and an agent reads this.
+        raise _FailedError(f"`{command}` exited {result.returncode}; run it to see why")
     return result.stdout
 
 

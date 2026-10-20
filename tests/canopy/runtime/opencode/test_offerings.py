@@ -151,13 +151,14 @@ def test_patterns_match_as_opencode_matches_them(text: str, pattern: str, *, mat
 def test_a_debug_command_that_fails_is_the_error_and_names_no_secret() -> None:
     def fail(args: Sequence[str]) -> procs.Result | None:
         if args[-1] == "canopy-worker":
-            return procs.Result(tuple(args), 1, "", "boot\nError: Agent canopy-worker not found\x1b[0m\n")
+            return procs.Result(tuple(args), 1, "", "Error: bad config: token = ghp_s3cret\n")
         return None
 
     found = offered(Debug({"canopy-chore": []}, fail=fail), "canopy-chore", "canopy-worker")
     assert found.agents[0].error is None
+    assert "s3cret" not in str(found)
     assert found.agents[1] == AgentOffer(
-        "canopy-worker", error="`opencode debug agent canopy-worker` exited 1: Error: Agent canopy-worker not found[0m"
+        "canopy-worker", error="`opencode debug agent canopy-worker` exited 1; run it to see why"
     )
     unreadable = offered(Debug({}, config={"mcp": {"github": {"enabled": "token-abc"}}}))
     assert unreadable.error == "`opencode debug config` printed what canopy cannot read"
