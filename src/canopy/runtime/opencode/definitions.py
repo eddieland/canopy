@@ -7,7 +7,8 @@ files mark for it:
 
 - the tracker's MCP server and the tools of it the private worker and the planner may call: its read tools, and for
   the private worker alone, its tools that create a ticket and those that write to a PR (DESIGN §22, §25); and the
-  overseer and the reviewer, its reads only; off a GitHub tracker, their denial of GitHub's issue reads (DESIGN §13);
+  overseer, the reviewer, and the chore, its reads only; off a GitHub tracker, the overseer's and the reviewer's denial
+  of GitHub's issue reads (DESIGN §13);
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
 - the reviewer's and overseer's temperature, unless it sets none;
@@ -27,7 +28,7 @@ import re
 from typing import TYPE_CHECKING
 
 from canopy.infra import resources
-from canopy.runtime.agents import OVERSEER, PLANNER, PRIVATE_WORKER, REVIEWER, WORKER, DefinitionsError
+from canopy.runtime.agents import CHORE, OVERSEER, PLANNER, PRIVATE_WORKER, REVIEWER, WORKER, DefinitionsError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -54,6 +55,7 @@ def _file(agent: str) -> str:
 _PRIVATE_FILE = _file(PRIVATE_WORKER)
 _OVERSEER_FILE = _file(OVERSEER)
 _REVIEWER_FILE = _file(REVIEWER)
+_CHORE_FILE = _file(CHORE)
 # The definitions that may call only the tracker's read tools, rendered at their marked line.
 _READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, _file(PLANNER))
 _WORKER_FILES = (_file(WORKER), _PRIVATE_FILE)
@@ -77,8 +79,9 @@ _REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_
 _REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
-# The line of the shipped overseer's and reviewer's definitions the tracker's rules are rendered at, above their denials
-# of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close (D021).
+# The line of the shipped overseer's, reviewer's, and chore's definitions the tracker's rules are rendered at, above
+# their denials of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close
+# (D021).
 _READS_MARKER = "  # canopy: tracker reads\n"
 # The tracker provider whose tickets are GitHub's issues, on the same server as the PRs (the skill `tracker-github`).
 _GITHUB = "github"
@@ -156,6 +159,9 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
     if _REVIEWER_FILE in found:
         text = found[_REVIEWER_FILE].decode()
         found[_REVIEWER_FILE] = render_reviewer_reads(text, rules.tracker_tools, rules.tracker_provider).encode()
+    if _CHORE_FILE in found:
+        text = found[_CHORE_FILE].decode()
+        found[_CHORE_FILE] = render_chore_reads(text, rules.tracker_tools, rules.tracker_provider).encode()
     return found
 
 
@@ -267,12 +273,20 @@ def render_reviewer_reads(text: str, tools: McpTools | None, provider: str) -> s
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's rules at.
     """
-    _require_reads_marker(text, _REVIEWER_FILE)
-    if tools is None or provider == _GITHUB:
-        return text
-    writes = (*tools.pr_writes, *tools.create)
-    reads = [tool for tool in tools.allowed if tool not in writes]
-    return _render_reads(text, tools.server, reads, issue_reads=True)
+    return _render_tracker_reads(text, tools, provider, _REVIEWER_FILE, issue_reads=True)
+
+
+def render_chore_reads(text: str, tools: McpTools | None, provider: str) -> str:
+    """Return the chore's definition with the tracker's rules at its marked line: it may only read the tracker.
+
+    As for the reviewer, but GitHub's issue reads stay whatever the tracker: a chore's prompt is the operator's, and may
+    ask for them (DESIGN §19). OpenCode sends no tool a rule denies whole, so a chore is sent none of the tracker's
+    server's other tools.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the tracker's rules at.
+    """
+    return _render_tracker_reads(text, tools, provider, _CHORE_FILE, issue_reads=False)
 
 
 def render_overseer(text: str, prompt: str, skill: str | None) -> str:
@@ -300,6 +314,22 @@ def _require_reads_marker(text: str, name: str) -> None:
     if _READS_MARKER not in text:
         marker = _READS_MARKER.strip()
         raise DefinitionsError(f"{name} has no line {marker!r} to render the tracker's reads at")
+
+
+def _render_tracker_reads(text: str, tools: McpTools | None, provider: str, name: str, *, issue_reads: bool) -> str:
+    """Render the tracker's read tools at definition `name`'s marked line, less the writes canopy knows of it.
+
+    On a GitHub tracker, whose server the PRs share, and with no tools known, `text` is returned as it is.
+
+    Returns:
+        `text`, rendered or not.
+    """
+    _require_reads_marker(text, name)
+    if tools is None or provider == _GITHUB:
+        return text
+    writes = (*tools.pr_writes, *tools.create)
+    reads = [tool for tool in tools.allowed if tool not in writes]
+    return _render_reads(text, tools.server, reads, issue_reads=issue_reads)
 
 
 def _render_reads(text: str, server: str, reads: Iterable[str], *, issue_reads: bool) -> str:
