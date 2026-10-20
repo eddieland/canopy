@@ -8,6 +8,7 @@ import { Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLoopDown } from '@/hooks/use-loop-down'
+import { useTickAsked } from '@/hooks/use-tick-asked'
 import { TICK_TONE } from '@/lib/ticks'
 import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
@@ -34,17 +35,27 @@ const PILL_TONE = {
 } as const
 
 /**
- * The header's readouts: the latest tick, or `no tick yet` before the first, and agent memory while a tier is on. The
- * counters are the attention page's.
+ * The header's readouts: the latest tick, or `no tick yet` before the first, `tick starting` from Tick now until the
+ * tick it asked for starts, and agent memory while a tier is on. The counters are the attention page's.
  */
 export function LiveReadouts() {
     const last = useQuery(tickQuery)
+    const starting = useTickAsked()
     const memory = useQuery(loopQuery).data?.memory ?? null
     return (
         // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
         <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
-            {/* Nothing until the read lands, so a workspace that has ticked never flashes `no tick yet`. */}
-            {last.data === undefined ? null : last.data.tick === null ? (
+            {/* Nothing until the read lands, so a workspace that has ticked never flashes `no tick yet`. Starting, it
+                says so from the click on, before the tick's row lands. */}
+            {starting ? (
+                <span
+                    className={cn('readout text-xs whitespace-nowrap', TICK_TONE.running)}
+                    title="Tick now asked for a tick: the loop starts it as soon as it finishes what it is doing."
+                    data-testid="last-tick"
+                >
+                    tick starting
+                </span>
+            ) : last.data === undefined ? null : last.data.tick === null ? (
                 <span className="readout text-xs whitespace-nowrap text-muted-foreground" data-testid="last-tick">
                     no tick yet
                 </span>

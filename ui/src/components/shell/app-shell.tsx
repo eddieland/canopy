@@ -13,6 +13,7 @@ import { useLiveUpdates } from '@/hooks/use-live-updates'
 import { StreamContext } from '@/hooks/use-loop-down'
 import { useRailMode } from '@/hooks/use-rail-mode'
 import type { RailMode } from '@/hooks/use-rail-mode'
+import { useTickAsked } from '@/hooks/use-tick-asked'
 import { useBuddy } from '@/lib/buddy'
 import { IN_PAGE } from '@/lib/in-page'
 import { isSearchShortcut } from '@/lib/search'
@@ -274,12 +275,13 @@ function RailButton() {
     )
 }
 
-/** The header's logo and name, alive with the stream and the latest tick. */
+/** The header's logo and name, alive with the stream and the latest tick, and with the tick Tick now asked for. */
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
+    const asked = useTickAsked()
     return (
         <>
-            <Mark live={stream === 'open'} ticking={tick?.status === 'running'} beat={tick?.id} />
+            <Mark live={stream === 'open'} ticking={tick?.status === 'running' || asked} beat={tick?.id} />
             <Wordmark beat={tick?.id} />
         </>
     )
