@@ -27,10 +27,13 @@ def instruct(canopy_env: CanopyEnv, text: str | bytes) -> Path:
     return path
 
 
-def section_of(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
+def prompt_of(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-    prompt = (canopy_env.state_dir / "runs" / f"{run_id}.prompt").read_text()
-    return prompt.split(SECTION, 1)[1].split("\n\nThe operator set these", 1)[0]
+    return (canopy_env.state_dir / "runs" / f"{run_id}.prompt").read_text()
+
+
+def section_of(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
+    return prompt_of(canopy_env, conn).split(SECTION, 1)[1].split("\n\nThe operator set these", 1)[0]
 
 
 def test_the_operators_standing_instructions_reach_the_worker(
@@ -42,12 +45,29 @@ def test_the_operators_standing_instructions_reach_the_worker(
     assert section_of(canopy_env, conn) == FIXUP
 
 
-def test_without_standing_instructions_the_section_says_none(
+def test_without_standing_instructions_there_is_no_section(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
     code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
     assert code == 0, decisions
-    assert section_of(canopy_env, conn) == "None."
+    prompt = prompt_of(canopy_env, conn)
+    assert SECTION not in prompt
+    # The notice's paragraph runs straight into the obligations.
+    assert "in a commit message.\n\n## Obligations\n" in prompt
+
+
+def test_an_override_with_the_old_placeholder_gets_the_text_alone(canopy_env: CanopyEnv) -> None:
+    # One written before `{{STANDING_SECTION}}` holds its own heading and framing around `{{STANDING_INSTRUCTIONS}}`.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir(parents=True)
+    (overrides / "worker-implement.md").write_text(
+        "Implement {{KEY}} if it carries {{LABELS}}.\n{{STANDING_INSTRUCTIONS}}\n"
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert prompts.render_worker(cfg, "implement", PROMPT_VALUES).endswith("\nNone.\n")
+    instruct(canopy_env, FIXUP)
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert prompts.render_worker(cfg, "implement", PROMPT_VALUES).endswith(f"\n{FIXUP}\n")
 
 
 @pytest.mark.parametrize(
@@ -98,7 +118,7 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     assert code == 1
     [(action, rationale)] = decisions
     assert action == "refused:bad_prompt"
-    assert "missing required placeholder {{STANDING_INSTRUCTIONS}}" in rationale
+    assert "missing required placeholder {{STANDING_SECTION}} or {{STANDING_INSTRUCTIONS}}" in rationale
 
 
 @pytest.mark.parametrize("kind", ["implement", "resume"])
@@ -111,4 +131,6 @@ def test_every_shipped_private_prompt_carries_the_instructions(canopy_env: Canop
 
 def test_blank_instructions_read_as_none(canopy_env: CanopyEnv) -> None:
     instruct(canopy_env, " \n\n")
-    assert prompts.standing_instructions(load(canopy_env.root, canopy_env.user_file)) == "None."
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert prompts.standing_instructions(cfg) == "None."
+    assert SECTION not in prompts.render_worker(cfg, "implement", PROMPT_VALUES)

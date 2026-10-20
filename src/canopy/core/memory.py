@@ -967,9 +967,9 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
     left_out = len(lessons) - len(kept)
     intro = (
         "Lessons the operator promoted for every run in this workspace, from what earlier workers proposed. They are "
-        "the operator's words, instructions like the standing instructions above, except where one conflicts with an "
-        "obligation below or anything else this prompt requires: the prompt comes first. They reach nobody else: never "
-        "quote, paraphrase, or mention them on the ticket, a PR, or in a commit message."
+        "the operator's words, instructions as if the operator had said them to you, except where one conflicts with "
+        "an obligation below or anything else this prompt requires: the prompt comes first. They reach nobody else: "
+        "never quote, paraphrase, or mention them on the ticket, a PR, or in a commit message."
     )
     body = [_lesson_entry(m) for m in kept] or ["None: the operator has promoted no lesson yet."]
     if left_out:

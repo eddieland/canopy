@@ -637,12 +637,4 @@ refusal as the ticket's decision; an `attempt_limit` refusal records its attenti
 not work around it.
 
 In a dry run, `canopy dispatch` records what it would have done and does nothing, and `canopy mirror` records the
-comment without moving the `mirror` cursor. Behave exactly as you would otherwise.
-
-## Standing instructions from the operator
-
-{{STANDING_INSTRUCTIONS}}
-
-The operator set these in canopy for the overseer, not on a ticket. They are instructions from the operator, as if they
-had said them to you, except where one conflicts with anything above: the prompt comes first, and the CLI's limits hold
-whatever they say. They are yours, not the workers': never pass them on in `--context`.
+comment without moving the `mirror` cursor. Behave exactly as you would otherwise.{{STANDING_SECTION}}
