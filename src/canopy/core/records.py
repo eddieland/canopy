@@ -8,7 +8,7 @@ table after every migration: the same columns, in order, each with the type and 
 A column holding one of `vocab`'s closed vocabularies is a field of that `StrEnum`, so the row carries the member and a
 value the vocabulary does not hold is refused where the row is read, not where something later branches on it.
 
-A table's row type is added when a PR first reads that table through it; the rest still read `sqlite3.Row`.
+Every journal table has a row type; a query still reading `sqlite3.Row` is converted when a PR changes it.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ from canopy.core.vocab import (
     ReviewRunStatus,
     ReviewState,
     RunKind,
+    RunStatus,
     StartStatus,
     TickStatus,
 )
@@ -579,6 +580,246 @@ class RunReplies(Row):
     ticket_drafts: bool
     # A JSON list of the drafts refused from the run's result, each its number and why.
     refused: str
+
+
+@dataclass(frozen=True)
+class Run(Row):
+    """A worker's run on a ticket (DESIGN §8): what it was asked, how it ended, and what it cost."""
+
+    TABLE: ClassVar[str] = "runs"
+
+    id: int
+    tick_id: int
+    ticket_key: str
+    kind: RunKind
+    #: The detached `_run`'s pid, and below, its worker's.
+    pid: int | None
+    branch: str
+    started_at: str
+    ended_at: str | None
+    status: RunStatus
+    result_json: str | None
+    log_path: str
+    worker_pid: int | None
+    session_id: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    private: bool
+    tokens_peak_context: int | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    definitions_digest: str | None
+    #: The worker's latest tool call, what it was doing, and when; None before its first.
+    activity_tool: str | None
+    activity: str | None
+    activity_at: str | None
+    plan_id: int | None
+
+
+@dataclass(frozen=True)
+class RunSlot(Row):
+    """A pool slot a run leased (DESIGN §8), one per repository it works in."""
+
+    TABLE: ClassVar[str] = "run_slots"
+
+    run_id: int
+    repo: str | None
+    slot_path: str
+    lease_id: str
+    lease_holder: str
+    base_branch: str | None
+    git_link: bytes | None
+    pool: str
+
+
+@dataclass(frozen=True)
+class TicketUnit(Row):
+    """A ticket's work in one repository (D058): its branch, PR, and phase."""
+
+    TABLE: ClassVar[str] = "ticket_units"
+
+    ticket_key: str
+    repo: str | None
+    branch: str | None
+    pr_url: str | None
+    phase: Phase | None
+    last_review_id: str | None
+    last_ci_run_id: str | None
+
+
+@dataclass(frozen=True)
+class Message(Row):
+    """A message in a subject's conversation (DESIGN §22): a worker's report or question, or a reply to one."""
+
+    TABLE: ClassVar[str] = "messages"
+
+    id: int
+    #: `ticket`, and the ticket's key.
+    subject_kind: str
+    subject_id: str
+    at: str
+    #: `worker`, `operator`, or `tracker`.
+    source: str
+    #: `report` or `question`, a worker's; `reply`, the operator's.
+    kind: str
+    #: `run`, `cli`, `web`, `slack`, or `tracker`.
+    channel: str
+    run_id: int | None
+    body: str
+    #: The message a reply answers, when the channel knows it.
+    answers: int | None
+    submission: str | None
+    comment_id: str | None
+    author: str | None
+    commented_at: str | None
+    truncated: bool
+
+
+@dataclass(frozen=True)
+class Notice(Row):
+    """A notice the operator set for the overseer, until it lapses or is ended."""
+
+    TABLE: ClassVar[str] = "notices"
+
+    id: int
+    body: str
+    set_at: str
+    channel: str
+    lapses_at: str
+    ended_at: str | None
+    ended_channel: str | None
+
+
+@dataclass(frozen=True)
+class Notification(Row):
+    """A notification a sink was sent (DESIGN §20), kept so the same one is not sent twice."""
+
+    TABLE: ClassVar[str] = "notifications"
+
+    sink: str
+    fingerprint: str
+    ticket_key: str | None
+    reason: str
+    repo: str | None
+    sent_at: str
+
+
+@dataclass(frozen=True)
+class NotifyEvent(Row):
+    """An event in the outbox the notification sinks read (DESIGN §20)."""
+
+    TABLE: ClassVar[str] = "notify_events"
+
+    id: int
+    grp: str
+    kind: str
+    at: str
+    #: A JSON object of the event's fields.
+    fields: str
+
+
+@dataclass(frozen=True)
+class NotifySink(Row):
+    """A notification sink's place in the outbox (DESIGN §20), and how its deliveries have gone."""
+
+    TABLE: ClassVar[str] = "notify_sinks"
+
+    name: str
+    #: The newest event it was delivered.
+    cursor: int
+    created_at: str
+    last_delivery_at: str | None
+    last_digest_at: str | None
+    failures: int
+    last_error: str | None
+
+
+@dataclass(frozen=True)
+class Pause(Row):
+    """The loop's pause, while the operator has it paused."""
+
+    TABLE: ClassVar[str] = "pause"
+
+    id: int
+    paused_at: str
+    channel: str
+
+
+@dataclass(frozen=True)
+class PrTitle(Row):
+    """A PR's title, as canopy last read it."""
+
+    TABLE: ClassVar[str] = "pr_titles"
+
+    pr_url: str
+    title: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class ReviewDismissal(Row):
+    """A review's finding the operator dismissed (DESIGN §21)."""
+
+    TABLE: ClassVar[str] = "review_dismissals"
+
+    review_run_id: int
+    finding: int
+    dismissed_at: str
+    channel: str
+
+
+@dataclass(frozen=True)
+class FindingDismissal(Row):
+    """A chore's finding the operator dismissed (DESIGN §19)."""
+
+    TABLE: ClassVar[str] = "finding_dismissals"
+
+    chore: str
+    finding_id: str
+    dismissed_at: str
+    channel: str
+
+
+@dataclass(frozen=True)
+class ReviewGrant(Row):
+    """Review runs the operator granted a PR past its limit (DESIGN §21)."""
+
+    TABLE: ClassVar[str] = "review_grants"
+
+    id: int
+    pr_url: str
+    runs: int
+    granted_at: str
+
+
+@dataclass(frozen=True)
+class AttemptGrant(Row):
+    """Attempts the operator granted a ticket's runs of one kind past its limit."""
+
+    TABLE: ClassVar[str] = "attempt_grants"
+
+    id: int
+    ticket_key: str
+    repo: str
+    kind: RunKind
+    runs: int
+    granted_at: str
+
+
+@dataclass(frozen=True)
+class SplitChild(Row):
+    """A ticket a split run filed, and the ticket it was split from."""
+
+    TABLE: ClassVar[str] = "split_children"
+
+    child_key: str
+    parent_key: str
+    repo: str
+    run_id: int
 
 
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, params: Sequence[object] = ()) -> list[R]:
