@@ -4,22 +4,14 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Collection, Iterable, Sequence
-from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import CliError, OverseerCommand, open_context, require_tick
-from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
-from canopy.core import db
-from canopy.core.vocab import ResumeReason, RunKind
-from canopy.infra import logs
-from canopy.loop import attention, tick
-from canopy.reviews import findings
+from canopy.cli.common import CliError, OverseerCommand, open_context
+from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, verb
+from canopy.core.vocab import ResumeReason
+from canopy.loop import tick, tools
 from canopy.runs import dispatch, policy, worker
-
-if TYPE_CHECKING:
-    import sqlite3
 
 
 @click.command("dispatch", cls=OverseerCommand)
@@ -102,162 +94,21 @@ def cmd_dispatch(
     cursor_pairs: tuple[tuple[str, str], ...],
 ) -> int:
     """Start a worker on a ticket (overseer only)."""
-    ctx = open_context(click_ctx)
-    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
-    if unit_cursors and len(set(repos)) > 1:
-        raise click.UsageError(
-            f"a {unit_cursors[0]} cursor belongs to one unit: advance it with `canopy ticket set {key} --repo NAME`",
-            click_ctx,
-        )
-    current = require_tick(ctx)
-    tick_id = current.id
-    log = logs.for_tick(tick_id)
-    db.touch_ticket(ctx.conn, key, ctx.repo)
-    dry_run = current.dry_run
-    try:
-        dispatch.check_kind(kind)
-        review = _review_findings(ctx.conn, key, kind, repos, review_run)
-        # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
-        if dry_run:
-            plan = dispatch.check(
-                ctx,
-                tick_id=tick_id,
-                key=key,
-                kind=kind,
-                label=label,
-                slug=slug,
-                base=base,
-                repos=repos,
-                reasons=reasons,
-                cursors=_handles(cursor_pairs, review_run),
-            )
-            branch, queue_label, repo_names, starts = plan.branch, plan.label, plan.repos, plan.starts
-            started = None
-        else:
-            started = dispatch.start(
-                ctx,
-                tick_id=tick_id,
-                key=key,
-                kind=kind,
-                label=label,
-                slug=slug,
-                base=base,
-                context=context,
-                repos=repos,
-                review=review,
-                reasons=reasons,
-                cursors=_handles(cursor_pairs, review_run),
-            )
-            branch, queue_label, repo_names, starts = started.branch, started.label, started.repos, started.starts
-    except dispatch.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        if r.attention is not None:
-            # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, or a retired
-            # prompt override (DESIGN §8, §14). In a workspace of several, the item is about the unit it holds.
-            db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
-        log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
-        raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling, or
-    # empty for a private ticket, which its start record authorizes (DESIGN §22). Under `tracker.private` the label
-    # authorizes a ticket's first run, which starts it privately.
-    authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
-    authorized += "; starts it privately (tracker.private)" if starts else ""
-    in_repo = f" in {', '.join(repo_names)}"
-    work = _work(key, kind, branch, base, repo_names)
-    requested = f"; review run {review_run}" if review_run is not None else ""
-    requested += f"; {_for(reasons)}" if reasons else ""
-    if started is None:
-        extras = [
-            *(f"cursor {name}={value}" for name, value in cursor_pairs),
-            f"context={context}" if context else "",
-        ]
-        rationale = truncate(
-            "; ".join(
-                e
-                for e in [
-                    (
-                        f"dry run: not dispatched; would {work}"
-                        if kind in policy.TICKET_KINDS
-                        else f"dry run: not dispatched; would work on {work}{in_repo}"
-                    ),
-                    authorized,
-                    f"review run {review_run}" if review_run is not None else "",
-                    _for(reasons) if reasons else "",
-                    *extras,
-                ]
-                if e
-            )
-        )
-        db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
-        log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
-        click.echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
-        return 0
-    # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
-    ticket_cursors = {name: value for name, value in cursor_pairs if name in db.TICKET_CURSORS}
-    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors)
-    if unit_cursors:
-        cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
-        db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], cursors=cursors)
-    where = _where(started)
-    rationale = f"run {started.run_id}: {work}{where}; {authorized}{requested}"
-    db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
-    log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
-    click.echo(f"dispatched {kind} for {key}: {rationale}")
-    return 0
-
-
-def _where(started: dispatch.Started) -> str:
-    """Return where a dispatch's decision says the run works: its slots, or the clones a triage reads, and its desk."""
-    if started.slots:
-        where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
-    else:
-        # A triage leases no slot: it reads the primary clones (DESIGN §25).
-        where = " reading the primary clones"
-    return where + (f"; desk {started.desk}" if started.desk is not None else "")
-
-
-def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
-    """Return what a dispatch's decision says the run works on: its branch, or for a kind counted per ticket, its key.
-
-    A plan or a triage works on no branch: it reads its repositories, and writes a plan, or judges whether the ticket
-    needs one.
-    """
-    if kind == policy.PLAN:
-        return f"plan {key} over {', '.join(repos)}"
-    if kind == policy.NEEDS_PLAN:
-        return f"triage {key}'s plan over {', '.join(repos)}"
-    return f"{branch} on {base}" if base is not None else branch
-
-
-def _handles(cursor_pairs: Iterable[tuple[str, str]], review_run: int | None) -> frozenset[str]:
-    """What the dispatch handles, each needing its reason (DESIGN §8): the cursors it moves, and `review_run`."""
-    return frozenset(name for name, _ in cursor_pairs) | ({"review_run"} if review_run is not None else frozenset())
-
-
-def _for(reasons: Collection[str]) -> str:
-    """How a decision's rationale names a resume's reasons, in the vocabulary's order."""
-    return f"for {', '.join(r for r in ResumeReason if r in reasons)}"
-
-
-def _review_findings(
-    conn: sqlite3.Connection, key: str, kind: str, repos: Sequence[str], run_id: int | None
-) -> str | None:
-    """Return the worker's `{{REVIEW_FINDINGS}}` for `--review-run`, or None without it (DESIGN §21).
-
-    Raises:
-        dispatch.Refusal: `--review-run` is given for a kind other than `resume`, or its review run is missing, of
-            another ticket or repository, not `done`, or found nothing.
-    """
-    if run_id is None:
-        return None
-    if kind != RunKind.RESUME:
-        raise dispatch.Refusal(
-            "bad_review", "--review-run names findings for a resume to address; it is for resume only"
-        )
-    try:
-        return findings.for_worker(conn, run_id, key, repos)
-    except findings.Unusable as e:
-        raise dispatch.Refusal("bad_review", str(e)) from None
+    return verb(
+        click_ctx,
+        tools.dispatch_run,
+        tools.Dispatch,
+        key=key,
+        kind=kind,
+        label=label,
+        repos=repos,
+        slug=slug,
+        base=base,
+        review_run=review_run,
+        reasons=reasons,
+        context=context,
+        cursors=dict(cursor_pairs),
+    )
 
 
 @click.command("_run", hidden=True)

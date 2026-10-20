@@ -10,17 +10,16 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.chores import execute, history, install, start, trial
-from canopy.cli.common import CliError, Group, OverseerCommand, open_context, require_tick
-from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, truncate
+from canopy.chores import execute, history, install, trial
+from canopy.cli.common import CliError, Group, OverseerCommand, open_context
+from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, verb
 from canopy.cli.render import one_line
 from canopy.core import chore_result as result
-from canopy.core import chore_view as view
-from canopy.core import contract, conversation, db, workspace
+from canopy.core import contract, conversation, workspace
 from canopy.core.config import ConfigError
 from canopy.core.memory_text import visible
 from canopy.infra import logs, procs
-from canopy.loop import attention, tick
+from canopy.loop import attention, tick, tools
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -41,31 +40,7 @@ def chore_group() -> None:
 @click.pass_context
 def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> int:
     """Start a run of chore NAME, if its guards allow one now."""
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    tick_id = current.id
-    log = logs.for_tick(tick_id)
-    try:
-        if current.dry_run:
-            start.check(ctx, tick_id=tick_id, name=name)
-            started = None
-        else:
-            started = start.start(ctx, tick_id=tick_id, name=name, context=context)
-    except start.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
-        log.info("chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
-        raise CliError(f"chore run refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    on_context = f"; context={context}" if context else ""
-    if started is None:
-        rationale = truncate(f"dry run: not dispatched{on_context}")
-        db.record_decision(ctx.conn, tick_id, None, start.DISPATCH_ACTION, rationale, chore=name)
-        click.echo(f"dry run: recorded chore run {name}; nothing was started")
-        return 0
-    rationale = truncate(f"chore run {started.run_id}{on_context}")
-    db.record_decision(ctx.conn, tick_id, None, start.DISPATCH_ACTION, rationale, chore=name)
-    log.info("chore run started", extra={"chore": name, "chore_run_id": started.run_id, "pid": started.pid})
-    click.echo(f"started chore {name}: run {started.run_id}")
-    return 0
+    return verb(click_ctx, tools.chore_run, tools.ChoreRun, name=name, context=context)
 
 
 @chore_group.command("wait", cls=OverseerCommand)
@@ -74,13 +49,7 @@ def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> i
 @click.pass_context
 def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
     """Record that chore NAME is due but should not run now, and why."""
-    ctx = open_context(click_ctx)
-    current = require_tick(ctx)
-    if name not in view.configured(ctx.config, ctx.workspace):
-        raise CliError(f"no chore named {name!r} is configured for this workspace")
-    db.record_decision(ctx.conn, current.id, None, "wait", rationale, chore=name)
-    click.echo(f"recorded wait for {attention.CHORE_PREFIX}{name}")
-    return 0
+    return verb(click_ctx, tools.chore_wait, tools.ChoreWait, name=name, rationale=rationale)
 
 
 @chore_group.command("try")
