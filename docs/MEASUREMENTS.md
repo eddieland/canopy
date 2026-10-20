@@ -793,3 +793,130 @@ export const CacheSplit = async () => ({
   DESIGN's caveats about a plugin held: the first run after adding it waited on an npm install of
   `@opencode-ai/plugin` into the snapshot, timing out twice at 400 s before a run in the same directory went through,
   and the first run in a directory new to OpenCode timed out at 120 s, then went through in under 280 s.
+
+## 2026-10-20: what each agent's first request holds, after #436
+
+SCENARIOS S40, re-run after #436 (each agent denied the GitHub tools its prompts never call, and the overseer offered
+only the tracker's reads) and the overseer prompt's compaction by a quarter. Issue #432 asked for this check; the
+method is 2026-10-17's, so the tables compare with 2026-10-19's row by row. Cited by no milestone yet.
+
+### Setup
+
+- OpenCode 1.19.3 from npm, still its latest. Its Anthropic provider's base URL pointed at 2026-10-17's recorder,
+  unchanged, with a model of the config's own, `recorder`, in place of a real one, so nothing in the request names a
+  real model. One `opencode run --agent NAME --format json --thinking --title=probe "Say ok."` per agent
+  `.agents/agents/` ships, as canopy's default template runs it, with `OPENCODE_CONFIG_DIR` set to the snapshot, in a
+  directory that is not a git checkout. Each run sent one request.
+- Two snapshots, rendered by `definitions.ensure` from a workspace on defaults (`trust.review_replies` is `approve`,
+  `trust.rebase` off): one with `tracker.provider = "jira"`, as on 2026-10-19, and one with `"github"`, for the four
+  definitions the provider changes (the overseer, the private worker, the planner, and the triage agent). The worker's,
+  the reviewer's, and the chore's are byte for byte the same in both.
+- GitHub's MCP server v2.0.2 (still its latest), built with `go install`, over stdio, on its default toolsets, with a
+  placeholder token. Atlassian's server needs a sign-in this machine could not make, so its schemas and instructions
+  are not measured. In their place, a stub server named `atlassian` listed 20 tools by name, each with an empty schema:
+  canopy's 12 default Jira read tools (`DEFAULT_TRACKER_TOOLS`) and the 8 writes and `execute` tools
+  `tests/canopy/core/test_definitions.py` names (`JIRA_WRITES`). It shows which names each definition lets through,
+  not what they cost; its rows count names only and are left out of every size. An overseer run without it sent the
+  same system prompt and the same other tools.
+- OpenCode reads skills from `~/.claude/skills` and `~/.agents/skills`, and this machine's home holds 16 of the first.
+  The tables come from runs with `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`, which lists the same three skills as 2026-10-19's
+  empty home did; F54 measures what the 16 add.
+- Sizes are characters of what the request sent, each tool as compact JSON, split by 2026-10-17's `split.py`, which
+  found each body at the start of the one system block. Tokens are characters / 4, not a provider's count.
+- `opencode debug --help` still names no command that prints a tool's schema, so the recorder is still needed.
+
+### What the first request holds
+
+Thousands of tokens, as characters / 4; a tool row's count of tools in brackets. The Jira snapshot:
+
+| | overseer | worker | worker-private | reviewer | chore | planner | plan-triage |
+|---|---|---|---|---|---|---|---|
+| OpenCode's own system prompt | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Body: canopy's text | 12.3 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| Body: the `tracker-jira` skill | 0.8 | | | | | | |
+| OpenCode: model line and `<env>` | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| GitHub server's instructions | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 |
+| OpenCode: list of skills | none | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 |
+| **System prompt** | **13.7** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** |
+| Built-in tools | 2.3 (4) | 3.9 (8) | 3.9 (8) | 1.1 (4) | 2.5 (5) | 1.9 (6) | 1.1 (4) |
+| OpenCode's MCP resource tools | 0.3 (3) | 0.3 (3) | 0.3 (3) | 0.3 (3) | 0.3 (3) | 0.3 (3) | 0.3 (3) |
+| GitHub server's tools | 1.7 (5) | 7.5 (22) | 7.1 (21) | 4.9 (13) | 7.0 (25) | 4.9 (13) | 4.9 (13) |
+| **Tools** | **4.4 (12)** | **11.6 (33)** | **11.3 (32)** | **6.3 (20)** | **9.8 (33)** | **7.1 (22)** | **6.3 (20)** |
+| **Prefix** | **18.1** | **12.7** | **12.3** | **7.4** | **10.8** | **8.1** | **7.4** |
+| Since 2026-10-19 | −16.9 | −2.1 | −2.2 | −2.2 | −0.4 | −2.1 | −2.0 |
+| The stub tracker's 20 names sent | 12 | 19 | 13 | 15 | 16 | 12 | 12 |
+
+The GitHub snapshot, where the stub `atlassian` server is not the tracker:
+
+| | overseer | worker-private | planner | plan-triage |
+|---|---|---|---|---|
+| Body: canopy's text | 12.3 | 0.1 | 0.1 | 0.1 |
+| Body: the `tracker-github` skill | 1.0 | | | |
+| OpenCode: model line, `<env>`, GitHub's instructions | 0.6 | 0.6 | 0.6 | 0.6 |
+| OpenCode: list of skills | none | 0.4 | 0.4 | 0.4 |
+| **System prompt** | **13.9** | **1.0** | **1.0** | **1.0** |
+| Built-in tools | 2.3 (4) | 3.9 (8) | 1.9 (6) | 1.1 (4) |
+| OpenCode's MCP resource tools | 0.3 (3) | 0.3 (3) | 0.3 (3) | 0.3 (3) |
+| GitHub server's tools | 3.2 (8) | 4.7 (12) | 3.3 (9) | 3.3 (9) |
+| **Tools** | **5.8 (15)** | **8.9 (23)** | **5.5 (18)** | **4.8 (16)** |
+| **Prefix** | **19.7** | **9.9** | **6.5** | **5.8** |
+| The stub server's 20 names sent | 20 | 18 | 15 | 15 |
+
+The built-in tools, in characters: `bash` 5,246, `todowrite` 2,657, `edit` 1,929, `read` 1,705, `grep` 1,154, `glob`
+1,085, `write` 997, `skill` 647, each 29 fewer than on 2026-10-19 (not looked into). The overseer keeps `bash`, `read`,
+`grep`, and `glob`; every other agent keeps what it kept on 2026-10-19. The overseer's GitHub tools on Jira are
+`get_me`, `list_branches`, `list_pull_requests`, `pull_request_read`, and `search_pull_requests`, 6,941 characters; on
+GitHub, `issue_read`, `list_issues`, and `search_issues` besides, 12,721.
+
+### Findings
+
+- **F51. #436 did what S40 expected, and the overseer's prefix is about half what it was.** On Jira the overseer was
+  sent 5 of GitHub's 46 tools, not 46, and no `todowrite`, `skill`, or list of skills: 72,406 characters, 18.1k tokens,
+  from 35.0k (−48%). Its tracker's tools were exactly the 12 default reads, every write and `execute` tool denied
+  (names only). On GitHub it keeps the 3 issue reads, 1.4k tokens more. Of the other agents, the workers, the planner,
+  and the triage agent were each sent 11 fewer of GitHub's tools, the reviewer 12, and the chore 1, as S40 expected.
+  S40's 24k for the overseer predates the prompt's compaction; 2026-10-19 F44's measured 22.4k did too.
+- **F52. The overseer's prompt is now 68% of its prefix.** 49,250 characters, 12.3k tokens, from 16.5k (−26%, the
+  compaction), and the tracker's skill 0.8k after it. Its tools are 4.4k, 24%.
+- **F53. Denial still works as on 2026-10-17 (F35) and 2026-10-19 (F42).** `skill: deny`, rendered with the tracker's
+  skill in the body, took the `skill` tool and the list of skills out of the overseer's request, and `todowrite: deny`
+  took `todowrite`. A tool allowed for one pattern is still sent whole, as the chore's `bash`, allowed only for
+  `canopy chore history *`, is. OpenCode's three MCP resource tools were sent to every agent; denying them was not tried
+  again.
+- **F54. Skills in the operator's home or the working directory reach every agent but the overseer.** With this
+  machine's 16 skills in `~/.claude/skills` scanned, each of the six other agents' list of skills was 15,040 characters,
+  not 1,425: 3.4k tokens more a run, the worker's prefix 16.1k instead of 12.7k (+27%). A `.agents/skills/canopy/`
+  copy of canopy's operator skill, where `canopy skill --install` puts it in the home, put a 560-character entry in the
+  list when it was in the working directory (the home's was not tried). `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` removed
+  both, so it would hide a repository's own `.agents/skills` too (inferred: tried in a plain directory), where DESIGN
+  OPERATING has canopy turn no skill off. The overseer is spared by its `skill: deny`.
+- **F55. Off a GitHub tracker, every agent but the overseer is still sent GitHub's issue tools.** In the Jira snapshot
+  the workers, the reviewer, the chore, the planner, and the triage agent were each sent `issue_read`, `list_issues`,
+  `search_issues`, `list_issue_types`, and `list_issue_fields`, 7,176 characters (1.8k tokens) a run. The overseer's
+  definition denies the first three off a GitHub tracker; these do not. That none of them is called there is inferred:
+  their tickets are in Jira.
+- **F56. Some definitions' tracker patterns let writes through, by the names canopy's tests list.** OpenCode matched
+  the patterns case-sensitively: the chore's `"*comment*"` did not stop `atlassian_addCommentToJiraIssue`, and the
+  reviewer's `"*add_*"` did not stop `atlassian_addWorklogToJiraIssue`. The chore was sent `addCommentToJiraIssue`,
+  `addWorklogToJiraIssue`, `execute`, and `executeJiraTool`; the reviewer the last three; the public worker every name
+  but `transitionJiraIssue`, the two `execute` tools among them, which run any tool, a transition too, by argument
+  (`DEFAULT_TRACKER_TOOLS`'s comment). The chore's definition says it has no tool that writes to the tracker
+  (TRUST_MODEL T6). Whether Atlassian's server lists these names by default was not checked. → a change under `agents/`.
+- **F57. A third MCP server reaches the overseer whole.** In the GitHub snapshot, where the stub `atlassian` server
+  was neither the tracker's nor GitHub's, the overseer was sent all 20 of its names, the 8 writes among them: its
+  definition denies GitHub's writes by name and the tracker's by a wildcard, and nothing else. Any other server in the
+  operator's runtime config would be offered the same way (inferred). → a change under `agents/`.
+
+The three largest things worth cutting, by tokens a run saves:
+
+1. **The overseer's prompt** (F52): 12.3k tokens a tick, 68% of its prefix. Prompt work, judged by
+   `canopy tick --dry-run`'s decisions, not by this check.
+2. **GitHub's issue tools off a GitHub tracker** (F55): 1.8k tokens on every run of six agents, by rendering the
+   overseer's denial of them into those definitions, or more of them.
+3. **The chore's GitHub tools no prompt names** (2026-10-19 F46): 11 tools, 7,398 characters (1.8k tokens) a chore
+   run, which every other agent now denies.
+
+Smaller: the GitHub server's instructions (0.5k on every run), its `--toolsets` and `--exclude-tools` the operator's
+to set; and in the list of skills, `customize-opencode` and the other provider's tracker skill (0.2k together). On an
+operator's machine with skills in the home, F54's list can outweigh 2 and 3 on every run; which skills are there is
+the operator's choice.

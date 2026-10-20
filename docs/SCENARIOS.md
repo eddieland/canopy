@@ -351,24 +351,22 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   from a query on the journal over the same UTC days: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd)
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
-- **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17). After an OpenCode
-  upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each agent
+- **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17; issue #432). After an
+  OpenCode upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each agent
   `.agents/agents/` ships against a recorder on loopback and split its first request by source, as MEASUREMENTS'
   2026-10-17 section says (Re-measuring the first request), on the operator's machine with their MCP servers: the
-  tracker's server has been in no run yet, and `split.py` gives each server's tools a row of their own. Expect
-  OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
-  against the latest such section (2026-10-19), a difference only where the change made one. A body the split cannot
-  find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`. Record one agent twice more, in two
-  directories, and compare the two requests as 2026-10-19's second section did: expect them to share nothing
-  while OpenCode sends one system block (F48), or the tools and the body once something splits it (F50).
-  After #436, which denies each agent the GitHub tools its prompts never call, expect against 2026-10-19's first table
-  the overseer sent 8 of GitHub's 46 tools and no `todowrite`, `skill`, or list of skills (a prefix of about 24k
-  tokens, from 35.0k); the planner, the triage agent, and both workers sent 11 fewer of GitHub's, the reviewer 12, and
-  the chore 1. Once the overseer is offered only the tracker's reads, expect it sent of the tracker's server only its
-  read tools (Jira's 12 by default), and off a GitHub tracker 5 of GitHub's tools, its issue reads gone (about 1.5k
-  tokens less). Once the reviewer is too, expect the same of it: of the tracker's server only its read tools, and off
-  a GitHub tracker none of GitHub's issue reads. Then let `canopy loop` run a week and expect no run or tick whose
-  transcript shows a call to a tool it was not offered (`tool not found`).
+  tracker's server has been in no run yet, and `split.py` gives each server's tools a row of their own. Run with
+  `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` so the tables compare, then the worker once without it, to record what the
+  skills in the operator's home add (2026-10-20 F54). Expect OpenCode's own prompt absent and the agent's body first;
+  no schema for a tool a definition denies outright; and, against the latest such section (2026-10-20), a difference
+  only where the change made one. A body the split cannot find means OpenCode moved it. Record the tables in
+  `MEASUREMENTS.md`. Record one agent twice more, in two directories, and compare the two requests as 2026-10-19's
+  second section did: expect them to share nothing while OpenCode sends one system block (F48), or the tools and the
+  body once something splits it (F50). With Atlassian's server, expect the overseer sent its 12 default read tools and
+  nothing else of it, as a stub with those names was (2026-10-20 F51), and check which of F56's names the server
+  lists. Since #1037, after those tables, expect the reviewer sent the same of the tracker's server, its read tools
+  only, and off a GitHub tracker none of GitHub's issue reads. Then let `canopy loop` run a week and expect no run or
+  tick whose transcript shows a call to a tool it was not offered (`tool not found`).
 
 ## Retired
 
