@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.metadata import version
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from canopy.core import spend as spending
 from canopy.serve import views
@@ -47,14 +47,32 @@ def spend(backend: BackendDep) -> Spend:
 def spend_breakdown(
     backend: BackendDep,
     days: Annotated[
-        int,
+        int | None,
         Query(
             ge=1,
             le=spending.MAX_DAYS,
-            description=f"How many UTC days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+            description=(
+                f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}; "
+                f"{spending.DEFAULT_DAYS} when neither this nor hours is given."
+            ),
         ),
-    ] = spending.DEFAULT_DAYS,
+    ] = None,
+    hours: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            le=spending.MAX_HOURS,
+            description=(
+                f"How many clock hours to read, by the hour, the current one so far included: 1 to "
+                f"{spending.MAX_HOURS}. Not with days."
+            ),
+        ),
+    ] = None,
 ) -> SpendBreakdown:
-    """What each day of the window cost, by kind; the ticks by what they bought; and the newest idle ticks."""
+    """What each day, or hour, of the window cost, by kind; the ticks by what they bought; and the newest idle ticks."""
+    if days is not None and hours is not None:
+        raise HTTPException(status_code=422, detail="give days or hours, not both")
     with backend.open() as ctx:
-        return views.spend_breakdown(backend, ctx, days)
+        if hours is not None:
+            return views.spend_breakdown_hours(backend, ctx, hours)
+        return views.spend_breakdown(backend, ctx, spending.DEFAULT_DAYS if days is None else days)

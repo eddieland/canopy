@@ -156,6 +156,45 @@ def test_a_run_counts_on_the_local_day_it_started(tmp_path: Path, journals: Jour
     assert (found.since, found.until) == ("2026-10-07T07:00:00.000Z", "2026-10-09T07:00:00.000Z")
 
 
+def test_a_window_in_hours_is_whole_clock_hours_ending_with_this_one(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    now = datetime(2026, 10, 8, 12, 30, tzinfo=UTC)
+    tick(conn, earlier(now, 1), 5.0, idle=False, woken_by="start")  # 12:30 yesterday: before the first hour
+    tick(conn, earlier(now, 0, 23), 1.0, idle=False, woken_by="start")  # 13:30 yesterday, in the first hour
+    tick(conn, earlier(now, 0, 0.25), 0.5, idle=True, woken_by="timer")  # 12:15, this hour so far
+    conn.execute(
+        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
+        "VALUES (NULL, 'deps', ?, 'ok', 'l', 0.75)",
+        (earlier(now, 0, 2),),
+    )
+    found = spend.breakdown_hours(conn, now, 24)
+
+    assert (found.since, found.until) == ("2026-10-07T13:00:00.000Z", "2026-10-08T13:00:00.000Z")
+    assert (found.days, found.hours) == (None, 24)
+    assert len(found.per_day) == 24
+    assert (found.per_day[0].day, found.per_day[-1].day) == ("2026-10-07T13", "2026-10-08T12")
+    by_hour = {d.day: d.costs for d in found.per_day}
+    assert by_hour["2026-10-07T13"].overseer == 1.0
+    assert (by_hour["2026-10-08T12"].overseer, by_hour["2026-10-08T12"].idle) == (0.5, 0.5)
+    assert by_hour["2026-10-08T10"].chores == 0.75
+    assert by_hour["2026-10-08T11"] == spend.Costs()
+    assert found.totals.total == pytest.approx(2.25)
+    assert [(w.by, w.ticks) for w in found.woken] == [("start", 1), ("timer", 1)]
+
+
+def test_an_hour_the_clock_goes_back_over_is_listed_once(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    # Clocks went back at 02:00 PDT on 2026-11-01: 08:30 UTC and 09:30 UTC are both 01:30 there.
+    for at in (datetime(2026, 11, 1, 8, 30, tzinfo=UTC), datetime(2026, 11, 1, 9, 30, tzinfo=UTC)):
+        tick(conn, db.format_time(at), 1.0, idle=False, woken_by="start")
+    with in_zone("America/Los_Angeles"):
+        found = spend.breakdown_hours(conn, datetime(2026, 11, 1, 20, tzinfo=UTC), 24)
+    names = [d.day for d in found.per_day]
+    assert len(names) == 23
+    assert len(set(names)) == len(names)
+    assert {d.day: d.costs.overseer for d in found.per_day}["2026-11-01T01"] == 2.0
+
+
 def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_a_week(conn, NOW)

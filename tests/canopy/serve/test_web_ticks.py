@@ -1,9 +1,12 @@
 """The web UI's ticks (DESIGN §6, §22, ROADMAP M24): what `canopy decisions` prints, a tick's page, and each ticket's
 decisions across ticks. Reads only."""
 
+import re
+
 import pytest
 
 from canopy.core import db
+from canopy.core import spend as spending
 from canopy.core.context import Context
 from canopy.loop import attention
 from canopy.serve import views
@@ -93,6 +96,20 @@ def test_a_ticket_page_lists_the_latest_decisions_about_it_across_ticks(backend:
     unit = c.get("/api/tickets/ABC-099").json()["decisions"]
     assert [(d["tick_id"], d["subject"]) for d in unit] == [(2, "ABC-099 (web)"), (1, "ABC-099 (web)")]
     assert c.get("/api/tickets/ABC-103").json()["decisions"] == []
+
+
+def test_the_spend_breakdown_reads_the_last_24_hours_by_the_hour(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/spend/breakdown", params={"hours": 24}).json()
+    by_days = c.get("/api/spend/breakdown", params={"days": 2}).json()
+    assert (found["days"], found["hours"], len(found["per_day"])) == (None, 24, 24)
+    assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}", d["day"]) for d in found["per_day"])
+    # Every run in the mock journal started within the day, so the 24 hours hold what its two days do.
+    assert found["totals"] == by_days["totals"]
+    assert sum(d["costs"]["total"] or 0 for d in found["per_day"]) == pytest.approx(found["totals"]["total"])
+    assert by_days["hours"] is None
+    assert c.get("/api/spend/breakdown", params={"hours": 24, "days": 7}).status_code == 422
+    assert c.get("/api/spend/breakdown", params={"hours": spending.MAX_HOURS + 1}).status_code == 422
 
 
 def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(backend: Backend) -> None:

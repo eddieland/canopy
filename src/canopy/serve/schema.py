@@ -1691,12 +1691,12 @@ class SpendCosts(_Model):
 
 
 class SpendDay(_Model):
-    """One local day's costs."""
+    """One local day's costs, or one local hour's in a window in hours."""
 
     day: str
-    """The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on."""
+    """The day, `YYYY-MM-DD`, or the hour, `YYYY-MM-DDTHH`, in the local time of the machine canopy runs on."""
     costs: SpendCosts
-    """What the runs that started on it cost."""
+    """What the runs that started in it cost."""
     done: int = 0
     """How many tickets the loop marked done on it."""
 
@@ -1792,14 +1792,19 @@ class SpendUnpriced(_Model):
 
 
 class SpendBreakdown(_Model):
-    """What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33)."""
+    """What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
+
+    Or of whole clock hours, the current one's so far included, by the hour.
+    """
 
     since: datetime
-    """When the window starts: local midnight on its first day."""
-    days: int
-    """How many days it spans."""
+    """When the window starts: local midnight on its first day, or the start of its first hour."""
+    days: int | None
+    """How many days it spans; None for a window in hours."""
+    hours: int | None = None
+    """How many hours it spans; None for a window in days."""
     per_day: list[SpendDay]
-    """Every day in it, oldest first, those with nothing spent included."""
+    """Every day in it, or every hour, oldest first, those with nothing spent included."""
     totals: SpendCosts
     """The whole window's costs."""
     ticks: list[SpendTicks]

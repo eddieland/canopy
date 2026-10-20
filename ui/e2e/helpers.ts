@@ -451,7 +451,7 @@ export async function select(page: Page, text: string): Promise<void> {
 }
 
 /**
- * Checks the spend chart's axis on the page shown: each day it names whole, as `Sep 13` rather than `Sep…`, centered
+ * Checks the spend chart's axis on the page shown: each day or hour it names whole, as `Sep 13` or `14:00`, centered
  * under its bar within a pixel, and clear of the next name, at least `minimum` of them.
  */
 export async function expectSpendAxisWhole(page: Page, minimum: number): Promise<void> {
@@ -473,7 +473,7 @@ export async function expectSpendAxisWhole(page: Page, minimum: number): Promise
     )
     expect(names.length).toBeGreaterThanOrEqual(minimum)
     for (const [i, name] of names.entries()) {
-        expect(name.text).toMatch(/^[A-Z][a-z]{2} \d{1,2}$/u)
+        expect(name.text).toMatch(/^(?:[A-Z][a-z]{2} \d{1,2}|\d{2}:00)$/u)
         expect(name.cut).toBe(false)
         expect(name.offCenter).toBeLessThanOrEqual(1)
         const next = names[i + 1]

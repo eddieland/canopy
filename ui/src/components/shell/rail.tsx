@@ -177,15 +177,15 @@ function Under({ children }: { children: string }) {
 }
 
 /**
- * Under what is working: what the last 24 hours and the last 30 days cost. Either opens the spend page, the week's or
- * the 30 days' breakdown by day and by what it bought.
+ * Under what is working: what the last 24 hours and the last 30 days cost. Either opens the spend page over its own
+ * window: the 24 hours by the hour, or the 30 days by the day.
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
     return (
         <RailSection label="Spent" testId="rail-spend">
             <div className="grid grid-cols-2 gap-2 px-2.5">
-                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours: the week by day" />
+                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours: the day by hour" hours={24} />
                 <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days: the month by day" days={30} />
             </div>
         </RailSection>
@@ -292,23 +292,25 @@ function RailSection({
     )
 }
 
-/** One window's cost, a dash when nothing in it reported one, opening the spend page over `days`, a week by default. */
+/** One window's cost, a dash when nothing in it reported one, opening the spend page over `hours` or `days`. */
 function Spent({
     window,
     label,
     hint,
+    hours,
     days,
 }: {
     window: SpendWindow | undefined
     label: string
     hint: string
+    hours?: 24
     days?: 30
 }) {
     const cost = window?.cost_usd ?? null
     return (
         <Link
             to="/spend"
-            search={{ days }}
+            search={{ days, hours }}
             className="-mx-1 flex flex-col rounded-sm px-1 hover:bg-surface-raised"
             title={hint}
             data-testid={`rail-spend-link-${label}`}

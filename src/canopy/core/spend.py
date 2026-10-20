@@ -1,12 +1,13 @@
 """What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
 
-Reads only. Every cost is what the agent runtime reported (§13), summed by the local day a run started on: the overseer
-of each tick, worker runs (old split runs among them), triage runs before a plan and the plan runs (§25), chore runs,
-and review runs. A dry run's overseer is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series
-of their own within the live overseer's. Beside what the window cost, what it got done: the tickets marked done in it,
-the plans its triage runs waived, and what each ticket and PR's own runs cost. And what each kind of run's first model
-call was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started cold. And what each
-kind's tool calls put into its context, by tool: the reads that each later model call reads again.
+Reads only. Every cost is what the agent runtime reported (§13), summed by the local day a run started on, or by the
+local hour for a window in hours: the overseer of each tick, worker runs (old split runs among them), triage runs before
+a plan and the plan runs (§25), chore runs, and review runs. A dry run's overseer is kept apart from the live ones', and
+idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window cost, what it
+got done: the tickets marked done in it, the plans its triage runs waived, and what each ticket and PR's own runs cost.
+And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
+how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
+model call reads again.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "triage", "plans", "chores", "reviews"]
@@ -37,6 +38,8 @@ KINDS: tuple[Kind, ...] = ("overseer", "workers", "triage", "plans", "chores", "
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
+# The longest window in hours the web UI reads: a week, by the hour.
+MAX_HOURS = 7 * 24
 # The idle ticks the web UI links to: the newest in the window.
 IDLE_TICKS = 20
 
@@ -61,6 +64,9 @@ _SERIES = ("overseer", "idle", "dry_run")
 _FIRST_CALL = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
 _DAY = "date(started_at, 'localtime')"
+# The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
+_HOUR_FORMAT = "%Y-%m-%dT%H"
+_HOUR = f"strftime('{_HOUR_FORMAT}', started_at, 'localtime')"
 
 
 @dataclass(frozen=True)
@@ -88,7 +94,10 @@ class Costs:
 
 @dataclass(frozen=True)
 class Day:
-    """One local day's costs, `day` as `YYYY-MM-DD`, and how many tickets were marked done on it."""
+    """One local day's costs, `day` as `YYYY-MM-DD`, and how many tickets were marked done on it.
+
+    In a window in hours it is one local hour's, `day` as `YYYY-MM-DDTHH`.
+    """
 
     day: str
     costs: Costs
@@ -198,20 +207,21 @@ class ToolSpend:
 class Breakdown:
     """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought.
 
-    The window is `[since, until)`, each a journal time: local midnight on its first day, and after its last. What it
-    got done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer, chores,
-    and the runs of tickets still open are what it cost to get those done. `waived` is how many of the triage runs that
-    started in it waived their ticket's plan (§25), so their cost reads against the planner runs they saved, whether or
-    not the operator undid the waiver since. `tickets` and `pull_requests` list what each one's own runs cost, the most
-    first. `first_calls` is each kind's first model calls by snapshot, the kinds in `KINDS` order and each kind's
-    snapshots by when their first run started; the overseer's include dry runs, whose first call is a live tick's.
-    `tools` is what each kind's tool calls returned, by tool, the most characters first; the overseer's include dry runs
-    too.
+    The window is `[since, until)`, each a journal time: local midnight on its first day, and after its last. A window
+    in `hours` has `days` None and lists each hour in `per_day`, from its first hour's start to the end of its last.
+    What it got done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer,
+    chores, and the runs of tickets still open are what it cost to get those done. `waived` is how many of the triage
+    runs that started in it waived their ticket's plan (§25), so their cost reads against the planner runs they saved,
+    whether or not the operator undid the waiver since. `tickets` and `pull_requests` list what each one's own runs
+    cost, the most first. `first_calls` is each kind's first model calls by snapshot, the kinds in `KINDS` order and
+    each kind's snapshots by when their first run started; the overseer's include dry runs, whose first call is a live
+    tick's. `tools` is what each kind's tool calls returned, by tool, the most characters first; the overseer's include
+    dry runs too.
     """
 
     since: str
     until: str
-    days: int
+    days: int | None
     per_day: Sequence[Day]
     totals: Costs
     ticks: Sequence[TickGroup]
@@ -225,6 +235,7 @@ class Breakdown:
     pull_requests: Sequence[PullRequestSpend] = ()
     first_calls: Sequence[FirstCalls] = ()
     tools: Sequence[ToolSpend] = ()
+    hours: int | None = None
 
 
 def window(now: datetime, days: int) -> tuple[datetime, datetime]:
@@ -244,6 +255,16 @@ def _midnight(day: date) -> datetime:
     return datetime.combine(day, time()).astimezone().astimezone(UTC)
 
 
+def hour_window(now: datetime, hours: int) -> tuple[datetime, datetime]:
+    """The window `[start, until)`: `hours` whole clock hours, ending with `now`'s.
+
+    Returns:
+        Its start and its end, each an aware UTC datetime.
+    """
+    this_hour = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    return this_hour - timedelta(hours=hours - 1), this_hour + timedelta(hours=1)
+
+
 def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     """What the last `days` local days cost, today's so far included, by day, by kind, and by what the ticks bought.
 
@@ -251,16 +272,60 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         The breakdown; a window with nothing in it lists each day with no costs.
     """
     start, end = window(now, days)
+    first = start.astimezone().date()
+    names = [(first + timedelta(days=i)).isoformat() for i in range(days)]
+    return _breakdown(conn, start, end, _Buckets(sql=_DAY, names=names, name_of=local_day), days=days)
+
+
+def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Breakdown:
+    """What the last `hours` clock hours cost, the current one's so far included, by local hour, as `breakdown` does.
+
+    An hour the clock goes back over is one local hour twice, so the window lists it once, with both in it.
+
+    Returns:
+        The breakdown; a window with nothing in it lists each hour with no costs.
+    """
+    start, end = hour_window(now, hours)
+    names = list(dict.fromkeys(_local_hour(start + timedelta(hours=i)) for i in range(hours)))
+    buckets = _Buckets(sql=_HOUR, names=names, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
+    return _breakdown(conn, start, end, buckets, hours=hours)
+
+
+@dataclass(frozen=True)
+class _Buckets:
+    """What a window sums its costs by: its days, or its hours."""
+
+    #: The SQL that names the bucket a row started in, from its `started_at`.
+    sql: str
+    #: Every bucket's name, oldest first.
+    names: Sequence[str]
+    #: The name of the bucket a journal time is in.
+    name_of: Callable[[str], str]
+
+
+def _local_hour(at: datetime) -> str:
+    return at.astimezone().strftime(_HOUR_FORMAT)
+
+
+def _breakdown(
+    conn: sqlite3.Connection,
+    start: datetime,
+    end: datetime,
+    buckets: _Buckets,
+    *,
+    days: int | None = None,
+    hours: int | None = None,
+) -> Breakdown:
     since = db.format_time(start)
     # Bounded at the window's end too, so a row the clock puts after today is in no figure rather than in some.
     until = db.format_time(end)
     # One read transaction, so a run or tick ending between two of the reads is in all of them or none.
     with db.read_snapshot(conn):
-        rows = _tick_rows(conn, since, until)
+        rows = _tick_rows(conn, since, until, buckets.sql)
         by_day: dict[str, dict[str, float | None]] = {}
         for kind, (table, which) in _TABLES.items():
             for day, cost in conn.execute(
-                f"SELECT {_DAY} AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
+                f"SELECT {buckets.sql} AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table and bucket)
                 f"WHERE {which} AND started_at >= ? AND started_at < ? GROUP BY day",
                 (since, until),
             ):
@@ -277,9 +342,8 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         for name in _SERIES:
             if _in_series(row, name):
                 day[name] = _sum([day.get(name), row.cost_usd])
-    first = start.astimezone().date()
-    names = [(first + timedelta(days=i)).isoformat() for i in range(days)]
-    done_on = Counter(local_day(at) for _, at in done.values())
+    names = buckets.names
+    done_on = Counter(buckets.name_of(at) for _, at in done.values())
     per_day = [Day(day=d, costs=_costs(by_day.get(d, {})), done=done_on[d]) for d in names]
     totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in names]) for n in (*_SERIES, *_TABLES)})
     ticks = _groups(rows)
@@ -301,6 +365,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         pull_requests=pull_requests,
         first_calls=first_calls,
         tools=tools,
+        hours=hours,
     )
 
 
@@ -333,7 +398,7 @@ def idle_ticks(
 
 @dataclass(frozen=True)
 class _TickRow:
-    """Ticks of one day that share a group, a status, and a cause: how many, their cost, and how many had none."""
+    """Ticks of one bucket that share a group, a status, and a cause: how many, their cost, and how many had none."""
 
     day: str
     dry: bool
@@ -349,9 +414,9 @@ class _TickRow:
         return self.woken_by is not None and self.group not in {None, "dry_run"}
 
 
-def _tick_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_TickRow]:
+def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: str) -> list[_TickRow]:
     rows = conn.execute(
-        f"SELECT {_DAY} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "  # noqa: S608 (a fixed day)
+        f"SELECT {bucket} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "  # noqa: S608 (a fixed bucket)
         "count(*) - count(cost_usd) "
         "FROM ticks WHERE started_at >= ? AND started_at < ? GROUP BY day, dry_run, status, idle, woken_by",
         (since, until),

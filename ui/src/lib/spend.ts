@@ -1,15 +1,16 @@
-// The spend page (ROADMAP M33): what each local day cost, by kind, and what the overseer's ticks bought. The numbers
-// are the server's (`canopy spend`); this lays them out.
+// The spend page (ROADMAP M33): what each local day, or hour, cost, by kind, and what the overseer's ticks bought. The
+// numbers are the server's (`canopy spend`); this lays them out.
 
+import type { SpendBreakdownRange } from '@/api/queries'
 import type { SpendBreakdown, SpendCosts, SpendDay, SpendGroup, SpendTicket } from '@/api/types'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
 
-/** The windows the page offers, in days. The first is the default, as it is `canopy spend`'s. */
-export const SPEND_WINDOWS = [7, 30] as const
+/** The window the page opens on, as `canopy spend` does: the week. */
+export const DEFAULT_WINDOW: SpendBreakdownRange = { days: 7 }
 
-/** A window the page offers, in days. */
-export type SpendWindowDays = (typeof SPEND_WINDOWS)[number]
+/** The windows the page offers, shortest first. */
+export const SPEND_WINDOWS: readonly SpendBreakdownRange[] = [{ hours: 24 }, DEFAULT_WINDOW, { days: 30 }]
 
 /** A series of the by-day chart: a part of a day's spend no other series counts. */
 export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'triage' | 'plans' | 'chores' | 'reviews' | 'dry_run'
@@ -93,14 +94,33 @@ export const GROUP_HINT: Record<SpendGroup, string> = {
  * The spend page's description, the window's state: what it cost and what it got done, as
  * `$10.51 over 7 days · 2 tickets done`. What the page shows on every visit is its title's help.
  */
-export function spendLine(found: Pick<SpendBreakdown, 'days' | 'done' | 'totals'>): string {
-    const days = found.days === 1 ? '1 day' : `${found.days} days`
-    return `${costText(found.totals.total)} over ${days} · ${counted(found.done, 'ticket')} done`
+export function spendLine(found: Pick<SpendBreakdown, 'days' | 'hours' | 'done' | 'totals'>): string {
+    return `${costText(found.totals.total)} over ${windowName(found)} · ${counted(found.done, 'ticket')} done`
 }
 
-/** The validated window of a search param: one the page offers, or undefined for the default. */
-export function spendWindow(value: unknown): SpendWindowDays | undefined {
-    return SPEND_WINDOWS.find((days) => days === value || String(days) === value)
+/** A window's length in words, from its search params or the breakdown read over it: `24 hours`, `7 days`. */
+export function windowName(range: { days?: number | null; hours?: number | null }): string {
+    const [n, unit] =
+        range.hours === undefined || range.hours === null ? [range.days ?? 0, 'day'] : [range.hours, 'hour']
+    return n === 1 ? `1 ${unit}` : `${n} ${unit}s`
+}
+
+/** A window's id, its toggle's value and test id: the hours with an `h`, `24h`, or the days, `7`. */
+export function windowId(range: SpendBreakdownRange): string {
+    return range.hours === undefined ? String(range.days) : `${range.hours}h`
+}
+
+/** The window the search params name, if the page offers it: hours before days; undefined for the default. */
+export function spendWindow(search: { days?: unknown; hours?: unknown }): SpendBreakdownRange | undefined {
+    return (
+        SPEND_WINDOWS.find((w) => w.hours !== undefined && names(search.hours, w.hours)) ??
+        SPEND_WINDOWS.find((w) => w.days !== undefined && names(search.days, w.days))
+    )
+}
+
+// Whether a search param names `n`, as a number or as its digits.
+function names(value: unknown, n: number): boolean {
+    return n === value || String(n) === value
 }
 
 /**
@@ -115,7 +135,7 @@ export function seriesCost(costs: SpendCosts, key: SeriesKey): number {
     return costs[key] ?? 0
 }
 
-/** The tallest day's total, the chart's top; 0 when nothing in the window reported a cost. */
+/** The tallest day's (or hour's) total, the chart's top; 0 when nothing in the window reported a cost. */
 export function chartTop(days: SpendDay[]): number {
     return Math.max(0, ...days.map((day) => day.costs.total ?? 0))
 }
@@ -138,11 +158,26 @@ export function dayHint(day: SpendDay): string {
         series.key === 'overseer' ? `${said(series)}${ofIt}` : said(series),
     )
     const total = day.costs.total === null ? 'nothing reported' : costText(day.costs.total)
-    return parts.length === 0 ? `${dayLabel(day.day)}: ${total}` : `${dayLabel(day.day)}: ${total}, ${parts.join(', ')}`
+    const name = dayName(day.day)
+    return parts.length === 0 ? `${name}: ${total}` : `${name}: ${total}, ${parts.join(', ')}`
 }
 
-/** A day as the server names it, `2026-10-07`, as the chart's axis says it: `Oct 7`, whatever the browser's zone. */
+/**
+ * A day as the server names it, `2026-10-07`, as the chart's axis says it: `Oct 7`, whatever the browser's zone. An
+ * hour, `2026-10-07T14`, is its time alone, `14:00`, as an axis of hours reads.
+ */
 export function dayLabel(day: string): string {
+    const hour = day.split('T')[1]
+    return hour === undefined ? dateLabel(day) : `${hour}:00`
+}
+
+/** A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or with its time, `Oct 7, 14:00`. */
+export function dayName(day: string): string {
+    const [date = day, hour] = day.split('T')
+    return hour === undefined ? dateLabel(date) : `${dateLabel(date)}, ${hour}:00`
+}
+
+function dateLabel(day: string): string {
     const [year, month, date] = day.split('-').map(Number)
     return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, date ?? 1)).toLocaleDateString('en-US', {
         month: 'short',
