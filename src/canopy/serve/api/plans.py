@@ -90,7 +90,7 @@ def change(key: TicketKey, body: PlanAction, backend: BackendDep) -> PlanChanged
             raise RefusedError(r) from None
     what = "plan skipped" if body.action == "skip" else "plan asked for"
     _log.info(what, extra={"ticket": ref.id, "superseded": asked.superseded, "channel": WEB})
-    return PlanChanged(action=body.action, superseded=asked.superseded, already=asked.already, waived=asked.waived)
+    return PlanChanged(action=body.action, superseded=asked.superseded, already=asked.already)
 
 
 @router.put(

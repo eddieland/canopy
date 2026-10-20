@@ -6,7 +6,6 @@ show` prints the newest plan as its file stands, and `--plans` every plan and th
 """
 
 import hashlib
-import json
 import sqlite3
 from pathlib import Path
 
@@ -88,7 +87,6 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
         "plan": plan_id,
         "superseded": None,
         "already": False,
-        "waived": None,
     }
     plan = present(plans.current(ctx.conn, KEY))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "web")
@@ -97,11 +95,11 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
     )
 
     asked = c.post(f"/api/tickets/{KEY}/plan", json={"action": "request"}, headers=headers)
-    assert asked.json() == {"action": "request", "plan": None, "superseded": plan_id, "already": False, "waived": None}
+    assert asked.json() == {"action": "request", "plan": None, "superseded": plan_id, "already": False}
     listed = c.get(f"/api/tickets/{KEY}/plans").json()
     assert (listed["needed"], listed["setting"], listed["newest"]["plan"]["status"]) == (True, "plan", "superseded")
     skipped = c.post(f"/api/tickets/{KEY}/plan", json={"action": "skip"}, headers=headers)
-    assert skipped.json() == {"action": "skip", "plan": None, "superseded": None, "already": False, "waived": None}
+    assert skipped.json() == {"action": "skip", "plan": None, "superseded": None, "already": False}
     assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "merge"}, headers=headers).status_code == 422
     # A write needs the session's token, as every write does.
     assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "skip"}).status_code == 403
@@ -311,96 +309,3 @@ def test_canopy_show_says_when_a_plan_is_needed_and_none_is_written(
     assert operator("show", KEY) == 0
     out = capsys.readouterr().out
     assert "Plan: needed, by your word, `plan`\n  none yet: the next tick dispatches a planner" in out
-
-
-def triaged(ctx: Context, status: RunStatus, result: dict[str, object] | None) -> int:
-    """Record a triage run of KEY that ended in `status` with `result` stored, as `_run` closes one; returns its id."""
-    db.touch_ticket(ctx.conn, KEY, ctx.repo)
-    tick_id = db.start_tick(ctx.conn, dry_run=False)
-    run_id = db.insert_run(
-        ctx.conn,
-        tick_id=tick_id,
-        key=KEY,
-        kind="needs-plan",
-        branch="",
-        slots=[],
-        runs_dir=ctx.state_dir,
-        works_units=False,
-        reads=["repo"],
-    )
-    if status is not RunStatus.RUNNING:
-        ctx.conn.execute(
-            "UPDATE runs SET status = ?, ended_at = started_at, result_json = ? WHERE id = ?",
-            (status, None if result is None else json.dumps(result), run_id),
-        )
-    if status is RunStatus.DONE and result is not None and result.get("verdict") == "trivial":
-        plans.record_waiver(ctx.conn, KEY, run_id, str(result["reason"]))
-    ctx.conn.commit()
-    return run_id
-
-
-def test_a_tickets_triage_is_read_with_its_plans_while_it_runs(ctx: Context) -> None:
-    c, _ = signed_in_client(ctx)
-    db.touch_ticket(ctx.conn, KEY, ctx.repo)
-    ctx.conn.commit()
-    assert c.get(f"/api/tickets/{KEY}/plans").json()["triage"] is None
-    run_id = triaged(ctx, RunStatus.RUNNING, None)
-    running = c.get(f"/api/tickets/{KEY}/plans").json()
-    found = running["triage"]
-    assert (found["run_id"], found["status"], found["verdict"], found["waived"]) == (run_id, "running", None, False)
-    # It is no plan run: the plan verbs and a save are not held for it.
-    assert running["planning"] is None
-
-
-def test_a_triages_waiver_is_read_while_it_is_in_force(ctx: Context) -> None:
-    c, headers = signed_in_client(ctx)
-    reason = "The ticket fixes one misspelled word\nin a comment."
-    run_id = triaged(ctx, RunStatus.DONE, {"status": "done", "verdict": "trivial", "reason": reason})
-    waived = c.get(f"/api/tickets/{KEY}/plans").json()["triage"]
-    # Its reason on one line, as the card shows it: model text, from the ticket.
-    assert (waived["run_id"], waived["status"], waived["verdict"], waived["waived"]) == (
-        run_id,
-        "done",
-        "trivial",
-        True,
-    )
-    assert waived["reason"] == "The ticket fixes one misspelled word in a comment."
-    assert waived["undoable"] is True
-    # Once its implement gives the ticket a branch, asking for a plan is refused, so the card offers none.
-    ctx.conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1' WHERE key = ?", (KEY,))
-    ctx.conn.commit()
-    assert c.get(f"/api/tickets/{KEY}/plans").json()["triage"]["undoable"] is False
-    ctx.conn.execute("UPDATE tickets SET branch = NULL WHERE key = ?", (KEY,))
-    ctx.conn.commit()
-
-    # Asking for a plan undoes the waiver and says whose; the triage and its verdict stay, as what came before the plan.
-    asked = c.post(f"/api/tickets/{KEY}/plan", json={"action": "request"}, headers=headers).json()
-    assert (asked["action"], asked["waived"]) == ("request", run_id)
-    undone = c.get(f"/api/tickets/{KEY}/plans").json()
-    assert (undone["setting"], undone["triage"]["verdict"], undone["triage"]["waived"]) == ("plan", "trivial", False)
-    assert undone["triage"]["undoable"] is False
-
-
-@pytest.mark.parametrize(
-    ("status", "result", "reason"),
-    [
-        (RunStatus.DONE, {"status": "done", "verdict": "plan", "reason": "It changes the config format."}, None),
-        (RunStatus.FAILED, {"status": "failed", "reason": "The tracker did not answer."}, None),
-        (
-            RunStatus.TIMEOUT,
-            {"status": "done", "verdict": "trivial", "reason": "One word.", "harness": "the triage timed out"},
-            "the triage timed out",
-        ),
-    ],
-    ids=["plan", "failed", "timeout"],
-)
-def test_a_triage_that_waived_nothing_is_read_as_it_ended(
-    ctx: Context, status: RunStatus, result: dict[str, object], reason: str | None
-) -> None:
-    c, _ = signed_in_client(ctx)
-    run_id = triaged(ctx, status, result)
-    found = c.get(f"/api/tickets/{KEY}/plans").json()["triage"]
-    # A verdict only from a run that ended `done`: a trivial line printed before a timeout judged nothing.
-    verdict = result["verdict"] if status is RunStatus.DONE else None
-    assert (found["run_id"], found["status"], found["verdict"], found["waived"]) == (run_id, status, verdict, False)
-    assert found["reason"] == (reason or result["reason"])

@@ -881,7 +881,7 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded.
 
     Messages from before the operator forgot the ticket's work are left out: they are about work that is gone. So is a
-    triage's report: model text written from the ticket, which no other run hears (DESIGN §25, Triage before a plan).
+    an old triage's report: model text written from the ticket, which no other run hears (M55).
     So are canopy's notes: they say what the loop did, which the worker knows, and quote the overseer's reasons.
     """
     rows = records.fetch_all(
@@ -900,7 +900,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
     Each run's kind, how it ended, its report, and a `blocked` run's question, as the run recorded them
     (`run_messages`). Every run starts a fresh session, so this is how a worker learns what the runs before it
     concluded (DESIGN §8). A private worker reads the same reports in its conversation. Runs from before the operator
-    forgot the ticket's work are left out, and so are triages, whose reason no worker hears (DESIGN §25). A summary and
+    forgot the ticket's work are left out, and so are old triages, whose reason no worker hears (M55). A summary and
     a question are each at most 2000 characters (`worker.MAX_TEXT`), so the section is bounded.
     """
     blocks: list[str] = []
@@ -978,11 +978,11 @@ def note(conn: sqlite3.Connection, key: str, body: str, *, answers: int) -> int:
 def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, str]]:
     """Return the `(kind, body)` messages a run that closed as `status` reports.
 
-    That is a report, and for a `blocked` run its question. The report is the worker's summary, a triage's reason, or
-    the harness's note, or the status, then each PR on a line of its own.
+    That is a report, and for a `blocked` run its question. The report is the worker's summary, an old triage's reason,
+    or the harness's note, or the status, then each PR on a line of its own.
     """
     result = contract.stored_object(result_json)
-    # A triage's report is its reason (DESIGN §25).
+    # An old triage's report is its reason (M55).
     summary = (
         _text(result.get("summary")) or _text(result.get("reason")) or _text(result.get("harness")) or f"ended {status}"
     )

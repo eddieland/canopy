@@ -17,7 +17,7 @@ the ticket allows, without copying a prompt to get it (§12, Prompt overrides).
 ### What a persona reaches
 
 - The planner, the reviewer, and the workers that implement and resume, public and private. Not the overseer, whose
-  prompt is policy and is cached across ticks (§13), nor a triage or a chore, which write verdicts rather than
+  prompt is policy and is cached across ticks (§13), nor a chore, which writes verdicts rather than
   prose a person reads.
 - The prompt's obligations come before it, and the prompt says so, as it does before the standing instructions (§12).
   A persona changes how an agent writes and where it looks hardest. It never changes the authorization check, the

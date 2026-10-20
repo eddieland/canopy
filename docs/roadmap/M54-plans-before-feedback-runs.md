@@ -13,9 +13,9 @@ a new CI state reaches the PR before they accept. The design is DESIGN §32, bes
   findings, a failed check, a conflict with the base, an authorized reply on the ticket) goes to the planner, with the
   PR's checks at its head. A failed check is an item because M56 makes fixing CI part of `resume`, so one plan, and one
   run, covers a round's comments and its red CI together. A round that is only red CI waits on its plan too, as the
-  operator asked; M55's triage can waive a trivial one. A worker's own comments and the replies the operator sent
-  through canopy (M53) are not items. The plan shows each item's author, and whether they are trusted, so the operator
-  weighs it; trust no longer decides what runs.
+  operator asked, trivial or not (M55's triage was removed, D126). A worker's own comments and the replies the operator
+  sent through canopy (M53) are not items. The plan shows each item's author, and whether they are trusted, so the
+  operator weighs it; trust no longer decides what runs.
 - **The planner.** M44's planner, definition, desk, prompt shape, and file, with the PR and its items in place of a
   ticket's first plan; it posts nothing and pushes nothing. Its plan is a markdown file the operator reads, edits, and
   comments on as M44's are, with one section per item, and its result line lists each item it covers by M53's thread or
@@ -75,8 +75,8 @@ at the head, in a desk holding the unit's slot at that head, so a review item's 
 refused, and an item no plan covers goes to the next plan; `unplanned` and `plan_changed` refuse the `resume` in code,
 and one approval goes ahead once, spent by the `resume` that starts; a reply on a waiting plan asks for changes, as on a
 ticket's plan; a waiting plan makes the unit `plan_proposed`, and the state block says whether it is stale and its quiet
-period has passed; a re-plan inside the quiet period is refused in code; and with triage on, a round is triaged once,
-before its first plan, which is M55's feedback half. Open for the operator: whether a `resume` the operator's own
+period has passed; and a re-plan inside the quiet period is refused in code. No round is triaged: M55, whose feedback
+half that was, is deferred (2026-10-20). Open for the operator: whether a `resume` the operator's own
 message asks for waits on a plan; whether `ask` asks the reviewer or the operator; how the planner reads a failed
 check's log; whether a round's first plan waits out the quiet period; and whether the `resume` of a plan that changes
 nothing is held to pushing nothing in code.

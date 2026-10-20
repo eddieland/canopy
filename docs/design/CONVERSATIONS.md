@@ -53,8 +53,8 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
   as reconcile ends a crashed one (§6) and still counts toward attempt limits. Stop and dispatch cannot interleave.
 - The private worker reads the tracker, and writes to it only to file follow-ups, which authorize nothing (§18): it
   is allowed the tracker tools config names as read tools, so a wrong list fails closed, the provider's tools that
-  create a ticket, whole, and on GitHub, whose server its PR goes through, the PR tools, which the planner and the
-  triage agent never get; with no read tools a private run is refused (TRUST_MODEL T6, D044). canopy's definition
+  create a ticket, whole, and on GitHub, whose server its PR goes through, the PR tools, which the planner never
+  gets; with no read tools a private run is refused (TRUST_MODEL T6, D044). canopy's definition
   allows the create tools by name, and OpenCode merges it after the operator's own config, whose last matching rule it
   overrides (D021, D044), so a deny there cannot take them back. `policy.max_follow_ups = 0` has workers file none and
   records none; only the MCP server's own tool selection, where it has one, takes the tools away. A follow-up a

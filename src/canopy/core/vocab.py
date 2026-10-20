@@ -92,8 +92,9 @@ class RunKind(StrEnum):
     SPLIT = "split"
     # Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket.
     PLAN = "plan"
-    # Judges, before a ticket's first plan, whether its work is trivial enough to need none (DESIGN §25, Triage before a
-    # plan): it leases no slot, reads the primary clones, writes nothing, and runs once per ticket.
+    # Retired (M55): a triage that judged, before a ticket's first plan, whether its work needed one. Every ticket the
+    # policy plans is planned now (DESIGN §25). Kept so the runs it named still read, counted per ticket and in no
+    # unit's attempts; nothing dispatches it.
     NEEDS_PLAN = "needs-plan"
 
 

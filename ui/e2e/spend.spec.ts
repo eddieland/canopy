@@ -68,7 +68,7 @@ test("each series has one name in the totals, the legend, and the table, and the
     await expect(page.locator('main header p')).toHaveText(`${total ?? ''} over 7 days · no tickets done`)
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /canopy spend --days N/u)
 
-    const series = ['idle ticks', 'overseer', 'workers', 'plan triage', 'plans', 'chores', 'reviews', 'dry runs']
+    const series = ['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'dry runs']
     await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
     await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
     // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do.
@@ -78,14 +78,12 @@ test("each series has one name in the totals, the legend, and the table, and the
         'overseer',
         'idle ticks',
         'workers',
-        'plan triage',
         'plans',
         'chores',
         'reviews',
         'dry runs',
         'tickets done',
         'per ticket done',
-        'plans waived',
     ])
     await expect(page.getByText('other ticks')).toHaveCount(0)
 })
@@ -187,8 +185,6 @@ test("each ticket's and PR's own runs, the costliest first, open their pages bes
     // The mock journal marks no ticket done, so there is nothing to divide the spend by.
     await expect(page.getByTestId('spend-done')).toHaveText('0')
     await expect(page.getByTestId('spend-per-done')).toHaveText('–')
-    // Nor does it triage a ticket: no plan was waived.
-    await expect(page.getByTestId('spend-waived')).toHaveText('0')
     await expect(page.getByTestId('spend-day-2026-10-08').locator('td').last()).toHaveText('0')
 
     const tickets = page.getByTestId('spend-ticket-table').locator('tbody tr')
@@ -233,7 +229,7 @@ test("the dearest day's total is over its bar, which stops short of the chart's 
     await page.goto('spend?days=30')
     await settled(page)
     // The mock prices today alone: its total is the dearest.
-    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(8).textContent()
+    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(7).textContent()
     const peak = page.getByTestId('spend-bar-2026-10-08').getByTestId('spend-peak')
     await expect(peak).toHaveText(total ?? '')
     await expect(peak).toHaveText(/^\$\d+\.\d\d$/u)

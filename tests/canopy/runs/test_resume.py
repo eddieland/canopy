@@ -166,6 +166,13 @@ def test_split_is_refused_naming_follow_ups(scenario: Scenario, mode: str) -> No
     assert reason.startswith("split is retired: a worker files follow-up tickets now")
 
 
+@pytest.mark.parametrize("mode", ["live", "dry run"])
+def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> None:
+    triage = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "needs-plan", "--context", "is it trivial?")
+    reason = "needs-plan is retired: a ticket that needs a plan is planned; dispatch plan"
+    assert scenario.refuses(triage, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
+
+
 @pytest.mark.parametrize(
     ("args", "reason"),
     [
