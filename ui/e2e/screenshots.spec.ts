@@ -94,7 +94,8 @@ for (const theme of THEMES) {
     })
 }
 
-// Every palette but a theme's default sets only the neutrals, so one whole page in each shows all it changes.
+// Every palette but a theme's default sets only the neutrals, so one page in each shows all it changes: its main pane
+// alone, so a change to the header or the rail rewrites none of these.
 for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {
@@ -105,7 +106,7 @@ for (const theme of THEMES) {
             await page.goto('attention')
             await settled(page)
             await expect(page.locator('html')).toHaveAttribute(`data-${theme}-palette`, palette)
-            await screenshotWhole(page, `attention-${palette}-${theme}.png`)
+            await screenshotMain(page, `attention-${palette}-${theme}.png`)
         })
     }
 }

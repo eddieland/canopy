@@ -12,9 +12,8 @@ the nav has a color of its own, for a little fun and a sense of place: its icon,
 trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
 decoration, but the fun's own (Fun, below). By default both themes' neutrals carry the accent's indigo hue, so the
-canvas has color of its own: dark is a deep indigo slate, light a lavender grey and white. Light can wear a warm
-off-white or Solarized's cream instead, and dark a plain grey, each picked apart (Themes, below). Dark is the one the
-operator lives in; neither is the lesser theme.
+canvas has color of its own: dark is a deep indigo slate, light a lavender grey and white. Each can wear another
+palette instead, picked apart (Themes, below). Dark is the one the operator lives in; neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
@@ -52,7 +51,7 @@ Rules:
   `text-white`), or arbitrary color values. `npm run lint` fails on them (`scripts/check-source.mjs`).
 - **No `dark:` in components.** Both themes are first-class and come from the same tokens. If a component looks wrong
   in one theme, the token is wrong: fix the value in `tokens.css`, for that theme. The lint fails on `dark:`.
-- **Text reads at 4.5:1** (WCAG AA for small text), in both themes and both palettes: every token used as text
+- **Text reads at 4.5:1** (WCAG AA for small text), in both themes and every palette: every token used as text
   (`foreground`, `muted-foreground`, `accent`, each status, section, diff, and syntax color) on `background`, `surface`,
   and `surface-raised`, and each status on its own tint up to 20% (a chip, a destructive button, a question's bubble),
   in a selected row too. `src/styles/tokens.test.ts` measures every pair from `tokens.css` and fails below it, so a
@@ -97,11 +96,14 @@ Rules:
   picked call's, which `tokens.test.ts` measures.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
-- **Palettes.** Lavender is light's default and indigo dark's. The others are a rule each in `tokens.css` that sets only
-  the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`: for light,
-  off-white, a warm paper, and Solarized's cream base tones; for dark, grey, the near-colorless neutrals the 2026-10-19
-  exploration drew for Mailroom. A light canvas is never grey, which only looks dim. Every hue, the accent's included,
-  is the same in all, so a component never knows which it is on.
+- **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
+  only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
+  off-white, a warm paper, and the light tones of Solarized, Nord, and Gruvbox; dark has grey (the near-colorless
+  neutrals the 2026-10-19 exploration drew for Mailroom), black, and the dark tones of Solarized and Gruvbox. A light
+  canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
+  knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
+  whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`
+  measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with

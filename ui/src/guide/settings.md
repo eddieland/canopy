@@ -10,9 +10,11 @@ are kept in this browser; everything else canopy reads from its config files, as
 of the header flips it too.
 
 Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
-**Indigo** in dark. Light can be **Off-white**, a warm paper, or **Solarized**, its cream; dark can be a plain **Grey**.
-Only the background, surfaces, and text change; every status color stays where you learned it. Solarized purists will
-notice the base tones sit a shade lighter than the spec, so the status colors stay readable on them.
+**Indigo** in dark. Light can also be **Off-white**, a warm paper, or the light side of **Solarized**, **Nord**, or
+**Gruvbox**. Dark can be a plain **Grey**, a near **Black** for an OLED screen, or the dark side of **Solarized** or
+**Gruvbox**. Only the background, surfaces, and text change; every status color stays where you learned it. Scheme
+purists will notice the bases sit a shade off the spec, so the status colors stay readable on them. Nord's dark side
+didn't make it: moved far enough for that, it was Indigo with a different name.
 
 ## Time
 

@@ -26,9 +26,10 @@
                 try {
                     palettes = JSON.parse(localStorage.getItem('canopy-palette')) || {}
                 } catch (e) {}
-                var light = palettes.light
-                d.dataset.lightPalette = light === 'off-white' || light === 'solarized' ? light : 'lavender'
-                d.dataset.darkPalette = palettes.dark === 'grey' ? 'grey' : 'indigo'
+                var light = ['off-white', 'solarized', 'nord', 'gruvbox']
+                var dark = ['grey', 'black', 'solarized', 'gruvbox']
+                d.dataset.lightPalette = light.indexOf(palettes.light) >= 0 ? palettes.light : 'lavender'
+                d.dataset.darkPalette = dark.indexOf(palettes.dark) >= 0 ? palettes.dark : 'indigo'
             })()
         </script>
         <link rel="icon" type="image/svg+xml" href="./favicon.svg" />

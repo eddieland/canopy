@@ -22,7 +22,7 @@ describe('parsePalettes', () => {
         { raw: null, palettes: { light: 'lavender', dark: 'indigo' } },
         { raw: '{"light":"solarized"}', palettes: { light: 'solarized', dark: 'indigo' } },
         { raw: '{"light":"off-white","dark":"grey"}', palettes: { light: 'off-white', dark: 'grey' } },
-        { raw: '{"light":"grey","dark":"solarized"}', palettes: { light: 'lavender', dark: 'indigo' } },
+        { raw: '{"light":"grey","dark":"nord"}', palettes: { light: 'lavender', dark: 'indigo' } },
         { raw: '{"dark":"mauve"}', palettes: { light: 'lavender', dark: 'indigo' } },
         { raw: '"grey"', palettes: { light: 'lavender', dark: 'indigo' } },
         { raw: 'null', palettes: { light: 'lavender', dark: 'indigo' } },

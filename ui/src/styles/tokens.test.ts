@@ -3,6 +3,9 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { PALETTES } from '@/theme/palette'
+import type { ResolvedTheme } from '@/theme/store'
+
 // Every color token that is text, read against what it sits on, in both themes, at WCAG AA for small text
 // (ui/DESIGN.md, "Tokens"). The colors are the ones tokens.css writes, converted from oklch as a browser does; a tint
 // is the token at that strength over its base, as Tailwind's `bg-status-failed/12` paints it.
@@ -15,14 +18,17 @@ type Rgb = [number, number, number]
 type Theme = Record<string, Rgb>
 
 const css = readFileSync(resolve(import.meta.dirname, 'tokens.css'), 'utf8')
-// Every other palette sets some tokens over its theme's default, so each is that default with those replaced.
-const THEMES: Record<string, Theme> = {
-    light: theme(':root'),
-    dark: theme('.dark'),
-    'off-white light': { ...theme(':root'), ...theme(":root[data-light-palette='off-white']:not(.dark)") },
-    'solarized light': { ...theme(':root'), ...theme(":root[data-light-palette='solarized']:not(.dark)") },
-    'grey dark': { ...theme('.dark'), ...theme(".dark[data-dark-palette='grey']") },
-}
+// Each theme's default, then every other palette in PALETTES, which sets some tokens over its theme's default, so each
+// is that default with those replaced. A palette with no rule here fails, as theme() throws.
+const DEFAULTS: Record<ResolvedTheme, Theme> = { light: theme(':root'), dark: theme('.dark') }
+const THEMES: Record<string, Theme> = Object.fromEntries(
+    (['light', 'dark'] as const).flatMap((mode) =>
+        PALETTES[mode].map((palette, index) => [
+            `${palette} ${mode}`,
+            index === 0 ? DEFAULTS[mode] : { ...DEFAULTS[mode], ...theme(paletteRule(mode, palette)) },
+        ]),
+    ),
+)
 
 // Text tokens, each read on the canvas, a surface, and a raised surface.
 const TEXT = [
@@ -142,6 +148,13 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
         expect(contrast(token('accent-foreground'), token('accent'))).toBeGreaterThanOrEqual(AA)
     })
 })
+
+/** The selector of the rule that sets `palette` over `mode`'s default. */
+function paletteRule(mode: ResolvedTheme, palette: string): string {
+    return mode === 'light'
+        ? `:root[data-light-palette='${palette}']:not(.dark)`
+        : `.dark[data-dark-palette='${palette}']`
+}
 
 /** The opaque oklch tokens a rule sets, by name, as sRGB. */
 function theme(selector: string): Theme {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { stubSystemTheme } from '@/test-utils'
 
-import { STORAGE_KEY as PALETTE_KEY } from './palette'
+import { PALETTES, STORAGE_KEY as PALETTE_KEY } from './palette'
 import { STORAGE_KEY } from './store'
 
 // The blocking script in index.html, run exactly as written.
@@ -53,7 +53,7 @@ describe('index.html theme script', () => {
         { stored: '{"dark":"grey"}', light: 'lavender', dark: 'grey' },
         { stored: '{"light":"off-white","dark":"grey"}', light: 'off-white', dark: 'grey' },
         { stored: '{"light":"solarized"}', light: 'solarized', dark: 'indigo' },
-        { stored: '{"light":"grey","dark":"solarized"}', light: 'lavender', dark: 'indigo' },
+        { stored: '{"light":"grey","dark":"nord"}', light: 'lavender', dark: 'indigo' },
         { stored: 'not json', light: 'lavender', dark: 'indigo' },
     ])('stored palettes $stored: light wears $light, dark $dark', ({ stored, light, dark }) => {
         stubSystemTheme(false)
@@ -64,4 +64,14 @@ describe('index.html theme script', () => {
         expect(document.documentElement.dataset.lightPalette).toBe(light)
         expect(document.documentElement.dataset.darkPalette).toBe(dark)
     })
+
+    it.each((['light', 'dark'] as const).flatMap((mode) => PALETTES[mode].map((palette) => ({ mode, palette }))))(
+        'applies every palette the store knows: $palette for $mode',
+        ({ mode, palette }) => {
+            stubSystemTheme(false)
+            localStorage.setItem(PALETTE_KEY, JSON.stringify({ [mode]: palette }))
+            run()
+            expect(document.documentElement.dataset[`${mode}Palette`]).toBe(palette)
+        },
+    )
 })

@@ -11,8 +11,8 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set only the neutrals, over the default's: off-white and Solarized for light, and for dark the grey the
- * 2026-10-19 exploration drew for Mailroom.
+ * others set only the neutrals, over the default's: off-white, Solarized, Nord, and Gruvbox for light; grey (the one
+ * the 2026-10-19 exploration drew for Mailroom), black, Solarized, and Gruvbox for dark.
  */
 
 :root {
@@ -209,6 +209,35 @@
     --context-carried: oklch(0.6 0.02 205);
 }
 
+/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted. */
+:root[data-light-palette='nord']:not(.dark) {
+    --background: oklch(0.951 0.007 261);
+    --surface: oklch(0.99 0.003 261);
+    --surface-raised: oklch(0.962 0.008 262);
+    --border: oklch(0.899 0.016 263);
+    --foreground: oklch(0.324 0.023 264);
+    --muted-foreground: oklch(0.452 0.035 264);
+    --scrollbar: oklch(0.452 0.035 264 / 0.4);
+    --status-stopped: oklch(0.43 0.035 264);
+    --spend-dry-run: oklch(0.6 0.02 262);
+    --context-carried: oklch(0.6 0.02 262);
+}
+
+/* Gruvbox light: bg0 the canvas, bg0_h a surface, bg1 the hairlines, fg1 the text, gray muted; the bases a shade
+ * lighter than Gruvbox's own, as Solarized's are. */
+:root[data-light-palette='gruvbox']:not(.dark) {
+    --background: oklch(0.958 0.05 96);
+    --surface: oklch(0.985 0.035 101);
+    --surface-raised: oklch(0.968 0.05 96);
+    --border: oklch(0.904 0.057 89);
+    --foreground: oklch(0.3 0.008 50);
+    --muted-foreground: oklch(0.5 0.023 63);
+    --scrollbar: oklch(0.5 0.023 63 / 0.4);
+    --status-stopped: oklch(0.47 0.023 63);
+    --spend-dry-run: oklch(0.59 0.02 70);
+    --context-carried: oklch(0.59 0.02 70);
+}
+
 /* The dark theme's grey palette, Mailroom's neutrals. Muted text is a step further from the canvas than Mailroom drew
  * it, and stopped one more, to read on its own tint as well. */
 .dark[data-dark-palette='grey'] {
@@ -223,6 +252,53 @@
     --status-stopped: oklch(0.72 0.015 286);
     --spend-dry-run: oklch(0.6 0.01 286);
     --context-carried: oklch(0.58 0.01 286);
+}
+
+/* Black: a near-black canvas, kind to an OLED screen, and colorless neutrals over it. */
+.dark[data-dark-palette='black'] {
+    --background: oklch(0.13 0 0);
+    --surface: oklch(0.17 0 0);
+    --surface-raised: oklch(0.215 0 0);
+    --border: oklch(0.26 0 0);
+    --foreground: oklch(0.95 0 0);
+    --muted-foreground: oklch(0.68 0 0);
+    --accent-foreground: oklch(0.13 0 0);
+    --scrollbar: oklch(0.68 0 0 / 0.4);
+    --status-stopped: oklch(0.72 0 0);
+    --spend-dry-run: oklch(0.55 0 0);
+    --context-carried: oklch(0.55 0 0);
+}
+
+/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text and base0 muted. The bases are a step
+ * darker than Solarized's own, and the text brighter, so the status and section hues still read at 4.5:1 on them. */
+.dark[data-dark-palette='solarized'] {
+    --background: oklch(0.187 0.049 220);
+    --surface: oklch(0.208 0.05 220);
+    --surface-raised: oklch(0.229 0.052 220);
+    --border: oklch(0.28 0.045 220);
+    --foreground: oklch(0.9 0.016 197);
+    --muted-foreground: oklch(0.72 0.02 205);
+    --accent-foreground: oklch(0.187 0.049 220);
+    --scrollbar: oklch(0.72 0.02 205 / 0.4);
+    --status-stopped: oklch(0.76 0.02 205);
+    --spend-dry-run: oklch(0.63 0.03 215);
+    --context-carried: oklch(0.63 0.03 215);
+}
+
+/* Gruvbox dark: bg0_h the canvas, bg0 a surface, bg1 raised, bg2 the hairlines, fg the text, gray muted. The bases are
+ * a step darker than Gruvbox's own, so the status and section hues still read at 4.5:1 on them. */
+.dark[data-dark-palette='gruvbox'] {
+    --background: oklch(0.171 0.005 220);
+    --surface: oklch(0.207 0 90);
+    --surface-raised: oklch(0.274 0.007 49);
+    --border: oklch(0.341 0.012 52);
+    --foreground: oklch(0.894 0.057 89);
+    --muted-foreground: oklch(0.69 0.035 76);
+    --accent-foreground: oklch(0.171 0.005 220);
+    --scrollbar: oklch(0.69 0.035 76 / 0.4);
+    --status-stopped: oklch(0.74 0.035 76);
+    --spend-dry-run: oklch(0.62 0.02 70);
+    --context-carried: oklch(0.62 0.02 70);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */

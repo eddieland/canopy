@@ -5,15 +5,16 @@ import type { ResolvedTheme } from './store'
 /**
  * The palette each theme draws its neutrals from, chosen apart for light and for dark. Each theme's default carries
  * the accent's hue in its canvas: lavender, a pale lavender grey with white surfaces, and indigo, a deep indigo slate.
- * Light can wear off-white, a warm paper, or Solarized's cream base tones instead; dark can wear grey, the neutral one
- * the 2026-10-19 exploration drew for Mailroom. Kept in localStorage and synced across tabs; the inline script in
- * index.html applies it before first paint, and this module afterwards.
+ * Light can wear off-white, a warm paper, or Solarized's, Nord's, or Gruvbox's light base tones instead. Dark can wear
+ * grey, the neutral one the 2026-10-19 exploration drew for Mailroom, a near black, or Solarized's or Gruvbox's dark
+ * tones. Kept in localStorage and synced across tabs; the inline script in index.html applies it before first paint,
+ * and this module afterwards.
  */
 
 /** Each theme's palettes, the default first. */
 export const PALETTES = {
-    light: ['lavender', 'off-white', 'solarized'],
-    dark: ['indigo', 'grey'],
+    light: ['lavender', 'off-white', 'solarized', 'nord', 'gruvbox'],
+    dark: ['indigo', 'grey', 'black', 'solarized', 'gruvbox'],
 } as const
 
 /** A set of neutrals `T` can wear. */
