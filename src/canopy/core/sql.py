@@ -11,7 +11,10 @@ identifier. So no clause can carry text that came from outside canopy's code, an
     rows = sql.execute(conn, q).fetchall()
 
 Each builder is immutable: a method returns a new statement, so a partial query can be kept in a constant and
-finished by each caller.
+finished by each caller. A statement run once per row, by `execute_many`, takes `ROW` where a value differs per row:
+
+    q = sql.update("ticks").set(ended_at=sql.ROW, status=TickStatus.ABANDONED).where("id = ?", sql.ROW)
+    sql.execute_many(conn, q, [(now(), tick) for tick in ticks])
 """
 
 from __future__ import annotations
@@ -20,10 +23,23 @@ import re
 import sqlite3
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from enum import Enum
 from typing import LiteralString, Protocol, runtime_checkable
 
 #: A value sqlite3 binds to a `?`. A `StrEnum` member is a `str`, and a `bool` an `int`.
 type Value = str | int | float | bytes | None
+
+
+class PerRow(Enum):
+    """The type of `ROW`, a value `execute_many` binds from each row in turn."""
+
+    ROW = "row"
+
+
+#: A value bound from each row a statement is run for, by `execute_many`, in the order the `ROW`s appear.
+ROW = PerRow.ROW
+#: What a fragment binds to its `?`s: a value, or a `ROW` that `execute_many` fills.
+type Bound = Value | PerRow
 
 
 @runtime_checkable
@@ -39,8 +55,8 @@ class Composable(Protocol):
         ...
 
 
-#: What fills a `{}` or a `?` in a clause's text: a piece of SQL, or a value.
-type Arg = Composable | Value
+#: What fills a `{}` or a `?` in a clause's text: a piece of SQL, or a value, or a `ROW`.
+type Arg = Composable | Value | PerRow
 
 
 @dataclass(frozen=True)
@@ -52,7 +68,7 @@ class Fragment:
 
     #: The SQL, with a `?` per value.
     text: str
-    params: tuple[Value, ...] = ()
+    params: tuple[Bound, ...] = ()
 
     def fragment(self) -> Fragment:
         """Render as a fragment: itself.
@@ -97,6 +113,17 @@ def in_(column: LiteralString, values: Collection[Value]) -> Fragment:
         The condition.
     """
     return Fragment(f"{column} IN ({', '.join('?' * len(values))})", tuple(values))
+
+
+def not_in(column: LiteralString, values: Collection[Value]) -> Fragment:
+    """Return `column NOT IN (?, ...)`, a `?` per value.
+
+    No values give `NOT IN ()`, which SQLite reads as matching every row. A NULL in `column` matches neither.
+
+    Returns:
+        The condition.
+    """
+    return Fragment(f"{column} NOT IN ({', '.join('?' * len(values))})", tuple(values))
 
 
 def any_of(*conditions: Composable) -> Fragment:
@@ -153,12 +180,29 @@ def insert(table: LiteralString, **values: Arg) -> Insert:
 
 
 def insert_rows(table: LiteralString, columns: Sequence[LiteralString]) -> Insert:
-    """Start an INSERT into `table` of a `?` per column, for `execute_many` to run once per row.
+    """Start an INSERT into `table` of a `ROW` per column, for `execute_many` to run once per row.
 
     Returns:
         The statement.
     """
-    return Insert(table=name(table), values=tuple((c, Fragment("?")) for c in map(_identifier, columns)))
+    return Insert(table=name(table), values=tuple((c, Fragment("?", (ROW,))) for c in map(_identifier, columns)))
+
+
+def insert_from(table: LiteralString, columns: Sequence[LiteralString], rows: Composable) -> Insert:
+    """Start an INSERT into `table`'s `columns` of the rows a SELECT returns, a value per column in order.
+
+    An `on_conflict` on one needs a WHERE in the SELECT, or SQLite reads the ON as the SELECT's join.
+
+    Returns:
+        The statement.
+
+    Raises:
+        ValueError: `columns` is empty.
+    """
+    if not columns:
+        msg = f"an INSERT into {table} from a SELECT names no column"
+        raise ValueError(msg)
+    return Insert(table=name(table), values=(), selected=tuple(map(_identifier, columns)), source=rows.fragment())
 
 
 def update(table: LiteralString) -> Update:
@@ -184,25 +228,35 @@ def execute(conn: sqlite3.Connection, statement: Composable) -> sqlite3.Cursor:
 
     Returns:
         The cursor, to read its rows from.
+
+    Raises:
+        ValueError: `statement` holds a `ROW`, which only `execute_many` fills.
     """
     built = statement.fragment()
-    return conn.execute(built.text, built.params)
+    values = [p for p in built.params if not isinstance(p, PerRow)]
+    if len(values) < len(built.params):
+        msg = "a statement with a ROW in it runs once per row, through execute_many"
+        raise ValueError(msg)
+    return conn.execute(built.text, values)
 
 
 def execute_many(conn: sqlite3.Connection, statement: Composable, rows: Iterable[Sequence[Value]]) -> sqlite3.Cursor:
-    """Run `statement` on `conn` once for each of `rows`, each binding its `?`s in order.
+    """Run `statement` on `conn` once for each of `rows`, each filling the statement's `ROW`s in order.
+
+    Its other values are bound as they are, the same for every row.
 
     Returns:
         The cursor.
 
     Raises:
-        ValueError: `statement` already binds values of its own.
+        ValueError: `statement` holds no `ROW`, or a row has more or fewer values than it has `ROW`s.
     """
     built = statement.fragment()
-    if built.params:
-        msg = "a statement run for many rows takes its values from the rows alone"
+    wanted = sum(isinstance(p, PerRow) for p in built.params)
+    if not wanted:
+        msg = "a statement run for many rows needs a ROW where a value differs per row"
         raise ValueError(msg)
-    return conn.executemany(built.text, rows)
+    return conn.executemany(built.text, (_filled(built.params, row, wanted) for row in rows))
 
 
 @dataclass(frozen=True)
@@ -279,6 +333,14 @@ class Select:
             The statement with it.
         """
         return replace(self, conditions=(*self.conditions, in_(column, values)))
+
+    def where_not_in(self, column: LiteralString, values: Collection[Value]) -> Select:
+        """Add `column NOT IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, conditions=(*self.conditions, not_in(column, values)))
 
     def group_by(self, columns: LiteralString, *args: Arg) -> Select:
         """Set its GROUP BY.
@@ -365,6 +427,9 @@ class Insert:
     resolution: str = ""
     conflict: Fragment | None = None
     returns: Fragment | None = None
+    #: For an INSERT of a SELECT's rows: the columns they fill, and the SELECT.
+    selected: tuple[str, ...] = ()
+    source: Fragment | None = None
 
     def or_ignore(self) -> Insert:
         """Make it INSERT OR IGNORE.
@@ -407,12 +472,18 @@ class Insert:
         Raises:
             ValueError: It sets no column.
         """
-        if not self.values:
+        if self.source is not None:
+            into = f"INSERT{self.resolution} INTO {self.table.text} ({', '.join(self.selected)}) "
+            head = Fragment(into + self.source.text, self.source.params)
+        elif not self.values:
             msg = f"an INSERT into {self.table.text} sets no column"
             raise ValueError(msg)
-        columns = ", ".join(c for c, _ in self.values)
-        row = _joined(", ", [v for _, v in self.values], empty=None, parenthesize=False)
-        head = Fragment(f"INSERT{self.resolution} INTO {self.table.text} ({columns}) VALUES ({row.text})", row.params)
+        else:
+            columns = ", ".join(c for c, _ in self.values)
+            row = _joined(", ", [v for _, v in self.values], empty=None, parenthesize=False)
+            head = Fragment(
+                f"INSERT{self.resolution} INTO {self.table.text} ({columns}) VALUES ({row.text})", row.params
+            )
         return _joined(
             " ", [p for p in (head, self.conflict, self.returns) if p is not None], empty=None, parenthesize=False
         )
@@ -462,6 +533,14 @@ class Update:
             The statement with it.
         """
         return replace(self, conditions=(*self.conditions, in_(column, values)))
+
+    def where_not_in(self, column: LiteralString, values: Collection[Value]) -> Update:
+        """Add `column NOT IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, conditions=(*self.conditions, not_in(column, values)))
 
     def everything(self) -> Update:
         """Update every row: an UPDATE with no condition is refused unless it says so.
@@ -531,6 +610,14 @@ class Delete:
         """
         return replace(self, conditions=(*self.conditions, in_(column, values)))
 
+    def where_not_in(self, column: LiteralString, values: Collection[Value]) -> Delete:
+        """Add `column NOT IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, conditions=(*self.conditions, not_in(column, values)))
+
     def everything(self) -> Delete:
         """Delete every row: a DELETE with no condition is refused unless it says so.
 
@@ -572,9 +659,17 @@ _TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\?|\{\}")
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
+def _filled(params: Sequence[Bound], row: Sequence[Value], wanted: int) -> list[Value]:
+    if len(row) != wanted:
+        msg = f"a row of {len(row)} values for a statement with {wanted} ROWs"
+        raise ValueError(msg)
+    values = iter(row)
+    return [next(values) if isinstance(p, PerRow) else p for p in params]
+
+
 def _fill(text: str, args: Sequence[Arg]) -> Fragment:
     out: list[str] = []
-    params: list[Value] = []
+    params: list[Bound] = []
     rest = list(args)
     at = 0
     for match in _TOKEN.finditer(text):
