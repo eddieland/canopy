@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import db, records
 from canopy.core.conversation import Refused
 
 if TYPE_CHECKING:
@@ -75,9 +75,12 @@ def current(conn: sqlite3.Connection, now: datetime | None = None) -> Notice | N
         The one notice that is neither ended nor lapsed, or None.
     """
     moment = db.format_time(now or datetime.now(UTC))
-    row = conn.execute(
-        "SELECT * FROM notices WHERE ended_at IS NULL AND lapses_at > ? ORDER BY id DESC LIMIT 1", (moment,)
-    ).fetchone()
+    row = records.fetch_one(
+        conn,
+        records.Notice,
+        "SELECT * FROM notices WHERE ended_at IS NULL AND lapses_at > ? ORDER BY id DESC LIMIT 1",
+        (moment,),
+    )
     return _notice(row) if row is not None else None
 
 
@@ -122,7 +125,7 @@ def set_notice(conn: sqlite3.Connection, text: str, *, minutes: int | None, chan
             "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, ?, ?)",
             (body, stamp, channel, db.format_time(moment + timedelta(minutes=lasts))),
         )
-    row = conn.execute("SELECT * FROM notices WHERE id = ?", (cur.lastrowid,)).fetchone()
+    [row] = records.fetch_all(conn, records.Notice, "SELECT * FROM notices WHERE id = ?", (cur.lastrowid,))
     return _notice(row)
 
 
@@ -137,7 +140,7 @@ def clear(conn: sqlite3.Connection, *, channel: str) -> Notice | None:
         if held is None:
             return None
         conn.execute("UPDATE notices SET ended_at = ?, ended_channel = ? WHERE id = ?", (db.now(), channel, held.id))
-    row = conn.execute("SELECT * FROM notices WHERE id = ?", (held.id,)).fetchone()
+    [row] = records.fetch_all(conn, records.Notice, "SELECT * FROM notices WHERE id = ?", (held.id,))
     return _notice(row)
 
 
@@ -148,7 +151,9 @@ def recent(conn: sqlite3.Connection, now: datetime) -> list[Notice]:
         Those notices; none when the operator set none lately.
     """
     since = db.format_time(now - timedelta(days=RECENT_DAYS))
-    rows = conn.execute(
+    rows = records.fetch_all(
+        conn,
+        records.Notice,
         "SELECT * FROM notices WHERE lapses_at > ? AND (ended_at IS NULL OR ended_at > ?) "
         "AND set_at <= ? ORDER BY id DESC LIMIT ?",
         (since, since, db.format_time(now), RECENT_LIMIT),
@@ -206,15 +211,15 @@ def describe(held: Notice, now: datetime) -> str:
     return f"Notice to workers ({held.channel}, {_duration(left)} left): {text}"
 
 
-def _notice(row: sqlite3.Row) -> Notice:
+def _notice(row: records.Notice) -> Notice:
     return Notice(
-        id=int(row["id"]),
-        text=str(row["body"]),
-        set_at=str(row["set_at"]),
-        channel=str(row["channel"]),
-        lapses_at=str(row["lapses_at"]),
-        ended_at=row["ended_at"],
-        ended_channel=row["ended_channel"],
+        id=row.id,
+        text=row.body,
+        set_at=row.set_at,
+        channel=row.channel,
+        lapses_at=row.lapses_at,
+        ended_at=row.ended_at,
+        ended_channel=row.ended_channel,
     )
 
 

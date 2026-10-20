@@ -372,10 +372,12 @@ def state_section(
     newest = records.fetch_one(
         conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
     )
-    run = conn.execute(
+    run = records.fetch_one(
+        conn,
+        records.Run,
         "SELECT * FROM runs WHERE ticket_key = ? AND kind = ? AND id > ? ORDER BY id DESC LIMIT 1",
         (key, RunKind.PLAN, ticket.forgotten_run_id or 0),
-    ).fetchone()
+    )
     if not needed_now and newest is None and run is None and attempts == 0:
         return None
     replied = conn.execute(
@@ -384,8 +386,8 @@ def state_section(
     ).fetchone()[0]
     blocked = (
         run is not None
-        and run["status"] == "blocked"
-        and (replied is None or run["ended_at"] is None or replied <= str(run["ended_at"]))
+        and run.status is RunStatus.BLOCKED
+        and (replied is None or run.ended_at is None or replied <= run.ended_at)
     )
     section: PlanState = {
         "needed": needed_now and waived is None,
@@ -473,12 +475,12 @@ def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:
     for row in rows:
         key = str(row[0])
         asked = question(conn, key)
-        if asked is not None and asked["run_id"] == row[1]:
-            found.append(conversation.Awaiting(key, int(asked["id"]), str(asked["body"])))
+        if asked is not None and asked.run_id == row[1]:
+            found.append(conversation.Awaiting(key, asked.id, asked.body))
     return found
 
 
-def question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+def question(conn: sqlite3.Connection, key: str) -> records.Message | None:
     """Return a ticket's latest question when a plan run asked it and no operator message came after it.
 
     On a public ticket this is the one question canopy holds rather than the tracker (DESIGN §25).
@@ -487,9 +489,9 @@ def question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
         The question's message, or None.
     """
     found = conversation.latest_question(conn, key)
-    if found is None or found["run_id"] is None:
+    if found is None or found.run_id is None:
         return None
-    run = db.get_run(conn, int(found["run_id"]))
+    run = db.get_run(conn, found.run_id)
     return found if run is not None and run["kind"] == RunKind.PLAN else None
 
 
