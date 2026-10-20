@@ -9,6 +9,13 @@ are kept in this browser; everything else canopy reads from its config files, as
 **Light**, **Dark**, or **System**, which follows your machine. Every open tab follows along. The button at the right
 of the header flips it too.
 
+Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
+**Indigo** in dark. Light can also be **Off-white**, a warm paper, or the light side of **Solarized**, **Nord**, or
+**Gruvbox**. Dark can be a plain **Grey**, a near **Black** for an OLED screen, or the dark side of **Solarized** or
+**Gruvbox**. Only the background, surfaces, and text change; every status color stays where you learned it. Scheme
+purists will notice the bases sit a shade off the spec, so the status colors stay readable on them. Nord's dark side
+didn't make it: moved far enough for that, it was Indigo with a different name.
+
 ## Time
 
 How every time of day on the page reads: **24-hour** (`14:05`, the default) or **12-hour** (`2:05 PM`). **Show time

@@ -6,12 +6,14 @@ import {
     placeholderGuide,
     LIGHT_ROUTES,
     NOW,
+    OTHER_PALETTES,
     ROUTES,
     screenshotMain,
     screenshotWhole,
     serveReview,
     settled,
     signIn,
+    storePalette,
     storeTheme,
     THEMES,
     WHOLE_ROUTES,
@@ -90,6 +92,23 @@ for (const theme of THEMES) {
         })
         await expect(page).toHaveScreenshot(`sign-in-${theme}.png`, { fullPage: true })
     })
+}
+
+// Every palette but a theme's default sets only the neutrals, so one page in each shows all it changes: its main pane
+// alone, so a change to the header or the rail rewrites none of these.
+for (const theme of THEMES) {
+    for (const palette of OTHER_PALETTES[theme]) {
+        test(`attention in ${palette} ${theme}`, async ({ page }) => {
+            await page.clock.setFixedTime(NOW)
+            await storeTheme(page, theme)
+            await storePalette(page, theme, palette)
+            await signIn(page)
+            await page.goto('attention')
+            await settled(page)
+            await expect(page.locator('html')).toHaveAttribute(`data-${theme}-palette`, palette)
+            await screenshotMain(page, `attention-${palette}-${theme}.png`)
+        })
+    }
 }
 
 // A tick's output as plain text: no color of its own, so dark alone.

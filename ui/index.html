@@ -5,9 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="light dark" />
         <!--
-        Blocking on purpose: sets the theme class and color-scheme before the first paint, so a reload never flashes
-        the other theme. Keep it in sync with src/theme/store.ts (STORAGE_KEY, the values, the resolution); a test in
-        src/theme/theme-script.test.ts runs this exact script. FastAPI allows it by hash in its CSP (serve/spa.py).
+        Blocking on purpose: sets the theme class, color-scheme, and each theme's palette before the first paint, so a
+        reload never flashes the other theme. Keep it in sync with src/theme/store.ts and src/theme/palette.ts (their
+        STORAGE_KEYs, the values, the resolution); a test in src/theme/theme-script.test.ts runs this exact script.
+        FastAPI allows it by hash in its CSP (serve/spa.py).
         -->
         <script>
             ;(function () {
@@ -21,6 +22,14 @@
                 d.classList.toggle('dark', dark)
                 d.style.colorScheme = dark ? 'dark' : 'light'
                 d.dataset.theme = p
+                var palettes = {}
+                try {
+                    palettes = JSON.parse(localStorage.getItem('canopy-palette')) || {}
+                } catch (e) {}
+                var light = ['off-white', 'solarized', 'nord', 'gruvbox']
+                var dark = ['grey', 'black', 'solarized', 'gruvbox']
+                d.dataset.lightPalette = light.indexOf(palettes.light) >= 0 ? palettes.light : 'lavender'
+                d.dataset.darkPalette = dark.indexOf(palettes.dark) >= 0 ? palettes.dark : 'indigo'
             })()
         </script>
         <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
