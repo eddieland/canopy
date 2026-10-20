@@ -23,7 +23,7 @@ def offences(source: str, module: str) -> list[str]:
         return []
     tree = ast.parse(source)
     found = [f"{module}:{n}: a `noqa: S608`" for n, line in enumerate(source.splitlines(), 1) if "S608" in line]
-    modules = _imported_names(tree)
+    modules = _canopy_modules(tree)
     for function, node in _calls(tree):
         callee = node.func
         if not isinstance(callee, ast.Attribute):
@@ -34,7 +34,8 @@ def offences(source: str, module: str) -> list[str]:
         if callee.attr == "Fragment":
             found.append(f"{module}:{node.lineno}: a Fragment made outside {BUILDER}")
         elif callee.attr in RUNS_SQL:
-            # `sql.execute`, and a function of another canopy module that is named so (`worker.execute`), run no SQL.
+            # `sql.execute`, and a function of another canopy module that is named so (`worker.execute`), run no SQL;
+            # a name the module also binds itself, as a parameter or a variable, may be a connection, so it counts.
             if isinstance(receiver, ast.Name) and receiver.id in modules:
                 continue
             if (module, function, callee.attr) in EXEMPT:
@@ -84,15 +85,40 @@ class Sneaky:
     ]
 
 
-def _imported_names(tree: ast.Module) -> set[str]:
+def test_a_connection_named_as_an_imported_module_is_still_found() -> None:
+    source = """
+import sqlite3 as db
+from canopy.runs import worker
+from json import tool
+
+def shadowed(worker):
+    worker.execute("DELETE FROM ticks")
+
+def foreign(conn):
+    db.connect(":memory:").execute("SELECT 1")
+    tool.execute("SELECT 1")
+"""
+    assert offences(source, "loop/sneaky.py") == [
+        "loop/sneaky.py:7: `.execute(...)` runs SQL outside the builder",
+        "loop/sneaky.py:10: `.execute(...)` runs SQL outside the builder",
+        "loop/sneaky.py:11: `.execute(...)` runs SQL outside the builder",
+    ]
+
+
+def _canopy_modules(tree: ast.Module) -> set[str]:
+    """The names a module imports from canopy itself, less any it also binds, as a parameter or a variable."""
     names: set[str] = set()
+    bound: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            names |= {(a.asname or a.name).split(".")[0] for a in node.names}
-        elif isinstance(node, ast.ImportFrom):
+            names |= {a.asname or a.name for a in node.names if a.name.split(".")[0] == "canopy" and a.asname}
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "canopy":
             names |= {a.asname or a.name for a in node.names}
-    # sqlite3's own functions run SQL as a connection's do.
-    return names - {"sqlite3"}
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bound.add(node.id)
+    return names - bound
 
 
 def _calls(tree: ast.Module) -> list[tuple[str, ast.Call]]:
