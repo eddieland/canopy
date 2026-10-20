@@ -14,8 +14,15 @@ of your own. `canopy chore install` alone lists the examples.
 
 ## What a chore is
 
-A chore is a recurring, read-only check you define once and the overseer runs when it is due. It works on no ticket,
-gets no worktree, pushes nothing, and its only output is a list of findings on the attention list
+A chore is a scheduled task with an agent's judgment in it. You write, in plain language, what to look at and what
+counts as a problem; when it is due, an agent reads whatever its tools reach (CI, PRs, the tracker, Sentry, canopy's
+own journal, a read-only CLI you allow), decides what matters, and reports each problem as a finding on the attention
+list, with a link. It sees the previous run's summary and open findings, so it can tell a new failure from one it
+already reported, and your notes steer it from run to run. A cron job can say a check went red; a chore can say it is
+the same flaky test as last week.
+
+It changes nothing. It works on no ticket, gets no worktree, edits and pushes nothing, posts no comment, and files no
+ticket; its only output is its findings
 ([DESIGN §19](../../docs/design/CHORES_NOTIFICATIONS_REVIEWS.md#19-chores)).
 
 The config sets the fastest recurrence and the allowed days and hours; the overseer decides whether a due run is worth

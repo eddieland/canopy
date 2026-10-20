@@ -169,7 +169,8 @@ Optional, in the workspace's `.canopy/config.toml`, or in `~/.config/canopy/conf
 
 - notification sinks for attention changes, `canopy-notify-desktop` and `canopy-notify-slack` (§20);
 - a reviewer agent on PRs, `[review]` (§21);
-- chores: recurring checks that report to the attention list (§19; see
+- chores: scheduled agents that read your CI, PRs, tracker, or a read-only CLI, judge what matters, and report it to
+  the attention list, changing nothing (§19; see
   [examples/chores/README.md](examples/chores/README.md)).
 
 The details are in [docs/design/LOOP.md](docs/design/LOOP.md) and

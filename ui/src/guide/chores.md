@@ -1,11 +1,38 @@
 # Chores
 
-Recurring work you define, beside the tickets: a check on your builds, a sweep for stale dependencies, anything an agent
-can look at on a schedule and report on to the attention list.
+A chore is a scheduled task with an agent's judgment in it. You write, in plain language, what to look at and what
+counts as a problem; on a schedule, an agent goes and looks, decides what matters, and puts each problem it finds on
+the attention list with a link. A cron job can tell you a check went red. A chore can tell you it's the same flaky
+test as Tuesday, that three PRs are failing for one reason, and which of forty Sentry issues is worth your morning.
 
-## Chores
+## What a chore can do
 
-A chore is an agent run about no ticket: no worktree, no branch, no push. You define one as `[chores.NAME]` in
+- **Read whatever its tools reach.** Under the agent canopy ships, that's your GitHub and tracker MCP servers' read
+  tools: CI on main, other people's PRs, review queues, tickets. Give a chore an agent of its own and it can also run
+  the read-only commands you allow it, such as `sentry issue list`, `pip-audit`, or canopy's own `canopy health`.
+- **Judge, not just match.** Its prompt can say "a test that failed and passed on retry is flaky" or "skip anything
+  someone is already assigned to", and it applies that the way a person would, with your [notes](#notes-to-a-chore)
+  steering it from run to run.
+- **Remember.** Each run sees what the last one said and which findings are still open, so a problem keeps one id and
+  one attention item until it's fixed, then quietly goes away. It can also look further back,
+  [below](#what-a-run-knows-of-the-last-ones).
+- **Run when it's worth it.** You set how often it may run and in which hours; the overseer decides whether a due run
+  is worth it, guided by a `when` line in your words, such as "skip it on weekends unless the last run found something".
+
+What it can't do is change anything. A chore edits no file, pushes no branch, posts no comment, and files no ticket;
+the agent it runs under has no write tools. Its only output is its findings, and what to do about them is yours, or
+a ticket's. That's deliberate: a chore reads text from people outside your queue, and an agent that reads strangers'
+words shouldn't hold a pen. When you already know what to change, that's a ticket, not a chore.
+
+Some chores canopy ships: `build-health` (red and flaky checks on main), `sentry-triage` (the errors nobody has
+acted on), `canopy-health` (what keeps failing in canopy itself, and the setting to tune), and `memory-tickets` (what
+workers learned that should become a ticket).
+[examples/chores](https://github.com/eddieland/canopy/tree/main/examples/chores) has those and a few dozen more ideas,
+from review queues to end-of-life runtimes.
+
+## Setting one up
+
+A chore runs about no ticket, so it gets no worktree and no branch. You define one as `[chores.NAME]` in
 `.canopy/config.toml` (or `~/.config/canopy/config.toml`, for every workspace), with a prompt and how often it may run,
 and set `capacity.max_chores` above 0. The overseer decides when a due chore runs, each tick, within the hours you
 allowed it. The schedule is a floor, not an alarm clock: "at most every 120 minutes" means no sooner, not on the dot.
