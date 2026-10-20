@@ -151,7 +151,8 @@ Agent definitions ship in `agents/`:
 
 - `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
   workspace, one command per bash call. Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021)
-  and loses every decision not yet recorded. MCP: the tracker; of GitHub, its reads of PRs, branches, and issues only.
+  and loses every decision not yet recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and
+  branches, and of issues only when they are the tickets.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels, follow-ups), GitHub (open and
   update a PR, read reviews and checks); merge, review submission, closing, transition, delete, fork, API file and
   branch writes, and other agents or workflow runs denied by name (D084).
@@ -187,10 +188,11 @@ refused, failing the tick or making the run `crashed` (D040). Two definitions ar
 their inputs makes a new snapshot:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
-- `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, then the shipped
-  `tracker-<provider>` skill if any, and then no skill tool, having nothing left to load. The body is the system prompt
-  the provider caches across ticks; a tick's message is its state block alone (§6). An override canopy cannot read
-  fails the tick and every run started from it, rather than running without the prompt.
+- `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
+  operator's override (§12), as its body, then the shipped `tracker-<provider>` skill if any, and then no skill tool,
+  having nothing left to load. The body is the system prompt the provider caches across ticks; a tick's message is its
+  state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather than
+  running without the prompt.
 
 Nothing is installed into repositories. OpenCode merges canopy's definitions after the repository's config, so a
 repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where
