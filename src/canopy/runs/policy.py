@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, sql
 from canopy.core.vocab import ResumeReason, RunKind
 
 if TYPE_CHECKING:
@@ -92,17 +92,16 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
     about it reads what it has run, not the journal's history.
     """
     counts: dict[Unit, dict[str, int]] = {}
-    query = "SELECT r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-    # Only the placeholder count is interpolated; the kinds are bound parameters.
-    kinds = f"r.kind NOT IN ({', '.join('?' * len(TICKET_KINDS))})"
-    if ticket is None:
-        rows = conn.execute(f"{query}WHERE {kinds} GROUP BY r.ticket_key, s.repo, r.kind", TICKET_KINDS)
-    else:
-        rows = conn.execute(
-            f"{query}WHERE r.ticket_key = ? AND {kinds} GROUP BY r.ticket_key, s.repo, r.kind",
-            (ticket, *TICKET_KINDS),
-        )
-    for row in rows:
+    query = (
+        sql.select("r.ticket_key, s.repo, r.kind, count(DISTINCT r.id)")
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .where("NOT {}", sql.in_("r.kind", TICKET_KINDS))
+        .group_by("r.ticket_key, s.repo, r.kind")
+    )
+    if ticket is not None:
+        query = query.where("r.ticket_key = ?", ticket)
+    for row in sql.execute(conn, query):
         counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
         counts_of[counted_as(str(row[2]))] += int(row[3])
     return counts
@@ -111,7 +110,9 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
 def grants(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
     """Return the runs of each kind the operator granted each unit past its policy limit. Units without are missing."""
     granted: dict[Unit, dict[str, int]] = {}
-    rows = conn.execute("SELECT ticket_key, repo, kind, sum(runs) FROM attempt_grants GROUP BY ticket_key, repo, kind")
+    rows = sql.execute(
+        conn, sql.select("ticket_key, repo, kind, sum(runs)").from_("attempt_grants").group_by("ticket_key, repo, kind")
+    )
     for row in rows:
         of_unit = granted.setdefault(unit(str(row[0]), str(row[1])), {})
         kind = counted_as(str(row[2]))
@@ -164,9 +165,8 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         raise conversation.Refused("unknown_repo", f"{key} has had no runs in {repo}")
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
-        conn.execute(
-            "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, ?, ?)",
-            (key, repo, kind, runs, db.now()),
+        sql.execute(
+            conn, sql.insert("attempt_grants", ticket_key=key, repo=repo, kind=kind, runs=runs, granted_at=db.now())
         )
         limit = unit_limits(config, grants(conn).get(unit(key, repo), {}))[kind]
         return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
@@ -199,10 +199,7 @@ def grant_ticket(conn: sqlite3.Connection, config: Config, key: str, kind: str, 
         raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
     # Read in the grant's own transaction, as `grant` reads its limit.
     with db.transaction(conn):
-        conn.execute(
-            "INSERT INTO ticket_grants (ticket_key, kind, runs, granted_at) VALUES (?, ?, ?, ?)",
-            (key, kind, runs, db.now()),
-        )
+        sql.execute(conn, sql.insert("ticket_grants", ticket_key=key, kind=kind, runs=runs, granted_at=db.now()))
         return TicketGranted(runs=ticket_attempts(conn, kind).get(key, 0), limit=ticket_limit(conn, config, key, kind))
 
 
@@ -213,7 +210,9 @@ def ticket_limit(conn: sqlite3.Connection, config: Config, key: str, kind: str) 
 
 def ticket_grants(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
     """Return the runs of `kind` the operator granted each ticket past its policy limit. Tickets without are missing."""
-    rows = conn.execute("SELECT ticket_key, sum(runs) FROM ticket_grants WHERE kind = ? GROUP BY ticket_key", (kind,))
+    rows = sql.execute(
+        conn, sql.select("ticket_key, sum(runs)").from_("ticket_grants").where("kind = ?", kind).group_by("ticket_key")
+    )
     return {str(r[0]): int(r[1]) for r in rows}
 
 
@@ -222,7 +221,9 @@ def ticket_attempts(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
 
     Tickets with no such run are missing.
     """
-    rows = conn.execute("SELECT ticket_key, count(*) FROM runs WHERE kind = ? GROUP BY ticket_key", (kind,))
+    rows = sql.execute(
+        conn, sql.select("ticket_key, count(*)").from_("runs").where("kind = ?", kind).group_by("ticket_key")
+    )
     return {str(r[0]): int(r[1]) for r in rows}
 
 
@@ -241,12 +242,16 @@ def ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dic
     """
     window = timedelta(minutes=config.policy.ci_cooldown_minutes)
     until: dict[Unit, datetime] = {}
-    rows = conn.execute(
-        "SELECT r.ticket_key, s.repo, max(r.ended_at) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.ended_at IS NOT NULL AND (r.kind = ? OR (r.kind = ? AND EXISTS "
-        "(SELECT 1 FROM run_reasons w WHERE w.run_id = r.id AND w.reason = ?))) GROUP BY r.ticket_key, s.repo",
-        (RETIRED, RunKind.RESUME, ResumeReason.CI),
+    for_ci = sql.select("1").from_("run_reasons w").where("w.run_id = r.id AND w.reason = ?", ResumeReason.CI)
+    worked_on_ci = (
+        sql.select("r.ticket_key, s.repo, max(r.ended_at)")
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .where("r.ended_at IS NOT NULL")
+        .where("r.kind = ? OR (r.kind = ? AND EXISTS ({}))", RETIRED, RunKind.RESUME, for_ci)
+        .group_by("r.ticket_key, s.repo")
     )
+    rows = sql.execute(conn, worked_on_ci)
     for row in rows:
         ends = db.parse_time(str(row[2])) + window
         name = unit(str(row[0]), row[1])

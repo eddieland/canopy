@@ -21,7 +21,7 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, prompts, records, replies, workspace
+from canopy.core import config, db, plans, prompts, records, replies, sql, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
@@ -217,7 +217,7 @@ def in_zone(zone: str) -> Iterator[None]:
 
 def only_tick(conn: sqlite3.Connection) -> records.Tick:
     """The one tick in the journal."""
-    [tick] = records.fetch_all(conn, records.Tick, "SELECT * FROM ticks")
+    [tick] = records.fetch_all(conn, records.Tick, sql.frag("SELECT * FROM ticks"))
     return tick
 
 
@@ -531,7 +531,7 @@ def posting(canopy_env: CanopyEnv) -> None:
 
 def all_drafts(conn: sqlite3.Connection) -> list[records.Draft]:
     """Every draft in the journal, in the order they were written."""
-    return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts ORDER BY id")
+    return records.fetch_all(conn, records.Draft, sql.frag("SELECT * FROM drafts ORDER BY id"))
 
 
 def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "Rename this.") -> dict[str, Any]:
@@ -572,7 +572,7 @@ def reads(state: Path, program: str = "connect") -> list[dict[str, Any]]:
 
 def memories(conn: sqlite3.Connection) -> list[records.Memory]:
     """Every memory in the journal, in the order they were written."""
-    return records.fetch_all(conn, records.Memory, "SELECT * FROM memories ORDER BY id")
+    return records.fetch_all(conn, records.Memory, sql.frag("SELECT * FROM memories ORDER BY id"))
 
 
 def run_with(conn: sqlite3.Connection, *args: str, key: str = KEY, **fields: object) -> sqlite3.Row:

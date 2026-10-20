@@ -9,7 +9,7 @@ from typing import ClassVar
 
 import pytest
 
-from canopy.core import db, records
+from canopy.core import db, records, sql
 from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus, StartStatus, TickStatus
 from tests.canopy.helpers import in_tick, present
 from tests.conftest import Journals
@@ -33,6 +33,11 @@ def row_types() -> list[type[records.Row]]:
 @pytest.fixture
 def conn(tmp_path: Path, journals: Journals) -> sqlite3.Connection:
     return journals.open(tmp_path / db.DB_FILE_NAME)
+
+
+def made(text: str) -> sql.Fragment:
+    """A query made at run time: these tests build their columns on purpose, to check what a row type refuses."""
+    return sql.frag(typing.cast("typing.LiteralString", text))
 
 
 def field_type(hint: object) -> tuple[object, bool]:
@@ -73,7 +78,7 @@ def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> No
     tick = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks running", repo="api")
     db.record_decision(conn, tick, None, "skip", "no tracker", chore="deps")
-    [first, second] = records.fetch_all(conn, records.Decision, "SELECT * FROM decisions ORDER BY id")
+    [first, second] = records.fetch_all(conn, records.Decision, sql.frag("SELECT * FROM decisions ORDER BY id"))
     assert first == records.Decision(
         id=first.id,
         tick_id=tick,
@@ -92,17 +97,17 @@ def test_columns_are_matched_by_name_not_position(conn: sqlite3.Connection) -> N
     tick = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
     reversed_columns = ", ".join(reversed(DECISION_COLUMNS.split(", ")))
-    row = records.fetch_one(conn, records.Decision, f"SELECT {reversed_columns} FROM decisions")  # noqa: S608
+    row = records.fetch_one(conn, records.Decision, made(f"SELECT {reversed_columns} FROM decisions"))  # noqa: S608
     assert row is not None
     assert (row.ticket_key, row.action, row.rationale) == ("PROJ-1", "wait", "checks running")
 
 
 def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connection) -> None:
-    assert records.fetch_one(conn, records.Decision, "SELECT * FROM decisions WHERE id = ?", (1,)) is None
+    assert records.fetch_one(conn, records.Decision, sql.frag("SELECT * FROM decisions WHERE id = ?", 1)) is None
 
 
 @pytest.mark.parametrize(
-    ("sql", "error"),
+    ("query", "error"),
     [
         ("SELECT id, tick_id FROM decisions", "missing action, chore, created_at, pr, rationale, repo, ticket_key"),
         (f"SELECT {DECISION_COLUMNS}, 1 AS extra FROM decisions", "no field for extra"),  # noqa: S608
@@ -110,11 +115,11 @@ def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connecti
     ],
 )
 def test_a_query_whose_columns_do_not_fit_is_refused_before_any_row(
-    conn: sqlite3.Connection, sql: str, error: str
+    conn: sqlite3.Connection, query: str, error: str
 ) -> None:
     # Refused on the query's shape alone: an empty table still fails, so the mistake shows on its first run.
     with pytest.raises(records.RowError, match=f"^query does not fit Decision: {re.escape(error)}$"):
-        records.fetch_all(conn, records.Decision, sql)
+        records.fetch_all(conn, records.Decision, made(query))
 
 
 @pytest.mark.parametrize(
@@ -127,9 +132,9 @@ def test_a_query_whose_columns_do_not_fit_is_refused_before_any_row(
 def test_a_value_of_another_type_is_refused(conn: sqlite3.Connection, action: str, error: str) -> None:
     tick = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
-    sql = f"SELECT {DECISION_COLUMNS.replace('action', f'{action} AS action')} FROM decisions"  # noqa: S608
+    query = made(f"SELECT {DECISION_COLUMNS.replace('action', f'{action} AS action')} FROM decisions")  # noqa: S608
     with pytest.raises(records.RowError, match=error):
-        records.fetch_all(conn, records.Decision, sql)
+        records.fetch_all(conn, records.Decision, query)
 
 
 @dataclass(frozen=True)
@@ -145,7 +150,9 @@ def test_a_flag_reads_as_a_bool_and_a_whole_real_as_a_float(conn: sqlite3.Connec
     conn.execute("CREATE TABLE flagged (id INTEGER PRIMARY KEY, done INTEGER NOT NULL, cost REAL)")
     conn.execute("INSERT INTO flagged VALUES (1, 1, NULL), (2, 0, 3)")
     # SQLite gives back an integer for a value a query computes, whatever the column's type.
-    found = records.fetch_all(conn, Flagged, "SELECT id, done, CAST(cost AS INTEGER) AS cost FROM flagged ORDER BY id")
+    found = records.fetch_all(
+        conn, Flagged, sql.frag("SELECT id, done, CAST(cost AS INTEGER) AS cost FROM flagged ORDER BY id")
+    )
     assert found == [Flagged(1, done=True, cost=None), Flagged(2, done=False, cost=3.0)]
     assert isinstance(found[1].cost, float)
 
@@ -154,7 +161,7 @@ def test_a_flag_that_is_not_0_or_1_is_refused(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE TABLE flagged (id INTEGER PRIMARY KEY, done INTEGER NOT NULL, cost REAL)")
     conn.execute("INSERT INTO flagged VALUES (1, 2, NULL)")
     with pytest.raises(records.RowError, match=r"flagged\.done holds neither 0 nor 1"):
-        records.fetch_all(conn, Flagged, "SELECT * FROM flagged")
+        records.fetch_all(conn, Flagged, sql.frag("SELECT * FROM flagged"))
 
 
 def test_a_vocabulary_column_reads_as_its_member(conn: sqlite3.Connection, tmp_path: Path) -> None:

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
-from canopy.core import db, review_diff
+from canopy.core import db, review_diff, sql
 from canopy.infra import procs
 from canopy.serve.mock_reviews import PR_88
 
@@ -152,40 +152,78 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
         "summary": "Answered the review: a failed search clears the spinner now, and the debounce stays at 250 ms.",
         "prs": {"web": PR_88},
     }
-    conn.execute(
-        "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
-        "log_path, private, session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, tokens_peak_context) "
-        "VALUES (?, 1, 'ABC-099', 'resume', 'agent/ABC-099-search', ?, ?, 'done', ?, ?, 0, ?, 0.74, 29600, 4440, "
-        "296000, 44400)",
-        (RUN, at(_STARTED), at(_ENDED), json.dumps(result), str(log_path), f"ses_mock{RUN}"),
+    sql.execute(
+        conn,
+        sql.insert(
+            "runs",
+            id=RUN,
+            tick_id=1,
+            ticket_key="ABC-099",
+            kind="resume",
+            branch="agent/ABC-099-search",
+            started_at=at(_STARTED),
+            ended_at=at(_ENDED),
+            status="done",
+            result_json=json.dumps(result),
+            log_path=str(log_path),
+            private=0,
+            session_id=f"ses_mock{RUN}",
+            cost_usd=0.74,
+            tokens_input=29600,
+            tokens_output=4440,
+            tokens_cache_read=296000,
+            tokens_peak_context=44400,
+        ),
     )
-    conn.execute(
-        "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch) "
-        "VALUES (?, 'web', ?, 'lease-45', 'canopy:ABC-099', 'main')",
-        (RUN, slot),
+    sql.execute(
+        conn,
+        sql.insert(
+            "run_slots",
+            run_id=RUN,
+            repo="web",
+            slot_path=slot,
+            lease_id="lease-45",
+            lease_holder="canopy:ABC-099",
+            base_branch="main",
+        ),
     )
-    conn.execute("INSERT INTO run_reasons (run_id, reason) VALUES (?, 'review')", (RUN,))
-    conn.execute("INSERT INTO run_replies (run_id, mode, ticket_drafts) VALUES (?, 'approve', 0)", (RUN,))
+    sql.execute(conn, sql.insert("run_reasons", run_id=RUN, reason="review"))
+    sql.execute(conn, sql.insert("run_replies", run_id=RUN, mode="approve", ticket_drafts=0))
     kept = review_diff.run_path_for(log_path, "web")
     review_diff.keep(kept, DIFF)
     review_diff.keep_head(kept, SHA)
     _read(conn, at)
     for number, kind, comment, stance, text, edit, reaction in _DRAFTS:
         thread = next((t[0] for t in _THREADS if t[1] == comment), None)
-        found = conn.execute(
-            "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, thread_id, "
-            "status, basis, created_at, checked_at) "
-            "VALUES (?, ?, 'ABC-099', ?, 'web', ?, ?, ?, ?, 'waiting', ?, ?, ?) RETURNING id",
-            (RUN, number, kind, PR_88, comment, stance, thread, at(_STARTED), at(_ENDED), at(-18)),
+        found = sql.execute(
+            conn,
+            sql.insert(
+                "drafts",
+                run_id=RUN,
+                number=number,
+                ticket_key="ABC-099",
+                kind=kind,
+                repo="web",
+                pr_url=PR_88,
+                comment_id=comment,
+                stance=stance,
+                thread_id=thread,
+                status="waiting",
+                basis=at(_STARTED),
+                created_at=at(_ENDED),
+                checked_at=at(-18),
+            ).returning("id"),
         ).fetchone()
         versions: list[tuple[int, str, str, str | None, str, str | None]] = [
             (1, text, "worker", None, at(_ENDED), reaction)
         ]
         if edit is not None:
             versions.append((2, edit, "operator", "web", at(-10), reaction))
-        conn.executemany(
-            "INSERT INTO draft_versions (draft_id, version, body, author, channel, created_at, reaction) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        sql.execute_many(
+            conn,
+            sql.insert_rows(
+                "draft_versions", ("draft_id", "version", "body", "author", "channel", "created_at", "reaction")
+            ),
             [(found["id"], *v) for v in versions],
         )
 
@@ -238,29 +276,58 @@ class GitHub(procs.SubprocessRunner):
         conn = db.connect(self.journal)
         try:
             with db.transaction(conn):
-                conn.execute(
-                    "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, "
-                    "observed_at) VALUES (?, 'review', ?, 'op', 0, 'pending', NULL, ?, NULL, ?)",
-                    (pr, pending["id"], request.get("body") or "", db.now()),
+                sql.execute(
+                    conn,
+                    sql.insert(
+                        "observed_reviews",
+                        pr_url=pr,
+                        item="review",
+                        id=pending["id"],
+                        author="op",
+                        bot=0,
+                        state="pending",
+                        created_at=None,
+                        body=str(request.get("body") or ""),
+                        url=None,
+                        observed_at=db.now(),
+                    ),
                 )
                 for line in (line for line in lines if line["kind"] == "comment"):
-                    conn.execute(
-                        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, created_at, body, url, "
-                        "review_id, thread_id, path, line, side, outdated, resolved, observed_at) "
-                        "SELECT pr_url, 'comment', ?, 'op', 0, ?, ?, ?, ?, thread_id, path, line, side, outdated, "
-                        "resolved, ? FROM observed_reviews WHERE pr_url = ? AND item = 'comment' AND id = ?",
-                        (line["id"], db.now(), _text_for(request, line["comment"]), line["url"], pending["id"],
-                         db.now(), pr, line["comment"]),
-                    )  # fmt: skip
+                    answered = (
+                        sql.select(
+                            "pr_url, 'comment', ?, 'op', 0, ?, ?, ?, ?, thread_id, path, line, side, outdated, "
+                            "resolved, ?",
+                            line["id"],
+                            db.now(),
+                            _text_for(request, line["comment"]),
+                            line["url"],
+                            pending["id"],
+                            db.now(),
+                        )
+                        .from_("observed_reviews")
+                        .where("pr_url = ?", pr)
+                        .where("item = 'comment'")
+                        .where("id = ?", line["comment"])
+                    )
+                    sql.execute(
+                        conn,
+                        sql.frag(
+                            "INSERT INTO observed_reviews (pr_url, item, id, author, bot, created_at, body, url, "
+                            "review_id, thread_id, path, line, side, outdated, resolved, observed_at) {}",
+                            answered,
+                        ),
+                    )
         finally:
             conn.close()
 
     def _read(self, request: Mapping[str, list[str]]) -> str:
         conn = db.connect(self.journal)
         try:
-            prs = conn.execute(
-                "SELECT * FROM observed_prs WHERE url IN (SELECT value FROM json_each(?))",
-                (json.dumps(request.get("prs", [])),),
+            prs = sql.execute(
+                conn,
+                sql.select("*")
+                .from_("observed_prs")
+                .where("url IN (SELECT value FROM json_each(?))", json.dumps(request.get("prs", []))),
             ).fetchall()
             lines: list[dict[str, object]] = []
             for pr in prs:
@@ -278,7 +345,8 @@ class GitHub(procs.SubprocessRunner):
                         "author": pr["author"],
                     }
                 )
-                for r in conn.execute("SELECT * FROM observed_reviews WHERE pr_url = ? ORDER BY id", (pr["url"],)):
+                reviews = sql.select("*").from_("observed_reviews").where("pr_url = ?", pr["url"]).order_by("id")
+                for r in sql.execute(conn, reviews):
                     thread = None
                     if r["thread_id"] is not None:
                         thread = {
@@ -369,34 +437,58 @@ def _post(stdin: str) -> str:
 def _read(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     """The reader's last whole read of PR 88, at the head run 45 pushed, after the run ended."""
     read_at = at(-18)
-    conn.execute(
-        "INSERT INTO observed_prs (url, repository, number, head_sha, base_ref, state, draft, mergeable, author, "
-        "observed_at) VALUES (?, 'acme/web', 88, ?, 'main', 'open', 0, 'mergeable', 'op', ?)",
-        (PR_88, SHA, read_at),
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_prs",
+            url=PR_88,
+            repository="acme/web",
+            number=88,
+            head_sha=SHA,
+            base_ref="main",
+            state="open",
+            draft=0,
+            mergeable="mergeable",
+            author="op",
+            observed_at=read_at,
+        ),
     )
-    conn.execute(
-        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, observed_at) "
-        "VALUES (?, 'review', ?, 'alice', 0, 'changes_requested', ?, 'A couple of things before this goes in.', ?, ?)",
-        (PR_88, _REVIEW, at(-48), f"{PR_88}#pullrequestreview-{_REVIEW}", read_at),
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_reviews",
+            pr_url=PR_88,
+            item="review",
+            id=_REVIEW,
+            author="alice",
+            bot=0,
+            state="changes_requested",
+            created_at=at(-48),
+            body="A couple of things before this goes in.",
+            url=f"{PR_88}#pullrequestreview-{_REVIEW}",
+            observed_at=read_at,
+        ),
     )
     for thread, comment, author, path, line, resolved, minutes, body in _THREADS:
-        conn.execute(
-            "INSERT INTO observed_reviews (pr_url, item, id, author, bot, created_at, body, url, review_id, "
-            "thread_id, path, line, side, outdated, resolved, observed_at) "
-            "VALUES (?, 'comment', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'right', ?, ?, ?)",
-            (
-                PR_88,
-                comment,
-                author,
-                at(minutes),
-                body,
-                f"{PR_88}#discussion_r{comment}",
-                _REVIEW,
-                thread,
-                path,
-                line,
-                int(line is None),
-                int(resolved),
-                read_at,
+        sql.execute(
+            conn,
+            sql.insert(
+                "observed_reviews",
+                pr_url=PR_88,
+                item="comment",
+                id=comment,
+                author=author,
+                bot=0,
+                created_at=at(minutes),
+                body=body,
+                url=f"{PR_88}#discussion_r{comment}",
+                review_id=_REVIEW,
+                thread_id=thread,
+                path=path,
+                line=line,
+                side="right",
+                outdated=int(line is None),
+                resolved=int(resolved),
+                observed_at=read_at,
             ),
         )

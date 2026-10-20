@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, memory, outbox, records, review_result
+from canopy.core import chore_view, contract, db, memory, outbox, records, review_result, sql
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, StartStatus
@@ -711,9 +711,12 @@ def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | Non
     row = records.fetch_one(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' AND id > ? "
-        "ORDER BY id DESC LIMIT 1",
-        (TICKET, key, db.forgotten_message_id(conn, key)),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ?", TICKET, key)
+        .where("kind = 'question' AND id > ?", db.forgotten_message_id(conn, key))
+        .order_by("id DESC")
+        .limit(1),
     )
     if row is None or operator_messages_after(conn, key, row.id):
         return None
@@ -732,11 +735,14 @@ class Awaiting:
 def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
     """Return every started, open ticket whose latest question has no operator message after it, by key."""
     found: list[Awaiting] = []
-    rows = conn.execute(
-        "SELECT s.subject_id FROM starts s LEFT JOIN tickets t ON t.key = s.subject_id "
-        "WHERE s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0 ORDER BY s.subject_id",
-        (TICKET,),
-    ).fetchall()
+    started = (
+        sql.select("s.subject_id")
+        .from_("starts s")
+        .left_join("tickets t ON t.key = s.subject_id")
+        .where("s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0", TICKET)
+        .order_by("s.subject_id")
+    )
+    rows = sql.execute(conn, started).fetchall()
     for row in rows:
         key = str(row[0])
         question = latest_question(conn, key)
@@ -747,9 +753,13 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
 
 def stopped(conn: sqlite3.Connection) -> list[str]:
     """Return every ticket the operator stopped, by key: what the overseer decides nothing about (DESIGN §22)."""
-    rows = conn.execute(
-        "SELECT subject_id FROM starts WHERE subject_kind = ? AND status = 'stopped' ORDER BY subject_id", (TICKET,)
-    ).fetchall()
+    stops = (
+        sql.select("subject_id")
+        .from_("starts")
+        .where("subject_kind = ? AND status = 'stopped'", TICKET)
+        .order_by("subject_id")
+    )
+    rows = sql.execute(conn, stops).fetchall()
     return [str(row[0]) for row in rows]
 
 
@@ -758,9 +768,10 @@ def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> l
     return records.fetch_all(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ? "
-        "ORDER BY id",
-        (TICKET, key, after),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TICKET, key, after)
+        .order_by("id"),
     )
 
 
@@ -870,9 +881,12 @@ def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
     rows = records.fetch_all(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
-        "AND (source = 'operator' OR kind = 'question') ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
+        .where("source = 'operator' OR kind = 'question'")
+        .order_by("id DESC")
+        .limit(PROMPT_MESSAGES),
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")
 
@@ -887,9 +901,13 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     rows = records.fetch_all(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? AND source != ? "
-        "AND (run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)) ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), CANOPY, RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
+        .where("source != ?", CANOPY)
+        .where("run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)", RunKind.NEEDS_PLAN)
+        .order_by("id DESC")
+        .limit(PROMPT_MESSAGES),
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
 

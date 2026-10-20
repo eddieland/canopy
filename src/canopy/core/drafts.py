@@ -20,7 +20,7 @@ from typing import assert_never
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from canopy.core import contract, db, records
+from canopy.core import contract, db, records, sql
 from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.replies import MAX_DRAFT_CHARS, MAX_DRAFTS, run_replies
 from canopy.core.vocab import DraftAuthor, DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode
@@ -28,6 +28,8 @@ from canopy.infra import logs
 
 # The longest ticket URL a draft may name; the post command checks the rest.
 MAX_URL = 2048
+# Every draft's whole row, for each reader to finish.
+_DRAFTS = sql.select("*").from_("drafts")
 
 
 class Fields(BaseModel):
@@ -73,7 +75,9 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
     rendered = run_replies(conn, run_id)
     if rendered is None or rendered.mode is not ReplyMode.APPROVE or fields is None or fields.drafts is None:
         return []
-    run = conn.execute("SELECT ticket_key, tick_id, started_at FROM runs WHERE id = ?", (run_id,)).fetchone()
+    run = sql.execute(
+        conn, sql.select("ticket_key, tick_id, started_at").from_("runs").where("id = ?", run_id)
+    ).fetchone()
     writing = _Writing(
         run_id=run_id,
         ticket_key=str(run["ticket_key"]),
@@ -92,9 +96,11 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
             _write(conn, writing, number, entry)
         except TextRefused as e:
             writing.refused.append(Refused(number, str(e)))
-    conn.execute(
-        "UPDATE run_replies SET refused = ? WHERE run_id = ?",
-        (json.dumps([r.as_json() for r in writing.refused]), run_id),
+    sql.execute(
+        conn,
+        sql.update("run_replies")
+        .set(refused=json.dumps([r.as_json() for r in writing.refused]))
+        .where("run_id = ?", run_id),
     )
     log = logs.for_tick(int(run["tick_id"]))
     for r in writing.refused:
@@ -122,7 +128,9 @@ def _run_prs(conn: sqlite3.Connection, run_id: int, key: str) -> dict[str, str]:
     Returns:
         Each PR's URL, to its repository.
     """
-    repos = {str(r["repo"]) for r in conn.execute("SELECT repo FROM run_slots WHERE run_id = ?", (run_id,))}
+    repos = {
+        str(r["repo"]) for r in sql.execute(conn, sql.select("repo").from_("run_slots").where("run_id = ?", run_id))
+    }
     return {str(u.pr_url): str(u.repo) for u in db.units(conn, key) if u.pr_url and u.repo in repos}
 
 
@@ -142,33 +150,41 @@ def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: Json
     pr, comment, stance, issue = _target(writing, kind, entry)
     status = DraftStatus.WAITING if kind is DraftKind.TICKET else DraftStatus.UNCHECKED
     now = db.now()
-    cursor = conn.execute(
-        "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, issue_url, stance, status, "
-        "basis, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            writing.run_id,
-            number,
-            writing.ticket_key,
-            kind,
-            None if pr is None else writing.prs[pr],
-            pr,
-            comment,
-            issue,
-            stance,
-            status,
-            writing.basis,
-            now,
+    cursor = sql.execute(
+        conn,
+        sql.insert(
+            "drafts",
+            run_id=writing.run_id,
+            number=number,
+            ticket_key=writing.ticket_key,
+            kind=kind,
+            repo=None if pr is None else writing.prs[pr],
+            pr_url=pr,
+            comment_id=comment,
+            issue_url=issue,
+            stance=stance,
+            status=status,
+            basis=writing.basis,
+            created_at=now,
         ),
     )
-    conn.execute(
-        "INSERT INTO draft_versions (draft_id, version, body, author, created_at, reaction) VALUES (?, 1, ?, ?, ?, ?)",
-        (cursor.lastrowid, text, DraftAuthor.WORKER, now, reaction),
+    sql.execute(
+        conn,
+        sql.insert(
+            "draft_versions",
+            draft_id=cursor.lastrowid,
+            version=1,
+            body=text,
+            author=DraftAuthor.WORKER,
+            created_at=now,
+            reaction=reaction,
+        ),
     )
     if kind is DraftKind.TICKET:
         # A ticket's draft needs no read, so it supersedes the earlier ones as it is written.
         written = get(conn, int(cursor.lastrowid or 0))
         if written is not None:
-            _supersede(conn, written, "kind = 'ticket' AND ticket_key = ?", writing.ticket_key)
+            _supersede(conn, written, sql.frag("kind = 'ticket' AND ticket_key = ?", writing.ticket_key))
 
 
 def _words(kind: DraftKind, entry: Mapping[str, JsonValue]) -> tuple[str, Reaction | None]:
@@ -278,11 +294,17 @@ def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
         Each PR's URL, to its sent `comments` and `reviews`, each list of ids in order.
     """
     found: dict[str, dict[str, list[int]]] = {}
-    rows = conn.execute(
-        "SELECT pr_url, sent_comment_id, CASE WHEN status = ? THEN pending_review_id ELSE sent_review_id END "
-        "AS sent_review_id FROM drafts WHERE status IN (?, ?) AND pr_url IS NOT NULL "
-        "ORDER BY pr_url, sent_at IS NULL, sent_at, id",
-        (DraftStatus.STAGED, DraftStatus.SENT, DraftStatus.STAGED),
+    rows = sql.execute(
+        conn,
+        sql.select(
+            "pr_url, sent_comment_id, CASE WHEN status = ? THEN pending_review_id ELSE sent_review_id END "
+            "AS sent_review_id",
+            DraftStatus.STAGED,
+        )
+        .from_("drafts")
+        .where_in("status", (DraftStatus.SENT, DraftStatus.STAGED))
+        .where("pr_url IS NOT NULL")
+        .order_by("pr_url, sent_at IS NULL, sent_at, id"),
     )
     for r in rows:
         sent = found.setdefault(str(r["pr_url"]), {"comments": [], "reviews": []})
@@ -299,7 +321,10 @@ def unchecked_prs(conn: sqlite3.Connection) -> list[str]:
     Returns:
         The PRs' URLs, in order.
     """
-    rows = conn.execute("SELECT DISTINCT pr_url FROM drafts WHERE status = ? ORDER BY pr_url", (DraftStatus.UNCHECKED,))
+    rows = sql.execute(
+        conn,
+        sql.select("pr_url").unique().from_("drafts").where("status = ?", DraftStatus.UNCHECKED).order_by("pr_url"),
+    )
     return [str(r["pr_url"]) for r in rows]
 
 
@@ -319,8 +344,7 @@ def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draf
     pending = records.fetch_all(
         conn,
         records.Draft,
-        f"SELECT * FROM drafts WHERE status = ? AND pr_url IN ({db.marks(whole)}) ORDER BY run_id, number",  # noqa: S608
-        (DraftStatus.UNCHECKED, *sorted(whole)),
+        _DRAFTS.where("status = ?", DraftStatus.UNCHECKED).where_in("pr_url", sorted(whole)).order_by("run_id, number"),
     )
     now = db.now()
     with db.transaction(conn):
@@ -332,64 +356,80 @@ def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draf
 def _check_one(conn: sqlite3.Connection, draft: records.Draft, now: str) -> None:
     thread: str | None = None
     if draft.kind is DraftKind.THREAD:
-        row = conn.execute(
-            "SELECT thread_id FROM observed_reviews WHERE pr_url = ? AND item = 'comment' AND id = ?",
-            (draft.pr_url, draft.comment_id),
+        row = sql.execute(
+            conn,
+            sql.select("thread_id")
+            .from_("observed_reviews")
+            .where("pr_url = ?", draft.pr_url)
+            .where("item = 'comment'")
+            .where("id = ?", draft.comment_id),
         ).fetchone()
         if row is None:
             _refuse(conn, draft, f"unknown_thread: {draft.pr_url} has no review comment {draft.comment_id}")
             return
         thread = str(row["thread_id"])
-        twin = conn.execute(
-            "SELECT number FROM drafts WHERE run_id = ? AND thread_id = ? AND id != ?", (draft.run_id, thread, draft.id)
+        twin = sql.execute(
+            conn,
+            sql.select("number")
+            .from_("drafts")
+            .where("run_id = ?", draft.run_id)
+            .where("thread_id = ?", thread)
+            .where("id != ?", draft.id),
         ).fetchone()
         if twin is not None:
             _refuse(conn, draft, f"a second draft for the thread draft {twin['number']} answers; a thread takes one")
             return
-    conn.execute(
-        "UPDATE drafts SET status = ?, thread_id = ?, checked_at = ? WHERE id = ?",
-        (DraftStatus.WAITING, thread, now, draft.id),
+    sql.execute(
+        conn,
+        sql.update("drafts")
+        .set(status=DraftStatus.WAITING, thread_id=thread, checked_at=now)
+        .where("id = ?", draft.id),
     )
-    same = "thread_id = ?" if thread is not None else "kind = 'pr' AND pr_url = ?"
-    _supersede(conn, draft, same, thread if thread is not None else draft.pr_url)
+    same = (
+        sql.frag("thread_id = ?", thread)
+        if thread is not None
+        else sql.frag("kind = 'pr' AND pr_url = ?", draft.pr_url)
+    )
+    _supersede(conn, draft, same)
 
 
-def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: str, value: object) -> None:
-    """Supersede the unsent drafts of earlier runs that `draft` replaces: those where `same` holds for `value`.
+def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: sql.Composable) -> None:
+    """Supersede the unsent drafts of earlier runs that `draft` replaces: those where `same` holds.
 
     Only earlier runs', and that is enough: `check` takes every unchecked draft of a PR it read, whatever its run, in
     run order, so an earlier run's draft for the PR is checked, and superseded, before a later run's replaces it.
     """
-    conn.execute(
-        f"UPDATE drafts SET status = ?, superseded_by = ?, why = ? WHERE {same} AND run_id < ? "  # noqa: S608
-        "AND status IN (?, ?)",
-        (
-            DraftStatus.SUPERSEDED,
-            draft.id,
-            f"superseded by run {draft.run_id}'s draft {draft.number}",
-            value,
-            draft.run_id,
-            DraftStatus.UNCHECKED,
-            DraftStatus.WAITING,
-        ),
+    sql.execute(
+        conn,
+        sql.update("drafts")
+        .set(
+            status=DraftStatus.SUPERSEDED,
+            superseded_by=draft.id,
+            why=f"superseded by run {draft.run_id}'s draft {draft.number}",
+        )
+        .where("{}", same)
+        .where("run_id < ?", draft.run_id)
+        .where_in("status", (DraftStatus.UNCHECKED, DraftStatus.WAITING)),
     )
 
 
 def _refuse(conn: sqlite3.Connection, draft: records.Draft, why: str) -> None:
-    conn.execute("UPDATE drafts SET status = ?, why = ? WHERE id = ?", (DraftStatus.REFUSED, why, draft.id))
+    sql.execute(conn, sql.update("drafts").set(status=DraftStatus.REFUSED, why=why).where("id = ?", draft.id))
     rendered = run_replies(conn, draft.run_id)
     if rendered is None:
         return
     refused = [*refused_of(rendered), Refused(draft.number, why)]
-    conn.execute(
-        "UPDATE run_replies SET refused = ? WHERE run_id = ?",
-        (json.dumps([r.as_json() for r in refused]), draft.run_id),
+    sql.execute(
+        conn,
+        sql.update("run_replies")
+        .set(refused=json.dumps([r.as_json() for r in refused]))
+        .where("run_id = ?", draft.run_id),
     )
 
 
 def get(conn: sqlite3.Connection, draft_id: int) -> records.Draft | None:
     """Return draft `draft_id`, or None."""
-    return records.fetch_one(conn, records.Draft, "SELECT * FROM drafts WHERE id = ?", (draft_id,))
+    return records.fetch_one(conn, records.Draft, _DRAFTS.where("id = ?", draft_id))
 
 
 def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.Draft]:
@@ -398,7 +438,7 @@ def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.Draft]:
     Returns:
         The drafts, whatever their status.
     """
-    return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts WHERE run_id = ? ORDER BY number", (run_id,))
+    return records.fetch_all(conn, records.Draft, _DRAFTS.where("run_id = ?", run_id).order_by("number"))
 
 
 def text_of(conn: sqlite3.Connection, draft_id: int) -> records.DraftVersion:
@@ -413,8 +453,7 @@ def text_of(conn: sqlite3.Connection, draft_id: int) -> records.DraftVersion:
     found = records.fetch_one(
         conn,
         records.DraftVersion,
-        "SELECT * FROM draft_versions WHERE draft_id = ? ORDER BY version DESC LIMIT 1",
-        (draft_id,),
+        sql.select("*").from_("draft_versions").where("draft_id = ?", draft_id).order_by("version DESC").limit(1),
     )
     if found is None:
         raise LookupError(f"draft {draft_id} has no text")
