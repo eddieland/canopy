@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db, records
+from canopy.core import db, records, sql
 from canopy.core.vocab import Phase, SeenKind, TickStatus
 from canopy.infra import resources
 from canopy.runtime.report import ToolUse, Usage
@@ -355,8 +355,8 @@ def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journa
     assert len(db.decisions_about(conn, "PROJ-1", 20)) == 1
     conn.set_trace_callback(None)
     assert len(statements) == 2
-    for sql in statements:
-        plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {sql}")]
+    for statement in statements:
+        plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}")]
         assert any("USING INDEX decisions_ticket" in step for step in plan), plan
         assert not any(step.startswith("SCAN d") for step in plan), plan
 
@@ -524,6 +524,6 @@ def test_the_reviews_that_had_ended_are_taken_as_seen(tmp_path: Path, journals: 
         "(1, 'https://github.com/acme/api/pull/8', 'def', 'x', NULL, 'running', 'l')"
     )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(54)
-    seen = records.fetch_all(conn, records.Seen, "SELECT * FROM seen")
+    seen = records.fetch_all(conn, records.Seen, sql.select("*").from_("seen"))
     assert seen == [records.Seen(SeenKind.REVIEW, "1", "2026-10-01T00:00:00Z", None)]
     assert db.seen_among(conn, SeenKind.REVIEW, ["1", "2"]) == {"1"}

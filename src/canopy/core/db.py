@@ -1276,22 +1276,16 @@ def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], 
     at = now()
     new: list[str] = []
     for subject in subjects:
-        cur = conn.execute(
-            "INSERT INTO seen (kind, subject, at, channel) VALUES (?, ?, ?, ?) ON CONFLICT (kind, subject) DO NOTHING",
-            (kind, subject, at, channel),
-        )
-        if cur.rowcount > 0:
+        mark = sql.insert("seen", kind=kind, subject=subject, at=at, channel=channel)
+        if sql.execute(conn, mark.on_conflict("(kind, subject) DO NOTHING")).rowcount > 0:
             new.append(subject)
     return new
 
 
 def seen_among(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str]) -> frozenset[str]:
     """Return which of `subjects` of `kind` the operator has seen: a read by key, however many they have seen."""
-    rows = conn.execute(
-        "SELECT subject FROM seen WHERE kind = ? AND subject IN (SELECT value FROM json_each(?))",
-        (kind, json.dumps(list(subjects))),
-    )
-    return frozenset(str(r[0]) for r in rows)
+    query = sql.select("subject").from_("seen").where("kind = ?", kind).where_in("subject", list(subjects))
+    return frozenset(str(r[0]) for r in sql.execute(conn, query))
 
 
 def set_review_slot(

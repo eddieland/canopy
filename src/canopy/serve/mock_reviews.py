@@ -173,9 +173,10 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         )
         if diff is not None:
             logs.write_private(review_diff.path_for(log_path), diff)
-    conn.executemany(
-        "INSERT INTO seen (kind, subject, at, channel) VALUES ('review', ?, ?, 'web')",
-        [("1", at(-96)), ("3", at(-68)), ("4", at(-50))],
+    sql.execute_many(
+        conn,
+        sql.insert_rows("seen", ["kind", "subject", "at", "channel"]),
+        [("review", "1", at(-96), "web"), ("review", "3", at(-68), "web"), ("review", "4", at(-50), "web")],
     )
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
     sql.execute(

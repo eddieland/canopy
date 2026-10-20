@@ -10,7 +10,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, records, review_diff
+from canopy.core import conversation, db, definitions, records, review_diff, sql
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind, SeenKind
@@ -869,7 +869,9 @@ def test_a_review_is_new_to_the_operator_until_they_see_it(
 
     scenario.operator("review", "show", str(first))
     assert new() == [second]
-    [mark] = records.fetch_all(scenario.conn, records.Seen, "SELECT * FROM seen WHERE subject = ?", (str(first),))
+    [mark] = records.fetch_all(
+        scenario.conn, records.Seen, sql.select("*").from_("seen").where("subject = ?", str(first))
+    )
     assert (mark.kind, mark.channel) == (SeenKind.REVIEW, "cli")
 
     # The guards every channel's mark goes through: all of them are marked, or none.
