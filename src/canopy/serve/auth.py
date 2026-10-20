@@ -33,7 +33,8 @@ FAILED_SIGN_IN_SECONDS = 1.0
 # What `GET /api/session` gives a page when nobody signs in (mock data only).
 OPEN_TOKEN = "open"  # noqa: S105  (not a credential: the open server checks none)
 _VERSION = "v1"
-_READ_METHODS = frozenset({"GET", "HEAD"})
+#: The methods that read; any other is a write, which needs the session's token (`Sessions.require`).
+READ_METHODS = frozenset({"GET", "HEAD"})
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,15 @@ class Signed:
 
     issued: int
     nonce: str
+
+    @property
+    def fingerprint(self) -> str:
+        """A name for the session the journal may keep (audit.py): it tells one session from another, and signs nothing.
+
+        Returns:
+            The first 16 hex digits of the sha256 of its issue time and nonce.
+        """
+        return hashlib.sha256(f"{self.issued}\0{self.nonce}".encode()).hexdigest()[:16]
 
 
 class Sessions:
@@ -144,7 +154,7 @@ class Sessions:
         session = self.of(request)
         if session is None:
             raise HTTPException(status_code=401, detail="sign in with the listener secret")
-        if request.method in _READ_METHODS:
+        if request.method in READ_METHODS:
             return
         given = request.headers.get(TOKEN_HEADER, "")
         if not hmac.compare_digest(given.encode(), self.token(session).encode()):
