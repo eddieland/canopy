@@ -807,7 +807,14 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
     scenario.operator("dismiss", f"review:{first.id}", "1")
     scenario.operator("grant", PR, "review")
     fourth = scenario.review(reviews("d" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
-    assert previous_review(fourth.prompt).endswith("\n\nIts findings: none the operator kept.")
+    assert previous_review(fourth.prompt) == (
+        f"canopy's review run {first.id} of this PR, at commit `{sha}`, ended with verdict findings, impact normal.\n"
+        "\n"
+        "Its summary:\n"
+        f"> {FINDINGS['summary']}\n"
+        "\n"
+        "Its findings: none the operator kept."
+    )
 
 
 def test_a_reviewer_override_without_the_previous_review_serves_only_a_prs_first_review(
