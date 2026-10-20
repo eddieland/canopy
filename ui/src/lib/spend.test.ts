@@ -33,8 +33,15 @@ const NONE: SpendCosts = {
     total: null,
 }
 
+// A day as the server names it, its start at UTC midnight, which only an hour's name reads.
 function day(name: string, costs: Partial<SpendCosts>): SpendDay {
-    return { day: name, costs: { ...NONE, ...costs }, done: 0 }
+    return { day: name, start: `${name}T00:00:00Z`, costs: { ...NONE, ...costs }, done: 0 }
+}
+
+// An hour of 2026-10-08 that starts at `hour` in the test's own zone, as the server names one in its own.
+function hourOf(hour: number, costs: Partial<SpendCosts> = {}): SpendDay {
+    const start = new Date(2026, 9, 8, hour).toISOString()
+    return { day: `2026-10-08T${String(hour).padStart(2, '0')}`, start, costs: { ...NONE, ...costs }, done: 0 }
 }
 
 describe('spend', () => {
@@ -57,28 +64,27 @@ describe('spend', () => {
             'Oct 7: $1.50, overseer $1.00 (idle ticks $0.25), reviews $0.50',
         )
         expect(dayHint(day('2026-10-02', {}), H24)).toBe('Oct 2: nothing reported')
-        expect(dayHint(day('2026-10-08T14', { workers: 2, total: 2 }), H24)).toBe('Oct 8, 14:00: $2.00, workers $2.00')
-        expect(dayHint(day('2026-10-08T14', { workers: 2, total: 2 }), H12)).toBe('Oct 8, 2 PM: $2.00, workers $2.00')
+        expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H24)).toMatch(/^\S+ 8 14:00: \$2\.00, workers \$2\.00$/u)
+        expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H12)).toMatch(/^\S+ 8 2:00 PM: \$2\.00/u)
     })
 
     it('names a day as the axis does, whatever the zone', () => {
-        expect(dayLabel('2026-10-01', H24)).toBe('Oct 1')
-        expect(dayLabel('2026-12-31', H12)).toBe('Dec 31')
+        expect(dayLabel(day('2026-10-01', {}), H24)).toBe('Oct 1')
+        expect(dayLabel(day('2026-12-31', {}), H12)).toBe('Dec 31')
+        expect(dayName({ day: '2026-10-08', start: '2026-10-07T15:00:00Z' }, H24)).toBe('Oct 8')
     })
 
-    it('names an hour by its time on the axis, and with its day in full', () => {
-        expect(dayLabel('2026-10-08T09', H24)).toBe('09:00')
-        expect(dayName('2026-10-08T09', H24)).toBe('Oct 8, 09:00')
-        expect(dayName('2026-10-08', H24)).toBe('Oct 8')
+    it('names an hour by when it starts in the browser, on the axis by its time alone, on the clock asked for', () => {
+        expect(dayLabel(hourOf(9), H24)).toBe('09:00')
+        expect(dayName(hourOf(9), H24)).toMatch(/^\S+ 8 09:00$/u)
+        expect(dayLabel(hourOf(0), H12)).toBe('12:00 AM')
+        expect(dayLabel(hourOf(14), H12)).toBe('2:00 PM')
+        expect(dayName(hourOf(14), H12)).toMatch(/^\S+ 8 2:00 PM$/u)
     })
 
-    it('names an hour on a 12-hour clock, midnight and noon as 12, and never with a zone', () => {
-        expect(dayLabel('2026-10-08T00', H12)).toBe('12 AM')
-        expect(dayLabel('2026-10-08T09', H12)).toBe('9 AM')
-        expect(dayLabel('2026-10-08T12', H12)).toBe('12 PM')
-        expect(dayLabel('2026-10-08T23', H12)).toBe('11 PM')
-        expect(dayName('2026-10-08T14', H12)).toBe('Oct 8, 2 PM')
-        expect(dayName('2026-10-08T14', { hours: '24', zone: true })).toBe('Oct 8, 14:00')
+    it('names the zone after an hour in full when asked, but never on the axis', () => {
+        expect(dayName(hourOf(14), { hours: '24', zone: true })).toMatch(/^\S+ 8 14:00 \S+$/u)
+        expect(dayLabel(hourOf(14), { hours: '24', zone: true })).toBe('14:00')
     })
 
     it('finds the dearest day, the latest of equals, so its total is said over its bar', () => {

@@ -6,6 +6,7 @@ import type { SpendBreakdown, SpendCosts, SpendDay, SpendGroup, SpendTicket } fr
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
+import { clockTime, stamp } from '@/lib/time'
 
 /** The window the page opens on, as `canopy spend` does: the week. */
 export const DEFAULT_WINDOW: SpendBreakdownRange = { days: 7 }
@@ -153,36 +154,30 @@ export function dayHint(day: SpendDay, clock: Clock): string {
         series.key === 'overseer' ? `${said(series)}${ofIt}` : said(series),
     )
     const total = day.costs.total === null ? 'nothing reported' : costText(day.costs.total)
-    const name = dayName(day.day, clock)
+    const name = dayName(day, clock)
     return parts.length === 0 ? `${name}: ${total}` : `${name}: ${total}, ${parts.join(', ')}`
 }
 
 /**
- * A day as the server names it, `2026-10-07`, as the chart's axis says it: `Oct 7`, whatever the browser's zone. An
- * hour, `2026-10-07T14`, is its time alone on the operator's clock, as an axis of hours reads: `14:00`, or `2 PM`.
+ * A day as the chart's axis says it: the server's name for it, `2026-10-07`, as `Oct 7`, whatever the browser's zone.
+ * An hour is the time it starts alone, in the browser's zone on the operator's clock and never with the zone, which
+ * the axis has no room for: `14:00`, or `2:00 PM`.
  */
-export function dayLabel(day: string, clock: Clock): string {
-    const hour = day.split('T')[1]
-    return hour === undefined ? dateLabel(day) : hourLabel(hour, clock)
+export function dayLabel(day: Pick<SpendDay, 'day' | 'start'>, clock: Clock): string {
+    return isHour(day) ? clockTime(day.start, { ...clock, zone: false }) : dateLabel(day.day)
 }
 
 /**
- * A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or with its time on the operator's clock,
- * `Oct 7, 14:00` or `Oct 7, 2 PM`.
+ * A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or an hour as every other time on the
+ * page is stamped, in the browser's zone on the operator's clock: `Oct 7 14:00`, `Oct 7 2:00 PM EDT`.
  */
-export function dayName(day: string, clock: Clock): string {
-    const [date = day, hour] = day.split('T')
-    return hour === undefined ? dateLabel(date) : `${dateLabel(date)}, ${hourLabel(hour, clock)}`
+export function dayName(day: Pick<SpendDay, 'day' | 'start'>, clock: Clock): string {
+    return isHour(day) ? stamp(day.start, clock) : dateLabel(day.day)
 }
 
-// An hour as the server names it, `14`, on the operator's clock. It is the wall time of the machine canopy runs on,
-// with no offset to say which zone that is, so it is written as it stands and never with a zone after it.
-function hourLabel(hour: string, clock: Clock): string {
-    if (clock.hours === '24') {
-        return `${hour}:00`
-    }
-    const n = Number(hour)
-    return `${n % 12 === 0 ? 12 : n % 12} ${n < 12 ? 'AM' : 'PM'}`
+// Whether the server named an hour, `2026-10-07T14`, rather than a day.
+function isHour(day: Pick<SpendDay, 'day'>): boolean {
+    return day.day.includes('T')
 }
 
 function dateLabel(day: string): string {

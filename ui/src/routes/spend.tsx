@@ -85,7 +85,8 @@ const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'plans', 'chores', 'reviews
 
 // The chart's axis names every day of up to a week, and every fifth day or hour past that, back from the latest.
 const AXIS_ALL = 7
-// The widest name the axis says, `Sep 30`, in characters, and the space it keeps from the next, in pixels.
+// The widest name the axis leaves room for at least, `Sep 30`, in characters, and the space it keeps from the next, in
+// pixels. An hour on a 12-hour clock, `12:00 PM`, is wider, and gets its own.
 const AXIS_NAME_CHARS = 6
 const AXIS_GAP = 8
 
@@ -377,7 +378,7 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
                         {days.toReversed().map((day) => (
                             <tr key={day.day} className="text-right" data-testid={`spend-day-${day.day}`}>
                                 <th scope="row" className="readout py-0.5 text-left font-normal whitespace-nowrap">
-                                    {dayName(day.day, clock)}
+                                    {dayName(day, clock)}
                                 </th>
                                 {SERIES.map((series) => (
                                     <td key={series.key} className="readout pl-3 text-muted-foreground">
@@ -405,8 +406,10 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
  * that often would touch, it names fewer days (`axisStep`).
  */
 function Chart({ days, clock }: { days: SpendDay[]; clock: Clock }) {
+    const names = days.map((day) => dayLabel(day, clock))
+    const widest = Math.max(AXIS_NAME_CHARS, ...names.map((name) => name.length))
     // The same room is the same state: a new object each time would render again for nothing.
-    const [measure, room] = useMeasure(axisRoom, undefined, { same: sameRoom })
+    const [measure, room] = useMeasure((chart: HTMLElement) => axisRoom(chart, widest), undefined, { same: sameRoom })
     const top = chartTop(days) * HEADROOM
     const dearest = dearestDay(days)
     const step = axisStep(days.length, AXIS_ALL, room)
@@ -434,7 +437,7 @@ function Chart({ days, clock }: { days: SpendDay[]; clock: Clock }) {
                                 )}
                                 data-testid={`spend-axis-${day.day}`}
                             >
-                                {dayLabel(day.day, clock)}
+                                {names[i]}
                             </span>
                         )}
                     </span>
@@ -445,10 +448,11 @@ function Chart({ days, clock }: { days: SpendDay[]; clock: Clock }) {
 }
 
 /**
- * What the drawn chart has room for: from one bar to the next, and the widest name a day can have, from the width of
- * a name shown (the axis is monospace), with its gap. Undefined while there is nothing to measure.
+ * What the drawn chart has room for: from one bar to the next, and the widest name a day can have, `widest`
+ * characters, from the width of a name shown (the axis is monospace), with its gap. Undefined while there is nothing
+ * to measure.
  */
-function axisRoom(chart: HTMLElement): AxisRoom | undefined {
+function axisRoom(chart: HTMLElement, widest: number): AxisRoom | undefined {
     const [plot, axis] = chart.children
     const first = plot?.children[0]?.getBoundingClientRect()
     const second = plot?.children[1]?.getBoundingClientRect()
@@ -460,7 +464,7 @@ function axisRoom(chart: HTMLElement): AxisRoom | undefined {
     const width = name.getBoundingClientRect().width
     return {
         pitch: second === undefined ? Number.POSITIVE_INFINITY : Math.round(second.left - first.left),
-        label: Math.ceil((width / chars) * AXIS_NAME_CHARS) + AXIS_GAP,
+        label: Math.ceil((width / chars) * widest) + AXIS_GAP,
     }
 }
 
