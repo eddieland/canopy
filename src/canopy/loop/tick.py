@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
@@ -54,7 +54,7 @@ CANOPY_CHECK_TIMEOUT_SECONDS = 60
 # lists it for as long once more.
 RECENTLY_DONE_DAYS = 30
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
-# `error` when `canopy loop` caught the tick raising.
+# `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 # What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
 # grant, a notice set or cleared), a run ending, the operator pressing the loop's tick-now key, or the operator asking
@@ -246,6 +246,29 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
         return Outcome(tick_id, status, summary, usage)
 
+    try:
+        return _steps(ctx, tick_id, log, finish, dry_run=dry_run, woken_by=woken_by)
+    # Closed with what it raised, so the journal keeps why it failed when the logs do not. Should closing it raise too,
+    # the next tick closes it `abandoned`.
+    except Exception as e:
+        log.exception("tick raised", extra={"error": str(e)})
+        return finish(TickStatus.ERROR, f"{type(e).__name__}: {e}")
+
+
+class _Finish(Protocol):
+    """Closes the tick with its status and summary, and what the overseer cost, and returns its outcome."""
+
+    def __call__(self, status: TickStatus, summary: str, usage: Usage | None = None) -> Outcome: ...
+
+
+def _steps(
+    ctx: Context, tick_id: int, log: logs.TickAdapter, finish: _Finish, *, dry_run: bool, woken_by: WokenBy | None
+) -> Outcome:
+    """Run tick `tick_id` from reconcile to closing it, through `finish` (DESIGN §6 steps 2 to 5).
+
+    Returns:
+        How the tick ended.
+    """
     try:
         # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
         review_reconcile.run(ctx, log)
