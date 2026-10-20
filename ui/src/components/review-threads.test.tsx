@@ -173,6 +173,22 @@ describe('DraftCard', () => {
         ])
     })
 
+    it('saves an edit on the key Settings names, as a reply does', async () => {
+        answer = () => Response.json(draft({ text: 'Mine.', edited: true, hash: 'aaaaaaaaaaaa' }))
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        expect(screen.getByRole('button', { name: 'Save' }).getAttribute('aria-keyshortcuts')).toBe('Enter')
+        const field = screen.getByRole('textbox', { name: 'In your words' })
+        fireEvent.change(field, { target: { value: 'Mine.' } })
+        fireEvent.keyDown(field, { key: 'Enter', shiftKey: true })
+        expect(writes()).toEqual([])
+        fireEvent.keyDown(field, { key: 'Enter' })
+        await screen.findByRole('status')
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/runs/45/drafts/1/edit', body: { text: 'Mine.', reaction: null } },
+        ])
+    })
+
     it('shows the reaction a draft stages, beside its text or alone', async () => {
         await renderRouted(<DraftCard draft={draft({ reaction: 'rocket' })} onChange={changed} />)
         expect(screen.getByTestId('draft-reaction').textContent).toContain('Rocket on the comment it answers, with')

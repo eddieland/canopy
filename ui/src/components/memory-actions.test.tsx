@@ -463,6 +463,26 @@ describe('LessonActions', () => {
         expect(screen.queryByRole('form')).toBeNull()
     })
 
+    it('saves an edit on the key Settings names, as a reply does', async () => {
+        answer = Response.json(edited())
+        renderIn(<LessonActions lesson={LESSON} onSaid={vi.fn<(said: string) => void>()} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        const form = screen.getByRole('form', { name: 'Edit memory:8' })
+        expect(within(form).getByRole('button', { name: 'Edit memory:8' }).getAttribute('aria-keyshortcuts')).toBe(
+            'Enter',
+        )
+        const words = within(form).getByRole('textbox', { name: 'The lesson, in your words' })
+        fireEvent.change(words, { target: { value: 'Run the tests once.' } })
+        fireEvent.keyDown(words, { key: 'Enter', shiftKey: true })
+        expect(sent).toEqual([])
+        fireEvent.keyDown(words, { key: 'Enter' })
+        await vi.waitFor(() => {
+            expect(sent).toEqual([
+                { path: '/api/memory/8/edit', body: { text: 'Run the tests once.', repo: null, every_repo: false } },
+            ])
+        })
+    })
+
     it('widens a lesson to every repository as --every-repo does, its words left as they are', async () => {
         answer = Response.json(edited())
         renderIn(<LessonActions lesson={LESSON} onSaid={vi.fn<(said: string) => void>()} />)

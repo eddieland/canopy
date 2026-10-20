@@ -14,11 +14,14 @@ import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { InlineCode } from '@/components/rich-text'
 import { RowLine } from '@/components/rows'
+import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { editRepoChoices, lessonChars, MAX_LESSON_CHARS, memoryStand, repoChoices } from '@/lib/memory'
 import { editedText, memoryForgottenText, PRIVATE_WORDS, promotedText, rejectedText, renewedText } from '@/lib/outcomes'
 import { memoryRef } from '@/lib/refs'
+import { useSendKeys } from '@/lib/send-key'
+import type { SendKeys } from '@/lib/send-key'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -348,9 +351,11 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
     const replaced = data === undefined ? undefined : inForceUnder(data.lessons, source.key)
     const privateWords = source.private && text.trim() === own.trim()
 
+    const sendKeys = useSendKeys()
+
     function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (fits) {
+        if (fits && !promote.isPending) {
             promote.mutate()
         }
     }
@@ -364,6 +369,7 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
             <LessonFields
                 text={text}
                 onText={setText}
+                onKeyDown={sendKeys.onKeyDown}
                 repo={repo}
                 onRepo={setRepo}
                 choices={data === undefined ? undefined : repoChoices(source, data.repos)}
@@ -394,9 +400,10 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
                 </p>
             )}
             <span className="flex flex-wrap items-center gap-2">
-                <Button type="submit" disabled={promote.isPending || !fits}>
+                <Button type="submit" disabled={promote.isPending || !fits} aria-keyshortcuts={sendKeys.shortcut}>
                     <ArrowUpFromLine />
                     Promote {memoryRef(source.id)}
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
                 <Button type="button" variant="ghost" onClick={onClose} disabled={promote.isPending}>
                     Cancel
@@ -441,10 +448,11 @@ export function EditForm({ lesson, onSaid, onClose }: Said & { lesson: MemoryEnt
     })
     const changed = text.trim() !== own.trim() || repo !== lesson.repo
     const fits = lessonFits(text)
+    const sendKeys = useSendKeys()
 
     function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (fits && changed) {
+        if (fits && changed && !edit.isPending) {
             edit.mutate()
         }
     }
@@ -458,6 +466,7 @@ export function EditForm({ lesson, onSaid, onClose }: Said & { lesson: MemoryEnt
             <LessonFields
                 text={text}
                 onText={setText}
+                onKeyDown={sendKeys.onKeyDown}
                 repo={repo}
                 onRepo={setRepo}
                 choices={data === undefined ? undefined : editRepoChoices(lesson, data.repos)}
@@ -467,9 +476,14 @@ export function EditForm({ lesson, onSaid, onClose }: Said & { lesson: MemoryEnt
                 version is due for review in 90 days.
             </p>
             <span className="flex flex-wrap items-center gap-2">
-                <Button type="submit" disabled={edit.isPending || !fits || !changed}>
+                <Button
+                    type="submit"
+                    disabled={edit.isPending || !fits || !changed}
+                    aria-keyshortcuts={sendKeys.shortcut}
+                >
                     <Pencil />
                     Edit {memoryRef(lesson.id)}
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
                 <Button type="button" variant="ghost" onClick={onClose} disabled={edit.isPending}>
                     Cancel
@@ -504,17 +518,20 @@ export function VersionForget({ version, onSaid }: Said & { version: MemoryEntry
 
 /**
  * A lesson's words and the repositories its runs are served in, as a promote or an edit takes them: the words in a
- * field with their count against the bound, and, once `choices` are read, the repositories as a segmented control.
+ * field with their count against the bound, sent on the send key (`onKeyDown`), and, once `choices` are read, the
+ * repositories as a segmented control.
  */
 function LessonFields({
     text,
     onText,
+    onKeyDown,
     repo,
     onRepo,
     choices,
 }: {
     text: string
     onText: (text: string) => void
+    onKeyDown: SendKeys['onKeyDown']
     repo: string | null
     onRepo: (repo: string | null) => void
     choices: (string | null)[] | undefined
@@ -541,6 +558,7 @@ function LessonFields({
                 id={`${id}-text`}
                 value={text}
                 onChange={(event) => onText(event.target.value)}
+                onKeyDown={onKeyDown}
                 spellCheck
                 className="min-h-20"
             />

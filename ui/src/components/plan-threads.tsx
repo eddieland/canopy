@@ -6,6 +6,7 @@ import { Age } from '@/components/age'
 import { Textarea } from '@/components/input'
 import { LinkedText } from '@/components/linked-text'
 import { Empty } from '@/components/panel'
+import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Disclosure } from '@/components/disclosure'
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { usePending } from '@/hooks/use-pending'
 import { changeRequest, MAX_COMMENT, MAX_REQUEST } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
-import { sends, useSendKey } from '@/lib/send-key'
+import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 /** A comment being written: the passage it is on and what it says so far. */
@@ -616,7 +617,7 @@ function CommentForm({
     onCancel: () => void
     onLeave: () => void
 }) {
-    const sendKey = useSendKey()
+    const sendKeys = useSendKeys()
     const field = useRef<HTMLTextAreaElement>(null)
     const [own, setOwn] = useState(initial)
     const body = value ?? own
@@ -654,11 +655,7 @@ function CommentForm({
             }
             return
         }
-        const { key, shiftKey, ctrlKey, metaKey } = event
-        if (sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) {
-            event.preventDefault()
-            event.currentTarget.form?.requestSubmit()
-        }
+        sendKeys.onKeyDown(event)
     }
 
     return (
@@ -676,9 +673,10 @@ function CommentForm({
                 <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
                     Cancel
                 </Button>
-                <Button type="submit" size="xs" disabled={!body.trim()}>
+                <Button type="submit" size="xs" disabled={!body.trim()} aria-keyshortcuts={sendKeys.shortcut}>
                     <MessageSquarePlus aria-hidden />
                     {submit}
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
             </div>
         </form>

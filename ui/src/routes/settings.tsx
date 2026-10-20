@@ -13,6 +13,7 @@ import { HatPreview } from '@/components/hat'
 import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
+import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
@@ -29,7 +30,7 @@ import type { TickerTopic } from '@/lib/headlines'
 import { noticeSetText, reloadedText } from '@/lib/outcomes'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
-import { setSendKey, useSendKey } from '@/lib/send-key'
+import { setSendKey, useSendKey, useSendKeys } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { stamp, useNow } from '@/lib/time'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
@@ -488,7 +489,7 @@ function ClockPanel() {
     )
 }
 
-/** Which key sends a reply or a note. */
+/** Which key sends a reply, a note, a comment, or any other text written to send. */
 function SendKeyPanel() {
     const sendKey = useSendKey()
     return (
@@ -496,8 +497,8 @@ function SendKeyPanel() {
             <PanelHeader label="Replies" />
             <div className="flex items-center justify-between gap-4 p-3">
                 <p className="max-w-3xl text-sm text-muted-foreground">
-                    Which key sends a reply or a note. Shift+Enter always makes a new line. Ctrl+Enter is ⌘+Enter on a
-                    Mac.
+                    Which key sends what you write: a reply, a note, a comment, review notes, a lesson, or a notice.
+                    Shift+Enter always makes a new line. Ctrl+Enter is ⌘+Enter on a Mac.
                 </p>
                 <ToggleGroup
                     type="single"
@@ -530,6 +531,7 @@ function NoticePanel() {
     const client = useQueryClient()
     const [text, setText] = useState('')
     const [lasts, setLasts] = useState('4h')
+    const sendKeys = useSendKeys()
     const minutes = LASTS.find((l) => l.value === lasts)?.minutes ?? 240
     const mutation = useMutation({
         mutationFn: () => setNotice(text, minutes),
@@ -545,7 +547,9 @@ function NoticePanel() {
                 className="flex flex-col gap-2 p-3"
                 onSubmit={(event) => {
                     event.preventDefault()
-                    mutation.mutate()
+                    if (!mutation.isPending && text.trim() !== '') {
+                        mutation.mutate()
+                    }
                 }}
             >
                 <p className="max-w-3xl text-sm text-muted-foreground">
@@ -557,6 +561,7 @@ function NoticePanel() {
                 <Textarea
                     value={text}
                     onChange={(event) => setText(event.target.value)}
+                    onKeyDown={sendKeys.onKeyDown}
                     placeholder="Artifactory is down: CI builds that fetch dependencies will likely fail."
                     aria-label="Notice to workers"
                     data-testid="notice-text"
@@ -583,10 +588,12 @@ function NoticePanel() {
                         type="submit"
                         variant="outline"
                         disabled={mutation.isPending || text.trim() === ''}
+                        aria-keyshortcuts={sendKeys.shortcut}
                         data-testid="notice-set"
                     >
                         <Megaphone />
                         Set notice
+                        <SendKeycap keys={sendKeys.shortcut} />
                     </Button>
                 </div>
                 <Notice error={mutation.error}>{mutation.data ? noticeSetText(mutation.data) : null}</Notice>

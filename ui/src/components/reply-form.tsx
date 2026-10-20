@@ -1,39 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Command, CornerDownLeft, Send } from 'lucide-react'
+import { Send } from 'lucide-react'
 import { useState } from 'react'
-import type { KeyboardEvent, SubmitEvent } from 'react'
+import type { SubmitEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
 import type { Replied } from '@/api/types'
 import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
+import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import { Kbd } from '@/components/ui/kbd'
 import { notedText, repliedText } from '@/lib/outcomes'
 import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
-import { isApple, sends, sendShortcut, useSendKey } from '@/lib/send-key'
+import { useSendKeys } from '@/lib/send-key'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
-
-const APPLE = isApple(navigator.userAgent)
-
-/** The keys of a shortcut (`Control+Enter`) as one keycap: ⌘ and Enter as glyphs, Ctrl as its word. */
-function Shortcut({ keys }: { keys: string }) {
-    return (
-        <Kbd aria-hidden className="ml-0.5 bg-accent-foreground/15 text-accent-foreground">
-            {keys.split('+').map((key) => {
-                if (key === 'Meta') {
-                    return <Command key={key} />
-                }
-                if (key === 'Enter') {
-                    return <CornerDownLeft key={key} />
-                }
-                return <span key={key}>Ctrl</span>
-            })}
-        </Kbd>
-    )
-}
 
 /**
  * What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19), and
@@ -69,8 +50,7 @@ export function ReplyForm({
     onReplied?: (replied: Replied, said: string) => void
 }) {
     const client = useQueryClient()
-    const sendKey = useSendKey()
-    const shortcut = sendShortcut(sendKey, APPLE)
+    const sendKeys = useSendKeys()
     const stored = draftKey(target.kind === 'ticket' ? `ticket:${target.key}` : `chore:${target.name}`)
     // The parent keys the form by its subject, so the draft is read once for it, on mount.
     const [draft] = useState(() => readDraft(stored))
@@ -98,16 +78,6 @@ export function ReplyForm({
         if (body.trim() && !mutation.isPending) {
             mutation.mutate(body)
         }
-    }
-
-    // The key Settings names sends through the form, as the button does; any other Enter makes a new line.
-    function sendOnKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-        const { key, shiftKey, ctrlKey, metaKey } = event
-        if (!sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) {
-            return
-        }
-        event.preventDefault()
-        event.currentTarget.form?.requestSubmit()
     }
 
     const chore = target.kind === 'chore'
@@ -143,7 +113,7 @@ export function ReplyForm({
                         setBody(event.target.value)
                         keepDraft(stored, { body: event.target.value, submission })
                     }}
-                    onKeyDown={sendOnKey}
+                    onKeyDown={sendKeys.onKeyDown}
                     placeholder={placeholder}
                 />
             </label>
@@ -152,10 +122,14 @@ export function ReplyForm({
                 <span className="ml-auto readout text-xs text-muted-foreground">
                     {body.length}/{MAX_REPLY}
                 </span>
-                <Button type="submit" disabled={mutation.isPending || !body.trim()} aria-keyshortcuts={shortcut}>
+                <Button
+                    type="submit"
+                    disabled={mutation.isPending || !body.trim()}
+                    aria-keyshortcuts={sendKeys.shortcut}
+                >
                     <Send />
                     {chore ? 'Add note' : 'Reply'}
-                    {shortcut && <Shortcut keys={shortcut} />}
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
             </div>
         </form>
