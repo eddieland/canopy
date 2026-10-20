@@ -12,12 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, assert_never
 
-from canopy.core import contract, db, plans, records, review_result, spend
+from canopy.core import contract, db, plans, records, review_result, spend, sql
 from canopy.core.vocab import ChoreRunStatus, PlanSetting, ReviewRunStatus, RunKind, RunStatus, TickStatus
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.spend import Kind
@@ -52,20 +52,24 @@ _FAILED: dict[Kind, frozenset[str]] = {
 }
 # Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
 # `review`), its status, when it started, what it was about, its note, and its cost. A triage and a plan run are rows of
-# `runs`, each a kind of its own, as `canopy spend` counts them. The tables are fixed, never input.
-_RUN_ROWS = (
-    "SELECT id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd FROM runs"
-)
-_ROWS: dict[Kind, str] = {
-    "overseer": "SELECT id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
-    "NULL AS subject, summary AS note, cost_usd FROM ticks",
-    "workers": f"{_RUN_ROWS} WHERE kind NOT IN ('{RunKind.NEEDS_PLAN.value}', '{RunKind.PLAN.value}')",
-    "triage": f"{_RUN_ROWS} WHERE kind = '{RunKind.NEEDS_PLAN.value}'",
-    "plans": f"{_RUN_ROWS} WHERE kind = '{RunKind.PLAN.value}'",
-    "chores": "SELECT id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd "
-    "FROM chore_runs",
-    "reviews": "SELECT id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd "
-    "FROM review_runs",
+# `runs`, each a kind of its own, as `canopy spend` counts them.
+_RUN_ROWS = sql.select(
+    "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd"
+).from_("runs")
+_ROWS: Mapping[Kind, sql.Select] = {
+    "overseer": sql.select(
+        "id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
+        "NULL AS subject, summary AS note, cost_usd"
+    ).from_("ticks"),
+    "workers": _RUN_ROWS.where("kind NOT IN (?, ?)", RunKind.NEEDS_PLAN, RunKind.PLAN),
+    "triage": _RUN_ROWS.where("kind = ?", RunKind.NEEDS_PLAN),
+    "plans": _RUN_ROWS.where("kind = ?", RunKind.PLAN),
+    "chores": sql.select("id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd").from_(
+        "chore_runs"
+    ),
+    "reviews": sql.select(
+        "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd"
+    ).from_("review_runs"),
 }
 
 
@@ -195,11 +199,14 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
 
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.
 def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> list[Outcome]:
-    rows = conn.execute(
-        f"SELECT what, status, count(*), SUM(cost_usd) FROM ({_ROWS[kind]}) "  # noqa: S608 (a fixed query)
-        "WHERE started_at >= ? AND started_at < ? AND status != 'running' GROUP BY what, status ORDER BY what, status",
-        (since, until),
+    ended = (
+        sql.select("what, status, count(*), SUM(cost_usd)")
+        .from_("({})", _ROWS[kind])
+        .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
+        .group_by("what, status")
+        .order_by("what, status")
     )
+    rows = sql.execute(conn, ended)
     return [
         Outcome(
             kind=kind,
@@ -214,13 +221,15 @@ def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> l
 
 
 def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[Failure]:
-    statuses = sorted(_FAILED[kind])
-    rows = conn.execute(
-        f"SELECT * FROM ({_ROWS[kind]}) "  # noqa: S608 (a fixed query, and a mark per status)
-        f"WHERE started_at >= ? AND started_at < ? AND status IN ({db.marks(statuses)}) "
-        "ORDER BY started_at DESC, id DESC LIMIT ?",
-        (since, until, *statuses, FAILURES),
+    failed = (
+        sql.select("*")
+        .from_("({})", _ROWS[kind])
+        .where("started_at >= ? AND started_at < ?", since, until)
+        .where_in("status", sorted(_FAILED[kind]))
+        .order_by("started_at DESC, id DESC")
+        .limit(FAILURES)
     )
+    rows = sql.execute(conn, failed)
     for run_id, what, status, started, subject, note, cost in rows:
         yield Failure(
             kind=kind,
@@ -246,11 +255,14 @@ def _text(value: object) -> str | None:
 
 
 def _refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
-    rows = conn.execute(
-        "SELECT substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id) FROM decisions "
-        "WHERE action LIKE ? AND created_at >= ? AND created_at < ? GROUP BY action ORDER BY count(*) DESC, action",
-        (len(REFUSED) + 1, f"{REFUSED}%", since, until),
+    refused = (
+        sql.select("substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id)", len(REFUSED) + 1)
+        .from_("decisions")
+        .where("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
+        .group_by("action")
+        .order_by("count(*) DESC, action")
     )
+    rows = sql.execute(conn, refused)
     return [
         Refusal(guard=str(guard), decisions=int(n), ticks=int(ticks), last_tick=int(last))
         for guard, n, ticks, last in rows
@@ -261,9 +273,12 @@ def _waivers(conn: sqlite3.Connection, since: str, until: str) -> list[Waiver]:
     waived = records.fetch_all(
         conn,
         records.PlanWaiver,
-        "SELECT w.* FROM plan_waivers w JOIN runs r ON r.id = w.run_id "
-        "WHERE r.started_at >= ? AND r.started_at < ? ORDER BY w.run_id DESC LIMIT ?",
-        (since, until, WAIVERS),
+        sql.select("w.*")
+        .from_("plan_waivers w")
+        .join("runs r ON r.id = w.run_id")
+        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+        .order_by("w.run_id DESC")
+        .limit(WAIVERS),
     )
     found: list[Waiver] = []
     for w in waived:
@@ -279,11 +294,13 @@ def _waivers(conn: sqlite3.Connection, since: str, until: str) -> list[Waiver]:
 def _waiver(conn: sqlite3.Connection, waived: records.PlanWaiver, ticket: records.Ticket) -> Waiver:
     forgotten = ticket.forgotten_run_id is not None and ticket.forgotten_run_id >= waived.run_id
     last_run = ticket.forgotten_run_id if forgotten else None
-    runs = conn.execute(
-        "SELECT id, kind, status, cost_usd FROM runs WHERE ticket_key = ? AND id > ? AND id <= coalesce(?, id) "
-        "ORDER BY id",
-        (waived.ticket_key, waived.run_id, last_run),
-    ).fetchall()
+    after = (
+        sql.select("id, kind, status, cost_usd")
+        .from_("runs")
+        .where("ticket_key = ? AND id > ? AND id <= coalesce(?, id)", waived.ticket_key, waived.run_id, last_run)
+        .order_by("id")
+    )
+    runs = sql.execute(conn, after).fetchall()
     impact, review_id = _impact(conn, waived, ticket.forgotten_at if forgotten else None)
     return Waiver(
         ticket=waived.ticket_key,
@@ -327,12 +344,19 @@ def _standing(
 # The highest impact a `done` review of the ticket's PR judged after the waiver and before a forget that ended it, and
 # the newest review that judged it. A review names its ticket, or its PR is one of the ticket's units' (§21).
 def _impact(conn: sqlite3.Connection, waived: records.PlanWaiver, until: str | None) -> tuple[str | None, int | None]:
-    rows = conn.execute(
-        "SELECT id, result_json FROM review_runs WHERE status = ? AND started_at >= ? "
-        "AND started_at <= coalesce(?, started_at) AND (ticket_key = ? OR pr_url IN "
-        "(SELECT pr_url FROM ticket_units WHERE ticket_key = ? AND pr_url IS NOT NULL)) ORDER BY id",
-        (ReviewRunStatus.DONE, waived.at, until, waived.ticket_key, waived.ticket_key),
+    reviews = (
+        sql.select("id, result_json")
+        .from_("review_runs")
+        .where("status = ? AND started_at >= ?", ReviewRunStatus.DONE, waived.at)
+        .where("started_at <= coalesce(?, started_at)", until)
+        .where(
+            "ticket_key = ? OR pr_url IN (SELECT pr_url FROM ticket_units WHERE ticket_key = ? AND pr_url IS NOT NULL)",
+            waived.ticket_key,
+            waived.ticket_key,
+        )
+        .order_by("id")
     )
+    rows = sql.execute(conn, reviews)
     best: tuple[str | None, int | None] = (None, None)
     for review_id, stored in rows:
         result = review_result.stored(stored)
