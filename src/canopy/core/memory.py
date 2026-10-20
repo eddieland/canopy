@@ -205,8 +205,9 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, rep
         required.append(MEMORY_CONTRACT)
     if modes.ticket_notes is MemoryMode.USE:
         digest = ticket_digest(conn, key)
-        # It starts the line of the heading after it, so it ends with the blank line before that heading.
-        values[TICKET_MEMORY] = f"{digest.text}\n\n"
+        # It starts the line of the heading after it, so it ends with the blank line before that heading; a ticket with
+        # no note in force gets no section.
+        values[TICKET_MEMORY] = f"{digest.text}\n\n" if digest.ids or digest.left_out else ""
         required.append(TICKET_MEMORY)
         ids.extend(digest.ids)
     if modes.proposals is MemoryMode.USE:

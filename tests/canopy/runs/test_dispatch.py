@@ -5,13 +5,16 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.context import Context
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from canopy.infra import procs
+from canopy.runs import dispatch
 from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, lifelock_left, pool, present, slot_of
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, pool_state
@@ -329,3 +332,15 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
         assert runner.spawned == []
         assert not treehouse_state.exists()
         assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 4
+
+
+def test_the_map_section_is_left_out_without_a_map_and_says_why_one_cannot_be_read(ctx: Context) -> None:
+    assert dispatch.map_note(ctx) is None
+    path = ctx.workspace.root / "MAP.md"
+    path.write_text("  \n")
+    assert dispatch.map_note(ctx) is None
+    path.write_text("# map\n")
+    assert dispatch.map_note(ctx) == "# map"
+    # A map the planner cannot read is one it should know of, so its section stays, saying why.
+    with mock.patch.object(Path, "read_text", autospec=True, side_effect=PermissionError(13, "Permission denied")):
+        assert dispatch.map_note(ctx) == "MAP.md could not be read (Permission denied)."

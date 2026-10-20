@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from canopy.core import conversation, db, records
 from canopy.core.vocab import RunKind
 from canopy.loop import acknowledge
-from tests.canopy.helpers import KEY, waits
+from tests.canopy.helpers import KEY, present, waits
 from tests.canopy.scenario_helpers import dispatches, raises
 
 if TYPE_CHECKING:
@@ -106,7 +106,7 @@ def test_a_private_workers_conversation_leaves_the_notes_out(scenario: Scenario)
     scenario.operator("reply", KEY, "Use the v2 client.")
     scenario.tick(*waits(KEY))
     assert [m[0] for m in conversation_of(scenario.conn)] == ["operator", "canopy"]
-    prompt = conversation.prompt_conversation(scenario.conn, KEY)
+    prompt = present(conversation.prompt_conversation(scenario.conn, KEY))
     assert "Use the v2 client." in prompt
     assert "Tick " not in prompt
 

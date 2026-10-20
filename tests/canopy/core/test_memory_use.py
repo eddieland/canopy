@@ -38,8 +38,8 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     first = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    assert f"{HEADING}Notes this ticket's earlier runs wrote" in prompt_of(canopy_env, int(first["id"]))
-    assert "None: no earlier run of this ticket left a note." in prompt_of(canopy_env, int(first["id"]))
+    # A ticket with no note in force gets no section.
+    assert HEADING not in prompt_of(canopy_env, int(first["id"]))
     [note] = memories(conn)
 
     assert dispatch_in_tick(conn, *FIX_CI).code == 0
@@ -56,7 +56,7 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
     assert dispatch_in_tick(conn, *WORK, key=OTHER).code == 0
     other = prompt_of(canopy_env, int(last_run(conn)["id"]))
     assert NOTE not in other
-    assert "None: no earlier run of this ticket left a note." in other
+    assert HEADING not in other
 
 
 def test_a_note_recorded_at_record_is_served_once_the_tier_is_in_use(
