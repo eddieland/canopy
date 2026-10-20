@@ -97,8 +97,9 @@ test('24 hours read by the hour, each named by its time and in full in the table
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(24)
     await expect(page.getByTestId('spend-table').locator('thead th').first()).toHaveText('hour')
     await expect(page.locator('main header p')).toContainText(' over 24 hours · ')
-    // The newest hour first in the table, with its day, and last on the axis by its time alone, in the server's zone.
-    await expect(page.getByTestId('spend-table').locator('tbody th').first()).toHaveText(/^Oct \d+, \d{2}:00$/u)
+    // The newest hour first in the table, stamped with its day, and last on the axis by its time alone, both in the
+    // browser's zone.
+    await expect(page.getByTestId('spend-table').locator('tbody th').first()).toHaveText(/^Oct \d+ \d{2}:00$/u)
     await expect(
         page
             .getByTestId('spend-chart')

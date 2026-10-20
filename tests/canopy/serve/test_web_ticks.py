@@ -117,6 +117,7 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     found = c.get("/api/spend/breakdown", params={"days": 2}).json()
     assert (found["since"], found["days"]) == ("2026-10-07T00:00:00Z", 2)
     assert [d["day"] for d in found["per_day"]] == ["2026-10-07", "2026-10-08"]
+    assert [d["start"] for d in found["per_day"]] == ["2026-10-07T00:00:00Z", "2026-10-08T00:00:00Z"]
     assert found["per_day"][0]["costs"]["total"] is None  # nothing the day before
     today = found["per_day"][1]["costs"]
     # Both ticks the loop ran, the second idle; the rest is the mock's runs, chore runs, and reviews.

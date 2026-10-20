@@ -173,6 +173,7 @@ def test_a_window_in_hours_is_whole_clock_hours_ending_with_this_one(tmp_path: P
     assert (found.days, found.hours) == (None, 24)
     assert len(found.per_day) == 24
     assert (found.per_day[0].day, found.per_day[-1].day) == ("2026-10-07T13", "2026-10-08T12")
+    assert (found.per_day[0].start, found.per_day[-1].start) == (found.since, "2026-10-08T12:00:00.000Z")
     by_hour = {d.day: d.costs for d in found.per_day}
     assert by_hour["2026-10-07T13"].overseer == 1.0
     assert (by_hour["2026-10-08T12"].overseer, by_hour["2026-10-08T12"].idle) == (0.5, 0.5)
@@ -194,6 +195,7 @@ def test_a_window_in_hours_is_whole_local_hours_in_a_zone_a_half_hour_off_utc(
         found = spend.breakdown_hours(conn, now, 24)
     assert (found.since, found.until) == ("2026-10-07T12:30:00.000Z", "2026-10-08T12:30:00.000Z")
     assert (found.per_day[0].day, found.per_day[-1].day) == ("2026-10-07T18", "2026-10-08T17")
+    assert found.per_day[0].start == "2026-10-07T12:30:00.000Z"
     assert found.per_day[0].costs.overseer == 1.0
     assert found.totals.total == 1.0
 
@@ -209,6 +211,8 @@ def test_an_hour_the_clock_goes_back_over_is_listed_once(tmp_path: Path, journal
     assert len(names) == 23
     assert len(set(names)) == len(names)
     assert {d.day: d.costs.overseer for d in found.per_day}["2026-11-01T01"] == 2.0
+    # The hour starts the first time the clock reads 01:00, in daylight time.
+    assert {d.day: d.start for d in found.per_day}["2026-11-01T01"] == "2026-11-01T08:00:00.000Z"
 
 
 def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: Path, journals: Journals) -> None:
@@ -218,6 +222,7 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
 
     assert (found.since, found.until, found.days) == ("2026-10-02T00:00:00.000Z", "2026-10-09T00:00:00.000Z", 7)
     assert [d.day for d in found.per_day] == [f"2026-10-0{n}" for n in range(2, 9)]
+    assert [d.start for d in found.per_day] == [f"2026-10-0{n}T00:00:00.000Z" for n in range(2, 9)]
     by_day = {d.day: d.costs for d in found.per_day}
     assert by_day["2026-10-02"] == spend.Costs()  # nothing that day: every cost None
     assert by_day["2026-10-02"].total is None

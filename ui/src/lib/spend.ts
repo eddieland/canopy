@@ -3,8 +3,10 @@
 
 import type { SpendBreakdownRange } from '@/api/queries'
 import type { SpendBreakdown, SpendCosts, SpendDay, SpendGroup, SpendTicket } from '@/api/types'
+import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
+import { clockTime, stamp } from '@/lib/time'
 
 /** The window the page opens on, as `canopy spend` does: the week. */
 export const DEFAULT_WINDOW: SpendBreakdownRange = { days: 7 }
@@ -144,7 +146,7 @@ export function dearestDay(days: SpendDay[]): number {
  * A day's bar on hover: its date, its total, and each series it has, by the names the legend gives them. The overseer
  * says its whole, as the totals do, with idle ticks' part of it after it: `overseer $1.00 (idle ticks $0.25)`.
  */
-export function dayHint(day: SpendDay): string {
+export function dayHint(day: SpendDay, clock: Clock): string {
     const said = (series: Series) => `${series.label} ${costText(day.costs[series.key])}`
     const idle = SERIES.find((series) => series.key === 'idle')
     const ofIt = idle !== undefined && (day.costs.idle ?? 0) > 0 ? ` (${said(idle)})` : ''
@@ -152,23 +154,30 @@ export function dayHint(day: SpendDay): string {
         series.key === 'overseer' ? `${said(series)}${ofIt}` : said(series),
     )
     const total = day.costs.total === null ? 'nothing reported' : costText(day.costs.total)
-    const name = dayName(day.day)
+    const name = dayName(day, clock)
     return parts.length === 0 ? `${name}: ${total}` : `${name}: ${total}, ${parts.join(', ')}`
 }
 
 /**
- * A day as the server names it, `2026-10-07`, as the chart's axis says it: `Oct 7`, whatever the browser's zone. An
- * hour, `2026-10-07T14`, is its time alone, `14:00`, as an axis of hours reads.
+ * A day as the chart's axis says it: the server's name for it, `2026-10-07`, as `Oct 7`, whatever the browser's zone.
+ * An hour is the time it starts alone, in the browser's zone on the operator's clock and never with the zone, which
+ * the axis has no room for: `14:00`, or `2:00 PM`.
  */
-export function dayLabel(day: string): string {
-    const hour = day.split('T')[1]
-    return hour === undefined ? dateLabel(day) : `${hour}:00`
+export function dayLabel(day: Pick<SpendDay, 'day' | 'start'>, clock: Clock): string {
+    return isHour(day) ? clockTime(day.start, { ...clock, zone: false }) : dateLabel(day.day)
 }
 
-/** A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or with its time, `Oct 7, 14:00`. */
-export function dayName(day: string): string {
-    const [date = day, hour] = day.split('T')
-    return hour === undefined ? dateLabel(date) : `${dateLabel(date)}, ${hour}:00`
+/**
+ * A day or an hour in full, as its row and its bar's hover say it: `Oct 7`, or an hour as every other time on the
+ * page is stamped, in the browser's zone on the operator's clock: `Oct 7 14:00`, `Oct 7 2:00 PM EDT`.
+ */
+export function dayName(day: Pick<SpendDay, 'day' | 'start'>, clock: Clock): string {
+    return isHour(day) ? stamp(day.start, clock) : dateLabel(day.day)
+}
+
+// Whether the server named an hour, `2026-10-07T14`, rather than a day.
+function isHour(day: Pick<SpendDay, 'day'>): boolean {
+    return day.day.includes('T')
 }
 
 function dateLabel(day: string): string {

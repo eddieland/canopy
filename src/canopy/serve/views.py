@@ -206,7 +206,10 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
         since=db.parse_time(found.since),
         days=found.days,
         hours=found.hours,
-        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs), done=d.done) for d in found.per_day],
+        per_day=[
+            SpendDay(day=d.day, start=db.parse_time(d.start), costs=_spend_costs(d.costs), done=d.done)
+            for d in found.per_day
+        ],
         totals=_spend_costs(found.totals),
         ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],

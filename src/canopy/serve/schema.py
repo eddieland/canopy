@@ -1679,6 +1679,8 @@ class SpendDay(_Model):
 
     day: str
     """The day, `YYYY-MM-DD`, or the hour, `YYYY-MM-DDTHH`, in the local time of the machine canopy runs on."""
+    start: datetime
+    """When it starts: the day's local midnight, or the hour's start, so a page can write it in its own zone."""
     costs: SpendCosts
     """What the runs that started in it cost."""
     done: int = 0

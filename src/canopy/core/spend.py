@@ -97,10 +97,12 @@ class Costs:
 class Day:
     """One local day's costs, `day` as `YYYY-MM-DD`, and how many tickets were marked done on it.
 
-    In a window in hours it is one local hour's, `day` as `YYYY-MM-DDTHH`.
+    In a window in hours it is one local hour's, `day` as `YYYY-MM-DDTHH`. `start` is when it starts, a journal time:
+    the day's local midnight, or the hour's start, the first of an hour the clock goes back over.
     """
 
     day: str
+    start: str
     costs: Costs
     done: int = 0
 
@@ -274,8 +276,9 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     """
     start, end = window(now, days)
     first = start.astimezone().date()
-    names = [(first + timedelta(days=i)).isoformat() for i in range(days)]
-    return _breakdown(conn, start, end, _Buckets(expression=_DAY, names=names, name_of=local_day), days=days)
+    each = [first + timedelta(days=i) for i in range(days)]
+    starts = {day.isoformat(): db.format_time(_midnight(day)) for day in each}
+    return _breakdown(conn, start, end, _Buckets(expression=_DAY, starts=starts, name_of=local_day), days=days)
 
 
 def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Breakdown:
@@ -287,8 +290,10 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Brea
         The breakdown; a window with nothing in it lists each hour with no costs.
     """
     start, end = hour_window(now, hours)
-    names = list(dict.fromkeys(_local_hour(start + timedelta(hours=i)) for i in range(hours)))
-    buckets = _Buckets(expression=_HOUR, names=names, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
+    starts: dict[str, str] = {}
+    for at in (start + timedelta(hours=i) for i in range(hours)):
+        starts.setdefault(_local_hour(at), db.format_time(at))
+    buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
     return _breakdown(conn, start, end, buckets, hours=hours)
 
 
@@ -298,8 +303,8 @@ class _Buckets:
 
     #: The SQL that names the bucket a row started in, from its `started_at`.
     expression: sql.Fragment
-    #: Every bucket's name, oldest first.
-    names: Sequence[str]
+    #: Every bucket's name, oldest first, and when it starts, a journal time.
+    starts: Mapping[str, str]
     #: The name of the bucket a journal time is in.
     name_of: Callable[[str], str]
 
@@ -345,10 +350,10 @@ def _breakdown(
         for name in _SERIES:
             if _in_series(row, name):
                 day[name] = _sum([day.get(name), row.cost_usd])
-    names = buckets.names
+    starts = buckets.starts
     done_on = Counter(buckets.name_of(at) for _, at in done.values())
-    per_day = [Day(day=d, costs=_costs(by_day.get(d, {})), done=done_on[d]) for d in names]
-    totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in names]) for n in (*_SERIES, *_TABLES)})
+    per_day = [Day(day=d, start=s, costs=_costs(by_day.get(d, {})), done=done_on[d]) for d, s in starts.items()]
+    totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in starts]) for n in (*_SERIES, *_TABLES)})
     ticks = _groups(rows)
     total = totals.total
     return Breakdown(
