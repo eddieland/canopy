@@ -170,6 +170,14 @@ describe('pullRequestOf', () => {
         expect(pullRequestOf({ ...item('a', 'needs_reviewer', at), detail: `see \`${pr}\`` })).toBeNull()
         expect(pullRequestOf({ ...item('a', 'needs_reviewer', at), detail: 'https://ci.example.test/7' })).toBeNull()
     })
+
+    it("is the PR's own URL when the detail links into it, such as to a thread", () => {
+        const at = '2026-10-08T12:00:00Z'
+        const detail = 'see https://github.com/acme/web/pull/88#discussion_r123'
+        expect(pullRequestOf({ ...item('a', 'needs_reviewer', at), detail })).toBe(
+            'https://github.com/acme/web/pull/88',
+        )
+    })
 })
 
 describe('shownDetail', () => {
