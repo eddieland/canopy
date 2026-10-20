@@ -57,12 +57,13 @@ Each split has one name everywhere on the page, in the totals, the chart's legen
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went
 on deciding there was nothing to do. Hover a name for what it counts.
 
-**By day** stacks each UTC day's spend by the same split, with a table under it. The dearest day has its total printed
-over its bar, so you can read the scale without hovering; hover any bar for that day's figures. A day that cost nothing
-is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, under the rest of the overseer's
-spend in a deeper shade of its color, and at real prices they're a sliver beside a worker's run, so read their trend
-from the table. A window where nothing reported a cost says so in
-one line rather than draw you an empty chart. Then:
+**By day** stacks each day's spend by the same split, with a table under it. A day runs midnight to midnight on the
+clock of the machine canopy runs on, so your evening's work lands on today and not on a UTC tomorrow. The dearest day
+has its total printed over its bar, so you can read the scale without hovering; hover any bar for that day's figures. A
+day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, under the
+rest of the overseer's spend in a deeper shade of its color, and at real prices they're a sliver beside a worker's run,
+so read their trend from the table. A window where nothing reported a cost says so in one line rather than draw you an
+empty chart. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned. Every later

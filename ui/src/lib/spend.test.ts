@@ -53,7 +53,7 @@ describe('spend', () => {
         expect(dayHint(day('2026-10-02', {}))).toBe('Oct 2: nothing reported')
     })
 
-    it('names a UTC day as the axis does, whatever the zone', () => {
+    it('names a day as the axis does, whatever the zone', () => {
         expect(dayLabel('2026-10-01')).toBe('Oct 1')
         expect(dayLabel('2026-12-31')).toBe('Dec 31')
     })
@@ -81,9 +81,10 @@ describe('spend', () => {
         expect(shareText(null)).toBe('–')
     })
 
-    it('says when and how a ticket was marked done, by its UTC day, and nothing for one that was not', () => {
-        expect(doneText({ done: 'merged', done_at: '2026-10-07T23:30:00Z' })).toBe('Oct 7, merged')
-        expect(doneText({ done: 'closed', done_at: '2026-10-08T00:10:00Z' })).toBe('Oct 8, closed')
+    it('says when and how a ticket was marked done, by its local day, and nothing for one that was not', () => {
+        // Noon UTC is the same day in every zone but the farthest few, so the test reads alike wherever it runs.
+        expect(doneText({ done: 'merged', done_at: '2026-10-07T12:00:00Z' })).toBe('Oct 7, merged')
+        expect(doneText({ done: 'closed', done_at: '2026-10-08T12:10:00Z' })).toBe('Oct 8, closed')
         expect(doneText({ done: null, done_at: null })).toBe('')
     })
 

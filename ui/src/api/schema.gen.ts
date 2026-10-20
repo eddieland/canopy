@@ -4632,7 +4632,7 @@ export type components = {
         };
         /**
          * SpendBreakdown
-         * @description What a window of whole UTC days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
+         * @description What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
          */
         SpendBreakdown: {
             /**
@@ -4677,7 +4677,7 @@ export type components = {
             /**
              * Since
              * Format: date-time
-             * @description When the window starts: midnight UTC on its first day.
+             * @description When the window starts: local midnight on its first day.
              */
             since: string;
             /**
@@ -4770,14 +4770,14 @@ export type components = {
         };
         /**
          * SpendDay
-         * @description One UTC day's costs.
+         * @description One local day's costs.
          */
         SpendDay: {
             /** @description What the runs that started on it cost. */
             costs: components["schemas"]["SpendCosts"];
             /**
              * Day
-             * @description The day, `YYYY-MM-DD`, in UTC.
+             * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
              */
             day: string;
             /**

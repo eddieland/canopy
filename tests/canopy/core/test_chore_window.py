@@ -1,11 +1,8 @@
 """A chore's `days` and `hours` (DESIGN §19): when a run may start, checked in code."""
 
 import json
-import os
-import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest import mock
 
 import pytest
 from pydantic import ValidationError
@@ -14,7 +11,7 @@ from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core import db, workspace
 from canopy.core.config import CHORE_DAYS, Chore, load
-from tests.canopy.helpers import chore_decisions, chore_toml
+from tests.canopy.helpers import chore_decisions, chore_toml, in_zone
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
@@ -63,14 +60,10 @@ def test_days_alone_open_at_midnight_and_hours_alone_every_day() -> None:
 
 
 def test_without_a_time_zone_the_window_is_local_time() -> None:
-    try:
-        with mock.patch.dict(os.environ, {"TZ": "Asia/Tokyo"}):
-            time.tzset()
-            morning = chore(hours="09:00-10:00")
-            assert window.next_open(morning, utc("2026-10-08T12:00")) == utc("2026-10-09T00:00")
-            assert window.describe(morning) == "every day 09:00-10:00 local time"
-    finally:
-        time.tzset()
+    with in_zone("Asia/Tokyo"):
+        morning = chore(hours="09:00-10:00")
+        assert window.next_open(morning, utc("2026-10-08T12:00")) == utc("2026-10-09T00:00")
+        assert window.describe(morning) == "every day 09:00-10:00 local time"
 
 
 @pytest.mark.parametrize(

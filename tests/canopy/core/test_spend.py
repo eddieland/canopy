@@ -5,20 +5,21 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, plans, spend
 from canopy.runtime.report import ToolUse, Usage
-from tests.canopy.helpers import earlier
+from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
 
 
 def noon_today() -> datetime:
-    """Today at noon UTC, so a journal written around it has the same UTC days whenever the test runs."""
+    """Today at noon UTC, so a journal written around it has the same days whenever the test runs: local time is UTC."""
     return datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
 
 
@@ -117,12 +118,42 @@ def decide(conn: sqlite3.Connection, tick_id: int, key: str, created: str, actio
     )
 
 
-def test_the_window_is_whole_utc_days_ending_today() -> None:
-    assert spend.window_start(NOW, 1) == datetime(2026, 10, 8, tzinfo=UTC)
-    assert spend.window_start(NOW, 7) == datetime(2026, 10, 2, tzinfo=UTC)
-    # A moment in another zone is read in UTC.
-    late = datetime(2026, 10, 8, 23, 30, tzinfo=UTC).astimezone()
-    assert spend.window_start(late, 1) == datetime(2026, 10, 8, tzinfo=UTC)
+def test_the_window_is_whole_local_days_ending_today() -> None:
+    assert spend.window(NOW, 1) == (datetime(2026, 10, 8, tzinfo=UTC), datetime(2026, 10, 9, tzinfo=UTC))
+    assert spend.window(NOW, 7)[0] == datetime(2026, 10, 2, tzinfo=UTC)
+    # A moment in another zone is read in local time.
+    late = datetime(2026, 10, 8, 23, 30, tzinfo=UTC).astimezone(ZoneInfo("Asia/Tokyo"))
+    assert spend.window(late, 1)[0] == datetime(2026, 10, 8, tzinfo=UTC)
+    with in_zone("Asia/Tokyo"):
+        assert spend.window(NOW, 1) == (datetime(2026, 10, 7, 15, tzinfo=UTC), datetime(2026, 10, 8, 15, tzinfo=UTC))
+
+
+def test_a_day_a_clock_change_lengthens_is_still_one_day() -> None:
+    with in_zone("America/Los_Angeles"):
+        start, until = spend.window(datetime(2026, 11, 1, 20, tzinfo=UTC), 1)
+    # Clocks went back at 02:00 on 2026-11-01: from midnight PDT to midnight PST is 25 hours.
+    assert (start, until) == (datetime(2026, 11, 1, 7, tzinfo=UTC), datetime(2026, 11, 2, 8, tzinfo=UTC))
+
+
+def test_a_run_counts_on_the_local_day_it_started(tmp_path: Path, journals: Journals) -> None:
+    """An evening's runs in Los Angeles, past midnight UTC, are today's there, not tomorrow's."""
+    conn = journals.open(tmp_path / "canopy.db")
+    evening = datetime(2026, 10, 9, 3, tzinfo=UTC)  # 20:00 PDT on 2026-10-08
+    morning = datetime(2026, 10, 8, 16, tzinfo=UTC)  # 09:00 PDT on 2026-10-08
+    for at in (evening, morning):
+        tick(conn, db.format_time(at), 1.0, idle=False, woken_by="start")
+        conn.execute(
+            "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
+            "VALUES (NULL, 'deps', ?, 'ok', 'l', 0.5)",
+            (db.format_time(at),),
+        )
+    with in_zone("America/Los_Angeles"):
+        found = spend.breakdown(conn, evening, 2)
+    assert [(d.day, d.costs.overseer, d.costs.chores) for d in found.per_day] == [
+        ("2026-10-07", None, None),
+        ("2026-10-08", 2.0, 1.0),
+    ]
+    assert (found.since, found.until) == ("2026-10-07T07:00:00.000Z", "2026-10-09T07:00:00.000Z")
 
 
 def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: Path, journals: Journals) -> None:
@@ -205,11 +236,11 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     journal_of_a_week(canopy_env.journal(), now)
     assert main(["spend", "--days", "3"]) == 0
     out = capsys.readouterr().out.splitlines()
-    start = spend.window_start(now, 3).strftime("%Y-%m-%d")
-    assert out[0] == f"Spend over 3 days, since {start} UTC, as the runtime reported it."
+    start = spend.window(now, 3)[0]
+    assert out[0] == f"Spend over 3 days, since {start:%Y-%m-%d} UTC, as the runtime reported it."
     header = ["day", "overseer", "idle", "workers", "triage", "plans", "chores", "reviews", "dry", "run", "total"]
     assert out[2].split() == header
-    days = [(spend.window_start(now, 3) + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
+    days = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
     assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
     words = [line.split() for line in out]

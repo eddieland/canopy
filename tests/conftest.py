@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 import tomllib
 from collections.abc import Mapping
 from contextlib import closing
@@ -56,11 +57,18 @@ def hermetic_agent_env() -> Iterator[None]:
 
     Workers run this suite inside the agent runtime, which exports its own (OpenCode sets OPENCODE_PID). The fake
     agent records these prefixes and tests assert on them exactly, so an inherited one would fail them.
+
+    Local time is UTC, so what canopy counts by local day reads alike on every machine; a test of another zone sets
+    `TZ` and calls `time.tzset()` itself.
     """
-    with mock.patch.dict(os.environ):
-        for name in [k for k in os.environ if k.startswith(RECORDED_ENV_PREFIXES)]:
-            del os.environ[name]
-        yield
+    try:
+        with mock.patch.dict(os.environ, {"TZ": "UTC"}):
+            time.tzset()
+            for name in [k for k in os.environ if k.startswith(RECORDED_ENV_PREFIXES)]:
+                del os.environ[name]
+            yield
+    finally:
+        time.tzset()
 
 
 @pytest.fixture

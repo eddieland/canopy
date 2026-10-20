@@ -183,7 +183,7 @@ def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
 
 
 def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown:
-    """What the last `days` UTC days cost, by the backend's clock, as `canopy spend --days` prints it.
+    """What the last `days` local days cost, by the backend's clock, as `canopy spend --days` prints it.
 
     Returns:
         The breakdown, with the newest idle ticks in the window.
