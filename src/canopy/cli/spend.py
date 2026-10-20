@@ -49,6 +49,8 @@ _TICKETS = 10
 # The tools that returned the most the text lists, and the width of their names' column; `--json` lists every one.
 _TOOLS = 10
 _TOOL_WIDTH = 32
+# What `canopy spend` says for a kind's runs whose sessions named no model.
+NO_MODEL = "(no model read)"
 
 
 @click.command("spend")
@@ -67,8 +69,8 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     The overseer, workers, plan runs, chores, and reviews, as the agent runtime reported each; dry runs apart from the
     live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each, and
-    the costliest tickets, and the tools whose calls put the most into context; --json adds every ticket, PR, and
-    tool, and each kind's first model calls by definitions snapshot.
+    the costliest tickets, the tools whose calls put the most into context, and each kind's spend by the models its
+    sessions name; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions snapshot.
     """
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
@@ -109,6 +111,7 @@ def render(found: Breakdown) -> list[str]:
     lines.append(_row("all", found.totals))
     lines.extend(["", *_tickets(found)])
     lines.extend(["", *_tools(found)])
+    lines.extend(["", *_models(found)])
     lines.extend(["", f"{'ticks':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
     lines.extend(
         f"{GROUP_LABELS[g.group]:<{_DAY_WIDTH}}{g.ticks:>{_COST_WIDTH}}{cost_text(g.cost_usd):>{_COST_WIDTH}}"
@@ -184,6 +187,31 @@ def _tools(found: Breakdown) -> list[str]:
     if len(found.tools) > _TOOLS:
         lines.append(f"and {len(found.tools) - _TOOLS} more; --json lists every one")
     lines.append(f"Returned is in characters; ~tokens is that over {spend.CHARS_PER_TOKEN}, an estimate.")
+    return lines
+
+
+# Each kind's spend by model, as the runs' sessions name them, read after each run and a few past ones each tick. The
+# model column is as wide as its longest name, since a model's name, unlike a tool's, is the point of the line.
+def _models(found: Breakdown) -> list[str]:
+    if not any(m.model is not None for m in found.models):
+        return ["No run's models read yet: canopy reads them from each run's session, a few runs each tick."]
+    width = max(len(m.model or NO_MODEL) for m in found.models)
+
+    def line(model: str, kind: str, *counts: str) -> str:
+        return f"{model:<{width}} {kind:<{_DAY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
+
+    lines = [line("model", "kind", "runs", "replies", "spent")]
+    lines.extend(
+        line(
+            m.model or NO_MODEL,
+            m.kind,
+            str(m.runs),
+            str(m.replies) if m.model is not None else "-",
+            cost_text(m.cost_usd),
+        )
+        for m in found.models
+    )
+    lines.append("A run on two models counts under each.")
     return lines
 
 

@@ -3,7 +3,7 @@
 The harness reads these and nothing else of a run's output. The runtime's implementation makes them from what it
 printed (`canopy.runtime.stdout`); a template that asks for no events reports text alone. What holds whatever the
 runtime is lives here, for the implementation to build on: a session id canopy prints, the sum of the model calls, and
-the bounded rollup of the tool calls.
+the bounded rollup of the tool calls, and which models served a session, as the runtime's record of it says.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, StrictInt
 
@@ -33,6 +33,16 @@ MAX_TOOL_NAME = 200
 OTHER_TOOLS = "(other tools)"
 #: What a call that loaded a skill is counted under, before the skill's name: `skill:tracker-jira`.
 SKILL_PREFIX = "skill:"
+#: How many models one session's record keeps, and how long a model's name may be: far more than a run uses, and few
+#: enough that a record no runtime wrote cannot fill the journal. The replies of any model past the first
+#: `MAX_MODELS` count under `OTHER_MODELS`, which no runtime names a model.
+MAX_MODELS = 20
+MAX_MODEL_NAME = 200
+OTHER_MODELS = "(other models)"
+
+#: How reading a session's models ended: they were read; the runtime keeps no session of that id, which reading again
+#: would not change; or the runtime could not be asked, or said what canopy cannot read.
+type ModelsRead = Literal["found", "missing", "failed"]
 
 
 @dataclass(frozen=True)
@@ -126,6 +136,29 @@ class Call:
     def sent(self) -> int:
         """What the call was sent: its input, from the cache or not."""
         return self.input + self.cache_read + self.cache_write
+
+
+@dataclass(frozen=True)
+class ModelUse:
+    """What one model did in a session: its replies, and what they cost."""
+
+    #: The model, as `provider/model`, printable, with no space, and at most `MAX_MODEL_NAME` characters.
+    model: str
+    #: How many of the session's replies it wrote.
+    replies: int
+    #: What those cost, in US dollars, as the runtime priced them.
+    cost_usd: float
+
+
+@dataclass(frozen=True)
+class SessionModels:
+    """Which models served a session, the most costly first, and how reading it ended."""
+
+    outcome: ModelsRead
+    #: Empty unless `found`, and for a session that made no model call.
+    models: Sequence[ModelUse] = ()
+    #: Why it `failed`, in canopy's words, never what the runtime printed.
+    error: str | None = None
 
 
 @dataclass(frozen=True)

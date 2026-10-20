@@ -646,3 +646,81 @@ def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, ki
         plan
     )
     assert plan[1].startswith("SEARCH t USING PRIMARY KEY (run_table=? AND run_id=?)"), plan
+
+
+def served(conn: sqlite3.Connection, table: str, run_id: int, *models: tuple[str, int, float]) -> None:
+    """Record that run `run_id` of `table` was read, and which models its session named."""
+    conn.execute(
+        "INSERT INTO run_model_reads (run_table, run_id, status, attempts, read_at) VALUES (?, ?, 'found', 1, 'x')",
+        (table, run_id),
+    )
+    conn.executemany(
+        "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES (?, ?, ?, ?, ?)",
+        [(table, run_id, *m) for m in models],
+    )
+
+
+def journal_of_models(conn: sqlite3.Connection, now: datetime) -> None:
+    """A day of runs on two models, a run on both, a run not read yet, and one on a model before the window."""
+    ticket(conn, "PROJ-1")
+    old = tick(conn, earlier(now, 9), 5.0)
+    served(conn, "ticks", old, ("anthropic/claude-old", 9, 5.0))
+    first = tick(conn, earlier(now, 0, 3), 0.5)
+    served(conn, "ticks", first, ("anthropic/claude-haiku", 4, 0.5))
+    tick(conn, earlier(now, 0, 2), 0.25)  # not read yet
+    for started, cost in ((earlier(now, 0, 3), 2.0), (earlier(now, 0, 2), 3.0)):
+        run(conn, first, "PROJ-1", started, cost, None)
+    served(conn, "runs", 1, ("openai/gpt-x", 10, 2.0))
+    served(conn, "runs", 2, ("openai/gpt-x", 5, 1.0), ("anthropic/claude-sonnet", 6, 2.0))
+
+
+def test_each_kind_s_spend_is_split_by_the_models_its_sessions_name(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_models(conn, NOW)
+    found = spend.breakdown(conn, NOW, 1).models
+    assert [(m.kind, m.model, m.runs, m.replies, m.cost_usd) for m in found] == [
+        ("overseer", "anthropic/claude-haiku", 1, 4, 0.5),
+        # The tick not read yet, at what it reported.
+        ("overseer", None, 1, 0, 0.25),
+        # The run on both models counts under each.
+        ("workers", "openai/gpt-x", 2, 15, 3.0),
+        ("workers", "anthropic/claude-sonnet", 1, 6, 2.0),
+    ]
+
+
+def test_canopy_spend_prints_the_spend_by_model(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    journal_of_models(canopy_env.journal(), noon_today())
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    start = out.index(next(line for line in out if line.startswith("model ")))
+    assert [line.split() for line in out[start : start + 6]] == [
+        ["model", "kind", "runs", "replies", "spent"],
+        ["anthropic/claude-haiku", "overseer", "1", "4", "$0.50"],
+        ["(no", "model", "read)", "overseer", "1", "-", "$0.25"],
+        ["openai/gpt-x", "workers", "2", "15", "$3.00"],
+        ["anthropic/claude-sonnet", "workers", "1", "6", "$2.00"],
+        ["A", "run", "on", "two", "models", "counts", "under", "each."],
+    ]
+
+
+def test_canopy_spend_says_when_no_run_s_models_were_read(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    journal_of_a_week(canopy_env.journal(), noon_today())
+    assert main(["spend"]) == 0
+    assert "No run's models read yet: canopy reads them from each run's session, a few runs each tick." in (
+        capsys.readouterr().out.splitlines()
+    )
+
+
+@pytest.mark.parametrize("kind", spend.KINDS)
+def test_models_read_only_the_windows_runs(tmp_path: Path, journals: Journals, kind: spend.Kind) -> None:
+    """As `test_tools_read_only_the_windows_runs`: the run table leads, and `run_models` is read by its key."""
+    conn = journals.open(tmp_path / "canopy.db")
+    table, _ = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
+    query = spend._named_models(kind, earlier(NOW, 7), earlier(NOW, 0))  # noqa: SLF001
+    plan = [str(row[3]) for row in sql.execute(conn, sql.frag("EXPLAIN QUERY PLAN {}", query))]
+    assert re.match(rf"SEARCH r USING (COVERING )?INDEX {table}_spent \(started_at>\? AND started_at<\?\)", plan[0]), (
+        plan
+    )
+    assert plan[1].startswith("SEARCH m USING PRIMARY KEY (run_table=? AND run_id=?)"), plan
