@@ -258,6 +258,8 @@ def test_wait_names_a_configured_chore(canopy_env: CanopyEnv, chores: Path, caps
         {"status": "ok", "more_findings": -1},
         {"status": "ok", "more_findings": "3"},
         {"status": "ok", "more_findings": result.MAX_MORE_FINDINGS + 1},
+        {"status": "ok", "findings": [{**FINDING, "id": None}]},
+        {"status": None},
     ],
 )
 def test_an_invalid_result_is_unknown_and_records_no_findings(
@@ -268,6 +270,18 @@ def test_an_invalid_result_is_unknown_and_records_no_findings(
     row = present(db.get_chore_run(conn, run_id))
     assert row.status == "unknown"
     assert result.stored(row.result_json) is None
+
+
+@pytest.mark.parametrize("empty", [None, ""])
+def test_an_empty_field_is_read_as_missing(empty: str | None) -> None:
+    finding = {**FINDING, "detail": empty, "link": empty}
+    report = {"status": "ok", "summary": empty, "findings": [finding], "more_findings": empty}
+    parsed = present(result.parse(json.dumps(report)))
+    assert parsed.summary == ""
+    assert parsed.more_findings == 0
+    assert parsed.findings[0].detail == ""
+    assert parsed.findings[0].link is None
+    assert present(result.parse(json.dumps({"status": "ok", "findings": empty}))).findings == []
 
 
 def test_long_text_is_cut_to_its_limits() -> None:
