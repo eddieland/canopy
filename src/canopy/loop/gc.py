@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import start as chore_start
-from canopy.core import db, hostgit, review_diff
+from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import MemoryScope, MemoryStatus, TickStatus
 from canopy.infra import lock, logs, procs
@@ -40,7 +40,7 @@ MIB = KIB * KIB
 _ROTATED_RE = re.compile(rf"{re.escape(logs.LOG_FILE_NAME)}\.(\d+)")
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 # The bytes of an attention row's text: what it holds, not the pages it fills.
-_ROW_BYTES = (
+_ROW_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
     "coalesce(length(CAST(ticket_key AS BLOB)), 0) + coalesce(length(CAST(repo AS BLOB)), 0) + "
     "coalesce(length(CAST(chore AS BLOB)), 0) + coalesce(length(CAST(pr AS BLOB)), 0)"
@@ -206,14 +206,13 @@ class _Files:
         return Path(os.path.realpath(path.parent)).is_relative_to(os.path.realpath(self.root))
 
 
-def _logged(conn: sqlite3.Connection, table: str, cutoff: str, *suffixes: str) -> list[_Owned]:
+def _logged(conn: sqlite3.Connection, table: db.RunTable, cutoff: str, *suffixes: str) -> list[_Owned]:
     """Each run's log in `table`, the files beside it named by `suffixes`, and the lifelock it holds while it lives.
 
     Returns:
         What each row owns, oldest first.
     """
-    # `table` is one of the three names `measure` passes, never input.
-    rows = conn.execute(f"SELECT ended_at, log_path FROM {table} ORDER BY id").fetchall()  # noqa: S608
+    rows = sql.execute(conn, sql.select("ended_at, log_path").from_(table).order_by("id")).fetchall()
     owned: list[_Owned] = []
     for r in rows:
         log = Path(r["log_path"])
@@ -231,10 +230,11 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
         What each run owns, oldest first.
     """
     repos: dict[int, list[str]] = {}
-    for r in conn.execute("SELECT run_id, repo FROM run_slots WHERE repo IS NOT NULL ORDER BY run_id, repo"):
+    slots = sql.select("run_id, repo").from_("run_slots").where("repo IS NOT NULL").order_by("run_id, repo")
+    for r in sql.execute(conn, slots):
         repos.setdefault(int(r["run_id"]), []).append(str(r["repo"]))
     owned: list[_Owned] = []
-    for r in conn.execute("SELECT id, ended_at, log_path FROM runs ORDER BY id"):
+    for r in sql.execute(conn, sql.select("id, ended_at, log_path").from_("runs").order_by("id")):
         log = Path(r["log_path"])
         kept = [review_diff.run_path_for(log, repo) for repo in repos.get(int(r["id"]), [])]
         paths = (log, log.with_suffix(".prompt"), *kept, *(p.with_suffix(".head") for p in kept))
@@ -244,7 +244,7 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
 
 def _tick_files(conn: sqlite3.Connection, state_dir: Path, ok_cutoff: str, other_cutoff: str) -> list[_Owned]:
     # A tick that did not close `ok` is one the operator debugs, so it keeps its files as long as a run's.
-    rows = conn.execute("SELECT id, status, ended_at FROM ticks ORDER BY id").fetchall()
+    rows = sql.execute(conn, sql.select("id, status, ended_at").from_("ticks").order_by("id")).fetchall()
     return [
         _Owned(
             tuple(state_dir / TICKS_DIR / f"{r['id']}{suffix}" for suffix in (".log", ".prompt")),
@@ -287,21 +287,36 @@ def _attention(conn: sqlite3.Connection, now: datetime, retention: Retention) ->
     Returns:
         The harness's kind, then the overseer's.
     """
-    oldest = conn.execute(
-        "SELECT id FROM ticks WHERE status = ? ORDER BY id DESC LIMIT 1 OFFSET ?",
-        (TickStatus.OK, attention.HISTORY_TICKS - 1),
+    oldest = sql.execute(
+        conn,
+        sql.select("id")
+        .from_("ticks")
+        .where("status = ?", TickStatus.OK)
+        .order_by("id DESC")
+        .limit(1, offset=attention.HISTORY_TICKS - 1),
     ).fetchone()
     window = int(oldest[0]) if oldest is not None else 0
     cutoff = _cutoff(now, retention.journal_days)
     harness = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
-    marks = ",".join("?" * len(harness))
-    rows = conn.execute(
-        f"SELECT action IN ({marks}) AS harness, count(*) AS n, sum(bytes) AS b, "  # noqa: S608
-        "sum(tick_id < ? AND created_at < ?) AS rn, sum(CASE WHEN tick_id < ? AND created_at < ? THEN bytes END) AS rb "
-        f"FROM (SELECT action, tick_id, created_at, {_ROW_BYTES} AS bytes FROM decisions WHERE action LIKE ?) "
-        "GROUP BY harness",
-        (*harness, window, cutoff, window, cutoff, f"{attention.ACTION_PREFIX}%"),
-    ).fetchall()
+    attended = (
+        sql.select("action, tick_id, created_at, {} AS bytes", _ROW_BYTES)
+        .from_("decisions")
+        .where("action LIKE ?", f"{attention.ACTION_PREFIX}%")
+    )
+    tallied = (
+        sql.select(
+            "{} AS harness, count(*) AS n, sum(bytes) AS b, sum(tick_id < ? AND created_at < ?) AS rn, "
+            "sum(CASE WHEN tick_id < ? AND created_at < ? THEN bytes END) AS rb",
+            sql.in_("action", harness),
+            window,
+            cutoff,
+            window,
+            cutoff,
+        )
+        .from_("({})", attended)
+        .group_by("harness")
+    )
+    rows = sql.execute(conn, tallied).fetchall()
     by = {bool(r["harness"]): r for r in rows}
     found = by.get(True)
     raised = Kind(
@@ -332,8 +347,8 @@ def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
     Returns:
         The free pages' kind, then the WAL's.
     """
-    page_size = int(conn.execute("PRAGMA page_size").fetchone()[0])
-    free = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+    page_size = int(sql.execute(conn, sql.frag("PRAGMA page_size")).fetchone()[0])
+    free = int(sql.execute(conn, sql.frag("PRAGMA freelist_count")).fetchone()[0])
     wal = _regular_size(journal.with_name(f"{journal.name}-wal"))
     wal_count, wal_bytes = (1, wal) if wal is not None else (0, 0)
     return [
@@ -410,13 +425,22 @@ def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) 
         The kind, counting rows that still hold text.
     """
     cutoff = _cutoff(now, retention.memory_days)
-    found = conn.execute(
-        "SELECT count(*), sum(length(CAST(body AS BLOB))), sum(gone < ?), "
-        "sum(CASE WHEN gone < ? THEN length(CAST(body AS BLOB)) END) FROM ("
-        "SELECT m.body, coalesce(m.invalidated_at, "
-        "(SELECT min(n.created_at) FROM memories n WHERE n.supersedes = m.id)) AS gone "
-        "FROM memories m WHERE m.scope != ? AND m.status IN (?, ?) AND m.body IS NOT NULL)",
-        (cutoff, cutoff, MemoryScope.LESSON, MemoryStatus.SUPERSEDED, MemoryStatus.INVALID),
+    superseded = sql.select("min(n.created_at)").from_("memories n").where("n.supersedes = m.id")
+    gone = (
+        sql.select("m.body, coalesce(m.invalidated_at, ({})) AS gone", superseded)
+        .from_("memories m")
+        .where("m.scope != ?", MemoryScope.LESSON)
+        .where_in("m.status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID))
+        .where("m.body IS NOT NULL")
+    )
+    found = sql.execute(
+        conn,
+        sql.select(
+            "count(*), sum(length(CAST(body AS BLOB))), sum(gone < ?), "
+            "sum(CASE WHEN gone < ? THEN length(CAST(body AS BLOB)) END)",
+            cutoff,
+            cutoff,
+        ).from_("({})", gone),
     ).fetchone()
     count, size, removable, removable_bytes = (int(v or 0) for v in found)
     return Kind(

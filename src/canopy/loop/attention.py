@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_view, contract, conversation, db, follow_ups, memory, plans, review_result
+from canopy.core import chore_view, contract, conversation, db, follow_ups, memory, plans, review_result, sql
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs
@@ -143,19 +143,20 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     """Return the current attention list, sorted by ticket key and reason."""
     ticks = [
         int(r[0])
-        for r in conn.execute(
-            "SELECT id FROM ticks WHERE status = 'ok' ORDER BY id DESC LIMIT ?",
-            (HISTORY_TICKS,),
+        for r in sql.execute(
+            conn, sql.select("id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS)
         )
     ]
     if not ticks:
         return _halted(conn, None)
-    # Only the placeholder count is interpolated; the tick ids are bound parameters.
-    rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore, pr FROM decisions "  # noqa: S608
-        f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
-        ticks,
-    ).fetchall()
+    recorded = (
+        sql.select("tick_id, ticket_key, action, rationale, created_at, repo, chore, pr")
+        .from_("decisions")
+        .where("action LIKE 'attention:%'")
+        .where_in("tick_id", ticks)
+        .order_by("id")
+    )
+    rows = sql.execute(conn, recorded).fetchall()
     by_tick: dict[int, dict[_ItemId, tuple[str, str]]] = {t: {} for t in ticks}
     for r in rows:
         key = None if r["ticket_key"] is None else str(r["ticket_key"])
@@ -190,13 +191,18 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
     Returns:
         The item, open since the first tick after `last_ok` that raised it, or nothing.
     """
-    latest = conn.execute("SELECT status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1").fetchone()
+    latest = sql.execute(
+        conn, sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1)
+    ).fetchone()
     if latest is None or latest[0] not in HALTS:
         return []
     reason = str(latest[0])
-    rows = conn.execute(
-        "SELECT rationale, created_at FROM decisions WHERE action = ? AND tick_id > ? ORDER BY id",
-        (f"{ACTION_PREFIX}{reason}", last_ok or 0),
+    rows = sql.execute(
+        conn,
+        sql.select("rationale, created_at")
+        .from_("decisions")
+        .where("action = ? AND tick_id > ?", f"{ACTION_PREFIX}{reason}", last_ok or 0)
+        .order_by("id"),
     ).fetchall()
     if not rows:
         return []
@@ -311,7 +317,7 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     it, and holds again once they start it (DESIGN §14, §22). A triage raises none, however it ended: the ticket is
     planned next, as if triage were off (DESIGN §25, Triage before a plan).
     """
-    done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
+    done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
     stopped = set(conversation.stopped(conn))
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):
@@ -354,13 +360,16 @@ def not_trivial(conn: sqlite3.Connection) -> list[UnitItem]:
     Returns:
         One item per unit, naming its newest `high` review and the triage run's reason, sorted by ticket and repository.
     """
-    rows = conn.execute(
-        "SELECT r.id, r.pr_url, r.result_json, u.ticket_key, u.repo FROM review_runs r "
-        "JOIN ticket_units u ON u.pr_url = r.pr_url AND (r.repo IS NULL OR u.repo IS NULL OR r.repo = u.repo) "
-        "JOIN tickets t ON t.key = u.ticket_key "
-        "WHERE r.status = ? AND t.done = 0 AND u.ticket_key IN (SELECT ticket_key FROM plan_waivers) ORDER BY r.id",
-        (ReviewRunStatus.DONE,),
-    ).fetchall()
+    reviewed = (
+        sql.select("r.id, r.pr_url, r.result_json, u.ticket_key, u.repo")
+        .from_("review_runs r")
+        .join("ticket_units u ON u.pr_url = r.pr_url AND (r.repo IS NULL OR u.repo IS NULL OR r.repo = u.repo)")
+        .join("tickets t ON t.key = u.ticket_key")
+        .where("r.status = ? AND t.done = 0", ReviewRunStatus.DONE)
+        .where("u.ticket_key IN (SELECT ticket_key FROM plan_waivers)")
+        .order_by("r.id")
+    )
+    rows = sql.execute(conn, reviewed).fetchall()
     found: dict[tuple[str, str | None], UnitItem] = {}
     for row in rows:
         stored = review_result.stored(row["result_json"])
