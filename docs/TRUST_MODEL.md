@@ -529,7 +529,10 @@ OpenCode merges a repository's definition of the same agent into canopy's rather
 that repeats one of canopy's permission patterns can put its own rules after it (D044). So, in code:
 
 - The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
-  agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
+  agents: by the name or the text of an agent file under `.opencode/`, whose frontmatter can rename it, and by name
+  anywhere in the text of an `opencode.json` or `opencode.jsonc`, or as an agent's key once the file is read as
+  OpenCode reads it, JSONC with its escapes resolved. A key that a `{file:...}` or `{env:...}` substitution builds,
+  and a file canopy cannot read as JSONC, count as defining one.
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
@@ -548,13 +551,14 @@ undenied in that definition. An operator who works private tickets in a reposito
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can
 also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
-canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
-agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
-agents. A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
-agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
-the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
-rules are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can
-push.
+canopy's definitions leave unset. The shadowing check reads an `opencode.json` as OpenCode 1.19.3 does, but it reads
+neither what a substitution puts in, where an environment variable's value goes in as it is, nor an agent file's YAML:
+it matches the frontmatter as text, so a name spelled in YAML escapes gets past it, and a later OpenCode may read a
+file in a way canopy does not. A definition that gets past it could add bash rules to canopy's agents. A scalar rule
+canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an agent sets for it, but
+OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets the same permission
+and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These rules are defense in
+depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can push.
 
 ### T8. Network listeners
 

@@ -229,7 +229,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D044. Refuse to start an agent where the repository's OpenCode config defines a canopy agent
 
 - OpenCode deep-merges definitions keeping first-loaded key order, so a repository could put an `allow` before
-  canopy's rules. JSONC and substitutions are not parsed (a T7 residual).
+  canopy's rules. The check reads JSONC and refuses what a substitution could name; what it cannot read is a T7
+  residual.
 
 ## D046. MIT, installed from git, never from PyPI under this name
 
