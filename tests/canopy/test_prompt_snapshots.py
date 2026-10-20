@@ -27,7 +27,7 @@ HELD_BY: dict[str, str] = {
         f"prompts/worker-{kind}.md": (
             f"core/__snapshots__/test_memory_prompts/test_with_memory_off_every_worker_prompt_is_as_it_was[{kind}].md"
         )
-        for kind in ("implement", "implement-private", "plan", "resume", "resume-private", "split")
+        for kind in ("implement", "implement-private", "plan", "resume", "resume-private")
     },
     **{f"agents/{name}.md": DEFINITION.format(name) for name in runtime_definitions.agent_names()},
 }
