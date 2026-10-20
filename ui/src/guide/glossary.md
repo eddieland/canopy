@@ -233,8 +233,10 @@ A review's outcome at a glance: `clean`, or a count of its findings with the wor
 
 ### Chore
 
-Recurring work no ticket asked for, defined as `[chores.NAME]` in your config and run when the overseer finds it due.
-No worktree, no branch, no push: it looks, and reports findings. See [Chores](chores).
+A scheduled task with an agent's judgment: on a schedule you set, an agent reads what its tools reach (CI, PRs, the
+tracker, Sentry, canopy's own journal), decides what matters by your prompt and notes, and reports each problem as a
+finding on the attention list. It changes nothing. Defined as `[chores.NAME]` in your config; the overseer runs it when
+it's due and worth it. See [Chores](chores).
 
 ### Lesson
 
