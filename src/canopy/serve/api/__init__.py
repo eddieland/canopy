@@ -3,9 +3,10 @@
 Every route but `/session` needs a signed-in session: the cookie `POST /session` sets with the listener secret. A write
 (any method but GET and HEAD) also carries the session's token, from `GET /session`, as `X-Canopy-Token`, and an
 `Origin` naming this server. Writes go through the functions the CLI's verbs call, with channel `web`, so the guards
-are the same ones; a guard's refusal is a 409 naming it, and a write that waited out another writer's hold on the
-journal a 503 saying so. A forget also carries the ticket's key as the operator typed it. A reload asks the loop to read
-its config again, as SIGHUP does; it writes nothing.
+are the same ones, or, for what no command would do (marking reviews seen), a core function of their own; a guard's
+refusal is a 409 naming it, and a write that waited out another writer's hold on the journal a 503 saying so. A forget
+also carries the ticket's key as the operator typed it. A reload asks the loop to read its config again, as SIGHUP
+does; it writes nothing.
 """
 
 from __future__ import annotations

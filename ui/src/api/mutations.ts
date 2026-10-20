@@ -223,7 +223,7 @@ export async function dismissReviewFinding(run: number, finding: number, undo: b
     )
 }
 
-/** `canopy seen review:ID...`: each review run's result is no longer new to the operator. */
+/** Marks review runs' results seen, as their pages do: each is no longer new to the operator (DESIGN §22). */
 export async function markReviewsSeen(runs: number[]): Promise<SeenMarked> {
     return unwrap(await api.POST('/api/seen', { body: { refs: runs.map((run) => `review:${run}`) } }))
 }

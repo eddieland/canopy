@@ -869,7 +869,7 @@ class ReviewDismissed(_Model):
 
 
 class SeenRequest(_Model):
-    """Subjects the operator has seen, by their references, as `canopy seen` names them (DESIGN §22)."""
+    """Subjects the operator has seen, by their references, `review:4` (DESIGN §22)."""
 
     refs: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(min_length=1, max_length=100)]
     """Each subject's reference: `review:ID`, a review run whose result they saw."""

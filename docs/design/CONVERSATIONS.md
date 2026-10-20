@@ -77,7 +77,7 @@ lowering the policy lowers it too. A grant resets no count (D030) and dispatches
 ### What the operator has seen
 
 A result is **new** to the operator until they see it in any channel: a review that ended with a verdict, on its page,
-with `canopy review show ID`, or marked with `canopy seen`. The journal keeps the mark by the subject's reference, so
+with `canopy review show ID`, or marked from the reviews list. The journal keeps the mark by the subject's reference, so
 every channel agrees on what is new, and another kind of subject joins by its own (Open, below). A mark authorizes
 nothing and no agent reads it; only the operator writes one, so an agent cannot hide a result by marking it seen.
 
@@ -96,8 +96,10 @@ and its controls TRUST_MODEL T8's.
 - `canopy loop` serves it from a thread (D073), on loopback or a private address (D076). Without a valid listener
   secret it serves nothing; a server failure never ends the loop. Only its development mode, on loopback with a journal
   of its own, may skip signing in.
-- It writes only through the functions the CLI's verbs use, with their guards, and beyond them only the operator's own
-  words on a plan (§25), never taking the tick lock. The server, not the page, refuses a forget not typed out.
+- It writes only through core's functions, with their guards: the ones the CLI's verbs use, and, for what no command
+  would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25) and what they
+  have seen. It never takes the tick lock. A page needs no CLI verb for what nobody would type. The server, not the
+  page, refuses a forget not typed out.
 - Every value from the journal or a run's log is untrusted and rendered as text (D113). `canopy.serve` alone imports
   the web stack, and calls out to nothing, so T2's "no outbound call" stands. No read costs more as the journal ages,
   but the spend's all-time total and search.
@@ -110,8 +112,8 @@ what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5,
 ### Trust model changes
 
 Private tickets and mirrored comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
-public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks added `seen` to
-T1's verbs that refuse inside a run.
+public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
+writes what no CLI verb does (D127).
 
 ### Open
 

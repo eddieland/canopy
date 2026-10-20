@@ -844,9 +844,9 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
 
 
 def test_a_review_is_new_to_the_operator_until_they_see_it(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    """`canopy seen review:ID` marks a review's result seen, as its page does; only the operator's (DESIGN §22)."""
+    """`canopy review show ID` marks a review's result seen, as its page does; only for the operator (DESIGN §22)."""
     sha = head(git_pool)
     first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     second = scenario.review(reviews(sha, "https://github.com/acme/api/pull/9"), reviewer=reviewer_reports(CLEAN)).id
@@ -860,27 +860,30 @@ def test_a_review_is_new_to_the_operator_until_they_see_it(
         ]
 
     assert new() == [second, first]
-    # An agent cannot hide a review from the operator by marking it seen.
+    # An agent cannot hide a review from the operator by reading it in full: the show stands, and it stays new.
     with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "1"}):
-        assert main(["seen", f"review:{first}"]) == 1
-        assert "seen refused (inside_run)" in capsys.readouterr().err
-        # Nor by reading it in full: the show stands, and it stays new.
         assert main(["review", "show", str(first)]) == 0
     assert new() == [second, first]
-    for ref, guard in [
-        (f"review:{running.id}", "running"),
-        ("review:99", "unknown"),
-        ("PROJ-1", "unsupported"),
-        ("review:x", "bad_ref"),
-    ]:
-        assert f"seen refused ({guard})" in scenario.operator("seen", f"review:{first}", ref, code=1).err
-    # A refusal marks none of them.
-    assert new() == [second, first]
+    # A review still running has no result to see yet: its show marks nothing.
+    scenario.operator("review", "show", str(running.id))
 
-    marked = scenario.operator("seen", f"review:{first}", f"review:{second}", f"review:{first}")
-    assert marked.out == f"review:{first}, review:{second} marked seen.\n"
-    assert new() == []
-    assert scenario.operator("seen", f"review:{second}").out == "already seen: nothing changed.\n"
+    scenario.operator("review", "show", str(first))
+    assert new() == [second]
     [mark] = records.fetch_all(scenario.conn, records.Seen, "SELECT * FROM seen WHERE subject = ?", (str(first),))
     assert (mark.kind, mark.channel) == (SeenKind.REVIEW, "cli")
+
+    # The guards every channel's mark goes through: all of them are marked, or none.
+    def refused(*refs: str) -> str:
+        with pytest.raises(conversation.Refused) as refusal:
+            conversation.see(scenario.conn, [conversation.parse_ref(r) for r in refs], channel="web")
+        return refusal.value.guard
+
+    assert refused(f"review:{second}", f"review:{running.id}") == "running"
+    assert refused(f"review:{second}", "review:99") == "unknown"
+    assert refused(f"review:{second}", "PROJ-1") == "unsupported"
+    assert new() == [second]
+    ref = conversation.Ref(conversation.REVIEW, str(second))
+    assert conversation.see(scenario.conn, [ref, ref], channel="web") == [ref]
+    assert conversation.see(scenario.conn, [ref], channel="web") == []
+    assert new() == []
     running.finishes()

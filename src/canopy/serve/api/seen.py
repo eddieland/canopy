@@ -17,7 +17,7 @@ _log = logs.for_tick(None)
 
 @router.post("/seen", operation_id="markSeen", summary="Mark subjects seen", responses=REFUSED)
 def mark_seen(body: SeenRequest, backend: BackendDep) -> SeenMarked:
-    """`canopy seen REF...`: each subject's result is no longer new to the operator. All are marked, or none."""
+    """Each subject's result is no longer new to the operator, as `canopy review show ID` marks one. All, or none."""
     with backend.open() as ctx:
         try:
             subjects = [conversation.parse_ref(ref) for ref in body.refs]

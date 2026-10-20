@@ -1,7 +1,7 @@
 """The reviews canopy keeps, as the web UI shows them (DESIGN §21): a shadow PR review, posted nowhere (D114).
 
 Reads only; dismissing a finding goes through `canopy.core.conversation`, as `canopy dismiss review:ID` does, and so
-does marking one seen, as `canopy seen review:ID` does.
+does marking one seen, as its page does (`api/seen.py`).
 Everything a review holds is untrusted: the reviewer read the PR, the diff is the PR's own text, and its transcript and
 log are the reviewer's output. Text goes out with
 control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.

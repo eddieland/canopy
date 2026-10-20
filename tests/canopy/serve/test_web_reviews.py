@@ -2,7 +2,7 @@
 
 The findings, the diff, and the reviewer's transcript and log are untrusted text. The writes are dismissing a
 finding, as `canopy dismiss review:ID`, sending some to a worker, as `canopy send review:ID`, and marking reviews
-seen, as `canopy seen review:ID`.
+seen, as `canopy review show ID` does.
 """
 
 import json
@@ -249,7 +249,7 @@ def test_findings_sent_from_the_web_reach_the_ticket_as_the_cli_sends_them(backe
 
 
 def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backend, tmp_path: Path) -> None:
-    """The mock operator has seen every review but review 2; a mark goes through `canopy seen`'s guards (DESIGN §22)."""
+    """The mock operator has seen every review but review 2; a mark goes through `conversation.see`'s guards (§22)."""
     c = client(None, backend, key=SECRET)
     headers = signed_in(c)
 

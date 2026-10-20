@@ -27,8 +27,8 @@ import { unseenOf, useMarkSeen } from '@/lib/seen-reviews'
  * canopy's latest review runs, newest first: the shadow PR reviews it keeps instead of posting them. A PR the operator
  * asked to have reviewed is a row from the moment they ask, waiting on a tick, until its review starts. `?repo=` keeps
  * the reviews of PRs in that repository, and `?q=` those whose PR, ticket, or commit holds every word. A result new to
- * the operator is marked so, as the nav counts it, until its page shows it or the header's button marks every one seen,
- * as `canopy seen` does.
+ * the operator is marked so, as the nav counts it, until its page shows it or the header's button marks every one
+ * seen.
  */
 export const Route = createFileRoute('/reviews/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
@@ -75,7 +75,7 @@ function ReviewsPage() {
                             <Button
                                 variant="ghost"
                                 size="xs"
-                                title="Mark every new review seen, as canopy seen does"
+                                title="Mark every new review seen"
                                 disabled={seen.pending}
                                 onClick={() => seen.mark(unseen.map((review) => review.id))}
                             >

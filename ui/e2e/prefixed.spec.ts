@@ -308,9 +308,7 @@ test("a review's finding is dismissed on its card, and kept again", async ({ pag
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
 })
 
-test('a review new to the operator is counted in the nav until its page shows it, as canopy seen marks it', async ({
-    page,
-}) => {
+test('a review new to the operator is counted in the nav until its page shows it', async ({ page }) => {
     // The mock operator has seen every review but review 2 (canopy/serve/mock_reviews.py).
     await page.goto('reviews')
     const nav = page.getByRole('navigation', { name: 'Main' })

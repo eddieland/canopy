@@ -1065,7 +1065,7 @@ export type paths = {
         put?: never;
         /**
          * Mark subjects seen
-         * @description `canopy seen REF...`: each subject's result is no longer new to the operator. All are marked, or none.
+         * @description Each subject's result is no longer new to the operator, as `canopy review show ID` marks one. All, or none.
          */
         post: operations["markSeen"];
         delete?: never;
@@ -4662,7 +4662,7 @@ export type components = {
         };
         /**
          * SeenRequest
-         * @description Subjects the operator has seen, by their references, as `canopy seen` names them (DESIGN §22).
+         * @description Subjects the operator has seen, by their references, `review:4` (DESIGN §22).
          */
         SeenRequest: {
             /**

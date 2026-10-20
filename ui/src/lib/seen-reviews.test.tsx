@@ -93,7 +93,7 @@ describe('unseenText', () => {
 })
 
 describe('useMarkSeen', () => {
-    it('marks reviews seen as canopy seen does, and the list says so before the stream does', async () => {
+    it('marks reviews seen by their refs, and the list says so before the stream does', async () => {
         const { client, wrapper } = withReviews([ended(7), ended(6), ended(5)])
         const { result } = renderHook(() => useMarkSeen(), { wrapper })
         act(() => result.current.mark([7, 5]))

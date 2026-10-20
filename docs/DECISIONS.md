@@ -509,3 +509,11 @@ such as a shipped migration, may still cite one, and git history has its text.
   cost.
 - Rejected: a cheaper agent judging trivial work before the plan, with its verdict waiving it (M55, built and removed).
 - Revisit: when ROADMAP's deferred list's trigger for M55 fires.
+
+## D127. A web write needs no CLI verb when no command would use it
+
+- The web UI writes through `canopy.core`'s functions and their guards, and TRUST_MODEL T8 names every write; one that
+  only a page would make, such as marking a review seen, gets no CLI verb to match it.
+- Why: the operator (2026-10-20) found a verb nobody would type, `canopy seen`, to be surface kept for a rule's sake.
+- Rejected: a CLI verb for every web write (`canopy seen`, built and removed).
+- Revisit: before a page-only write that authorizes work, which T8 would then have to guard as the CLI's verbs are.

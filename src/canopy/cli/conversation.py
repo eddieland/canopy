@@ -519,32 +519,6 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
     return 0
 
 
-@click.command("seen")
-@click.argument("refs", metavar="review:ID...", nargs=-1, required=True)
-@click.pass_context
-def cmd_seen(click_ctx: click.Context, refs: tuple[str, ...]) -> int:
-    """Mark the results of review runs (`review:ID`) seen, so the web UI no longer counts them new.
-
-    `canopy review show ID` and a review's page mark one seen as they show it; this marks the ones you read elsewhere,
-    or all at once. A review still running refuses: it has no result yet.
-    """
-    _operator("seen")
-    subjects = [_ref(ref, "seen") for ref in refs]
-    ctx = open_context(click_ctx)
-    try:
-        new = conversation.see(ctx.conn, subjects, channel=CLI)
-    except conversation.Refused as r:
-        raise CliError(f"seen refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info(
-        "seen", extra={"subjects": [str(s) for s in subjects], "new": [str(s) for s in new], "channel": CLI}
-    )
-    if new:
-        click.echo(f"{', '.join(str(s) for s in new)} marked seen.")
-    else:
-        click.echo("already seen: nothing changed.")
-    return 0
-
-
 @click.command("show")
 @click.argument("ref", metavar="REF")
 @click.option(

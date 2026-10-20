@@ -1,10 +1,10 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `seen`, and the
-web UI) calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the
-command does not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows),
-and the body is within its bound. Agents never write a message: `_run` records a run's report and question from its
-result line (`close_run`), and nothing else a worker can call does.
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, and the web UI)
+calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the command does
+not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is
+within its bound. Agents never write a message: `_run` records a run's report and question from its result line
+(`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). The overseer records one other kind of message, a tracker comment it
@@ -90,7 +90,7 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
-    # (DESIGN §21), and to mark it seen (§22).
+    # (DESIGN §21), and to mark it seen, as that show and its page do (§22).
     REVIEW: ("dismiss", "send", "seen"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.

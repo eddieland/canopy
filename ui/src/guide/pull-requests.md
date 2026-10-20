@@ -166,9 +166,9 @@ A review that has finished since you last looked is new: its row has a dot after
 side navigation counts the new ones on every page, in the color of the worst finding among them, so a blocking one
 stands out from a clean one. Opening a review's page marks it seen; **mark 3 seen** in the list's header does it for
 all of them at once, for the days you trust the summary. canopy keeps what you've seen in its journal, so your laptop,
-your desktop, and the terminal agree: `canopy review show` ends a new review's line with `new`, `canopy review show ID`
-marks it seen as the page does, and `canopy seen review:4 review:5` marks the ones you read some other way. Only you
-can mark one: an agent that tried would be refused, which is the point of a list of things you haven't read.
+your desktop, and the terminal agree: `canopy review show` ends a new review's line with `new`, and
+`canopy review show ID` marks it seen as the page does. Only you can mark one: an agent that reads a review in full
+leaves it new, which is the point of a list of things you haven't read.
 
 ## A review's page
 

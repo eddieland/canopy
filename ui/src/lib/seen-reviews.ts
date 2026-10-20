@@ -7,7 +7,7 @@ import { counted } from '@/lib/descriptions'
 
 /**
  * Which reviews' results are new to the operator (DESIGN §22): a review that ended with a verdict is new until they
- * see it, on its page or with `canopy review show ID`, or mark it seen, from the reviews list or with `canopy seen`.
+ * see it, on its page or with `canopy review show ID`, or mark it seen from the reviews list.
  * The journal keeps what they have seen, so every browser and the CLI agree on it, and the reviews list carries it on
  * each review (`seen`).
  */
@@ -42,7 +42,7 @@ export function unseenText(n: number): string {
 }
 
 /**
- * `canopy seen review:ID...`, in a component: `mark` marks the reviews seen, and the reviews list says so at once.
+ * Marking reviews seen, in a component: `mark` marks them seen, and the reviews list says so at once.
  * `pending` while a mark is on its way, and `error` why the last one failed, a refusal naming its guard.
  */
 export function useMarkSeen() {
