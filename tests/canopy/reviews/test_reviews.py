@@ -33,22 +33,17 @@ from tests.canopy.helpers import (
     waits,
     with_events,
 )
-from tests.canopy.review_helpers import CLEAN, FINDINGS, PR, head, review_decisions, reviewer_reports
+from tests.canopy.review_helpers import (
+    CLEAN,
+    FINDINGS,
+    PR,
+    feature_commit,
+    head,
+    review_decisions,
+    reviewer_reports,
+)
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool, git
-
-
-@pytest.fixture
-def reviewing(canopy_env: CanopyEnv) -> CanopyEnv:
-    """Reviews on, for the loop's own PRs, with the reviewer command running the fake agent as `canopy-reviewer`.
-
-    PROJ-1's unit in `repo` has opened `PR`, as its worker's result records it, so a review may name PROJ-1 for it.
-    """
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
-    user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
-    canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
-    db.set_unit(canopy_env.journal(), "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
-    return canopy_env
 
 
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(scenario: Scenario) -> None:
@@ -662,17 +657,6 @@ def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Sc
     assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
     scenario.operator("review", "show", "99", code=1)
     assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}\n")
-
-
-def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
-    """Push a commit adding `retry.py` on a branch `feature` off origin's `main`, and return it."""
-    seed = tmp_path / "seed"
-    git("checkout", "--quiet", "-b", "feature", cwd=seed)
-    (seed / "retry.py").write_text("while True:\n    call()\n")
-    git("add", "retry.py", cwd=seed)
-    git("commit", "--quiet", "-m", "retry", cwd=seed)
-    git("push", "--quiet", str(git_pool.origin), "feature", cwd=seed)
-    return present(git_pool.remote_head("feature"))
 
 
 def test_a_review_keeps_its_commits_diff_for_the_web_ui(

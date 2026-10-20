@@ -49,6 +49,8 @@ from canopy.core.vocab import (
     Reaction,
     ReplyMode,
     ResumeReason,
+    ReviewDraftAuthor,
+    ReviewDraftStatus,
     ReviewItem,
     ReviewRunStatus,
     ReviewState,
@@ -743,6 +745,54 @@ class DraftVersion(Row):
     created_at: str
     #: The reaction it stages on the review comment its thread's draft names, if any.
     reaction: Reaction | None
+
+
+@dataclass(frozen=True)
+class ReviewDraft(Row):
+    """A review's draft (DESIGN §34): a review of a PR the loop does not own, as the comment review it would post."""
+
+    TABLE: ClassVar[str] = "review_drafts"
+
+    id: int
+    review_run_id: int
+    pr_url: str
+    #: The commit the review read, which the review is posted on.
+    sha: str
+    status: ReviewDraftStatus
+    why: str | None
+    created_at: str
+    #: A publish's claim: the version it posts, when it began, and through which channel.
+    publish_version: int | None
+    publish_started_at: str | None
+    publish_channel: str | None
+    #: The pending review a post reported: its node id, which a later post deletes it by, and its id.
+    pending_review: str | None
+    pending_review_id: int | None
+    published_at: str | None
+    published_review_id: int | None
+    published_url: str | None
+    #: A JSON list, in the version's order, of each published comment's `id` and `url`.
+    published_comments: str | None
+
+
+@dataclass(frozen=True)
+class ReviewDraftVersion(Row):
+    """One version of a review's draft, exactly what would post: its body and its comments (DESIGN §34)."""
+
+    TABLE: ClassVar[str] = "review_draft_versions"
+
+    draft_id: int
+    version: int
+    body: str
+    #: A JSON list of comments, each its `path`, `line`, and `text`, and the `finding` it was made from, if any.
+    comments: str
+    author: ReviewDraftAuthor
+    channel: str | None
+    #: What made it, in the harness's words.
+    change: str
+    #: A JSON list of what canopy left out as it made it, and why.
+    refused: str
+    created_at: str
 
 
 @dataclass(frozen=True)

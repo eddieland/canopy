@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe, sql
+from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe, review_drafts_manage, sql
 from canopy.core.config import GITHUB_READER, notify_words
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
 
@@ -95,7 +95,8 @@ def vcs_request(ctx: Context) -> observe.Request:
     """What a `vcs` source is asked: the PRs the journal watches, the map's repositories, and the review query.
 
     A PR is watched while its unit's ticket is not marked done, merged and closed ones included, and while a draft
-    waits on a read of it (§29). A unit's PR that is not a PR's URL cannot be read, so it is not asked about.
+    waits on a read of it (§29), a review's draft among them (§34). A unit's PR that is not a PR's URL cannot be read,
+    so it is not asked about.
 
     Returns:
         The request.
@@ -108,7 +109,11 @@ def vcs_request(ctx: Context) -> observe.Request:
         for unit in units
         if unit.pr_url is not None and observe.is_pr_url(unit.pr_url)
     }
-    prs.update(drafts.unchecked_prs(ctx.conn), drafts_manage.unsettled_prs(ctx.conn))
+    prs.update(
+        drafts.unchecked_prs(ctx.conn),
+        drafts_manage.unsettled_prs(ctx.conn),
+        review_drafts_manage.unsettled_prs(ctx.conn),
+    )
     query = ctx.config.review.query.strip()
     return observe.Request(
         prs=sorted(prs),

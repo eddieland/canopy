@@ -53,6 +53,7 @@ class Review:
     state: str
     body: str = ""
     at: str | None = "2026-10-18T10:00:00Z"
+    commit: str | None = None
 
 
 @dataclass
@@ -145,6 +146,7 @@ class Fake:
                 state="PENDING",
                 body=variables.get("body") or "",
                 at=None,
+                commit=variables.get("commit"),
             )
             pull.reviews.append(review)
             node = {"id": review.node, "fullDatabaseId": str(review.id)}
@@ -158,6 +160,14 @@ class Fake:
             thread.comments.append(comment)
             node = {"fullDatabaseId": str(comment.id), "url": f"{PR}#discussion_r{comment.id}"}
             return {"data": {"addPullRequestReviewThreadReply": {"comment": node}}}
+        if op == "Thread":
+            found = self.review_by_node(variables["review"])
+            assert found is not None
+            pull, review = found
+            comment = Comment(id=self.new_id(), body=variables["body"], author=self.viewer, review=review.id)
+            pull.threads.append(Thread(f"PRRT_{comment.id}", variables["path"], variables["line"], [comment]))
+            node = {"fullDatabaseId": str(comment.id), "url": f"{PR}#discussion_r{comment.id}"}
+            return {"data": {"addPullRequestReviewThread": {"thread": {"comments": {"nodes": [node]}}}}}
         if op == "Submit":
             assert "event: COMMENT" in document
             found = self.review_by_node(variables["review"])
@@ -606,6 +616,58 @@ def test_a_staged_reply_that_fails_deletes_the_pending_review(github: tuple[Fake
     assert [r.state for r in fake.pulls["acme", "api", 7].reviews] == ["COMMENTED"]
 
 
+SHA = "9b2f4c6e1a7d" * 3 + "9b2f"
+NEW = [
+    {"path": "src/retry.py", "line": 2, "text": "This loops forever."},
+    {"path": "README.md", "line": 1, "text": "?"},
+]
+
+
+def test_a_review_of_a_commit_starts_a_thread_for_each_comment_then_submits(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    code, lines, _ = send(url, {"pr": PR, "commit": SHA, "body": "Two things.", "comments": NEW})
+    assert code == 0
+    pull = fake.pulls["acme", "api", 7]
+    review = pull.reviews[-1]
+    assert (review.state, review.body, review.commit) == ("COMMENTED", "Two things.", SHA)
+    started = pull.threads[-2:]
+    assert [(t.path, t.line, [c.body for c in t.comments]) for t in started] == [
+        ("src/retry.py", 2, ["This loops forever."]),
+        ("README.md", 1, ["?"]),
+    ]
+    assert all(t.comments[0].review == review.id for t in started)
+    assert [line["kind"] for line in lines] == ["as", "pending", "comment", "comment", "review", "end"]
+    assert lines[2] == {
+        "kind": "comment",
+        "index": 1,
+        "id": started[0].comments[0].id,
+        "url": f"{PR}#discussion_r{started[0].comments[0].id}",
+    }
+    assert lines[3]["index"] == 2
+    assert fake.ops().index("Submit") > max(i for i, op in enumerate(fake.ops()) if op == "Thread")
+
+
+def test_a_comment_github_refuses_posts_nothing_of_the_review_and_is_named(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["Thread"] = "refuse"
+    code, lines, err = send(url, {"pr": PR, "commit": SHA, "body": "Two things.", "comments": NEW})
+    assert code == 1
+    assert "GitHub refused comment 1, on src/retry.py:2" in err
+    assert lines[-1] == {"kind": "end", "submitted": False}
+    assert [r.state for r in fake.pulls["acme", "api", 7].reviews] == ["COMMENTED"]
+    assert "Submit" not in fake.ops()
+
+
+def test_a_staged_review_of_a_commit_holds_its_comments_pending(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    code, lines, _ = send(url, {"pr": PR, "commit": SHA, "comments": NEW, "submit": False})
+    assert code == 0
+    review = fake.pulls["acme", "api", 7].reviews[-1]
+    assert (review.state, review.commit) == ("PENDING", SHA)
+    assert [line["kind"] for line in lines] == ["as", "pending", "comment", "comment", "end"]
+    assert lines[-1] == {"kind": "end", "submitted": False, "staged": True}
+
+
 def test_a_body_alone_is_a_review_with_no_replies(github: tuple[Fake, str]) -> None:
     fake, url = github
     code, lines, _ = send(url, {"pr": PR, "body": "Fixed CI."})
@@ -814,6 +876,11 @@ def test_an_issue_comment_that_may_have_posted_prints_no_end(github: tuple[Fake,
         ({"pr": PR, "body": "x" * 65537}, "longer than GitHub's"),
         ({"pr": PR, "body": "x", "delete_pending": 3}, "delete_pending must be"),
         ({"pr": PR, "body": "x", "submit": "no"}, "submit must be true or false"),
+        ({"pr": PR, "comments": [{"path": "a", "line": 1, "text": "x"}]}, "comments need the commit"),
+        ({"pr": PR, "commit": "abc1234", "body": "x"}, "commit must be a commit's full id"),
+        ({"pr": PR, "commit": SHA, "comments": [{"path": "a", "line": "1", "text": "x"}]}, "a line, and its text"),
+        ({"pr": PR, "commit": SHA, "comments": [{"path": "a", "line": 1}]}, "the comment is empty"),
+        ({"pr": PR, "commit": SHA, "comments": "x"}, "comments must be a list"),
     ],
 )
 def test_the_poster_refuses_what_it_cannot_use(github: tuple[Fake, str], request_: object, message: str) -> None:

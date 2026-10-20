@@ -140,7 +140,11 @@ Controls:
   that could send them could start work in the operator's name. The message names findings by number and never quotes
   them, so the reviewer's text stays data. So does the mark `canopy review show ID` makes of a review's result seen,
   which the web UI then no longer counts new (DESIGN §22): an agent that could mark one could hide from the operator
-  the review it was steered to hide. Inside a run the show still prints, and marks nothing.
+  the review it was steered to hide. Inside a run the show still prints, and marks nothing. So do `canopy review
+  edit` and `publish`, the operator's verbs on a review's draft (DESIGN §34): an agent that could publish one could
+  post as the operator on any PR their query matches, and one that could edit it could choose what they publish
+  unread. A draft is the reviewer's text, written from the PR's, and untrusted until the operator publishes a version
+  of it, which they name by its hash.
   So does `gc` (DESIGN §26): an agent that could remove history early
   could remove the transcript that shows what it did, and no flag of it shortens retention, which only the
   operator's private config sets. So does `notice`, when it sets or clears the operator's notice to workers
@@ -204,7 +208,8 @@ Controls:
   names the repository the review runs in, as it does for `review.query`'s matches, and can end a request, as `merged`,
   `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a steered overseer ending a
   request early costs a review, never adds one; the PR's page shows who ended it and why. Reviews live in the journal
-  only (D114): nothing on a PR is one.
+  (D114): nothing on a PR is one but a version of a review of someone else's PR the operator published (DESIGN §34),
+  which the loop reads as no review of its own.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -369,7 +374,13 @@ but must be distinguishable:
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
-- canopy's reviews post nothing (D114), so nothing a reviewer writes appears under the operator's name.
+- canopy's reviews post nothing the operator has not published (D114). A review of a PR the loop does not own may
+  be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
+  hash, unmarked, as one comment review on the commit the review read, which approves nothing and resolves no thread.
+  It speaks as the operator on someone else's PR, and with no bot identity (D010) nothing on GitHub says a model wrote
+  it but what the operator leaves in. The journal records which review wrote each version and what the operator
+  changed, the version published, the channel, and the review's and each comment's id. The loop's own PRs publish
+  none.
 - A reply the operator sends through canopy (DESIGN §29) carries no marks: it is their own words, posted word for
   word as they last saw it, named by its hash, as one comment review that approves nothing and resolves no thread. The
   journal records which run drafted it, whether the operator edited it, the channel, and the comment's id, by which
@@ -469,7 +480,9 @@ its destination. A steered reviewer can put what it read into
 its findings, which reach the operator and, through `resume`, a worker on that ticket, who can push and comment; the
 worker reads them as data, as it reads any review comment. A write tool the operator's runtime grants anyway, on
 GitHub's server or another the tracker's rules do not cover, under a name the deny patterns miss, would let a steered
-reviewer post; that is noise, not authority, since the loop reads reviews only from its journal.
+reviewer post; that is noise, not authority, since the loop reads reviews only from its journal. A steered reviewer
+can put a link carrying data in a comment of a review's draft, which reaches GitHub if the operator publishes it
+unread.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
@@ -680,9 +693,10 @@ loop's terminal would.
 ## 6. What canopy must never do
 
 - Approve, merge, or close a PR, or submit a PR review that approves or requests changes. The one review canopy
-  submits is a comment review of text the operator sent through canopy word for word (DESIGN §29); the one it leaves
-  pending holds text the operator staged, word for word, for them to submit.
-- Push to or edit a PR the loop is only reviewing.
+  submits is a comment review of text the operator sent through canopy word for word (DESIGN §29), or of a review's
+  draft they published word for word on a PR the loop does not own (§34); the one it leaves pending holds text the
+  operator staged, word for word, for them to submit.
+- Push to or edit a PR the loop is only reviewing. A comment review the operator published edits nothing.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator
   authored and labeled with a queue label (T1); and never with force, except a worker's rebased branch pushed with a
