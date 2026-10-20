@@ -357,8 +357,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   After #436, which denies each agent the GitHub tools its prompts never call, expect against 2026-10-19's first table
   the overseer sent 8 of GitHub's 46 tools and no `todowrite`, `skill`, or list of skills (a prefix of about 24k
   tokens, from 35.0k); the planner, the triage agent, and both workers sent 11 fewer of GitHub's, the reviewer 12, and
-  the chore 1. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a call to a tool it
-  was not offered (`tool not found`).
+  the chore 1. Once the overseer is offered only the tracker's reads, expect it sent of the tracker's server only its
+  read tools (Jira's 12 by default), and off a GitHub tracker 5 of GitHub's tools, its issue reads gone (about 1.5k
+  tokens less). Then let `canopy loop` run a week and expect no run or tick whose transcript shows a call to a tool
+  it was not offered (`tool not found`).
 
 ## Retired
 

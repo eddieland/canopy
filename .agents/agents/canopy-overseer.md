@@ -30,12 +30,16 @@ permission:
   # With the tracker's skill in its body, canopy renders `skill: deny` at the marked line: the overseer has nothing to
   # load. Otherwise the prompt has it load the skill by name, if there is one, and the skill tool stays.
   # canopy: skill rule
+  # The overseer only reads the tracker (TRUST_MODEL T6). At the marked line canopy renders the tracker's server denied
+  # by a wildcard, then each of its read tools allowed by name: for GitHub, whose server it shares, the reads kept
+  # below. Off a GitHub tracker, GitHub's issue reads are denied first, and an allow after them reopens a read of the
+  # tracker's they match. The denials below come after, so no allow reopens a write they close. With no read tools
+  # known, the line stays as it is.
+  # canopy: tracker reads
   # GitHub's MCP tools are permissioned by name, `<server>_<tool>`, and the server's name is the operator's, so each
   # tool is denied by its own: OpenCode sends no tool a rule denies whole, which cuts each tick's request. Kept are the
-  # reads the prompt makes, PRs (with their checks, reviews, comments, and merge state) and branches; issues, which are
-  # the tickets when the tracker is GitHub; and the signed-in user, too small to matter. Every write is denied
-  # (TRUST_MODEL T6). The tracker's own server is left as it is: reading it is the overseer's work, and its tool names
-  # are its own, so a pattern here could take a read the overseer needs.
+  # reads the prompt makes, PRs (with their checks, reviews, comments, and merge state) and branches; issues, when they
+  # are the tickets; and the signed-in user, too small to matter. Every write is denied (TRUST_MODEL T6).
   "*merge_pull_request*": deny
   "*create_pull_request*": deny
   "*update_pull_request*": deny

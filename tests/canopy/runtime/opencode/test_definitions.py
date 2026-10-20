@@ -10,6 +10,7 @@ from canopy.runtime.opencode import definitions
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 SKILL_MARKER = "  # canopy: skill rule\n"
+READS_MARKER = "  # canopy: tracker reads\n"
 TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER, agents.PLAN_TRIAGE]
 
 
@@ -50,6 +51,11 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
     text = {name: rendered[f"agents/{name}.md"].decode() for name in definitions.agent_names()}
     assert '  "tracker_*": deny\n  "tracker_read": allow\n' in text[agents.PRIVATE_WORKER]
     assert '  "tracker_read": allow\n' in text[agents.PLANNER]
+    # The overseer reads it too, and denies GitHub's issue reads, which are no tracker's but GitHub's.
+    assert (
+        f'{READS_MARKER}  "*issue_read*": deny\n  "*list_issues*": deny\n  "*search_issues*": deny\n'
+        '  "tracker_*": deny\n  "tracker_read": allow\n'
+    ) in text[agents.OVERSEER]
     assert "--force-with-lease" in text[agents.WORKER]
     assert '"*reply_to_pull_request_comment*": deny' in text[agents.WORKER]
     assert '"*reply_to_pull_request_comment*": deny' not in text[agents.PRIVATE_WORKER]
@@ -64,12 +70,12 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
 def test_the_overseer_gets_the_trackers_skill_when_canopy_ships_one_and_no_skill_tool() -> None:
     # With the skill in its body there is nothing left to load, and OpenCode sends no tool a rule denies whole.
     files = {
-        "agents/canopy-overseer.md": f"---\npermission:\n{SKILL_MARKER}---\n{PROMPT_MARKER}".encode(),
+        "agents/canopy-overseer.md": f"---\npermission:\n{SKILL_MARKER}{READS_MARKER}---\n{PROMPT_MARKER}".encode(),
         "skills/tracker-jira/SKILL.md": b"---\nname: tracker-jira\n---\nUse JQL.\n",
     }
     overseer = definitions.render(files, replace(PLAIN, tracker_provider="jira"))["agents/canopy-overseer.md"].decode()
     skill = "The skill `tracker-jira` follows, given here so that you need not load it.\n\nUse JQL.\n"
-    assert overseer == f"---\npermission:\n{SKILL_MARKER}  skill: deny\n---\nDecide.\n\n{skill}"
+    assert overseer == f"---\npermission:\n{SKILL_MARKER}  skill: deny\n{READS_MARKER}---\nDecide.\n\n{skill}"
 
 
 @pytest.mark.parametrize("agent", TEMPERATURE_AGENTS)
@@ -98,6 +104,26 @@ def test_an_overseer_definition_without_a_marked_line_is_refused(marker: str) ->
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     with pytest.raises(agents.DefinitionsError, match="no line"):
         definitions.render_overseer(bundled.replace(marker, ""), "# canopy overseer\n", None)
+
+
+@pytest.mark.parametrize("tools", [None, agents.McpTools("github", ("issue_read",))])
+def test_an_overseer_definition_without_its_tracker_reads_line_is_refused(tools: agents.McpTools | None) -> None:
+    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match="tracker reads"):
+        definitions.render_overseer_reads(bundled.replace(READS_MARKER, ""), tools, "github")
+
+
+def test_a_github_tracker_gives_the_overseer_its_own_reads_of_github() -> None:
+    # The provider's read tools there hold the PR writes a private worker needs; GitHub's issue reads stay.
+    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
+    tools = agents.McpTools("gh", ("create_pull_request", "issue_read"))
+    rendered = definitions.render_overseer_reads(bundled, tools, "github")
+    rules = rendered.split(READS_MARKER, 1)[1].split("  # ", 1)[0]
+    assert rules == (
+        '  "gh_*": deny\n  "gh_get_me": allow\n  "gh_issue_read": allow\n  "gh_list_issues": allow\n'
+        '  "gh_search_issues": allow\n  "gh_pull_request_read": allow\n  "gh_list_pull_requests": allow\n'
+        '  "gh_search_pull_requests": allow\n  "gh_list_branches": allow\n'
+    )
 
 
 def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:
