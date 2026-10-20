@@ -549,7 +549,7 @@ def test_overseer_output_refuses_a_symlink(scenario: Scenario, tmp_path: Path) -
     (ticks / "1.log").symlink_to(target)
     failed = scenario.tick(dry_run=True, code=1)
     assert failed.tick.status == TickStatus.ERROR
-    assert failed.tick.summary == f"OSError: [Errno 40] Too many levels of symbolic links: '{ticks / '1.log'}'"
+    assert failed.tick.summary == f"OSError: [Errno {errno.ELOOP}] {os.strerror(errno.ELOOP)}: '{ticks / '1.log'}'"
     assert target.read_text() == "not yours\n"
 
 
