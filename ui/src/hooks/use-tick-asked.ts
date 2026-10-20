@@ -6,7 +6,8 @@ import { useLoopDown } from '@/hooks/use-loop-down'
 
 /**
  * Tick now's request, shared by every Tick now on the page through its key, so the header shows the tick it asked for
- * from the click on: `asked` reads it. Its variables are the latest tick's id when it was asked, or null before any.
+ * from the click on: `useTickAsked` reads it. Its variables are the latest tick's id when it was asked, or null before
+ * any.
  */
 export function useTickNow() {
     return useMutation({ mutationKey: keys.tickNow, mutationFn: (_after: number | null) => tickNow() })

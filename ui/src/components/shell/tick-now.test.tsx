@@ -50,7 +50,6 @@ describe('TickNow', () => {
         const client = new QueryClient()
         client.setQueryDefaults(keys.tick, { enabled: false })
         client.setQueryDefaults(keys.meta, { enabled: false })
-        client.setQueryDefaults(keys.meta, { enabled: false })
         client.setQueryData(keys.tick, { tick: null, acknowledged: null })
         render(
             <QueryClientProvider client={client}>
@@ -99,7 +98,6 @@ describe('TickNow', () => {
     it('waits from the click until the tick it asked for starts, and that tick ends', async () => {
         const client = new QueryClient()
         client.setQueryDefaults(keys.tick, { enabled: false })
-        client.setQueryDefaults(keys.meta, { enabled: false })
         client.setQueryDefaults(keys.meta, { enabled: false })
         client.setQueryData(keys.tick, { tick: { id: 7, status: 'ok' } as Tick, acknowledged: null })
         render(
