@@ -189,7 +189,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
                 "stops, replies, forgets, grants attempts, plans, dismisses or sends findings, marks reviews seen, "
-                "edits or sends drafts, pauses, resumes, or collects garbage",
+                "edits or sends drafts, pauses, resumes, collects garbage, or reads the commands agents start with",
             )
 
 
