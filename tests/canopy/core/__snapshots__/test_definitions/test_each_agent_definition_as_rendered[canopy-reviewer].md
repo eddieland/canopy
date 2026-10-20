@@ -23,6 +23,28 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
+  # The reviewer reads the ticket and writes nothing to it (TRUST_MODEL T6). At the marked line canopy renders, off a
+  # GitHub tracker, GitHub's issue reads denied, then the tracker's server denied by a wildcard and each of its read
+  # tools allowed by name, so a write tool no pattern names fails closed (D021). On a GitHub tracker, whose server the
+  # PR's reads go through, and with no read tools known, the line stays as it is. The patterns below come after, so no
+  # allow reopens a write they close.
+  # canopy: tracker reads
+  "*issue_read*": deny
+  "*list_issues*": deny
+  "*search_issues*": deny
+  "atlassian_*": deny
+  "atlassian_atlassianUserInfo": allow
+  "atlassian_getAccessibleAtlassianResources": allow
+  "atlassian_getJiraIssue": allow
+  "atlassian_getJiraIssueTypeMetaWithFields": allow
+  "atlassian_listJiraIssueChangelogs": allow
+  "atlassian_listJiraIssueComments": allow
+  "atlassian_listJiraIssueLinkTypes": allow
+  "atlassian_listJiraIssueRemoteIssueLinks": allow
+  "atlassian_listJiraProjectIssueTypesMetadata": allow
+  "atlassian_listJiraProjects": allow
+  "atlassian_lookupJiraAccountId": allow
+  "atlassian_searchJiraIssuesUsingJql": allow
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth. Denied: commenting or replying anywhere, submitting a PR review (it can approve), asking Copilot for one,
   # and anything that pushes, writes files, changes labels, or edits or deletes. Reading stays allowed.
