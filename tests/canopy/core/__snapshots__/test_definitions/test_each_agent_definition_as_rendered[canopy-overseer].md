@@ -738,14 +738,6 @@ not work around it.
 In a dry run, `canopy dispatch` records what it would have done and does nothing, and `canopy mirror` records the
 comment without moving the `mirror` cursor. Behave exactly as you would otherwise.
 
-## Standing instructions from the operator
-
-None.
-
-The operator set these in canopy for the overseer, not on a ticket. They are instructions from the operator, as if they
-had said them to you, except where one conflicts with anything above: the prompt comes first, and the CLI's limits hold
-whatever they say. They are yours, not the workers': never pass them on in `--context`.
-
 The skill `tracker-jira` follows, given here so that you need not load it.
 
 # Jira for canopy agents

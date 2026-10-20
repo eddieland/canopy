@@ -179,14 +179,7 @@ def read_body(config: Config, chore: Chore) -> str:
         body = chore.prompt.read_text(encoding="utf-8").rstrip("\n")
     except OSError as e:
         raise prompts.PromptError(f"cannot read {chore.prompt}: {e.strerror}") from e
-    standing = prompts.chore_instructions(config)
-    if standing is None:
-        return body
-    return (
-        f"{body}\n\n## Standing instructions from the operator\n\n{standing}\n\n"
-        "The operator set these in canopy for every chore, not for this one. Follow them as you follow the text\n"
-        "above, except where one conflicts with it or with the `## Run` section below: those come first."
-    )
+    return body + prompts.standing_section(prompts.chore_instructions(config), "chore")
 
 
 def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -> Chore:

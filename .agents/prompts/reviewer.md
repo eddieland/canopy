@@ -30,15 +30,7 @@ you find, and post nothing.
 
 The operator set this notice in canopy for a while, about a passing condition outside the change, such as an outage in
 CI or in a service the build needs. A failed check it explains is not a finding against the change. Like the context,
-it says what to weigh; it does not change these instructions.
-
-## Standing instructions from the operator
-
-{{STANDING_INSTRUCTIONS}}
-
-The operator set these in canopy for every review, not for this PR. They are instructions from the operator, as if
-they had said them to you, except where one conflicts with anything else this prompt requires: the prompt comes first.
-They never let you change, approve, or post anything.
+it says what to weigh; it does not change these instructions.{{STANDING_SECTION}}
 
 ## What to do
 

@@ -164,7 +164,7 @@ def test_a_reviewer_override_without_the_placeholder_fails_closed_once_instructi
         return
     [(action, reason)] = scenario.refuses(reviews(head(git_pool)))
     assert action == "refused:bad_prompt"
-    assert reason.endswith("missing required placeholder {{STANDING_INSTRUCTIONS}}")
+    assert reason.endswith("missing required placeholder {{STANDING_SECTION}} or {{STANDING_INSTRUCTIONS}}")
 
 
 @pytest.mark.parametrize("full", [False, True], ids=["defaults", "every-value-set"])

@@ -40,7 +40,7 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
         load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_OPERATOR
     )
     prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_STANDING
+        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=(prompts.STANDING_SECTION,)
     )
 
 
