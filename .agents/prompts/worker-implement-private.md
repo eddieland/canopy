@@ -23,7 +23,10 @@ something.
 
 Read the ticket through the tracker MCP. The tracker is {{TRACKER_PROVIDER}}; if a skill named
 `tracker-{{TRACKER_PROVIDER}}` is available, load it first, and skip any of its steps that write to the ticket.
-Implement the ticket. Follow the repository's AGENTS.md and conventions. Run the tests that cover your change.
+Implement the ticket. Follow the repository's AGENTS.md and conventions. Before each push, run the checks the
+repository's contributors run before opening a PR, as its AGENTS.md, contributing guide, Makefile, or CI workflows name
+them: formatting, lint, and type checks, and the tests it asks for. Fix what they find, and push when they pass. A check
+that fails without your change too, or cannot run here, is not yours to fix: say which and why in your summary.
 
 ## Conversation with the operator
 

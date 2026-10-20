@@ -57,7 +57,11 @@ work departs from the plan, with its step and why.
 
 {{REASONS}}
 
-Work every reason listed in this one run, on this one checkout. Where you can, push once for all of them.
+Work every reason listed in this one run, on this one checkout. Where you can, push once for all of them. Before each
+push, run the checks the repository's contributors run before opening a PR, as its AGENTS.md, contributing guide,
+Makefile, or CI workflows name them: formatting, lint, and type checks, and the tests it asks for. Fix what they find,
+and push when they pass. A check that fails without your change too, or cannot run here, is not yours to fix: say which
+and why in your summary.
 
 ## Context from the overseer
 

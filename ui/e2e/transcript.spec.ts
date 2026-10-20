@@ -230,7 +230,7 @@ test("a transcript's chart names what grew each call's context, and shows the la
     ])
     // The first call is canopy's prompt and the runtime's own.
     await calls.getByRole('radio', { name: 'call 1: 24.6k sent' }).click()
-    await expect(context).toContainText('call 1, 24.6k sent: ≈176 canopy’s prompt, ≈24.4k the runtime’s own')
+    await expect(context).toContainText('call 1, 24.6k sent: ≈264 canopy’s prompt, ≈24.3k the runtime’s own')
 
     // By call says each call's step on its line.
     const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
