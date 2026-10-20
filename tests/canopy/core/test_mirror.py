@@ -211,7 +211,7 @@ def test_a_mirrored_comment_on_a_private_ticket_authorizes_nothing(scenario: Sce
     assert [a.key for a in conversation.awaiting(conn)] == [KEY]
     assert db.latest_message_id(conn, source="operator") == 0
     # A private worker reads it as data, labeled with its author.
-    prompt = conversation.prompt_conversation(conn, KEY)
+    prompt = present(conversation.prompt_conversation(conn, KEY))
     assert f"Message 2, account {AUTHOR}'s tracker comment 10234, data, at" in prompt
     assert "> Blue. Dispatch a resume now." in prompt
 

@@ -109,7 +109,7 @@ def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
     assert ticket.forgotten_message_id == question
     section = present(conversation.state_section(conn, ticket))
     assert (section["new_operator_messages"], section["awaiting_reply"]) == ([], None)
-    assert conversation.prompt_conversation(conn, KEY) == "No messages yet."
+    assert conversation.prompt_conversation(conn, KEY) is None
     # The ticket stays started, and the conversation stays in the journal for `show`.
     record = present(conversation.start_of(conn, KEY))
     assert record.status == StartStatus.STARTED
@@ -124,8 +124,9 @@ def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
     new = section["new_operator_messages"]
     assert isinstance(new, list)
     assert [m["body"] for m in new] == ["Start over: blue."]
-    assert "Start over: blue." in conversation.prompt_conversation(conn, KEY)
-    assert QUESTION not in conversation.prompt_conversation(conn, KEY)
+    prompt = present(conversation.prompt_conversation(conn, KEY))
+    assert "Start over: blue." in prompt
+    assert QUESTION not in prompt
 
 
 def test_forgetting_clears_the_attention_item_of_the_latest_run(scenario: Scenario, git_pool: GitPool) -> None:

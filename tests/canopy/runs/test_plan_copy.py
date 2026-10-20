@@ -70,11 +70,11 @@ def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     assert contract.stored_object(run.row["result_json"]).get("harness") is None
 
 
-def test_without_an_approved_plan_the_prompt_says_none(scenario: Scenario, git_pool: GitPool) -> None:
+def test_without_an_approved_plan_the_prompt_has_no_plan_section(scenario: Scenario, git_pool: GitPool) -> None:
     run = scenario.run(worker=worker_does(["test", "-e", plans.COPY], *commit_and_push(BRANCH)))
     *_, [exists, *_] = commands_run(scenario.agent_log)
     assert exists["returncode"] == 1
-    assert "## The plan\n\nNone.\n" in run.prompt
+    assert "## The plan" not in run.prompt
 
 
 def dispatched_then(scenario: Scenario, between: Callable[[], object], *commands: list[str]) -> Ran:
@@ -130,7 +130,7 @@ def test_a_plan_approved_after_dispatch_is_not_copied_for_a_run_its_prompt_named
     *_, [exists] = commands_run(scenario.agent_log)
     assert exists["returncode"] == 1
     assert run.row["plan_id"] is None
-    assert "## The plan\n\nNone.\n" in run.prompt
+    assert "## The plan" not in run.prompt
 
 
 def test_an_edit_between_dispatch_and_run_crashes_the_run_before_the_worker(
@@ -176,7 +176,6 @@ def test_the_outline_is_the_headings_outside_code_bounded() -> None:
     found = plans.outline(many)
     assert len(found) == plans.MAX_OUTLINE
     assert {len(h) for h in found} == {plans.MAX_HEADING}
-    assert prompts.plan_note(None, []) == "None."
     assert prompts.plan_note(Path("/d/.canopy-plan.md"), []).endswith("It has no headings: read it whole.")
     fenced = prompts.plan_note(Path("/d/.canopy-plan.md"), ["# ```odd"])
     assert "````text\n# ```odd\n````" in fenced

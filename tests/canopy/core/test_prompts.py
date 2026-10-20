@@ -93,6 +93,97 @@ def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
     assert text == "{{BRANCH}} agent/PROJ-1-work `agent-ready-alice`\n"
 
 
+#: An override with two sections that may not apply, one ending a line another placeholder goes on with.
+SECTIONS = """Work {{KEY}} with {{LABELS}}.
+
+{{#CONTEXT}}
+
+## Context
+
+{{CONTEXT}}
+
+{{/CONTEXT}}
+
+{{#PLAN}}
+
+## Plan
+
+{{PLAN}}
+
+{{/PLAN}}{{BRANCH}}
+
+## Last
+"""
+
+
+@pytest.mark.parametrize(
+    ("context", "plan", "rendered"),
+    [
+        pytest.param("Look at CI.", "The plan.", "\n\n## Context\n\nLook at CI.\n\n## Plan\n\nThe plan.b", id="both"),
+        pytest.param(None, "The plan.", "\n\n## Plan\n\nThe plan.b", id="no-context"),
+        pytest.param("Look at CI.", None, "\n\n## Context\n\nLook at CI.b", id="no-plan"),
+        pytest.param(None, None, "b", id="neither"),
+    ],
+)
+def test_a_section_without_a_value_is_left_out_whole(
+    canopy_env: CanopyEnv, context: str | None, plan: str | None, rendered: str
+) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text(SECTIONS)
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    values = {**PROMPT_VALUES, "KEY": "PROJ-1", "CONTEXT": context, "PLAN": plan, "BRANCH": "b"}
+    text = prompts.render_worker(cfg, "implement", values)
+    assert text == f"Work PROJ-1 with `agent-ready-alice`.{rendered}\n\n## Last\n"
+
+
+def test_an_override_written_before_sections_reads_none_where_one_does_not_apply(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text("{{KEY}} {{LABELS}}\n\n## Context\n\n{{CONTEXT}}\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, "implement", {**PROMPT_VALUES, "CONTEXT": None})
+    assert text.endswith("\n\n## Context\n\nNone.\n")
+
+
+def test_a_required_placeholder_inside_a_section_left_out_is_missing(canopy_env: CanopyEnv) -> None:
+    # The label check is the worker's own authorization (D051): an override cannot hide it where it does not render.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text(
+        "{{KEY}}\n\n{{#CONTEXT}}\n\n{{CONTEXT}} {{LABELS}}\n\n{{/CONTEXT}}\n"
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert "Look. `agent-ready-alice`" in prompts.render_worker(cfg, "implement", {**PROMPT_VALUES, "CONTEXT": "Look."})
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{LABELS\}\}"):
+        prompts.render_worker(cfg, "implement", PROMPT_VALUES)
+
+
+@pytest.mark.parametrize("kind", ["implement", "resume"])
+def test_a_private_prompt_without_a_conversation_still_renders(canopy_env: CanopyEnv, kind: str) -> None:
+    # `{{CONVERSATION}}` is required of a private prompt; its section left out for want of one still counts.
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, {**PROMPT_VALUES, "CONVERSATION": None}, private=True)
+    assert "## Conversation with the operator" not in text
+
+
+@pytest.mark.parametrize(
+    ("override", "error"),
+    [
+        pytest.param("{{#CONTEXT}}\n{{CONTEXT}}\n", r"\{\{#CONTEXT\}\} has no matching", id="unclosed"),
+        pytest.param("{{CONTEXT}}\n{{/CONTEXT}}\n", r"\{\{/CONTEXT\}\} has no matching", id="unopened"),
+        pytest.param("{{#NOPE}}\n\nx\n\n{{/NOPE}}\n", r"unknown placeholder \{\{#NOPE\}\}", id="unknown"),
+    ],
+)
+def test_a_section_marker_without_its_match_is_an_error(canopy_env: CanopyEnv, override: str, error: str) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text(f"{{{{KEY}}}} {{{{LABELS}}}}\n{override}")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=error):
+        prompts.render_worker(cfg, "implement", PROMPT_VALUES)
+
+
 def test_unknown_placeholder_is_an_error(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
     with pytest.raises(prompts.PromptError, match=r"unknown placeholder \{\{REPOSITORIES\}\}"):
@@ -380,7 +471,9 @@ def test_shipped_resume_prompts_gate_untrusted_reviewers(canopy_env: CanopyEnv) 
     cfg = load(canopy_env.root, canopy_env.user_file)
     public = prompts.render_worker(cfg, "resume", PROMPT_VALUES)
     assert "Trusted reviewers: `octocat`." in public
-    assert "## Messages from the operator\n\nNo messages from the operator.\n" in public
+    assert "## Messages from the operator" not in public
+    replied = prompts.render_worker(cfg, "resume", {**PROMPT_VALUES, "OPERATOR_MESSAGES": "Go ahead."})
+    assert "## Messages from the operator\n\nGo ahead.\n" in replied
     private = prompts.render_worker(cfg, "resume", {**PROMPT_VALUES, "CONVERSATION": "No messages yet."}, private=True)
     assert "Trusted reviewers: `octocat`." in private
 

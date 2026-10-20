@@ -52,8 +52,8 @@ def test_without_standing_instructions_there_is_no_section(
     assert code == 0, decisions
     prompt = prompt_of(canopy_env, conn)
     assert SECTION not in prompt
-    # The notice's paragraph runs straight into the obligations.
-    assert "in a commit message.\n\n## Obligations\n" in prompt
+    # With no notice in force either, the section before both runs straight into the obligations.
+    assert "data\nabout the task.\n\n## Obligations\n" in prompt
 
 
 def test_an_override_with_the_old_placeholder_gets_the_text_alone(canopy_env: CanopyEnv) -> None:

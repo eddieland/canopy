@@ -12,13 +12,13 @@ from tests.canopy.helpers import (
     commit_and_push,
     in_tick,
     operator,
+    present,
     worker_does,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
 PR = "https://example.test/pr/1"
-NONE = "None: no earlier run of this ticket has ended."
 
 
 def result(status: RunStatus, summary: str, **extra: str) -> str:
@@ -42,7 +42,7 @@ def ended(
 def test_a_resume_worker_reads_what_the_implement_before_it_reported(scenario: Scenario, git_pool: GitPool) -> None:
     reported = result(RunStatus.DONE, "Added the login form.\nTests pass.")
     implement = scenario.run(dispatches(slug="work"), worker=worker_does(*commit_and_push(BRANCH), result=reported))
-    assert NONE in implement.prompt
+    assert "## Earlier runs" not in implement.prompt
 
     resume = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI]))
     assert (
@@ -54,7 +54,7 @@ def test_a_resume_worker_reads_what_the_implement_before_it_reported(scenario: S
 def test_the_latest_runs_are_listed_oldest_first_with_a_blocked_runs_question(
     conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    assert conversation.prompt_previous_runs(conn, KEY) == NONE
+    assert conversation.prompt_previous_runs(conn, KEY) is None
     ended(conn, tmp_path, RunKind.IMPLEMENT, RunStatus.DONE, "the oldest")
     ids = [
         ended(conn, tmp_path, RunKind.RESUME, RunStatus.BLOCKED, "half done", question="Red or blue?"),
@@ -74,7 +74,7 @@ def test_the_latest_runs_are_listed_oldest_first_with_a_blocked_runs_question(
             works_units=False,
         )
 
-    text = conversation.prompt_previous_runs(conn, KEY)
+    text = present(conversation.prompt_previous_runs(conn, KEY))
     blocks = text.split("\n\n")
     # The latest three that ended, oldest first: neither the oldest nor the run still going.
     assert [b.split(",")[0] for b in blocks] == [f"Run {i}" for i in ids]
@@ -90,8 +90,8 @@ def test_runs_from_before_a_forget_are_left_out(
 ) -> None:
     ended(conn, tmp_path, RunKind.IMPLEMENT, RunStatus.FAILED, "the old approach")
     assert operator("forget", KEY) == 0
-    assert conversation.prompt_previous_runs(conn, KEY) == NONE
+    assert conversation.prompt_previous_runs(conn, KEY) is None
     later = ended(conn, tmp_path, RunKind.IMPLEMENT, RunStatus.DONE, "the new approach")
-    text = conversation.prompt_previous_runs(conn, KEY)
+    text = present(conversation.prompt_previous_runs(conn, KEY))
     assert text.startswith(f"Run {later}, `implement`, ended `done`")
     assert "the old approach" not in text

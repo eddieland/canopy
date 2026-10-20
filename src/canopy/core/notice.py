@@ -35,8 +35,6 @@ MAX_MINUTES = 7 * 24 * 60
 # failed check from an outage stays held after the notice ends until a newer run of it exists (§7).
 RECENT_DAYS = 7
 RECENT_LIMIT = 5
-# What a prompt's `{{NOTICE}}` says with none in force.
-NONE = "None."
 # `--for`'s form: a whole number of minutes, hours, or days.
 _DURATION_RE = re.compile(r"([1-9][0-9]{0,5})([mhd])")
 _UNIT_MINUTES = {"m": 1, "h": 60, "d": 24 * 60}

@@ -134,7 +134,7 @@ def test_resume_prompt_points_at_the_reply_and_names_the_repliers(scenario: Scen
 
 def test_implement_prompt_without_context_or_repliers(scenario: Scenario, git_pool: GitPool) -> None:
     prompt = scenario.run(worker=asks()).prompt
-    assert "## Context from the overseer\n\nNone.\n" in prompt
+    assert "## Context from the overseer" not in prompt
     assert "one of none (no reply may instruct you) and it is not a worker's" in " ".join(prompt.split())
 
 

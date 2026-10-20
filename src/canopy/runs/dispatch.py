@@ -354,18 +354,23 @@ def repositories_note(
     return "\n".join(lines)
 
 
-def map_note(ctx: Context) -> str:
-    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18)."""
+def map_note(ctx: Context) -> str | None:
+    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18).
+
+    Returns:
+        The text, cut to `MAX_MAP`, or why a `MAP.md` there cannot be read; None, which leaves the prompt's section out,
+        without one or with an empty one.
+    """
     path = ctx.workspace.map_prose
     if path is None:
-        return "None: this workspace has no MAP.md."
+        return None
     try:
         text = path.read_text(encoding="utf-8", errors="replace").strip()
     except OSError as e:
-        return f"None: MAP.md could not be read ({e.strerror})."
+        return f"MAP.md could not be read ({e.strerror})."
     if len(text) > MAX_MAP:
         return f"{text[:MAX_MAP]}\n\n[MAP.md is longer than {MAX_MAP} characters; the rest is left out.]"
-    return text or "None: MAP.md is empty."
+    return text or None
 
 
 def _planned_repositories(
@@ -952,8 +957,8 @@ def _spawn(
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(limit),
         "PR_URL": JOINT_PR_NOTE if plan.joint else _pr_note(prs.get(first.repo or ""), branch),
-        "CONTEXT": context or "None.",
-        "REVIEW_FINDINGS": review or "None.",
+        "CONTEXT": context or None,
+        "REVIEW_FINDINGS": review or None,
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
         "TRUSTED_REVIEWERS": prompts.trusted_reviewers(cfg.trust.trusted_reviewers),
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
@@ -961,7 +966,7 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
-        "PLAN": "None.",
+        "PLAN": None,
         "PLAN_FILE": plans.REPLACED,
         "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
@@ -1105,7 +1110,7 @@ def _render(
     ctx: Context,
     key: str,
     kind: str,
-    values: Mapping[str, str],
+    values: Mapping[str, str | None],
     required: Sequence[str],
     *,
     repos: Collection[str],

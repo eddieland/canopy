@@ -905,15 +905,18 @@ def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
     return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
 
 
-def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
+def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str | None:
     """Return a public worker's `{{OPERATOR_MESSAGES}}`: the operator's latest replies, oldest first, bounded.
 
     A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089). The questions
     workers reported come with them, so a reply to message N names something the worker can read (D093); the rest of
     the conversation is on the tracker. Messages from before the operator forgot the ticket's work are left out.
+
+    Returns:
+        The messages; None, which leaves the prompt's section out, when there are none.
     """
     if not has_operator_messages(conn, key):
-        return "No messages from the operator."
+        return None
     rows = records.fetch_all(
         conn,
         records.Message,
@@ -924,15 +927,18 @@ def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
         .order_by("id DESC")
         .limit(PROMPT_MESSAGES),
     )
-    return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")
+    return _bounded([_prompt_message(m) for m in reversed(rows)])
 
 
-def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
+def prompt_conversation(conn: sqlite3.Connection, key: str) -> str | None:
     """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded.
 
     Messages from before the operator forgot the ticket's work are left out: they are about work that is gone. So is a
     an old triage's report: model text written from the ticket, which no other run hears (M55).
     So are canopy's notes: they say what the loop did, which the worker knows, and quote the overseer's reasons.
+
+    Returns:
+        The messages; None, which leaves the prompt's section out, when there are none.
     """
     rows = records.fetch_all(
         conn,
@@ -945,10 +951,10 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
         .order_by("id DESC")
         .limit(PROMPT_MESSAGES),
     )
-    return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
+    return _bounded([_prompt_message(m) for m in reversed(rows)])
 
 
-def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
+def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str | None:
     """Return a public worker's `{{PREVIOUS_RUNS}}`: what the ticket's latest runs reported, oldest first.
 
     Each run's kind, how it ended, its report, and a `blocked` run's question, as the run recorded them
@@ -956,6 +962,9 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
     concluded (DESIGN §8). A private worker reads the same reports in its conversation. Runs from before the operator
     forgot the ticket's work are left out, and so are old triages, whose reason no worker hears (M55). A summary and
     a question are each at most 2000 characters (`worker.MAX_TEXT`), so the section is bounded.
+
+    Returns:
+        The reports; None, which leaves the prompt's section out, when no earlier run has ended.
     """
     blocks: list[str] = []
     for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS, skip_kind=RunKind.NEEDS_PLAN):
@@ -964,7 +973,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
         for m in db.run_messages(conn, int(run["id"])):
             lines += [f"Its {m.kind}:", _quoted(m.body)]
         blocks.append("\n".join(lines))
-    return "\n\n".join(blocks) or "None: no earlier run of this ticket has ended."
+    return "\n\n".join(blocks) or None
 
 
 class ChoreNote(TypedDict):
@@ -980,7 +989,7 @@ def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     return [{"id": m.id, "at": m.at, "note": printable(m.body)} for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)]
 
 
-def _bounded(blocks: Sequence[str], empty: str) -> str:
+def _bounded(blocks: Sequence[str]) -> str | None:
     # The newest blocks that fit in PROMPT_CHARS, oldest first, with a note of how many older ones were left out.
     total = 0
     kept: list[str] = []
@@ -991,7 +1000,7 @@ def _bounded(blocks: Sequence[str], empty: str) -> str:
         kept.append(block)
     kept.reverse()
     if not kept:
-        return empty
+        return None
     left_out = len(blocks) - len(kept)
     note = [f"[{left_out} older messages are left out.]"] if left_out else []
     return "\n\n".join([*note, *kept])
