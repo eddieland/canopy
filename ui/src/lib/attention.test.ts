@@ -59,6 +59,7 @@ describe('severity', () => {
         expect(severity(item('a', 'worker_failed', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'review_limit', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'canopy_unavailable', '2026-10-08T12:00:00Z'))).toBe('failed')
+        expect(severity(item('a', 'disk_low', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'awaiting_reply', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'untrusted_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'drafts_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')

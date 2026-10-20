@@ -16,7 +16,10 @@ A tick ends:
 - `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there;
 - `overseer failed`, when the overseer didn't finish its job, such as deciding about every ticket;
 - `canopy unavailable`, when the overseer couldn't run canopy at all, so nothing was decided;
+- `disk low`, when the disk had less free than `loop.min_free_disk_mib`, 2 GiB by default, so the overseer didn't run
+  and started nothing;
 - `reconcile failed`, when tidying up after the last tick went wrong;
+- `error`, when something in canopy itself broke during the tick; its summary names what, such as a full disk;
 - `abandoned`, when its process went away without closing it, and the next tick closed it for it.
 
 ## A tick's page
