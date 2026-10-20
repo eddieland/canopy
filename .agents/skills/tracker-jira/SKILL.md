@@ -17,6 +17,10 @@ The ticket key is the Jira issue key as-is: `PROJ-123`.
 `tracker.query` is JQL. Run it through the server's JQL search tool. Atlassian remote MCP tools usually need a cloud id;
 if they ask for one, resolve it once per run from the accessible-resources tool and reuse it.
 
+The search (`searchJiraIssuesUsingJql` on Atlassian's server) returns one page of issues a call. While its response
+names a next page, by a page token or a start offset past the issues returned so far, call it again with the same JQL
+and that token or offset. The result is complete when a response names no next page or returns no issues.
+
 The query only finds tickets. Read each result and confirm the label is in its `labels` field before treating it as a
 candidate.
 

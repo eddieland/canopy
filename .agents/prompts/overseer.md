@@ -73,11 +73,14 @@ ticket.
 
 1. **Find tickets.** When `query_due` is true, run the configured query first, before you read any ticket, even when
    the state block lists tickets: it is the only way a newly labeled ticket becomes a candidate. It is in the tracker's
-   search syntax, or plain language if the tracker has none. As soon as you have the result, record it:
-   `canopy queried <KEY> ...`, naming every open ticket it returned, labeled or not, in the state block or not (in
-   several calls for a long result), or `canopy queried` alone for none. When `query_due` is false, the operator is
-   spacing the query out to save its cost: neither run nor record it. A key is the tracker's short id (the skill says
-   which form), matching `[A-Za-z0-9][A-Za-z0-9_-]*`.
+   search syntax, or plain language if the tracker has none. Its result comes a page at a time: read the next page
+   until the tracker says there are no more (the skill says how), at most 5 pages. If more remain after the fifth,
+   stop there and say so in your final message: the rest wait until earlier tickets leave the result, so the operator
+   should narrow the query. As soon as you have the result, record it: `canopy queried <KEY> ...`, naming every open
+   ticket on every page you read, labeled or not, in the state block or not (in several calls for a long result), or
+   `canopy queried` alone for none. When `query_due` is false, the operator is spacing the query out to save its cost:
+   neither run nor record it. A key is the tracker's short id (the skill says which form), matching
+   `[A-Za-z0-9][A-Za-z0-9_-]*`.
 2. **Sort them.** Work the tickets in the state block's `tickets` that are not `done`, and those `canopy queried`
    named, as "Which tickets are candidates" says.
 3. **Derive.** For each candidate, mirror its new comments (see "Mirroring comments"), then derive its phase from live
