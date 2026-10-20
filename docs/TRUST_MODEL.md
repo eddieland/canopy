@@ -622,6 +622,12 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
+- Each write request, any method but GET and HEAD, that the server lets through is recorded in the journal once it is
+  answered: a sign-in with the secret, or a write whose session, token, and Origin the session check accepted, even if
+  a verb's own guard then refuses it. The record holds when, its method and path, its status, the peer's address, and
+  a fingerprint of the session that signs nothing; never its body, headers, query, cookie, or token, so a forget still
+  deletes the operator's words. What the guard or the session check refuses is not recorded, so only a page of this
+  server or the secret's holder adds rows.
 - The web channel writes only through `canopy.core`'s functions, with their guards, and only what this list names:
   mostly what the CLI's verbs write, through the functions they use (T1). It can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
@@ -640,10 +646,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   are the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
-  editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else. It cannot write
-  config: a reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's
-  bind and port never change under it. A forget must carry the ticket's key typed out, checked in code, and a
-  memory's forget its ref (`memory:42`). A grant
+  editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else, but the record of
+  its writes above. It cannot write config: a reload reads only the operator's own files, and a `serve.*` change
+  waits for a restart, so the listener's bind and port never change under it. A forget must carry the ticket's key
+  typed out, checked in code, and a memory's forget its ref (`memory:42`). A grant
   allows one more run a request, with `canopy grant`'s guards. A try is the operator's, as the CLI's is: it waits for
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.

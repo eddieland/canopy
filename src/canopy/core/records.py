@@ -1017,6 +1017,26 @@ class SplitChild(Row):
     run_id: int
 
 
+@dataclass(frozen=True)
+class WebWrite(Row):
+    """A write request the web UI's server let through, or a sign-in, as it answered it (TRUST_MODEL T8)."""
+
+    TABLE: ClassVar[str] = "web_writes"
+
+    id: int
+    #: When the request came in.
+    at: str
+    method: str
+    #: The request's path, without its query, at most 512 characters.
+    path: str
+    #: The HTTP status it was answered with.
+    code: int
+    #: The peer's address, as the server saw it.
+    client: str | None
+    #: A fingerprint of the session it was let through as or signed in; None on the mock server, which signs nobody in.
+    session: str | None
+
+
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> list[R]:
     """Run `query`, a statement built with `sql`, and build each row it returns as `row_type`.
 

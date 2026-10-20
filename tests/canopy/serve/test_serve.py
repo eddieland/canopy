@@ -344,7 +344,11 @@ def test_a_write_that_waits_out_a_held_journal_is_a_503_saying_so(
     finally:
         log.removeHandler(handler)
     warned = [r.getMessage() for r in handler.records if r.levelno >= logging.WARNING]
-    assert warned == [f"journal busy: POST {url} waited 0.05s for the write lock"]
+    # The audit cannot record the 503 either while the journal is held.
+    assert warned == [
+        f"journal busy: POST {url} waited 0.05s for the write lock",
+        f"web UI write not recorded: POST {url}",
+    ]
 
 
 def test_any_other_operational_error_stays_a_500(ui: Path, backend: Backend) -> None:

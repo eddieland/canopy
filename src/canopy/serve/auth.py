@@ -33,7 +33,11 @@ FAILED_SIGN_IN_SECONDS = 1.0
 # What `GET /api/session` gives a page when nobody signs in (mock data only).
 OPEN_TOKEN = "open"  # noqa: S105  (not a credential: the open server checks none)
 _VERSION = "v1"
-_READ_METHODS = frozenset({"GET", "HEAD"})
+#: The methods that read; any other is a write, which needs the session's token (`Sessions.require`).
+READ_METHODS = frozenset({"GET", "HEAD"})
+#: Where a write the server lets through leaves, in the request's state, the session it was let through as, and a
+#: sign-in the session it issued: None on an open server, which signs nobody in. audit.py records what it finds there.
+AUTHORIZED = "canopy_authorized"
 
 
 @dataclass(frozen=True)
@@ -42,6 +46,15 @@ class Signed:
 
     issued: int
     nonce: str
+
+    @property
+    def fingerprint(self) -> str:
+        """A name for the session the journal may keep (audit.py): it tells one session from another, and signs nothing.
+
+        Returns:
+            The first 16 hex digits of the sha256 of its issue time and nonce.
+        """
+        return hashlib.sha256(f"{self.issued}\0{self.nonce}".encode()).hexdigest()[:16]
 
 
 class Sessions:
@@ -135,16 +148,20 @@ class Sessions:
     def require(self, request: Request) -> None:
         """A FastAPI dependency: refuse a request without a session, and a write without its token and an Origin.
 
+        A write it lets through leaves its session in the request's state under `AUTHORIZED`, for audit.py.
+
         Raises:
             HTTPException: 401 without a valid session; 403 for a write without the session's token or an Origin
                 header naming an allowed host. The guard has already refused a foreign Origin (guard.py).
         """
         if self.open:
+            if request.method not in READ_METHODS:
+                setattr(request.state, AUTHORIZED, None)
             return
         session = self.of(request)
         if session is None:
             raise HTTPException(status_code=401, detail="sign in with the listener secret")
-        if request.method in _READ_METHODS:
+        if request.method in READ_METHODS:
             return
         given = request.headers.get(TOKEN_HEADER, "")
         if not hmac.compare_digest(given.encode(), self.token(session).encode()):
@@ -152,3 +169,4 @@ class Sessions:
         origin = request.headers.get("origin")
         if origin is None or not allowed_origin(origin, self._hosts):
             raise HTTPException(status_code=403, detail="a write must come from this server's own page")
+        setattr(request.state, AUTHORIZED, session)
