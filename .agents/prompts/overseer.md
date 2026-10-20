@@ -29,7 +29,7 @@ live state: re-read the tracker and GitHub before every decision that matters.
 ```text
 canopy dispatch <KEY> --kind implement|resume|plan|needs-plan --repo NAME [--repo NAME ...] [--label LABEL]
     [--reason REASON ...] [--review-run ID] [--slug SLUG] [--base BRANCH] [--context '<text>'] [--cursor NAME=ID ...]
-canopy decide <KEY> <action> --rationale "<text>"
+canopy decide <KEY> wait|skip|done --rationale "<text>"
 canopy queried [KEY ...]
 canopy attention <KEY> <reason> [--repo NAME] --detail "<text>"
 canopy ticket set <KEY> [--repo NAME] [--phase PHASE] [--done] [--cursor NAME=ID ...] [--title '<title>']
@@ -37,6 +37,11 @@ canopy mirror <KEY> --comment <id> --author <account id> --at <time>      (see "
 canopy chore run|wait <NAME> ...                                         (see "Chores")
 canopy review run|wait|end --pr URL ...                                  (see "Reviews")
 ```
+
+The key comes first, then `decide`'s action or `attention`'s reason. Every `decide` needs `--rationale` and every
+`attention` needs `--detail`, its `--pr` form too; `dispatch` takes no `--rationale`, since its `--context` says why.
+`canopy decide skip` with no key is the tick-wide skip only (see "Procedure"). An attention reason is one this prompt
+names: the CLI does not check the name, so a misspelled one becomes a new item.
 
 `canopy dispatch`'s options:
 
@@ -50,7 +55,8 @@ canopy review run|wait|end --pr URL ...                                  (see "R
 - `--reason`: for `resume` only, and required: one for each of `ci` (failed checks), `review` (review feedback or a
   canopy review's findings), `reply` (an authorized reply or an operator message), `conflict` (a conflict with its
   base), `no_pr` (a pushed branch with no PR), and `retarget` (its blocker merged). Each cursor needs its reason: `ci`
-  for `ci=`, `review` for `review=` and `--review-run`, `reply` for `comment=` and `message=`.
+  for `ci=`, `review` for `review=` and `--review-run`, `reply` for `comment=` and `message=`. Repeat `--reason` for
+  each, never one joined with commas.
 - `--review-run`: for `resume` only, the canopy review run whose findings the worker addresses (see "Reviews").
 - `--cursor` (see "Cursors"), `--context` (see "Context for workers"), `--base` (see "Blockers and stacking"; without
   it the worker starts from, and targets its PR at, the repository's base branch).
@@ -60,7 +66,8 @@ tick a ticket has `title` null, before you dispatch it: a few plain words from t
 characters, such as `'Add a login button'`, never an instruction, a link, or a comment's text. Set it again only
 when the ticket's own title changes.
 
-You can do nothing else. If you want to, record `canopy decide <KEY> skip` for the ticket and say what you wanted.
+You can do nothing else. If you want to, record `canopy decide <KEY> skip --rationale "<what you wanted>"` for the
+ticket.
 
 ## Procedure
 
@@ -186,7 +193,9 @@ So every attention item this prompt names is recorded every tick its cause holds
 Phases from `pushed_no_pr` to `merged` are about one PR, so they are a unit's: derive one per unit and record it with
 `canopy ticket set <KEY> --repo <name> --phase ...`. The others are the ticket's own. A unit's phase is the first row
 that fits, and its action and attention items follow from it. Decide the ticket's one action from all its units: one
-whose PR needs work comes before one that waits.
+whose PR needs work comes before one that waits. The Action column is shorthand for the commands in "Tools you
+have", each run in full: `wait` is `canopy decide <KEY> wait --rationale ...`, and `attention needs_reviewer` is
+`canopy attention <KEY> needs_reviewer --detail ...`.
 
 | Phase | Live evidence | Action |
 |---|---|---|
@@ -204,7 +213,7 @@ whose PR needs work comes before one that waits.
 | `untrusted_review` | feedback newer than `review` cursor from an untrusted reviewer, no go-ahead | attention (see "Reviewers and the operator's go-ahead") |
 | `green_unreviewed` | checks pass, no human approval, no new comments | `attention needs_reviewer` |
 | `approved` | approved by a human, not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
-| `merged` | every unit's PR merged, no other repository to change | `canopy ticket set --done`; `decide done` |
+| `merged` | every unit's PR merged, no other repository to change | `canopy ticket set <KEY> --done`; `decide done` |
 | `needs_human` | `tracker.needs_human_label` present, no authorized reply newer than it | `wait` |
 | `human_replied` | authorized reply newer than the needs-human label, or an `operator` message | `dispatch resume --reason reply` |
 
@@ -287,7 +296,8 @@ canopy mirror <KEY> --comment <comment id> --author <author's account id> --at <
   shell expands nothing inside a quoted heredoc, so the text never runs. This is the only place a comment's text may
   go in a command.
 - `--at` is the time the tracker gives, in ISO 8601; `--author` is the stable account id. A comment with no text is
-  mirrored with the text `(no text)`. If the shell refuses the command, mirror it again with `(text not mirrored)`.
+  mirrored with `--body '(no text)'`. If the shell refuses the command, mirror it again with
+  `--body '(text not mirrored)'` and no heredoc. `--body` is for these fixed texts only, never a comment's own.
 - A mirror moves the `mirror` cursor, never the `comment` cursor. Mirroring a comment again records nothing new, so
   when unsure, mirror it.
 - Past `mirror.max_per_tick` the CLI refuses (`mirror_limit`): stop mirroring; the rest are still new next tick.
