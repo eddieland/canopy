@@ -163,7 +163,8 @@ a layer. `tests/canopy/test_layers.py` enforces this and fails on a module outsi
 canopy (harness, Python)
   __main__.py  python -m canopy, how dispatch starts _run from the same installation
   cli/         the command line; only cli imports click, and only __main__ imports cli
-  loop/        the tick (§6) and canopy loop, which drive the features below; the state block; the attention list
+  loop/        the tick (§6) and canopy loop, which drive the features below; the state block; the attention list;
+               the overseer's verbs, which its commands and its MCP server share (§27)
   runs/        worker runs on tickets (§8): guards, leases, the detached _run, reconcile
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
