@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from canopy.core import db
+from canopy.core import db, sql
 from canopy.core.config import notify_words
 from canopy.core.conversation import MAX_MIRRORED
 from canopy.core.vocab import PrState, ReviewItem, ReviewState
@@ -164,50 +164,45 @@ def _lines(stdout: str) -> Iterable[_Pr | _Review | _End]:
 
 def _record(conn: sqlite3.Connection, url: str, lines: Iterable[_Pr | _Review], now: str) -> None:
     """Replace what the journal holds of `url` with what one whole read returned."""
-    conn.execute("DELETE FROM observed_reviews WHERE pr_url = ?", (url,))
+    sql.execute(conn, sql.delete("observed_reviews").where("pr_url = ?", url))
     for line in lines:
         if isinstance(line, _Pr):
-            conn.execute(
-                "INSERT OR REPLACE INTO observed_prs (url, repository, number, head_sha, base_ref, state, draft, "
-                "mergeable, author, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    url,
-                    line.repository,
-                    line.number,
-                    line.head_sha,
-                    line.base_ref,
-                    line.state,
-                    line.draft,
-                    line.mergeable,
-                    line.author,
-                    now,
-                ),
+            row = sql.insert(
+                "observed_prs",
+                url=url,
+                repository=line.repository,
+                number=line.number,
+                head_sha=line.head_sha,
+                base_ref=line.base_ref,
+                state=line.state,
+                draft=line.draft,
+                mergeable=line.mergeable,
+                author=line.author,
+                observed_at=now,
             )
+            sql.execute(conn, row.or_replace())
             continue
         thread = line.thread if line.item is ReviewItem.COMMENT else None
         if line.item is ReviewItem.COMMENT and thread is None:
             continue
-        conn.execute(
-            "INSERT OR REPLACE INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, "
-            "review_id, thread_id, path, line, side, outdated, resolved, observed_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                url,
-                line.item,
-                line.id,
-                line.author,
-                line.bot,
-                line.state if line.item is ReviewItem.REVIEW else None,
-                line.time,
-                line.body[:MAX_MIRRORED],
-                line.url,
-                line.review,
-                None if thread is None else thread.id,
-                None if thread is None else thread.path,
-                None if thread is None else thread.line,
-                None if thread is None else thread.side,
-                None if thread is None else thread.outdated,
-                None if thread is None else thread.resolved,
-                now,
-            ),
+        review = sql.insert(
+            "observed_reviews",
+            pr_url=url,
+            item=line.item,
+            id=line.id,
+            author=line.author,
+            bot=line.bot,
+            state=line.state if line.item is ReviewItem.REVIEW else None,
+            created_at=line.time,
+            body=line.body[:MAX_MIRRORED],
+            url=line.url,
+            review_id=line.review,
+            thread_id=None if thread is None else thread.id,
+            path=None if thread is None else thread.path,
+            line=None if thread is None else thread.line,
+            side=None if thread is None else thread.side,
+            outdated=None if thread is None else thread.outdated,
+            resolved=None if thread is None else thread.resolved,
+            observed_at=now,
         )
+        sql.execute(conn, review.or_replace())

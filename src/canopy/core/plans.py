@@ -28,7 +28,7 @@ import stat
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, Literal, NotRequired, TypedDict
 
-from canopy.core import contract, conversation, db, records
+from canopy.core import contract, conversation, db, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
 from canopy.core.vocab import PlanSetting, PlanStatus, RunKind, RunStatus
 from canopy.infra import lock
@@ -127,8 +127,11 @@ def waiver(conn: sqlite3.Connection, ticket: records.Ticket) -> records.PlanWaiv
     return records.fetch_one(
         conn,
         records.PlanWaiver,
-        "SELECT * FROM plan_waivers WHERE ticket_key = ? AND run_id > ? ORDER BY id DESC LIMIT 1",
-        (ticket.key, ticket.forgotten_run_id or 0),
+        sql.select("*")
+        .from_("plan_waivers")
+        .where("ticket_key = ? AND run_id > ?", ticket.key, ticket.forgotten_run_id or 0)
+        .order_by("id DESC")
+        .limit(1),
     )
 
 
@@ -138,9 +141,7 @@ def record_waiver(conn: sqlite3.Connection, key: str, run_id: int, reason: str) 
     Only `_run` calls it, from a triage's validated `done` `trivial` result (DESIGN §25): no agent and no command writes
     a waiver.
     """
-    conn.execute(
-        "INSERT INTO plan_waivers (ticket_key, run_id, reason, at) VALUES (?, ?, ?, ?)", (key, run_id, reason, db.now())
-    )
+    sql.execute(conn, sql.insert("plan_waivers", ticket_key=key, run_id=run_id, reason=reason, at=db.now()))
 
 
 @dataclass(frozen=True)
@@ -165,11 +166,14 @@ def triage(conn: sqlite3.Connection, key: str) -> Triage | None:
     Returns:
         The triage, or None when the ticket has had none.
     """
-    row = conn.execute(
-        "SELECT id, status, started_at, ended_at, result_json FROM runs WHERE ticket_key = ? AND kind = ? "
-        "ORDER BY id DESC LIMIT 1",
-        (key, RunKind.NEEDS_PLAN),
-    ).fetchone()
+    newest = (
+        sql.select("id, status, started_at, ended_at, result_json")
+        .from_("runs")
+        .where("ticket_key = ? AND kind = ?", key, RunKind.NEEDS_PLAN)
+        .order_by("id DESC")
+        .limit(1)
+    )
+    row = sql.execute(conn, newest).fetchone()
     if row is None:
         return None
     run_id, status, started, ended, result_json = row
@@ -231,7 +235,8 @@ def _first_run(conn: sqlite3.Connection, key: str, kind: RunKind) -> int | None:
     Returns:
         The run's id, or None if the ticket has had no run of `kind`.
     """
-    found = conn.execute("SELECT min(id) FROM runs WHERE ticket_key = ? AND kind = ?", (key, kind)).fetchone()[0]
+    first = sql.select("min(id)").from_("runs").where("ticket_key = ? AND kind = ?", key, kind)
+    found = sql.execute(conn, first).fetchone()[0]
     return int(found) if found is not None else None
 
 
@@ -370,20 +375,20 @@ def state_section(
     waived = waiver(conn, ticket)
     needed_now = needed(policy.plan, ticket.plan_setting)
     newest = records.fetch_one(
-        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
+        conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1)
     )
     run = records.fetch_one(
         conn,
         records.Run,
-        "SELECT * FROM runs WHERE ticket_key = ? AND kind = ? AND id > ? ORDER BY id DESC LIMIT 1",
-        (key, RunKind.PLAN, ticket.forgotten_run_id or 0),
+        sql.select("*")
+        .from_("runs")
+        .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.PLAN, ticket.forgotten_run_id or 0)
+        .order_by("id DESC")
+        .limit(1),
     )
     if not needed_now and newest is None and run is None and attempts == 0:
         return None
-    replied = conn.execute(
-        "SELECT max(at) FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
-        (conversation.TICKET, key, ticket.forgotten_message_id or 0),
-    ).fetchone()[0]
+    replied = sql.execute(conn, _replied(ticket)).fetchone()[0]
     blocked = (
         run is not None
         and run.status is RunStatus.BLOCKED
@@ -416,7 +421,9 @@ def waits(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
         True while the newest plan waits on the operator's word.
     """
     newest = records.fetch_one(
-        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (ticket.key,)
+        conn,
+        records.Plan,
+        sql.select("*").from_("plans").where("ticket_key = ?", ticket.key).order_by("id DESC").limit(1),
     )
     if newest is None or newest.status is not PlanStatus.PROPOSED:
         return False
@@ -437,21 +444,30 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     """
     key = ticket.key
     newest = records.fetch_one(
-        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
+        conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1)
     )
-    started = conn.execute(
-        "SELECT max(started_at) FROM runs WHERE ticket_key = ? AND kind = ? AND id > ?",
-        (key, RunKind.PLAN, ticket.forgotten_run_id or 0),
-    ).fetchone()[0]
-    replied = conn.execute(
-        "SELECT max(at) FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
-        (conversation.TICKET, key, ticket.forgotten_message_id or 0),
-    ).fetchone()[0]
+    latest_run = (
+        sql.select("max(started_at)")
+        .from_("runs")
+        .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.PLAN, ticket.forgotten_run_id or 0)
+    )
+    started = sql.execute(conn, latest_run).fetchone()[0]
+    replied = sql.execute(conn, _replied(ticket)).fetchone()[0]
     since = max(
         newest.created_at if newest is not None and newest.status is not PlanStatus.SUPERSEDED else "",
         str(started) if started is not None else "",
     )
     return replied if replied is not None and since and replied > since else None
+
+
+def _replied(ticket: records.Ticket) -> sql.Select:
+    # When the operator last wrote on the ticket since its last forget: one row, None when they have not.
+    return (
+        sql.select("max(at)")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ?", conversation.TICKET, ticket.key)
+        .where("source = 'operator' AND id > ?", ticket.forgotten_message_id or 0)
+    )
 
 
 def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:
@@ -464,14 +480,19 @@ def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:
         Each ticket's question, by key.
     """
     found: list[conversation.Awaiting] = []
-    rows = conn.execute(
-        "SELECT r.ticket_key, r.id FROM runs r JOIN tickets t ON t.key = r.ticket_key "
-        "WHERE t.done = 0 AND r.id > coalesce(t.forgotten_run_id, 0) AND r.status = 'blocked' "
-        "AND r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key AND kind = ?) "
-        "AND NOT EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = ? AND s.subject_id = r.ticket_key) "
-        "ORDER BY r.ticket_key",
-        (RunKind.PLAN, conversation.TICKET),
-    ).fetchall()
+    blocked = (
+        sql.select("r.ticket_key, r.id")
+        .from_("runs r")
+        .join("tickets t ON t.key = r.ticket_key")
+        .where("t.done = 0 AND r.id > coalesce(t.forgotten_run_id, 0) AND r.status = 'blocked'")
+        .where("r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key AND kind = ?)", RunKind.PLAN)
+        .where(
+            "NOT EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = ? AND s.subject_id = r.ticket_key)",
+            conversation.TICKET,
+        )
+        .order_by("r.ticket_key")
+    )
+    rows = sql.execute(conn, blocked).fetchall()
     for row in rows:
         key = str(row[0])
         asked = question(conn, key)
@@ -591,9 +612,15 @@ def record(
         [plan] = records.fetch_all(
             conn,
             records.Plan,
-            "INSERT INTO plans (ticket_key, run_id, created_at, status, sha256, size) VALUES (?, ?, ?, ?, ?, ?) "
-            "RETURNING *",
-            (key, run_id, db.now(), PlanStatus.PROPOSED, written.sha256, written.size),
+            sql.insert(
+                "plans",
+                ticket_key=key,
+                run_id=run_id,
+                created_at=db.now(),
+                status=PlanStatus.PROPOSED,
+                sha256=written.sha256,
+                size=written.size,
+            ).returning("*"),
         )
         built = event(plan.id) if event is not None else None
         if built is not None:
@@ -608,7 +635,9 @@ def current(conn: sqlite3.Connection, key: str) -> records.Plan | None:
         The plan's row, or None when the ticket has none.
     """
     return records.fetch_one(
-        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? AND status != ?", (key, PlanStatus.SUPERSEDED)
+        conn,
+        records.Plan,
+        sql.select("*").from_("plans").where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
     )
 
 
@@ -618,7 +647,9 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
     Returns:
         The plans' rows, oldest first.
     """
-    return records.fetch_all(conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id", (key,))
+    return records.fetch_all(
+        conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id")
+    )
 
 
 def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str, dispatch_lock: Path) -> records.Plan:
@@ -650,9 +681,15 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
         [approved] = records.fetch_all(
             conn,
             records.Plan,
-            "UPDATE plans SET status = ?, approved_sha256 = ?, approved_at = ?, approved_channel = ? WHERE id = ? "
-            "RETURNING *",
-            (PlanStatus.APPROVED, reading.sha256, db.now(), channel, plan.id),
+            sql.update("plans")
+            .set(
+                status=PlanStatus.APPROVED,
+                approved_sha256=reading.sha256,
+                approved_at=db.now(),
+                approved_channel=channel,
+            )
+            .where("id = ?", plan.id)
+            .returning("*"),
         )
     return approved
 
@@ -759,10 +796,13 @@ def supersede(conn: sqlite3.Connection, key: str) -> int | None:
     Returns:
         The superseded plan's id, or None when the ticket had no current plan.
     """
-    row = conn.execute(
-        "UPDATE plans SET status = ? WHERE ticket_key = ? AND status != ? RETURNING id",
-        (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
-    ).fetchone()
+    superseding = (
+        sql.update("plans")
+        .set(status=PlanStatus.SUPERSEDED)
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
+        .returning("id")
+    )
+    row = sql.execute(conn, superseding).fetchone()
     return int(row[0]) if row is not None else None
 
 
