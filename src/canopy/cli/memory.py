@@ -1,4 +1,4 @@
-"""`canopy memory`: what workers recorded of what they learn, and the operator's lessons (DESIGN §28).
+"""`canopy memory`: what workers and reviewers recorded of what they learn, and the operator's lessons (DESIGN §28).
 
 The listing commands say each tier's mode in words first, so recorded memory is never taken for memory in use, and
 print what a worker wrote as plain text with every character that hides text named. With `--json` they print the same
@@ -17,7 +17,7 @@ import click
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO, TICKET_KEY
 from canopy.cli.render import report_json
-from canopy.core import conversation, db, memory, memory_manage, records
+from canopy.core import conversation, db, memory, memory_manage, records, review_notes
 from canopy.core import memory_search as search
 from canopy.core.memory_text import visible
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 @click.group("memory", cls=Group)
 def memory_group() -> None:
-    """Read and manage agent memory: ticket notes, proposals, and lessons, while `[memory]` turns them on."""
+    """Read and manage agent memory, ticket notes, proposals, lessons, and review notes, as `[memory]` turns it on."""
 
 
 @memory_group.command("list")
@@ -70,6 +70,47 @@ def cmd_list(
             shown = note.ticket_key
             click.echo(f"\n{shown}:")
         click.echo(_line(note))
+    return 0
+
+
+@memory_group.command("review-notes")
+@click.argument("key", type=TICKET_KEY, required=False)
+@click.option("--all", "every", is_flag=True, help="Also list superseded and invalid notes, and tombstones.")
+@click.option("--review", "review_id", type=int, help="List what this review wrote and read, and what it had refused.")
+@click.option(
+    "--digest", is_flag=True, help="Print the notes KEY's next review would get, as its prompt would carry them."
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the modes and the notes as one JSON object instead.")
+@click.pass_context
+def cmd_review_notes(
+    click_ctx: click.Context, key: str | None, *, every: bool, review_id: int | None, digest: bool, as_json: bool
+) -> int:
+    """List the notes reviewers left for later reviews, of KEY or of every ticket, after each tier's mode in words."""
+    if digest and key is None:
+        raise click.UsageError("--digest prints one ticket's digest: name its KEY")
+    if as_json and (digest or review_id is not None):
+        raise click.UsageError("--json lists notes: give it without --review or --digest")
+    ctx = open_context(click_ctx)
+    if as_json:
+        found = review_notes.notes(ctx.conn, key, every=every)
+        click.echo(report_json({"modes": _modes(ctx), "review_notes": [_review_note_json(n) for n in found]}))
+        return 0
+    _print_modes(ctx)
+    if review_id is not None:
+        _print_review(ctx, review_id)
+        return 0
+    if digest and key is not None:
+        _print_review_digest(ctx, key)
+        return 0
+    found = review_notes.notes(ctx.conn, key, every=every)
+    if not found:
+        click.echo(f"\nNo review notes{f' for {key}' if key else ''}.")
+    shown: str | None = None
+    for note in found:
+        if note.ticket_key != shown:
+            shown = note.ticket_key
+            click.echo(f"\n{shown}:")
+        click.echo(_review_line(note))
     return 0
 
 
@@ -115,12 +156,15 @@ def cmd_search(click_ctx: click.Context, query: tuple[str, ...], key: str | None
 
 @memory_group.command("forget")
 @click.argument("memory_id", metavar="ID", type=int)
+@click.option("--review-note", "review_note", is_flag=True, help="ID names a review note, as `review-notes` lists it.")
 @click.pass_context
-def cmd_forget(click_ctx: click.Context, memory_id: int) -> int:
-    """Delete one memory's text, a note's, a proposal's, or a lesson's. Its row stays, without the text.
+def cmd_forget(click_ctx: click.Context, memory_id: int, *, review_note: bool) -> int:
+    """Delete one memory's text: a note's, a proposal's, a lesson's, or a review note's. Its row stays, textless.
 
     Forgetting a lesson retires it: no run reads it again.
     """
+    if review_note:
+        return _forget_review_note(click_ctx, memory_id)
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
@@ -140,23 +184,51 @@ def cmd_forget(click_ctx: click.Context, memory_id: int) -> int:
     return 0
 
 
-@memory_group.command("purge")
-@click.option("--ticket", "key", type=TICKET_KEY, help="Every note and proposal this ticket's runs wrote.")
-@click.option("--run", "run_id", type=int, help="Every note and proposal this run wrote.")
-@click.option("--all", "every", is_flag=True, help="Every memory, the lessons you promoted included.")
-@click.pass_context
-def cmd_purge(click_ctx: click.Context, key: str | None, run_id: int | None, *, every: bool) -> int:
-    """Delete the text of many memories at once. Their rows stay, without the text."""
-    if sum((key is not None, run_id is not None, every)) != 1:
-        raise click.UsageError("name what to purge: one of --ticket, --run, or --all")
+def _forget_review_note(click_ctx: click.Context, note_id: int) -> int:
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        scrubbed = memory_manage.purge(ctx.conn, ticket=key, run=run_id, every=every)
+        note, scrubbed = memory_manage.forget_review_note(ctx.conn, note_id)
+    except conversation.Refused as r:
+        raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("review note forgotten", extra={"review_note": note_id})
+    click.echo(f"Review note {note_id} (`{note.key}` of {note.ticket_key}) is forgotten: its text is deleted.")
+    _print_checkpoint(scrubbed)
+    return 0
+
+
+@memory_group.command("purge")
+@click.option(
+    "--ticket", "key", type=TICKET_KEY, help="Every note and proposal this ticket's runs wrote, and its review notes."
+)
+@click.option("--run", "run_id", type=int, help="Every note and proposal this run wrote.")
+@click.option("--review", "review_id", type=int, help="Every review note this review wrote.")
+@click.option("--all", "every", is_flag=True, help="Every memory, the lessons you promoted included.")
+@click.pass_context
+def cmd_purge(
+    click_ctx: click.Context, key: str | None, run_id: int | None, review_id: int | None, *, every: bool
+) -> int:
+    """Delete the text of many memories at once. Their rows stay, without the text."""
+    if sum((key is not None, run_id is not None, review_id is not None, every)) != 1:
+        raise click.UsageError("name what to purge: one of --ticket, --run, --review, or --all")
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        scrubbed = memory_manage.purge(ctx.conn, ticket=key, run=run_id, review=review_id, every=every)
     except conversation.Refused as r:
         raise CliError(f"purge refused ({r.guard}): {r.reason}") from None
-    what = f"ticket {key}'s runs" if key is not None else f"run {run_id}" if run_id is not None else "every memory"
-    logs.for_tick(None).info("memory purged", extra={"ticket": key, "run_id": run_id, "count": scrubbed.count})
+    what = (
+        f"ticket {key}'s runs and reviews"
+        if key is not None
+        else f"run {run_id}"
+        if run_id is not None
+        else f"review {review_id}"
+        if review_id is not None
+        else "every memory"
+    )
+    logs.for_tick(None).info(
+        "memory purged", extra={"ticket": key, "run_id": run_id, "review_run_id": review_id, "count": scrubbed.count}
+    )
     click.echo(
         f"Purged {scrubbed.count} memor{'y' if scrubbed.count == 1 else 'ies'} of {what}: their text is deleted."
     )
@@ -452,19 +524,40 @@ def _print_modes(ctx: Context) -> None:
     settings = ctx.config.memory
     if not settings.on:
         click.echo(
-            "Memory is off: memory.ticket_notes and memory.proposals are both off, so no worker writes memory and no "
-            "run reads it."
+            "Memory is off: memory.ticket_notes, memory.proposals, and memory.review_notes are all off, so no worker "
+            "or reviewer writes memory and no run reads it."
         )
         return
     # Each band starts with its mode in words, which no two modes share.
     click.echo(f"{memory.NOTES_TIER}: {memory.notes_band(settings.ticket_notes)}")
     click.echo(f"{memory.LESSONS_TIER}: {memory.lessons_band(settings.proposals)}")
+    if settings.review_notes is not MemoryMode.OFF:
+        click.echo(f"{review_notes.TIER}: {review_notes.band(settings.review_notes)}")
 
 
 def _modes(ctx: Context) -> dict[str, str]:
     """Each tier's mode, by its key under `[memory]`, as `--json` prints it."""
     settings = ctx.config.memory
-    return {"ticket_notes": settings.ticket_notes, "proposals": settings.proposals}
+    return {
+        "ticket_notes": settings.ticket_notes,
+        "proposals": settings.proposals,
+        "review_notes": settings.review_notes,
+    }
+
+
+def _review_note_json(note: records.ReviewNote) -> dict[str, Any]:
+    """A review note as `memory review-notes --json` prints it."""
+    return {
+        "id": note.id,
+        "ticket": note.ticket_key,
+        "key": note.key,
+        "status": note.status,
+        "why": note.why,
+        "review_run_id": note.review_run_id,
+        "sha": note.sha,
+        "created_at": note.created_at,
+        "text": visible(note.body) if note.body is not None else None,
+    }
 
 
 def _note_json(note: records.Memory) -> dict[str, Any]:
@@ -548,6 +641,54 @@ def _print_digest(ctx: Context, key: str) -> None:
     label = "served to its next run" if mode is MemoryMode.USE else "would be served at use"
     click.echo(f"\n{key}'s notes, {label}:\n")
     click.echo(digest.text.rstrip())
+
+
+def _review_line(note: records.ReviewNote) -> str:
+    status = note.status if note.why is None else f"{note.status}, {note.why}"
+    text = visible(note.body) if note.body is not None else "(text deleted)"
+    return (
+        f"  {note.id}  `{note.key}`  {status}; by review {note.review_run_id} of `{note.sha[:12]}` at "
+        f"{note.created_at}\n      {text}"
+    )
+
+
+def _print_review_digest(ctx: Context, key: str) -> None:
+    mode = ctx.config.memory.review_notes
+    digest = review_notes.digest(ctx.conn, key)
+    label = "served to its next review" if mode is MemoryMode.USE else "would be served at use"
+    click.echo(f"\n{key}'s review notes, {label}:\n")
+    click.echo(digest.text.rstrip())
+
+
+def _print_review(ctx: Context, review_id: int) -> None:
+    run = db.get_review_run(ctx.conn, review_id)
+    if run is None:
+        raise CliError(f"no review {review_id}")
+    rendered = review_notes.review_memory(ctx.conn, review_id)
+    if rendered is None:
+        click.echo(f"\nReview {review_id} was rendered with review notes off: it wrote and read none.")
+        return
+    mode = memory.mode_words(rendered.review_notes)
+    click.echo(
+        f"\nReview {review_id} (of {run.ticket_key} at `{run.sha[:12]}`), rendered with {review_notes.TIER} {mode}."
+    )
+    wrote = review_notes.written_by(ctx.conn, review_id)
+    click.echo("Wrote:" if wrote else "Wrote: none")
+    for note in wrote:
+        click.echo(_review_line(note))
+    read = review_notes.read_by(ctx.conn, review_id)
+    if read:
+        click.echo("Read:")
+        for note in read:
+            click.echo(_review_line(note))
+    else:
+        click.echo("Read: none" if rendered.review_notes is MemoryMode.USE else "Read: none, recording only")
+    refused = memory.refused_of(rendered)
+    if refused:
+        click.echo("Refused:")
+    for r in refused:
+        named = f" `{r.key}`" if r.key else ""
+        click.echo(f"  {r.field}{named}: {r.why}")
 
 
 def _print_run(ctx: Context, run_id: int) -> None:

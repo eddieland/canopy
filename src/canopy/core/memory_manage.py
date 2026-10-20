@@ -1,5 +1,7 @@
 """The operator's verbs on agent memory (DESIGN §28, Commands): forgetting and purging, and making lessons.
 
+Forgetting and purging reach review notes too, which only reviews read (`core.review_notes`).
+
 Each deletes bodies, never rows: a forgotten memory is a tombstone that keeps who wrote it and when. The delete runs
 with `PRAGMA secure_delete` on, the search index is merged after it so it keeps no word of the text, and the
 write-ahead log is checkpointed, so a purged poison or a leaked secret does not survive in free pages or the log. Only
@@ -16,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, memory, records, sql
+from canopy.core import conversation, db, memory, records, review_notes, sql
 from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.vocab import MemoryAuthor, MemoryMode, MemoryScope, MemoryStatus
 
@@ -57,60 +59,101 @@ def forget(conn: sqlite3.Connection, memory_id: int) -> tuple[records.Memory, Sc
         raise conversation.Refused("unknown", f"no memory has id {memory_id}")
     if found.body is None:
         raise conversation.Refused("forgotten", f"memory {memory_id}'s text is already gone: {found.why}")
-    return found, _scrub(conn, sql.frag("id = ?", memory_id), why="forgotten")
+    return found, _scrub(conn, memories_where=sql.frag("id = ?", memory_id), why="forgotten")
+
+
+def forget_review_note(conn: sqlite3.Connection, note_id: int) -> tuple[records.ReviewNote, Scrubbed]:
+    """Delete one review note's body, leaving its tombstone (DESIGN §28).
+
+    Returns:
+        The note as it was, and what was deleted.
+
+    Raises:
+        Refused: (`inside_run`) inside one of canopy's ticks or runs; (`unknown`) no review note has the id;
+            (`forgotten`) its body is already gone.
+    """
+    conversation.check_operator()
+    found = review_notes.get(conn, note_id)
+    if found is None:
+        raise conversation.Refused("unknown", f"no review note has id {note_id}")
+    if found.body is None:
+        raise conversation.Refused("forgotten", f"review note {note_id}'s text is already gone: {found.why}")
+    return found, _scrub(conn, notes_where=sql.frag("id = ?", note_id), why="forgotten")
 
 
 def purge(
-    conn: sqlite3.Connection, *, ticket: str | None = None, run: int | None = None, every: bool = False
+    conn: sqlite3.Connection,
+    *,
+    ticket: str | None = None,
+    run: int | None = None,
+    review: int | None = None,
+    every: bool = False,
 ) -> Scrubbed:
-    """Delete the bodies of every note and proposal of a ticket's runs, of one run, or with `every`, of every memory.
+    """Delete the bodies of every note and proposal of a ticket's runs and reviews, of one run, of one review, or all.
 
-    A lesson is the operator's own text, so only `every` deletes one.
+    With `every`, every memory and review note. A lesson is the operator's own text, so only `every` deletes one.
 
     Returns:
         What was deleted.
 
     Raises:
         Refused: (`inside_run`) inside one of canopy's ticks or runs.
-        ValueError: Not exactly one of `ticket`, `run`, and `every` is given.
+        ValueError: Not exactly one of `ticket`, `run`, `review`, and `every` is given.
     """
     conversation.check_operator()
-    if sum((ticket is not None, run is not None, every)) != 1:
-        raise ValueError("purge takes exactly one of a ticket, a run, or every memory")
+    if sum((ticket is not None, run is not None, review is not None, every)) != 1:
+        raise ValueError("purge takes exactly one of a ticket, a run, a review, or every memory")
     if ticket is not None:
-        return _scrub(conn, sql.frag("ticket_key = ?", ticket), why="purged")
+        mine = sql.frag("ticket_key = ?", ticket)
+        return _scrub(conn, memories_where=mine, notes_where=mine, why="purged")
     if run is not None:
-        return _scrub(conn, sql.frag("run_id = ?", run), why="purged")
-    return _scrub(conn, sql.frag("1"), why="purged")
+        return _scrub(conn, memories_where=sql.frag("run_id = ?", run), why="purged")
+    if review is not None:
+        return _scrub(conn, notes_where=sql.frag("review_run_id = ?", review), why="purged")
+    return _scrub(conn, memories_where=sql.frag("1"), notes_where=sql.frag("1"), why="purged")
 
 
-def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: str) -> Scrubbed:
-    """Set the body of every memory `where` names to NULL, securely, and checkpoint the log after it.
+def _scrub(
+    conn: sqlite3.Connection,
+    *,
+    memories_where: sql.Fragment | None = None,
+    notes_where: sql.Fragment | None = None,
+    why: str,
+) -> Scrubbed:
+    """Set the body of every memory and review note the conditions name to NULL, securely, and checkpoint after it.
 
     Returns:
         How many bodies were deleted, and whether the checkpoint completed: a reader can hold it back, and the next
         checkpoint completes it.
     """
+    stamp = db.now()
     before = int(sql.execute(conn, sql.frag("PRAGMA secure_delete")).fetchone()[0])
     sql.execute(conn, _SECURE_DELETE[1])
+    count = 0
     try:
         with db.transaction(conn):
-            cur = sql.execute(
-                conn,
-                sql.update("memories")
-                .set(body=None, status=MemoryStatus.INVALID, why=why)
-                .set_to("invalidated_at = coalesce(invalidated_at, ?)", db.now())
-                .where("body IS NOT NULL")
-                .where("{}", where),
-            )
-            count = cur.rowcount
-            # The index's triggers marked the deleted words; merging its segments drops them, and frees the pages
-            # that held them for `secure_delete` to zero.
-            sql.execute(conn, sql.insert("memories_fts", memories_fts=sql.frag("'optimize'")))
+            if memories_where is not None:
+                count += _blank(conn, sql.update("memories"), memories_where, why, stamp)
+                # The index's triggers marked the deleted words; merging its segments drops them, and frees the pages
+                # that held them for `secure_delete` to zero.
+                sql.execute(conn, sql.insert("memories_fts", memories_fts=sql.frag("'optimize'")))
+            if notes_where is not None:
+                count += _blank(conn, sql.update("review_notes"), notes_where, why, stamp)
     finally:
         sql.execute(conn, _SECURE_DELETE[before])
     busy = int(sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()[0])
     return Scrubbed(count=count, checkpointed=busy == 0)
+
+
+def _blank(conn: sqlite3.Connection, table: sql.Update, condition: sql.Fragment, why: str, stamp: str) -> int:
+    # A tombstone: the row stays, without its text, invalid if it was not already.
+    cur = sql.execute(
+        conn,
+        table.set(body=None, status=MemoryStatus.INVALID, why=why)
+        .set_to("invalidated_at = coalesce(invalidated_at, ?)", stamp)
+        .where("body IS NOT NULL AND ({})", condition),
+    )
+    return cur.rowcount
 
 
 @dataclass(frozen=True)

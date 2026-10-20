@@ -168,6 +168,9 @@ REQUIRED_REBASE = ("BRANCH_UPDATE",)
 # Agent memory's placeholders (DESIGN §28): a ticket's notes, the operator's lessons, and the result fields memory adds.
 # Each renders as the empty string while its tier is off; the shipped prompts place them so that leaves nothing.
 MEMORY_PARTS = ("TICKET_MEMORY", "WORKSPACE_LESSONS", "MEMORY_CONTRACT")
+# Review notes' parts of the reviewer's prompt (DESIGN §28), empty unless the review's start rendered them, so with the
+# tier off the prompt is the same bytes as before it existed (`core.review_notes`).
+REVIEW_MEMORY_PARTS = ("REVIEW_MEMORY", "REVIEW_MEMORY_CONTRACT")
 # The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's, public and private, the
 # planner's, and the reviewer's.
 _HEARS_NOTICE: dict[str, list[str]] = {
@@ -584,20 +587,27 @@ def render_worker(
 
 
 def render_reviewer(
-    config: Config, values: Mapping[str, str], *, notice: str | None = None, notes: str | None = None
+    config: Config,
+    values: Mapping[str, str],
+    *,
+    notice: str | None = None,
+    notes: str | None = None,
+    required: Sequence[str] = (),
 ) -> str:
     """Return the reviewer's prompt (DESIGN §21) with every `{{NAME}}` replaced from `values`.
 
-    It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
-    a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
-    review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `{{PERSONA}}` is
+    It must carry `REQUIRED_REVIEWER`, and `required`. `notice` is the operator's notice in force (`core.notice`), for
+    `{{NOTICE}}`: a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review
+    request the review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `{{PERSONA}}` is
     `DEFAULT_PERSONA`'s text, as a worker's is. `{{STANDING_SECTION}}` comes from the config, and with
-    `paths.reviewer_instructions` set the prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone.
+    `paths.reviewer_instructions` set the prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone. Review
+    notes' parts render empty unless `values` has them.
 
     Returns:
         The rendered prompt.
     """
     values = {
+        **dict.fromkeys(REVIEW_MEMORY_PARTS, ""),
         **values,
         **_standing_values(reviewer_instructions(config), "reviewer"),
         "NOTICE": notice if notice is not None else "None.",
@@ -607,7 +617,7 @@ def render_reviewer(
     standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
-    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted), one_of=standing)
+    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted, *required), one_of=standing)
 
 
 def render(

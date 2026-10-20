@@ -481,18 +481,26 @@ def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) 
     """The text of notes and proposals no longer in force (DESIGN §28), removable `memory_days` after they left it.
 
     A memory leaves force when it is invalidated, or when a newer one supersedes it. A lesson's text is never removed.
+    Review notes are counted with the workers' notes.
 
     Returns:
         The kind, counting rows that still hold text.
     """
     cutoff = _cutoff(now, retention.memory_days)
+    left = (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID)
     superseded = sql.select("min(n.created_at)").from_("memories n").where("n.supersedes = m.id")
-    gone = (
+    superseded_note = sql.select("min(n.created_at)").from_("review_notes n").where("n.supersedes = r.id")
+    gone = sql.union(
         sql.select("m.body, coalesce(m.invalidated_at, ({})) AS gone", superseded)
         .from_("memories m")
         .where("m.scope != ?", MemoryScope.LESSON)
-        .where_in("m.status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID))
-        .where("m.body IS NOT NULL")
+        .where_in("m.status", left)
+        .where("m.body IS NOT NULL"),
+        sql.select("r.body, coalesce(r.invalidated_at, ({})) AS gone", superseded_note)
+        .from_("review_notes r")
+        .where_in("r.status", left)
+        .where("r.body IS NOT NULL"),
+        every=True,
     )
     found = sql.execute(
         conn,
@@ -501,7 +509,7 @@ def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) 
             "sum(CASE WHEN gone < ? THEN length(CAST(body AS BLOB)) END)",
             cutoff,
             cutoff,
-        ).from_("({})", gone),
+        ).from_("({}) AS g", gone),
     ).fetchone()
     count, size, removable, removable_bytes = (int(v or 0) for v in found)
     return Kind(

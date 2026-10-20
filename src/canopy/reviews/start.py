@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, pools, prompts, review_requests
+from canopy.core import contract, db, notice, outbox, pools, prompts, review_notes, review_requests
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
@@ -199,12 +199,24 @@ def _spawn(
     run = db.get_review_run(ctx.conn, run_id)
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
+    # Review notes reach only a review of the loop's own PR, by its ticket (DESIGN §28).
+    remembered = review_notes.render(ctx.conn, cfg, ticket=request.ticket)
+    if remembered is not None:
+        values.update(remembered.values)
     try:
-        prompt = prompts.render_reviewer(cfg, values, notice=notice.for_prompt(ctx.conn), notes=_notes(ctx.conn, run))
+        prompt = prompts.render_reviewer(
+            cfg,
+            values,
+            notice=notice.for_prompt(ctx.conn),
+            notes=_notes(ctx.conn, run),
+            required=remembered.required if remembered is not None else (),
+        )
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
         db.delete_review_run(ctx.conn, run_id)
         raise Refusal("bad_prompt", str(e)) from e
+    if remembered is not None:
+        review_notes.record_rendered(ctx.conn, run_id, remembered)
     try:
         logs.write_private(prompt_file(ctx, run_id), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.

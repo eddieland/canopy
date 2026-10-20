@@ -514,9 +514,13 @@ def approve_policy(env: CanopyEnv) -> None:
     env.append_shared('\n[policy]\nplan = "approve"\n')
 
 
-def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off") -> None:
+def with_memory(
+    canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off", review_notes: str = "off"
+) -> None:
     """Set agent memory's tiers (DESIGN §28) in the workspace's private file, which holds nothing else in the tests."""
-    canopy_env.write_private(f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\n')
+    canopy_env.write_private(
+        f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\nreview_notes = "{review_notes}"\n'
+    )
 
 
 def approving(canopy_env: CanopyEnv, extra: str = "") -> None:

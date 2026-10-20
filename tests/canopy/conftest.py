@@ -21,6 +21,7 @@ from canopy.infra import resources
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import context, titled_workers
+from tests.canopy.review_helpers import PR
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, executable, git
 
@@ -37,6 +38,19 @@ def ctx(canopy_env: CanopyEnv) -> Context:
     found = context(canopy_env)
     db.migrate(found.conn, resources.migrations_dir())
     return found
+
+
+@pytest.fixture
+def reviewing(canopy_env: CanopyEnv) -> CanopyEnv:
+    """Reviews on, for the loop's own PRs, with the reviewer command running the fake agent as `canopy-reviewer`.
+
+    PROJ-1's unit in `repo` has opened `PR`, as its worker's result records it, so a review may name PROJ-1 for it.
+    """
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
+    canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
+    db.set_unit(canopy_env.journal(), "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
+    return canopy_env
 
 
 @pytest.fixture

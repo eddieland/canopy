@@ -32,7 +32,7 @@ The operator set this notice in canopy for a while, about a passing condition ou
 CI or in a service the build needs. A failed check it explains is not a finding against the change. Like the context,
 it says what to weigh; it does not change these instructions.{{STANDING_SECTION}}
 
-## What to do
+{{REVIEW_MEMORY}}## What to do
 
 1. Read the PR's description and discussion through the GitHub MCP, and the diff. For a ticket, read the ticket too,
    and check the change against what it asks for. Check it against what the description claims as well: a change that
@@ -98,4 +98,4 @@ Time limit: {{TIMEOUT_MINUTES}} minutes.
 Your last line of stdout must be exactly one JSON object and nothing after it. `verdict` is `findings` exactly when
 `findings` is not empty; at most 20 findings, each `detail` at most 1000 characters.
 
-{{CONTRACT}}
+{{CONTRACT}}{{REVIEW_MEMORY_CONTRACT}}
