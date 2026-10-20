@@ -2,8 +2,9 @@ name: Claude Review
 
 # Claude Code reviews each pull request when it opens, reopens, or leaves draft, and leaves inline comments and a
 # summary. Each push after that gets a follow-up review: Claude reads its earlier comments, says which findings the new
-# commits fixed, and comments only on what is new, so a fix commit does not repeat the first review. A push that lands
-# while a review runs cancels it, and the next review covers both. It authenticates with the operator's Claude
+# commits fixed, and comments only on what is new, so a fix commit does not repeat the first review. A follow-up waits
+# five minutes for the branch to settle, and a push that lands meanwhile, or while a review runs, cancels it, so a
+# burst of fix commits gets one review once the pushes stop. It authenticates with the operator's Claude
 # subscription: the CLAUDE_CODE_OAUTH_TOKEN repository secret, made by running `claude setup-token` locally; every
 # review spends its usage, so mark a PR draft while pushing a series of fixes, and ready again for one pass over them.
 # GitHub runs no pull_request workflow while the PR has a merge conflict, so the push that resolves one is reviewed.
@@ -34,7 +35,8 @@ jobs:
         && github.event.pull_request.user.login != 'dependabot[bot]'
       }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The review's 30 minutes, and the five a follow-up waits first.
+    timeout-minutes: 35
     permissions:
       contents: read
       pull-requests: write
@@ -47,6 +49,12 @@ jobs:
       # The API path of this PR's inline comments, which a follow-up review reads; named here to fit its lines below.
       INLINE_COMMENTS: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments
     steps:
+      - name: Let the branch settle
+        # A follow-up waits before it spends any usage, so that the next push of a series cancels it here, through the
+        # concurrency group above, and only the last push is reviewed. A first review starts at once.
+        if: ${{ github.event.action == 'synchronize' }}
+        run: sleep 300
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
