@@ -1,12 +1,12 @@
 """What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
 
-Reads only. Every cost is what the agent runtime reported (§13), summed by the UTC day a run started on: the overseer of
-each tick, worker runs (old split runs among them), triage runs before a plan and the plan runs (§25), chore runs, and
-review runs. A dry run's overseer is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of
-their own within the live overseer's. Beside what the window cost, what it got done: the tickets marked done in it, the
-plans its triage runs waived, and what each ticket and PR's own runs cost. And what each kind of run's first model call
-was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started cold. And what each kind's
-tool calls put into its context, by tool: the reads that each later model call reads again.
+Reads only. Every cost is what the agent runtime reported (§13), summed by the local day a run started on: the overseer
+of each tick, worker runs (old split runs among them), triage runs before a plan and the plan runs (§25), chore runs,
+and review runs. A dry run's overseer is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series
+of their own within the live overseer's. Beside what the window cost, what it got done: the tickets marked done in it,
+the plans its triage runs waived, and what each ticket and PR's own runs cost. And what each kind of run's first model
+call was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started cold. And what each
+kind's tool calls put into its context, by tool: the reads that each later model call reads again.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import json
 import statistics
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import contract, db, records
@@ -24,7 +24,6 @@ from canopy.core.vocab import RunKind
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Iterable, Mapping, Sequence
-    from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "triage", "plans", "chores", "reviews"]
@@ -60,6 +59,8 @@ CHARS_PER_TOKEN = 4
 _SERIES = ("overseer", "idle", "dry_run")
 # What a run's row says of its first model call, and when it started.
 _FIRST_CALL = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
+# The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
+_DAY = "date(started_at, 'localtime')"
 
 
 @dataclass(frozen=True)
@@ -87,7 +88,7 @@ class Costs:
 
 @dataclass(frozen=True)
 class Day:
-    """One UTC day's costs, `day` as `YYYY-MM-DD`, and how many tickets were marked done on it."""
+    """One local day's costs, `day` as `YYYY-MM-DD`, and how many tickets were marked done on it."""
 
     day: str
     costs: Costs
@@ -197,15 +198,15 @@ class ToolSpend:
 class Breakdown:
     """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought.
 
-    The window is `[since, until)`, each a journal time: midnight UTC on its first day, and after its last. What it got
-    done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer, chores, and
-    the runs of tickets still open are what it cost to get those done. `waived` is how many of the triage runs that
+    The window is `[since, until)`, each a journal time: local midnight on its first day, and after its last. What it
+    got done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer, chores,
+    and the runs of tickets still open are what it cost to get those done. `waived` is how many of the triage runs that
     started in it waived their ticket's plan (§25), so their cost reads against the planner runs they saved, whether or
-    not the operator undid the waiver since. `tickets` and `pull_requests` list what each
-    one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the kinds in
-    `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs, whose
-    first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters first;
-    the overseer's include dry runs too.
+    not the operator undid the waiver since. `tickets` and `pull_requests` list what each one's own runs cost, the most
+    first. `first_calls` is each kind's first model calls by snapshot, the kinds in `KINDS` order and each kind's
+    snapshots by when their first run started; the overseer's include dry runs, whose first call is a live tick's.
+    `tools` is what each kind's tool calls returned, by tool, the most characters first; the overseer's include dry runs
+    too.
     """
 
     since: str
@@ -226,33 +227,40 @@ class Breakdown:
     tools: Sequence[ToolSpend] = ()
 
 
-def window_start(now: datetime, days: int) -> datetime:
-    """The window's start: midnight UTC, `days - 1` days before `now`'s day, so `days` UTC days end with today.
+def window(now: datetime, days: int) -> tuple[datetime, datetime]:
+    """The window `[start, until)`: `days` whole days of this machine's local time, ending with `now`'s day.
+
+    A day is from one local midnight to the next, so a day that a clock change shortens or lengthens is still one day.
 
     Returns:
-        An aware UTC datetime.
+        Its start and its end, each an aware UTC datetime.
     """
-    today = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    return today - timedelta(days=days - 1)
+    today = now.astimezone().date()
+    return _midnight(today - timedelta(days=days - 1)), _midnight(today + timedelta(days=1))
+
+
+# A day's local midnight. A naive time's `astimezone` reads it in this machine's local time, with its own DST rules.
+def _midnight(day: date) -> datetime:
+    return datetime.combine(day, time()).astimezone().astimezone(UTC)
 
 
 def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
-    """What the last `days` UTC days cost, today's so far included, by day, by kind, and by what the ticks bought.
+    """What the last `days` local days cost, today's so far included, by day, by kind, and by what the ticks bought.
 
     Returns:
         The breakdown; a window with nothing in it lists each day with no costs.
     """
-    start = window_start(now, days)
+    start, end = window(now, days)
     since = db.format_time(start)
     # Bounded at the window's end too, so a row the clock puts after today is in no figure rather than in some.
-    until = db.format_time(start + timedelta(days=days))
+    until = db.format_time(end)
     # One read transaction, so a run or tick ending between two of the reads is in all of them or none.
     with db.read_snapshot(conn):
         rows = _tick_rows(conn, since, until)
         by_day: dict[str, dict[str, float | None]] = {}
         for kind, (table, which) in _TABLES.items():
             for day, cost in conn.execute(
-                f"SELECT substr(started_at, 1, 10) AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
+                f"SELECT {_DAY} AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
                 f"WHERE {which} AND started_at >= ? AND started_at < ? GROUP BY day",
                 (since, until),
             ):
@@ -269,8 +277,9 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         for name in _SERIES:
             if _in_series(row, name):
                 day[name] = _sum([day.get(name), row.cost_usd])
-    names = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
-    done_on = Counter(at[:10] for _, at in done.values())
+    first = start.astimezone().date()
+    names = [(first + timedelta(days=i)).isoformat() for i in range(days)]
+    done_on = Counter(local_day(at) for _, at in done.values())
     per_day = [Day(day=d, costs=_costs(by_day.get(d, {})), done=done_on[d]) for d in names]
     totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in names]) for n in (*_SERIES, *_TABLES)})
     ticks = _groups(rows)
@@ -293,6 +302,15 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         first_calls=first_calls,
         tools=tools,
     )
+
+
+def local_day(stamp: str) -> str:
+    """The local day a journal time is on, as the window's days are named.
+
+    Returns:
+        The day, `YYYY-MM-DD`.
+    """
+    return db.parse_time(stamp).astimezone().date().isoformat()
 
 
 def idle_ticks(
@@ -333,7 +351,7 @@ class _TickRow:
 
 def _tick_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_TickRow]:
     rows = conn.execute(
-        "SELECT substr(started_at, 1, 10) AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "
+        f"SELECT {_DAY} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "  # noqa: S608 (a fixed day)
         "count(*) - count(cost_usd) "
         "FROM ticks WHERE started_at >= ? AND started_at < ? GROUP BY day, dry_run, status, idle, woken_by",
         (since, until),

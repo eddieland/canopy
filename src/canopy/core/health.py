@@ -1,6 +1,6 @@
 """How the loop's agent runs ended, and what its guards refused (DESIGN §11), read by `canopy health`.
 
-Reads only. Over the same window as `canopy spend` (whole UTC days, today's so far included, by start): how many of
+Reads only. Over the same window as `canopy spend` (whole local days, today's so far included, by start): how many of
 each kind's runs ended each way and what they cost, the newest of those that ended other than as they should, the
 overseer's asks a guard refused, by guard, and the plans triage waived (§25), each with what came of its ticket after.
 It is what a chore that looks at canopy itself reads, beside `canopy spend`, to say which failures recur and what they
@@ -10,7 +10,6 @@ cost, and whether triage judges trivial work well.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import contract, db, plans, records, review_result, spend
@@ -169,14 +168,14 @@ class Health:
 
 
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
-    """How the runs of the last `days` UTC days ended, today's so far included, what guards refused, and the waivers.
+    """How the runs of the last `days` local days ended, today's so far included, what guards refused, and the waivers.
 
     Returns:
         The report; a window with nothing in it has empty lists.
     """
-    start = spend.window_start(now, days)
+    start, end = spend.window(now, days)
     since = db.format_time(start)
-    until = db.format_time(start + timedelta(days=days))
+    until = db.format_time(end)
     with db.read_snapshot(conn):
         outcomes = [o for kind in spend.KINDS for o in _outcomes(conn, kind, since, until)]
         failures = [f for kind in spend.KINDS for f in _failures(conn, kind, since, until)]

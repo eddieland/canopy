@@ -1,4 +1,4 @@
-// The spend page (ROADMAP M33): what each UTC day cost, by kind, and what the overseer's ticks bought. The numbers
+// The spend page (ROADMAP M33): what each local day cost, by kind, and what the overseer's ticks bought. The numbers
 // are the server's (`canopy spend`); this lays them out.
 
 import type { SpendBreakdown, SpendCosts, SpendDay, SpendGroup, SpendTicket } from '@/api/types'
@@ -141,7 +141,7 @@ export function dayHint(day: SpendDay): string {
     return parts.length === 0 ? `${dayLabel(day.day)}: ${total}` : `${dayLabel(day.day)}: ${total}, ${parts.join(', ')}`
 }
 
-/** A UTC day, `2026-10-07`, as the chart's axis says it: `Oct 7`. */
+/** A day as the server names it, `2026-10-07`, as the chart's axis says it: `Oct 7`, whatever the browser's zone. */
 export function dayLabel(day: string): string {
     const [year, month, date] = day.split('-').map(Number)
     return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, date ?? 1)).toLocaleDateString('en-US', {
@@ -156,9 +156,9 @@ export function shareText(share: number | null): string {
     return share === null ? '–' : `${Math.round(share * 100)}%`
 }
 
-/** When and how a ticket was marked done in the window, `Oct 7, merged`; empty when it was not. */
+/** When and how a ticket was marked done in the window, on the operator's day: `Oct 7, merged`; empty when not. */
 export function doneText(ticket: Pick<SpendTicket, 'done' | 'done_at'>): string {
     return ticket.done === null || ticket.done_at === null
         ? ''
-        : `${dayLabel(ticket.done_at.slice(0, 10))}, ${ticket.done}`
+        : `${new Date(ticket.done_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${ticket.done}`
 }

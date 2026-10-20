@@ -201,6 +201,17 @@ def earlier(now: datetime, days: float, hours: float = 0) -> str:
     return db.format_time(now - timedelta(days=days, hours=hours))
 
 
+@contextmanager
+def in_zone(zone: str) -> Iterator[None]:
+    """This machine's local time is `zone`, an IANA name, while the block runs, and UTC again after it."""
+    try:
+        with mock.patch.dict(os.environ, {"TZ": zone}):
+            time.tzset()
+            yield
+    finally:
+        time.tzset()
+
+
 def only_tick(conn: sqlite3.Connection) -> records.Tick:
     """The one tick in the journal."""
     [tick] = records.fetch_all(conn, records.Tick, "SELECT * FROM ticks")

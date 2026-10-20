@@ -10,7 +10,7 @@ import click
 
 from canopy.cli.common import open_context
 from canopy.cli.render import report_json
-from canopy.cli.spend import cost_text
+from canopy.cli.spend import cost_text, since_text
 from canopy.core import health, spend
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ _FAILURES = 10
     default=spend.DEFAULT_DAYS,
     show_default=True,
     metavar="N",
-    help="How many UTC days to read, today's so far included.",
+    help="How many local days to read, today's so far included.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Print the report as one JSON object instead.")
 @click.pass_context
@@ -62,9 +62,8 @@ def render(found: Health) -> list[str]:
     Returns:
         Its lines, without line ends.
     """
-    lines = [
-        f"Runs over {found.days} day{'s' if found.days != 1 else ''}, since {found.since[:10]} UTC, by how they ended."
-    ]
+    days = f"{found.days} day{'s' if found.days != 1 else ''}"
+    lines = [f"Runs over {days}, since {since_text(found.since)}, by how they ended."]
     if not found.outcomes:
         return [*lines, "", "No tick or run ended."]
     lines.extend(["", _line("kind", "what", "status", "runs", "spent")])

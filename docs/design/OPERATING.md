@@ -38,12 +38,13 @@ The journal never stores credentials or raw CI logs, and a run's result is kept 
 
 `canopy decisions [TICK]` prints a tick's overseer cost and decisions: the way to read a dry run's plan.
 
-`canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window, so that comparing two
-windows tells whether spending more bought more. Every figure counts a run on the day it started. A ticket counts as
-done by its newest `done` decision in the window, `merged` and `closed` alike, since a tracker that closes a ticket
-when its PR merges closes most before the loop sees the merge. Spend per ticket done divides the window's whole spend,
-overseer and chores included. A tool's share of context is measured in characters it returned, since the runtime does
-not attribute tokens to tool results, and is labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
+`canopy spend` weighs what agent runs cost against what they got done, by day over a window, so that comparing two
+windows tells whether spending more bought more. Every figure counts a run on the day it started, in the local time of
+the machine canopy runs on, as the operator's own day is. A ticket counts as done by its newest `done` decision in the
+window, `merged` and `closed` alike, since a tracker that closes a ticket when its PR merges closes most before the loop
+sees the merge. Spend per ticket done divides the window's whole spend, overseer and chores included. A tool's share of
+context is measured in characters it returned, since the runtime does not attribute tokens to tool results, and is
+labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
 
 `canopy health` reads the same window for how runs ended: each kind's runs by status and cost, the newest failures,
 and the overseer's asks a guard refused. A failure is a run that did not do what it was started for: a tick not closed
