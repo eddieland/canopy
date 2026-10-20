@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import config, definitions, plans
+from canopy.core import config, definitions, plans, prompts
 from canopy.infra import resources
 from canopy.runtime import agents
 from canopy.runtime import definitions as runtime_definitions
@@ -569,7 +569,7 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     head = head.replace(SKILL_MARKER, f"{SKILL_MARKER}  skill: deny\n", 1)
     assert text.startswith(head)
     body = text.removeprefix(head)
-    prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")
+    prompt = prompts.render_overseer(config.load(canopy_env.root)).strip("\n")
     assert body.startswith(
         f"{prompt}\n\nThe skill `tracker-jira` follows, given here so that you need not load it.\n\n"
     )
