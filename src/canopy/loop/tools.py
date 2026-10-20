@@ -451,11 +451,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
             "; ".join(
                 e
                 for e in [
-                    (
-                        f"dry run: not dispatched; would {work}"
-                        if kind in policy.TICKET_KINDS
-                        else f"dry run: not dispatched; would work on {work}{in_repo}"
-                    ),
+                    _would(kind, work, in_repo),
                     authorized,
                     f"review run {request.review_run}" if request.review_run is not None else "",
                     _for(reasons) if reasons else "",
@@ -1027,11 +1023,23 @@ def _where(started: dispatch.Started) -> str:
     return where + (f"; desk {started.desk}" if started.desk is not None else "")
 
 
+def _would(kind: str, work: str, in_repo: str) -> str:
+    """Return what a dry run's decision says the run would have done."""
+    if kind in policy.TICKET_KINDS:
+        return f"dry run: not dispatched; would {work}"
+    if kind == policy.FEEDBACK_PLAN:
+        return f"dry run: not dispatched; would {work}{in_repo}"
+    return f"dry run: not dispatched; would work on {work}{in_repo}"
+
+
 def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
     """Return what a dispatch's decision says the run works on: its branch, or for a kind counted per ticket, its key.
 
-    A plan works on no branch: it reads its repositories, and writes a plan.
+    A plan works on no branch: it reads its repositories, and writes a plan. A feedback plan reads its branch, and
+    writes the plan its `resume` waits on (DESIGN §32).
     """
+    if kind == policy.FEEDBACK_PLAN:
+        return f"plan the feedback on {branch}"
     if kind == policy.PLAN:
         return f"plan {key} over {', '.join(repos)}"
     return f"{branch} on {base}" if base is not None else branch

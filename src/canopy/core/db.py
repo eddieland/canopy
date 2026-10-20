@@ -727,6 +727,7 @@ def insert_run(
     plan_id: int | None = None,
     reasons: Sequence[str] = (),
     rendered: Callable[[int], None] | None = None,
+    feedback_plan_id: int | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -738,6 +739,7 @@ def insert_run(
     `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
     `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
+    `feedback_plan_id` is the approved feedback plan a `resume` follows in place of a ticket's plan (DESIGN §32).
 
     Returns:
         The new run's id.
@@ -755,6 +757,7 @@ def insert_run(
             log_path="",
             private=int(private),
             plan_id=plan_id,
+            feedback_plan_id=feedback_plan_id,
         )
         run_id = _rowid(sql.execute(conn, run))
         sql.execute(conn, sql.update("runs").set(log_path=str(runs_dir / f"{run_id}.log")).where("id = ?", run_id))
@@ -1823,7 +1826,8 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
 
     Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22). The forget is
     recorded with the `branch` and `prs` it dropped, beside every earlier one. A waiting or approved plan is
-    superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
+    superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays. So is a feedback
+    plan (DESIGN §32): its PRs are forgotten with the rest.
     """
     ts = now()
     last_run = sql.select("max(id)").from_("runs").where("ticket_key = ?", key)
@@ -1859,6 +1863,10 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
         sql.update("plans")
         .set(status=PlanStatus.SUPERSEDED)
         .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
+    )
+    conn.execute(
+        "UPDATE feedback_plans SET status = ? WHERE ticket_key = ? AND status != ?",
+        (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
     )
 
 

@@ -79,4 +79,16 @@ period has passed; and a re-plan inside the quiet period is refused in code. No 
 half that was, is deferred (2026-10-20). Open for the operator: whether a `resume` the operator's own
 message asks for waits on a plan; whether `ask` asks the reviewer or the operator; how the planner reads a failed
 check's log; whether a round's first plan waits out the quiet period; and whether the `resume` of a plan that changes
-nothing is held to pushing nothing in code.
+nothing is held to pushing nothing in code. Built 2026-10-20, against the fakes, the foundation: the private
+`policy.feedback_plan` and `policy.max_feedback_plan_attempts` (6, per unit, granted with `canopy grant KEY
+feedback-plan`, never reset); the `feedback-plan` run, the planner in a desk of the units' slots at the PR's head, with
+its PRs read whole first and their items, less the operator's sent replies, workers' comments, resolved threads, and
+items a spent plan covered, in the desk as data; its result's items checked, an id it was not given refused with a
+harness note; migration 0053's `feedback_plans` and `feedback_plan_items`, with row types; `unplanned` and
+`plan_changed` refusing a `resume` but `no_pr`'s alone, the plan spent by the `resume` that starts, which follows it in
+place of the ticket's plan, its prompt naming the approved items by id; a new feedback plan refused while one waits
+with no change asked, or its approval waits for its `resume`; `canopy plan KEY --approve` approving it whole; the state
+block's `feedback_plan`, only under `approve` or once a ticket had a feedback plan run, and the overseer's rows for it;
+and TRUST_MODEL T1, T3, and T7. Left: re-planning when a plan goes stale and the quiet period, approval by item and its
+operator message, the PR page's threads view and T8's web approval, drafts starting from the plan, the plan that
+changes nothing, and failed checks and conflicts as items with ids of their own.

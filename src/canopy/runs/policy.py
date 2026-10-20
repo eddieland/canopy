@@ -12,6 +12,10 @@ A plan is not a unit's work: it writes down how the ticket will be done across e
 §25). Nor is an old `split`, a kind follow-up tickets replaced (M46), nor an old `needs-plan`, the triage before a plan
 the operator removed (M55). Their runs are counted per ticket, and never in a unit's counts. The operator grants a
 ticket more plans (`grant_ticket`).
+
+A feedback plan is a unit's: it reads the PR's head in the unit's slot (DESIGN §32). Its runs count per unit, as the
+kinds above do, and are granted per unit, but apart from `KINDS`, so a unit's counts read as they did before feedback
+plans (`feedback_plan_attempts`).
 """
 
 from __future__ import annotations
@@ -41,10 +45,15 @@ RETIRED = RunKind.FIX_CI
 SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
 NEEDS_PLAN = RunKind.NEEDS_PLAN
+FEEDBACK_PLAN = RunKind.FEEDBACK_PLAN
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
 TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, NEEDS_PLAN)
 # The kinds counted per ticket that `canopy grant` takes.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
+#: The kinds counted per unit that `canopy grant` takes: `KINDS`, and feedback plans, counted apart from them.
+UNIT_GRANT_KINDS: tuple[str, ...] = (*KINDS, FEEDBACK_PLAN)
+# The kinds `attempts` leaves out: the ticket's, and feedback plans, which `feedback_plan_attempts` counts.
+_APART: tuple[str, ...] = (*TICKET_KINDS, FEEDBACK_PLAN)
 DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT, NEEDS_PLAN))
 
 
@@ -70,6 +79,8 @@ def _limit(config: Config, kind: RunKind) -> int:
             return 0
         case RunKind.PLAN:
             return p.max_plan_attempts
+        case RunKind.FEEDBACK_PLAN:
+            return p.max_feedback_plan_attempts
         case _:
             assert_never(kind)
 
@@ -96,7 +107,7 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
         sql.select("r.ticket_key, s.repo, r.kind, count(DISTINCT r.id)")
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
-        .where("NOT {}", sql.in_("r.kind", TICKET_KINDS))
+        .where("NOT {}", sql.in_("r.kind", _APART))
         .group_by("r.ticket_key, s.repo, r.kind")
     )
     if ticket is not None:
@@ -105,6 +116,24 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
         counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
         counts_of[counted_as(str(row[2]))] += int(row[3])
     return counts
+
+
+def feedback_plan_attempts(conn: sqlite3.Connection) -> dict[Unit, int]:
+    """Return each unit's count of feedback plan runs, whatever they ended as (DESIGN §32). Units with none are missing.
+
+    A feedback plan run leases its unit's slot, so it counts in each repository it read, as a `resume` would.
+    """
+    rows = conn.execute(
+        "SELECT r.ticket_key, s.repo, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
+        "WHERE r.kind = ? GROUP BY r.ticket_key, s.repo",
+        (FEEDBACK_PLAN,),
+    )
+    return {unit(str(row[0]), row[1]): int(row[2]) for row in rows}
+
+
+def feedback_plan_limit(config: Config, granted: Mapping[str, int]) -> int:
+    """Return the most feedback plan runs a unit may have: the policy's, plus the runs the operator granted it."""
+    return config.policy.max_feedback_plan_attempts + granted.get(FEEDBACK_PLAN, 0)
 
 
 def grants(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
@@ -150,8 +179,8 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         raise conversation.Refused(
             "bad_kind", "a resume now fixes CI, and fix-ci runs count as resume runs: grant resume instead"
         )
-    if kind not in KINDS:
-        raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(KINDS)}")
+    if kind not in UNIT_GRANT_KINDS:
+        raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(UNIT_GRANT_KINDS)}")
     if db.get_ticket(conn, key) is None:
         raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
     # Every repository the ticket has had runs in, including those `canopy forget` dropped the units of.
@@ -168,7 +197,11 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         sql.execute(
             conn, sql.insert("attempt_grants", ticket_key=key, repo=repo, kind=kind, runs=runs, granted_at=db.now())
         )
-        limit = unit_limits(config, grants(conn).get(unit(key, repo), {}))[kind]
+        granted = grants(conn).get(unit(key, repo), {})
+        if kind == FEEDBACK_PLAN:
+            done = feedback_plan_attempts(conn).get(unit(key, repo), 0)
+            return Granted(repo=repo, runs=done, limit=feedback_plan_limit(config, granted))
+        limit = unit_limits(config, granted)[kind]
         return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
 
 

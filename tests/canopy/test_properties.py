@@ -190,6 +190,8 @@ def test_every_config_key_declares_a_scope() -> None:
         "trust.trusted_reviewers",
         "trust.comment_prefix",
         "runtime.plan_cmd",
+        # Feedback plans hold trusted reviewers' feedback, and plan anyone else's unasked (DESIGN §32).
+        "policy.feedback_plan",
         "runtime.chore_cmd",
         "capacity.max_chores",
         "chores",

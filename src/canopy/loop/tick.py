@@ -19,6 +19,7 @@ from canopy.core import (
     db,
     definitions,
     drafts,
+    feedback_plans,
     follow_ups,
     notice,
     plans,
@@ -200,6 +201,7 @@ def _render(
         private=private,
         operator=operator,
         planned=planned,
+        feedback_planned=_feedback_plans(ctx, tickets),
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
@@ -229,6 +231,22 @@ def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.P
     for t in tickets:
         limit = base + granted.get(t.key, 0)
         section = plans.state_section(ctx.conn, ctx.config.policy, t, attempts=done.get(t.key, 0), limit=limit)
+        if section is not None:
+            found[t.key] = section
+    return found
+
+
+def _feedback_plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, feedback_plans.FeedbackPlanState]:
+    """Return each ticket's feedback plan for the state block, by key: only the tickets feedback plans touch (§32)."""
+    done = policy.feedback_plan_attempts(ctx.conn)
+    granted = policy.grants(ctx.conn)
+    units = db.all_units(ctx.conn)
+    found: dict[str, feedback_plans.FeedbackPlanState] = {}
+    for t in tickets:
+        repos = [str(u.repo) for u in units.get(t.key, [])]
+        attempts = {r: done.get(policy.unit(t.key, r), 0) for r in repos}
+        limits = {r: policy.feedback_plan_limit(ctx.config, granted.get(policy.unit(t.key, r), {})) for r in repos}
+        section = feedback_plans.state_section(ctx.conn, ctx.config, t, attempts=attempts, limits=limits)
         if section is not None:
             found[t.key] = section
     return found
