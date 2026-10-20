@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { stack } from '@/lib/plan-margin'
+import { releaseComments, stack } from '@/lib/plan-margin'
 
 describe('stack', () => {
     it('puts each card at its passage when none is in the way of another', () => {
@@ -55,5 +55,18 @@ describe('stack', () => {
             ),
         ).toEqual([0, 48])
         expect(stack([{ want: -30, height: 40 }], undefined, 8)).toEqual([0])
+    })
+})
+
+describe('releaseComments', () => {
+    it('puts placed cards back in a plain list', () => {
+        const list = document.createElement('div')
+        list.dataset['aligned'] = ''
+        const card = document.createElement('article')
+        card.style.marginTop = '120px'
+        list.append(card)
+        releaseComments(list)
+        expect(card.style.marginTop).toBe('')
+        expect('aligned' in list.dataset).toBe(false)
     })
 })

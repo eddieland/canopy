@@ -76,6 +76,29 @@ test('a comment stays on its passage while the plan is edited above it', async (
     await expect(page.getByLabel('Plan Markdown')).toContainText('# Export reports as CSV, streamed')
 })
 
+test('Markdown swaps the plan for its text, and an edit there comes back with its comments', async ({ page }) => {
+    const mode = page.getByRole('button', { name: 'Markdown', exact: true })
+    await mode.click()
+    await expect(mode).toHaveAttribute('aria-pressed', 'true')
+    const source = page.getByRole('textbox', { name: 'Plan as Markdown' })
+    await expect(source).toHaveValue(/^# Export reports as CSV\n\n## What changes\n/u)
+    await expect(plan(page)).toBeHidden()
+    await expect(page.getByRole('toolbar', { name: 'Format' })).toBeHidden()
+    await source.fill((await source.inputValue()).replace('# Export reports as CSV', '# Export reports as CSV, raw'))
+    // What the editor says of the plan follows the text as it is typed.
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('# Export reports as CSV, raw')
+    await mode.click()
+    await expect(source).toBeHidden()
+    const doc = plan(page)
+    await expect(doc.getByRole('heading', { level: 3 })).toHaveText('Export reports as CSV, raw')
+    await expect(doc.locator('[data-thread=sample-1]')).toHaveText("streams the report's rows as they are read")
+    await expect(comments(page)).toHaveCount(3)
+    // The whole edit is one step back.
+    await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Undo' }).click()
+    await expect(doc.getByRole('heading', { level: 3 })).toHaveText('Export reports as CSV')
+})
+
 test('a wrapped line reads as one paragraph, and an edit undone leaves the Markdown as it was', async ({ page }) => {
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     const markdown = page.getByLabel('Plan Markdown')

@@ -9,6 +9,7 @@ import {
     ChevronUp,
     Code,
     Diff,
+    FileCode,
     Italic,
     List,
     ListOrdered,
@@ -49,7 +50,7 @@ import {
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
 import { changesKey, PlanChanges, textOf } from '@/lib/plan-diff'
-import { alignComments, floatUnder } from '@/lib/plan-margin'
+import { alignComments, floatUnder, releaseComments } from '@/lib/plan-margin'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
 import { planExtensions } from '@/lib/plan-schema'
@@ -82,6 +83,11 @@ const BAR_CLEARANCE = 128
 const COMMENT_KEYS = 'Mod-Alt-m'
 // A comment floating under its passage, over the plan, while the comments sit under it.
 const FLOAT = 'absolute z-20 w-[min(24rem,100%)] overflow-hidden rounded-md border bg-surface'
+// The plan's Markdown as a field, where the document would be: as wide as its text, and as tall as the Markdown.
+const SOURCE = [
+    'block field-sizing-content min-h-72 w-full max-w-3xl resize-none bg-transparent outline-none',
+    'font-mono text-xs leading-relaxed text-foreground',
+]
 
 /**
  * A plan in a rich editor, with the operator's comments on its passages beside it (docs/design/PLANNING.md §25,
@@ -92,7 +98,9 @@ const FLOAT = 'absolute z-20 w-[min(24rem,100%)] overflow-hidden rounded-md bord
  * stay on their passages as the plan is edited, by their words (`src/lib/plan-anchors.ts`), and a passage deleted
  * whole leaves its comment marked as gone. The threads are the caller's state, given as `threads` and changed through
  * `onThreadsChange`. `markdown` is read once: a new plan is a new `key`. With `onAskForChanges`, the plan's foot ends
- * in Ask for changes, which sends the open comments to the planner as one message (`changeRequest`).
+ * in Ask for changes, which sends the open comments to the planner as one message (`changeRequest`). Markdown, in the
+ * header, swaps the document for its Markdown as plain text, to read or edit as written; `onChange` gets that text as
+ * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
  */
 export function PlanEditor({
     markdown,
@@ -185,6 +193,9 @@ export function PlanEditor({
     // operator says otherwise.
     const [showChoice, setShowChoice] = useState<boolean | undefined>(undefined)
     const showChanges = showChoice ?? previous?.shown === true
+    // The plan's Markdown as the operator edits it as text, while the Markdown mode is on; undefined while it is off.
+    const [source, setSource] = useState<string | undefined>(undefined)
+    const raw = source !== undefined
     const seen = useEditorState({
         editor,
         selector: ({ editor: current }) => {
@@ -219,8 +230,11 @@ export function PlanEditor({
     }
     // Under the plan, the comment being written, and a thread opened from its passage while it stays open, float
     // under their passage (`floatUnder`), so the page need not go down to the list and back.
-    const draftFloats = !beside && draft !== undefined
-    const floating = beside || clicked === undefined ? undefined : threads.find((thread) => thread.id === clicked)
+    // As Markdown, the plan has no passages to float under or line the cards up with: the comments are a plain list.
+    const draftFloats = !raw && !beside && draft !== undefined
+    const floating =
+        raw || beside || clicked === undefined ? undefined : threads.find((thread) => thread.id === clicked)
+    const aligned = beside && !raw
     const frame = useRef<HTMLDivElement>(null)
     const float = useRef<HTMLDivElement>(null)
 
@@ -234,9 +248,17 @@ export function PlanEditor({
             floatUnder(editor, range, float.current, frame.current)
         }
     })
+    // While the plan shows as Markdown, its document is hidden, and has no place on the page to line a card up with.
+    const align = useEffectEvent((element: HTMLElement) => {
+        if (raw) {
+            releaseComments(element)
+            return beside
+        }
+        return alignComments(editor, element)
+    })
     useLayoutEffect(() => {
         if (list.current !== null) {
-            alignComments(editor, list.current)
+            align(list.current)
         }
         place()
     })
@@ -245,17 +267,17 @@ export function PlanEditor({
         if (element === null) {
             return
         }
-        const align = () => {
-            setBeside(alignComments(editor, element))
+        const realign = () => {
+            setBeside(align(element))
             place()
         }
-        const observer = new ResizeObserver(align)
+        const observer = new ResizeObserver(realign)
         observer.observe(element)
         observer.observe(editor.view.dom)
-        editor.on('transaction', align)
+        editor.on('transaction', realign)
         return () => {
             observer.disconnect()
-            editor.off('transaction', align)
+            editor.off('transaction', realign)
         }
     }, [editor])
 
@@ -383,6 +405,26 @@ export function PlanEditor({
         }
     }
 
+    // Shows the plan as its Markdown, or reads the Markdown edited there back into the document. Read back, it is an
+    // edit as any other (`onEdit`), one step of undo, and each comment finds its passage again by its words; Markdown
+    // left as it was changes nothing, so the document keeps its comments' places and its history as they were.
+    function showSource(on: boolean) {
+        if (on) {
+            setSource(editor.getMarkdown())
+            return
+        }
+        if (source !== undefined && source !== editor.getMarkdown()) {
+            editor.commands.setContent(source, { contentType: 'markdown' })
+        }
+        setSource(undefined)
+    }
+
+    function editSource(text: string) {
+        setSource(text)
+        setChanged(text.trimEnd() !== original)
+        onChange?.(text)
+    }
+
     // Puts the cursor at the next change after it, or the one before, round to the other end, as a document's compare
     // steps through its changes; the plan scrolls to it, clear of the toolbar and the bar.
     function goToChange(step: 1 | -1) {
@@ -433,7 +475,7 @@ export function PlanEditor({
                                 // modes are.
                                 <span aria-hidden className="h-4 w-px bg-border" />
                             )}
-                            {previous !== undefined && (
+                            {previous !== undefined && !raw && (
                                 <span className="flex items-center gap-1">
                                     {/* A mode, named for what it shows: the plan as it reads now, what changed since
                                         marked on it. Its icon says it is a control while it is off too. */}
@@ -444,11 +486,37 @@ export function PlanEditor({
                                     {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
                                 </span>
                             )}
-                            <OutlineMenu editor={editor} />
+                            <Toggle
+                                size="xs"
+                                pressed={raw}
+                                onPressedChange={showSource}
+                                title={editable ? 'Edit the plan as Markdown' : "Read the plan's Markdown"}
+                            >
+                                <FileCode aria-hidden />
+                                Markdown
+                            </Toggle>
+                            {!raw && <OutlineMenu editor={editor} />}
                         </span>
-                        {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
+                        {editable && !raw && (
+                            <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />
+                        )}
                     </PanelHeader>
-                    <EditorContent editor={editor} className={cn('px-6 py-4', showChanges && 'plan-changes')} />
+                    <EditorContent
+                        editor={editor}
+                        className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
+                    />
+                    {source !== undefined && (
+                        <div className="px-6 py-4">
+                            <textarea
+                                aria-label="Plan as Markdown"
+                                className={cn(SOURCE)}
+                                value={source}
+                                readOnly={!editable}
+                                spellCheck={false}
+                                onChange={(event) => editSource(event.target.value)}
+                            />
+                        </div>
+                    )}
                     {editable && (
                         <BubbleMenu
                             editor={editor}
@@ -504,8 +572,8 @@ export function PlanEditor({
                 </Panel>
                 {/* Beside the plan, its comments are a margin, not a box: cards on the page, each level with its
                     passage, under a header that stays at the top of the page with their count. */}
-                <Panel className={cn(beside && 'border-transparent bg-transparent')}>
-                    <PanelHeader label="Comments" sticky={beside}>
+                <Panel className={cn(aligned && 'border-transparent bg-transparent')}>
+                    <PanelHeader label="Comments" sticky={aligned}>
                         <span className="readout text-xs text-muted-foreground">{open} open</span>
                     </PanelHeader>
                     <PlanThreads
