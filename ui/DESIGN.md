@@ -748,6 +748,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   list narrows as they type, each keystroke replacing the history entry, so Back leaves the page. A filtered count says
   `6 of 41`, and an empty result says which filter left nothing. Both filter the list the server sends, its 200
   newest by activity, not the whole journal.
+- **The PR and review filters** narrow the pull requests and reviews lists as the tickets filters do
+  (`src/lib/pull-request-filter.ts`, `PullRequestFilterBar`): under the header, a search field (`?q=`) keeps the rows
+  whose PR, repository, or ticket holds every word (a PR's titles too, a review's commit), and beside it a chip for each
+  repository the list's rows are in (`?repo=`), shown while there is more than one. A review requested but not yet
+  started has no repository until a tick reads it, so a chosen repository leaves it out.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
