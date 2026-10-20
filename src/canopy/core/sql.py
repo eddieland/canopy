@@ -120,9 +120,17 @@ def all_of(*conditions: Composable) -> Fragment:
 def union(*selects: Composable, every: bool = False) -> Fragment:
     """Return the selects joined by UNION, or by UNION ALL when `every`, keeping each row of each.
 
+    An ORDER BY or LIMIT of the whole goes on a select of the union, as `select("*").from_("({}) AS u", ...)`.
+
     Returns:
         The compound select.
+
+    Raises:
+        ValueError: One of `selects` has an ORDER BY, LIMIT, or OFFSET of its own, which SQLite refuses there.
     """
+    if any(isinstance(s, Select) and (s.order or s.row_limit is not None or s.row_offset is not None) for s in selects):
+        msg = "a select in a UNION may not have its own ORDER BY, LIMIT, or OFFSET"
+        raise ValueError(msg)
     return _joined(" UNION ALL " if every else " UNION ", selects, empty=None, parenthesize=False)
 
 
@@ -309,7 +317,13 @@ class Select:
 
         Returns:
             Its SQL and values.
+
+        Raises:
+            ValueError: It joins a table with nothing to join it to.
         """
+        if self.joins and self.source is None:
+            msg = "a SELECT with a JOIN needs a FROM"
+            raise ValueError(msg)
         parts: list[Fragment] = []
         if self.ctes:
             parts += [
@@ -389,7 +403,13 @@ class Insert:
 
         Returns:
             Its SQL and values.
+
+        Raises:
+            ValueError: It sets no column.
         """
+        if not self.values:
+            msg = f"an INSERT into {self.table.text} sets no column"
+            raise ValueError(msg)
         columns = ", ".join(c for c, _ in self.values)
         row = _joined(", ", [v for _, v in self.values], empty=None, parenthesize=False)
         head = Fragment(f"INSERT{self.resolution} INTO {self.table.text} ({columns}) VALUES ({row.text})", row.params)
@@ -407,6 +427,8 @@ class Update:
     assignments: tuple[Fragment, ...] = ()
     conditions: tuple[Fragment, ...] = ()
     returns: Fragment | None = None
+    #: Set by `everything`, so an UPDATE with no condition is meant.
+    unconditional: bool = False
 
     def set(self, **values: Arg) -> Update:
         """Set a column per keyword to a value or a piece of SQL.
@@ -441,6 +463,14 @@ class Update:
         """
         return replace(self, conditions=(*self.conditions, in_(column, values)))
 
+    def everything(self) -> Update:
+        """Update every row: an UPDATE with no condition is refused unless it says so.
+
+        Returns:
+            The statement so.
+        """
+        return replace(self, unconditional=True)
+
     def returning(self, columns: LiteralString, *args: Arg) -> Update:
         """Add a RETURNING of `columns`.
 
@@ -456,10 +486,13 @@ class Update:
             Its SQL and values.
 
         Raises:
-            ValueError: It sets nothing.
+            ValueError: It sets nothing, or has no condition and was not told to update everything.
         """
         if not self.assignments:
             msg = f"an UPDATE of {self.table.text} sets nothing"
+            raise ValueError(msg)
+        if not self.conditions and not self.unconditional:
+            msg = f"an update of {self.table.text}'s rows has no condition; call everything() to update every row"
             raise ValueError(msg)
         parts = [
             Fragment(f"UPDATE {self.table.text} SET"),

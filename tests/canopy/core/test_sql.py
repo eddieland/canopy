@@ -109,6 +109,15 @@ def test_selects_join_by_union_inside_another_statement() -> None:
     q = sql.select("*").from_("memories").where("id IN ({})", sql.union(back, ahead))
     assert rendered(q)[0] == "SELECT * FROM memories WHERE id IN (SELECT id FROM back UNION SELECT id FROM ahead)"
     assert rendered(sql.union(back, ahead, every=True))[0] == "SELECT id FROM back UNION ALL SELECT id FROM ahead"
+    with pytest.raises(ValueError, match="its own ORDER BY"):
+        sql.union(back, ahead.order_by("id"))
+    with pytest.raises(ValueError, match="its own ORDER BY"):
+        sql.union(back.limit(1), ahead)
+
+
+def test_a_select_that_joins_needs_something_to_join_to() -> None:
+    with pytest.raises(ValueError, match="needs a FROM"):
+        sql.select("*").join("tickets t ON t.key = r.ticket_key").fragment()
 
 
 def test_an_insert_binds_its_values_upserts_and_returns(conn: sqlite3.Connection) -> None:
@@ -160,6 +169,14 @@ def test_an_update_sets_by_keyword_or_in_sql_and_returns(conn: sqlite3.Connectio
     assert tuple(sql.execute(conn, q).fetchone()) == ("ok", 5)
     with pytest.raises(ValueError, match="sets nothing"):
         sql.update("ticks").where("id = ?", tick).fragment()
+    with pytest.raises(ValueError, match="no condition"):
+        sql.update("ticks").set(summary="all").fragment()
+    assert sql.execute(conn, sql.update("ticks").set(summary="all").everything()).rowcount == 1
+
+
+def test_an_insert_that_sets_no_column_is_refused() -> None:
+    with pytest.raises(ValueError, match="sets no column"):
+        sql.insert("ticks").fragment()
 
 
 def test_a_keyword_column_is_held_to_a_name(conn: sqlite3.Connection) -> None:
