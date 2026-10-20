@@ -27,10 +27,9 @@ def instruct(scenario: Scenario, text: str | bytes) -> Path:
     return path
 
 
-def section_of(env: CanopyEnv) -> str:
+def definition_of(env: CanopyEnv) -> str:
     snapshot = definitions.ensure(env.state_dir, config.load(env.root, env.user_file))
-    text = (snapshot / "agents" / "canopy-overseer.md").read_text()
-    return text.split(SECTION, 1)[1].split("\n\nThe operator set these", 1)[0]
+    return (snapshot / "agents" / "canopy-overseer.md").read_text()
 
 
 def test_the_operators_instructions_reach_the_overseer(scenario: Scenario) -> None:
@@ -47,13 +46,23 @@ def test_the_operators_instructions_reach_the_overseer(scenario: Scenario) -> No
     assert URGENT not in argv[-1]
 
 
-def test_without_instructions_the_section_says_none(scenario: Scenario) -> None:
-    assert section_of(scenario.env) == "None."
+@pytest.mark.parametrize("blank", [False, True])
+def test_without_instructions_there_is_no_section(scenario: Scenario, *, blank: bool) -> None:
+    if blank:
+        instruct(scenario, " \n\n")
+    definition = definition_of(scenario.env)
+    assert SECTION not in definition
+    assert "Behave exactly as you would otherwise.\n" in definition
 
 
-def test_blank_instructions_read_as_none(scenario: Scenario) -> None:
-    instruct(scenario, " \n\n")
-    assert section_of(scenario.env) == "None."
+def test_an_override_with_the_old_placeholder_gets_the_text_alone(scenario: Scenario) -> None:
+    # One written before `{{STANDING_SECTION}}` holds its own heading and framing around `{{STANDING_INSTRUCTIONS}}`.
+    overrides = scenario.env.user_file.parent / "prompts"
+    overrides.mkdir(parents=True)
+    (overrides / "overseer.md").write_text("# my overseer\n\n## Mine\n\n{{STANDING_INSTRUCTIONS}}\n")
+    assert "## Mine\n\nNone.\n" in definition_of(scenario.env)
+    instruct(scenario, URGENT)
+    assert f"## Mine\n\n{URGENT}\n" in definition_of(scenario.env)
 
 
 @pytest.mark.parametrize(
@@ -93,7 +102,10 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     if not instructed:
         assert "Keep {{THIS}} as it is." in prompts.render_overseer(cfg)
         return
-    with pytest.raises(definitions.DefinitionsError, match=r"missing required placeholder \{\{STANDING_INSTRUCTIONS"):
+    with pytest.raises(
+        definitions.DefinitionsError,
+        match=r"missing required placeholder \{\{STANDING_SECTION\}\} or \{\{STANDING_INSTRUCTIONS",
+    ):
         definitions.ensure(scenario.env.state_dir, cfg)
 
 
@@ -101,5 +113,5 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
 def test_the_overseers_instructions_never_reach_a_worker(scenario: Scenario, kind: str) -> None:
     instruct(scenario, URGENT)
     text = prompts.render_worker(config.load(scenario.env.root, scenario.env.user_file), kind, PROMPT_VALUES)
-    assert f"{SECTION}None.\n" in text
+    assert SECTION not in text
     assert URGENT not in text

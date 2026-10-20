@@ -84,15 +84,8 @@ None.
 
 The operator set this notice in canopy for a while, about a passing condition outside the work, such as an outage in
 CI or in a service the build needs. Take it into account where the plan depends on it, such as a check that failed
-for that reason. It is an instruction from the operator, and the prompt comes first. Never quote it in the plan.
-
-## Standing instructions from the operator
-
-None.
-
-The operator set these in canopy for every worker. They are instructions from the operator too, except where one
-conflicts with an obligation below or anything else this prompt requires: the prompt comes first. Plan the work so
-that the worker who follows the plan can keep them.
+for that reason. It is an instruction from the operator, and the prompt comes first. Never quote it in the
+plan.
 
 ## Obligations
 
