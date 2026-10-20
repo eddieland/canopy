@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, Group, open_context
-from canopy.core import conversation, db, drafts, drafts_manage, records, replies
+from canopy.core import conversation, drafts, drafts_manage, records, replies, sql
 from canopy.core.memory_text import visible
 from canopy.core.vocab import DraftKind, DraftStatus, Reaction, ReviewItem
 from canopy.infra import logs
@@ -65,17 +65,10 @@ def cmd_list(click_ctx: click.Context, subject: str | None) -> int:
     Each comes with its thread as last read, its text, and its hash.
     """
     ctx = open_context(click_ctx)
-    where = f"status IN ({db.marks(_OPEN)})"
-    params: list[object] = list(_OPEN)
+    query = sql.select("*").from_("drafts").where_in("status", _OPEN).order_by("run_id, number")
     if subject is not None:
-        where += " AND (ticket_key = ? OR pr_url = ?)"
-        params += [subject, subject]
-    found = records.fetch_all(
-        ctx.conn,
-        records.Draft,
-        f"SELECT * FROM drafts WHERE {where} ORDER BY run_id, number",  # noqa: S608  (placeholders only)
-        params,
-    )
+        query = query.where("ticket_key = ? OR pr_url = ?", subject, subject)
+    found = records.fetch_all(ctx.conn, records.Draft, query)
     click.echo(f"Review replies: {ctx.config.trust.review_replies}.")
     if not found:
         click.echo(f"\nNo drafts wait on you{f' for {subject}' if subject else ''}.")
@@ -290,8 +283,12 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
         for c in records.fetch_all(
             conn,
             records.ObservedReview,
-            "SELECT * FROM observed_reviews WHERE pr_url = ? AND item = ? AND thread_id = ? ORDER BY created_at, id",
-            (draft.pr_url, ReviewItem.COMMENT, draft.thread_id),
+            sql.select("*")
+            .from_("observed_reviews")
+            .where("pr_url = ?", draft.pr_url)
+            .where("item = ?", ReviewItem.COMMENT)
+            .where("thread_id = ?", draft.thread_id)
+            .order_by("created_at, id"),
         ):
             click.echo(f"  > {c.author} at {c.created_at}: {visible(' '.join(c.body.split()))}")
     if draft.reacted is not None and draft.status is not DraftStatus.SENT:
