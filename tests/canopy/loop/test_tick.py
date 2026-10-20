@@ -1,5 +1,6 @@
 """End to end: `canopy tick --dry-run` against the fake treehouse and a fake overseer that calls the real `canopy`."""
 
+import errno
 import json
 import os
 import re
@@ -14,7 +15,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.core.vocab import Phase, TickStatus
-from canopy.infra import lock, procs
+from canopy.infra import lock, logs, procs
 from canopy.loop import attention, tick
 from tests.canopy.helpers import (
     agent_runs,
@@ -407,6 +408,22 @@ def test_treehouse_failure_skips_the_overseer(scenario: Scenario) -> None:
     assert not scenario.agent_log.exists()
 
 
+def test_a_tick_that_raises_closes_error_naming_it(scenario: Scenario) -> None:
+    write_private = logs.write_private
+
+    def disk_full(path: Path, text: str) -> None:
+        if path.suffix == ".prompt":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        write_private(path, text)
+
+    with mock.patch.object(logs, "write_private", autospec=True, side_effect=disk_full):
+        failed = scenario.tick(dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert failed.tick.status == TickStatus.ERROR
+    assert failed.tick.summary == "OSError: [Errno 28] No space left on device"
+    assert not scenario.agent_log.exists()
+
+
 @contextmanager
 def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
     """Until the block ends, the `canopy` on PATH, where the overseer would find it, runs `script`, and is the only one.
@@ -530,8 +547,9 @@ def test_overseer_output_refuses_a_symlink(scenario: Scenario, tmp_path: Path) -
     target = tmp_path / "elsewhere.txt"
     target.write_text("not yours\n")
     (ticks / "1.log").symlink_to(target)
-    with pytest.raises(OSError, match="Too many levels of symbolic links"):
-        scenario.tick(dry_run=True)
+    failed = scenario.tick(dry_run=True, code=1)
+    assert failed.tick.status == TickStatus.ERROR
+    assert failed.tick.summary == f"OSError: [Errno 40] Too many levels of symbolic links: '{ticks / '1.log'}'"
     assert target.read_text() == "not yours\n"
 
 

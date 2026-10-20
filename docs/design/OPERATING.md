@@ -137,7 +137,9 @@ root (TRUST_MODEL T7). The state directory is always `<workspace>/.canopy/` (§1
 `paths.worker_instructions` names a short file of the operator's standing instructions, rendered into every worker
 prompt, after the obligations (§8). Prefer it to an override, and a skill for know-how (§13). A file
 canopy cannot use refuses the dispatch as `bad_prompt` rather than running a worker without it. A passing condition,
-such as a CI outage, belongs in a notice to workers (§8).
+such as a CI outage, belongs in a notice to workers (§8). `paths.overseer_instructions` is the same for the overseer:
+rendered at the end of its prompt, which comes first, and a file canopy cannot use fails the tick before the overseer
+starts. Neither reaches the other's prompt.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
@@ -311,6 +313,8 @@ open item is never notified twice, and an item that returns after going away is 
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
 - Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
   `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
+  the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
 - MCP unavailable: the overseer records a tick-wide `skip`; the tick closes `skipped`, no decisions are made on partial
   data, and the attention list stays as it was.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.

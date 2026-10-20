@@ -532,7 +532,7 @@ def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
         assert present(db.get_run(ctx.conn, run_id))["status"] == "running"
 
 
-def test_a_tick_that_raises_ends_that_tick_not_the_loop(
+def test_a_tick_that_raises_closes_error_and_the_loop_goes_on(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     with overseer_does():
@@ -549,12 +549,11 @@ def test_a_tick_that_raises_ends_that_tick_not_the_loop(
             clock=time.clock,
         )
         assert statuses == {"error": 1, "ok": 1}
-        assert "tick  error" in out.getvalue()
+        assert "tick 1  error" in out.getvalue()
         assert "RuntimeError: a bug in tick code" in out.getvalue()
-        # The raising tick left its row running; the next one closed it.
-        assert tick_statuses(canopy_env) == ["abandoned", "ok"]
+        assert tick_statuses(canopy_env) == ["error", "ok"]
         log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
-        assert any(line["msg"] == "tick raised; the loop goes on" and "exc" in line for line in log_lines)
+        assert any(line["msg"] == "tick raised" and "exc" in line for line in log_lines)
 
 
 def test_the_tick_now_key_ends_the_wait_at_once(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
