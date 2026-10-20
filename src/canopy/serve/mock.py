@@ -480,7 +480,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         .set_to("tokens_input = CAST(cost_usd * 40000 AS INTEGER)")
         .set_to("tokens_output = CAST(cost_usd * 6000 AS INTEGER)")
         .set_to("tokens_cache_read = CAST(cost_usd * 400000 AS INTEGER)")
-        .set_to("tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)"),
+        .set_to("tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)")
+        .everything(),
     )
     tickets = (
         # key, title (None: not named yet), phase, branch, last seen
