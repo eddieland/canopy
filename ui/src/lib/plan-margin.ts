@@ -81,6 +81,19 @@ export function alignComments(editor: Editor, list: HTMLElement): boolean {
 }
 
 /**
+ * Puts the cards in `list` back in a plain list, as `alignComments` does when the list does not sit beside the plan:
+ * for while the plan shows as Markdown, with no passages on the page to place them by.
+ */
+export function releaseComments(list: HTMLElement): void {
+    for (const card of list.children) {
+        if (card instanceof HTMLElement) {
+            card.style.marginTop = ''
+        }
+    }
+    delete list.dataset['aligned']
+}
+
+/**
  * Places `card` under the passage `range` covers in `editor`, inside `container`, which it is positioned in: its top
  * `GAP` under the passage's last line, its left at the passage's start, kept within the container's sides. For a
  * comment shown at its passage while the comments sit under the plan, so the page need not go to them.
