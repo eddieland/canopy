@@ -18,9 +18,7 @@ world. Authority stays with the source (§4 principle 1, §22): an observation s
 what is true now. Nothing yet reads an observation to decide anything but the derivation, which only the operator and
 the measurement read.
 
-Built so far: each tick runs the sources, validates and bounds what they print, records it and each run, raises
-`connector_failed`, and `canopy status` names each source with its last run and the age of its observations. Not yet:
-the derivation, and canopy's connectors grown to this contract.
+Not yet built: canopy's connectors grown to this contract.
 
 ### Sources
 
@@ -90,8 +88,9 @@ shadow, and a measurement says which rows code may take.
 - Each tick the harness derives, from the observations and the journal, what §7 and §14 derive: the candidates (§17),
   each ticket's and unit's phase, its next action and the actions a choice allows, and the attention reasons. A ticket
   that depends on a stale or missing observation is derived as stale and counted apart, never as a disagreement.
-- The derivation is recorded beside `decisions`. It writes no decision, and changes no state block, attention item,
-  cursor, phase, or guard.
+- The derivation is recorded beside `decisions`, every row of §7 that held, as §7 has no order yet, and with it the
+  phase the overseer left each subject at when the tick closed. It writes no decision, and changes no state block,
+  attention item, cursor, phase, or guard.
 - It agrees with the overseer when the phase the overseer set is one of the rows that held and its decision one that
   row allows. Agreement is computed, never stored, so a fix to the comparison reads every tick already recorded; the
   rows themselves go under §26's window, and the measurement in `MEASUREMENTS.md` outlives them.
