@@ -48,7 +48,7 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
     definitions rendered from `config` when it is given.
 
     Raises:
-        DefinitionsError: The overseer's prompt cannot be read, or a shipped definition cannot be rendered.
+        DefinitionsError: The overseer's prompt cannot be rendered, or a shipped definition cannot be rendered.
     """
     found = runtime_definitions.bundled()
     return found if config is None else runtime_definitions.render(found, rules(config))
@@ -58,13 +58,12 @@ def rules(config: Config) -> agents.Rules:
     """Return what `config` lets each agent do, for the runtime to write into its definitions.
 
     Raises:
-        DefinitionsError: The overseer's prompt cannot be read.
+        DefinitionsError: The overseer's prompt cannot be rendered (`prompts.render_overseer`).
     """
-    path = prompts.prompt_path(config, prompts.OVERSEER)
     try:
-        prompt = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as e:
-        raise DefinitionsError(f"cannot read the overseer prompt {path}: {e}") from e
+        prompt = prompts.render_overseer(config)
+    except prompts.PromptError as e:
+        raise DefinitionsError(str(e)) from e
     runtime = config.runtime
     temperatures = {
         agents.REVIEWER: runtime.review_temperature,
@@ -114,7 +113,7 @@ def ensure(state_dir: Path, config: Config | None = None) -> Path:
 
     Raises:
         DefinitionsError: the snapshot's directory exists and is not private to the operator, or the overseer's prompt
-            cannot be read.
+            cannot be rendered.
         OSError: the snapshot could not be written, and no other process put one in its place.
     """
     files = sources(config)

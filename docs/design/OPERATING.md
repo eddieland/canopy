@@ -137,7 +137,9 @@ root (TRUST_MODEL T7). The state directory is always `<workspace>/.canopy/` (§1
 `paths.worker_instructions` names a short file of the operator's standing instructions, rendered into every worker
 prompt, after the obligations (§8). Prefer it to an override, and a skill for know-how (§13). A file
 canopy cannot use refuses the dispatch as `bad_prompt` rather than running a worker without it. A passing condition,
-such as a CI outage, belongs in a notice to workers (§8).
+such as a CI outage, belongs in a notice to workers (§8). `paths.overseer_instructions` is the same for the overseer:
+rendered at the end of its prompt, which comes first, and a file canopy cannot use fails the tick before the overseer
+starts. Neither reaches the other's prompt.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
