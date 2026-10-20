@@ -188,7 +188,8 @@ the pool's base branch. If a finding seems to be about code the PR never touched
 The results are the page you read; how the reviewer got there is a page of its own, one link away under **run**:
 **transcript and log**. It's the review in the trail, then **Run**, and holds what a run's page does: what a failed
 review ended on, the harness's note, when it ran, what it spent, and where its log is; then the reviewer's transcript,
-every file it read and command it ran, and the log's end as written, folded until you open it.
+every file it read and command it ran, the prompt canopy handed it, and the log's end as written, each folded until you
+open it.
 
 Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
 PR, or the runtime. A reviewer's events reach its log when it ends, so while it works the transcript says so and

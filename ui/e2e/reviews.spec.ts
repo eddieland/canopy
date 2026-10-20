@@ -92,7 +92,8 @@ test("a review's run is a page of its own, one link from its results", async ({ 
     const transcript = page.getByTestId('transcript')
     await expect(transcript).toContainText("I'll read the diff against main")
     await expect(transcript).toContainText('src/search/useSearch.ts')
-    // Its log as written waits folded, read only when opened.
+    // The prompt canopy rendered for the reviewer, and its log as written, wait folded.
+    await expect(page.getByTestId('prompt')).toContainText('Show prompt')
     await expect(page.getByTestId('review-output')).toContainText('Output')
     // The trail leads back to the results.
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'review:4' }).click()

@@ -143,6 +143,9 @@ def test_a_reviews_run_is_its_log_its_tokens_and_its_reviewers_session(backend: 
     assert [e["kind"] for e in entries[:4]] == ["text", "tool", "tool", "step"]
     # Its last text is the result the harness read, which the review's page shows as its findings.
     assert json.loads(entries[-2]["text"])["summary"] == found["summary"]
+    # The prompt canopy rendered for the reviewer, kept beside its log as a run's is.
+    assert transcript["prompt"]["text"].startswith("# canopy reviewer\n")
+    assert c.get("/api/reviews/3/transcript").json()["prompt"] is None
     output = c.get("/api/reviews/4/output").json()
     assert output["status"] == "read"
     assert output["text"].startswith("--- reviewer stdout ---")

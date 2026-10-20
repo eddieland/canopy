@@ -9,6 +9,7 @@ import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
+import { PromptPanel } from '@/components/prompt-panel'
 import { ReviewOutputPanel } from '@/components/raw-output'
 import { TranscriptPanel } from '@/components/transcript'
 import { WhenField } from '@/components/when-field'
@@ -24,7 +25,7 @@ const HELP =
     'and output, and what each model call cost. Its findings are on the review’s page.'
 
 /**
- * A review's run on a page of its own: how it ended, what it spent, its log, and its reviewer's transcript. The
+ * A review's run on a page of its own: how it ended, what it spent, its log, its reviewer's transcript and prompt. The
  * review's page is its results, read far more often, so it links here from its `run` field rather than show this.
  */
 export const Route = createFileRoute('/reviews/$id_/run')({
@@ -74,6 +75,7 @@ function Loaded({ id }: { id: number }) {
                     page="review"
                     view={view}
                 />
+                <PromptPanel transcript={transcript} />
                 <ReviewOutputPanel id={id} />
             </div>
         </>

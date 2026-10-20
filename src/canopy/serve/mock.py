@@ -1417,6 +1417,21 @@ as a finding.
 
 None.
 """
+_PROMPT_REVIEW_4 = """\
+# canopy reviewer
+
+You are reviewing one pull request at one commit. You did not write it and you have no transcript of whoever did.
+This is review 2 of at most 2 of this PR.
+
+- PR: https://github.com/acme/web/pull/88
+- Commit: `9b2f4c61`. Review this commit, not whatever the PR's head is by the time you read it.
+- Checkout: `checkout` is the repository at that commit. Read anything in it you need.
+- Ticket: ABC-099.
+
+## Context from the overseer
+
+The first review found a stale response could replace a newer one; check the abort.
+"""
 # Run 40's setup command, as `_run` writes it before the worker starts (DESIGN §8), and its runtime's stderr.
 _SETUP_40 = """\
 --- setup web stdout ---
@@ -1710,6 +1725,11 @@ def _transcripts(state_dir: Path) -> None:
             text = f"{stdout}\n--- stderr ---\n{_TICK_STDERR}"
         logs.write_private(state_dir / directory / f"{name}.log", text)
     # What canopy gave each runtime, kept beside its log: the first model call's input (DESIGN §22).
-    prompts = (("runs", "39", _PROMPT_39), ("ticks", "2", _PROMPT_TICK_2), ("chore-runs/deps", "2", _PROMPT_CHORE_2))
+    prompts = (
+        ("runs", "39", _PROMPT_39),
+        ("ticks", "2", _PROMPT_TICK_2),
+        ("chore-runs/deps", "2", _PROMPT_CHORE_2),
+        ("reviews", "4", _PROMPT_REVIEW_4),
+    )
     for directory, name, text in prompts:
         logs.write_private(state_dir / directory / f"{name}.prompt", text)
