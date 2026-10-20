@@ -274,7 +274,7 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     paths = ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events")
     # A transcript is agent output from a file, and a review's diff the PR's text: as much the operator's as the rest.
     files = ("/api/runs/39", "/api/runs/39/transcript", "/api/runs/40/output", "/api/ticks/2/transcript")
-    reviews = ("/api/reviews", "/api/reviews/4")
+    reviews = ("/api/reviews", "/api/reviews/4", "/api/reviews/4/transcript", "/api/reviews/4/output")
     chores = ("/api/chores/deps/runs/2", "/api/chores/deps/runs/2/transcript")
     for path in (*paths, *files, *reviews, *chores):
         assert c.get(path).status_code == 401, path
@@ -992,6 +992,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/reviews",
         "/api/review-requests",
         "/api/reviews/{run_id}",
+        "/api/reviews/{run_id}/transcript",
+        "/api/reviews/{run_id}/output",
         "/api/reviews/{run_id}/dismissals",
         "/api/reviews/{run_id}/sends",
         "/api/pull-requests",

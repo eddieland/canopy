@@ -392,7 +392,7 @@ def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
     """
     if db.get_tick(ctx.conn, tick_id) is None:
         return None
-    return _raw_output(tick_output(ctx, tick_id))
+    return raw_output(tick_output(ctx, tick_id))
 
 
 def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
@@ -405,10 +405,15 @@ def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
-    return _raw_output(Path(str(row["log_path"])))
+    return raw_output(Path(str(row["log_path"])))
 
 
-def _raw_output(path: Path) -> RawOutput:
+def raw_output(path: Path) -> RawOutput:
+    """The end of a log or output file as written (DESIGN §22).
+
+    Returns:
+        The tail, without control characters, or a `no_output` status when the file is missing or not a regular file.
+    """
     found = transcript.tail(path)
     if found is None:
         return RawOutput(status="no_output")

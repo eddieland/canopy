@@ -4,7 +4,7 @@ import { Braces } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { runOutputQuery, tickOutputQuery } from '@/api/queries'
+import { reviewOutputQuery, runOutputQuery, tickOutputQuery } from '@/api/queries'
 import type { RawOutput } from '@/api/types'
 import { CopyablePath } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
@@ -58,6 +58,26 @@ export function RunOutputPanel({ id }: { id: number }) {
             pretty={pretty}
             onPretty={setPretty}
             testId="run-output"
+        />
+    )
+}
+
+/**
+ * A review run's log as written: its reviewer's stdout, stderr, and exit, each under a `--- ... ---` line canopy
+ * writes, so a review that failed before its first event says why. Pretty is the page's alone, as a run's is.
+ */
+export function ReviewOutputPanel({ id }: { id: number }) {
+    const [pretty, setPretty] = useState(false)
+    return (
+        <OutputPanel
+            query={reviewOutputQuery(id)}
+            // Its path is the Run panel's log field, with its copy button: named once.
+            file="the review’s log"
+            whose="the review"
+            written="the reviewer’s stdout and stderr"
+            pretty={pretty}
+            onPretty={setPretty}
+            testId="review-output"
         />
     )
 }

@@ -51,6 +51,9 @@ export const keys = {
     reviews: ['reviews'] as const,
     reviewRequests: ['reviews', 'requested'] as const,
     review: (id: number) => ['reviews', id] as const,
+    // A review's transcript, and its log's end under it: read again only when the stream says its row moved.
+    reviewTranscript: (id: number) => ['transcript', 'review', id] as const,
+    reviewOutput: (id: number) => ['transcript', 'review', id, 'output'] as const,
     // The PRs list and each PR's page share a prefix, so one invalidation marks both stale.
     pullRequests: ['pull-requests'] as const,
     pullRequest: (url: string) => ['pull-requests', url] as const,
@@ -387,6 +390,31 @@ export function reviewQuery(id: number) {
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reviews/{run_id}', { params: { path: { run_id: id } }, signal })),
         placeholderData: undefined,
+    })
+}
+
+/**
+ * A review run's session, read back from its log by the server on every fetch (DESIGN §22). The reviewer's output
+ * reaches the log when it ends, so the stream marks it stale when the review's row moves (live.ts).
+ */
+export function reviewTranscriptQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.reviewTranscript(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reviews/{run_id}/transcript', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** The end of a review run's log as written, the reviewer's stderr and exit included. Stale when its transcript is. */
+export function reviewOutputQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.reviewOutput(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reviews/{run_id}/output', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
     })
 }
 

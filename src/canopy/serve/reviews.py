@@ -1,13 +1,15 @@
 """The reviews canopy keeps, as the web UI shows them (DESIGN §21): a shadow PR review, posted nowhere (D114).
 
 Reads only; dismissing a finding goes through `canopy.core.conversation`, as `canopy dismiss review:ID` does.
-Everything a review holds is untrusted: the reviewer read the PR, and the diff is the PR's own text. Text goes out with
+Everything a review holds is untrusted: the reviewer read the PR, the diff is the PR's own text, and its transcript and
+log are the reviewer's output. Text goes out with
 control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, conversation, db, review_diff, review_requests
@@ -18,14 +20,16 @@ from canopy.serve.schema import (
     DiffHunk,
     DiffLine,
     FindingSeverity,
+    RawOutput,
     RequestedReview,
     ReviewDetail,
     ReviewDiff,
     ReviewFinding,
     ReviewSummary,
     RunState,
+    Transcript,
 )
-from canopy.serve.views import lines, ticket_title
+from canopy.serve.views import lines, new_tokens, raw_output, session_transcript, shown_path, ticket_title
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -86,7 +90,37 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         diff=diff,
         runs=[summary(r) for r in db.review_runs_of(ctx.conn, row.pr_url)],
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
+        new_tokens=new_tokens(row),
+        peak_context=row.tokens_peak_context,
+        log_path=shown_path(row.log_path, ctx.workspace.root),
     )
+
+
+def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
+    """A review run's session in its log, or None if there is no such run.
+
+    The reviewer's output reaches the log when it ends, so a running review's transcript has no session yet.
+
+    Returns:
+        The transcript, its status saying whether the run recorded a session and whether its log could be read.
+    """
+    row = db.get_review_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    return session_transcript(Path(row.log_path), row.session_id)
+
+
+def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
+    """The end of a review run's log as written, the reviewer's stderr and exit included.
+
+    Returns:
+        The tail, without control characters, or a `no_output` status when the log is missing or not a regular file;
+        None if there is no such run.
+    """
+    row = db.get_review_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    return raw_output(Path(row.log_path))
 
 
 def summary(row: records.ReviewRun) -> ReviewSummary:

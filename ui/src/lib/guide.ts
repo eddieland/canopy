@@ -123,6 +123,7 @@ export const PAGE_GUIDES = {
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
     '/reviews/': 'pull-requests#the-reviews-page',
     '/reviews/$id': 'pull-requests#a-reviews-page',
+    '/reviews/$id_/run': 'pull-requests#a-reviews-run',
     '/runs/': 'runs',
     '/runs/$id': 'runs#a-runs-page',
     '/worktrees': 'runs#worktrees',

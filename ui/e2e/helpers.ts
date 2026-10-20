@@ -29,6 +29,7 @@ export const ROUTES = [
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',
     'reviews/4',
+    'reviews/4/run',
     'chores',
     'chores/deps',
     'chores/deps/runs/2',

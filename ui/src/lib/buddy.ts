@@ -90,6 +90,14 @@ export const TIPS = {
         'Haiku: red line, then green line / a finding sits on the seam / I sit on the rail',
         'Dear diary, a finding said "severity: high". I said "same". We have so much in common.',
     ],
+    '/reviews/$id_/run': [
+        "It looks like you're checking the reviewer's work. Would you like me to check yours?",
+        'Unhelpful tip: to speed up a review, scroll its transcript faster.',
+        'Fun fact: a reviewer reads every file it reviews. I read the first line and form an opinion.',
+        'Hot take: a transcript is a review of the review. Somebody should review it.',
+        'Haiku: it read the whole diff / it ran grep, it wrote one line / then it judged us all',
+        "Dear diary, a reviewer read a file I've never heard of. I nodded like I had.",
+    ],
     '/runs/': [
         "It looks like you're watching runs. A watched run never finishes. (Unconfirmed.)",
         'Unhelpful tip: a run that has cost nothing has probably not started.',

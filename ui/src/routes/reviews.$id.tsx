@@ -10,7 +10,6 @@ import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
-import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -127,7 +126,8 @@ function NoReview({ title, children }: { title: string; children: string }) {
 /**
  * The review's fields, its summary first, since what it found is what the operator came for, then why the harness
  * decided its status, its verdict, and what it read. Its status is the page's description alone, and the PR's other
- * reviews are a line under the PR, so nothing here says what the header says.
+ * reviews are a line under the PR, so nothing here says what the header says. How its run went, its transcript, log,
+ * and spend, is the run's own page, opened from the `run` field: read now and then, not each time.
  */
 function ReviewPanel({ detail }: { detail: ReviewDetail }) {
     const { review } = detail
@@ -177,18 +177,25 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                         <span className="text-muted-foreground"> against {detail.base_branch}</span>
                     )}
                 </Field>
-                <Field label="ended" mono>
-                    {review.ended_at === null ? (
-                        'still reviewing'
-                    ) : (
-                        <span className="flex items-baseline gap-2">
-                            <Timestamp at={review.ended_at} />
-                            <Age at={review.ended_at} variant="ago" />
-                        </span>
-                    )}
-                </Field>
-                <Field label="spent" mono>
-                    <Cost usd={review.cost_usd} />
+                <Field label="run" mono>
+                    <span className="flex flex-wrap items-baseline gap-x-2">
+                        {review.ended_at === null ? (
+                            'still reviewing'
+                        ) : (
+                            <>
+                                <Timestamp at={review.ended_at} />
+                                <Age at={review.ended_at} variant="ago" />
+                            </>
+                        )}
+                        <Link
+                            to="/reviews/$id/run"
+                            params={{ id: String(review.id) }}
+                            className="text-accent underline-offset-4 hover:underline"
+                            data-testid="review-run-link"
+                        >
+                            transcript and log
+                        </Link>
+                    </span>
                 </Field>
             </Fields>
         </Panel>

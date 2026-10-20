@@ -411,7 +411,10 @@ Rules:
   them next: in the card above its foot, and under the plan page's header, never a muted line a request can hide in.
   A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its Work panel,
   since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is settled as the
-  page opens, so a plan approved meanwhile leaves its card where it was read.
+  page opens, so a plan approved meanwhile leaves its card where it was read. A review's run is on a page of its own
+  too, `/reviews/$id/run`, under the review in the trail, with a run's skeleton: its Run panel, its transcript, its
+  prompt, and its output. The review's page is its results, so it says only when the run ended and links there from a
+  `run` field.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no

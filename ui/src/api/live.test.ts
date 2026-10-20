@@ -120,16 +120,19 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.choreRunTranscript(chore.name, run.id))?.isInvalidated).toBe(true)
     })
 
-    it("writes the reviews whole, and reads a review's page and the PRs again only when a review moves", () => {
+    it("writes the reviews whole, and reads a review's pages and the PRs again only when a review moves", () => {
         const client = new QueryClient()
         const [running] = mockReviews as [ReviewSummary]
         const detail = { review: running } as ReviewDetail
         client.setQueryData(keys.review(running.id), detail)
+        client.setQueryData(keys.reviewTranscript(running.id), { status: 'no_session', entries: [] })
+        client.setQueryData(keys.reviewOutput(running.id), { status: 'read', text: '', size: 0 })
         client.setQueryData(keys.pullRequests, [])
 
         applyStreamEvent(client, { type: 'reviews.updated', reviews: mockReviews })
         expect(client.getQueryData(keys.reviews)).toEqual(mockReviews)
         expect(client.getQueryState(keys.review(running.id))?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.reviewTranscript(running.id))?.isInvalidated).toBe(false)
         expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(false)
 
         // The review ended: its page reads it again, the list replaced whole stays as sent, and the PRs read again.
@@ -139,6 +142,9 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.reviews)?.isInvalidated).toBe(false)
         expect(client.getQueryState(keys.review(running.id))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(true)
+        // Its run's page too: the reviewer's events reached its log as it ended.
+        expect(client.getQueryState(keys.reviewTranscript(running.id))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.reviewOutput(running.id))?.isInvalidated).toBe(true)
     })
 
     it('writes the reviews waiting on a tick whole', () => {

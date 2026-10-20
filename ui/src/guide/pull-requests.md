@@ -165,7 +165,8 @@ which one holds its PR is the next tick's to work out, not the page's to guess.
 ## A review's page
 
 At the top, the reviewer's summary, since that's the answer you came for, then its verdict, the PR (with its other
-reviews, if any, on a line under it), and the commit it read. The status is the line under the title. Then its
+reviews, if any, on a line under it), the commit it read, and when its run ended, with a link to the run. The status is
+the line under the title. Then its
 findings, each linking to where it sits, and the diff, a panel per file, with each finding pinned under the line it
 names. A finding about a file the diff doesn't touch waits in a panel of its own after the files. A long diff shows the
 lines around each finding at first, with folds that open the rest.
@@ -181,6 +182,18 @@ so nothing you folded hides a finding from you.
 
 A PR stacked on another branch shows that branch's commits too, since the diff runs from where the PR's branch left
 the pool's base branch. If a finding seems to be about code the PR never touched, check that first.
+
+## A review's run
+
+The results are the page you read; how the reviewer got there is a page of its own, one link away under **run**:
+**transcript and log**. It's the review in the trail, then **Run**, and holds what a run's page does: what a failed
+review ended on, the harness's note, when it ran, what it spent, and where its log is; then the reviewer's transcript,
+every file it read and command it ran, the prompt canopy handed it, and the log's end as written, each folded until you
+open it.
+
+Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
+PR, or the runtime. A reviewer's events reach its log when it ends, so while it works the transcript says so and
+waits; there is no watching it think.
 
 ## Acting on findings
 

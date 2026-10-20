@@ -140,7 +140,7 @@ export function TranscriptPanel({
     const allOpen = opened.open || (!callView && shown.some((n) => searchOpens(n.hits)))
     const lines = shown.reduce((sum, n) => sum + (n.hits === null ? 0 : n.hits.row + n.hits.body), 0)
     // Why there is nothing to show, once read: the header says it, and the panel is that header alone.
-    const why = transcript !== undefined && entries.length === 0 ? empty(transcript, running) : null
+    const why = transcript !== undefined && entries.length === 0 ? empty(transcript, running, page) : null
     return (
         // Its space is held only while it is read (No layout shift): read, it is as tall as what it holds.
         <Panel className={cn(transcript === undefined && 'min-h-40')} data-testid="transcript">
@@ -305,10 +305,11 @@ function Fold({ label, onShow }: { label: string; onShow: () => void }) {
 }
 
 /** Why a transcript shows no events: in a few words for its header, and whole for their hover. */
-function empty(transcript: Transcript, running: boolean): { short: string; reason: string } {
+function empty(transcript: Transcript, running: boolean, page: TranscriptPage): { short: string; reason: string } {
     if (running) {
-        // Its session is recorded at its first event, so before then there is none.
-        return { short: 'no events yet', reason: 'no events yet: they show here as the agent prints them' }
+        // Its session is recorded at its first event, so before then there is none; a reviewer's, as it ends.
+        const when = page === 'review' ? 'when the reviewer ends' : 'as the agent prints them'
+        return { short: 'no events yet', reason: `no events yet: they show here ${when}` }
     }
     switch (transcript.status) {
         case 'no_session': {
