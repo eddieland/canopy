@@ -135,6 +135,28 @@ def test_tool_calls_are_rolled_up_by_tool_with_what_they_returned() -> None:
     )
 
 
+def test_a_skill_call_is_counted_under_the_skill_it_loaded() -> None:
+    def skill(status: str = "completed", **state: object) -> str:
+        return event("tool_use", {"type": "tool", "tool": "skill", "state": {"status": status, **state}})
+
+    lines = [
+        # OpenCode 1.19.3 names the skill in the call's input, and the one it loaded in its metadata.
+        skill(input={"name": "tracker-jira"}, metadata={"name": "tracker-jira", "dir": "/s"}, output="x" * 10),
+        skill(input={"name": "tracker-jira"}, output="y" * 5),
+        skill("error", input={"name": "no-such-skill"}, error="Skill not found"),
+        # A name that is not a skill's by OpenCode's rule counts as the tool alone, as does a call that names none.
+        skill(input={"name": "Bad Name\u001b[31m"}, output="z"),
+        skill(input={"name": "a" * 65}, output="z"),
+        skill(output="z"),
+        text(RESULT),
+    ]
+    assert events.read("\n".join(lines)).tools == (
+        ToolUse("skill:tracker-jira", calls=2, errors=0, result_chars=15),
+        ToolUse("skill:no-such-skill", calls=1, errors=1, result_chars=len("Skill not found")),
+        ToolUse("skill", calls=3, errors=0, result_chars=3),
+    )
+
+
 def test_plain_text_and_events_with_no_tool_call_roll_up_no_tool() -> None:
     assert events.read(f"chatter\n{RESULT}\n").tools == ()
     assert events.read("\n".join([text(RESULT), step()])).tools == ()

@@ -98,10 +98,10 @@ Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is t
 
 | Chore | What it reports | Finding id | Cadence | Runs under |
 | --- | --- | --- | --- | --- |
-| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, `canopy health --json *` and three more read-only commands allowed |
-| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with `opencode mcp list` |
+| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, `canopy health --json *` and canopy's other read-only commands allowed |
+| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with `canopy agents` |
 | `plan-waivers` | Plans triage waived for work that was not trivial: a PR the reviewer judged high impact, a plan the operator asked for after, a worker that had to ask or try again; and triage as a whole too loose, or not worth its cost ([plan-waivers.md](plan-waivers.md)) | `waiver/<key>`, `triage/loose`, `triage/rarely-waives` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health` |
-| `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, `canopy memory lessons`, `proposals`, and `list` allowed, tracker and GitHub MCP read tools |
+| `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, `canopy memory lessons`, `proposals`, and `list` allowed with `--json`, tracker and GitHub MCP read tools |
 
 ## Writing a good chore
 
@@ -241,7 +241,8 @@ timeout_minutes = 15
     "canopy decisions*": allow
     "canopy show run:*": allow
     "canopy show chore:*": allow
-    "opencode mcp list": allow
+    "canopy config show --json": allow
+    "canopy agents --json": allow
   ```
 
 - **No MCP servers needed.** Neither prompt calls one. Deny your servers' tools for the agent by name in
@@ -251,10 +252,12 @@ timeout_minutes = 15
   workspace ([SANDBOX.md](../../docs/SANDBOX.md)), and these chores read the journal in it. Leave the `canopy-sandbox`
   prefix off their `cmd`.
 - **Fill in the lists.** `canopy-efficiency.md` names your MCP servers and which agents need each, so that a server an
-  agent needs but seldom calls is not reported unused for it. `opencode mcp list` shows what you have.
+  agent needs but seldom calls is not reported unused for it. `canopy agents` shows what you have, and what each of
+  canopy's agents is offered of it.
 - **Disable for some agents.** A `Disable:` finding names canopy's agents to deny a server or skill for, and the rule
   to add to `~/.config/opencode/opencode.json`, which leaves it on for your own sessions and canopy's other agents:
-  `"agent": {"canopy-overseer": {"permission": {"sentry_*": "deny", "skill": {"*": "deny"}}}}`.
+  `"agent": {"canopy-overseer": {"permission": {"sentry_*": "deny", "skill": {"*": "deny"}}}}`. `canopy agents` then
+  shows the server's reach as `none` for that agent.
 - **A finding is a recommendation.** Its title says which kind (`Tune:`, `Disable:`, `Fix:`, `Feature:`), and its
   detail the figures it rests on. Act on it, or answer it with `canopy reply chore:canopy-efficiency '<note>'` ("keep
   the jira server for workers; it is for private tickets"), and the next run leaves it out.
@@ -330,9 +333,9 @@ timeout_minutes = 20
   bash:
     "*": deny
     "canopy chore history *": allow
-    "canopy memory lessons": allow
-    "canopy memory proposals": allow
-    "canopy memory list": allow
+    "canopy memory lessons --json": allow
+    "canopy memory proposals --json": allow
+    "canopy memory list --json": allow
   ```
 
 - **MCP read tools, not write tools.** It searches the tracker and GitHub to leave out what is already filed, and reads

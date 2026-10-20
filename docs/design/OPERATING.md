@@ -51,6 +51,12 @@ and the overseer's asks a guard refused. A failure is a run that did not do what
 `ok`, or a run ended `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. With `canopy spend --json`, it is what a
 chore that looks at canopy itself reads (`examples/chores/`).
 
+Two more read-only commands serve those chores. `canopy config show` lists each number, switch, and choice in the
+merged config with its default, bounds, and the file that set it; text, commands, and paths are left out, since they
+may carry a host or a token and an agent reports what it reads. `canopy agents` asks the runtime what each of canopy's
+agents is offered, MCP servers and skills, once it has merged the operator's own runtime config into canopy's
+definitions, so a recommendation to deny one rests on the merge the runtime makes, not on canopy's files alone.
+
 ## 12. Configuration
 
 Configuration is layered. Each layer overrides the one before it, key by key:
@@ -171,9 +177,9 @@ result: canopy never falls back to an earlier one, which may be an example the a
 The overseer's done token is a plain line anywhere in its final message (§6).
 
 From the events the harness also reads, each validated (D026), the session id, the cost, the context used, and the
-tool calls by tool, and records them on the tick or run (§11) with the digest of the definitions it loaded, so a prompt
-or definition change splits runs into before and after. Figures that do not validate make the run report no cost
-rather than too little, and a template that asks for no events records no cost.
+tool calls by tool, a skill's by the skill it loaded, and records them on the tick or run (§11) with the digest of the
+definitions it loaded, so a prompt or definition change splits runs into before and after. Figures that do not
+validate make the run report no cost rather than too little, and a template that asks for no events records no cost.
 
 The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
 what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.

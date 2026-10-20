@@ -30,6 +30,10 @@ write `.canopy-new-plan.md` at its desk's root and nothing else: not through the
 it replaces, and nothing beside the desk. Its `edit` rules come after its MCP patterns, since `*edit*` matches the edit
 tool's own name; in the other order the edit tool is taken away altogether.
 
+A seventh asks OpenCode what it offers each of canopy's shipped agents (DESIGN §13), through `opencode debug`, which
+needs no model: that each is read without an error, and that the chore and the reviewer, which may push nothing, are
+offered no MCP server whole.
+
 This runs a real model, so it is opt-in: set CANOPY_OPENCODE_CANARY=1 with `opencode` on PATH and a model provider
 configured in OpenCode. CANOPY_OPENCODE_CANARY_MODEL (provider/model) picks the model; otherwise OpenCode's default.
 The helpers that read OpenCode's event stream are unit-tested here without opencode or a model.
@@ -46,6 +50,7 @@ import pytest
 
 from canopy.infra import resources
 from canopy.infra.procs import SubprocessRunner
+from canopy.runtime import definitions, offerings
 
 requires_canary = pytest.mark.skipif(
     os.environ.get("CANOPY_OPENCODE_CANARY") != "1" or shutil.which("opencode") is None,
@@ -424,6 +429,23 @@ def events(stdout: str) -> list[dict[str, object]]:
 def attempted(calls: Iterable[str], needle: str) -> bool:
     """Return whether any tool call mentions `needle`."""
     return any(needle in call for call in calls)
+
+
+@requires_canary
+def test_opencode_says_what_it_offers_each_of_canopys_agents(tmp_path: Path) -> None:
+    config_dir = tmp_path / "definitions"
+    for relative, content in definitions.bundled().items():
+        (config_dir / relative).parent.mkdir(parents=True, exist_ok=True)
+        (config_dir / relative).write_bytes(content)
+    found = offerings.offerings(
+        SubprocessRunner(), cwd=tmp_path, definitions_dir=config_dir, agents=definitions.agent_names()
+    )
+    assert found.error is None
+    assert [a.agent for a in found.agents if a.error is not None] == []
+    assert "tracker-jira" in found.skills
+    for offer in found.agents:
+        if offer.agent in {"canopy-chore", "canopy-reviewer"}:
+            assert all(s.reach != "all" for s in offer.servers), offer
 
 
 ERROR_EVENT = (

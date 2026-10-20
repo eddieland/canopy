@@ -9,7 +9,9 @@ per line. canopy reads three kinds of event and one field of every event, each v
   most one call was sent is the run's peak context. The first call's is kept apart: what it was sent, less the
   prompt, is the run's fixed overhead, and its cache write says whether that came from the cache.
 - `tool_use`: one tool call, printed once it ended, `completed` or `error`. Rolled up by tool, the calls, the errors,
-  and the characters of what they returned are what each tool put into the run's context.
+  and the characters of what they returned are what each tool put into the run's context. A call of the `skill` tool
+  is counted under the skill it loaded, `skill:<name>`, so spend says which skills an agent uses, not only that it
+  used one.
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
@@ -27,12 +29,15 @@ from typing import Annotated, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
 from canopy.runtime import report
-from canopy.runtime.report import MAX_COST_USD, AgentOutput, Call, Count, ToolUse, Usage
+from canopy.runtime.opencode.definitions import MAX_SKILL_NAME, SKILL_NAME_RE
+from canopy.runtime.report import MAX_COST_USD, SKILL_PREFIX, AgentOutput, Call, Count, ToolUse, Usage
 
 #: The event that starts a model call, the one that ends it, and the one that ends a tool call.
 STEP_START = "step_start"
 STEP_FINISH = "step_finish"
 TOOL_USE = "tool_use"
+#: OpenCode's tool that loads a skill.
+SKILL_TOOL = "skill"
 
 
 class _Text(BaseModel):
@@ -71,6 +76,15 @@ class _ToolState(BaseModel):
     status: Literal["completed", "error"]
     output: StrictStr | None = None
     error: StrictStr | None = None
+    #: What the call was given, and what the tool said of it besides its output; read only for a skill's name.
+    input: object = None
+    metadata: object = None
+
+
+class _Named(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    name: StrictStr
 
 
 class _ToolPart(BaseModel):
@@ -158,7 +172,11 @@ class Tally:
             return
         state = part.state
         error = state.status == "error"
-        self._tools.add(part.tool, error=error, said=state.error if error else state.output)
+        tool = part.tool
+        if tool == SKILL_TOOL:
+            skill = _skill_name(state)
+            tool = f"{SKILL_PREFIX}{skill}" if skill is not None else tool
+        self._tools.add(tool, error=error, said=state.error if error else state.output)
 
 
 def parse_event(line: str) -> dict[str, object] | None:
@@ -176,3 +194,19 @@ def parse_event(line: str) -> dict[str, object] | None:
     if not isinstance(event.get("type"), str) or "sessionID" not in event:
         return None
     return event
+
+
+def _skill_name(state: _ToolState) -> str | None:
+    """The skill a `skill` call loaded: the name OpenCode found it under, else the one it was asked for.
+
+    Returns:
+        The name, or None when neither is a skill's name by OpenCode's rule, so the call counts as `skill` alone.
+    """
+    for said in (state.metadata, state.input):
+        try:
+            name = _Named.model_validate(said).name
+        except ValidationError:
+            continue
+        if len(name) <= MAX_SKILL_NAME and SKILL_NAME_RE.fullmatch(name):
+            return name
+    return None

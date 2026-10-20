@@ -1,13 +1,14 @@
 """canopy's agents, and what config decides each may do (DESIGN §13), whatever runtime's format they are written in.
 
 The runtime's implementation writes `Rules` into the definitions it ships (`canopy.runtime.definitions`), each in its
-own format; these are what canopy decides, and the names it runs each agent by.
+own format; these are what canopy decides, and the names it runs each agent by. `Offerings` is what each agent is then
+offered once the runtime has merged the operator's own config into canopy's (`canopy.runtime.offerings`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -63,3 +64,46 @@ class Rules:
     #: The overseer's prompt, and the tracker's provider, whose shipped skill, if any, follows it.
     overseer_prompt: str
     tracker_provider: str
+
+
+#: How much of an MCP server's tools an agent is offered: every one, only some, or none.
+Reach = Literal["all", "some", "none"]
+
+
+@dataclass(frozen=True)
+class ServerOffer:
+    """One MCP server, as one agent is offered it."""
+
+    #: The server, as the runtime's config names it.
+    server: str
+    reach: Reach
+    #: The rules that make the reach `some`, in the order they apply, the last that matches a tool winning: each the
+    #: tool names they match, as the runtime's patterns write them, after `offer` or `deny`.
+    exceptions: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
+class AgentOffer:
+    """What one of canopy's agents is offered, after the operator's config: MCP servers and skills."""
+
+    agent: str
+    servers: Sequence[ServerOffer] = ()
+    #: The skills it is offered, and those it is denied, by name.
+    skills: Sequence[str] = ()
+    denied_skills: Sequence[str] = ()
+    #: Why the runtime could not say what the agent is offered, or None when it said.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class Offerings:
+    """What the runtime offers canopy's agents, where they start."""
+
+    #: Every MCP server the runtime has configured, by name, and those its config turns off for every agent.
+    servers: Sequence[str] = ()
+    disabled_servers: Sequence[str] = ()
+    #: Every skill the runtime finds, by name.
+    skills: Sequence[str] = ()
+    agents: Sequence[AgentOffer] = ()
+    #: Why the runtime could not list its servers or its skills, or None when it did.
+    error: str | None = None

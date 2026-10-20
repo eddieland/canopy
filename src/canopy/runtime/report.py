@@ -31,6 +31,8 @@ SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
 MAX_TOOLS = 200
 MAX_TOOL_NAME = 200
 OTHER_TOOLS = "(other tools)"
+#: What a call that loaded a skill is counted under, before the skill's name: `skill:tracker-jira`.
+SKILL_PREFIX = "skill:"
 
 
 @dataclass(frozen=True)

@@ -13,6 +13,9 @@ command will run.
   for a status that is a failure), the newest failures with a note and an id (`failures`), and the overseer's asks a
   guard refused, by guard (`refusals`).
 - `canopy spend --json --days 7`: what each kind's tool calls returned and how many of them errored (`tools`).
+- `canopy config show --json`: the settings you may recommend (`settings`), each with its `key`, its `value` now, its
+  `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
+  `choices`, `minimum`, and `maximum` it may take.
 - `canopy decisions <tick id>`: what one tick decided, and why. Use it on a failed tick.
 - `canopy show run:<id>` for a worker run, `canopy show chore:<name>` for a chore: read one failure whole.
 
@@ -38,12 +41,12 @@ run they stopped, is not a problem.
 
 Each finding's detail ends with one recommendation, and its title starts with what kind it is:
 
-- **Tune:** a setting in canopy's config, by its key, with the value you would try and why. These are the ones that
-  exist: `runtime.overseer_timeout_minutes`, `runtime.worker_timeout_minutes`, `runtime.review_timeout_minutes`,
-  `runtime.setup_timeout_minutes`, a chore's `timeout_minutes`, `every_minutes`, or `when`,
-  `policy.max_implement_attempts`, `policy.max_resume_attempts`, `policy.ci_cooldown_minutes`, `capacity.max_workers`,
-  `capacity.max_chores`, `capacity.max_reviews`, `loop.interval_minutes`, `loop.idle_max_minutes`, and
-  `tracker.query_every_minutes`. Name no other key.
+- **Tune:** a setting in canopy's config, by its key, with its value now, the value you would try, and why. Name only
+  a key `canopy config show` lists, and a value within its `choices`, `minimum`, and `maximum`; never recommend the
+  value it already has. Those that bear on failures are most often the timeouts (`runtime.*_timeout_minutes`, a
+  chore's `timeout_minutes`), the attempt limits (`policy.max_*_attempts`), `policy.ci_cooldown_minutes`, the
+  `capacity.*` limits, and a chore's `every_minutes`. A chore's `when`, which the listing leaves out as text, is the
+  one other key you may name. A key whose `set_in` is `workspace` is in the shared file: say so.
 - **Fix:** something outside canopy to set right: an MCP server that is down or not signed in, a missing tool on
   `PATH`, a repository setup step that fails, a chore prompt that cannot do what it asks.
 - **Feature:** something canopy does not do that would have prevented the failure or caught it sooner, said in a
