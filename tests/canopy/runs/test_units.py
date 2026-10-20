@@ -260,7 +260,7 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         # A review or ci cursor is a unit's: in a workspace of several it needs --repo, and one repository.
         reviewed = "2026-10-07T20:58:50Z"
         refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--cursor", f"review={reviewed}", code=2)
-        assert "a review cursor belongs to one unit: name its repository with --repo" in refused.err
+        assert "repo is required (--repo): a review cursor belongs to one unit" in refused.err
         ws_scenario.overseer(*dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--cursor", "ci=9"), code=2)
         refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "nope", "--phase", "ci_red", code=1)
         assert "'nope' is not a repository in this workspace (api, web)" in refused.err
@@ -279,7 +279,7 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         assert ticket.phase is None  # a phase about the PR is the unit's
         # A phase about the PR needs its unit; the ticket's own phases are the ticket's, --repo or not.
         refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "approved", code=2)
-        assert "the approved phase belongs to one unit: name its repository with --repo" in refused.err
+        assert "repo is required (--repo): the approved phase belongs to one unit" in refused.err
         ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human")
         ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase == "needs_human"
@@ -301,7 +301,7 @@ def test_a_merge_conflict_is_a_units_phase(ws_scenario: Scenario) -> None:
     """A PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
     conn = ws_scenario.conn
     refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "conflicted", code=2)
-    assert "the conflicted phase belongs to one unit: name its repository with --repo" in refused.err
+    assert "repo is required (--repo): the conflicted phase belongs to one unit" in refused.err
     ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted")
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
@@ -313,7 +313,7 @@ def test_untrusted_review_is_a_units_phase(ws_scenario: Scenario) -> None:
     """Feedback on a PR from an untrusted reviewer is `untrusted_review`, the unit's phase like `changes_requested`."""
     conn = ws_scenario.conn
     refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "untrusted_review", code=2)
-    assert "the untrusted_review phase belongs to one unit: name its repository with --repo" in refused.err
+    assert "repo is required (--repo): the untrusted_review phase belongs to one unit" in refused.err
     ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review")
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")

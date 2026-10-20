@@ -191,7 +191,8 @@ def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener
         if line.strip():
             response = answer(line, opener)
             if response is not None:
-                write(json.dumps(response, ensure_ascii=False) + "\n")
+                # Escaped to ASCII: a lone surrogate a client sent, echoed in a refusal, could not be written as UTF-8.
+                write(json.dumps(response) + "\n")
 
 
 @contextlib.contextmanager

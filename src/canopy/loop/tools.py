@@ -13,10 +13,22 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, WithJsonSchema, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    ValidationError,
+    WithJsonSchema,
+    model_validator,
+)
+from pydantic_core import PydanticUndefined
 
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, config, contract, conversation, db, memory, review_requests, vocab
@@ -29,6 +41,8 @@ from canopy.runs import dispatch, policy
 
 if TYPE_CHECKING:
     import sqlite3
+
+    from pydantic.config import JsonDict
 
     from canopy.core import records
     from canopy.core.context import Context
@@ -62,7 +76,8 @@ class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer i
 def explain(error: ValidationError) -> str:
     """Say what was wrong with a request, as the overseer reads it from a tool's error or a command's usage error.
 
-    It names each field and what was wrong with it, never the value given: a mirrored comment's body is the tracker's.
+    It names each field and what was wrong with it, never pydantic's copy of the input; a check echoes a value only for
+    short, bounded fields, never a body: a mirrored comment's body is the tracker's.
 
     Returns:
         One line per problem: a rule across fields as its own sentence, a field's as `field: problem`.
@@ -211,6 +226,55 @@ def _cursors(pairs: Mapping[str, str]) -> Mapping[str, str]:
     return pairs
 
 
+def _null_left_out(empty: Callable[[], object], shown: object = PydanticUndefined) -> BeforeValidator:
+    """Take a field's `null` as the field left out, as the fields that default to None do: a model sends either.
+
+    Returns:
+        A validator that puts `empty()` in place of None, its schema `shown` when given, else the field's own.
+    """
+    return BeforeValidator(lambda value: empty() if value is None else value, json_schema_input_type=shown)
+
+
+def _known_kind(value: object) -> object:
+    """Refuse a kind that is no run kind, naming only those dispatched.
+
+    A retired kind passes, to be refused naming what replaced it, a refusal the decisions record.
+
+    Returns:
+        `value`, unchanged.
+
+    Raises:
+        ValueError: It is no run kind.
+    """
+    if not (isinstance(value, str) and value in tuple(RunKind)):
+        raise ValueError(f"choose from {', '.join(policy.DISPATCH_KINDS)}")
+    return value
+
+
+def _required(*names: str) -> Callable[[JsonDict], None]:
+    """List `names` in a request's schema as required, though the request takes them left out.
+
+    A field left out is a guard's refusal, which the decisions record as the command's is; the schema still tells the
+    model to name it.
+
+    Returns:
+        What adds them to the schema's `required`.
+    """
+
+    def add(schema: JsonDict) -> None:
+        listed = schema.get("required")
+        schema["required"] = [*(listed if isinstance(listed, list) else []), *names]
+        properties = schema.get("properties")
+        for name in names:
+            field = properties.get(name) if isinstance(properties, dict) else None
+            if isinstance(field, dict):
+                field.pop("default", None)
+
+    return add
+
+
+#: A cursor's name: comment and message are a ticket's, review and ci a unit's.
+CursorName = Literal["comment", "message", "review", "ci"]
 #: A ticket key, such as PROJ-123.
 Key = Annotated[str, _matching(KEY_RE, "ticket key"), Field(description="A ticket key, such as PROJ-123.")]
 #: A repository's name in the workspace's map.
@@ -223,7 +287,8 @@ Text = Annotated[str, AfterValidator(clean_text)]
 PrUrl = Annotated[str, AfterValidator(pr_url), Field(description="The PR's https:// URL.")]
 #: The cursors a call advances, by name: comment and message are a ticket's, review and ci a unit's.
 Cursors = Annotated[
-    Mapping[Literal["comment", "message", "review", "ci"], str],
+    Mapping[CursorName, str],
+    _null_left_out(dict, Mapping[CursorName, str] | None),
     AfterValidator(_cursors),
     Field(
         description="Cursors to advance past what you handled, by name. comment and message are the ticket's; review "
@@ -233,8 +298,9 @@ Cursors = Annotated[
 
 
 class _Request(BaseModel):
-    # An unknown field is refused: a misspelled one would otherwise be dropped without a word.
-    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+    # An unknown field is refused: a misspelled one would otherwise be dropped without a word. A number is taken for a
+    # string, as a tracker's ids are often sent: a comment's id, a check run's.
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True, coerce_numbers_to_str=True)
 
 
 # The verbs, each its request, then its function.
@@ -243,12 +309,16 @@ class _Request(BaseModel):
 class Dispatch(_Request):
     """A worker started on a ticket."""
 
+    # `repos` left out is the dispatch guard's refusal, recorded as the command's is, so the request takes it.
+    model_config = ConfigDict(json_schema_extra=_required("repos"))
+
     #: The ticket.
     key: Key
     #: What the worker does. `fix-ci` and `split` are taken only to be refused naming what replaced them, a refusal
     #: the decisions record, so the schema does not offer them.
     kind: Annotated[
         RunKind,
+        BeforeValidator(_known_kind),
         WithJsonSchema({"type": "string", "enum": list(policy.DISPATCH_KINDS)}),
         Field(description="What the worker does."),
     ]
@@ -263,6 +333,7 @@ class Dispatch(_Request):
     #: The repositories the run works in, a unit each; several for a joint run.
     repos: Annotated[
         tuple[Repo, ...],
+        _null_left_out(tuple),
         Field(description="The repositories the run works in, one unit each; several for a joint run. Required."),
     ] = ()
     #: implement only: the short name of the work, in its branch.
@@ -276,11 +347,13 @@ class Dispatch(_Request):
     )
     #: resume only: the canopy review run whose findings the worker addresses.
     review_run: Annotated[
-        int | None, Field(ge=1, description="resume only: the review run whose findings the worker addresses.")
+        StrictInt | None, Field(ge=1, description="resume only: the review run whose findings the worker addresses.")
     ] = None
     #: resume only, and required for it: why it runs.
     reasons: Annotated[
-        tuple[ResumeReason, ...], Field(description="resume only, and required for it: why it runs, each once.")
+        tuple[ResumeReason, ...],
+        _null_left_out(tuple, tuple[ResumeReason, ...] | None),
+        Field(description="resume only, and required for it: why it runs, each once."),
     ] = ()
     #: What the worker should read or do: links, comment ids, check names. Never quoted text.
     context: Annotated[
@@ -294,8 +367,8 @@ class Dispatch(_Request):
         unit_cursors = [name for name in self.cursors if name in db.UNIT_CURSORS]
         if unit_cursors and len(set(self.repos)) > 1:
             raise ValueError(
-                f"a {unit_cursors[0]} cursor belongs to one unit: "
-                f"advance it with `canopy ticket set {self.key} --repo NAME`"
+                f"cursors: a {unit_cursors[0]} cursor belongs to one unit, so repos (--repo) names one; advance it "
+                f"after with ticket-set and its repo (`canopy ticket set {self.key} --repo NAME`)"
             )
         return self
 
@@ -438,8 +511,8 @@ class Decide(_Request):
             )
         if key is not None and action == "skip" and duties.tick_wide(rationale):
             raise ValueError(
-                f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick and names no key: "
-                "`canopy decide skip --rationale '...'`, only when the tick cannot go on; "
+                f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick, so it names no key: leave key out "
+                "(`canopy decide skip --rationale '...'`), only when the tick cannot go on; "
                 "otherwise decide each ticket under its own key"
             )
         return self
@@ -514,7 +587,7 @@ class Attention(_Request):
     @model_validator(mode="after")
     def _about(self) -> Self:
         if self.key is None and self.pr is None:
-            raise ValueError("expected KEY REASON, or REASON with --pr")
+            raise ValueError("key or pr is required (KEY, or --pr): an item is about a ticket, or a PR with no ticket")
         return self
 
 
@@ -560,7 +633,11 @@ class TicketSet(_Request):
     #: The cursors to advance past what was handled. A dry run advances none.
     cursors: Cursors = Field(default_factory=dict)
     #: Mark the ticket done in the journal. A dry run does not.
-    done: Annotated[bool, Field(description="Mark the ticket done in the journal. A dry run does not.")] = False
+    done: Annotated[
+        StrictBool,
+        _null_left_out(lambda: False, StrictBool | None),
+        Field(description="Mark the ticket done in the journal. A dry run does not."),
+    ] = False
     #: A short name for the ticket, from its own title.
     title: Annotated[
         Annotated[str, AfterValidator(clean_title)] | None,
@@ -573,7 +650,7 @@ class TicketSet(_Request):
         unit_phase = self.phase if self.phase in vocab.UNIT_PHASES else None
         if self.repo is None and (unit_pairs or unit_phase is not None):
             what = f"a {unit_pairs[0]} cursor" if unit_pairs else f"the {unit_phase} phase"
-            raise ValueError(f"{what} belongs to one unit: name its repository with --repo")
+            raise ValueError(f"repo is required (--repo): {what} belongs to one unit")
         return self
 
 
@@ -690,6 +767,9 @@ def mirror(ctx: Context, request: Mirror) -> str:
 class ReviewRun(_Request):
     """A review of a PR at a commit."""
 
+    # `repo` left out is the review guard's refusal, recorded as the command's is, so the request takes it.
+    model_config = ConfigDict(json_schema_extra=_required("repo"))
+
     #: The PR's URL, as an opaque string: the review's guards check it, and a refusal records it.
     pr: Annotated[str, Field(description="The PR's https:// URL.")]
     #: The full head commit read on the PR just now.
@@ -697,7 +777,11 @@ class ReviewRun(_Request):
     #: The ticket of one of the loop's own PRs.
     ticket: Annotated[Key | None, Field(description="The ticket of one of the loop's own PRs.")] = None
     #: The PR's repository, by its name in the map.
-    repo: Annotated[Repo | None, Field(description="The PR's repository, by its name in the map. Required.")] = None
+    repo: Annotated[
+        Repo | None,
+        WithJsonSchema({"type": "string"}),
+        Field(description="The PR's repository, by its name in the map. Required."),
+    ] = None
     #: What the reviewer should look at first. Never quoted text.
     context: Annotated[Text | None, Field(description="What the reviewer should look at first. Never quoted text.")] = (
         None
@@ -912,7 +996,9 @@ def running_tick(ctx: Context) -> records.Tick:
     """
     row = current_tick(ctx)
     if row is None:
-        raise Refused(f"no tick is running ({conversation.TICK_ID_ENV} is not set); this command runs inside a tick")
+        raise Refused(
+            f"no tick is running ({conversation.TICK_ID_ENV} is not set); the overseer's verbs run only inside one"
+        )
     return row
 
 
@@ -989,7 +1075,7 @@ def _review_findings(
         return None
     if kind != RunKind.RESUME:
         raise dispatch.Refusal(
-            "bad_review", "--review-run names findings for a resume to address; it is for resume only"
+            "bad_review", "review_run (--review-run) names findings for a resume to address; it is for resume only"
         )
     try:
         return findings.for_worker(conn, run_id, key, repos)

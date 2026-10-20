@@ -99,6 +99,15 @@ def test_the_body_is_read_from_stdin_and_cut_to_its_bound(scenario: Scenario) ->
         assert message["truncated"] == 1
 
 
+def test_a_bad_ref_is_refused_before_stdin_is_read(scenario: Scenario) -> None:
+    stdin = io.StringIO("the body")
+    with mock.patch.object(sys, "stdin", stdin), scenario.ticking() as tick_id:
+        refused = scenario.overseer(*mirror(*comment(key="!!bad"), body=None), code=1).err
+    assert "mirror refused (bad_ref)" in refused
+    assert stdin.tell() == 0
+    assert [d[1] for d in decisions(scenario.conn, tick_id)] == ["refused:bad_ref"]
+
+
 def test_mirror_refuses_what_it_cannot_record_and_records_each_refusal(
     scenario: Scenario, capsys: pytest.CaptureFixture[str]
 ) -> None:

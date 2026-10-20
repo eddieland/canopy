@@ -73,7 +73,7 @@ def test_only_a_tick_wide_reason_skips_the_tick(scenario: Scenario) -> None:
         refused = scenario.overseer("decide", "skip", "--rationale", "wanted to relabel PROJ-1", code=2)
         assert "a skip about one ticket names its key" in refused.err
         queue = ["decide", "queue", "skip", "--rationale", "tracker_unsupported: queue is not an issue"]
-        assert "'tracker_unsupported' skips the whole tick and names no key" in scenario.overseer(*queue, code=2).err
+        assert "'tracker_unsupported' skips the whole tick, so it names no key" in scenario.overseer(*queue, code=2).err
         scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: labels")
         scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "mcp_unavailable: github, for its PR")
     rows = [(d.ticket_key, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]

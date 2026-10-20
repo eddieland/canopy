@@ -88,3 +88,6 @@ canopy serves MCP itself, over stdio only, to the overseer only. M37 retires mir
 
 - Structured results: JSON a tool returns instead of the CLI's text, once no command prints the same thing.
 - A validate-only `check_result` tool for workers, once workers are measured losing runs to results that do not parse.
+- How long OpenCode waits on one `tools/call` to a local server, and on `tools/list` as it connects, to be read from
+  its source before stage 2: `dispatch` can wait on the dispatch lock and a pool's lease, and the server answers one
+  call at a time, so calls the overseer makes in parallel queue behind it.
