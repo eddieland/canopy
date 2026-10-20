@@ -633,7 +633,7 @@ class RunSlot(Row):
     lease_holder: str
     base_branch: str | None
     git_link: bytes | None
-    pool: str
+    pool: PoolKind
 
 
 @dataclass(frozen=True)
