@@ -267,6 +267,19 @@ def test_the_feedback_planner_prompt(
 
 
 @pytest.mark.usefixtures("git_pool")
+def test_the_feedback_planner_prompt_when_it_may_approve_its_plan(
+    scenario: Scenario, canopy_env: CanopyEnv, github_state: Path, markdown_snapshot: SnapshotAssertion
+) -> None:
+    """The same prompt under `policy.planner_may_approve`, whole: how it says a plan needs no review (DESIGN §25)."""
+    with_a_pr(scenario)
+    scenario.configures("private", policy={"planner_may_approve": True})
+    run_id = planned(scenario, github_state)
+    prompt = (canopy_env.state_dir / "runs" / f"{run_id}.prompt").read_text()
+    prompt = re.sub(r"\d{4}-\d\d-\d\dT[\d:.]+Z", "<time>", prompt.replace(str(canopy_env.root), "/workspace"))
+    assert prompt == markdown_snapshot
+
+
+@pytest.mark.usefixtures("git_pool")
 def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and_resumed(
     scenario: Scenario, github_state: Path
 ) -> None:

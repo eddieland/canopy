@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
@@ -336,3 +337,13 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
     third = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
     assert present(plans.current(scenario.conn, KEY)).run_id == third.id
     assert present(plans.current(scenario.conn, KEY)).status is PlanStatus.PROPOSED
+
+
+def test_the_planners_prompt_when_it_may_approve_its_plan(
+    scenario: Scenario, git_pool: GitPool, markdown_snapshot: SnapshotAssertion
+) -> None:
+    """The planner's prompt under `policy.planner_may_approve`, whole: how it says a plan needs no review (§25)."""
+    scenario.configures("private", policy={"planner_may_approve": True})
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    prompt = run.prompt.replace(str(scenario.env.root), "/workspace")
+    assert re.sub(r"\d{4}-\d\d-\d\dT[\d:.]+Z", "<time>", prompt) == markdown_snapshot
