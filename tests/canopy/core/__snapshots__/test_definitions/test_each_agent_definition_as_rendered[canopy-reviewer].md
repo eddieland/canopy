@@ -24,8 +24,8 @@ permission:
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
-  # in depth. Denied: commenting or replying anywhere, submitting a PR review (it can approve), and anything that
-  # pushes, writes files, changes labels, or edits or deletes. Reading stays allowed.
+  # in depth. Denied: commenting or replying anywhere, submitting a PR review (it can approve), asking Copilot for one,
+  # and anything that pushes, writes files, changes labels, or edits or deletes. Reading stays allowed.
   "*add_*": deny
   "*addComment*": deny
   "*reply*": deny
@@ -46,6 +46,20 @@ permission:
   "*branch*": deny
   "*file*": deny
   "*fork*": deny
+  "*copilot*": deny
+  # GitHub's tools that no canopy prompt asks for, denied by name: OpenCode sends no tool a rule denies whole, so each
+  # request is smaller. Its teams, users, and UI data; releases and tags; repository search; and collaborators.
+  "*get_teams*": deny
+  "*get_team_members*": deny
+  "*search_users*": deny
+  "*ui_get*": deny
+  "*list_releases*": deny
+  "*get_latest_release*": deny
+  "*get_release_by_tag*": deny
+  "*list_tags*": deny
+  "*get_tag*": deny
+  "*search_repositories*": deny
+  "*list_repository_collaborators*": deny
 ---
 
 The system prompt is supplied by the harness at invocation time via the

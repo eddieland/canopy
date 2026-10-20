@@ -9,6 +9,7 @@ from canopy.runtime import agents
 from canopy.runtime.opencode import definitions
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+SKILL_MARKER = "  # canopy: skill rule\n"
 TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER, agents.PLAN_TRIAGE]
 
 
@@ -60,14 +61,15 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
     assert files == definitions.bundled()
 
 
-def test_the_overseer_gets_the_trackers_skill_when_canopy_ships_one() -> None:
+def test_the_overseer_gets_the_trackers_skill_when_canopy_ships_one_and_no_skill_tool() -> None:
+    # With the skill in its body there is nothing left to load, and OpenCode sends no tool a rule denies whole.
     files = {
-        "agents/canopy-overseer.md": f"---\nx: y\n---\n{PROMPT_MARKER}".encode(),
+        "agents/canopy-overseer.md": f"---\npermission:\n{SKILL_MARKER}---\n{PROMPT_MARKER}".encode(),
         "skills/tracker-jira/SKILL.md": b"---\nname: tracker-jira\n---\nUse JQL.\n",
     }
     overseer = definitions.render(files, replace(PLAIN, tracker_provider="jira"))["agents/canopy-overseer.md"].decode()
     skill = "The skill `tracker-jira` follows, given here so that you need not load it.\n\nUse JQL.\n"
-    assert overseer == f"---\nx: y\n---\nDecide.\n\n{skill}"
+    assert overseer == f"---\npermission:\n{SKILL_MARKER}  skill: deny\n---\nDecide.\n\n{skill}"
 
 
 @pytest.mark.parametrize("agent", TEMPERATURE_AGENTS)
@@ -83,17 +85,19 @@ def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
         definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
 
 
-def test_the_overseer_prompt_stands_alone_without_a_skill_for_its_tracker() -> None:
-    head = f"---\ndescription: x\n---\n\n{PROMPT_MARKER}"
+def test_the_overseer_prompt_stands_alone_without_a_skill_for_its_tracker_and_keeps_its_skill_tool() -> None:
+    # The prompt has it load the tracker's skill by name, if one is installed, so the skill tool stays.
+    head = f"---\npermission:\n{SKILL_MARKER}---\n\n{PROMPT_MARKER}"
     assert definitions.render_overseer(f"{head}stub\n", "# canopy overseer\n\nDecide.\n", None) == (
-        "---\ndescription: x\n---\n\n# canopy overseer\n\nDecide.\n"
+        f"---\npermission:\n{SKILL_MARKER}---\n\n# canopy overseer\n\nDecide.\n"
     )
 
 
-def test_an_overseer_definition_without_its_marked_line_is_refused() -> None:
+@pytest.mark.parametrize("marker", [PROMPT_MARKER, SKILL_MARKER])
+def test_an_overseer_definition_without_a_marked_line_is_refused(marker: str) -> None:
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     with pytest.raises(agents.DefinitionsError, match="no line"):
-        definitions.render_overseer(bundled.replace(PROMPT_MARKER, ""), "# canopy overseer\n", None)
+        definitions.render_overseer(bundled.replace(marker, ""), "# canopy overseer\n", None)
 
 
 def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:

@@ -19,6 +19,7 @@ from canopy.runtime.opencode import definitions as opencode_definitions
 from tests.conftest import CanopyEnv
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+SKILL_MARKER = "  # canopy: skill rule\n"
 
 
 def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
@@ -562,6 +563,8 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     head = opencode_definitions.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
+    # With the skill in its body, it has nothing to load (`skill: deny`, below).
+    head = head.replace(SKILL_MARKER, f"{SKILL_MARKER}  skill: deny\n", 1)
     assert text.startswith(head)
     body = text.removeprefix(head)
     prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")
@@ -606,6 +609,138 @@ def test_each_agent_definition_as_rendered(
     # What each agent runs on, as a run loads it: its rules, and the overseer's whole prompt and tracker skill.
     files = definitions.sources(config.load(canopy_env.root))
     assert files[f"agents/{agent}.md"].decode() == markdown_snapshot
+
+
+#: GitHub's MCP tools, as its server v2.0.2 lists them on its default toolsets, in OpenCode's `<server>_<tool>` form.
+GITHUB_TOOLS = tuple(
+    f"github_{tool}"
+    for tool in (
+        "get_me",
+        "get_team_members",
+        "get_teams",
+        "ui_get",
+        "assign_copilot_to_issue",
+        "request_copilot_review",
+        "add_issue_comment",
+        "get_label",
+        "issue_read",
+        "issue_write",
+        "list_issue_fields",
+        "list_issue_types",
+        "list_issues",
+        "search_issues",
+        "sub_issue_write",
+        "update_issue_comment",
+        "add_comment_to_pending_review",
+        "add_reply_to_pull_request_comment",
+        "create_pull_request",
+        "list_pull_requests",
+        "merge_pull_request",
+        "pull_request_read",
+        "pull_request_review_write",
+        "search_pull_requests",
+        "update_pull_request",
+        "update_pull_request_branch",
+        "create_branch",
+        "create_or_update_file",
+        "create_repository",
+        "delete_file",
+        "fork_repository",
+        "get_commit",
+        "get_file_contents",
+        "get_latest_release",
+        "get_release_by_tag",
+        "get_tag",
+        "list_branches",
+        "list_commits",
+        "list_releases",
+        "list_repository_collaborators",
+        "list_tags",
+        "push_files",
+        "search_code",
+        "search_commits",
+        "search_repositories",
+        "search_users",
+    )
+)
+#: The ones no canopy prompt asks for: teams, users, UI data, releases, tags, repository search and creation, forks,
+#: collaborators, and Copilot.
+UNASKED_GITHUB_TOOLS = (
+    "github_get_teams",
+    "github_get_team_members",
+    "github_search_users",
+    "github_ui_get",
+    "github_list_releases",
+    "github_get_latest_release",
+    "github_get_release_by_tag",
+    "github_list_tags",
+    "github_get_tag",
+    "github_search_repositories",
+    "github_list_repository_collaborators",
+    "github_create_repository",
+    "github_fork_repository",
+    "github_assign_copilot_to_issue",
+    "github_request_copilot_review",
+)
+#: The overseer's reads of GitHub: PRs, with their checks, reviews, and merge state; branches; issues, the tickets when
+#: the tracker is GitHub; and the signed-in user.
+OVERSEER_GITHUB_READS = {
+    "github_pull_request_read",
+    "github_list_pull_requests",
+    "github_search_pull_requests",
+    "github_list_branches",
+    "github_issue_read",
+    "github_list_issues",
+    "github_search_issues",
+    "github_get_me",
+}
+
+
+def _ruleset(canopy_env: CanopyEnv, agent: str) -> list[tuple[str, str, str]]:
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"]
+    return _opencode_ruleset(rendered.decode())
+
+
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.CHORE}))
+def test_no_agent_is_sent_the_github_tools_no_prompt_asks_for(canopy_env: CanopyEnv, agent: str) -> None:
+    # OpenCode leaves a tool its rules deny whole out of the request (MEASUREMENTS 2026-10-19 F42), which is what this
+    # cuts: each schema is sent on every call.
+    ruleset = _ruleset(canopy_env, agent)
+    assert [tool for tool in UNASKED_GITHUB_TOOLS if not _opencode_disabled(ruleset, tool)] == []
+
+
+def test_a_chore_keeps_githubs_reads_and_loses_copilot(canopy_env: CanopyEnv) -> None:
+    # A chore's prompt is the operator's, and may ask for any read, such as the tags since a release; Copilot writes.
+    ruleset = _ruleset(canopy_env, agents.CHORE)
+    for tool in ("github_list_tags", "github_get_latest_release", "github_get_teams", "github_search_repositories"):
+        assert not _opencode_disabled(ruleset, tool), tool
+    assert _opencode_disabled(ruleset, "github_request_copilot_review")
+    assert _opencode_disabled(ruleset, "github_assign_copilot_to_issue")
+
+
+def test_the_overseer_is_sent_only_the_github_reads_it_makes(canopy_env: CanopyEnv) -> None:
+    # Every write is denied (TRUST_MODEL T6), and every read its prompt has no use for.
+    ruleset = _ruleset(canopy_env, agents.OVERSEER)
+    assert {tool for tool in GITHUB_TOOLS if not _opencode_disabled(ruleset, tool)} == OVERSEER_GITHUB_READS
+
+
+def test_the_overseer_keeps_the_trackers_reads(canopy_env: CanopyEnv) -> None:
+    # Its patterns name GitHub's tools exactly, so none of them takes a tracker's read, whatever server it is on.
+    ruleset = _ruleset(canopy_env, agents.OVERSEER)
+    jira = config.DEFAULT_TRACKER_TOOLS["jira"]
+    for tool in (*(f"{jira.server}_{read}" for read in jira.allowed), "linear_list_issues", "linear_get_issue"):
+        assert not _opencode_disabled(ruleset, tool), tool
+
+
+def test_the_overseer_has_no_todo_list_and_no_skill_tool_with_the_trackers_skill_in_its_body() -> None:
+    # The prompt has it load the tracker's skill by name only where canopy ships none, so the skill tool stays then.
+    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
+    with_skill = _opencode_ruleset(opencode_definitions.render_overseer(bundled, "Decide.\n", "The skill."))
+    without = _opencode_ruleset(opencode_definitions.render_overseer(bundled, "Decide.\n", None))
+    assert _opencode_disabled(with_skill, "todowrite")
+    assert _opencode_disabled(without, "todowrite")
+    assert _opencode_disabled(with_skill, "skill")
+    assert not _opencode_disabled(without, "skill")
 
 
 @pytest.mark.parametrize(

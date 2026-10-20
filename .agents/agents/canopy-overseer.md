@@ -25,6 +25,54 @@ permission:
     "*": deny
     "canopy *": allow
     "treehouse status*": allow
+  # Nothing to plan across calls: a tick's work is its decisions, each recorded as it is made.
+  todowrite: deny
+  # With the tracker's skill in its body, canopy renders `skill: deny` at the marked line: the overseer has nothing to
+  # load. Otherwise the prompt has it load the skill by name, if there is one, and the skill tool stays.
+  # canopy: skill rule
+  # GitHub's MCP tools are permissioned by name, `<server>_<tool>`, and the server's name is the operator's, so each
+  # tool is denied by its own: OpenCode sends no tool a rule denies whole, which cuts each tick's request. Kept are the
+  # reads the prompt makes, PRs (with their checks, reviews, comments, and merge state) and branches; issues, which are
+  # the tickets when the tracker is GitHub; and the signed-in user, too small to matter. Every write is denied
+  # (TRUST_MODEL T6). The tracker's own server is left as it is: reading it is the overseer's work, and its tool names
+  # are its own, so a pattern here could take a read the overseer needs.
+  "*merge_pull_request*": deny
+  "*create_pull_request*": deny
+  "*update_pull_request*": deny
+  "*pull_request_review_write*": deny
+  "*add_comment_to_pending_review*": deny
+  "*add_reply_to_pull_request_comment*": deny
+  "*add_issue_comment*": deny
+  "*update_issue_comment*": deny
+  "*issue_write*": deny
+  "*create_branch*": deny
+  "*create_or_update_file*": deny
+  "*push_files*": deny
+  "*delete_file*": deny
+  "*create_repository*": deny
+  "*fork_repository*": deny
+  "*copilot*": deny
+  # Reads the prompt has no use for: commits, code and files, what creating an issue takes, and the tools below that
+  # no canopy prompt asks for.
+  "*get_commit*": deny
+  "*list_commits*": deny
+  "*search_commits*": deny
+  "*search_code*": deny
+  "*get_file_contents*": deny
+  "*get_label*": deny
+  "*list_issue_types*": deny
+  "*list_issue_fields*": deny
+  "*get_teams*": deny
+  "*get_team_members*": deny
+  "*search_users*": deny
+  "*ui_get*": deny
+  "*list_releases*": deny
+  "*get_latest_release*": deny
+  "*get_release_by_tag*": deny
+  "*list_tags*": deny
+  "*get_tag*": deny
+  "*search_repositories*": deny
+  "*list_repository_collaborators*": deny
 ---
 
 <!-- canopy: overseer prompt -->

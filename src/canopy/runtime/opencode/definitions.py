@@ -12,7 +12,8 @@ files mark for it:
 - the reviewer's, overseer's, and triage agent's temperature, unless it sets none;
 - the overseer's prompt, then the tracker's skill if canopy ships one, as the overseer's body: the body is the agent's
   system prompt, which the provider caches across ticks, where the state block, the tick's message, changes every tick
-  (DESIGN §6).
+  (DESIGN §6). With the skill there, the overseer's skill tool is denied, so that OpenCode sends neither it nor the
+  list of skills.
 
 OpenCode applies the last matching permission rule (D021), so every catch-all `"*"` comes before its exceptions, and
 a rendered rule that allows goes after the deny it narrows.
@@ -77,6 +78,10 @@ _TOOLS_MARKER = "  # canopy: tracker tools\n"
 _TEMPERATURE_MARKER = "# canopy: temperature\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
 _PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+# The line of the shipped overseer definition the denial of its skill tool is rendered at, when its body holds the
+# tracker's skill: nothing is left for it to load, and a tool denied whole is not sent.
+_SKILL_MARKER = "  # canopy: skill rule\n"
+_SKILL_RULE = "  skill: deny\n"
 
 
 def agent_names() -> list[str]:
@@ -200,14 +205,19 @@ def render_overseer(text: str, prompt: str, skill: str | None) -> str:
     """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
 
     The body is the agent's system prompt, so it is cached across ticks with the tools (DESIGN §6, §13). `skill` is the
-    tracker's skill, its own frontmatter left out: given here, the overseer need not load it with a tool call each tick.
+    tracker's skill, its own frontmatter left out: given here, the overseer need not load it with a tool call each tick,
+    so its skill tool is denied too. Without one, the prompt has it load the tracker's skill by name.
 
     Raises:
-        DefinitionsError: `text` has no marked line to render the prompt at.
+        DefinitionsError: `text` has no marked line to render the prompt at, or none for the skill rule.
     """
     head, marker, _ = text.partition(_PROMPT_MARKER)
     if not marker:
         raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_PROMPT_MARKER.strip()!r} to render the prompt at")
+    if _SKILL_MARKER not in head:
+        raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_SKILL_MARKER.strip()!r} to render the skill rule at")
+    if skill is not None:
+        head = head.replace(_SKILL_MARKER, _SKILL_MARKER + _SKILL_RULE, 1)
     parts = [prompt] if skill is None else [prompt, skill]
     return head + "\n\n".join(part.strip("\n") for part in parts) + "\n"
 

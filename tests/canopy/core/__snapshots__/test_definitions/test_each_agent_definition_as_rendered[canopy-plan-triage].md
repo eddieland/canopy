@@ -55,6 +55,19 @@ permission:
   "*run_trigger*": deny
   "*rerun*": deny
   "*cancel*": deny
+  # GitHub's tools that no canopy prompt asks for, denied by name: OpenCode sends no tool a rule denies whole, so each
+  # request is smaller. Its teams, users, and UI data; releases and tags; repository search; and collaborators.
+  "*get_teams*": deny
+  "*get_team_members*": deny
+  "*search_users*": deny
+  "*ui_get*": deny
+  "*list_releases*": deny
+  "*get_latest_release*": deny
+  "*get_release_by_tag*": deny
+  "*list_tags*": deny
+  "*get_tag*": deny
+  "*search_repositories*": deny
+  "*list_repository_collaborators*": deny
   # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools are allowed by name: the
   # last matching rule wins (D021), so a write tool missing from both lists fails closed.
   # canopy: tracker tools
