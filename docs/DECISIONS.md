@@ -490,3 +490,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
   transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).
 - Revisit: if the overseer needs more of MCP than tools, or a runtime that cannot start a stdio server.
+
+## D125. Every journal query is built with `core/sql.py`, from literal SQL and bound values
+
+- Each clause's text is a `LiteralString` and each value a `?`, so the type checker refuses SQL built from data; a
+  name chosen at run time comes from a `Literal` or `sql.name`. Clauses stay written in SQL, so a query still reads
+  as one. Settled by the operator (2026-10-20), in place of f-strings and their `noqa: S608`.
+- Rejected: SQLAlchemy Core (a schema to keep beside the migrations, and an engine canopy does not need); PyPika (a
+  dependency for what one module of ours does); f-strings with a reason on each (a promise no checker holds).
+- Revisit: if a feature builds queries from what the operator picks at run time, such as arbitrary filters.
