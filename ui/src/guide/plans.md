@@ -122,7 +122,8 @@ The note on the whole plan travels the same way: only with Ask for changes. Pres
 foot asks whether to approve without them, rather than quietly throw away what you wrote.
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
-starts; the ticket's Plan card carries the same band, and the plan's chip reads `changes asked`. The button reads
+starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads
+`changes asked`. A reply once the plan is approved asks for no changes: it goes to the implement. The button reads
 **Ask again**, so you never send a second request without knowing about the first.
 
 Approving is the moment an agent gets the go-ahead to write code, so the foot marks it: a check, the CLI's words on
