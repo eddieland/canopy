@@ -51,9 +51,9 @@ only authorization to start work (TRUST_MODEL T1). Jira works through any Jira M
 remote MCP included, with the shipped `tracker-jira` skill (§17). Capacity is `capacity.max_workers`, enforced in code
 (§8).
 
-Known gap affecting intake at volume: the overseer prompt does not page the tracker search, so a labeled ticket past
-the first page waits until earlier ones leave the queue (PRIOR_ART "In prompts"). Fixing it is an overseer prompt
-change, which needs human approval.
+Intake at volume: the overseer pages the tracker search, up to five pages a tick, so a labeled ticket past the first
+page is found (PRIOR_ART "In prompts"). A query longer than that still leaves the rest waiting until earlier tickets
+leave it, so narrow it; M36's connector pages it to the end in code.
 
 ### R2. Worktree pool: create, track, and clean up worktrees per ticket, with a capacity limit
 

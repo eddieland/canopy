@@ -105,7 +105,7 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   with the state block's tickets, but nothing says to page, so a new labeled ticket past the first page (Jira and
   GitHub return 30 to 50) is not seen until earlier ones leave the queue; the union covers only tickets canopy already
   knows. Symphony's refresh of running issues by id truncated at 50 until it paged
-  ([#43](https://github.com/openai/symphony/pull/43)).
+  ([#43](https://github.com/openai/symphony/pull/43)). Since 2026-10-20 `overseer.md` pages it, up to five pages a tick.
 - **CI newness is keyed on the check run id.** A human re-run or a runner or billing failure makes a newer run and
   another `resume` for CI. agent-orchestrator woke an agent 8 times in 40 minutes from one billing refusal
   ([#5089](https://github.com/Untrivial-ai/agent-orchestrator/pull/5089)). Keying on commit and check name, and raising

@@ -19,6 +19,10 @@ To call an issue tool, strip the prefix and use the number. Do not use `#123` as
 file, or `repo:owner/name is:issue is:open label:agent-ready-yourname` when an operator narrows it to their own labels.
 Pull requests are issues in GitHub's API: skip any result that is a pull request, even if the query forgot `is:issue`.
 
+Run the query with `search_issues`, which returns one page of results a call. Ask for the next page, by page number or
+by the cursor the response gives, with the same query. The result is complete when a page comes back empty or with
+fewer results than the page size.
+
 The query only finds tickets. Read each result and confirm the label is on it before treating it as a candidate.
 
 ## Closed
