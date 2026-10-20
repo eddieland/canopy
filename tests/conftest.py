@@ -73,8 +73,8 @@ def hermetic_agent_env() -> Iterator[None]:
 
 @pytest.fixture
 def fakes_on_path() -> Iterator[Path]:
-    """Put tests/fakes first on PATH, so `treehouse` and `agent` resolve to the fakes, and this environment's `canopy`
-    right after it."""
+    """Put tests/fakes first on PATH, so `treehouse`, `agent`, and `opencode` resolve to the fakes, and this
+    environment's `canopy` right after it."""
     path = os.pathsep.join([str(FAKES_DIR), str(SCRIPTS_DIR), os.environ.get("PATH", "")])
     with mock.patch.dict(os.environ, {"PATH": path}):
         yield FAKES_DIR
@@ -115,6 +115,19 @@ def connector_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     state = tmp_path / "connector.json"
     with mock.patch.dict(
         os.environ, {"FAKE_CONNECTOR_STATE": str(state), "FAKE_CONNECTOR_LOG": str(tmp_path / "connector.jsonl")}
+    ):
+        yield state
+
+
+@pytest.fixture
+def opencode_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
+    """The fake `opencode` on PATH, knowing no session until the test writes the yielded state file.
+
+    Each run appends its argv and cwd to `opencode.jsonl` beside it. See tests/fakes/opencode for its keys.
+    """
+    state = tmp_path / "opencode.json"
+    with mock.patch.dict(
+        os.environ, {"FAKE_OPENCODE_STATE": str(state), "FAKE_OPENCODE_LOG": str(tmp_path / "opencode.jsonl")}
     ):
         yield state
 

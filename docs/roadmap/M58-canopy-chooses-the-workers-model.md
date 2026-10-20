@@ -51,12 +51,12 @@ for the canary after it.
   attention item of its name. OpenCode itself would refuse that run before its first call and exit 1, never falling
   back, so the check turns a failed run into an attention item and keeps the slot. Config load never reads the list,
   so it stays fast.
-- **Recorded on the run.** A migration adds `model` to `runs`, `review_runs`, `chore_runs`, and `ticks`: what canopy
-  asked for, empty for the runtime's default.
-  No event names the model a call went to; the session records it for each message, and `opencode export` prints it
-  (§13). canopy does not read it back: with a template's `--model` refused, the session runs the model asked for or
-  fails before its first call. `canopy status` and the web UI's run, review, chore, and tick pages show it, and
-  `canopy spend` breaks each kind's cost down by model.
+- **Recorded on the run, as the session says** (the operator, 2026-10-20). No event names the model a call went to;
+  the session records it for each message, and `opencode export` prints it (§13). After each live tick canopy reads a
+  few ended runs' sessions, the newest never-read first, past runs among them, and records each model that wrote a
+  run's replies with what they cost, so runs on the runtime's default and on a template's own `--model` are attributed
+  too, and a run on two models splits between them. `canopy spend` breaks each kind's cost down by model (built,
+  2026-10-20); `canopy status` and the web UI's run, review, chore, and tick pages show it.
 - **Out of scope** (issue #418): two models side by side on one ticket, since one worker per ticket stays; the overseer
   or a ticket's labels choosing a model; comparison reports beyond the spend split.
 - **TRUST_MODEL**, in the PR that builds it: T1 (every agent's model is the operator's choice alone, from config, the
@@ -97,7 +97,13 @@ at each dispatch with a model set, in the workspace root rather than a repositor
 refusing `model_list_failed` when the read fails as it refuses `model_missing`. The operator settled the two points
 left open (2026-10-19): every agent's model can be set, from `[runtime.models]` and per ticket for the ticket's own
 agents, and the web UI's control is built with it, on the ticket's page. The commit trailer naming the model
-(issue #275) follows from this, not built here. Open for the operator: whether a run whose agent has no model set
-records the runtime's default rather than nothing, since until every agent's model is set those runs stay unattributed;
-and whether past runs are attributed from their sessions, whose ids the journal keeps and whose records `opencode
-export` prints.
+(issue #275) follows from this, not built here. The operator settled the last two open points (2026-10-20): a run
+records the models its session says served it, not only what canopy asked for, since cost attribution needs what
+served; and past runs are attributed from their sessions too, a few each tick. Of the pinned OpenCode's source
+(2026-10-20): `opencode export` finds a session by its id alone, in the one database that holds every project's, so
+any directory finds it; it prints each assistant message's `providerID`, `modelID`, and `cost`, and with `--sanitize`
+redacts its text, reasoning, tool output, and paths; a session it lacks is `Session not found` on stderr and exit 1.
+The sandbox's templates share OpenCode's data directory, so sandboxed runs are found too. Subagent sessions are not in
+their parent's export. Built (2026-10-20): the read, from `opencode export --sanitize` after each live tick, five
+runs a tick at most, a failed read tried again a day later up to three reads, and `canopy spend`'s split by model. Not
+built yet: the model shown in `canopy status` and the web UI's pages, and the choosing itself.

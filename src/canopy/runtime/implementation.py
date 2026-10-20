@@ -6,6 +6,24 @@ There is one binding, chosen here and not in config: canopy runs one runtime at 
 between them (AGENTS.md, Do not build).
 """
 
-from canopy.runtime.opencode import definitions, events, invocation, offerings, project_config, transcript, watch
+from canopy.runtime.opencode import (
+    definitions,
+    events,
+    invocation,
+    offerings,
+    project_config,
+    session_models,
+    transcript,
+    watch,
+)
 
-__all__ = ["definitions", "events", "invocation", "offerings", "project_config", "transcript", "watch"]
+__all__ = [
+    "definitions",
+    "events",
+    "invocation",
+    "offerings",
+    "project_config",
+    "session_models",
+    "transcript",
+    "watch",
+]

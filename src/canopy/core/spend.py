@@ -7,7 +7,7 @@ ones', and idle ticks' (§6, Idle pacing) are a series of their own within the l
 cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
-model call reads again.
+model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13).
 """
 
 from __future__ import annotations
@@ -207,6 +207,23 @@ class ToolSpend:
 
 
 @dataclass(frozen=True)
+class ModelSpend:
+    """What one kind's runs that started in the window spent on one model, as each run's session says (§13).
+
+    `runs` counts the runs one of whose replies the model wrote, so a run on two models counts under each, `replies`
+    the replies it wrote, and `cost_usd` what the session priced them at. `model` is None for the kind's runs whose
+    sessions named no model: not read yet, no longer kept, not read for failing, or making no model call; their cost
+    is what the runs themselves reported, and `replies` is 0.
+    """
+
+    kind: Kind
+    model: str | None
+    runs: int
+    replies: int
+    cost_usd: float | None
+
+
+@dataclass(frozen=True)
 class Breakdown:
     """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought.
 
@@ -217,7 +234,9 @@ class Breakdown:
     what each one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the
     kinds in `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs,
     whose first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters
-    first; the overseer's include dry runs too.
+    first; the overseer's include dry runs too. `models` is what each kind spent on each model, the kinds in `KINDS`
+    order and each kind's models the most costly first, its runs no session named a model for last; the overseer's
+    include dry runs too.
     """
 
     since: str
@@ -236,6 +255,7 @@ class Breakdown:
     first_calls: Sequence[FirstCalls] = ()
     tools: Sequence[ToolSpend] = ()
     hours: int | None = None
+    models: Sequence[ModelSpend] = ()
 
 
 def window(now: datetime, days: int) -> tuple[datetime, datetime]:
@@ -345,6 +365,7 @@ def _breakdown(
         pull_requests = _pull_requests(conn, since, until)
         first_calls = _first_calls(conn, since, until)
         tools = _tools(conn, since, until)
+        models = _models(conn, since, until)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -373,6 +394,7 @@ def _breakdown(
         first_calls=first_calls,
         tools=tools,
         hours=hours,
+        models=models,
     )
 
 
@@ -681,6 +703,47 @@ def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
         .group_by("t.tool")
+    )
+
+
+# Each kind's spend by model in the window, from its runs that started in it; then those of its runs no session named a
+# model for, under None.
+def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend]:
+    found: list[ModelSpend] = []
+    for kind in KINDS:
+        found.extend(
+            ModelSpend(kind=kind, model=str(model), runs=int(runs), replies=int(replies), cost_usd=float(cost))
+            for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until))
+        )
+        [(runs, cost)] = sql.execute(conn, _unnamed_models(kind, since, until)).fetchall()
+        if runs:
+            found.append(ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost))
+    return found
+
+
+# One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
+# index, and `run_models` is read by its key's prefix.
+def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
+    table, which = _ALL_TABLES[kind]
+    return (
+        sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
+        .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
+        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+        .where("{}", which)
+        .group_by("m.model")
+        .order_by("SUM(m.cost_usd) DESC, m.model")
+    )
+
+
+# One kind's runs in a window that no session named a model for, and what they reported they cost.
+def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
+    table, which = _ALL_TABLES[kind]
+    return (
+        sql.select("count(*), SUM(r.cost_usd)")
+        .from_("{} r", sql.name(table))
+        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+        .where("{}", which)
+        .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
     )
 
 

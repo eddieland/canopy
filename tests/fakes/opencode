@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Fake `opencode` for tests: plays `opencode export ID --sanitize` from a state file, and nothing else.
+
+On PATH ahead of any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the
+environment:
+
+    FAKE_OPENCODE_STATE     the state file, JSON, {"sessions": {ID: [[provider, model, cost], ...]}}. Missing, or no
+                            entry for ID: OpenCode's `Session not found: ID` on stderr, and exit 1.
+    FAKE_OPENCODE_LOG       if set, one JSON line {"argv": [...], "cwd": ...} is appended per run.
+
+Keys of the state besides `sessions`, each optional:
+
+    exit    the exit code of every export, with `stderr`, for an OpenCode that fails. Default none.
+    stderr  text printed on stderr with `exit`.
+
+Any other command exits 2. Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is
+on PATH.
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def main() -> int:
+    log = os.environ.get("FAKE_OPENCODE_LOG")
+    if log:
+        with Path(log).open("a") as f:
+            f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\n")
+    match sys.argv[1:]:
+        case ["export", session_id, "--sanitize"]:
+            return export(session_id)
+        case _:
+            sys.stderr.write(f"fake opencode plays only `export ID --sanitize`, not {sys.argv[1:]}\n")
+            return 2
+
+
+def export(session_id: str) -> int:
+    state = read_state()
+    sys.stderr.write(f"Exporting session: {session_id}\n")
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    calls = state.get("sessions", {}).get(session_id)
+    if calls is None:
+        sys.stderr.write(f"Error: Session not found: {session_id}\n")
+        return 1
+    messages: list[dict[str, Any]] = [{"info": {"id": "msg_0", "role": "user"}, "parts": []}]
+    for i, (provider, model, cost) in enumerate(calls, start=1):
+        info = {"id": f"msg_{i}", "role": "assistant", "providerID": provider, "modelID": model, "cost": cost}
+        messages.append({"info": info, "parts": [{"type": "text", "text": f"[redacted:text:prt_{i}]"}]})
+    print(json.dumps({"info": {"id": session_id}, "messages": messages}, indent=2))
+    return 0
+
+
+def read_state() -> dict[str, Any]:
+    path = os.environ.get("FAKE_OPENCODE_STATE")
+    if not path or not Path(path).exists():
+        return {}
+    return json.loads(Path(path).read_text())
+
+
+if __name__ == "__main__":
+    sys.exit(main())
