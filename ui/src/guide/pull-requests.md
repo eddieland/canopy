@@ -64,9 +64,10 @@ Each waiting draft has three buttons:
 A reply on a thread can carry a reaction too, a 👍 or any of the eight GitHub offers, put on the comment it answers. A
 worker may propose one, and sometimes nothing else: a thumbs up on a nit it fixed says "Done." without the comment.
 The card shows the reaction under the text. **Edit** has a row of them to pick from; pick the lit one again to take
-it off, and leave the text empty to send the reaction alone. A send adds the reactions first, then the review. GitHub
-keeps one of each per person, so if the review then fails, the reaction stays, the card says so, and sending again
-won't stack a second 👍 on your coworker's comment.
+it off. To send the reaction alone, leave the text empty: once a reaction is picked, **Clear text** beside it empties
+it in one click, which beats holding backspace through a worker's earnest paragraph for a review bot that won't read
+it. A send adds the reactions first, then the review. GitHub keeps one of each per person, so if the review then
+fails, the reaction stays, the card says so, and sending again won't stack a second 👍 on your coworker's comment.
 
 **Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
 review, so your coworker gets one notification rather than a burst. The button reads **Sending…** while the post is on
