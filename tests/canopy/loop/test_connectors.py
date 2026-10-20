@@ -9,7 +9,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import connector_runs, db, observe, records
+from canopy.core import connector_runs, db, observe, records, sql
 from canopy.core.vocab import CheckConclusion, CheckStatus, ConnectorRunStatus, MergeState, SourceKind, TicketState
 from canopy.loop import connectors
 from tests.canopy.helpers import reads, waits
@@ -53,12 +53,12 @@ def asked(state: Path) -> list[dict[str, Any]]:
 
 def runs(scenario: Scenario) -> list[records.ConnectorRun]:
     """Every connector run the journal holds, in order."""
-    return records.fetch_all(scenario.conn, records.ConnectorRun, "SELECT * FROM connector_runs ORDER BY id")
+    return records.fetch_all(scenario.conn, records.ConnectorRun, sql.frag("SELECT * FROM connector_runs ORDER BY id"))
 
 
 def observed_tickets(scenario: Scenario) -> dict[str, records.ObservedTicket]:
     """The observed tickets, by key."""
-    found = records.fetch_all(scenario.conn, records.ObservedTicket, "SELECT * FROM observed_tickets")
+    found = records.fetch_all(scenario.conn, records.ObservedTicket, sql.frag("SELECT * FROM observed_tickets"))
     return {t.key: t for t in found}
 
 
@@ -125,13 +125,13 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     [seen] = observed_tickets(scenario).values()
     assert (seen.key, seen.state, json.loads(seen.blockers)) == ("PROJ-1", TicketState.OPEN, ["PROJ-9"])
     assert json.loads(seen.labels) == [{"name": "agent", "added_at": "2026-10-18T09:00:00.000Z"}]
-    [observed] = records.fetch_all(scenario.conn, records.ObservedPr, "SELECT * FROM observed_prs")
+    [observed] = records.fetch_all(scenario.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
     assert (json.loads(observed.labels), observed.mergeable_state) == (["agent"], MergeState.BLOCKED)
-    [check] = records.fetch_all(scenario.conn, records.ObservedCheck, "SELECT * FROM observed_checks")
+    [check] = records.fetch_all(scenario.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
     assert (check.name, check.status, check.conclusion) == ("build", CheckStatus.COMPLETED, CheckConclusion.SUCCESS)
-    [branch] = records.fetch_all(scenario.conn, records.ObservedBranch, "SELECT * FROM observed_branches")
+    [branch] = records.fetch_all(scenario.conn, records.ObservedBranch, sql.frag("SELECT * FROM observed_branches"))
     assert (branch.repository, branch.name) == ("repo", "agent/proj-1")
-    [comment] = records.fetch_all(scenario.conn, records.ObservedComment, "SELECT * FROM observed_comments")
+    [comment] = records.fetch_all(scenario.conn, records.ObservedComment, sql.frag("SELECT * FROM observed_comments"))
     assert (comment.ticket, comment.id, comment.source, comment.body) == ("PROJ-1", "10001", "tracker", "(no text)")
     assert comment.commented_at == "2026-10-18T10:00:00.000Z"
     # In shadow: the comment is in no conversation, so no worker's prompt carries it, and the overseer is shown
@@ -175,12 +175,12 @@ def test_a_cut_off_output_keeps_the_previous_observations_and_the_tick_goes_on(
 ) -> None:
     plays(watched, github={"lines": [pr(labels=["agent"])]})
     scenario.tick(*waits(*KEYS))
-    [first] = records.fetch_all(scenario.conn, records.ObservedPr, "SELECT * FROM observed_prs")
+    [first] = records.fetch_all(scenario.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
 
     plays(watched, github={"lines": [pr(head_sha="def5678")], "end": None, "stderr": "GitHub went away"})
     ticked = scenario.tick(*waits(*KEYS))
     assert ticked.tick.status == "ok", "a failed source does not fail the tick"
-    assert records.fetch_all(scenario.conn, records.ObservedPr, "SELECT * FROM observed_prs") == [first]
+    assert records.fetch_all(scenario.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs")) == [first]
     github = runs(scenario)[-1]
     assert (github.status, github.recorded, github.stderr) == ("failed", "{}", "GitHub went away")
     assert github.missed == "it ended without its end line: GitHub went away"
@@ -245,7 +245,7 @@ def test_the_default_vcs_source_is_canopys_own_reader_and_reads_each_watched_pr(
     scenario.tick(*waits("PROJ-1"))
     [run] = runs(scenario)
     assert (run.source, run.status) == ("github", "ok")
-    [check] = records.fetch_all(scenario.conn, records.ObservedCheck, "SELECT * FROM observed_checks")
+    [check] = records.fetch_all(scenario.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
     assert (check.pr_url, check.status, check.head_sha) == (PR, CheckStatus.IN_PROGRESS, "abc1234")
 
 

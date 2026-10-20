@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from canopy.core import contract, db, records
+from canopy.core import contract, db, records, sql
 from canopy.core.memory_text import TextRefused, check_key, check_text, normalized, visible
 from canopy.core.vocab import MemoryAuthor, MemoryCited, MemoryMode, MemoryScope, MemoryStatus, RunKind
 from canopy.infra import logs
@@ -72,6 +72,12 @@ MEMORY_CONTRACT = "MEMORY_CONTRACT"
 SEARCH_COMMAND = "canopy memory search WORDS"
 _NOTES_HEADING = "## Notes from earlier runs"
 _LESSONS_HEADING = "## Lessons from the operator"
+# Every memory's whole row, for each reader to finish.
+_MEMORIES = sql.select("*").from_("memories")
+# The step of a walk back through `supersedes` from the ids in `back`.
+_EARLIER = (
+    sql.select("m.supersedes").from_("memories m").join("back b ON m.id = b.id").where("m.supersedes IS NOT NULL")
+)
 
 
 def mode_words(mode: MemoryMode) -> str:
@@ -292,16 +298,20 @@ def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -
 
     Call inside the transaction that inserts the run (`db.insert_run`), so a run and what it read are one fact.
     """
-    conn.execute(
-        "INSERT INTO run_memory (run_id, ticket_notes, proposals) VALUES (?, ?, ?)",
-        (run_id, rendered.modes.ticket_notes, rendered.modes.proposals),
+    sql.execute(
+        conn,
+        sql.insert(
+            "run_memory", run_id=run_id, ticket_notes=rendered.modes.ticket_notes, proposals=rendered.modes.proposals
+        ),
     )
-    conn.executemany("INSERT INTO memory_reads (run_id, memory_id) VALUES (?, ?)", [(run_id, i) for i in rendered.ids])
+    sql.execute_many(
+        conn, sql.insert_rows("memory_reads", ("run_id", "memory_id")), [(run_id, i) for i in rendered.ids]
+    )
 
 
 def run_memory(conn: sqlite3.Connection, run_id: int) -> records.RunMemory | None:
     """Return what run `run_id`'s prompt was rendered under, or None for a run rendered with every tier off."""
-    return records.fetch_one(conn, records.RunMemory, "SELECT * FROM run_memory WHERE run_id = ?", (run_id,))
+    return records.fetch_one(conn, records.RunMemory, sql.select("*").from_("run_memory").where("run_id = ?", run_id))
 
 
 # What a run wrote
@@ -370,7 +380,7 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     rendered = run_memory(conn, run_id)
     if rendered is None or fields is None:
         return []
-    row = conn.execute("SELECT ticket_key, tick_id FROM runs WHERE id = ?", (run_id,)).fetchone()
+    row = sql.execute(conn, sql.select("ticket_key, tick_id").from_("runs").where("id = ?", run_id)).fetchone()
     writing = _Writing(
         run_id=run_id,
         ticket_key=str(row["ticket_key"]),
@@ -394,11 +404,14 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     if writing.modes.ticket_notes is not MemoryMode.OFF:
         _write_notes(conn, writing, fields.notes)
     if writing.modes.proposals is not MemoryMode.OFF:
-        repos = {str(r["repo"]) for r in conn.execute("SELECT repo FROM run_slots WHERE run_id = ?", (run_id,))}
+        slots = sql.execute(conn, sql.select("repo").from_("run_slots").where("run_id = ?", run_id))
+        repos = {str(r["repo"]) for r in slots}
         _write_proposals(conn, writing, fields.proposals, repos)
-    conn.execute(
-        "UPDATE run_memory SET refused = ? WHERE run_id = ?",
-        (json.dumps([r.as_json() for r in writing.refused]), run_id),
+    sql.execute(
+        conn,
+        sql.update("run_memory")
+        .set(refused=json.dumps([r.as_json() for r in writing.refused]))
+        .where("run_id = ?", run_id),
     )
     log = logs.for_tick(writing.tick_id)
     for r in writing.refused:
@@ -425,13 +438,15 @@ def _mark_wrong(conn: sqlite3.Connection, writing: _Writing, wrong: Sequence[rec
     for m in wrong:
         if m.scope is MemoryScope.LESSON:
             # The operator's word: a run's report raises `lesson_wrong`, and only the operator retires it.
-            conn.execute(
-                "UPDATE memories SET wrong_at = ?, wrong_run_id = ? WHERE id = ?", (stamp, writing.run_id, m.id)
+            sql.execute(
+                conn, sql.update("memories").set(wrong_at=stamp, wrong_run_id=writing.run_id).where("id = ?", m.id)
             )
         else:
-            conn.execute(
-                "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ?",
-                (MemoryStatus.INVALID, f"wrong, says run {writing.run_id}", stamp, m.id),
+            sql.execute(
+                conn,
+                sql.update("memories")
+                .set(status=MemoryStatus.INVALID, why=f"wrong, says run {writing.run_id}", invalidated_at=stamp)
+                .where("id = ?", m.id),
             )
 
 
@@ -441,19 +456,27 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
     review = db.format_time(now + timedelta(days=REVIEW_DAYS))
     for m in used:
         # A lesson in use is pushed back from review: one that helps keeps being served without the operator's look.
-        conn.execute(
-            "UPDATE memories SET last_used_at = ?, use_count = use_count + 1, "
-            "review_at = CASE WHEN scope = ? THEN max(coalesce(review_at, ''), ?) ELSE review_at END WHERE id = ?",
-            (stamp, MemoryScope.LESSON, review, m.id),
+        sql.execute(
+            conn,
+            sql.update("memories")
+            .set(last_used_at=stamp)
+            .set_to("use_count = use_count + 1")
+            .set_to(
+                "review_at = CASE WHEN scope = ? THEN max(coalesce(review_at, ''), ?) ELSE review_at END",
+                MemoryScope.LESSON,
+                review,
+            )
+            .where("id = ?", m.id),
         )
 
 
 def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, memories: Sequence[records.Memory]) -> None:
     # Beside the count, so a memory names the runs that relied on it, and a run's page what it relied on.
-    conn.executemany(
-        "UPDATE memory_reads SET cited = ? WHERE run_id = ? AND memory_id = ?",
-        [(cited, run_id, m.id) for m in memories],
-    )
+    for m in memories:
+        sql.execute(
+            conn,
+            sql.update("memory_reads").set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", m.id),
+        )
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:
@@ -463,9 +486,12 @@ def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, s
         note = rendered.get(entry) if isinstance(entry, str) else None
         if note is None:
             continue
-        conn.execute(
-            "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ? AND status = ?",
-            (MemoryStatus.INVALID, f"dropped by run {writing.run_id}", stamp, note.id, MemoryStatus.ACTIVE),
+        sql.execute(
+            conn,
+            sql.update("memories")
+            .set(status=MemoryStatus.INVALID, why=f"dropped by run {writing.run_id}", invalidated_at=stamp)
+            .where("id = ?", note.id)
+            .where("status = ?", MemoryStatus.ACTIVE),
         )
 
 
@@ -515,28 +541,30 @@ def _write_note(conn: sqlite3.Connection, writing: _Writing, key: str, text: str
     stamp = db.now()
     if replaced is not None:
         # Before the insert: the index holds one active note per ticket and key.
-        conn.execute("UPDATE memories SET status = ? WHERE id = ?", (MemoryStatus.SUPERSEDED, replaced.id))
-    cur = conn.execute(
-        "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, head, supersedes, "
-        "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            MemoryScope.TICKET,
-            writing.ticket_key,
-            key,
-            text,
-            MemoryStatus.ACTIVE,
-            MemoryAuthor.WORKER,
-            writing.run_id,
-            writing.tick_id,
-            writing.head,
-            replaced.id if replaced is not None else None,
-            stamp,
+        sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", replaced.id))
+    cur = sql.execute(
+        conn,
+        sql.insert(
+            "memories",
+            scope=MemoryScope.TICKET,
+            ticket_key=writing.ticket_key,
+            key=key,
+            body=text,
+            status=MemoryStatus.ACTIVE,
+            author=MemoryAuthor.WORKER,
+            run_id=writing.run_id,
+            tick_id=writing.tick_id,
+            head=writing.head,
+            supersedes=replaced.id if replaced is not None else None,
+            created_at=stamp,
         ),
     )
     if replaced is not None:
-        conn.execute(
-            "UPDATE memories SET why = ?, invalidated_at = ? WHERE id = ?",
-            (f"superseded by note {cur.lastrowid}", stamp, replaced.id),
+        sql.execute(
+            conn,
+            sql.update("memories")
+            .set(why=f"superseded by note {cur.lastrowid}", invalidated_at=stamp)
+            .where("id = ?", replaced.id),
         )
 
 
@@ -575,21 +603,21 @@ def _write_proposal(conn: sqlite3.Connection, writing: _Writing, key: str, text:
     for found in [*waiting, *active_lessons(conn)]:
         if found.body is not None and normalized(found.body) == same:
             raise TextRefused(f"it repeats {found.scope} {found.id}")
-    conn.execute(
-        "INSERT INTO memories (scope, ticket_key, repo, key, body, status, author, run_id, tick_id, head, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            MemoryScope.PROPOSAL,
-            writing.ticket_key,
-            repo,
-            key,
-            text,
-            MemoryStatus.PENDING,
-            MemoryAuthor.WORKER,
-            writing.run_id,
-            writing.tick_id,
-            writing.head,
-            db.now(),
+    sql.execute(
+        conn,
+        sql.insert(
+            "memories",
+            scope=MemoryScope.PROPOSAL,
+            ticket_key=writing.ticket_key,
+            repo=repo,
+            key=key,
+            body=text,
+            status=MemoryStatus.PENDING,
+            author=MemoryAuthor.WORKER,
+            run_id=writing.run_id,
+            tick_id=writing.tick_id,
+            head=writing.head,
+            created_at=db.now(),
         ),
     )
 
@@ -600,9 +628,13 @@ def end_ticket_notes(conn: sqlite3.Connection, key: str, why: str) -> int:
     Returns:
         How many notes it invalidated.
     """
-    cur = conn.execute(
-        "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE scope = ? AND ticket_key = ? AND status = ?",
-        (MemoryStatus.INVALID, why, db.now(), MemoryScope.TICKET, key, MemoryStatus.ACTIVE),
+    cur = sql.execute(
+        conn,
+        sql.update("memories")
+        .set(status=MemoryStatus.INVALID, why=why, invalidated_at=db.now())
+        .where("scope = ?", MemoryScope.TICKET)
+        .where("ticket_key = ?", key)
+        .where("status = ?", MemoryStatus.ACTIVE),
     )
     return cur.rowcount
 
@@ -615,8 +647,10 @@ def active_notes(conn: sqlite3.Connection, key: str) -> list[records.Memory]:
     return records.fetch_all(
         conn,
         records.Memory,
-        "SELECT * FROM memories WHERE scope = ? AND ticket_key = ? AND status = ? ORDER BY key",
-        (MemoryScope.TICKET, key, MemoryStatus.ACTIVE),
+        _MEMORIES.where("scope = ?", MemoryScope.TICKET)
+        .where("ticket_key = ?", key)
+        .where("status = ?", MemoryStatus.ACTIVE)
+        .order_by("key"),
     )
 
 
@@ -630,9 +664,10 @@ def notes(conn: sqlite3.Connection, key: str | None = None, *, every: bool = Fal
     return records.fetch_all(
         conn,
         records.Memory,
-        f"SELECT * FROM memories WHERE scope = ? AND (? IS NULL OR ticket_key = ?) "  # noqa: S608  (placeholders only)
-        f"AND status IN ({','.join('?' * len(statuses))}) ORDER BY ticket_key, key, id DESC",
-        (MemoryScope.TICKET, key, key, *statuses),
+        _MEMORIES.where("scope = ?", MemoryScope.TICKET)
+        .where("? IS NULL OR ticket_key = ?", key, key)
+        .where_in("status", statuses)
+        .order_by("ticket_key, key, id DESC"),
     )
 
 
@@ -653,11 +688,15 @@ def ticket_notes(conn: sqlite3.Connection) -> list[TicketNotes]:
     Returns:
         The tickets, the one whose newest note in force was written last first.
     """
-    rows = conn.execute(
-        "SELECT m.ticket_key, count(*) AS n, sum(m.use_count > 0) AS used, max(m.created_at) AS latest, t.title "
-        "FROM memories m LEFT JOIN tickets t ON t.key = m.ticket_key "
-        "WHERE m.scope = ? AND m.status = ? GROUP BY m.ticket_key ORDER BY latest DESC, m.ticket_key",
-        (MemoryScope.TICKET, MemoryStatus.ACTIVE),
+    rows = sql.execute(
+        conn,
+        sql.select("m.ticket_key, count(*) AS n, sum(m.use_count > 0) AS used, max(m.created_at) AS latest, t.title")
+        .from_("memories m")
+        .left_join("tickets t ON t.key = m.ticket_key")
+        .where("m.scope = ?", MemoryScope.TICKET)
+        .where("m.status = ?", MemoryStatus.ACTIVE)
+        .group_by("m.ticket_key")
+        .order_by("latest DESC, m.ticket_key"),
     )
     return [TicketNotes(str(r["ticket_key"]), int(r["n"]), int(r["used"]), str(r["latest"]), r["title"]) for r in rows]
 
@@ -667,15 +706,18 @@ def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:
     return records.fetch_all(
         conn,
         records.Memory,
-        "SELECT * FROM memories WHERE scope = ? AND status = ? ORDER BY id",
-        (MemoryScope.PROPOSAL, MemoryStatus.PENDING),
+        _MEMORIES.where("scope = ?", MemoryScope.PROPOSAL).where("status = ?", MemoryStatus.PENDING).order_by("id"),
     )
 
 
 def pending_count(conn: sqlite3.Connection) -> int:
     """Return how many proposals wait on the operator, as `pending_proposals` lists them."""
-    row = conn.execute(
-        "SELECT count(*) FROM memories WHERE scope = ? AND status = ?", (MemoryScope.PROPOSAL, MemoryStatus.PENDING)
+    row = sql.execute(
+        conn,
+        sql.select("count(*)")
+        .from_("memories")
+        .where("scope = ?", MemoryScope.PROPOSAL)
+        .where("status = ?", MemoryStatus.PENDING),
     ).fetchone()
     return int(row[0])
 
@@ -685,8 +727,7 @@ def active_lessons(conn: sqlite3.Connection) -> list[records.Memory]:
     return records.fetch_all(
         conn,
         records.Memory,
-        "SELECT * FROM memories WHERE scope = ? AND status = ? ORDER BY key, id",
-        (MemoryScope.LESSON, MemoryStatus.ACTIVE),
+        _MEMORIES.where("scope = ?", MemoryScope.LESSON).where("status = ?", MemoryStatus.ACTIVE).order_by("key, id"),
     )
 
 
@@ -698,15 +739,16 @@ def past(conn: sqlite3.Connection, scope: MemoryScope, *, limit: int = HISTORY_S
     return records.fetch_all(
         conn,
         records.Memory,
-        "SELECT * FROM memories WHERE scope = ? AND status IN (?, ?) "
-        "ORDER BY coalesce(invalidated_at, created_at) DESC, id DESC LIMIT ?",
-        (scope, MemoryStatus.SUPERSEDED, MemoryStatus.INVALID, limit),
+        _MEMORIES.where("scope = ?", scope)
+        .where_in("status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID))
+        .order_by("coalesce(invalidated_at, created_at) DESC, id DESC")
+        .limit(limit),
     )
 
 
 def get(conn: sqlite3.Connection, memory_id: int) -> records.Memory | None:
     """Return memory `memory_id`, or None."""
-    return records.fetch_one(conn, records.Memory, "SELECT * FROM memories WHERE id = ?", (memory_id,))
+    return records.fetch_one(conn, records.Memory, _MEMORIES.where("id = ?", memory_id))
 
 
 def history(conn: sqlite3.Connection, memory_id: int) -> list[records.Memory]:
@@ -721,15 +763,15 @@ def history(conn: sqlite3.Connection, memory_id: int) -> list[records.Memory]:
         The versions, the newest first; [] for an id no memory has.
     """
     # UNION, not UNION ALL, so a cycle written into the journal by hand ends the walk rather than looping.
+    start = sql.select("id").from_("memories").where("id = ?", memory_id)
+    later = sql.select("m.id").from_("memories m").join("ahead a ON m.supersedes = a.id")
     return records.fetch_all(
         conn,
         records.Memory,
-        "WITH RECURSIVE back(id) AS (SELECT id FROM memories WHERE id = ? "
-        "UNION SELECT m.supersedes FROM memories m JOIN back b ON m.id = b.id WHERE m.supersedes IS NOT NULL), "
-        "ahead(id) AS (SELECT id FROM memories WHERE id = ? "
-        "UNION SELECT m.id FROM memories m JOIN ahead a ON m.supersedes = a.id) "
-        "SELECT * FROM memories WHERE id IN (SELECT id FROM back UNION SELECT id FROM ahead) ORDER BY id DESC",
-        (memory_id, memory_id),
+        _MEMORIES.with_("back(id) AS ({})", sql.union(start, _EARLIER), recursive=True)
+        .with_("ahead(id) AS ({})", sql.union(start, later))
+        .where("id IN ({})", sql.union(sql.select("id").from_("back"), sql.select("id").from_("ahead")))
+        .order_by("id DESC"),
     )
 
 
@@ -737,11 +779,11 @@ def version(conn: sqlite3.Connection, found: records.Memory) -> int:
     """Return which version of its memory `found` is: 1 for one that superseded none, one more for each before it."""
     if found.supersedes is None:
         return 1
-    row = conn.execute(
-        "WITH RECURSIVE back(id) AS (SELECT ? "
-        "UNION SELECT m.supersedes FROM memories m JOIN back b ON m.id = b.id WHERE m.supersedes IS NOT NULL) "
-        "SELECT count(*) FROM back",
-        (found.id,),
+    row = sql.execute(
+        conn,
+        sql.select("count(*)")
+        .with_("back(id) AS ({})", sql.union(sql.select("?", found.id), _EARLIER), recursive=True)
+        .from_("back"),
     ).fetchone()
     return int(row[0])
 
@@ -775,7 +817,7 @@ def origin(conn: sqlite3.Connection, lesson: records.Memory) -> records.Memory |
 
 def written_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
     """Return what run `run_id` wrote, in the order it wrote it."""
-    return records.fetch_all(conn, records.Memory, "SELECT * FROM memories WHERE run_id = ? ORDER BY id", (run_id,))
+    return records.fetch_all(conn, records.Memory, _MEMORIES.where("run_id = ?", run_id).order_by("id"))
 
 
 def read_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
@@ -783,8 +825,11 @@ def read_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
     return records.fetch_all(
         conn,
         records.Memory,
-        "SELECT m.* FROM memories m JOIN memory_reads r ON r.memory_id = m.id WHERE r.run_id = ? ORDER BY m.id",
-        (run_id,),
+        sql.select("m.*")
+        .from_("memories m")
+        .join("memory_reads r ON r.memory_id = m.id")
+        .where("r.run_id = ?", run_id)
+        .order_by("m.id"),
     )
 
 
@@ -793,8 +838,11 @@ def citations(conn: sqlite3.Connection, run_id: int) -> dict[int, MemoryCited]:
     reads = records.fetch_all(
         conn,
         records.MemoryRead,
-        "SELECT * FROM memory_reads WHERE run_id = ? AND cited IS NOT NULL ORDER BY memory_id",
-        (run_id,),
+        sql.select("*")
+        .from_("memory_reads")
+        .where("run_id = ?", run_id)
+        .where("cited IS NOT NULL")
+        .order_by("memory_id"),
     )
     return {r.memory_id: r.cited for r in reads if r.cited is not None}
 
@@ -804,9 +852,14 @@ def used_by(conn: sqlite3.Connection, memory_id: int, *, limit: int = USED_BY_SH
 
     A run from before canopy named them is counted in the memory's `use_count` but is not among them.
     """
-    rows = conn.execute(
-        "SELECT run_id FROM memory_reads WHERE memory_id = ? AND cited = ? ORDER BY run_id DESC LIMIT ?",
-        (memory_id, MemoryCited.USED, limit),
+    rows = sql.execute(
+        conn,
+        sql.select("run_id")
+        .from_("memory_reads")
+        .where("memory_id = ?", memory_id)
+        .where("cited = ?", MemoryCited.USED)
+        .order_by("run_id DESC")
+        .limit(limit),
     )
     return [int(r["run_id"]) for r in rows]
 
@@ -848,7 +901,9 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
     active = active_notes(conn, key)
     runs = {
         int(r["id"]): r
-        for r in conn.execute("SELECT id, kind, status FROM runs WHERE ticket_key = ? ORDER BY id", (key,))
+        for r in sql.execute(
+            conn, sql.select("id, kind, status").from_("runs").where("ticket_key = ?", key).order_by("id")
+        )
     }
     later = sorted(runs)
     entries = {note.id: _note_entry(note, runs, later) for note in active}

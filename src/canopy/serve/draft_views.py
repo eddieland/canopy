@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, drafts, drafts_manage, records
+from canopy.core import db, drafts, drafts_manage, records, sql
 from canopy.core.vocab import DraftKind
 from canopy.serve.schema import Draft, DraftKindName, DraftStanceName, DraftStatusName, ReactionName
 
@@ -26,9 +26,13 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         The draft.
     """
     text = drafts.text_of(conn, found.id)
-    supersedes_edited = conn.execute(
-        "SELECT 1 FROM drafts d JOIN draft_versions v ON v.draft_id = d.id WHERE d.superseded_by = ? AND v.version > 1",
-        (found.id,),
+    supersedes_edited = sql.execute(
+        conn,
+        sql.select("1")
+        .from_("drafts d")
+        .join("draft_versions v ON v.draft_id = d.id")
+        .where("d.superseded_by = ?", found.id)
+        .where("v.version > 1"),
     ).fetchone()
     return Draft(
         run=found.run_id,
@@ -61,7 +65,11 @@ def of_ticket(conn: sqlite3.Connection, key: str) -> list[Draft]:
     found = records.fetch_all(
         conn,
         records.Draft,
-        "SELECT * FROM drafts WHERE ticket_key = ? AND kind = ? ORDER BY run_id DESC, number LIMIT ?",
-        (key, DraftKind.TICKET, TICKET_DRAFTS),
+        sql.select("*")
+        .from_("drafts")
+        .where("ticket_key = ?", key)
+        .where("kind = ?", DraftKind.TICKET)
+        .order_by("run_id DESC, number")
+        .limit(TICKET_DRAFTS),
     )
     return [draft(conn, d) for d in found]

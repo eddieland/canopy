@@ -200,5 +200,3 @@ def test_records_read_a_built_statement_as_typed_rows(conn: sqlite3.Connection) 
     q = sql.select("*").from_("ticks").where("id = ?", tick)
     assert [t.id for t in records.fetch_all(conn, records.Tick, q)] == [tick]
     assert records.fetch_one(conn, records.Tick, q.where("dry_run = ?", 0)) is None
-    with pytest.raises(ValueError, match="binds its own values"):
-        records.fetch_all(conn, records.Tick, q, (tick,))

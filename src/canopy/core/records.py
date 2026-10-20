@@ -927,28 +927,24 @@ class SplitChild(Row):
     run_id: int
 
 
-def fetch_all[R: Row](
-    conn: sqlite3.Connection, row_type: type[R], query: sql.Composable | str, params: Sequence[object] = ()
-) -> list[R]:
-    """Run `query`, a statement built with `sql` or a string with `params`, and build each row it returns as `row_type`.
+def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> list[R]:
+    """Run `query`, a statement built with `sql`, and build each row it returns as `row_type`.
 
     Returns:
         The rows, in the order the query returned them.
     """
-    cur = _run(conn, query, params)
+    cur = sql.execute(conn, query)
     build = _builder(row_type, cur.description)
     return [build(r) for r in cur.fetchall()]
 
 
-def fetch_one[R: Row](
-    conn: sqlite3.Connection, row_type: type[R], query: sql.Composable | str, params: Sequence[object] = ()
-) -> R | None:
-    """Run `query`, a statement built with `sql` or a string with `params`, and build its first row as `row_type`.
+def fetch_one[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> R | None:
+    """Run `query`, a statement built with `sql`, and build its first row as `row_type`.
 
     Returns:
         The first row, or None when the query returned none.
     """
-    cur = _run(conn, query, params)
+    cur = sql.execute(conn, query)
     build = _builder(row_type, cur.description)
     first = cur.fetchone()
     return None if first is None else build(first)
@@ -964,15 +960,6 @@ def columns(row: sqlite3.Row | Row) -> sqlite3.Row | dict[str, Any]:
         A typed row's fields by name, or the `sqlite3.Row` itself.
     """
     return asdict(row) if isinstance(row, Row) else row
-
-
-def _run(conn: sqlite3.Connection, query: sql.Composable | str, params: Sequence[object]) -> sqlite3.Cursor:
-    if isinstance(query, str):
-        return conn.execute(query, params)
-    if params:
-        msg = "a statement built with `sql` binds its own values"
-        raise ValueError(msg)
-    return sql.execute(conn, query)
 
 
 def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]]) -> Callable[[Sequence[object]], R]:

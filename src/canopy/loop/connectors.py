@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe
+from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe, sql
 from canopy.core.config import GITHUB_READER, notify_words
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
 
@@ -81,7 +81,9 @@ def tracker_request(ctx: Context) -> observe.Request:
     keys = [t.key for t in db.open_tickets(ctx.conn) if t.key not in stopped]
     newest = {
         str(r[0]): str(r[1])
-        for r in ctx.conn.execute("SELECT ticket, max(commented_at) FROM observed_comments GROUP BY ticket")
+        for r in sql.execute(
+            ctx.conn, sql.select("ticket, max(commented_at)").from_("observed_comments").group_by("ticket")
+        )
     }
     return observe.Request(
         query=ctx.config.tracker.query,
@@ -98,7 +100,7 @@ def vcs_request(ctx: Context) -> observe.Request:
     Returns:
         The request.
     """
-    done = {str(r[0]) for r in ctx.conn.execute("SELECT key FROM tickets WHERE done = 1")}
+    done = {str(r[0]) for r in sql.execute(ctx.conn, sql.select("key").from_("tickets").where("done = 1"))}
     prs = {
         unit.pr_url
         for key, units in db.all_units(ctx.conn).items()

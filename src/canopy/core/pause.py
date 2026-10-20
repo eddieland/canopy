@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import db, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -34,7 +34,7 @@ def paused(conn: sqlite3.Connection) -> Paused | None:
     Returns:
         When the loop was paused and through which channel, or None if it is not paused.
     """
-    row = conn.execute("SELECT paused_at, channel FROM pause WHERE id = 1").fetchone()
+    row = sql.execute(conn, sql.select("paused_at, channel").from_("pause").where("id = 1")).fetchone()
     return Paused(str(row["paused_at"]), str(row["channel"])) if row is not None else None
 
 
@@ -44,8 +44,8 @@ def pause(conn: sqlite3.Connection, *, channel: str) -> bool:
     Returns:
         Whether it was already paused, which keeps the first pause's time and channel.
     """
-    cur = conn.execute(
-        "INSERT INTO pause (id, paused_at, channel) VALUES (1, ?, ?) ON CONFLICT (id) DO NOTHING", (db.now(), channel)
+    cur = sql.execute(
+        conn, sql.insert("pause", id=sql.frag("1"), paused_at=db.now(), channel=channel).on_conflict("(id) DO NOTHING")
     )
     return cur.rowcount == 0
 
@@ -56,4 +56,4 @@ def resume(conn: sqlite3.Connection) -> bool:
     Returns:
         Whether the loop was already running.
     """
-    return conn.execute("DELETE FROM pause WHERE id = 1").rowcount == 0
+    return sql.execute(conn, sql.delete("pause").where("id = 1")).rowcount == 0

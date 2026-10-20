@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict
 
-from canopy.core import contract, conversation, db
+from canopy.core import contract, conversation, db, sql
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -195,15 +195,21 @@ def filed(conn: sqlite3.Connection) -> list[Item]:
     Returns:
         One item per parent, by key, naming each waiting follow-up with its repository and the run that filed it.
     """
-    rows = conn.execute(
-        "SELECT f.key, f.parent_key, f.repo, f.run_id FROM follow_ups f JOIN tickets p ON p.key = f.parent_key "
-        "LEFT JOIN tickets t ON t.key = f.key "
-        "WHERE p.done = 0 AND (p.forgotten_at IS NULL OR f.at > p.forgotten_at) AND coalesce(t.done, 0) = 0 "
-        "AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_key = f.key) "
-        "AND NOT EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = ? AND s.subject_id = f.key) "
-        "ORDER BY f.parent_key, f.at, f.key",
-        (conversation.TICKET,),
-    ).fetchall()
+    unworked = (
+        sql.select("f.key, f.parent_key, f.repo, f.run_id")
+        .from_("follow_ups f")
+        .join("tickets p ON p.key = f.parent_key")
+        .left_join("tickets t ON t.key = f.key")
+        .where("p.done = 0")
+        .where("p.forgotten_at IS NULL OR f.at > p.forgotten_at")
+        .where("coalesce(t.done, 0) = 0")
+        .where("NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_key = f.key)")
+        .where(
+            "NOT EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = ? AND s.subject_id = f.key)", conversation.TICKET
+        )
+        .order_by("f.parent_key, f.at, f.key")
+    )
+    rows = sql.execute(conn, unworked).fetchall()
     by_parent: dict[str, list[str]] = {}
     for row in rows:
         repo = f"for {row['repo']}" if row["repo"] is not None else "for no repository named"
@@ -230,12 +236,17 @@ def unrecorded(conn: sqlite3.Connection) -> list[Item]:
     Returns:
         One item per ticket, by key.
     """
-    rows = conn.execute(
-        "SELECT r.id, r.ticket_key, r.result_json FROM runs r JOIN tickets t ON t.key = r.ticket_key "
-        "WHERE t.done = 0 AND r.id > coalesce(t.forgotten_run_id, 0) AND json_valid(r.result_json) "
-        "AND json_type(r.result_json, ?) = 'object' ORDER BY r.ticket_key, r.id",
-        (f"$.{STORED}",),
-    ).fetchall()
+    refused = (
+        sql.select("r.id, r.ticket_key, r.result_json")
+        .from_("runs r")
+        .join("tickets t ON t.key = r.ticket_key")
+        .where("t.done = 0")
+        .where("r.id > coalesce(t.forgotten_run_id, 0)")
+        .where("json_valid(r.result_json)")
+        .where("json_type(r.result_json, ?) = 'object'", f"$.{STORED}")
+        .order_by("r.ticket_key, r.id")
+    )
+    rows = sql.execute(conn, refused).fetchall()
     by_ticket: dict[str, list[str]] = {}
     for row in rows:
         stored = contract.stored_object(row["result_json"]).get(STORED)
@@ -288,7 +299,7 @@ def _prefix(key: str) -> str:
 
 def _note_late(conn: sqlite3.Connection, run_id: int, late: Iterable[str]) -> None:
     # Name the keys another run recorded first in run `run_id`'s note and stored refusals, as `check` names its own.
-    row = conn.execute("SELECT result_json FROM runs WHERE id = ?", (run_id,)).fetchone()
+    row = sql.execute(conn, sql.select("result_json").from_("runs").where("id = ?", run_id)).fetchone()
     result = contract.stored_object(row[0] if row is not None else None)
     keys = list(late)
     added = "; ".join(f"{key}: another run recorded it first" for key in keys)
@@ -304,7 +315,7 @@ def _note_late(conn: sqlite3.Connection, run_id: int, late: Iterable[str]) -> No
         "keys": [*named, *keys[:room]],
         "others": (others if isinstance(others, int) else 0) + len(keys[room:]),
     }
-    conn.execute("UPDATE runs SET result_json = ? WHERE id = ?", (json.dumps(result), run_id))
+    sql.execute(conn, sql.update("runs").set(result_json=json.dumps(result)).where("id = ?", run_id))
 
 
 def _said(stored: Mapping[str, object]) -> str:

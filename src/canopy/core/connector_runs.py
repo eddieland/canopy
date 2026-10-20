@@ -12,9 +12,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import db, records
+from canopy.core import db, records, sql
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
 
 if TYPE_CHECKING:
@@ -28,6 +28,12 @@ if TYPE_CHECKING:
 FAILED_REASON = "connector_failed"
 
 
+#: A table of what a connector observed.
+type _Observed = Literal["observed_tickets", "observed_prs"]
+#: The column naming each of its rows' subject.
+type _Subject = Literal["key", "url"]
+
+
 def record(
     conn: sqlite3.Connection, tick_id: int | None, *, name: str, source: Source, request: Request, observed: Observed
 ) -> int:
@@ -37,24 +43,25 @@ def record(
         The run's id.
     """
     with db.transaction(conn):
-        cur = conn.execute(
-            "INSERT INTO connector_runs (tick_id, source, kind, started_at, ended_at, status, request, recorded, "
-            "refused, missed, stderr, query_result, review_query_result) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                tick_id,
-                name,
-                SourceKind(source.kind),
-                observed.started_at,
-                observed.ended_at,
-                observed.status,
-                json.dumps(request.to_json()),
-                json.dumps(dict(sorted(observed.recorded.items()))),
-                json.dumps(dict(sorted(observed.refused.items()))),
-                observed.missed,
-                observed.stderr,
-                None if observed.query_result is None else json.dumps(list(observed.query_result)),
-                None if observed.review_query_result is None else json.dumps(list(observed.review_query_result)),
+        cur = sql.execute(
+            conn,
+            sql.insert(
+                "connector_runs",
+                tick_id=tick_id,
+                source=name,
+                kind=SourceKind(source.kind),
+                started_at=observed.started_at,
+                ended_at=observed.ended_at,
+                status=observed.status,
+                request=json.dumps(request.to_json()),
+                recorded=json.dumps(dict(sorted(observed.recorded.items()))),
+                refused=json.dumps(dict(sorted(observed.refused.items()))),
+                missed=observed.missed,
+                stderr=observed.stderr,
+                query_result=None if observed.query_result is None else json.dumps(list(observed.query_result)),
+                review_query_result=(
+                    None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
+                ),
             ),
         )
     return int(cur.lastrowid or 0)
@@ -78,8 +85,11 @@ def failures(conn: sqlite3.Connection, tick_id: int) -> list[Failure]:
     rows = records.fetch_all(
         conn,
         records.ConnectorRun,
-        "SELECT * FROM connector_runs WHERE tick_id = ? AND status != ? ORDER BY source, id",
-        (tick_id, ConnectorRunStatus.OK),
+        sql.select("*")
+        .from_("connector_runs")
+        .where("tick_id = ?", tick_id)
+        .where("status != ?", ConnectorRunStatus.OK)
+        .order_by("source, id"),
     )
     found: list[Failure] = []
     for run in rows:
@@ -118,8 +128,7 @@ def statuses(conn: sqlite3.Connection, config: Config, now: datetime) -> list[So
         latest = records.fetch_one(
             conn,
             records.ConnectorRun,
-            "SELECT * FROM connector_runs WHERE source = ? ORDER BY id DESC LIMIT 1",
-            (name,),
+            sql.select("*").from_("connector_runs").where("source = ?", name).order_by("id DESC").limit(1),
         )
         times, never = _ages(conn, None if latest is None else latest.request)
         oldest = min(times) if times else None
@@ -142,18 +151,26 @@ def _ages(conn: sqlite3.Connection, request: str | None) -> tuple[list[str], int
     prs = [p for p in asked.get("prs", none) if isinstance(p, str)]
     times: list[str] = []
     never = 0
-    for table, column, subjects in (("observed_tickets", "key", tickets), ("observed_prs", "url", prs)):
+    observed: tuple[tuple[_Observed, _Subject, list[str]], ...] = (
+        ("observed_tickets", "key", tickets),
+        ("observed_prs", "url", prs),
+    )
+    for table, column, subjects in observed:
         seen = _observed_at(conn, table, column, subjects)
         times.extend(seen.values())
         never += sum(subject not in seen for subject in subjects)
     return times, never
 
 
-def _observed_at(conn: sqlite3.Connection, table: str, column: str, subjects: Collection[str]) -> dict[str, str]:
+def _observed_at(
+    conn: sqlite3.Connection, table: _Observed, column: _Subject, subjects: Collection[str]
+) -> dict[str, str]:
     if not subjects:
         return {}
-    rows = conn.execute(
-        f"SELECT {column}, observed_at FROM {table} WHERE {column} IN (SELECT value FROM json_each(?))",  # noqa: S608
-        (json.dumps(sorted(subjects)),),
+    rows = sql.execute(
+        conn,
+        sql.select("{}, observed_at", sql.name(column))
+        .from_(table)
+        .where("{} IN (SELECT value FROM json_each(?))", sql.name(column), json.dumps(sorted(subjects))),
     )
     return {str(r[0]): str(r[1]) for r in rows}

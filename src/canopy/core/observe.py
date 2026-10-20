@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from canopy.core import contract, conversation, db
+from canopy.core import contract, conversation, db, sql
 from canopy.core.config import REPO_NAME_RE, notify_words
 from canopy.core.vocab import (
     CheckConclusion,
@@ -570,16 +570,16 @@ def _record(conn: sqlite3.Connection, config: Config, kind: SourceKind, read: _O
     with db.transaction(conn):
         if kind is SourceKind.TRACKER:
             for key in sorted(whole.tickets):
-                conn.execute("DELETE FROM observed_tickets WHERE key = ?", (key,))
-            known = {str(r[0]) for r in conn.execute("SELECT key FROM tickets")}
+                sql.execute(conn, sql.delete("observed_tickets").where("key = ?", key))
+            known = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets"))}
         else:
             known = set[str]()
             for url in sorted(whole.prs):
-                for table in ("observed_reviews", "observed_checks"):
-                    conn.execute(f"DELETE FROM {table} WHERE pr_url = ?", (url,))  # noqa: S608
-                conn.execute("DELETE FROM observed_prs WHERE url = ?", (url,))
+                sql.execute(conn, sql.delete("observed_reviews").where("pr_url = ?", url))
+                sql.execute(conn, sql.delete("observed_checks").where("pr_url = ?", url))
+                sql.execute(conn, sql.delete("observed_prs").where("url = ?", url))
             for repo in sorted(whole.repositories):
-                conn.execute("DELETE FROM observed_branches WHERE repository = ?", (repo,))
+                sql.execute(conn, sql.delete("observed_branches").where("repository = ?", repo))
         for line in read.lines:
             if line.of not in (whole.tickets | whole.prs | whole.repositories):
                 continue
@@ -597,56 +597,70 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
     match line:
         case _Ticket():
             labels = [{"name": label.name, "added_at": label.added_at} for label in line.labels]
-            conn.execute(
-                "INSERT OR REPLACE INTO observed_tickets (key, title, body, state, labels, updated_at, blockers, "
-                "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    line.key,
-                    line.title,
-                    line.body,
-                    line.state,
-                    json.dumps(labels),
-                    line.updated_at,
-                    json.dumps(line.blockers),
-                    now,
-                ),
+            sql.execute(
+                conn,
+                sql.insert(
+                    "observed_tickets",
+                    key=line.key,
+                    title=line.title,
+                    body=line.body,
+                    state=line.state,
+                    labels=json.dumps(labels),
+                    updated_at=line.updated_at,
+                    blockers=json.dumps(line.blockers),
+                    observed_at=now,
+                ).or_replace(),
             )
         case _Comment():
             if line.ticket not in known:
                 return False
             return _record_comment(conn, config, line, now)
         case _Pr():
-            conn.execute(
-                "INSERT OR REPLACE INTO observed_prs (url, repository, number, head_sha, base_ref, state, draft, "
-                "mergeable, author, observed_at, labels, mergeable_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    line.url,
-                    line.repository,
-                    line.number,
-                    line.head_sha,
-                    line.base_ref,
-                    line.state,
-                    line.draft,
-                    line.mergeable,
-                    line.author,
-                    now,
-                    json.dumps(line.labels),
-                    line.mergeable_state,
-                ),
+            sql.execute(
+                conn,
+                sql.insert(
+                    "observed_prs",
+                    url=line.url,
+                    repository=line.repository,
+                    number=line.number,
+                    head_sha=line.head_sha,
+                    base_ref=line.base_ref,
+                    state=line.state,
+                    draft=line.draft,
+                    mergeable=line.mergeable,
+                    author=line.author,
+                    observed_at=now,
+                    labels=json.dumps(line.labels),
+                    mergeable_state=line.mergeable_state,
+                ).or_replace(),
             )
         case _Review():
             _insert_review(conn, line, now)
         case _Check():
-            conn.execute(
-                "INSERT OR REPLACE INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, "
-                "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (line.pr, line.name, line.head_sha, line.status, line.conclusion, line.run_id, line.url, now),
+            sql.execute(
+                conn,
+                sql.insert(
+                    "observed_checks",
+                    pr_url=line.pr,
+                    name=line.name,
+                    head_sha=line.head_sha,
+                    status=line.status,
+                    conclusion=line.conclusion,
+                    run_id=line.run_id,
+                    url=line.url,
+                    observed_at=now,
+                ).or_replace(),
             )
         case _Branch():
-            conn.execute(
-                "INSERT OR REPLACE INTO observed_branches (repository, name, head_sha, observed_at) "
-                "VALUES (?, ?, ?, ?)",
-                (line.repository, line.name, line.head_sha, now),
+            sql.execute(
+                conn,
+                sql.insert(
+                    "observed_branches",
+                    repository=line.repository,
+                    name=line.name,
+                    head_sha=line.head_sha,
+                    observed_at=now,
+                ).or_replace(),
             )
     return True
 
@@ -666,48 +680,47 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
         else "tracker"
     )
-    cursor = conn.execute(
-        "INSERT OR IGNORE INTO observed_comments (ticket, id, author, commented_at, body, truncated, source, "
-        "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            line.ticket,
-            line.id,
-            line.author,
-            line.time,
-            text[: conversation.MAX_MIRRORED],
-            len(text) > conversation.MAX_MIRRORED,
-            source,
-            now,
-        ),
+    cursor = sql.execute(
+        conn,
+        sql.insert(
+            "observed_comments",
+            ticket=line.ticket,
+            id=line.id,
+            author=line.author,
+            commented_at=line.time,
+            body=text[: conversation.MAX_MIRRORED],
+            truncated=len(text) > conversation.MAX_MIRRORED,
+            source=source,
+            observed_at=now,
+        ).or_ignore(),
     )
     return cursor.rowcount == 1
 
 
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
     thread = line.thread if line.item is ReviewItem.COMMENT else None
-    conn.execute(
-        "INSERT OR REPLACE INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, "
-        "review_id, thread_id, path, line, side, outdated, resolved, observed_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            line.pr,
-            line.item,
-            line.id,
-            line.author,
-            line.bot,
-            line.state if line.item is ReviewItem.REVIEW else None,
-            line.time,
-            line.body,
-            line.url,
-            line.review,
-            None if thread is None else thread.id,
-            None if thread is None else thread.path,
-            None if thread is None else thread.line,
-            None if thread is None else thread.side,
-            None if thread is None else thread.outdated,
-            None if thread is None else thread.resolved,
-            now,
-        ),
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_reviews",
+            pr_url=line.pr,
+            item=line.item,
+            id=line.id,
+            author=line.author,
+            bot=line.bot,
+            state=line.state if line.item is ReviewItem.REVIEW else None,
+            created_at=line.time,
+            body=line.body,
+            url=line.url,
+            review_id=line.review,
+            thread_id=None if thread is None else thread.id,
+            path=None if thread is None else thread.path,
+            line=None if thread is None else thread.line,
+            side=None if thread is None else thread.side,
+            outdated=None if thread is None else thread.outdated,
+            resolved=None if thread is None else thread.resolved,
+            observed_at=now,
+        ).or_replace(),
     )
 
 

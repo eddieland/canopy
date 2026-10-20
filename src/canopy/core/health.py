@@ -11,12 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, spend
-from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus, TickStatus
+from canopy.core import contract, db, spend, sql
+from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TickStatus
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.spend import Kind
@@ -44,18 +44,24 @@ _FAILED: dict[Kind, frozenset[str]] = {
 # Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
 # `review`), its status, when it started, what it was about, its note, and its cost. A plan run is a row of `runs`, a
 # kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input, and
-# each query is literal SQL (D125): the kinds are `RunKind.PLAN` and `RunKind.NEEDS_PLAN`.
-_ROWS: dict[Kind, str] = {
-    "overseer": "SELECT id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
-    "NULL AS subject, summary AS note, cost_usd FROM ticks",
-    "workers": "SELECT id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd "
-    "FROM runs WHERE kind NOT IN ('plan', 'needs-plan')",
-    "plans": "SELECT id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd "
-    "FROM runs WHERE kind IN ('plan', 'needs-plan')",
-    "chores": "SELECT id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd "
-    "FROM chore_runs",
-    "reviews": "SELECT id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd "
-    "FROM review_runs",
+# each is built from literal SQL (D125).
+_RUN_ROWS = sql.select(
+    "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd"
+).from_("runs")
+_PLAN_KINDS = sql.in_("kind", (RunKind.PLAN, RunKind.NEEDS_PLAN))
+_ROWS: Mapping[Kind, sql.Select] = {
+    "overseer": sql.select(
+        "id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
+        "NULL AS subject, summary AS note, cost_usd"
+    ).from_("ticks"),
+    "workers": _RUN_ROWS.where("NOT ({})", _PLAN_KINDS),
+    "plans": _RUN_ROWS.where("{}", _PLAN_KINDS),
+    "chores": sql.select("id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd").from_(
+        "chore_runs"
+    ),
+    "reviews": sql.select(
+        "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd"
+    ).from_("review_runs"),
 }
 
 
@@ -146,11 +152,14 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
 
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.
 def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> list[Outcome]:
-    rows = conn.execute(
-        f"SELECT what, status, count(*), SUM(cost_usd) FROM ({_ROWS[kind]}) "  # noqa: S608 (a fixed query)
-        "WHERE started_at >= ? AND started_at < ? AND status != 'running' GROUP BY what, status ORDER BY what, status",
-        (since, until),
+    ended = (
+        sql.select("what, status, count(*), SUM(cost_usd)")
+        .from_("({})", _ROWS[kind])
+        .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
+        .group_by("what, status")
+        .order_by("what, status")
     )
+    rows = sql.execute(conn, ended)
     return [
         Outcome(
             kind=kind,
@@ -165,13 +174,15 @@ def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> l
 
 
 def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[Failure]:
-    statuses = sorted(_FAILED[kind])
-    rows = conn.execute(
-        f"SELECT * FROM ({_ROWS[kind]}) "  # noqa: S608 (a fixed query, and a mark per status)
-        f"WHERE started_at >= ? AND started_at < ? AND status IN ({db.marks(statuses)}) "
-        "ORDER BY started_at DESC, id DESC LIMIT ?",
-        (since, until, *statuses, FAILURES),
+    failed = (
+        sql.select("*")
+        .from_("({})", _ROWS[kind])
+        .where("started_at >= ? AND started_at < ?", since, until)
+        .where_in("status", sorted(_FAILED[kind]))
+        .order_by("started_at DESC, id DESC")
+        .limit(FAILURES)
     )
+    rows = sql.execute(conn, failed)
     for run_id, what, status, started, subject, note, cost in rows:
         yield Failure(
             kind=kind,
@@ -197,11 +208,14 @@ def _text(value: object) -> str | None:
 
 
 def _refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
-    rows = conn.execute(
-        "SELECT substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id) FROM decisions "
-        "WHERE action LIKE ? AND created_at >= ? AND created_at < ? GROUP BY action ORDER BY count(*) DESC, action",
-        (len(REFUSED) + 1, f"{REFUSED}%", since, until),
+    refused = (
+        sql.select("substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id)", len(REFUSED) + 1)
+        .from_("decisions")
+        .where("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
+        .group_by("action")
+        .order_by("count(*) DESC, action")
     )
+    rows = sql.execute(conn, refused)
     return [
         Refusal(guard=str(guard), decisions=int(n), ticks=int(ticks), last_tick=int(last))
         for guard, n, ticks, last in rows

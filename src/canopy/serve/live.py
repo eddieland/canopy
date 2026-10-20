@@ -27,6 +27,7 @@ from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from canopy.core import sql
 from canopy.infra import logs
 from canopy.serve import reviews, views
 from canopy.serve.schema import (
@@ -152,7 +153,7 @@ class _Reader:
 
 
 def _data_version(ctx: Context) -> int:
-    row = ctx.conn.execute("PRAGMA data_version").fetchone()
+    row = sql.execute(ctx.conn, sql.frag("PRAGMA data_version")).fetchone()
     return int(row[0])
 
 
@@ -248,13 +249,13 @@ def _snapshot(ctx: Context) -> Iterator[None]:
     list still in the order from before it. Held only for the reads, never across an `await`, so it never holds back a
     checkpoint for longer than one read of the lists.
     """
-    ctx.conn.execute("BEGIN")
+    sql.execute(ctx.conn, sql.frag("BEGIN"))
     try:
         yield
     except BaseException:
-        ctx.conn.execute("ROLLBACK")
+        sql.execute(ctx.conn, sql.frag("ROLLBACK"))
         raise
-    ctx.conn.execute("COMMIT")
+    sql.execute(ctx.conn, sql.frag("COMMIT"))
 
 
 def _costs(spend: Spend) -> tuple[float | None, float | None, float | None]:

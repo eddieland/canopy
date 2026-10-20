@@ -16,14 +16,21 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, memory, records
+from canopy.core import conversation, db, memory, records, sql
 from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.vocab import MemoryAuthor, MemoryMode, MemoryScope, MemoryStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from canopy.core.config import Config
+
+#: The statement that sets `secure_delete` back to each value `PRAGMA secure_delete` reads, which a PRAGMA cannot bind.
+_SECURE_DELETE: Mapping[int, sql.Fragment] = {
+    0: sql.frag("PRAGMA secure_delete = OFF"),
+    1: sql.frag("PRAGMA secure_delete = ON"),
+    2: sql.frag("PRAGMA secure_delete = FAST"),
+}
 
 
 @dataclass(frozen=True)
@@ -45,12 +52,12 @@ def forget(conn: sqlite3.Connection, memory_id: int) -> tuple[records.Memory, Sc
             its body is already gone.
     """
     conversation.check_operator()
-    found = records.fetch_one(conn, records.Memory, "SELECT * FROM memories WHERE id = ?", (memory_id,))
+    found = records.fetch_one(conn, records.Memory, sql.select("*").from_("memories").where("id = ?", memory_id))
     if found is None:
         raise conversation.Refused("unknown", f"no memory has id {memory_id}")
     if found.body is None:
         raise conversation.Refused("forgotten", f"memory {memory_id}'s text is already gone: {found.why}")
-    return found, _scrub(conn, "id = ?", (memory_id,), why="forgotten")
+    return found, _scrub(conn, sql.frag("id = ?", memory_id), why="forgotten")
 
 
 def purge(
@@ -71,36 +78,38 @@ def purge(
     if sum((ticket is not None, run is not None, every)) != 1:
         raise ValueError("purge takes exactly one of a ticket, a run, or every memory")
     if ticket is not None:
-        return _scrub(conn, "ticket_key = ?", (ticket,), why="purged")
+        return _scrub(conn, sql.frag("ticket_key = ?", ticket), why="purged")
     if run is not None:
-        return _scrub(conn, "run_id = ?", (run,), why="purged")
-    return _scrub(conn, "1", (), why="purged")
+        return _scrub(conn, sql.frag("run_id = ?", run), why="purged")
+    return _scrub(conn, sql.frag("1"), why="purged")
 
 
-def _scrub(conn: sqlite3.Connection, where: str, params: tuple[object, ...], *, why: str) -> Scrubbed:
+def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: str) -> Scrubbed:
     """Set the body of every memory `where` names to NULL, securely, and checkpoint the log after it.
 
     Returns:
         How many bodies were deleted, and whether the checkpoint completed: a reader can hold it back, and the next
         checkpoint completes it.
     """
-    before = int(conn.execute("PRAGMA secure_delete").fetchone()[0])
-    conn.execute("PRAGMA secure_delete = ON")
+    before = int(sql.execute(conn, sql.frag("PRAGMA secure_delete")).fetchone()[0])
+    sql.execute(conn, _SECURE_DELETE[1])
     try:
         with db.transaction(conn):
-            # `where` is one of the fixed clauses above, never input; its values are bound parameters.
-            cur = conn.execute(
-                f"UPDATE memories SET body = NULL, status = ?, why = ?, "  # noqa: S608
-                f"invalidated_at = coalesce(invalidated_at, ?) WHERE body IS NOT NULL AND {where}",
-                (MemoryStatus.INVALID, why, db.now(), *params),
+            cur = sql.execute(
+                conn,
+                sql.update("memories")
+                .set(body=None, status=MemoryStatus.INVALID, why=why)
+                .set_to("invalidated_at = coalesce(invalidated_at, ?)", db.now())
+                .where("body IS NOT NULL")
+                .where("{}", where),
             )
             count = cur.rowcount
             # The index's triggers marked the deleted words; merging its segments drops them, and frees the pages
             # that held them for `secure_delete` to zero.
-            conn.execute("INSERT INTO memories_fts (memories_fts) VALUES ('optimize')")
+            sql.execute(conn, sql.insert("memories_fts", memories_fts=sql.frag("'optimize'")))
     finally:
-        conn.execute(f"PRAGMA secure_delete = {before}")
-    busy = int(conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0])
+        sql.execute(conn, _SECURE_DELETE[before])
+    busy = int(sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()[0])
     return Scrubbed(count=count, checkpointed=busy == 0)
 
 
@@ -159,34 +168,38 @@ def promote(
     with db.transaction(conn):
         old = next((m for m in memory.active_lessons(conn) if m.key == source.key), None)
         if old is not None:
-            conn.execute("UPDATE memories SET status = ? WHERE id = ?", (MemoryStatus.SUPERSEDED, old.id))
-        cur = conn.execute(
-            "INSERT INTO memories (scope, repo, key, body, status, author, supersedes, promoted_from, created_at, "
-            "approved_at, review_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                MemoryScope.LESSON,
-                repo if repo is not None else source.repo,
-                source.key,
-                body,
-                MemoryStatus.ACTIVE,
-                MemoryAuthor.OPERATOR,
-                old.id if old is not None else None,
-                source.id,
-                stamp,
-                stamp,
-                db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
+            sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id))
+        cur = sql.execute(
+            conn,
+            sql.insert(
+                "memories",
+                scope=MemoryScope.LESSON,
+                repo=repo if repo is not None else source.repo,
+                key=source.key,
+                body=body,
+                status=MemoryStatus.ACTIVE,
+                author=MemoryAuthor.OPERATOR,
+                supersedes=old.id if old is not None else None,
+                promoted_from=source.id,
+                created_at=stamp,
+                approved_at=stamp,
+                review_at=db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
             ),
         )
         lesson_id = int(cur.lastrowid or 0)
         if old is not None:
-            conn.execute(
-                "UPDATE memories SET why = ?, invalidated_at = ? WHERE id = ?",
-                (f"superseded by lesson {lesson_id}", stamp, old.id),
+            sql.execute(
+                conn,
+                sql.update("memories")
+                .set(why=f"superseded by lesson {lesson_id}", invalidated_at=stamp)
+                .where("id = ?", old.id),
             )
         if source.scope is MemoryScope.PROPOSAL:
-            conn.execute(
-                "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ?",
-                (MemoryStatus.SUPERSEDED, f"promoted to lesson {lesson_id}", stamp, source.id),
+            sql.execute(
+                conn,
+                sql.update("memories")
+                .set(status=MemoryStatus.SUPERSEDED, why=f"promoted to lesson {lesson_id}", invalidated_at=stamp)
+                .where("id = ?", source.id),
             )
     lesson = memory.get(conn, lesson_id)
     if lesson is None:
@@ -217,9 +230,12 @@ def reject(conn: sqlite3.Connection, config: Config, proposal_id: int) -> record
         Refused: (`inside_run`), (`off`), (`unknown`), or (`not_pending`), as `promote` does.
     """
     proposal = _pending(conn, config, proposal_id)
-    conn.execute(
-        "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ? AND status = ?",
-        (MemoryStatus.INVALID, "rejected", db.now(), proposal.id, MemoryStatus.PENDING),
+    sql.execute(
+        conn,
+        sql.update("memories")
+        .set(status=MemoryStatus.INVALID, why="rejected", invalidated_at=db.now())
+        .where("id = ?", proposal.id)
+        .where("status = ?", MemoryStatus.PENDING),
     )
     return proposal
 
@@ -240,8 +256,8 @@ def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
     if found is None or found.scope is not MemoryScope.LESSON or found.status is not MemoryStatus.ACTIVE:
         raise conversation.Refused("unknown", f"no lesson in force has id {lesson_id}")
     due = db.format_time(datetime.now(UTC) + timedelta(days=memory.REVIEW_DAYS))
-    conn.execute(
-        "UPDATE memories SET review_at = ?, wrong_at = NULL, wrong_run_id = NULL WHERE id = ?", (due, lesson_id)
+    sql.execute(
+        conn, sql.update("memories").set(review_at=due, wrong_at=None, wrong_run_id=None).where("id = ?", lesson_id)
     )
     return due
 
@@ -310,28 +326,30 @@ def edit(
     stamp = db.format_time(now)
     with db.transaction(conn):
         # Out of force first: the journal holds one lesson in force under a key.
-        conn.execute("UPDATE memories SET status = ? WHERE id = ?", (MemoryStatus.SUPERSEDED, old.id))
-        cur = conn.execute(
-            "INSERT INTO memories (scope, repo, key, body, status, author, supersedes, promoted_from, created_at, "
-            "approved_at, review_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                MemoryScope.LESSON,
-                serves,
-                old.key,
-                body,
-                MemoryStatus.ACTIVE,
-                MemoryAuthor.OPERATOR,
-                old.id,
-                old.id,
-                stamp,
-                stamp,
-                db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
+        sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id))
+        cur = sql.execute(
+            conn,
+            sql.insert(
+                "memories",
+                scope=MemoryScope.LESSON,
+                repo=serves,
+                key=old.key,
+                body=body,
+                status=MemoryStatus.ACTIVE,
+                author=MemoryAuthor.OPERATOR,
+                supersedes=old.id,
+                promoted_from=old.id,
+                created_at=stamp,
+                approved_at=stamp,
+                review_at=db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
             ),
         )
         new_id = int(cur.lastrowid or 0)
-        conn.execute(
-            "UPDATE memories SET why = ?, invalidated_at = ? WHERE id = ?",
-            (f"edited into lesson {new_id}", stamp, old.id),
+        sql.execute(
+            conn,
+            sql.update("memories")
+            .set(why=f"edited into lesson {new_id}", invalidated_at=stamp)
+            .where("id = ?", old.id),
         )
     lesson = memory.get(conn, new_id)
     if lesson is None:

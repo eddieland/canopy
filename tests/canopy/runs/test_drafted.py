@@ -14,7 +14,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import drafts, observe, records, replies, review_diff
+from canopy.core import drafts, observe, records, replies, review_diff, sql
 from canopy.core.config import load
 from canopy.core.vocab import DraftKind, DraftStatus, ResumeReason, ReviewItem, RunKind
 from canopy.infra import logs, procs
@@ -64,7 +64,7 @@ def test_after_a_run_its_pr_is_read_and_its_drafts_checked(scenario: Scenario, g
     found = present(replies.run_replies(conn, run.id))
     assert [(r.number, r.why) for r in drafts.refused_of(found)] == [(2, unknown.why)]
     assert reads(github_state) == [{"prs": [PR]}]
-    observed = records.fetch_all(conn, records.ObservedReview, "SELECT * FROM observed_reviews ORDER BY id")
+    observed = records.fetch_all(conn, records.ObservedReview, sql.frag("SELECT * FROM observed_reviews ORDER BY id"))
     assert [(o.item, o.id, o.thread_id, o.author) for o in observed] == [
         (ReviewItem.COMMENT, 501, "PRRT_1", "alice"),
         (ReviewItem.COMMENT, 502, "PRRT_2", "alice"),
@@ -256,9 +256,9 @@ def test_a_read_records_only_what_it_read_whole_and_a_line_it_cannot_use_leaves_
     # `other` has a line canopy refused, so it is not whole; `third` is not named whole.
     assert found.whole == {PR}
     assert found.failure == "the reader did not read it whole"
-    observed = records.fetch_all(conn, records.ObservedReview, "SELECT * FROM observed_reviews")
+    observed = records.fetch_all(conn, records.ObservedReview, sql.frag("SELECT * FROM observed_reviews"))
     assert [(o.pr_url, o.id) for o in observed] == [(PR, 501)]
-    [pr] = records.fetch_all(conn, records.ObservedPr, "SELECT * FROM observed_prs")
+    [pr] = records.fetch_all(conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
     assert (pr.url, pr.number, pr.draft) == (PR, 7, False)
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import contract, conversation, db, follow_ups, records
+from canopy.core import contract, conversation, db, follow_ups, records, sql
 from canopy.loop import attention
 from tests.canopy.helpers import (
     KEY,
@@ -32,7 +32,7 @@ def recorded(conn: sqlite3.Connection) -> list[tuple[str, str, int, str | None]]
 
 
 def records_of(conn: sqlite3.Connection) -> list[records.FollowUp]:
-    return records.fetch_all(conn, records.FollowUp, "SELECT * FROM follow_ups ORDER BY at, key")
+    return records.fetch_all(conn, records.FollowUp, sql.frag("SELECT * FROM follow_ups ORDER BY at, key"))
 
 
 def asked(scenario: Scenario) -> list[tuple[str | None, str]]:

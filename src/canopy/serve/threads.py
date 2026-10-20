@@ -12,7 +12,7 @@ from collections.abc import Set as AbstractSet
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import db, drafts, drafts_manage, records, review_diff
+from canopy.core import db, drafts, drafts_manage, records, review_diff, sql
 from canopy.core.vocab import DraftKind, ReviewItem
 from canopy.serve.draft_views import draft
 from canopy.serve.reviews import diff_view
@@ -38,9 +38,9 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
         The threads, the PR's own comment's drafts, and the drafts no read has placed on a thread.
     """
     conn = ctx.conn
-    observed = records.fetch_one(conn, records.ObservedPr, "SELECT * FROM observed_prs WHERE url = ?", (url,))
+    observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", url))
     found = records.fetch_all(
-        conn, records.Draft, "SELECT * FROM drafts WHERE pr_url = ? ORDER BY run_id, number", (url,)
+        conn, records.Draft, sql.select("*").from_("drafts").where("pr_url = ?", url).order_by("run_id, number")
     )
     if observed is None and not found:
         return None
@@ -50,8 +50,11 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
     comments = records.fetch_all(
         conn,
         records.ObservedReview,
-        "SELECT * FROM observed_reviews WHERE pr_url = ? AND item = ? ORDER BY created_at, id",
-        (url, ReviewItem.COMMENT),
+        sql.select("*")
+        .from_("observed_reviews")
+        .where("pr_url = ?", url)
+        .where("item = ?", ReviewItem.COMMENT)
+        .order_by("created_at, id"),
     )
     sent = set(drafts.sent_by_pr(conn).get(url, {}).get("comments", []))
     by_thread: dict[str, list[records.ObservedReview]] = {}
@@ -91,10 +94,9 @@ def known(conn: sqlite3.Connection, url: str) -> bool:
     Returns:
         True when the journal holds a read of the PR or a draft for it.
     """
-    found = conn.execute(
-        "SELECT EXISTS (SELECT 1 FROM observed_prs WHERE url = ?) OR EXISTS (SELECT 1 FROM drafts WHERE pr_url = ?)",
-        (url, url),
-    ).fetchone()
+    read = sql.select("1").from_("observed_prs").where("url = ?", url)
+    drafted = sql.select("1").from_("drafts").where("pr_url = ?", url)
+    found = sql.execute(conn, sql.select("EXISTS ({}) OR EXISTS ({})", read, drafted)).fetchone()
     return bool(found[0])
 
 
@@ -128,13 +130,18 @@ def _kept_diff(conn: sqlite3.Connection, url: str) -> tuple[int, Path] | None:
     Returns:
         The run's id and its diff's path, or None when no run kept one.
     """
-    unit = conn.execute("SELECT ticket_key, repo FROM ticket_units WHERE pr_url = ?", (url,)).fetchone()
+    unit = sql.execute(conn, sql.select("ticket_key, repo").from_("ticket_units").where("pr_url = ?", url)).fetchone()
     if unit is None:
         return None
-    rows = conn.execute(
-        "SELECT r.id, r.log_path FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.ticket_key = ? AND s.repo = ? ORDER BY r.id DESC LIMIT 20",
-        (unit["ticket_key"], unit["repo"]),
+    rows = sql.execute(
+        conn,
+        sql.select("r.id, r.log_path")
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .where("r.ticket_key = ?", unit["ticket_key"])
+        .where("s.repo = ?", unit["repo"])
+        .order_by("r.id DESC")
+        .limit(20),
     )
     for r in rows:
         path = review_diff.run_path_for(str(r["log_path"]), str(unit["repo"]))

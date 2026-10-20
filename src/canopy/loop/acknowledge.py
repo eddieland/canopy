@@ -11,7 +11,7 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, sql
 from canopy.core.items import one_line
 
 if TYPE_CHECKING:
@@ -41,11 +41,18 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
     tick = db.get_tick(conn, tick_id)
     if tick is None or tick.message_id is None:
         return {}
-    rows = conn.execute(
-        "SELECT id, subject_id FROM messages WHERE subject_kind = ? AND source = 'operator' AND id > ? AND id <= ? "
-        "ORDER BY id",
-        (conversation.TICKET, _noted_up_to(conn, tick_id), tick.message_id),
-    ).fetchall()
+    unanswered = (
+        sql.select("id, subject_id")
+        .from_("messages")
+        .where(
+            "subject_kind = ? AND source = 'operator' AND id > ? AND id <= ?",
+            conversation.TICKET,
+            _noted_up_to(conn, tick_id),
+            tick.message_id,
+        )
+        .order_by("id")
+    )
+    rows = sql.execute(conn, unanswered).fetchall()
     read: defaultdict[str, list[int]] = defaultdict(list)
     for row in rows:
         read[str(row["subject_id"])].append(int(row["id"]))
@@ -61,11 +68,14 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
 def _noted_up_to(conn: sqlite3.Connection, tick_id: int) -> int:
     # The newest message the live `ok` tick before this one read, which its notes answered for. A dry run's does not
     # count: it notes nothing, so what it read is still unanswered.
-    row = conn.execute(
-        "SELECT message_id FROM ticks WHERE status = 'ok' AND dry_run = 0 AND id < ? AND message_id IS NOT NULL "
-        "ORDER BY id DESC LIMIT 1",
-        (tick_id,),
-    ).fetchone()
+    noted = (
+        sql.select("message_id")
+        .from_("ticks")
+        .where("status = 'ok' AND dry_run = 0 AND id < ? AND message_id IS NOT NULL", tick_id)
+        .order_by("id DESC")
+        .limit(1)
+    )
+    row = sql.execute(conn, noted).fetchone()
     return 0 if row is None else int(row[0])
 
 

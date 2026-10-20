@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation
+from canopy.core import conversation, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -88,8 +88,8 @@ def search(conn: sqlite3.Connection, query: str) -> Found:
     terms = words(query)
     hits: list[Hit] = []
     more: list[Source] = []
-    for source, sql, hit in _SOURCES:
-        rows = _matching(conn, sql, terms)
+    for source, rows_of, hit in _SOURCES:
+        rows = _matching(conn, rows_of, terms)
         if len(rows) > PER_SOURCE:
             more.append(source)
         hits.extend(hit(row, snippet(str(row["text"]), terms)) for row in rows[:PER_SOURCE])
@@ -124,41 +124,48 @@ def like(term: str) -> str:
     return f"%{escaped}%"
 
 
-def _matching(conn: sqlite3.Connection, sql: str, terms: Collection[str]) -> list[sqlite3.Row]:
+def _matching(conn: sqlite3.Connection, rows_of: sql.Select, terms: Collection[str]) -> list[sqlite3.Row]:
     # Each source's query is a subquery with a `text` column and an `id` that orders it newest first. SQLite flattens
     # it, so the scan walks the table by id and stops once the limit is met. The SQL is fixed; the terms are bound.
-    where = " AND ".join("text LIKE ? ESCAPE '\\'" for _ in terms)
-    return conn.execute(
-        f"SELECT * FROM ({sql}) WHERE {where} ORDER BY id DESC LIMIT ?",  # noqa: S608
-        (*(like(t) for t in terms), PER_SOURCE + 1),
-    ).fetchall()
+    query = sql.select("*").from_("({})", rows_of)
+    for term in terms:
+        query = query.where("text LIKE ? ESCAPE '\\'", like(term))
+    return sql.execute(conn, query.order_by("id DESC").limit(PER_SOURCE + 1)).fetchall()
 
 
 # A ticket's text: its key and title, then its branch and each unit's branch and PR, each once. Ordered by when a tick
 # last saw it, since a ticket's rowid says only when it was first seen.
-_TICKETS = (
-    "SELECT t.key, t.phase, t.last_seen_at AS at,"
+_TICKETS = sql.select(
+    "t.key, t.phase, t.last_seen_at AS at,"
     "  t.key || coalesce(' ' || t.title, '') || coalesce(' ' || (SELECT group_concat(v, ' ') FROM ("
     "    SELECT t.branch AS v UNION SELECT u.branch FROM ticket_units u WHERE u.ticket_key = t.key"
     "    UNION SELECT u.pr_url FROM ticket_units u WHERE u.ticket_key = t.key"
     "  ) WHERE v IS NOT NULL AND v != ''), '') AS text,"
-    "  t.last_seen_at AS id "
-    "FROM tickets t"
-)
-_MESSAGES = "SELECT id, subject_kind, subject_id, at, kind, run_id, body AS text FROM messages"
+    "  t.last_seen_at AS id"
+).from_("tickets t")
+_MESSAGES = sql.select("id, subject_kind, subject_id, at, kind, run_id, body AS text").from_("messages")
 # A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
 # is valid JSON has one, and only an object is a finding: the JSON functions fail on anything else.
 _CHORE_RUNS = (
-    "SELECT id, chore, status, coalesce(ended_at, started_at) AS at,"
-    "  coalesce(json_extract(result_json, '$.harness'), '') || char(10)"
-    "  || coalesce(json_extract(result_json, '$.summary'), '') || char(10)"
-    "  || coalesce((SELECT group_concat("
-    "    coalesce(json_extract(f.value, '$.title'), '') || ': ' || coalesce(json_extract(f.value, '$.detail'), ''),"
-    "    char(10)) FROM json_each(result_json, '$.findings') AS f WHERE f.type = 'object'), '') AS text "
-    "FROM chore_runs WHERE json_valid(result_json)"
+    sql.select(
+        "id, chore, status, coalesce(ended_at, started_at) AS at,"
+        "  coalesce(json_extract(result_json, '$.harness'), '') || char(10)"
+        "  || coalesce(json_extract(result_json, '$.summary'), '') || char(10)"
+        "  || coalesce((SELECT group_concat("
+        "    coalesce(json_extract(f.value, '$.title'), '') || ': ' || coalesce(json_extract(f.value, '$.detail'), ''),"
+        "    char(10)) FROM json_each(result_json, '$.findings') AS f WHERE f.type = 'object'), '') AS text"
+    )
+    .from_("chore_runs")
+    .where("json_valid(result_json)")
 )
-_DECISIONS = "SELECT id, tick_id, ticket_key, chore, action, created_at AS at, rationale AS text FROM decisions"
-_TICKS = "SELECT id, status, coalesce(ended_at, started_at) AS at, summary AS text FROM ticks WHERE summary IS NOT NULL"
+_DECISIONS = sql.select("id, tick_id, ticket_key, chore, action, created_at AS at, rationale AS text").from_(
+    "decisions"
+)
+_TICKS = (
+    sql.select("id, status, coalesce(ended_at, started_at) AS at, summary AS text")
+    .from_("ticks")
+    .where("summary IS NOT NULL")
+)
 
 
 def _ticket(row: sqlite3.Row, text: str) -> Hit:
@@ -205,7 +212,7 @@ def _tick(row: sqlite3.Row, text: str) -> Hit:
     return Hit("tick", str(row["at"]), text, tick_id=int(row["id"]), label=str(row["status"]))
 
 
-_SOURCES: tuple[tuple[Source, str, Callable[[sqlite3.Row, str], Hit]], ...] = (
+_SOURCES: tuple[tuple[Source, sql.Select, Callable[[sqlite3.Row, str], Hit]], ...] = (
     ("ticket", _TICKETS, _ticket),
     ("message", _MESSAGES, _message),
     ("chore_run", _CHORE_RUNS, _chore_run),

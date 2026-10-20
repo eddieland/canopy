@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db, records
+from canopy.core import db, records, sql
 from canopy.core.conversation import Refused
 
 if TYPE_CHECKING:
@@ -78,8 +78,11 @@ def current(conn: sqlite3.Connection, now: datetime | None = None) -> Notice | N
     row = records.fetch_one(
         conn,
         records.Notice,
-        "SELECT * FROM notices WHERE ended_at IS NULL AND lapses_at > ? ORDER BY id DESC LIMIT 1",
-        (moment,),
+        sql.select("*")
+        .from_("notices")
+        .where("ended_at IS NULL AND lapses_at > ?", moment)
+        .order_by("id DESC")
+        .limit(1),
     )
     return _notice(row) if row is not None else None
 
@@ -117,15 +120,15 @@ def set_notice(conn: sqlite3.Connection, text: str, *, minutes: int | None, chan
     with db.transaction(conn):
         moment = datetime.now(UTC)
         stamp = db.format_time(moment)
-        conn.execute(
-            "UPDATE notices SET ended_at = ?, ended_channel = ? WHERE ended_at IS NULL AND lapses_at > ?",
-            (stamp, channel, stamp),
+        sql.execute(
+            conn,
+            sql.update("notices")
+            .set(ended_at=stamp, ended_channel=channel)
+            .where("ended_at IS NULL AND lapses_at > ?", stamp),
         )
-        cur = conn.execute(
-            "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, ?, ?)",
-            (body, stamp, channel, db.format_time(moment + timedelta(minutes=lasts))),
-        )
-    [row] = records.fetch_all(conn, records.Notice, "SELECT * FROM notices WHERE id = ?", (cur.lastrowid,))
+        lapses_at = db.format_time(moment + timedelta(minutes=lasts))
+        cur = sql.execute(conn, sql.insert("notices", body=body, set_at=stamp, channel=channel, lapses_at=lapses_at))
+    [row] = records.fetch_all(conn, records.Notice, sql.select("*").from_("notices").where("id = ?", cur.lastrowid))
     return _notice(row)
 
 
@@ -139,8 +142,8 @@ def clear(conn: sqlite3.Connection, *, channel: str) -> Notice | None:
         held = current(conn)
         if held is None:
             return None
-        conn.execute("UPDATE notices SET ended_at = ?, ended_channel = ? WHERE id = ?", (db.now(), channel, held.id))
-    [row] = records.fetch_all(conn, records.Notice, "SELECT * FROM notices WHERE id = ?", (held.id,))
+        sql.execute(conn, sql.update("notices").set(ended_at=db.now(), ended_channel=channel).where("id = ?", held.id))
+    [row] = records.fetch_all(conn, records.Notice, sql.select("*").from_("notices").where("id = ?", held.id))
     return _notice(row)
 
 
@@ -154,9 +157,13 @@ def recent(conn: sqlite3.Connection, now: datetime) -> list[Notice]:
     rows = records.fetch_all(
         conn,
         records.Notice,
-        "SELECT * FROM notices WHERE lapses_at > ? AND (ended_at IS NULL OR ended_at > ?) "
-        "AND set_at <= ? ORDER BY id DESC LIMIT ?",
-        (since, since, db.format_time(now), RECENT_LIMIT),
+        sql.select("*")
+        .from_("notices")
+        .where("lapses_at > ?", since)
+        .where("ended_at IS NULL OR ended_at > ?", since)
+        .where("set_at <= ?", db.format_time(now))
+        .order_by("id DESC")
+        .limit(RECENT_LIMIT),
     )
     return [_notice(r) for r in rows]
 
@@ -169,7 +176,7 @@ def moved_after(conn: sqlite3.Connection, since: str) -> bool:
     Returns:
         True if a notice was set, cleared, or replaced after `since`.
     """
-    row = conn.execute("SELECT 1 FROM notices WHERE set_at > ? OR ended_at > ? LIMIT 1", (since, since))
+    row = sql.execute(conn, sql.select("1").from_("notices").where("set_at > ? OR ended_at > ?", since, since).limit(1))
     return row.fetchone() is not None
 
 

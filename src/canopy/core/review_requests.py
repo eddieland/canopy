@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, records
+from canopy.core import contract, conversation, db, records, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -47,7 +47,7 @@ def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:
 def open_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     """Return the open requests, oldest first."""
     return records.fetch_all(
-        conn, records.ReviewRequest, "SELECT * FROM review_requests WHERE ended_at IS NULL ORDER BY id"
+        conn, records.ReviewRequest, sql.select("*").from_("review_requests").where("ended_at IS NULL").order_by("id")
     )
 
 
@@ -59,8 +59,11 @@ def waiting_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     return records.fetch_all(
         conn,
         records.ReviewRequest,
-        "SELECT * FROM review_requests q WHERE q.ended_at IS NULL AND NOT EXISTS "
-        "(SELECT 1 FROM review_runs r WHERE r.pr_url = q.pr_url AND r.status = 'running') ORDER BY q.id DESC",
+        sql.select("*")
+        .from_("review_requests q")
+        .where("q.ended_at IS NULL")
+        .where("NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.pr_url = q.pr_url AND r.status = 'running')")
+        .order_by("q.id DESC"),
     )
 
 
@@ -69,8 +72,7 @@ def open_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewRequest
     return records.fetch_one(
         conn,
         records.ReviewRequest,
-        "SELECT * FROM review_requests WHERE pr_url = ? AND ended_at IS NULL",
-        (pr_url,),
+        sql.select("*").from_("review_requests").where("pr_url = ? AND ended_at IS NULL", pr_url),
     )
 
 
@@ -79,8 +81,7 @@ def latest_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewReque
     return records.fetch_one(
         conn,
         records.ReviewRequest,
-        "SELECT * FROM review_requests WHERE pr_url = ? ORDER BY id DESC LIMIT 1",
-        (pr_url,),
+        sql.select("*").from_("review_requests").where("pr_url = ?", pr_url).order_by("id DESC").limit(1),
     )
 
 
@@ -116,7 +117,7 @@ def request(
     if said is not None and len(said) > MAX_NOTES:
         raise conversation.Refused("bad_notes", f"the notes are {len(said)} characters; the most is {MAX_NOTES}")
     url = _pr_url(ref)
-    if conn.execute("SELECT 1 FROM ticket_units WHERE pr_url = ?", (url,)).fetchone() is not None:
+    if sql.execute(conn, sql.select("1").from_("ticket_units").where("pr_url = ?", url)).fetchone() is not None:
         raise conversation.Refused(
             "loop_pr",
             f"{url} is one of the loop's own PRs, a ticket's unit's; `review.agent_prs` reviews those",
@@ -124,14 +125,11 @@ def request(
     with db.transaction(conn):
         found = open_request(conn, url)
         if found is not None and said is not None:
-            conn.execute("UPDATE review_requests SET notes = ? WHERE id = ?", (said, found.id))
+            sql.execute(conn, sql.update("review_requests").set(notes=said).where("id = ?", found.id))
             found = open_request(conn, url)
         if found is not None:
             return Requested(request=found, already=True)
-        conn.execute(
-            "INSERT INTO review_requests (pr_url, created_at, channel, notes) VALUES (?, ?, ?, ?)",
-            (url, db.now(), channel, said),
-        )
+        sql.execute(conn, sql.insert("review_requests", pr_url=url, created_at=db.now(), channel=channel, notes=said))
         made = open_request(conn, url)
     if made is None:
         raise RuntimeError(f"the request for {url} vanished")
@@ -168,8 +166,11 @@ def stop(conn: sqlite3.Connection, ref: conversation.Ref) -> Stopped:
         running = records.fetch_one(
             conn,
             records.ReviewRun,
-            "SELECT * FROM review_runs WHERE pr_url = ? AND status = 'running' ORDER BY id DESC LIMIT 1",
-            (url,),
+            sql.select("*")
+            .from_("review_runs")
+            .where("pr_url = ? AND status = 'running'", url)
+            .order_by("id DESC")
+            .limit(1),
         )
     return Stopped(request=found, running=running)
 
@@ -211,17 +212,21 @@ def answered(conn: sqlite3.Connection, pr_url: str) -> bool:
         True if this call ended a request.
     """
     with db.transaction(conn):
-        cur = conn.execute(
-            "UPDATE review_requests SET ended_at = ?, end_reason = ? WHERE pr_url = ? AND ended_at IS NULL",
-            (db.now(), REVIEWED, pr_url),
+        cur = sql.execute(
+            conn,
+            sql.update("review_requests")
+            .set(ended_at=db.now(), end_reason=REVIEWED)
+            .where("pr_url = ? AND ended_at IS NULL", pr_url),
         )
     return cur.rowcount == 1
 
 
 def _end(conn: sqlite3.Connection, request_id: int, reason: str) -> None:
-    conn.execute(
-        "UPDATE review_requests SET ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL",
-        (db.now(), reason, request_id),
+    sql.execute(
+        conn,
+        sql.update("review_requests")
+        .set(ended_at=db.now(), end_reason=reason)
+        .where("id = ? AND ended_at IS NULL", request_id),
     )
 
 

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
-from canopy.core import db, hostgit, records
+from canopy.core import db, hostgit, records, sql
 from canopy.core.pools import AVAILABLE, QUARANTINED, Lease, PoolError, Process, ReturnOutcome, Slot, holder_for
 from canopy.infra import cwds, lock, procs
 
@@ -181,7 +181,7 @@ class CanopyPool:
             if container.parent == self.directory and not container.is_symlink():
                 shutil.rmtree(container, ignore_errors=True)
             with db.transaction(self.conn):
-                self.conn.execute("DELETE FROM slots WHERE path = ?", (str(path),))
+                sql.execute(self.conn, sql.delete("slots").where("path = ?", str(path)))
         return None
 
     def move_in(self, path: Path) -> Path:
@@ -223,9 +223,7 @@ class CanopyPool:
                     target.parent.rmdir()
                 raise
             with db.transaction(self.conn):
-                self.conn.execute(
-                    "INSERT INTO slots (repo, name, path) VALUES (?, ?, ?)", (self.repo, str(number), str(target))
-                )
+                sql.execute(self.conn, sql.insert("slots", repo=self.repo, name=str(number), path=str(target)))
             with contextlib.suppress(OSError):
                 path.parent.rmdir()
         return target
@@ -250,11 +248,8 @@ class CanopyPool:
                 raise PoolError(str(e)) from e
             base = self._reset_to_base(path, row)
         with db.transaction(self.conn):
-            self.conn.execute(
-                "UPDATE slots SET lease_id = NULL, lease_holder = NULL, leased_at = NULL, base = ?, seeded = '[]' "
-                "WHERE path = ?",
-                (base, str(path)),
-            )
+            freed = sql.update("slots").set(lease_id=None, lease_holder=None, leased_at=None, base=base, seeded="[]")
+            sql.execute(self.conn, freed.where("path = ?", str(path)))
         return ReturnOutcome.RETURNED
 
     def _lease(self, holder: str, *, base: str | None, fetch: bool, refuse_busy: bool) -> Lease:
@@ -337,7 +332,8 @@ class CanopyPool:
         try:
             planned = self._plan_seed(path, manifest)
             with db.transaction(self.conn):
-                self.conn.execute("UPDATE slots SET seeded = ? WHERE path = ?", (json.dumps(planned), str(path)))
+                seeded = sql.update("slots").set(seeded=json.dumps(planned)).where("path = ?", str(path))
+                sql.execute(self.conn, seeded)
             _copy_seeds(self.clone, path, planned)
         except (OSError, PoolError) as e:
             if new:
@@ -346,10 +342,8 @@ class CanopyPool:
                 with contextlib.suppress(OSError):
                     _remove_seeded(path, self._seeded(path))
                 with db.transaction(self.conn):
-                    self.conn.execute(
-                        "UPDATE slots SET lease_id = NULL, lease_holder = ?, seeded = '[]' WHERE path = ?",
-                        (QUARANTINED, str(path)),
-                    )
+                    held = sql.update("slots").set(lease_id=None, lease_holder=QUARANTINED, seeded="[]")
+                    sql.execute(self.conn, held.where("path = ?", str(path)))
             raise PoolError(f"failed to seed {path}: {e}") from e
 
     def _plan_seed(self, path: Path, manifest: str | None) -> list[str]:
@@ -516,26 +510,35 @@ class CanopyPool:
     def _claim(self, path: Path, want: _Want) -> Lease:
         lease = _new_lease(path, want)
         with db.transaction(self.conn):
-            self.conn.execute(
-                "UPDATE slots SET lease_id = ?, lease_holder = ?, leased_at = ?, base = ?, seeded = '[]' "
-                "WHERE path = ?",
-                (lease.lease_id, want.holder, lease.leased_at, want.base or "", str(path)),
+            claimed = sql.update("slots").set(
+                lease_id=lease.lease_id,
+                lease_holder=want.holder,
+                leased_at=lease.leased_at,
+                base=want.base or "",
+                seeded="[]",
             )
+            sql.execute(self.conn, claimed.where("path = ?", str(path)))
         return lease
 
     def _insert(self, name: str, path: Path, want: _Want) -> Lease:
         lease = _new_lease(path, want)
         with db.transaction(self.conn):
-            self.conn.execute(
-                "INSERT INTO slots (repo, name, path, lease_id, lease_holder, leased_at, base) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (self.repo, name, str(path), lease.lease_id, want.holder, lease.leased_at, want.base or ""),
+            row = sql.insert(
+                "slots",
+                repo=self.repo,
+                name=name,
+                path=str(path),
+                lease_id=lease.lease_id,
+                lease_holder=want.holder,
+                leased_at=lease.leased_at,
+                base=want.base or "",
             )
+            sql.execute(self.conn, row)
         return lease
 
     def _adopt(self, name: str, path: Path) -> records.PoolSlot:
         with db.transaction(self.conn):
-            self.conn.execute("INSERT INTO slots (repo, name, path) VALUES (?, ?, ?)", (self.repo, name, str(path)))
+            sql.execute(self.conn, sql.insert("slots", repo=self.repo, name=name, path=str(path)))
         adopted = self._row(path)
         if adopted is None:
             raise PoolError(f"slot {path} vanished from the journal")
@@ -548,25 +551,26 @@ class CanopyPool:
         if path.parent.parent == self.directory and not path.parent.is_symlink():
             shutil.rmtree(path.parent, ignore_errors=True)
         with db.transaction(self.conn):
-            self.conn.execute("DELETE FROM slots WHERE path = ?", (str(path),))
+            sql.execute(self.conn, sql.delete("slots").where("path = ?", str(path)))
 
     def _heal(self) -> None:
         """Forget idle slots whose directory is gone; a leased one waits for its return."""
         gone = [r.path for r in self._rows() if r.lease_holder is None and not Path(r.path).exists()]
         if gone:
             with db.transaction(self.conn):
-                self.conn.executemany("DELETE FROM slots WHERE path = ?", [(p,) for p in gone])
+                sql.execute(self.conn, sql.delete("slots").where_in("path", gone))
 
     def _rows(self) -> list[records.PoolSlot]:
         return records.fetch_all(
             self.conn,
             records.PoolSlot,
-            "SELECT * FROM slots WHERE repo = ? ORDER BY CAST(name AS INTEGER), name",
-            (self.repo,),
+            sql.select("*").from_("slots").where("repo = ?", self.repo).order_by("CAST(name AS INTEGER), name"),
         )
 
     def _row(self, path: Path) -> records.PoolSlot | None:
-        return records.fetch_one(self.conn, records.PoolSlot, "SELECT * FROM slots WHERE path = ?", (str(path),))
+        return records.fetch_one(
+            self.conn, records.PoolSlot, sql.select("*").from_("slots").where("path = ?", str(path))
+        )
 
     def _seeded(self, path: Path) -> list[str]:
         row = self._row(path)
