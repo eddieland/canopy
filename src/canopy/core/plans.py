@@ -200,8 +200,9 @@ class NewestPlan(TypedDict):
 class PlanState(TypedDict):
     """A ticket's `plan` key in the overseer's state block (DESIGN §25, Phases and the overseer's part).
 
-    `changes_asked` is an operator message newer than the newest plan and than the latest plan run's start: a reply the
-    planner has not read. `blocked` is the latest plan run ending `blocked` with no operator message since.
+    `changes_asked` is an operator message newer than the newest plan and than the latest plan run's start, while that
+    plan is not approved: a reply the planner has not read. `blocked` is the latest plan run ending `blocked` with no
+    operator message since.
     """
 
     needed: bool
@@ -282,6 +283,7 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
 
     That is their latest message on the ticket when it is newer than its current plan and than its latest plan run's
     start, as the overseer's state block reads it (`state_section`), so the web UI says what the overseer will act on.
+    A message after an approval asks for none: it rides the `implement` (DESIGN §25).
 
     Returns:
         The message's time as the journal holds it, or None.
@@ -290,6 +292,8 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     newest = records.fetch_one(
         conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1)
     )
+    if newest is not None and newest.status is PlanStatus.APPROVED:
+        return None
     latest_run = (
         sql.select("max(started_at)")
         .from_("runs")

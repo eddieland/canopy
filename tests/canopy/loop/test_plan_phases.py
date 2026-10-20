@@ -100,6 +100,11 @@ def test_an_approval_after_a_reply_wins(scenario: Scenario, git_pool: GitPool) -
     section = present(plans.state_section(scenario.conn, Policy(plan="approve"), ticket, attempts=1, limit=3))
     newest = present(section["newest"])
     assert newest["status"] == PlanStatus.APPROVED
+    # Nor does the reply, or one after it, ask for changes of a plan approved: it rides the implement.
+    assert section["changes_asked"] is False
+    scenario.operator("reply", KEY, "And bigger.")
+    ticket = present(db.get_ticket(scenario.conn, KEY))
+    assert plans.changes_asked(scenario.conn, ticket) is None
 
 
 def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(scenario: Scenario, git_pool: GitPool) -> None:
