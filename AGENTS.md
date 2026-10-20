@@ -162,6 +162,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   migration's sha256 and holding a row for each table it creates; `tests/canopy/core/test_db.py` fails on an edited
   migration, and applies every migration to a journal with data in it and fails on any row lost. Two PRs that take the
   same version conflict on the companion: the one merged second renumbers its migration and companion both.
+- Every query on the journal is built with `core/sql.py` (D125) and run through `sql.execute`, `sql.execute_many`, or
+  `records.fetch_all`/`fetch_one`: clause text is literal SQL, each value a `?`, a piece built elsewhere a `{}`, and a
+  table or column chosen at run time a `Literal` or `sql.name`. Never an f-string, `%`, or `+` into SQL.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. Every table has one, and a new table gets its row
   type in the PR that adds it. `tests/canopy/core/test_records.py` holds each row type to
