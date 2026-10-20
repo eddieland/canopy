@@ -1073,7 +1073,7 @@ export type paths = {
         };
         /**
          * Get the spend by day and by what it bought
-         * @description What each day of the window cost, by kind; the ticks by what they bought; and the newest idle ticks.
+         * @description What each day, or hour, of the window cost, by kind; the ticks by what they bought; and the newest idle ticks.
          */
         get: operations["getSpendBreakdown"];
         put?: never;
@@ -4633,19 +4633,26 @@ export type components = {
         /**
          * SpendBreakdown
          * @description What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
+         *
+         *     Or of whole clock hours, the current one's so far included, by the hour.
          */
         SpendBreakdown: {
             /**
              * Days
-             * @description How many days it spans.
+             * @description How many days it spans; None for a window in hours.
              */
-            days: number;
+            days: number | null;
             /**
              * Done
              * @description How many tickets the loop marked done in the window, merged or closed.
              * @default 0
              */
             done: number;
+            /**
+             * Hours
+             * @description How many hours it spans; None for a window in days.
+             */
+            hours: number | null;
             /**
              * Idle Share
              * @description Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
@@ -4659,7 +4666,7 @@ export type components = {
             idle_ticks: components["schemas"]["Tick"][];
             /**
              * Per Day
-             * @description Every day in it, oldest first, those with nothing spent included.
+             * @description Every day in it, or every hour, oldest first, those with nothing spent included.
              */
             per_day: components["schemas"]["SpendDay"][];
             /**
@@ -4677,7 +4684,7 @@ export type components = {
             /**
              * Since
              * Format: date-time
-             * @description When the window starts: local midnight on its first day.
+             * @description When the window starts: local midnight on its first day, or the start of its first hour.
              */
             since: string;
             /**
@@ -4770,14 +4777,14 @@ export type components = {
         };
         /**
          * SpendDay
-         * @description One local day's costs.
+         * @description One local day's costs, or one local hour's in a window in hours.
          */
         SpendDay: {
-            /** @description What the runs that started on it cost. */
+            /** @description What the runs that started in it cost. */
             costs: components["schemas"]["SpendCosts"];
             /**
              * Day
-             * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
+             * @description The day, `YYYY-MM-DD`, or the hour, `YYYY-MM-DDTHH`, in the local time of the machine canopy runs on.
              */
             day: string;
             /**
@@ -10040,8 +10047,10 @@ export interface operations {
     getSpendBreakdown: {
         parameters: {
             query?: {
-                /** @description How many UTC days to read, today's so far included: 1 to 366. */
-                days?: number;
+                /** @description How many local days to read, today's so far included: 1 to 366; 7 when neither this nor hours is given. */
+                days?: number | null;
+                /** @description How many clock hours to read, by the hour, the current one so far included: 1 to 168. Not with days. */
+                hours?: number | null;
             };
             header?: never;
             path?: never;

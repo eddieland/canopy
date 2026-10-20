@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { spendBreakdownQuery } from '@/api/queries'
+import type { SpendBreakdownRange } from '@/api/queries'
 import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
@@ -21,7 +22,9 @@ import {
     chartTop,
     dayHint,
     dayLabel,
+    dayName,
     dearestDay,
+    DEFAULT_WINDOW,
     doneText,
     GROUP_HINT,
     GROUP_LABEL,
@@ -31,22 +34,24 @@ import {
     SPEND_WINDOWS,
     spendLine,
     spendWindow,
+    windowId,
+    windowName,
 } from '@/lib/spend'
-import type { SpendWindowDays } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
 
 interface SpendSearch {
-    days?: SpendWindowDays | undefined
+    days?: number | undefined
+    hours?: number | undefined
 }
 
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
-    "What agent runs cost each day, as the runtime reported it: the overseer, idle ticks' part of it apart, and " +
-    'the workers, plan triages, plans, chores, and reviews it started; beside it, the tickets the loop marked done, ' +
-    "the plans triage waived, and what each ticket's and PR's own runs cost; and which tools put the most into the " +
-    "runs' context. As canopy spend --days N prints it."
+    'What agent runs cost each day, or each hour of the last 24, as the runtime reported it: the overseer, idle ' +
+    "ticks' part of it apart, and the workers, plan triages, plans, chores, and reviews it started; beside it, the " +
+    "tickets the loop marked done, the plans triage waived, and what each ticket's and PR's own runs cost; and which " +
+    "tools put the most into the runs' context. As canopy spend --days N prints it."
 
 // What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
@@ -82,8 +87,8 @@ const KIND_LABEL = {
 // columns read.
 const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'triage', 'plans', 'chores', 'reviews', 'dry_run'] as const
 
-// The by-day chart's axis names every day of up to a week, and every fifth past that, back from today.
-const AXIS_ALL = SPEND_WINDOWS[0]
+// The chart's axis names every day of up to a week, and every fifth day or hour past that, back from the latest.
+const AXIS_ALL = 7
 // The widest name the axis says, `Sep 30`, in characters, and the space it keeps from the next, in pixels.
 const AXIS_NAME_CHARS = 6
 const AXIS_GAP = 8
@@ -98,19 +103,24 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
 
 /**
  * What agent runs cost per day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
- * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?days=`, a
- * week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
+ * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?hours=24`,
+ * by the hour, or `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  */
 export const Route = createFileRoute('/spend')({
     // Typed search params: a window the page does not offer is dropped, which reads as the week.
-    validateSearch: (search: Record<string, unknown>): SpendSearch => ({ days: spendWindow(search['days']) }),
+    validateSearch: (search: Record<string, unknown>): SpendSearch => {
+        const picked = spendWindow(search)
+        return { days: picked?.days, hours: picked?.hours }
+    },
     component: SpendPage,
 })
 
 function SpendPage() {
-    const days = Route.useSearch().days ?? SPEND_WINDOWS[0]
+    const shown = rangeOf(Route.useSearch())
     const navigate = Route.useNavigate()
-    const query = useQuery(spendBreakdownQuery(days))
+    const query = useQuery(spendBreakdownQuery(shown))
+    // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
+    const span = windowName(shown)
     const { data } = query
     // A read that failed with nothing on screen says so once, in Totals, with Read again, rather than leave every panel
     // under it shimmering as if it were still coming.
@@ -124,19 +134,24 @@ function SpendPage() {
                 <PanelHeader label="Totals">
                     <ToggleGroup
                         type="single"
-                        value={String(days)}
+                        value={windowId(shown)}
                         aria-label="Window"
                         onValueChange={(value) => {
-                            const picked = spendWindow(value)
-                            // Pressing the window shown turns it off: keep it.
+                            const picked = SPEND_WINDOWS.find((w) => windowId(w) === value)
+                            // Pressing the window shown turns it off: keep it. The week, the default, needs no search.
                             if (picked !== undefined) {
-                                void navigate({ search: { days: picked === SPEND_WINDOWS[0] ? undefined : picked } })
+                                const week = picked === DEFAULT_WINDOW
+                                void navigate({ search: week ? {} : { days: picked.days, hours: picked.hours } })
                             }
                         }}
                     >
-                        {SPEND_WINDOWS.map((n) => (
-                            <ToggleGroupItem key={n} value={String(n)} data-testid={`spend-window-${n}`}>
-                                {n} days
+                        {SPEND_WINDOWS.map((w) => (
+                            <ToggleGroupItem
+                                key={windowId(w)}
+                                value={windowId(w)}
+                                data-testid={`spend-window-${windowId(w)}`}
+                            >
+                                {windowName(w)}
                             </ToggleGroupItem>
                         ))}
                     </ToggleGroup>
@@ -146,11 +161,11 @@ function SpendPage() {
             {!failed && (
                 <>
                     <Panel data-testid="spend-by-day">
-                        <PanelHeader label="By day" />
+                        <PanelHeader label={shown.hours === undefined ? 'By day' : 'By hour'} />
                         {data === undefined ? (
                             <PanelSkeleton rows={6} className="min-h-72" />
                         ) : (
-                            <ByDay days={data.per_day} />
+                            <ByDay days={data.per_day} span={span} unit={shown.hours === undefined ? 'day' : 'hour'} />
                         )}
                     </Panel>
                     <div className="grid gap-6 xl:grid-cols-2">
@@ -163,7 +178,7 @@ function SpendPage() {
                             {data === undefined ? (
                                 <PanelSkeleton rows={5} className="min-h-40" />
                             ) : (
-                                <Tickets tickets={data.tickets} days={days} />
+                                <Tickets tickets={data.tickets} span={span} />
                             )}
                         </Panel>
                         <Panel data-testid="spend-pull-requests">
@@ -175,7 +190,7 @@ function SpendPage() {
                             {data === undefined ? (
                                 <PanelSkeleton rows={5} className="min-h-40" />
                             ) : (
-                                <PullRequests pullRequests={data.pull_requests} days={days} />
+                                <PullRequests pullRequests={data.pull_requests} span={span} />
                             )}
                         </Panel>
                     </div>
@@ -186,7 +201,7 @@ function SpendPage() {
                         {data === undefined ? (
                             <PanelSkeleton rows={5} className="min-h-40" />
                         ) : (
-                            <Tools tools={data.tools} days={days} />
+                            <Tools tools={data.tools} span={span} />
                         )}
                     </Panel>
                     <div className="grid gap-6 xl:grid-cols-2">
@@ -195,7 +210,7 @@ function SpendPage() {
                             {data === undefined ? (
                                 <PanelSkeleton rows={5} className="min-h-40" />
                             ) : (
-                                <TickGroups found={data} />
+                                <TickGroups found={data} span={span} />
                             )}
                         </Panel>
                         <Panel data-testid="spend-woken">
@@ -203,7 +218,7 @@ function SpendPage() {
                             {data === undefined ? (
                                 <PanelSkeleton rows={4} className="min-h-40" />
                             ) : (
-                                <Woken found={data} />
+                                <Woken found={data} span={span} />
                             )}
                         </Panel>
                     </div>
@@ -216,7 +231,7 @@ function SpendPage() {
                         {data === undefined ? (
                             <PanelSkeleton className="min-h-24" />
                         ) : data.idle_ticks.length === 0 ? (
-                            <Empty size="panel">no idle ticks in these {days} days</Empty>
+                            <Empty size="panel">no idle ticks in these {span}</Empty>
                         ) : (
                             <ul className="divide-y" data-testid="spend-idle-tick-list">
                                 {data.idle_ticks.map((tick) => (
@@ -229,6 +244,14 @@ function SpendPage() {
             )}
         </>
     )
+}
+
+// The window the search names, the week when it names none.
+function rangeOf(search: SpendSearch): SpendBreakdownRange {
+    if (search.hours !== undefined) {
+        return { hours: search.hours }
+    }
+    return search.days === undefined ? DEFAULT_WINDOW : { days: search.days }
 }
 
 /**
@@ -318,13 +341,14 @@ function Totals({ found }: { found: SpendBreakdown }) {
 }
 
 /**
- * Each day as a stacked bar, the series bottom up, with the legend under it, then the same numbers as a table: the
- * chart is for the eye, so a screen reader reads the table. A window where no run reported a cost says so, in place
- * of all three. A week's table shows whole; 30 days' scrolls under its column names, so the panels below stay in reach.
+ * Each day, or hour, as a stacked bar, the series bottom up, with the legend under it, then the same numbers as a
+ * table: the chart is for the eye, so a screen reader reads the table. A window where no run reported a cost says so,
+ * in place of all three. A week's table shows whole; a longer one scrolls under its column names, so the panels below
+ * stay in reach.
  */
-function ByDay({ days }: { days: SpendDay[] }) {
+function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'day' | 'hour' }) {
     if (chartTop(days) === 0) {
-        return <Empty size="panel">no run reported a cost in these {days.length} days</Empty>
+        return <Empty size="panel">no run reported a cost in these {span}</Empty>
     }
     return (
         <div className="flex flex-col gap-4 p-3">
@@ -338,11 +362,15 @@ function ByDay({ days }: { days: SpendDay[] }) {
                     </li>
                 ))}
             </ul>
-            <PanelScroll label="Spend by day" className="max-h-60 overflow-x-auto" data-testid="spend-table-scroll">
+            <PanelScroll
+                label={`Spend by ${unit}`}
+                className="max-h-60 overflow-x-auto"
+                data-testid="spend-table-scroll"
+            >
                 <table className="w-full border-collapse text-sm" data-testid="spend-table">
                     <thead className="sticky top-0 bg-surface">
                         <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">day</th>
+                            <th className="panel-label pb-1.5 text-left font-normal">{unit}</th>
                             {SERIES.map((series) => (
                                 <th
                                     key={series.key}
@@ -360,7 +388,7 @@ function ByDay({ days }: { days: SpendDay[] }) {
                         {days.toReversed().map((day) => (
                             <tr key={day.day} className="text-right" data-testid={`spend-day-${day.day}`}>
                                 <th scope="row" className="readout py-0.5 text-left font-normal whitespace-nowrap">
-                                    {dayLabel(day.day)}
+                                    {dayName(day.day)}
                                 </th>
                                 {SERIES.map((series) => (
                                     <td key={series.key} className="readout pl-3 text-muted-foreground">
@@ -521,9 +549,9 @@ function Bar({ day, top, peak }: { day: SpendDay; top: number; peak: PeakAlign |
  * first: its key and title, its runs and reviews, what they cost, and when and how it was marked done. Not the
  * overseer's, whose ticks serve the whole workspace.
  */
-function Tickets({ tickets, days }: { tickets: SpendTicket[]; days: number }) {
+function Tickets({ tickets, span }: { tickets: SpendTicket[]; span: string }) {
     if (tickets.length === 0) {
-        return <Empty size="panel">no ticket had a run in these {days} days</Empty>
+        return <Empty size="panel">no ticket had a run in these {span}</Empty>
     }
     return (
         <PanelScroll label="Spend by ticket" className="max-h-96 px-3 pb-3">
@@ -566,9 +594,9 @@ function Tickets({ tickets, days }: { tickets: SpendTicket[]; days: number }) {
  * Each PR a run that started in the window pushed to, or a review of it did, the costliest first: the PR, its ticket,
  * its phase, its runs and reviews, and what they cost. A run that pushed to two PRs counts on each.
  */
-function PullRequests({ pullRequests, days }: { pullRequests: SpendPullRequest[]; days: number }) {
+function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]; span: string }) {
     if (pullRequests.length === 0) {
-        return <Empty size="panel">no run pushed to a PR, and none was reviewed, in these {days} days</Empty>
+        return <Empty size="panel">no run pushed to a PR, and none was reviewed, in these {span}</Empty>
     }
     return (
         <PanelScroll label="Spend by pull request" className="max-h-96 px-3 pb-3">
@@ -618,9 +646,9 @@ function PullRequests({ pullRequests, days }: { pullRequests: SpendPullRequest[]
  * the tokens that is, estimated. After the fixed prefix, most of a run's context is tool results, which each later
  * model call reads again, so this is what fills it.
  */
-function Tools({ tools, days }: { tools: SpendTool[]; days: number }) {
+function Tools({ tools, span }: { tools: SpendTool[]; span: string }) {
     if (tools.length === 0) {
-        return <Empty size="panel">no tool call recorded in these {days} days</Empty>
+        return <Empty size="panel">no tool call recorded in these {span}</Empty>
     }
     return (
         <PanelScroll label="Spend by tool" className="max-h-96 px-3 pb-3">
@@ -664,9 +692,9 @@ function Tools({ tools, days }: { tools: SpendTool[]; days: number }) {
 }
 
 /** The ticks that ended in the window, a row per group, with idle ticks' share; a line saying so when none did. */
-function TickGroups({ found }: { found: SpendBreakdown }) {
+function TickGroups({ found, span }: { found: SpendBreakdown; span: string }) {
     if (found.ticks.every((g) => g.ticks === 0)) {
-        return <Empty size="panel">no tick ended in these {found.days} days</Empty>
+        return <Empty size="panel">no tick ended in these {span}</Empty>
     }
     return (
         <CountTable
@@ -683,9 +711,9 @@ function TickGroups({ found }: { found: SpendBreakdown }) {
 }
 
 /** The loop's live ticks by what ended the wait before each, the most common first. */
-function Woken({ found }: { found: SpendBreakdown }) {
+function Woken({ found, span }: { found: SpendBreakdown; span: string }) {
     if (found.woken.length === 0) {
-        return <Empty size="panel">no tick canopy loop ran in these {found.days} days</Empty>
+        return <Empty size="panel">no tick canopy loop ran in these {span}</Empty>
     }
     return (
         <CountTable
