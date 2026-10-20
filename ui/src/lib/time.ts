@@ -33,13 +33,18 @@ export function stamp(iso: string, clock: Clock): string {
     return `${parts.month ?? ''} ${parts.day ?? ''} ${timeOfDay(parts)}`
 }
 
+/** An ISO time as its local time of day alone, on the operator's clock: `14:05`, `2:05 PM`, or `14:05 EDT`. */
+export function clockTime(iso: string, clock: Clock): string {
+    return timeOfDay(stampParts(iso, clock))
+}
+
 /**
  * When something that ran ended, set after when it started: the local time alone when it ended the day it started
  * (`06:59`), else the whole stamp (`Oct 9 01:10`).
  */
 export function endStamp(started: string, ended: string, clock: Clock): string {
     const sameDay = new Date(started).toDateString() === new Date(ended).toDateString()
-    return sameDay ? timeOfDay(stampParts(ended, clock)) : stamp(ended, clock)
+    return sameDay ? clockTime(ended, clock) : stamp(ended, clock)
 }
 
 /** How long something ran, from its start to its end, in the CLI's largest whole unit, as an age is: `29m`. */

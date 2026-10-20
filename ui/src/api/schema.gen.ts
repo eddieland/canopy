@@ -4811,6 +4811,12 @@ export type components = {
              * @default 0
              */
             done: number;
+            /**
+             * Start
+             * Format: date-time
+             * @description When it starts: the day's local midnight, or the hour's start, so a page can write it in its own zone.
+             */
+            start: string;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
