@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { GitPullRequestDraft, Pencil, Send, Trash2, Undo2 } from 'lucide-react'
+import { Eraser, GitPullRequestDraft, Pencil, Send, Trash2, Undo2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
@@ -578,7 +578,7 @@ function StagedReaction({ reaction, alone }: { reaction: Reaction; alone: boolea
 /**
  * A draft's words in the operator's own, as `canopy draft edit`: plain text, held to the bound a draft is, and for a
  * thread's draft the reaction it stages, picked from the ones GitHub offers or none, so the text may be empty to send
- * the reaction alone. Kept as a new version beside the run's own.
+ * the reaction alone: once one is picked, Clear text empties it in a click. Kept as a new version beside the run's own.
  */
 function EditDraft({
     draft,
@@ -654,9 +654,22 @@ function EditDraft({
                             </ToggleGroupItem>
                         ))}
                     </ToggleGroup>
-                    <span className="text-xs text-muted-foreground">
-                        {reaction === null ? 'None.' : 'Leave the text empty to send it alone.'}
-                    </span>
+                    {reaction !== null && text !== '' ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setText('')}
+                            title="Empty the text, to send the reaction alone"
+                        >
+                            <Eraser />
+                            Clear text
+                        </Button>
+                    ) : (
+                        <span className="text-xs text-muted-foreground">
+                            {reaction === null ? 'None.' : 'Sent alone, with no reply.'}
+                        </span>
+                    )}
                 </span>
             )}
             <span className="flex flex-wrap items-center gap-2">
