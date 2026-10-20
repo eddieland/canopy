@@ -308,6 +308,8 @@ open item is never notified twice, and an item that returns after going away is 
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
 - Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
   `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
+  the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
 - MCP unavailable: the overseer records a tick-wide `skip`; the tick closes `skipped`, no decisions are made on partial
   data, and the attention list stays as it was.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.

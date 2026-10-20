@@ -114,9 +114,9 @@ Work through these in order and stop at the first that explains it.
 
 1. Did a recent tick run at all? `canopy status` shows the last tick. `skipped` usually means the overseer could not
    reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `overseer_failed`, and `reconcile_failed`
-   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing. An `overseer_failed`
-   summary that says `left duties undone` names what the overseer skipped (the query, a ticket, or a chore); what that
-   tick dispatched still runs.
+   have a summary, and `ticks/<id>.log` has the detail. `error` names the exception the tick raised; `canopy.log` has
+   its traceback. A failed or skipped tick decides nothing. An `overseer_failed` summary that says `left duties undone`
+   names what the overseer skipped (the query, a ticket, or a chore); what that tick dispatched still runs.
 2. What did the overseer decide about KEY?
 
    ```sh
