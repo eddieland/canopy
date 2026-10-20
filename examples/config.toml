@@ -123,6 +123,10 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: the same for the overseer, such as "dispatch tickets labeled urgent before the rest". They go at the end of
 # its prompt, at most 4 KiB, and never reach a worker (DESIGN §12).
 # overseer_instructions = "~/.config/canopy/overseer-instructions.md"
+# Optional: the same for every reviewer, such as "treat a missing migration test as a finding", and for every chore
+# run, after the chore's own prompt, such as "name a CI job by its workflow file". Each at most 4 KiB (DESIGN §12).
+# reviewer_instructions = "~/.config/canopy/reviewer-instructions.md"
+# chore_instructions = "~/.config/canopy/chore-instructions.md"
 
 [notify]
 # Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.

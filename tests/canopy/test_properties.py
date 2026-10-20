@@ -184,6 +184,8 @@ def test_every_config_key_declares_a_scope() -> None:
         "paths.prompt_overrides",
         "paths.worker_instructions",
         "paths.overseer_instructions",
+        "paths.reviewer_instructions",
+        "paths.chore_instructions",
         "capacity.max_workers",
         "tracker.labels",
         "trust.authorized_repliers",

@@ -19,7 +19,7 @@ from canopy.chores import execute, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import db, definitions, workspace
+from canopy.core import db, definitions, prompts, workspace
 from canopy.core.config import Chore, load
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
@@ -168,20 +168,63 @@ def test_the_run_object_carries_the_notice_in_force(canopy_env: CanopyEnv, chore
     assert json_block((runs / "2.prompt").read_text())["notice"] == "CI is down."
 
 
+def chore_instructions(canopy_env: CanopyEnv, text: str | None) -> Path:
+    """Point `paths.chore_instructions` at a file holding `text`, or at one that is not there for None."""
+    path = canopy_env.user_file.parent / "chore-instructions.md"
+    if text is not None:
+        path.write_text(text)
+    canopy_env.configure(canopy_env.user_file, {"paths": {"chore_instructions": str(path)}})
+    return path
+
+
+def test_the_operators_standing_instructions_follow_every_chores_own_prompt(
+    canopy_env: CanopyEnv, chores: Path, agent_log: Path
+) -> None:
+    rule = "Name a CI job by its workflow file."
+    chore_instructions(canopy_env, f"\n{rule}\n\n")
+    run_inline(canopy_env.journal(), OK)
+    prompt = (canopy_env.state_dir / "chore-runs" / "build-health" / "1.prompt").read_text()
+    assert prompt.startswith(
+        f"# Build health\n\nLook at the build queue.\n\n## Standing instructions from the operator\n\n{rule}\n\n"
+    )
+    assert prompt.index(rule) < prompt.index("\n## Run\n")
+    # A try is a run through the same code, so its prompt carries them too.
+    with chore_reports(OK):
+        assert main(["chore", "try", "build-health", "--no-record"]) == 0
+    assert f"## Standing instructions from the operator\n\n{rule}\n" in agent_runs(agent_log)[-1]["argv"][3]
+
+
+def test_chore_instructions_that_cannot_be_used_refuse_the_run(
+    canopy_env: CanopyEnv, chores: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The operator set them for every chore; a run without them would work as if they were never written.
+    path = chore_instructions(canopy_env, "x" * (prompts.MAX_STANDING_BYTES + 1))
+    conn = canopy_env.journal()
+    with in_tick(conn) as tick_id:
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
+        [(_, action, reason)] = chore_decisions(conn, tick_id)
+    assert action == "refused:bad_prompt"
+    assert reason == f"chore instructions {path} are {prompts.MAX_STANDING_BYTES + 1} bytes, over 4096"
+    assert main(["chore", "try", "build-health", "--no-record"]) == 1
+    assert f"chore instructions {path} are" in capsys.readouterr().err
+    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+
+
 def test_the_chore_prompt(
     canopy_env: CanopyEnv, chores: Path, agent_log: Path, markdown_snapshot: SnapshotAssertion
 ) -> None:
     """A chore's prompt, whole, at its first run and at one after it, so a change to the `## Run` section the harness
     writes is a diff in review (DESIGN §19).
 
-    The second run has a previous run, an open finding, a note from the operator, and a notice. Each time the journal
-    records shows as `TIME`.
+    The second run has a previous run, an open finding, a note from the operator, a notice, and standing instructions
+    to every chore. Each time the journal records shows as `TIME`.
     """
     conn = canopy_env.journal()
     runs = canopy_env.state_dir / "chore-runs" / "build-health"
     run_inline(conn, OK)
     assert main(["reply", "chore:build-health", "Leave out the docs site: it is never deployed."]) == 0
     assert main(["notice", "CI is down."]) == 0
+    chore_instructions(canopy_env, "Name a CI job by its workflow file.\n")
     backdate(conn, 180)
     run_inline(conn, OK)
     first, later = (TIMES.sub("TIME", (runs / f"{n}.prompt").read_text()) for n in (1, 2))

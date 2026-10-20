@@ -816,13 +816,17 @@ class Paths(Section):
 
     # No static default: `load` supplies `prompts/` in the user config directory, which depends on XDG_CONFIG_HOME.
     prompt_overrides: Annotated[UserPath, Scope.PRIVATE]
-    # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
-    # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
+    #: A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
+    #: ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
     worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
-    # The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
+    #: The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
     worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
-    # The operator's standing instructions to the overseer, rendered into its prompt (DESIGN §12).
+    #: The operator's standing instructions to the overseer, rendered into its prompt (DESIGN §12).
     overseer_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: The operator's standing instructions to every reviewer, rendered into its prompt (DESIGN §12).
+    reviewer_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: The operator's standing instructions to every chore run, after the chore's own prompt (DESIGN §12).
+    chore_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).

@@ -116,6 +116,57 @@ def test_a_review_hears_the_notice_in_force(reviewing: CanopyEnv, scenario: Scen
     assert "## Notice from the operator\n\nCI is down.\n" in reviewed.prompt
 
 
+def reviewer_instructions(scenario: Scenario, text: str | None) -> Path:
+    """Point `paths.reviewer_instructions` at a file holding `text`, or at one that is not there for None."""
+    path = scenario.env.user_file.parent / "reviewer-instructions.md"
+    if text is not None:
+        path.write_text(text)
+    scenario.configures(paths={"reviewer_instructions": str(path)})
+    return path
+
+
+def test_the_operators_standing_instructions_reach_every_reviewer(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    rule = "A migration without a test that applies it is a finding."
+    reviewer_instructions(scenario, f"\n{rule}\n\n")
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert f"## Standing instructions from the operator\n\n{rule}\n\nThe operator set these" in reviewed.prompt
+
+
+def test_reviewer_instructions_that_cannot_be_used_cost_the_pr_nothing(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+) -> None:
+    # The operator set them for every review; a review without them would judge as if they were never written.
+    path = reviewer_instructions(scenario, None)
+    [(action, reason)] = scenario.refuses(reviews(head(git_pool)))
+    assert action == "refused:bad_prompt"
+    assert reason.startswith(f"cannot read reviewer instructions {path}: ")
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+
+
+@pytest.mark.parametrize("instructed", [False, True])
+def test_a_reviewer_override_without_the_placeholder_fails_closed_once_instructions_are_set(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    instructed: bool,  # noqa: FBT001  (a parametrized fixture)
+) -> None:
+    # An override written before the placeholder existed keeps serving an operator who sets no instructions.
+    if instructed:
+        reviewer_instructions(scenario, "Be brief.")
+    overrides = reviewing.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "reviewer.md").write_text("Review {{PR_URL}} at {{SHA}} in {{CHECKOUT}}.\n")
+    if not instructed:
+        assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).status == "done"
+        return
+    [(action, reason)] = scenario.refuses(reviews(head(git_pool)))
+    assert action == "refused:bad_prompt"
+    assert reason.endswith("missing required placeholder {{STANDING_INSTRUCTIONS}}")
+
+
 @pytest.mark.parametrize("full", [False, True], ids=["defaults", "every-value-set"])
 def test_the_reviewer_prompt(
     reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, markdown_snapshot: SnapshotAssertion, *, full: bool
@@ -123,12 +174,14 @@ def test_the_reviewer_prompt(
     """The reviewer's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
 
     One with every value at its default, and one with each set: a ticket, the overseer's context, the operator's rule
-    for `low`, and a notice. `git_pool` gives the review a pool to lease from; the run starts and never runs.
+    for `low`, a notice, and standing instructions. `git_pool` gives the review a pool to lease from; the run starts
+    and never runs.
     """
     command = reviews("b" * 40)
     if full:
         scenario.configures(review={"low_impact": "A change to docs or tests only."})
         scenario.operator("notice", "CI is down.")
+        reviewer_instructions(scenario, "A migration without a test that applies it is a finding.\n")
         command = reviews("b" * 40, ticket="PROJ-1", context="Start with src/retry.py")
     with in_tick(scenario.conn):
         assert main(command[1:], runner=InlineRunner()) == 0
