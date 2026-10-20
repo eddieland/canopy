@@ -182,6 +182,22 @@ def test_a_window_in_hours_is_whole_clock_hours_ending_with_this_one(tmp_path: P
     assert [(w.by, w.ticks) for w in found.woken] == [("start", 1), ("timer", 1)]
 
 
+def test_a_window_in_hours_is_whole_local_hours_in_a_zone_a_half_hour_off_utc(
+    tmp_path: Path, journals: Journals
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    now = datetime(2026, 10, 8, 12, 15, tzinfo=UTC)  # 17:45 in Kolkata, UTC+5:30
+    # 18:15 there yesterday, in the first hour; 18:10 there the day before, outside the window.
+    tick(conn, db.format_time(datetime(2026, 10, 7, 12, 45, tzinfo=UTC)), 1.0, idle=False, woken_by="start")
+    tick(conn, db.format_time(datetime(2026, 10, 6, 12, 40, tzinfo=UTC)), 5.0, idle=False, woken_by="start")
+    with in_zone("Asia/Kolkata"):
+        found = spend.breakdown_hours(conn, now, 24)
+    assert (found.since, found.until) == ("2026-10-07T12:30:00.000Z", "2026-10-08T12:30:00.000Z")
+    assert (found.per_day[0].day, found.per_day[-1].day) == ("2026-10-07T18", "2026-10-08T17")
+    assert found.per_day[0].costs.overseer == 1.0
+    assert found.totals.total == 1.0
+
+
 def test_an_hour_the_clock_goes_back_over_is_listed_once(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     # Clocks went back at 02:00 PDT on 2026-11-01: 08:30 UTC and 09:30 UTC are both 01:30 there.

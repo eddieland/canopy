@@ -256,12 +256,15 @@ def _midnight(day: date) -> datetime:
 
 
 def hour_window(now: datetime, hours: int) -> tuple[datetime, datetime]:
-    """The window `[start, until)`: `hours` whole clock hours, ending with `now`'s.
+    """The window `[start, until)`: `hours` whole local clock hours, ending with `now`'s.
+
+    Floored on this machine's clock, not UTC's, so in a zone a half hour off UTC each hour is still the one its runs
+    are summed by.
 
     Returns:
         Its start and its end, each an aware UTC datetime.
     """
-    this_hour = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    this_hour = now.astimezone().replace(minute=0, second=0, microsecond=0).astimezone(UTC)
     return this_hour - timedelta(hours=hours - 1), this_hour + timedelta(hours=1)
 
 
