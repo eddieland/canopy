@@ -91,8 +91,9 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
   body.
 - Push again when you fix something after a push, such as a lint error you missed: in a new commit, never an amend.
   Do not wait for or poll CI. Do not retry a rejected push in a loop.
-- Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, and `gh run view` are allowed; do not try another,
-  `gh api` among them. Read GitHub through the GitHub MCP server instead.
+- Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, `gh pr edit`, and `gh run view` are allowed; do not try
+  another, `gh api` among them. Read GitHub through the GitHub MCP server instead. Use `gh pr edit` only on your own
+  PRs' title and body.
 - Time limit: 45 minutes. Leave time to push and report.
 
 ## Persona

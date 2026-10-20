@@ -122,8 +122,9 @@ The tracker is {{TRACKER_PROVIDER}}; if a skill named
 it. If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in
 the title. {{OPEN_PR}} {{PRIVATE_PR_REPLIES}} Time limit {{TIMEOUT_MINUTES}} minutes.
 
-Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, and `gh run view` are allowed; do not try another, `gh api`
-among them. Read GitHub through the GitHub MCP server instead.
+Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, `gh pr edit`, and `gh run view` are allowed; do not try
+another, `gh api` among them. Read GitHub through the GitHub MCP server instead. Use `gh pr edit` only on your own PRs'
+title and body.
 
 Each shell command starts in {{SLOT}}, whatever an earlier one changed directory to, and a `cd` is checked against
 where its command starts, even after another `cd` in the same command: `cd app && cd ../lib` is refused as leaving

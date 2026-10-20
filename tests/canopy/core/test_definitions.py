@@ -322,6 +322,18 @@ def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
 
 
 @pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
+def test_workers_may_edit_their_pr_with_gh(agent: str) -> None:
+    """`gh pr edit` writes to a PR, as the PR update tool both keep does; the private one still cannot edit the
+    ticket."""
+    rules = _rules(agent, "bash")
+    for command in ("gh pr edit", "gh pr edit 12 --title 'PROJ-1: x'", "gh pr edit agent/PROJ-1-x --body-file body.md"):
+        assert _allowed(rules, command), command
+    if agent == agents.PRIVATE_WORKER:
+        for refused in ("gh issue edit 12 --title x", "gh pr comment 12 --body x", "gh pr editx"):
+            assert not _allowed(rules, refused), refused
+
+
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_search_their_memory_and_run_no_other_canopy_command(agent: str) -> None:
     """The memory digests name `canopy memory search` (DESIGN §28); the loop's other commands stay the overseer's."""
     rules = _rules(agent, "bash")
