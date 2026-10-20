@@ -20,6 +20,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal, LiteralString
 
 from canopy.core import contract, db, records, sql
+from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
     import sqlite3
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "plans", "chores", "reviews"]
 type Done = Literal["merged", "closed"]
+#: A table of agent runs, each with a `started_at` and a `cost_usd`: the overseer's ticks, and the others'.
+type _Table = Literal["ticks", "runs", "chore_runs", "review_runs"]
 
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
@@ -45,25 +48,27 @@ IDLE_TICKS = 20
 # Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a plan run (§25), an
 # old triage before a plan among them (M55), is a row of `runs`, a kind of its own, and every other row there a
 # worker's, an old split's among them. Then every kind, the overseer's ticks included. The tables and conditions are
-# fixed, never input, and written as literal SQL (D125): the kinds are `RunKind.PLAN` and `RunKind.NEEDS_PLAN`.
-_TABLES: dict[Kind, tuple[LiteralString, LiteralString]] = {
-    "workers": ("runs", "kind NOT IN ('plan', 'needs-plan')"),
-    "plans": ("runs", "kind IN ('plan', 'needs-plan')"),
-    "chores": ("chore_runs", "1"),
-    "reviews": ("review_runs", "1"),
+# fixed, never input (D125).
+_PLANS = sql.in_("kind", (RunKind.PLAN, RunKind.NEEDS_PLAN))
+_EVERY = sql.frag("1")
+_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
+    "workers": ("runs", sql.frag("NOT ({})", _PLANS)),
+    "plans": ("runs", _PLANS),
+    "chores": ("chore_runs", _EVERY),
+    "reviews": ("review_runs", _EVERY),
 }
-_ALL_TABLES: dict[Kind, tuple[LiteralString, LiteralString]] = {"overseer": ("ticks", "1"), **_TABLES}
+_ALL_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
 CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
 # What a run's row says of its first model call, and when it started.
-_FIRST_CALL = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
+_FIRST_CALL: LiteralString = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
-_DAY = "date(started_at, 'localtime')"
+_DAY = sql.frag("date(started_at, 'localtime')")
 # The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
 _HOUR_FORMAT = "%Y-%m-%dT%H"
-_HOUR = f"strftime('{_HOUR_FORMAT}', started_at, 'localtime')"
+_HOUR = sql.frag("strftime(?, started_at, 'localtime')", _HOUR_FORMAT)
 
 
 @dataclass(frozen=True)
@@ -290,7 +295,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     start, end = window(now, days)
     first = start.astimezone().date()
     names = [(first + timedelta(days=i)).isoformat() for i in range(days)]
-    return _breakdown(conn, start, end, _Buckets(sql=_DAY, names=names, name_of=local_day), days=days)
+    return _breakdown(conn, start, end, _Buckets(expression=_DAY, names=names, name_of=local_day), days=days)
 
 
 def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Breakdown:
@@ -303,7 +308,7 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Brea
     """
     start, end = hour_window(now, hours)
     names = list(dict.fromkeys(_local_hour(start + timedelta(hours=i)) for i in range(hours)))
-    buckets = _Buckets(sql=_HOUR, names=names, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
+    buckets = _Buckets(expression=_HOUR, names=names, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
     return _breakdown(conn, start, end, buckets, hours=hours)
 
 
@@ -312,7 +317,7 @@ class _Buckets:
     """What a window sums its costs by: its days, or its hours."""
 
     #: The SQL that names the bucket a row started in, from its `started_at`.
-    sql: str
+    expression: sql.Fragment
     #: Every bucket's name, oldest first.
     names: Sequence[str]
     #: The name of the bucket a journal time is in.
@@ -337,14 +342,17 @@ def _breakdown(
     until = db.format_time(end)
     # One read transaction, so a run or tick ending between two of the reads is in all of them or none.
     with db.read_snapshot(conn):
-        rows = _tick_rows(conn, since, until, buckets.sql)
+        rows = _tick_rows(conn, since, until, buckets.expression)
         by_day: dict[str, dict[str, float | None]] = {}
         for kind, (table, which) in _TABLES.items():
-            for day, cost in conn.execute(
-                f"SELECT {buckets.sql} AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table and bucket)
-                f"WHERE {which} AND started_at >= ? AND started_at < ? GROUP BY day",
-                (since, until),
-            ):
+            costs = (
+                sql.select("{} AS day, SUM(cost_usd)", buckets.expression)
+                .from_(table)
+                .where("{}", which)
+                .where("started_at >= ? AND started_at < ?", since, until)
+                .group_by("day")
+            )
+            for day, cost in sql.execute(conn, costs):
                 by_day.setdefault(str(day), {})[kind] = cost
         unpriced = _unpriced(conn, since, until, rows)
         done = _done(conn, since, until)
@@ -405,9 +413,11 @@ def idle_ticks(
     found = records.fetch_all(
         conn,
         records.Tick,
-        "SELECT * FROM ticks WHERE started_at >= ? AND started_at < ? AND dry_run = 0 AND idle = 1 "
-        "ORDER BY id DESC LIMIT ?",
-        (since, until, limit),
+        sql.select("*")
+        .from_("ticks")
+        .where("started_at >= ? AND started_at < ? AND dry_run = 0 AND idle = 1", since, until)
+        .order_by("id DESC")
+        .limit(limit),
     )
     return db.with_decision_counts(conn, found)
 
@@ -430,13 +440,16 @@ class _TickRow:
         return self.woken_by is not None and self.group not in {None, "dry_run"}
 
 
-def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: str) -> list[_TickRow]:
-    rows = conn.execute(
-        f"SELECT {bucket} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "  # noqa: S608 (a fixed bucket)
-        "count(*) - count(cost_usd) "
-        "FROM ticks WHERE started_at >= ? AND started_at < ? GROUP BY day, dry_run, status, idle, woken_by",
-        (since, until),
-    ).fetchall()
+def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fragment) -> list[_TickRow]:
+    grouped = (
+        sql.select(
+            "{} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), count(*) - count(cost_usd)", bucket
+        )
+        .from_("ticks")
+        .where("started_at >= ? AND started_at < ?", since, until)
+        .group_by("day, dry_run, status, idle, woken_by")
+    )
+    rows = sql.execute(conn, grouped).fetchall()
     return [
         _TickRow(
             day=str(day),
@@ -510,11 +523,13 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
     ended = [r for r in rows if r.group is not None]
     found = [Unpriced(kind="overseer", runs=sum(r.ticks for r in ended), unpriced=sum(r.unpriced for r in ended))]
     for kind, (table, which) in _TABLES.items():
-        runs, unpriced = conn.execute(
-            f"SELECT count(*), count(*) - count(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
-            f"WHERE {which} AND started_at >= ? AND started_at < ? AND status != 'running'",
-            (since, until),
-        ).fetchone()
+        counted = (
+            sql.select("count(*), count(*) - count(cost_usd)")
+            .from_(table)
+            .where("{}", which)
+            .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
+        )
+        runs, unpriced = sql.execute(conn, counted).fetchone()
         found.append(Unpriced(kind=kind, runs=int(runs), unpriced=int(unpriced)))
     return found
 
@@ -523,13 +538,14 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
 # it (§7), but `closed` ones too, since a tracker that closes a ticket when its PR merges closes most that landed. Not
 # one marked done before the operator last forgot it, nor one reopened since, which is no longer done.
 def _done(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
-    rows = conn.execute(
-        "SELECT t.key, d.rationale, d.created_at FROM tickets t JOIN decisions d ON d.id = ("
-        "  SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done'"
-        ") WHERE t.done = 1 AND d.created_at >= ? AND d.created_at < ? "
-        "AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at)",
-        (since, until),
-    ).fetchall()
+    marked = (
+        sql.select("t.key, d.rationale, d.created_at")
+        .from_("tickets t")
+        .join("decisions d ON d.id = (SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done')")
+        .where("t.done = 1 AND d.created_at >= ? AND d.created_at < ?", since, until)
+        .where("t.forgotten_at IS NULL OR d.created_at > t.forgotten_at")
+    )
+    rows = sql.execute(conn, marked).fetchall()
     return {
         str(key): ("closed" if rationale == db.CLOSED_RATIONALE else "merged", str(at)) for key, rationale, at in rows
     }
@@ -542,12 +558,8 @@ def _tickets(
     runs = _by_ticket(conn, "runs", since, until)
     reviews = _by_ticket(conn, "review_runs", since, until)
     keys = sorted({*runs, *reviews, *done})
-    titles = {
-        str(key): None if title is None else str(title)
-        for key, title in conn.execute(
-            "SELECT key, title FROM tickets WHERE key IN (SELECT value FROM json_each(?))", (json.dumps(keys),)
-        )
-    }
+    named = sql.select("key, title").from_("tickets").where("key IN (SELECT value FROM json_each(?))", json.dumps(keys))
+    titles = {str(key): None if title is None else str(title) for key, title in sql.execute(conn, named)}
     found = [
         TicketSpend(
             key=key,
@@ -563,38 +575,46 @@ def _tickets(
     return sorted(found, key=lambda t: -(t.cost_usd or 0.0))
 
 
-def _by_ticket(conn: sqlite3.Connection, table: str, since: str, until: str) -> dict[str, tuple[int, float | None]]:
-    return {
-        str(key): (int(count), cost)
-        for key, count, cost in conn.execute(
-            f"SELECT ticket_key, count(*), SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
-            "WHERE started_at >= ? AND started_at < ? AND ticket_key IS NOT NULL GROUP BY ticket_key",
-            (since, until),
-        )
-    }
+def _by_ticket(
+    conn: sqlite3.Connection, table: Literal["runs", "review_runs"], since: str, until: str
+) -> dict[str, tuple[int, float | None]]:
+    by_key = (
+        sql.select("ticket_key, count(*), SUM(cost_usd)")
+        .from_(table)
+        .where("started_at >= ? AND started_at < ? AND ticket_key IS NOT NULL", since, until)
+        .group_by("ticket_key")
+    )
+    return {str(key): (int(count), cost) for key, count, cost in sql.execute(conn, by_key)}
 
 
 # Each PR a run that started in the window pushed to, as its result names it, or a review run of it started in the
 # window, the costliest first. A run still running names no PR yet, so it counts on its ticket and on none of these.
 def _pull_requests(conn: sqlite3.Connection, since: str, until: str) -> list[PullRequestSpend]:
     runs: dict[str, list[tuple[str, float | None]]] = {}
-    for key, result, cost in conn.execute(
-        "SELECT ticket_key, result_json, cost_usd FROM runs WHERE started_at >= ? AND started_at < ?", (since, until)
-    ):
+    pushed = (
+        sql.select("ticket_key, result_json, cost_usd")
+        .from_("runs")
+        .where("started_at >= ? AND started_at < ?", since, until)
+    )
+    for key, result, cost in sql.execute(conn, pushed):
         for url in dict.fromkeys(contract.stored_prs(contract.stored_object(result))):
             runs.setdefault(url, []).append((str(key), cost))
     reviews: dict[str, list[tuple[str | None, float | None]]] = {}
-    for url, key, cost in conn.execute(
-        "SELECT pr_url, ticket_key, cost_usd FROM review_runs WHERE started_at >= ? AND started_at < ?", (since, until)
-    ):
+    reviewed = (
+        sql.select("pr_url, ticket_key, cost_usd")
+        .from_("review_runs")
+        .where("started_at >= ? AND started_at < ?", since, until)
+    )
+    for url, key, cost in sql.execute(conn, reviewed):
         reviews.setdefault(str(url), []).append((None if key is None else str(key), cost))
     urls = sorted({*runs, *reviews})
+    of_units = (
+        sql.select("pr_url, ticket_key, phase")
+        .from_("ticket_units")
+        .where("pr_url IN (SELECT value FROM json_each(?))", json.dumps(urls))
+    )
     units = {
-        str(url): (str(key), None if phase is None else str(phase))
-        for url, key, phase in conn.execute(
-            "SELECT pr_url, ticket_key, phase FROM ticket_units WHERE pr_url IN (SELECT value FROM json_each(?))",
-            (json.dumps(urls),),
-        )
+        str(url): (str(key), None if phase is None else str(phase)) for url, key, phase in sql.execute(conn, of_units)
     }
     found = [
         PullRequestSpend(
@@ -621,12 +641,14 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
     for kind in KINDS:
         table, which = _ALL_TABLES[kind]
         by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
-        for digest, sent, written, started in conn.execute(
-            f"SELECT {_FIRST_CALL} FROM {table} "  # noqa: S608 (a fixed table)
-            f"WHERE {which} AND started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL "
-            "ORDER BY started_at, id",
-            (since, until),
-        ):
+        first = (
+            sql.select(_FIRST_CALL)
+            .from_(table)
+            .where("{}", which)
+            .where("started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL", since, until)
+            .order_by("started_at, id")
+        )
+        for digest, sent, written, started in sql.execute(conn, first):
             call = (int(sent), _cold(int(sent), int(written or 0)), str(started))
             by_digest.setdefault(None if digest is None else str(digest), []).append(call)
         found.extend(
@@ -649,10 +671,7 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
 def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
     found: list[ToolSpend] = []
     for kind in KINDS:
-        table, which = _ALL_TABLES[kind]
-        for tool, runs, calls, errors, chars in conn.execute(
-            _TOOLS_SQL.format(table=table, which=which), (table, since, until)
-        ):
+        for tool, runs, calls, errors, chars in sql.execute(conn, _tools_of(kind, since, until)):
             found.append(
                 ToolSpend(
                     kind=kind,
@@ -671,11 +690,15 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
 # on `started_at` (migration 0022), and `run_tools` is read by its key's prefix: `CROSS JOIN` keeps SQLite from
 # reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
 # kind's condition names only the run table's columns, which `run_tools` shares none of.
-_TOOLS_SQL = (
-    "SELECT t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars) "
-    "FROM {table} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id "
-    "WHERE r.started_at >= ? AND r.started_at < ? AND ({which}) GROUP BY t.tool"
-)
+def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
+    table, which = _ALL_TABLES[kind]
+    return (
+        sql.select("t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars)")
+        .from_("{} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id", sql.name(table), table)
+        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+        .where("{}", which)
+        .group_by("t.tool")
+    )
 
 
 # Each kind's spend by model in the window, from its runs that started in it; then those of its runs no session named a
@@ -693,7 +716,7 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend
     return found
 
 
-# One kind's spend by model in a window, read as `_TOOLS_SQL` reads `run_tools`: the run table leads, by its `_spent`
+# One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
 # index, and `run_models` is read by its key's prefix.
 def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
     table, which = _ALL_TABLES[kind]
@@ -701,7 +724,7 @@ def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
         sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
-        .where("{}", sql.frag(which))
+        .where("{}", which)
         .group_by("m.model")
         .order_by("SUM(m.cost_usd) DESC, m.model")
     )
@@ -714,7 +737,7 @@ def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
         sql.select("count(*), SUM(r.cost_usd)")
         .from_("{} r", sql.name(table))
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
-        .where("{}", sql.frag(which))
+        .where("{}", which)
         .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
     )
 

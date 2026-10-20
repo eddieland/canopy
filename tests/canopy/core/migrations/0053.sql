@@ -1,5 +1,7 @@
--- sha256 of 0053_run_models.sql: 3db7e46cb3fc267e17281a2b10ca4fd19994e0af6f5ed81086504e05740eda3c
+-- sha256 of 0053_feedback_plans.sql: ab5dc7c342afc374f95ca4542904a0fe1efec20ce26c9e6514521a8abe0babf9
 
-INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at)
-VALUES ('runs', 1, 'found', NULL, 1, 'x');
-INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES ('runs', 1, 'anthropic/claude-x', 4, 0.5);
+INSERT INTO feedback_plans (ticket_key, run_id, created_at, status, sha256, size, approved_sha256, approved_at,
+    approved_channel, spent_run_id)
+VALUES ('OLD-1', 1, 'x', 'approved', 'a', 9, 'a', 'y', 'cli', 1);
+INSERT INTO feedback_plan_items (plan_id, number, pr_url, item, item_id, proposal, reply)
+VALUES (1, 1, 'https://github.com/acme/api/pull/7', 'comment', 501, 'change', 'Renamed.');

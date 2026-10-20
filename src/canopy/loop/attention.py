@@ -23,7 +23,16 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_view, connector_runs, contract, conversation, db, follow_ups, memory
+from canopy.core import (
+    chore_view,
+    connector_runs,
+    contract,
+    conversation,
+    db,
+    follow_ups,
+    memory,
+    sql,
+)
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs
@@ -141,19 +150,20 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     """Return the current attention list, sorted by ticket key and reason."""
     ticks = [
         int(r[0])
-        for r in conn.execute(
-            "SELECT id FROM ticks WHERE status = 'ok' ORDER BY id DESC LIMIT ?",
-            (HISTORY_TICKS,),
+        for r in sql.execute(
+            conn, sql.select("id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS)
         )
     ]
     if not ticks:
         return _halted(conn, None)
-    # Only the placeholder count is interpolated; the tick ids are bound parameters.
-    rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore, pr FROM decisions "  # noqa: S608
-        f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
-        ticks,
-    ).fetchall()
+    recorded = (
+        sql.select("tick_id, ticket_key, action, rationale, created_at, repo, chore, pr")
+        .from_("decisions")
+        .where("action LIKE 'attention:%'")
+        .where_in("tick_id", ticks)
+        .order_by("id")
+    )
+    rows = sql.execute(conn, recorded).fetchall()
     by_tick: dict[int, dict[_ItemId, tuple[str, str]]] = {t: {} for t in ticks}
     for r in rows:
         key = None if r["ticket_key"] is None else str(r["ticket_key"])
@@ -188,13 +198,18 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
     Returns:
         The item, open since the first tick after `last_ok` that raised it, or nothing.
     """
-    latest = conn.execute("SELECT status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1").fetchone()
+    latest = sql.execute(
+        conn, sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1)
+    ).fetchone()
     if latest is None or latest[0] not in HALTS:
         return []
     reason = str(latest[0])
-    rows = conn.execute(
-        "SELECT rationale, created_at FROM decisions WHERE action = ? AND tick_id > ? ORDER BY id",
-        (f"{ACTION_PREFIX}{reason}", last_ok or 0),
+    rows = sql.execute(
+        conn,
+        sql.select("rationale, created_at")
+        .from_("decisions")
+        .where("action = ? AND tick_id > ?", f"{ACTION_PREFIX}{reason}", last_ok or 0)
+        .order_by("id"),
     ).fetchall()
     if not rows:
         return []
@@ -309,7 +324,7 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     it, and holds again once they start it (DESIGN §14, §22). An old triage raises none, however it ended: the ticket
     is planned next (M55).
     """
-    done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
+    done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
     stopped = set(conversation.stopped(conn))
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):

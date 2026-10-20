@@ -1,9 +1,10 @@
 """The web UI's reviews (DESIGN §21, Reading reviews): canopy's shadow PR review, posted nowhere (D114).
 
-The findings and the diff are untrusted text. The writes are dismissing a finding, as `canopy dismiss review:ID`, and
-sending some to a worker, as `canopy send review:ID`.
+The findings, the diff, and the reviewer's transcript and log are untrusted text. The writes are dismissing a
+finding, as `canopy dismiss review:ID`, and sending some to a worker, as `canopy send review:ID`.
 """
 
+import json
 from pathlib import Path
 
 from canopy.core import db, review_diff
@@ -124,9 +125,55 @@ def test_a_review_without_a_diff_has_none_and_a_failed_one_says_why(backend: Bac
 
 def test_no_such_review_is_a_404_and_its_id_is_a_positive_integer(backend: Backend) -> None:
     c = client(None, backend)
-    missing = c.get("/api/reviews/99")
-    assert (missing.status_code, missing.json()["detail"]) == (404, "no review run 99")
+    for path in ("/api/reviews/99", "/api/reviews/99/transcript", "/api/reviews/99/output"):
+        missing = c.get(path)
+        assert (missing.status_code, missing.json()["detail"]) == (404, "no review run 99"), path
     assert c.get("/api/reviews/0").status_code == 422
+    assert c.get("/api/reviews/0/transcript").status_code == 422
+
+
+def test_a_reviews_run_is_its_log_its_tokens_and_its_reviewers_session(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/reviews/4").json()
+    # Its log is shown from the workspace's root, as a run's is.
+    assert found["log_path"] == ".canopy/reviews/4.log"
+    transcript = c.get("/api/reviews/4/transcript").json()
+    assert (transcript["status"], transcript["session_id"]) == ("read", "ses_review4")
+    entries = transcript["entries"]
+    assert [e["kind"] for e in entries[:4]] == ["text", "tool", "tool", "step"]
+    # Its last text is the result the harness read, which the review's page shows as its findings.
+    assert json.loads(entries[-2]["text"])["summary"] == found["summary"]
+    # The prompt canopy rendered for the reviewer, kept beside its log as a run's is.
+    assert transcript["prompt"]["text"].startswith("# canopy reviewer\n")
+    assert c.get("/api/reviews/3/transcript").json()["prompt"] is None
+    output = c.get("/api/reviews/4/output").json()
+    assert output["status"] == "read"
+    assert output["text"].startswith("--- reviewer stdout ---")
+    assert output["text"].endswith("--- reviewer exit 0 ---\n")
+
+
+def test_a_review_that_ended_badly_shows_the_call_it_ended_on(backend: Backend) -> None:
+    entries = client(None, backend).get("/api/reviews/3/transcript").json()["entries"]
+    failed = [e for e in entries if e["kind"] == "tool" and e["status"] == "error"]
+    assert [e["output"] for e in failed] == ["File not found: checkout/src/billing/client.ts"]
+
+
+def test_a_running_review_has_no_session_yet(backend: Backend, tmp_path: Path) -> None:
+    # The reviewer's output reaches the log when it ends, and its session with it.
+    with backend.open() as ctx:
+        run_id = db.insert_review_run(
+            ctx.conn,
+            tick_id=1,
+            pr_url=mock_reviews.PR_95,
+            sha="abc1234",
+            ticket=None,
+            repo="web",
+            purpose="request",
+            logs_dir=tmp_path,
+        )
+    c = client(None, backend)
+    assert c.get(f"/api/reviews/{run_id}/transcript").json()["status"] == "no_session"
+    assert c.get(f"/api/reviews/{run_id}").json()["new_tokens"] is None
 
 
 def test_a_diff_that_is_a_link_is_not_followed(backend: Backend, tmp_path: Path) -> None:

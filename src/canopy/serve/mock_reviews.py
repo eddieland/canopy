@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import review_diff
+from canopy.core import review_diff, sql
 from canopy.core.review_result import Finding, ReviewResult
 from canopy.infra import logs
 
@@ -44,7 +44,8 @@ _STALE = ReviewResult(
         )
     ],
 )
-_LATEST = ReviewResult(
+# What review 4 reported, its reviewer's last line in its transcript too.
+LATEST = ReviewResult(
     status="done",
     verdict="findings",
     impact="normal",
@@ -142,34 +143,41 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         (1, PR_88, SHA_88_FIRST, "ABC-099", "web", -100, -97, "done", _STALE.model_dump_json(), 0.21, None),
         (2, PR_12, SHA_12, None, "api", -80, -79, "done", _CLEAN.model_dump_json(), 0.06, DIFF_12),
         (3, PR_91, SHA_91, "ABC-103", "web", -70, -69, "unknown", json.dumps({"harness": _UNKNOWN}), 0.02, None),
-        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", _LATEST.model_dump_json(), 0.24, DIFF_88),
+        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", LATEST.model_dump_json(), 0.24, DIFF_88),
     )
     for run_id, pr, sha, ticket, repo, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"
-        conn.execute(
-            "INSERT INTO review_runs (id, tick_id, pr_url, sha, ticket_key, repo, purpose, started_at, ended_at, "
-            "status, result_json, log_path, base_branch, session_id, cost_usd) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'main', ?, ?)",
-            (
-                run_id,
-                pr,
-                sha,
-                ticket,
-                repo,
-                "query" if ticket is None else "own",
-                at(started),
-                at(ended),
-                status,
-                result,
-                str(log_path),
-                f"ses_review{run_id}",
-                cost,
+        sql.execute(
+            conn,
+            sql.insert(
+                "review_runs",
+                id=run_id,
+                tick_id=1,
+                pr_url=pr,
+                sha=sha,
+                ticket_key=ticket,
+                repo=repo,
+                purpose="query" if ticket is None else "own",
+                started_at=at(started),
+                ended_at=at(ended),
+                status=status,
+                result_json=result,
+                log_path=str(log_path),
+                base_branch="main",
+                session_id=f"ses_review{run_id}",
+                cost_usd=cost,
             ),
         )
         if diff is not None:
             logs.write_private(review_diff.path_for(log_path), diff)
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
-    conn.execute(
-        "INSERT INTO review_requests (pr_url, created_at, channel, notes) VALUES (?, ?, 'web', ?)",
-        (PR_95, at(-20), "The author asked for a close look at the retry loop; I'm not sure it backs off."),
+    sql.execute(
+        conn,
+        sql.insert(
+            "review_requests",
+            pr_url=PR_95,
+            created_at=at(-20),
+            channel="web",
+            notes="The author asked for a close look at the retry loop; I'm not sure it backs off.",
+        ),
     )

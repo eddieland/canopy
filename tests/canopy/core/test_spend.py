@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, spend
+from canopy.core import db, spend, sql
 from canopy.runtime.report import ToolUse, Usage
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
@@ -634,9 +634,9 @@ def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, ki
     plans share `runs`, told apart by kind, which the index does not cover: each run in the window is read for it.
     """
     conn = journals.open(tmp_path / "canopy.db")
-    table, which = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
-    sql = spend._TOOLS_SQL.format(table=table, which=which)  # noqa: SLF001
-    plan = [str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {sql}", (table, earlier(NOW, 7), earlier(NOW, 0)))]
+    table, _ = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
+    query = spend._tools_of(kind, earlier(NOW, 7), earlier(NOW, 0))  # noqa: SLF001
+    plan = [str(row[3]) for row in sql.execute(conn, sql.frag("EXPLAIN QUERY PLAN {}", query))]
     assert re.match(rf"SEARCH r USING (COVERING )?INDEX {table}_spent \(started_at>\? AND started_at<\?\)", plan[0]), (
         plan
     )
@@ -712,9 +712,9 @@ def test_canopy_spend_says_when_no_run_s_models_were_read(
 def test_models_read_only_the_windows_runs(tmp_path: Path, journals: Journals, kind: spend.Kind) -> None:
     """As `test_tools_read_only_the_windows_runs`: the run table leads, and `run_models` is read by its key."""
     conn = journals.open(tmp_path / "canopy.db")
-    built = spend._named_models(kind, earlier(NOW, 7), earlier(NOW, 0)).fragment()  # noqa: SLF001
-    plan = [str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {built.text}", built.params)]
-    table = spend._ALL_TABLES[kind][0]  # noqa: SLF001
+    table, _ = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
+    query = spend._named_models(kind, earlier(NOW, 7), earlier(NOW, 0))  # noqa: SLF001
+    plan = [str(row[3]) for row in sql.execute(conn, sql.frag("EXPLAIN QUERY PLAN {}", query))]
     assert re.match(rf"SEARCH r USING (COVERING )?INDEX {table}_spent \(started_at>\? AND started_at<\?\)", plan[0]), (
         plan
     )

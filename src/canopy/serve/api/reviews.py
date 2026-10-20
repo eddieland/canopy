@@ -1,4 +1,7 @@
-"""The reviews canopy keeps instead of posting them (DESIGN §21, D114), all untrusted; dismissing, sending findings."""
+"""The reviews canopy keeps instead of posting them (DESIGN §21, D114), all untrusted; dismissing, sending findings.
+
+Each review run is readable on its own too, apart from its results: its session's transcript and its log's end.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +16,7 @@ from canopy.serve import reviews
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
 from canopy.serve.schema import (
+    RawOutput,
     RequestedReview,
     ReviewDetail,
     ReviewDismissed,
@@ -20,6 +24,7 @@ from canopy.serve.schema import (
     ReviewSendRequest,
     ReviewSent,
     ReviewSummary,
+    Transcript,
 )
 
 if TYPE_CHECKING:
@@ -64,6 +69,38 @@ def review(run_id: ReviewId, request: Request, backend: BackendDep) -> Response:
     return _json(found, request)
 
 
+# The reviewer's output, read back from the review's log on each request; never on the stream (DESIGN §22).
+@router.get(
+    "/reviews/{run_id}/transcript",
+    operation_id="getReviewTranscript",
+    summary="Get a review's transcript",
+    responses=not_found("review run"),
+)
+def review_transcript(run_id: ReviewId, backend: BackendDep) -> Transcript:
+    """The review run's session, read back from its log: agent output, untrusted and bounded."""
+    with backend.open() as ctx:
+        found = reviews.review_transcript(ctx, run_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"no review run {run_id}")
+    return found
+
+
+# The end of the same log as written, the reviewer's stderr and exit included, read again on each request.
+@router.get(
+    "/reviews/{run_id}/output",
+    operation_id="getReviewOutput",
+    summary="Get a review's output",
+    responses=not_found("review run"),
+)
+def review_output(run_id: ReviewId, backend: BackendDep) -> RawOutput:
+    """The end of the review run's log as written, the reviewer's stderr included: untrusted and bounded."""
+    with backend.open() as ctx:
+        found = reviews.review_raw_output(ctx, run_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"no review run {run_id}")
+    return found
+
+
 @router.post(
     "/reviews/{run_id}/dismissals",
     operation_id="dismissReviewFinding",
@@ -76,7 +113,7 @@ def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -
     with backend.open() as ctx:
         try:
             defined = chore_view.defined(ctx.config, ctx.workspace)
-            conversation.dismiss(ctx.conn, ref, str(body.finding), channel=WEB, chores=defined, undo=body.undo)
+            conversation.dismiss(ctx.conn, ref, [str(body.finding)], channel=WEB, chores=defined, undo=body.undo)
         except conversation.Refused as r:
             raise RefusedError(r) from None
     _log.info(

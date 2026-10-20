@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -28,7 +28,9 @@ def limit(conn: sqlite3.Connection, config: Config, pr_url: str) -> int:
 
 def granted(conn: sqlite3.Connection, pr_url: str) -> int:
     """Return the review runs the operator granted the PR at `pr_url` past the policy's limit, 0 for none."""
-    row = conn.execute("SELECT coalesce(sum(runs), 0) FROM review_grants WHERE pr_url = ?", (pr_url,)).fetchone()
+    row = sql.execute(
+        conn, sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", pr_url)
+    ).fetchone()
     return int(row[0])
 
 
@@ -65,5 +67,5 @@ def grant(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, ru
         raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant past")
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
-        conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, ?, ?)", (ref.id, runs, db.now()))
+        sql.execute(conn, sql.insert("review_grants", pr_url=ref.id, runs=runs, granted_at=db.now()))
         return Granted(runs=reviewed, limit=limit(conn, config, ref.id))

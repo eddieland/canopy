@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, memory, outbox, records, review_result
+from canopy.core import chore_view, contract, db, memory, outbox, records, review_result, sql
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, StartStatus
@@ -387,61 +387,70 @@ def reply(
 def dismiss(
     conn: sqlite3.Connection,
     ref: Ref,
-    finding: str,
+    findings: Collection[str],
     *,
     channel: str,
     chores: Mapping[str, Chore],
     undo: bool = False,
 ) -> None:
-    """Dismiss one finding: a chore's, named by its id (DESIGN §19), or a review run's, by its number (§21).
+    """Dismiss findings: a chore's, named by their ids (DESIGN §19), or a review run's, by their numbers (§21).
 
     A chore's open finding is kept off the attention list until it clears: the chore's runs still report it and its
     page still shows it, marked dismissed, and once an `ok` run leaves it out the dismissal is spent, so the finding is
     listed again if it comes back. A review's finding stays on the review's page, marked, and is left out of what a
     `resume` hands a worker and of the overseer's state block. Dismissing one again records the time anew; `undo`
-    takes a dismissal back.
+    takes a dismissal back. The findings are dismissed together or not at all: one refused leaves every other as it
+    was.
 
     Raises:
         Refused: `unsupported` for a subject that is not a chore or a review, `unknown` for a chore not in `chores`, a
             review run that does not exist or found nothing, or a finding the subject does not have (with `undo`, one
-            not dismissed), and `bad_finding` for an id or number no finding can have.
+            not dismissed), and `bad_finding` for no findings, or an id or number no finding can have.
     """
     check_verb(ref, "dismiss")
+    if not findings:
+        raise Refused("bad_finding", "name one or more findings")
     if ref.kind == REVIEW:
-        _dismiss_review(conn, ref, finding, channel=channel, undo=undo)
+        _dismiss_review(conn, ref, findings, channel=channel, undo=undo)
         return
     if ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
-    if len(finding) > MAX_ID or not FINDING_ID_RE.fullmatch(finding):
+    if any(len(f) > MAX_ID or not FINDING_ID_RE.fullmatch(f) for f in findings):
         raise Refused("bad_finding", f"a finding id matches {FINDING_ID_RE.pattern}, at most {MAX_ID} characters")
+    ids = list(dict.fromkeys(findings))
     with db.transaction(conn):
         if undo:
-            if not db.delete_dismissal(conn, ref.id, finding):
-                raise Refused("unknown", f"{ref} has no dismissed finding {finding!r}")
+            for finding in ids:
+                if not db.delete_dismissal(conn, ref.id, finding):
+                    raise Refused("unknown", f"{ref} has no dismissed finding {finding!r}")
             return
         state = chore_view.state_of(conn, ref.id, chores[ref.id])
-        if not any(f.finding.id == finding for f in state.findings()):
-            raise Refused("unknown", f"{ref} has no open finding {finding!r}")
-        db.set_dismissal(conn, ref.id, finding, channel=channel)
+        open_ids = {f.finding.id for f in state.findings()}
+        for finding in ids:
+            if finding not in open_ids:
+                raise Refused("unknown", f"{ref} has no open finding {finding!r}")
+            db.set_dismissal(conn, ref.id, finding, channel=channel)
 
 
-def _dismiss_review(conn: sqlite3.Connection, ref: Ref, finding: str, *, channel: str, undo: bool) -> None:
-    if not (finding.isascii() and finding.isdigit() and 0 < len(finding) <= 2 and int(finding) > 0):  # noqa: PLR2004
+def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str], *, channel: str, undo: bool) -> None:
+    if not all(f.isascii() and f.isdigit() and 0 < len(f) <= 2 and int(f) > 0 for f in findings):  # noqa: PLR2004
         raise Refused("bad_finding", f"a review's finding is its number, from 1 to {review_result.MAX_FINDINGS}")
-    number, run_id = int(finding), int(ref.id)
+    numbers, run_id = sorted({int(f) for f in findings}), int(ref.id)
     with db.transaction(conn):
         if undo:
-            if not db.delete_review_dismissal(conn, run_id, number):
-                raise Refused("unknown", f"{ref} has no dismissed finding {number}")
+            for number in numbers:
+                if not db.delete_review_dismissal(conn, run_id, number):
+                    raise Refused("unknown", f"{ref} has no dismissed finding {number}")
             return
         run = db.get_review_run(conn, run_id)
         if run is None:
             raise Refused("unknown", f"there is no review run {run_id}")
         stored = review_result.stored(run.result_json)
         found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
-        if number > found:
-            raise Refused("unknown", f"{ref} has no finding {number}: it reported {found}")
-        db.set_review_dismissal(conn, run_id, number, channel=channel)
+        if numbers[-1] > found:
+            raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
+        for number in numbers:
+            db.set_review_dismissal(conn, run_id, number, channel=channel)
 
 
 @dataclass(frozen=True)
@@ -711,9 +720,12 @@ def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | Non
     row = records.fetch_one(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' AND id > ? "
-        "ORDER BY id DESC LIMIT 1",
-        (TICKET, key, db.forgotten_message_id(conn, key)),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ?", TICKET, key)
+        .where("kind = 'question' AND id > ?", db.forgotten_message_id(conn, key))
+        .order_by("id DESC")
+        .limit(1),
     )
     if row is None or operator_messages_after(conn, key, row.id):
         return None
@@ -732,11 +744,14 @@ class Awaiting:
 def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
     """Return every started, open ticket whose latest question has no operator message after it, by key."""
     found: list[Awaiting] = []
-    rows = conn.execute(
-        "SELECT s.subject_id FROM starts s LEFT JOIN tickets t ON t.key = s.subject_id "
-        "WHERE s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0 ORDER BY s.subject_id",
-        (TICKET,),
-    ).fetchall()
+    started = (
+        sql.select("s.subject_id")
+        .from_("starts s")
+        .left_join("tickets t ON t.key = s.subject_id")
+        .where("s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0", TICKET)
+        .order_by("s.subject_id")
+    )
+    rows = sql.execute(conn, started).fetchall()
     for row in rows:
         key = str(row[0])
         question = latest_question(conn, key)
@@ -747,9 +762,13 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
 
 def stopped(conn: sqlite3.Connection) -> list[str]:
     """Return every ticket the operator stopped, by key: what the overseer decides nothing about (DESIGN §22)."""
-    rows = conn.execute(
-        "SELECT subject_id FROM starts WHERE subject_kind = ? AND status = 'stopped' ORDER BY subject_id", (TICKET,)
-    ).fetchall()
+    stops = (
+        sql.select("subject_id")
+        .from_("starts")
+        .where("subject_kind = ? AND status = 'stopped'", TICKET)
+        .order_by("subject_id")
+    )
+    rows = sql.execute(conn, stops).fetchall()
     return [str(row[0]) for row in rows]
 
 
@@ -758,9 +777,10 @@ def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> l
     return records.fetch_all(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ? "
-        "ORDER BY id",
-        (TICKET, key, after),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TICKET, key, after)
+        .order_by("id"),
     )
 
 
@@ -870,9 +890,12 @@ def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
     rows = records.fetch_all(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
-        "AND (source = 'operator' OR kind = 'question') ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
+        .where("source = 'operator' OR kind = 'question'")
+        .order_by("id DESC")
+        .limit(PROMPT_MESSAGES),
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")
 
@@ -887,9 +910,13 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     rows = records.fetch_all(
         conn,
         records.Message,
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? AND source != ? "
-        "AND (run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)) ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), CANOPY, RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
+        .where("source != ?", CANOPY)
+        .where("run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)", RunKind.NEEDS_PLAN)
+        .order_by("id DESC")
+        .limit(PROMPT_MESSAGES),
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
 

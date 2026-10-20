@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import records
+from canopy.core import records, sql
 from canopy.core.prompts import mark_comments
 from canopy.core.vocab import Reaction, ReplyMode, RunKind
 
@@ -83,15 +83,14 @@ def render(
 
 def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -> None:
     """Record what run `run_id`'s prompt was rendered under. Call inside the transaction that inserts the run."""
-    conn.execute(
-        "INSERT INTO run_replies (run_id, mode, ticket_drafts) VALUES (?, ?, ?)",
-        (run_id, rendered.mode, rendered.ticket_drafts),
+    sql.execute(
+        conn, sql.insert("run_replies", run_id=run_id, mode=rendered.mode, ticket_drafts=rendered.ticket_drafts)
     )
 
 
 def run_replies(conn: sqlite3.Connection, run_id: int) -> records.RunReplies | None:
     """Return what run `run_id`'s prompt was rendered under, or None for a run of a kind that comments nowhere."""
-    return records.fetch_one(conn, records.RunReplies, "SELECT * FROM run_replies WHERE run_id = ?", (run_id,))
+    return records.fetch_one(conn, records.RunReplies, sql.select("*").from_("run_replies").where("run_id = ?", run_id))
 
 
 def posted_values(marks: str, label: str) -> dict[str, str]:

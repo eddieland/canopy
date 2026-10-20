@@ -411,7 +411,10 @@ Rules:
   them next: in the card above its foot, and under the plan page's header, never a muted line a request can hide in.
   A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its Work panel,
   since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is settled as the
-  page opens, so a plan approved meanwhile leaves its card where it was read.
+  page opens, so a plan approved meanwhile leaves its card where it was read. A review's run is on a page of its own
+  too, `/reviews/$id/run`, under the review in the trail, with a run's skeleton: its Run panel, its transcript, its
+  prompt, and its output. The review's page is its results, so it says only when the run ended and links there from a
+  `run` field.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -1283,7 +1286,8 @@ sliver beside four others; and its axis names short call numbers without measuri
     then its order, By call, and All open.
   - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
     header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
-    only once opened. A run's Memory is one.
+    only once opened. A run's Memory is one, and the Prompt on a run's, a tick's, and a chore run's pages
+    (`PromptPanel`), its length and a copy button as its readout, `none kept` alone when canopy kept none.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header

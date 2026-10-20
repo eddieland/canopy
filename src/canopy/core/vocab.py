@@ -96,6 +96,9 @@ class RunKind(StrEnum):
     # policy plans is planned now (DESIGN §25). Kept so the runs it named still read, counted per ticket and in no
     # unit's attempts; nothing dispatches it.
     NEEDS_PLAN = "needs-plan"
+    #: Writes a plan for what came back to a unit's PR, before the `resume` that acts on it (DESIGN §32): it reads the
+    #: PR's head, pushes nothing, and counts per unit.
+    FEEDBACK_PLAN = "feedback-plan"
 
 
 class ResumeReason(StrEnum):
@@ -166,6 +169,19 @@ class PlanStatus(StrEnum):
     APPROVED = "approved"
     # A newer plan, a request for one, a skip, or `canopy forget` replaced it.
     SUPERSEDED = "superseded"
+
+
+class Proposal(StrEnum):
+    """What a feedback plan proposes for one of its items, `feedback_plan_items.proposal` (DESIGN §32)."""
+
+    #: Change the code as the plan says, and reply saying so.
+    CHANGE = "change"
+    #: Change nothing for it, and reply saying why.
+    DECLINE = "decline"
+    #: A question the item raises before anything is changed for it.
+    ASK = "ask"
+    #: Nothing to do: no change and no reply.
+    LEAVE = "leave"
 
 
 class PlanSetting(StrEnum):

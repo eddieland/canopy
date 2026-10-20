@@ -44,6 +44,7 @@ from canopy.core.vocab import (
     PlanSetting,
     PlanStatus,
     PoolKind,
+    Proposal,
     PrState,
     Reaction,
     ReplyMode,
@@ -314,6 +315,45 @@ class Plan(Row):
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlan(Row):
+    """A plan a feedback plan run wrote for a ticket's PRs (DESIGN §32): its status, hashes, and approval. No text."""
+
+    TABLE: ClassVar[str] = "feedback_plans"
+
+    id: int
+    ticket_key: str
+    run_id: int
+    created_at: str
+    status: PlanStatus
+    #: The file's SHA-256, hex, and its size in bytes, as the planner wrote it.
+    sha256: str
+    size: int
+    #: The file's SHA-256 when the operator approved it, their edits included; set with the time and the channel.
+    approved_sha256: str | None
+    approved_at: str | None
+    approved_channel: str | None
+    #: The `resume` that went ahead on the approval, which it spent: an approval goes ahead once.
+    spent_run_id: int | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlanItem(Row):
+    """An item a feedback plan covers: a review or review comment by its observed id, and what the plan proposes."""
+
+    TABLE: ClassVar[str] = "feedback_plan_items"
+
+    plan_id: int
+    #: Its place in the planner's result line, from 1: what an approval names it by.
+    number: int
+    pr_url: str
+    item: ReviewItem
+    item_id: int
+    proposal: Proposal
+    #: The reply the plan would draft, for a change or a decline: model text, never an instruction.
+    reply: str | None
 
 
 @dataclass(frozen=True)
@@ -754,6 +794,8 @@ class Run(Row):
     activity: str | None
     activity_at: str | None
     plan_id: int | None
+    #: The feedback plan this run wrote, or the approved one its `resume` follows (DESIGN §32).
+    feedback_plan_id: int | None
 
 
 @dataclass(frozen=True)
@@ -958,28 +1000,24 @@ class SplitChild(Row):
     run_id: int
 
 
-def fetch_all[R: Row](
-    conn: sqlite3.Connection, row_type: type[R], query: sql.Composable | str, params: Sequence[object] = ()
-) -> list[R]:
-    """Run `query`, a statement built with `sql` or a string with `params`, and build each row it returns as `row_type`.
+def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> list[R]:
+    """Run `query`, a statement built with `sql`, and build each row it returns as `row_type`.
 
     Returns:
         The rows, in the order the query returned them.
     """
-    cur = _run(conn, query, params)
+    cur = sql.execute(conn, query)
     build = _builder(row_type, cur.description)
     return [build(r) for r in cur.fetchall()]
 
 
-def fetch_one[R: Row](
-    conn: sqlite3.Connection, row_type: type[R], query: sql.Composable | str, params: Sequence[object] = ()
-) -> R | None:
-    """Run `query`, a statement built with `sql` or a string with `params`, and build its first row as `row_type`.
+def fetch_one[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> R | None:
+    """Run `query`, a statement built with `sql`, and build its first row as `row_type`.
 
     Returns:
         The first row, or None when the query returned none.
     """
-    cur = _run(conn, query, params)
+    cur = sql.execute(conn, query)
     build = _builder(row_type, cur.description)
     first = cur.fetchone()
     return None if first is None else build(first)
@@ -995,15 +1033,6 @@ def columns(row: sqlite3.Row | Row) -> sqlite3.Row | dict[str, Any]:
         A typed row's fields by name, or the `sqlite3.Row` itself.
     """
     return asdict(row) if isinstance(row, Row) else row
-
-
-def _run(conn: sqlite3.Connection, query: sql.Composable | str, params: Sequence[object]) -> sqlite3.Cursor:
-    if isinstance(query, str):
-        return conn.execute(query, params)
-    if params:
-        msg = "a statement built with `sql` binds its own values"
-        raise ValueError(msg)
-    return sql.execute(conn, query)
 
 
 def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]]) -> Callable[[Sequence[object]], R]:
