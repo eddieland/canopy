@@ -76,6 +76,41 @@ test('a review from before diffs were kept lists its findings as their cards, on
     await expect(page).toHaveURL(/\/reviews\/4$/u)
 })
 
+test("a review's run is a page of its own, one link from its results", async ({ page }) => {
+    await page.goto('reviews/4')
+    const main = page.getByRole('main')
+    // The results say when the run ended, not what it spent, and keep its transcript off the page.
+    await expect(main.getByRole('term').filter({ hasText: 'spent' })).toHaveCount(0)
+    await expect(page.getByTestId('transcript')).toHaveCount(0)
+    await page.getByTestId('review-run-link').click()
+    await expect(page).toHaveURL(/\/reviews\/4\/run$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run Debounce search input')
+    await expect(main.getByText('done', { exact: true })).toHaveCount(1)
+    await expect(main.getByRole('term').filter({ hasText: 'spent' })).toHaveCount(1)
+    await expect(main.getByText('.canopy/reviews/4.log', { exact: true })).toBeVisible()
+    // The reviewer's transcript: what it read, and the result its review's page shows as findings.
+    const transcript = page.getByTestId('transcript')
+    await expect(transcript).toContainText("I'll read the diff against main")
+    await expect(transcript).toContainText('src/search/useSearch.ts')
+    // Its log as written waits folded, read only when opened.
+    await expect(page.getByTestId('review-output')).toContainText('Output')
+    // The trail leads back to the results.
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'review:4' }).click()
+    await expect(page).toHaveURL(/\/reviews\/4$/u)
+})
+
+test("a review that ended badly says on its run's page what it ended on", async ({ page }) => {
+    await page.goto('reviews/3/run')
+    await settled(page)
+    // The harness's note says why it is `unknown`, and `ended on` the failed call, which shows its row.
+    await expect(page.getByRole('main').getByText("the reviewer's last line was not a valid result")).toBeVisible()
+    const read = page.getByTestId('transcript').getByTestId('transcript-tool')
+    await expect(read).toHaveCount(1)
+    await page.getByRole('button', { name: /File not found: checkout\/src\/billing\/client\.ts/u }).click()
+    await expect(read.locator('summary')).toBeFocused()
+    await expect(read.locator('summary')).toBeInViewport()
+})
+
 test('a review that does not exist says so', async ({ page }) => {
     await page.goto('reviews/99')
     await expect(page.getByText('no review run 99')).toBeVisible()

@@ -1283,11 +1283,12 @@ WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 100
 
 
 def _transcripts(state_dir: Path) -> None:
-    """Write the events of runs 39 to 43's, tick 2's, and chore run 2's sessions where the loop would write them."""
+    """Write the events of runs 39 to 43's, tick 2's, chore run 2's, and reviews 3 and 4's sessions where they go."""
     # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
     s39, s40, s41, s43 = "ses_mock39", "ses_mock40", "ses_mock41", "ses_mock43"
     s2, c2 = "ses_tick2", "ses_chore2"
+    r3, r4 = "ses_review3", "ses_review4"
     run_39 = [
         _start(s39, -90),
         _text(s39, -89.9, "I'll read the ticket, then the search box."),
@@ -1471,6 +1472,55 @@ def _transcripts(state_dir: Path) -> None:
         _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
         _step(s2, -59, 0.31, reason="stop"),
     ]
+    # Review 4 read the diff and the files it touches, then reported what its page shows (mock_reviews).
+    review_4 = [
+        _start(r4, -57.9),
+        _text(r4, -57.8, "I'll read the diff against main, then each file it touches in full."),
+        _done(
+            r4,
+            -57.7,
+            "Diff against the base",
+            "git diff --stat main...HEAD",
+            " src/search/SearchBox.tsx |  4 +++-\n src/search/useSearch.ts  | 21 +++++++++++++++++++++\n",
+        ),
+        _tool(
+            r4,
+            -57.5,
+            "read",
+            {
+                "status": "completed",
+                "input": {"filePath": "checkout/src/search/useSearch.ts"},
+                # The new file is the diff's last hunk, its lines without their `+`.
+                "output": "\n".join(line[1:] for line in mock_reviews.DIFF_88.splitlines()[-21:]),
+                "title": "src/search/useSearch.ts",
+            },
+        ),
+        _step(r4, -57.4, 0.09, sent=18_200),
+        _start(r4, -57.3),
+        _text(r4, -57, "The abort is right. `setLoading(false)` only runs on success, so an error leaves it on."),
+        _done(r4, -56.6, "Find the other timings", "grep -rn '_MS =' src/config.ts", "export const TOAST_MS = 4000\n"),
+        _step(r4, -56.5, 0.11, sent=21_400),
+        _start(r4, -56.4),
+        _text(r4, -56.1, mock_reviews.LATEST.model_dump_json()),
+        _step(r4, -56, 0.04, reason="stop", sent=22_900),
+    ]
+    # Review 3 ended on a file it could not read, and never printed a result: `unknown`, as its row says.
+    review_3 = [
+        _start(r3, -69.9),
+        _text(r3, -69.8, "Reading the billing client the PR moves to v2."),
+        _tool(
+            r3,
+            -69.5,
+            "read",
+            {
+                "status": "error",
+                "input": {"filePath": "checkout/src/billing/client.ts"},
+                "error": "File not found: checkout/src/billing/client.ts",
+            },
+        ),
+        _text(r3, -69.2, "The client moved, and the diff does not say where. I'll stop here."),
+        _step(r3, -69.1, 0.02, reason="stop", sent=9_400),
+    ]
     # The running chore run's log exists, as `canopy chores run` opens it, and holds no events yet.
     none: list[str] = []
     written = (
@@ -1481,6 +1531,8 @@ def _transcripts(state_dir: Path) -> None:
         ("ticks", "2", tick_2),
         ("chore-runs/deps", "2", chore_2),
         ("chore-runs/build-health", "4", none),
+        ("reviews", "3", review_3),
+        ("reviews", "4", review_4),
     )
     for directory, name, lines in written:
         (state_dir / directory).mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -1496,6 +1548,8 @@ def _transcripts(state_dir: Path) -> None:
             text = _SETUP_40 + worker
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
+        elif directory == "reviews":
+            text = f"--- reviewer stdout ---\n{stdout}\n--- reviewer stderr ---\n\n--- reviewer exit 0 ---\n"
         elif directory.startswith("chore-runs/"):
             text = f"--- chore stdout ---\n{stdout}\n--- chore stderr ---\n\n--- chore exit 0 ---\n"
         else:

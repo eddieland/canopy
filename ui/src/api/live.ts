@@ -81,11 +81,13 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
                 void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             }
-            // A review's page is read again when its row moves: it ended, with its findings, or its cost went up.
+            // A review's page is read again when its row moves: it ended, with its findings, or its cost went up. Its
+            // run's page holds the same review, so its transcript and output are read again with it.
             for (const review of event.reviews) {
                 const shown = client.getQueryData<ReviewDetail>(keys.review(review.id))
                 if (shown !== undefined && reviewLogged(shown.review) !== reviewLogged(review)) {
                     void client.invalidateQueries({ queryKey: keys.review(review.id), exact: true })
+                    void client.invalidateQueries({ queryKey: keys.reviewTranscript(review.id) })
                 }
             }
             break

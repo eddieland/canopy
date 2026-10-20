@@ -1999,6 +1999,14 @@ class ReviewDetail(_Model):
     """Whether its findings can be sent to a worker: a `done` review of one of the loop's own PRs (DESIGN §21)."""
     runs: list[ReviewSummary]
     """Every review run of the same PR, newest first, this one included."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+    reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+    or recorded it before canopy kept it."""
+    log_path: str
+    """Where its log is: from the workspace root when under it."""
 
 
 class ReviewRequest(_Model):
