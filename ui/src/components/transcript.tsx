@@ -17,6 +17,7 @@ import { FoldButton } from '@/components/fold-button'
 import { SearchField } from '@/components/input'
 import { JsonTokens } from '@/components/json-text'
 import { MarkedText } from '@/components/marked-text'
+import { MoreLines } from '@/components/more-lines'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RowGrid, RowLine } from '@/components/rows'
@@ -30,7 +31,7 @@ import type { TranscriptPage } from '@/lib/context-chart-open'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
 import { rowLineFrom } from '@/lib/rows'
-import { markedTokens } from '@/lib/search'
+import { marked, markedTokens } from '@/lib/search'
 import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import {
@@ -41,6 +42,7 @@ import {
     duration,
     elapsed,
     findQueryOf,
+    foldText,
     hitsIn,
     moreLabel,
     outcome,
@@ -50,6 +52,7 @@ import {
     startOf,
     summary,
     tally,
+    THINKING_LINES,
     tokenCount,
     TRANSCRIPT_BUDGET,
     wroteTokens,
@@ -394,15 +397,13 @@ function Entry({
         case 'text': {
             return (
                 <Row at={entry.at} start={start} targeted={targeted}>
-                    <p
-                        className={cn(
-                            'min-w-0 flex-1 text-sm break-words whitespace-pre-wrap',
-                            entry.reasoning && 'text-muted-foreground italic',
-                        )}
-                    >
-                        {entry.reasoning && <span className="panel-label mr-2 not-italic">thinking</span>}
-                        <MarkedText text={entry.text} words={words} />
-                    </p>
+                    {entry.reasoning ? (
+                        <Thinking text={entry.text} open={open} words={words} />
+                    ) : (
+                        <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">
+                            <MarkedText text={entry.text} words={words} />
+                        </p>
+                    )}
                     {entry.cut && <Chip>cut</Chip>}
                 </Row>
             )
@@ -427,6 +428,31 @@ function Entry({
             )
         }
     }
+}
+
+/**
+ * The agent's reasoning, muted and italic under its `thinking` label. Past `THINKING_LINES` it shows its first lines
+ * and a toggle for the rest (`foldText`), whole from the start when the row is opened (All open, or shown from the
+ * chart) or the search holds a line the fold would hide. The toggle, once clicked, wins over both.
+ */
+function Thinking({ text, open, words }: { text: string; open: boolean; words: readonly string[] }) {
+    const [toggled, setToggled] = useState<boolean | null>(null)
+    const fold = foldText(text, THINKING_LINES)
+    const whole = toggled ?? (open || matches(text, words) > matches(fold.shown, words))
+    return (
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-muted-foreground italic">
+            <p className="text-sm break-words whitespace-pre-wrap">
+                <span className="panel-label mr-2 not-italic">thinking</span>
+                <MarkedText text={whole ? text : fold.shown} words={words} />
+            </p>
+            {fold.hidden > 0 && <MoreLines hidden={fold.hidden} open={whole} onToggle={() => setToggled(!whole)} />}
+        </div>
+    )
+}
+
+// How many matches of `words` `text` holds.
+function matches(text: string, words: readonly string[]): number {
+    return marked(text, words).filter((piece) => piece.mark).length
 }
 
 /**
