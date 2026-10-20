@@ -387,61 +387,70 @@ def reply(
 def dismiss(
     conn: sqlite3.Connection,
     ref: Ref,
-    finding: str,
+    findings: Collection[str],
     *,
     channel: str,
     chores: Mapping[str, Chore],
     undo: bool = False,
 ) -> None:
-    """Dismiss one finding: a chore's, named by its id (DESIGN §19), or a review run's, by its number (§21).
+    """Dismiss findings: a chore's, named by their ids (DESIGN §19), or a review run's, by their numbers (§21).
 
     A chore's open finding is kept off the attention list until it clears: the chore's runs still report it and its
     page still shows it, marked dismissed, and once an `ok` run leaves it out the dismissal is spent, so the finding is
     listed again if it comes back. A review's finding stays on the review's page, marked, and is left out of what a
     `resume` hands a worker and of the overseer's state block. Dismissing one again records the time anew; `undo`
-    takes a dismissal back.
+    takes a dismissal back. The findings are dismissed together or not at all: one refused leaves every other as it
+    was.
 
     Raises:
         Refused: `unsupported` for a subject that is not a chore or a review, `unknown` for a chore not in `chores`, a
             review run that does not exist or found nothing, or a finding the subject does not have (with `undo`, one
-            not dismissed), and `bad_finding` for an id or number no finding can have.
+            not dismissed), and `bad_finding` for no findings, or an id or number no finding can have.
     """
     check_verb(ref, "dismiss")
+    if not findings:
+        raise Refused("bad_finding", "name one or more findings")
     if ref.kind == REVIEW:
-        _dismiss_review(conn, ref, finding, channel=channel, undo=undo)
+        _dismiss_review(conn, ref, findings, channel=channel, undo=undo)
         return
     if ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
-    if len(finding) > MAX_ID or not FINDING_ID_RE.fullmatch(finding):
+    if any(len(f) > MAX_ID or not FINDING_ID_RE.fullmatch(f) for f in findings):
         raise Refused("bad_finding", f"a finding id matches {FINDING_ID_RE.pattern}, at most {MAX_ID} characters")
+    ids = list(dict.fromkeys(findings))
     with db.transaction(conn):
         if undo:
-            if not db.delete_dismissal(conn, ref.id, finding):
-                raise Refused("unknown", f"{ref} has no dismissed finding {finding!r}")
+            for finding in ids:
+                if not db.delete_dismissal(conn, ref.id, finding):
+                    raise Refused("unknown", f"{ref} has no dismissed finding {finding!r}")
             return
         state = chore_view.state_of(conn, ref.id, chores[ref.id])
-        if not any(f.finding.id == finding for f in state.findings()):
-            raise Refused("unknown", f"{ref} has no open finding {finding!r}")
-        db.set_dismissal(conn, ref.id, finding, channel=channel)
+        open_ids = {f.finding.id for f in state.findings()}
+        for finding in ids:
+            if finding not in open_ids:
+                raise Refused("unknown", f"{ref} has no open finding {finding!r}")
+            db.set_dismissal(conn, ref.id, finding, channel=channel)
 
 
-def _dismiss_review(conn: sqlite3.Connection, ref: Ref, finding: str, *, channel: str, undo: bool) -> None:
-    if not (finding.isascii() and finding.isdigit() and 0 < len(finding) <= 2 and int(finding) > 0):  # noqa: PLR2004
+def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str], *, channel: str, undo: bool) -> None:
+    if not all(f.isascii() and f.isdigit() and 0 < len(f) <= 2 and int(f) > 0 for f in findings):  # noqa: PLR2004
         raise Refused("bad_finding", f"a review's finding is its number, from 1 to {review_result.MAX_FINDINGS}")
-    number, run_id = int(finding), int(ref.id)
+    numbers, run_id = sorted({int(f) for f in findings}), int(ref.id)
     with db.transaction(conn):
         if undo:
-            if not db.delete_review_dismissal(conn, run_id, number):
-                raise Refused("unknown", f"{ref} has no dismissed finding {number}")
+            for number in numbers:
+                if not db.delete_review_dismissal(conn, run_id, number):
+                    raise Refused("unknown", f"{ref} has no dismissed finding {number}")
             return
         run = db.get_review_run(conn, run_id)
         if run is None:
             raise Refused("unknown", f"there is no review run {run_id}")
         stored = review_result.stored(run.result_json)
         found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
-        if number > found:
-            raise Refused("unknown", f"{ref} has no finding {number}: it reported {found}")
-        db.set_review_dismissal(conn, run_id, number, channel=channel)
+        if numbers[-1] > found:
+            raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
+        for number in numbers:
+            db.set_review_dismissal(conn, run_id, number, channel=channel)
 
 
 @dataclass(frozen=True)

@@ -45,8 +45,8 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy stop KEY [--now]` | Nothing dispatches a started ticket again until `canopy start`; `--now` ends its run. |
 | `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
-| `canopy dismiss chore:NAME ID` | Keeps a finding off the attention list until the chore stops reporting it; `--undo`. |
-| `canopy dismiss review:ID N` | Holds a review's finding N back from workers and the overseer; `--undo`. |
+| `canopy dismiss chore:NAME ID...` | Keeps findings off the attention list until the chore stops reporting them; `--undo`. |
+| `canopy dismiss review:ID N...` | Holds a review's findings N... back from workers and the overseer; `--undo`. |
 | `canopy send review:ID N...` | Sends findings N... to a worker: a reply on the review's ticket, the operator's go-ahead. |
 | `canopy start URL --review` | Has canopy review someone else's PR once, at its head; nothing is posted. `--notes TEXT` tells the reviewer what to look at. |
 | `canopy stop URL` | Ends a PR's review request; a review already running finishes. `canopy show URL` shows it and its reviews. |

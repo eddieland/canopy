@@ -776,9 +776,13 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
         assert f"dismiss refused ({guard})" in capsys.readouterr().err
     assert main(["dismiss", "chore:build-health", FINDING["id"], "--undo"]) == 1
     assert "has no dismissed finding" in capsys.readouterr().err
+    # Several are dismissed together or not at all.
+    assert main(["dismiss", "chore:build-health", FINDING["id"], "stuck/pr-7"]) == 1
+    assert "dismiss refused (unknown)" in capsys.readouterr().err
+    assert db.dismissals(conn, "build-health") == {}
 
-    assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 0
-    assert "is dismissed: it is off the attention list" in capsys.readouterr().out
+    assert main(["dismiss", "chore:build-health", FINDING["id"], FINDING["id"]]) == 0
+    assert f"{FINDING['id']} is dismissed: it is off the attention list" in capsys.readouterr().out
     # `attention.md` is rewritten at once, not at the next tick; a sink hears why the finding left at the next one.
     assert "Nothing needs you." in page.read_text()
     tick()

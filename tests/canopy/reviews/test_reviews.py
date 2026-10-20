@@ -676,8 +676,12 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
         (["review:99", "1"], "unknown"),
         (["review:x", "1"], "bad_ref"),
         ([ref, "2", "--undo"], "unknown"),
+        ([ref, "2", "3"], "unknown"),
+        ([ref, "2", "two"], "bad_finding"),
     ]:
         assert f"dismiss refused ({guard})" in scenario.operator("dismiss", *args, code=1).err
+    # Several are dismissed together or not at all.
+    assert db.review_dismissals(conn, review_id) == frozenset()
 
     dismissed = scenario.operator("dismiss", ref, "2")
     assert f"{ref} finding 2 is dismissed: no worker or tick acts on it." in dismissed.out
@@ -697,7 +701,8 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert "log line is noisy" not in prompt
 
     # With every finding dismissed, there is nothing for a worker to address.
-    scenario.operator("dismiss", ref, "1")
+    both = scenario.operator("dismiss", ref, "2", "1")
+    assert f"{ref} findings 2, 1 are dismissed: no worker or tick acts on them." in both.out
     assert scenario.refuses(resume(review_id)) == [
         (
             "refused:bad_review",

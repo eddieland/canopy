@@ -76,7 +76,7 @@ def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -
     with backend.open() as ctx:
         try:
             defined = chore_view.defined(ctx.config, ctx.workspace)
-            conversation.dismiss(ctx.conn, ref, str(body.finding), channel=WEB, chores=defined, undo=body.undo)
+            conversation.dismiss(ctx.conn, ref, [str(body.finding)], channel=WEB, chores=defined, undo=body.undo)
         except conversation.Refused as r:
             raise RefusedError(r) from None
     _log.info(
