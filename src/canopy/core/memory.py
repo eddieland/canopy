@@ -50,8 +50,10 @@ MAX_PENDING = 20
 # A proposal nobody reviews expires; a lesson comes up for review this long after it was promoted or last used.
 PROPOSAL_DAYS = 14
 REVIEW_DAYS = 90
-# The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted.
-MAX_LESSONS_DIGEST = 2 * 1024
+# The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted. Room for a dozen
+# lessons at `MAX_PROPOSAL_CHARS`, twice that at a usual length: they are the operator's own words, so a lesson left out
+# is one the operator promoted for nothing.
+MAX_LESSONS_DIGEST = 8 * 1024
 # The runs a memory names as having relied on it, the latest first; its use count counts every one.
 USED_BY_SHOWN = 5
 # The most proposals or lessons no longer pending or in force a history lists: the latest to leave, enough to look back
