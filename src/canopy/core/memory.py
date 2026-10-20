@@ -34,8 +34,10 @@ if TYPE_CHECKING:
 # a run reads.
 NOTES_TIER = "ticket notes"
 LESSONS_TIER = "lessons"
-# The kinds whose prompts carry a ticket's notes and the memory contract; a review and a chore get no memory, and a
-# plan hears lessons only (DESIGN §28).
+# `memory.review_notes`, which only reviews read (`core.review_notes`).
+REVIEW_NOTES_TIER = "review notes"
+# The kinds whose prompts carry a ticket's notes and the memory contract; a review hears only review notes, a chore no
+# memory, and a plan lessons only (DESIGN §28).
 NOTE_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN})
 # Bounds on what a run may write (DESIGN §28, Writing).
@@ -97,9 +99,13 @@ def tiers(memory: Memory) -> str:
     """Return each tier's mode in words, as the readout's hover and `canopy status` say it.
 
     Returns:
-        `ticket notes: recording, lessons: off`, and so on.
+        `ticket notes: recording, lessons: off`, and so on, then `review notes: in use` or `recording` while that
+        tier is not off.
     """
-    return f"{NOTES_TIER}: {mode_words(memory.ticket_notes)}, {LESSONS_TIER}: {mode_words(memory.proposals)}"
+    found = f"{NOTES_TIER}: {mode_words(memory.ticket_notes)}, {LESSONS_TIER}: {mode_words(memory.proposals)}"
+    if memory.review_notes is not MemoryMode.OFF:
+        found += f", {REVIEW_NOTES_TIER}: {mode_words(memory.review_notes)}"
+    return found
 
 
 def readout(memory: Memory) -> str | None:
@@ -861,8 +867,8 @@ def used_by(conn: sqlite3.Connection, memory_id: int, *, limit: int = USED_BY_SH
     return [int(r["run_id"]) for r in rows]
 
 
-def refused_of(rendered: records.RunMemory) -> list[Refused]:
-    """Return what a run had refused of its memory, from its `run_memory` row; [] if the row does not parse."""
+def refused_of(rendered: records.RunMemory | records.ReviewMemory) -> list[Refused]:
+    """Return what a run or a review had refused of its memory, from its row; [] if the row does not parse."""
     try:
         found: object = json.loads(rendered.refused)
     except json.JSONDecodeError:

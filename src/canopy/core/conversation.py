@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, memory, outbox, records, review_result, sql
+from canopy.core import chore_view, contract, db, memory, outbox, records, review_notes, review_result, sql
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
@@ -609,6 +609,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
         db.forget_ticket(conn, ref.id, channel=channel, branch=ticket.branch, prs=prs)
         # Its notes are about work that is gone, as its earlier runs' reports are (DESIGN §28, Retention).
         memory.end_ticket_notes(conn, ref.id, "forgotten work")
+        review_notes.end_notes(conn, ref.id, "forgotten work")
     return Forgot(branch=ticket.branch, prs=prs)
 
 

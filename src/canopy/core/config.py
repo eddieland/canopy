@@ -655,26 +655,28 @@ class Review(Section):
 
 
 class Memory(Section):
-    """The `[memory]` table: what workers record of what they learn, and whether later runs read it (DESIGN §28).
+    """The `[memory]` table: what workers and reviewers record of what they learn, and whether later runs read it.
 
-    Each tier is `off`, `record` (workers write, no agent reads), or `use`. Private: `use` changes what agents may write
-    into later prompts, and `record` fills what `use` would serve (TRUST_MODEL T7).
+    Each tier (DESIGN §28) is `off`, `record` (agents write, no agent reads), or `use`. Private: `use` changes what
+    agents may write into later prompts, and `record` fills what `use` would serve (TRUST_MODEL T7).
     """
 
     # Notes a ticket's runs write for its later runs.
     ticket_notes: Annotated[MemoryMode, Scope.PRIVATE] = MemoryMode.OFF
     # Lessons workers propose for every run in the workspace, which reach a prompt only once the operator promotes one.
     proposals: Annotated[MemoryMode, Scope.PRIVATE] = MemoryMode.OFF
+    # Notes a review of the loop's own PR writes for its ticket's later reviews, which no worker reads.
+    review_notes: Annotated[MemoryMode, Scope.PRIVATE] = MemoryMode.OFF
 
     @property
     def on(self) -> bool:
-        """Whether either tier is on, recording or in use."""
-        return (self.ticket_notes, self.proposals) != (MemoryMode.OFF, MemoryMode.OFF)
+        """Whether any tier is on, recording or in use."""
+        return any(m is not MemoryMode.OFF for m in (self.ticket_notes, self.proposals, self.review_notes))
 
     @property
     def in_use(self) -> bool:
         """Whether a tier is at `use`, so some run may read memory."""
-        return MemoryMode.USE in (self.ticket_notes, self.proposals)
+        return MemoryMode.USE in (self.ticket_notes, self.proposals, self.review_notes)
 
 
 class Retention(Section):

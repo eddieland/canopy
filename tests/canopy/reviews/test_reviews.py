@@ -38,19 +38,6 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool, git
 
 
-@pytest.fixture
-def reviewing(canopy_env: CanopyEnv) -> CanopyEnv:
-    """Reviews on, for the loop's own PRs, with the reviewer command running the fake agent as `canopy-reviewer`.
-
-    PROJ-1's unit in `repo` has opened `PR`, as its worker's result records it, so a review may name PROJ-1 for it.
-    """
-    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
-    user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
-    canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
-    db.set_unit(canopy_env.journal(), "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
-    return canopy_env
-
-
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(scenario: Scenario) -> None:
     scenario.tick(dry_run=True)
     assert "reviews" not in scenario.state()

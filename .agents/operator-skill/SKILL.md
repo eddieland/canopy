@@ -57,7 +57,8 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands, `--skip` it. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy memory list [KEY]` | Agent memory's tiers in words, then the ticket notes workers recorded; `--run ID`, `--digest`, `--json`. |
-| `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
+| `canopy memory review-notes [KEY]` | The notes reviews left for a ticket's later reviews; `--review ID`, `--digest`, `--json`. |
+| `canopy memory forget ID`, `purge` | Deletes one memory's text (`--review-note` for one), or many (`--ticket`, `--run`, `--review`, `--all`); the rows stay. |
 | `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from; `--json`. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports (`--json`); `renew` keeps one. |

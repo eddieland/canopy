@@ -619,7 +619,7 @@ def test_the_memory_listings_print_json_for_an_agent_to_read(
     lesson = promoted(conn, canopy_env, "Use `make test-api`.", key="test-api")
     assert main(["memory", "list", "--json"]) == 0
     listed = json.loads(capsys.readouterr().out)
-    assert listed["modes"] == {"ticket_notes": "record", "proposals": "record"}
+    assert listed["modes"] == {"ticket_notes": "record", "proposals": "record", "review_notes": "off"}
     [entry] = listed["notes"]
     assert {k: entry[k] for k in ("id", "ticket", "key", "status", "run_id", "use_count", "text")} == {
         "id": note,

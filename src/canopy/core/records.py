@@ -456,6 +456,49 @@ class MemoryRead(Row):
 
 
 @dataclass(frozen=True)
+class ReviewNote(Row):
+    """A note a review of a ticket's PR left for its later reviews (DESIGN §28). `body` is None once forgotten."""
+
+    TABLE: ClassVar[str] = "review_notes"
+
+    id: int
+    ticket_key: str
+    key: str
+    body: str | None
+    status: MemoryStatus
+    #: The harness's words for the latest change of status.
+    why: str | None
+    review_run_id: int
+    #: The commit the review read.
+    sha: str
+    supersedes: int | None
+    created_at: str
+    invalidated_at: str | None
+
+
+@dataclass(frozen=True)
+class ReviewMemory(Row):
+    """What a review's prompt was rendered under, review notes' mode, and what `_review` refused (DESIGN §28)."""
+
+    TABLE: ClassVar[str] = "review_memory"
+
+    review_run_id: int
+    review_notes: MemoryMode
+    #: A JSON list of the entries refused from the review's result, each the field, the key if valid, and why.
+    refused: str
+
+
+@dataclass(frozen=True)
+class ReviewNoteRead(Row):
+    """A review note rendered into a review's prompt (DESIGN §28)."""
+
+    TABLE: ClassVar[str] = "review_note_reads"
+
+    review_run_id: int
+    note_id: int
+
+
+@dataclass(frozen=True)
 class RunReason(Row):
     """One reason a `resume` runs, as its dispatch named it (DESIGN §8)."""
 

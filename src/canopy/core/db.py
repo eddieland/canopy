@@ -665,12 +665,14 @@ def finish_run(
     result_json: str | None,
     *,
     event: Event | None = None,
+    then: Callable[[], object] | None = None,
 ) -> bool:
     """Close a running run in `table`, recording `event` with it. Returns False if it was already closed.
 
     A worker run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
     also ends its PR's open review request, as `reviewed`, in the same transaction (DESIGN §21): the request asked for
-    one review, and this is it.
+    one review, and this is it. `then` writes what else the run reported, such as a review's notes (DESIGN §28), in
+    the same transaction, only if this call closed it.
 
     Returns:
         True if this call closed the run.
@@ -688,6 +690,8 @@ def finish_run(
             )
         if closed and event is not None:
             record_event(conn, event)
+        if closed and then is not None:
+            then()
     return closed
 
 

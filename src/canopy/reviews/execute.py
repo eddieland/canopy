@@ -13,11 +13,11 @@ import json
 import os
 import shutil
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff
+from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff, review_notes
 from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
@@ -51,6 +51,8 @@ class Outcome:
     status: ReviewRunStatus
     result: result.ReviewResult | None
     note: str = ""
+    #: The review notes the reviewer sent with a valid result, written as the run closes, never stored with the result.
+    notes: review_notes.Fields | None = None
 
     def result_json(self) -> str:
         """Return what `review_runs.result_json` stores: the validated result and the harness's note."""
@@ -96,7 +98,16 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             clean_up(ctx, run, log)
             stored = outcome.result_json()
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
-            if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
+            sent = outcome.notes
+            if not db.finish_run(
+                ctx.conn,
+                "review_runs",
+                run_id,
+                outcome.status,
+                stored,
+                event=ended,
+                then=lambda: review_notes.record_review(ctx.conn, run_id, sent),
+            ):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
             elif outcome.result is not None and outcome.result.pr_title:
                 # The PR's title as the reviewer read it, for display: the newest report wins, a worker's or a review's.
@@ -187,7 +198,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     parsed = result.parse(output.text)
     if parsed is None:
         return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
-    return judged(ctx, parsed)
+    return replace(judged(ctx, parsed), notes=review_notes.parse(output.text))
 
 
 def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:

@@ -161,6 +161,15 @@ Controls:
   and PRs. The overseer reads none, reviews and chores get none, and at `record` no agent reads them. `memory.*` is
   private (T7). `canopy memory forget` and `purge`, which delete notes' text, refuse when `CANOPY_TICK_ID` or
   `CANOPY_RUN_ID` is set.
+- Review notes (DESIGN §28), with `memory.review_notes` at `use`: a review of one of the loop's own PRs may write notes
+  its ticket's later reviews read as data, so a PR's or ticket's text that steered one reviewer can reach the next
+  one's prompt, even after the PR drops it, bounded by the ticket's life as ticket notes are. The notes reach no worker,
+  no chore, and not the overseer, so they open no path to anything that commits or decides; the worst a steered note
+  does is lead a later review to miss a defect, which a steered reviewer could already do by reporting clean.
+  `_review` writes only the notes of the review's own ticket, read from its row, and none for a PR with no ticket; a
+  review drops only notes rendered into its own prompt; the bounds are ticket notes', in code. The prompt frames them as
+  data that does not narrow the review, and a defect still goes in its findings. At `record` no agent reads them.
+  `forget` and `purge` reach them, and refuse inside a tick or a run.
 - Workspace lessons (DESIGN §28, ROADMAP M50) are operator text, beside the standing instructions. Workers only
   propose them, with `memory.proposals` not off: a proposal is stored pending, bounded as a note is, at most 3 a run and
   20 waiting, and reaches no prompt at any mode. Only `canopy memory promote`, in the operator's shell, makes one, or

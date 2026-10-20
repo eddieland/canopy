@@ -14,8 +14,11 @@ Memory comes in two tiers, split by how far a worker's words can travel.
   words if you like, or reject it; a lesson is your text, read by every worker in the workspace beside your standing
   instructions. A lesson reaches every run, which is exactly why a proposal waits for you.
 
-The overseer reads no memory and writes none, and reviews and chores get neither tier: a reviewer stays
-independent of what the author believed.
+The overseer reads no memory and writes none, and chores get none. Reviews get neither tier, so a reviewer stays
+independent of what the author believed. They keep notes of their own instead, under `review_notes`: what a review of
+one of canopy's own PRs checked, or suspected and disproved, left for the reviews of that ticket's later commits. No
+worker ever reads them, so the author can't learn to write for its reviewer. This page doesn't show them yet;
+`canopy memory review-notes` does, and `forget --review-note` and `purge` clear them out.
 
 ## How it protects you
 
@@ -40,8 +43,8 @@ around them.
 ## Turning it on
 
 Each tier has a mode under `[memory]` in your own config, the user file or the private file, never the workspace's:
-`ticket_notes` for notes and `proposals` for lessons. Each is `off`, `record`, or `use`, which the UI calls off,
-recording, and in use.
+`ticket_notes` for notes, `proposals` for lessons, and `review_notes` for the reviewers' notes. Each is `off`, `record`,
+or `use`, which the UI calls off, recording, and in use.
 
 - **Recording**: workers write, and no run reads any of it. You see what a tier would hold before it reaches a prompt.
 - **In use**: workers write, and runs read.
