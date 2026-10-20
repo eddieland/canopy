@@ -77,11 +77,13 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("loop", "interval_minutes = 1"),
         ("loop", "idle_max_minutes = 1"),
         ("loop", "min_gap_minutes = 1"),
+        ("loop", "min_free_disk_mib = 0"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
         ("paths", "worktree_include = '/tmp/x'"),
         ("paths", "worker_instructions = '/tmp/x'"),
+        ("paths", "overseer_instructions = '/tmp/x'"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:

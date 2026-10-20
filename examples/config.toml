@@ -96,6 +96,9 @@ interval_minutes = 15
 # idle_max_minutes = 120
 # No tick starts sooner than this after the last one ended, whatever wakes the loop, unless you press t at its terminal.
 # min_gap_minutes = 1
+# No tick runs the overseer, so none starts work, while the disk holding .canopy/ or the workspace has less free than
+# this, in MiB; you are told through the attention list. 0 turns the check off.
+# min_free_disk_mib = 2048
 
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work. Use the
@@ -131,6 +134,9 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: a few lines every worker should follow, such as "commit review fixes with `git commit --fixup`". They go
 # into every worker's prompt, at most 4 KiB, so you need not copy a prompt to add them (DESIGN §12).
 # worker_instructions = "~/.config/canopy/worker-instructions.md"
+# Optional: the same for the overseer, such as "dispatch tickets labeled urgent before the rest". They go at the end of
+# its prompt, at most 4 KiB, and never reach a worker (DESIGN §12).
+# overseer_instructions = "~/.config/canopy/overseer-instructions.md"
 
 [notify]
 # Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.

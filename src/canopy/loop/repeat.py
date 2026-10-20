@@ -81,6 +81,7 @@ _STATUS_STYLES = {
     "skipped": "bold yellow",
     "lock_busy": "bold yellow",
     "canopy_unavailable": "bold red",
+    "disk_low": "bold red",
     "overseer_failed": "bold red",
     "reconcile_failed": "bold red",
     "error": "bold red",

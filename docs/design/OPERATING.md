@@ -137,7 +137,9 @@ root (TRUST_MODEL T7). The state directory is always `<workspace>/.canopy/` (§1
 `paths.worker_instructions` names a short file of the operator's standing instructions, rendered into every worker
 prompt, after the obligations (§8). Prefer it to an override, and a skill for know-how (§13). A file
 canopy cannot use refuses the dispatch as `bad_prompt` rather than running a worker without it. A passing condition,
-such as a CI outage, belongs in a notice to workers (§8).
+such as a CI outage, belongs in a notice to workers (§8). `paths.overseer_instructions` is the same for the overseer:
+rendered at the end of its prompt, which comes first, and a file canopy cannot use fails the tick before the overseer
+starts. Neither reaches the other's prompt.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
@@ -212,14 +214,8 @@ turns none off, but for the overseer whose body holds the tracker's skill. A rep
 agents under other names, MCP servers, and permissions (TRUST_MODEL T7). `runtime.pr_skill` names a skill workers
 open PRs with (§8); prefer that to a prompt override.
 
-### What OpenCode does with a plugin
-
-canopy ships no plugin. One in the snapshot would rest on this, read from OpenCode's source at 1.19.3 (2026-10-19) and
-read again before one is built: OpenCode loads plugins from every config directory, the snapshot's last, so a
-repository's run first; a hook that throws fails the tool call after the tool has run; an MCP tool's result is
-truncated after the hook, keeping the head. With any plugin configured, OpenCode waits on an npm install into every
-writable config directory it loads, so a snapshot that ships a plugin must be unwritable. A variable canopy sets for a
-run reaches a sandboxed agent unchanged.
+canopy ships no plugin yet. The one designed, a clock that tells a running agent the minutes left, and what OpenCode
+does with a plugin, are §33.
 
 ### Each agent's model
 
@@ -259,11 +255,11 @@ grouped by reason. Items disappear when their cause is gone; there is no manual 
 too, with the loop's state and the running and recent runs.
 
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
-raise them define: `canopy_unavailable` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`, `multi_repo`,
-`follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19), `review_failed` and
-`review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and `not_trivial` (§25),
-`memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and `drafts_waiting` (§29). An item about one unit names
-its repository, shown as `KEY (repo)`.
+raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
+`multi_repo`, `follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
+`review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and `not_trivial`
+(§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and `drafts_waiting` (§29). An item about one unit
+names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The
@@ -271,21 +267,22 @@ cause is gone when a newer run starts or the ticket is done. The overseer does n
 an authorized replier comments, or the operator sends a message, after the run ended (§22, D093): that is how a human
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's or a planner's unanswered question (§22, §25), `repo_missing` for a
-mapped repository with no clone (§18), and `canopy_unavailable` for a tick whose `canopy --version` check failed (§6
-step 5). It raises `follow_up_filed` about a ticket not done whose runs filed follow-ups since its latest forget, naming
-each with its repository while canopy has no run of it, no start record, and no mark that it is done: a queue label,
-which the overseer then dispatches on, or the operator's start ends its wait. Items have no dismissal, so a follow-up
-the operator leaves stops being asked about when its parent is done or forgotten. It raises `follow_up_unrecorded`
-about a ticket whose runs reported tickets the journal did not record, until the ticket is done or forgotten (§18).
+mapped repository with no clone (§18), and `canopy_unavailable` or `disk_low` for a tick whose `canopy --version` or
+free-disk check failed (§6 step 5). It raises `follow_up_filed` about a ticket not done whose runs filed follow-ups
+since its latest forget, naming each with its repository while canopy has no run of it, no start record, and no mark
+that it is done: a queue label, which the overseer then dispatches on, or the operator's start ends its wait. Items have
+no dismissal, so a follow-up the operator leaves stops being asked about when its parent is done or forgotten. It raises
+`follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not record, until the ticket is done
+or forgotten (§18).
 
 **Recorded by the overseer.** The overseer records an item with `canopy attention <KEY> <reason> --detail ...`, every
 tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
 decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
-`skipped` tick leaves the previous list standing; `canopy_unavailable` is added to it while it is the latest tick's.
-The state block lists the overseer's open items (§6 step 4), so it records each again until it sees the cause gone. An
-item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when the state
-block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while the
-overseer keeps asking.
+`skipped` tick leaves the previous list standing; `canopy_unavailable` or `disk_low` is added to it while it is the
+latest tick's. The state block lists the overseer's open items (§6 step 4), so it records each again until it sees the
+cause gone. An item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when
+the state block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while
+the overseer keeps asking.
 
 **Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it
 new. Each sink (§20), `notify.cmd` among them, keeps its own record of what it was told, and each tick sends it the new
@@ -303,11 +300,15 @@ open item is never notified twice, and an item that returns after going away is 
 - treehouse unavailable or failing in reconcile: the tick closes `reconcile_failed`; the overseer does not run.
 - `canopy --version` fails from the overseer's environment: the tick closes `canopy_unavailable`, the overseer does not
   run, and the item of that name stays until a tick ends otherwise (§6 step 5).
+- Too little free disk: the tick closes `disk_low` the same way. Runs already going keep going; none starts until a
+  tick finds the space.
 - Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.
   Three consecutive ticks not `ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
 - Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
   `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
+  the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
 - MCP unavailable: the overseer records a tick-wide `skip`; the tick closes `skipped`, no decisions are made on partial
   data, and the attention list stays as it was.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.

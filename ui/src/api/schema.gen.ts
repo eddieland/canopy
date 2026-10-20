@@ -5255,7 +5255,7 @@ export type components = {
             started_at: string;
             /**
              * Status
-             * @description running | ok | skipped | canopy_unavailable | overseer_failed | reconcile_failed | abandoned
+             * @description running, ok, skipped, canopy_unavailable, disk_low, overseer_failed, reconcile_failed, error, or abandoned
              */
             status: string;
             /**

@@ -68,9 +68,13 @@ def run_reason(status: RunStatus) -> str | None:
 
 # A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
 UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
+#: A tick that found too little free disk closes with this status and raises this item (DESIGN §6).
+DISK_LOW: str = TickStatus.DISK_LOW
+#: The statuses of a tick that did not run the overseer for a cause of canopy's own, each raising an item of its name.
+HALTS = frozenset({UNAVAILABLE, DISK_LOW})
 #: A review judged `high` the PR of a ticket whose plan a triage waived (DESIGN §25, A second opinion after).
 NOT_TRIVIAL = "not_trivial"
-# What the harness records itself (`tick._record_harness_items`, and `UNAVAILABLE`), so the overseer does not.
+# What the harness records itself (`tick._record_harness_items`, and `HALTS`), so the overseer does not.
 HARNESS_REASONS = frozenset(
     {
         *filter(None, map(run_reason, RunStatus)),
@@ -78,7 +82,7 @@ HARNESS_REASONS = frozenset(
         NOT_TRIVIAL,
         chore_view.FAILED_REASON,
         "repo_missing",
-        UNAVAILABLE,
+        *HALTS,
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
         follow_ups.REASON,
@@ -145,7 +149,7 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         )
     ]
     if not ticks:
-        return _unavailable(conn, None)
+        return _halted(conn, None)
     # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
         f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore, pr FROM decisions "  # noqa: S608
@@ -173,29 +177,30 @@ def current(conn: sqlite3.Connection) -> list[Item]:
                 break
             since = earlier[1]
         items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
-    return items + _unavailable(conn, ticks[0])
+    return items + _halted(conn, ticks[0])
 
 
-def _unavailable(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
-    """The `canopy_unavailable` item, while the latest ended tick closed so (DESIGN §6 step 5).
+def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
+    """The item of a `HALTS` status while the latest ended tick closed with it (DESIGN §6 step 5).
 
     That tick ran no overseer, so it leaves the list standing as a failed tick does, and adds this one item: the cause
     is canopy's own, and the operator hears of it at once rather than after `loop.failing`'s streak. It is gone at the
     first tick that ends otherwise.
 
     Returns:
-        The item, open since the first tick of the streak after `last_ok`, or nothing.
+        The item, open since the first tick after `last_ok` that raised it, or nothing.
     """
     latest = conn.execute("SELECT status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1").fetchone()
-    if latest is None or latest[0] != UNAVAILABLE:
+    if latest is None or latest[0] not in HALTS:
         return []
+    reason = str(latest[0])
     rows = conn.execute(
         "SELECT rationale, created_at FROM decisions WHERE action = ? AND tick_id > ? ORDER BY id",
-        (f"{ACTION_PREFIX}{UNAVAILABLE}", last_ok or 0),
+        (f"{ACTION_PREFIX}{reason}", last_ok or 0),
     ).fetchall()
     if not rows:
         return []
-    return [Item(None, UNAVAILABLE, str(rows[-1]["rationale"]), str(rows[0]["created_at"]))]
+    return [Item(None, reason, str(rows[-1]["rationale"]), str(rows[0]["created_at"]))]
 
 
 class OpenItem(TypedDict):

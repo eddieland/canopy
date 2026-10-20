@@ -1,7 +1,9 @@
 """End to end: `canopy tick --dry-run` against the fake treehouse and a fake overseer that calls the real `canopy`."""
 
+import errno
 import json
 import os
+import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -13,7 +15,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.core.vocab import Phase, TickStatus
-from canopy.infra import lock, procs
+from canopy.infra import lock, logs, procs
 from canopy.loop import attention, tick
 from tests.canopy.helpers import (
     agent_runs,
@@ -406,6 +408,22 @@ def test_treehouse_failure_skips_the_overseer(scenario: Scenario) -> None:
     assert not scenario.agent_log.exists()
 
 
+def test_a_tick_that_raises_closes_error_naming_it(scenario: Scenario) -> None:
+    write_private = logs.write_private
+
+    def disk_full(path: Path, text: str) -> None:
+        if path.suffix == ".prompt":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        write_private(path, text)
+
+    with mock.patch.object(logs, "write_private", autospec=True, side_effect=disk_full):
+        failed = scenario.tick(dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert failed.tick.status == TickStatus.ERROR
+    assert failed.tick.summary == "OSError: [Errno 28] No space left on device"
+    assert not scenario.agent_log.exists()
+
+
 @contextmanager
 def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
     """Until the block ends, the `canopy` on PATH, where the overseer would find it, runs `script`, and is the only one.
@@ -448,6 +466,28 @@ def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
     assert "canopy_unavailable" in (scenario.env.state_dir / "attention.md").read_text()
 
     # Once `canopy` works again, the next tick runs the overseer and the item is gone.
+    scenario.tick(dry_run=True)
+    assert len(agent_runs(scenario.agent_log)) == 2
+    assert scenario.attention() == []
+
+
+def test_too_little_free_disk_closes_the_tick_without_the_overseer(scenario: Scenario) -> None:
+    scenario.tick(dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
+    scenario.configures(loop={"min_free_disk_mib": 2**40})  # more than any disk the tests run on has free
+    low = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+    assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
+
+    assert [t.tick.status for t in low] == [TickStatus.DISK_LOW] * 2
+    summary = present(low[-1].tick.summary)
+    where = re.escape(str(scenario.env.state_dir))
+    assert re.fullmatch(rf"\d+ MiB free on {where}, under loop\.min_free_disk_mib \({2**40}\)", summary)
+    assert scenario.attention() == [(None, "disk_low")]
+    [item] = attention.current(scenario.conn)
+    assert item.detail == f"{summary}; the overseer did not run. Free space there, and the next tick runs it"
+    assert item.since == low[0].decisions[0].created_at  # open since the first tick of the streak
+
+    # `0` turns the check off: the next tick runs the overseer, and the item is gone.
+    scenario.configures(loop={"min_free_disk_mib": 0})
     scenario.tick(dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
@@ -507,8 +547,9 @@ def test_overseer_output_refuses_a_symlink(scenario: Scenario, tmp_path: Path) -
     target = tmp_path / "elsewhere.txt"
     target.write_text("not yours\n")
     (ticks / "1.log").symlink_to(target)
-    with pytest.raises(OSError, match="Too many levels of symbolic links"):
-        scenario.tick(dry_run=True)
+    failed = scenario.tick(dry_run=True, code=1)
+    assert failed.tick.status == TickStatus.ERROR
+    assert failed.tick.summary == f"OSError: [Errno {errno.ELOOP}] {os.strerror(errno.ELOOP)}: '{ticks / '1.log'}'"
     assert target.read_text() == "not yours\n"
 
 

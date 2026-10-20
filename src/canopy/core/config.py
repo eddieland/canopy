@@ -716,6 +716,9 @@ class Loop(Section):
     idle_max_minutes: Annotated[Minutes, Scope.PRIVATE] = 120
     # The least time from one tick's end to the next's start, whatever ends the wait, but `TICK_NOW_KEY` (DESIGN §6).
     min_gap_minutes: Annotated[Minutes, Scope.PRIVATE] = 1
+    # A tick runs no overseer, so dispatches nothing, while the state directory's or the workspace's filesystem has less
+    # than this many MiB free (DESIGN §6 step 5). `0` turns the check off.
+    min_free_disk_mib: Annotated[Count, Scope.PRIVATE] = 2048
 
     @model_validator(mode="after")
     def _cap_not_below_interval(self) -> Loop:
@@ -829,6 +832,8 @@ class Paths(Section):
     worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
     # The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
     worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
+    # The operator's standing instructions to the overseer, rendered into its prompt (DESIGN §12).
+    overseer_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
