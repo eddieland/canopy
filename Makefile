@@ -109,9 +109,10 @@ ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout 
 	npm --prefix ui run build
 
 # Not part of check: it needs a browser. CI runs it as its own job. PLAYWRIGHT_CHROMIUM_EXECUTABLE points it at a
-# preinstalled Chromium instead of the one `npx playwright install chromium` downloads.
-ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by FastAPI
-	npm --prefix ui run test:e2e
+# preinstalled Chromium instead of the one `npx playwright install chromium` downloads. SHARD=i/n runs the i-th of n
+# slices, as CI's jobs do.
+ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by FastAPI (SHARD=i/n: one slice of it)
+	npm --prefix ui run test:e2e$(if $(SHARD), -- --shard=$(SHARD))
 
 # Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
 # INSTALL_SOURCE is what to install: this checkout by default, or anything `uv tool install` accepts.
