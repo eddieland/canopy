@@ -90,6 +90,17 @@ describe('ReviewRequestForm', () => {
         expect(field().value).toBe('')
     })
 
+    it('requests a review of the PR a link into it names, such as a thread', async () => {
+        renderWith(<ReviewRequestForm />)
+        fireEvent.change(field(), { target: { value: `${PR}/files#r123` } })
+        fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+
+        expect((await screen.findByRole('status')).textContent).toBe(
+            `${PR} is requested for review. The next tick reviews its head, once.`,
+        )
+        expect(sent).toEqual([{ path: '/api/pull-request/start', url: PR }])
+    })
+
     it('hands the reviewer the notes as written, trimmed, and clears them with the URL', async () => {
         renderWith(<ReviewRequestForm />)
         fireEvent.change(field(), { target: { value: PR } })

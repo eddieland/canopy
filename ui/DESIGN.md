@@ -1176,7 +1176,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   slot `#3`, as treehouse does (`messageRef`, `slotRef`). A note, proposal, or lesson is `memory:3` in the same
   grammar (`memoryRef`), so a list of them never shows a bare number that reads as a row's. Nothing builds a
   reference in place. A PR is named as GitHub writes a reference, `org/repo#123` (`pullRequestLabel`; any other
-  host's URL as written without `https://`), and only through `PullRequestLink`.
+  host's URL as written without `https://`), and only through `PullRequestLink`. A link into a GitHub PR, such as to
+  one of its threads, is the PR all the same: its name goes in to the PR's page and its icon out to the thread.
 - **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
   then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
   hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when
