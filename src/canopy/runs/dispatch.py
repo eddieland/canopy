@@ -18,7 +18,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, drafts, memory, notice, outbox, plans, pools, prompts, replies
+from canopy.core import (
+    conversation,
+    db,
+    drafts,
+    feedback_plans,
+    memory,
+    notice,
+    outbox,
+    plans,
+    pools,
+    prompts,
+    replies,
+)
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PlanStatus, PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
@@ -143,9 +155,10 @@ def start(
     ticket's first implement named, in every repository. `base` stacks the run on another ticket's branch (DESIGN §10);
     without it the run starts from each pool's base branch. `repos` names the units the run covers, one repository each.
     A run over several repositories is a joint run (DESIGN §18). A `plan` works no unit, and writes the ticket's plan
-    (DESIGN §25). A `resume` for a canopy review's findings carries them in `review`, read from the journal (DESIGN
-    §21). A `resume` names why it runs in `reasons`, and `cursors` names the cursors the dispatch moves, with
-    `review_run` for `--review-run`: each needs its reason (DESIGN §8).
+    (DESIGN §25); a `feedback-plan` reads its units' PRs at their heads, and writes the plan their `resume` waits on
+    under `policy.feedback_plan = "approve"` (DESIGN §32). A `resume` for a canopy review's findings carries them in
+    `review`, read from the journal (DESIGN §21). A `resume` names why it runs in `reasons`, and `cursors` names the
+    cursors the dispatch moves, with `review_run` for `--review-run`: each needs its reason (DESIGN §8).
 
     Returns:
         The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
@@ -284,12 +297,14 @@ def desk_path(ctx: Context, key: str) -> Path:
 
 
 def in_desk(kind: str, repos: Sized) -> bool:
-    """Whether a `kind` run over `repos` works in a desk: a joint run or a plan, whose desk holds the plan it replaces.
+    """Whether a `kind` run over `repos` works in a desk: a joint run, a plan, or a feedback plan.
+
+    A plan's desk holds the plan it replaces, and a feedback plan's its PRs' items too.
 
     Returns:
-        True for a run over several repositories, and for every plan.
+        True for a run over several repositories, and for every plan and feedback plan.
     """
-    return len(repos) > 1 or kind == policy.PLAN
+    return len(repos) > 1 or kind in (policy.PLAN, policy.FEEDBACK_PLAN)
 
 
 def valid_slug(value: str) -> bool:
@@ -353,6 +368,42 @@ def map_note(ctx: Context) -> str:
     return text or "None: MAP.md is empty."
 
 
+def _planned_repositories(
+    ctx: Context, kind: str, branch: str, slots: Sequence[db.RunSlot], *, prs: Mapping[str, str], desk: Path | None
+) -> str:
+    """Return a run's `{{REPOSITORIES}}`: a plan's at their bases, a feedback plan's at their PRs' heads, or a worker's.
+
+    Returns:
+        The section.
+    """
+    if kind == policy.PLAN:
+        return plan_repositories_note(ctx, slots, desk)
+    if kind == policy.FEEDBACK_PLAN:
+        return feedback_repositories_note(ctx, branch, slots, prs, desk)
+    return repositories_note(ctx, branch, slots, prs, desk)
+
+
+def feedback_repositories_note(
+    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: Mapping[str, str], desk: Path | None
+) -> str:
+    """Return a feedback plan's `{{REPOSITORIES}}` section: each repository it reads, at its PR's head (DESIGN §32)."""
+    lines = [
+        (
+            f"`{desk}` is a desk, a directory holding one link per repository's worktree, each checked out at "
+            f"`{branch}` as its PR's head was pushed. Read each repository through its link. Nothing you leave in the "
+            "desk or the worktrees survives."
+        ),
+        "",
+    ]
+    for s in slots:
+        name = s.repo or ""
+        found = ctx.workspace.repo(name)
+        summary = f" {found.summary}" if found is not None and found.summary else ""
+        where = desk / name if desk is not None else s.slot_path
+        lines.append(f"- `{name}` at `{where}`: PR {prs.get(name, 'not recorded')}, from `{s.base_branch}`.{summary}")
+    return "\n".join(lines)
+
+
 def plan_repositories_note(ctx: Context, slots: Sequence[db.RunSlot], desk: Path | None) -> str:
     """Return a plan's `{{REPOSITORIES}}` section: each repository it reads, checked out at its base."""
     lines = [
@@ -403,7 +454,10 @@ def _plan(
     if kind == policy.PLAN:
         _check_plan(ctx, key, slug=slug, base=base)
         return Plan(branch="", base=None, label=configured, repos=names, private=private or starts, starts=starts)
-    _check_planned(ctx, key, kind)
+    if kind == policy.FEEDBACK_PLAN:
+        branch = _check_feedback_plan(ctx, key, slug=slug, base=base, repos=names)
+        return Plan(branch=branch, base=None, label=configured, repos=names, private=private or starts, starts=starts)
+    _check_planned(ctx, key, kind, names, reasons)
     branch = _branch(ctx, key, kind, slug, names)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
@@ -560,18 +614,64 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
         )
 
 
-def _check_planned(ctx: Context, key: str, kind: str) -> None:
-    """Refuse work a plan the operator approved should govern, but does not (DESIGN §25).
+def _check_feedback_plan(ctx: Context, key: str, *, slug: str | None, base: str | None, repos: Sequence[str]) -> str:
+    """Refuse a feedback plan that is not due, or could not read its ticket and PRs (DESIGN §32), and return its branch.
+
+    It reads each unit's PR at its head, the ticket's branch, so every unit it names must have a branch and a PR.
+
+    Returns:
+        The ticket's branch, which the plan's slots check out.
+
+    Raises:
+        Refusal: a base is given (`bad_base`), or a slug (`bad_slug`); feedback plans are off (`feedback_plan_off`); a
+            unit has no branch (`no_branch`) or no PR (`bad_plan`); the ticket's feedback plan waits on the operator,
+            or its approval waits for its resume (`bad_plan`); or (`no_read_tools`) no tracker read tools are known
+            for the planner.
+    """
+    if base is not None:
+        raise Refusal(
+            "bad_base", "a feedback plan reads the PR's head and starts from no other branch; leave out --base"
+        )
+    refused = feedback_plans.dispatch_refusal(ctx.conn, ctx.config.policy, key)
+    if refused is not None:
+        raise Refusal(*refused)
+    branch = _branch(ctx, key, policy.FEEDBACK_PLAN, slug, repos)
+    prs = _unit_prs(ctx, key)
+    for repo in repos:
+        if repo not in prs:
+            raise Refusal(
+                "bad_plan", f"{key} has no PR recorded in {repo}: a feedback plan plans what came back to a PR"
+            )
+    if ctx.config.tracker.tools() is None:
+        raise Refusal(
+            "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"
+        )
+    return branch
+
+
+def _check_planned(ctx: Context, key: str, kind: str, repos: Sequence[str] = (), reasons: Collection[str] = ()) -> None:
+    """Refuse work a plan the operator approved should govern, but does not (DESIGN §25, §32).
 
     A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
     one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
+    Under `policy.feedback_plan = "approve"`, a `resume` but one for `no_pr` alone waits on an approved feedback plan no
+    `resume` has spent, and follows it in place of the ticket's plan.
 
     Raises:
-        Refusal: an `implement` for a ticket that needs a plan and has none approved (`unplanned`); an `implement` or
+        Refusal: an `implement` for a ticket that needs a plan and has none approved, or a `resume` that needs a
+            feedback plan and has none approved and unspent over its repositories (`unplanned`); an `implement` or
             `resume` whose approved plan's file is missing, unreadable, or no longer has its approved hash
             (`plan_changed`).
     """
     if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
+        return
+    if kind == RunKind.RESUME and feedback_plans.needed(ctx.config.policy, reasons):
+        refused = feedback_plans.resume_refusal(
+            ctx.conn, ctx.state_dir, ctx.config.policy, key, repos_named=repos, reasons=reasons
+        )
+        if refused is not None:
+            raise Refusal(*refused)
+        # It follows its feedback plan, not the ticket's: the ticket's plan is not its to check.
         return
     ticket = db.get_ticket(ctx.conn, key)
     plan = plans.current(ctx.conn, key)
@@ -688,6 +788,8 @@ def _guard(
             raise Refusal("running", f"run {run['id']} is already working {key}")
     if key in planned:
         raise Refusal("running", f"this dry run already dispatched {key}")
+    if kind == policy.FEEDBACK_PLAN:
+        return _guard_feedback_plan(ctx, key, repos, running, planned)
     if kind in policy.TICKET_KINDS:
         # A plan is the ticket's, not a unit's: its count is per ticket.
         done = policy.ticket_attempts(ctx.conn, kind).get(key, 0)
@@ -719,6 +821,41 @@ def _guard(
         numbered.append((unit_counts[kind] + 1, -limit))
     _check_capacity(ctx, running, planned)
     attempt, negative_limit = max(numbered, default=(1, -policy.limits(ctx.config)[kind]))
+    return attempt, -negative_limit
+
+
+def _guard_feedback_plan(
+    ctx: Context, key: str, repos: Sequence[str], running: Sequence[object], planned: Sequence[str]
+) -> tuple[int, int]:
+    """Refuse a feedback plan run for a unit at its limit, or past capacity (DESIGN §32, TRUST_MODEL T3).
+
+    Its runs count per unit, apart from the unit's other kinds, and never reset; the operator's grants raise the limit.
+
+    Returns:
+        The run's attempt number and attempt limit: the unit with the most feedback plan runs sets both.
+
+    Raises:
+        Refusal: a unit at its feedback plan limit (`attempt_limit`), naming its repository, or `capacity`.
+    """
+    counts = policy.feedback_plan_attempts(ctx.conn)
+    granted = policy.grants(ctx.conn)
+    numbered: list[tuple[int, int]] = []
+    for repo in repos:
+        unit = policy.unit(key, repo)
+        done = counts.get(unit, 0)
+        limit = policy.feedback_plan_limit(ctx.config, granted.get(unit, {}))
+        refused = policy.blocked(
+            f"{key} in {repo}",
+            policy.FEEDBACK_PLAN,
+            counts={policy.FEEDBACK_PLAN: done},
+            limit=limit,
+            cooldown_until=None,
+        )
+        if refused is not None:
+            raise Refusal(*refused, repo=repo)
+        numbered.append((done + 1, -limit))
+    _check_capacity(ctx, running, planned)
+    attempt, negative_limit = max(numbered, default=(1, -ctx.config.policy.max_feedback_plan_attempts))
     return attempt, -negative_limit
 
 
@@ -794,7 +931,8 @@ def _spawn(
         for repo, leased in leases
     )
     desk = desk_path(ctx, key) if in_desk(kind, plan.repos) else None
-    planning = kind == policy.PLAN
+    # A plan and a feedback plan each write a plan, with one prompt for public and private tickets.
+    planning = kind in (policy.PLAN, policy.FEEDBACK_PLAN)
     prs = _unit_prs(ctx, key)
     bases = {s.base_branch for s in slots}
     repliers = ", ".join(f"`{r}`" for r in cfg.trust.authorized_repliers)
@@ -805,9 +943,7 @@ def _spawn(
         "BRANCH": branch,
         "BASE": first.base_branch if len(bases) == 1 else "each repository's base branch, listed under Repositories",
         "STACKING": stacking_note(branch, plan.base),
-        "REPOSITORIES": plan_repositories_note(ctx, slots, desk)
-        if planning
-        else repositories_note(ctx, branch, slots, prs, desk),
+        "REPOSITORIES": _planned_repositories(ctx, kind, branch, slots, prs=prs, desk=desk),
         "PRS": json.dumps({s.repo: "<url or null>" for s in slots}, separators=(",", ":")),
         "PR_TITLES": json.dumps({s.repo: "<its title or null>" for s in slots}, separators=(",", ":")),
         "TRACKER_PROVIDER": cfg.tracker.provider,
@@ -832,6 +968,13 @@ def _spawn(
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
     }
+    if kind == policy.FEEDBACK_PLAN:
+        values |= {
+            "ITEMS_FILE": feedback_plans.ITEMS,
+            "MAX_ITEMS": str(feedback_plans.MAX_ITEMS),
+            "MAX_REPLY": f"{feedback_plans.MAX_REPLY:,}",
+            "PULL_REQUESTS": ", ".join(f"`{prs[s.repo or '']}`" for s in slots),
+        }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed.
     required: tuple[str, ...] = prompts.REQUIRED_JOINT if plan.joint and not planning else ()
     if planning:
@@ -853,9 +996,9 @@ def _spawn(
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
     # `_run` writes the copy where the worker starts: its desk, or its one worktree (DESIGN §25).
-    followed = _plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY)
+    followed = _plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY, reasons)
     if followed is not None:
-        values["PLAN"] = followed[1]
+        values["PLAN"] = followed.note
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)
@@ -869,13 +1012,17 @@ def _spawn(
         branch=branch,
         slots=slots,
         runs_dir=runs_dir(ctx),
-        works_units=kind not in policy.TICKET_KINDS,
+        # A plan or a feedback plan pushes nothing, and leaves the ticket's branch and units as they are.
+        works_units=kind not in (*policy.TICKET_KINDS, policy.FEEDBACK_PLAN),
         started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
-        plan_id=followed[0] if followed is not None else None,
+        plan_id=followed.plan_id if followed is not None else None,
         reasons=tuple(r for r in ResumeReason if r in reasons),
-        rendered=functools.partial(_record_rendered, ctx, remembered, replied),
+        rendered=functools.partial(
+            _record_rendered, ctx, remembered, replied, followed.feedback_plan_id if followed is not None else None
+        ),
+        feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
@@ -993,19 +1140,44 @@ def _render(
 
 
 def _record_rendered(
-    ctx: Context, remembered: memory.Rendered | None, replied: replies.Rendered | None, run_id: int
+    ctx: Context,
+    remembered: memory.Rendered | None,
+    replied: replies.Rendered | None,
+    feedback_plan_id: int | None,
+    run_id: int,
 ) -> None:
-    """Record what run `run_id`'s prompt was rendered under, inside the transaction that inserts it."""
+    """Record what run `run_id`'s prompt was rendered under, inside the transaction that inserts it.
+
+    A `resume` that follows a feedback plan spends its approval here, so one approval goes ahead once (DESIGN §32).
+
+    Raises:
+        Refusal: (`unplanned`) the feedback plan is no longer approved and unspent; the run is not inserted.
+    """
     if remembered is not None:
         memory.record_rendered(ctx.conn, run_id, remembered)
     if replied is not None:
         replies.record_rendered(ctx.conn, run_id, replied)
+    if feedback_plan_id is not None and not feedback_plans.spend(ctx.conn, feedback_plan_id, run_id):
+        raise Refusal(
+            "unplanned", f"feedback plan {feedback_plan_id} was replaced or spent while this dispatch was planned"
+        )
 
 
-def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> tuple[int, str] | None:
+@dataclass(frozen=True)
+class _Followed:
+    """The approved plan an `implement` or a `resume` follows: the ticket's, or a feedback plan, and its `{{PLAN}}`."""
+
+    note: str
+    plan_id: int | None = None
+    feedback_plan_id: int | None = None
+
+
+def _plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection[str]) -> _Followed | None:
     """Return the approved plan an `implement` or a `resume` follows, and its `{{PLAN}}`, if the ticket has one.
 
-    The run records the plan's id, so `_run` writes the copy of the plan this prompt names, and no other (DESIGN §25).
+    A `resume` that needs a feedback plan follows it, which `_check_planned` let through, with the items it covers;
+    any other follows the ticket's approved plan. The run records the plan's id, so `_run` writes the copy of the plan
+    this prompt names, and no other (DESIGN §25, §32).
 
     Returns:
         The plan's id, and where the run's copy will be with the plan's outline; or None for another kind, or a ticket
@@ -1013,11 +1185,20 @@ def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> tuple[int, str]
     """
     if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
         return None
+    if kind == RunKind.RESUME:
+        feedback = feedback_plans.follows(ctx.conn, ctx.config.policy, key, reasons)
+        text = feedback_plans.approved_text(ctx.state_dir, feedback) if feedback is not None else None
+        if feedback is not None and text is not None:
+            covered = [
+                (i.number, i.pr_url, i.item_id, str(i.proposal)) for i in feedback_plans.items(ctx.conn, feedback.id)
+            ]
+            note = prompts.feedback_plan_note(copy, plans.outline(text), covered)
+            return _Followed(note=note, feedback_plan_id=feedback.id)
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
     if approved is None or text is None:
         return None
-    return approved.id, prompts.plan_note(copy, plans.outline(text))
+    return _Followed(note=prompts.plan_note(copy, plans.outline(text)), plan_id=approved.id)
 
 
 def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:

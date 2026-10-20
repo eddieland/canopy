@@ -400,12 +400,15 @@ def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
 
 def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_plan_a_private_one() -> None:
     # A plan's one prompt serves both (DESIGN §22, §25). `fix-ci`, `split`, and `needs-plan` are dispatched no more,
-    # and their prompts went with them (DESIGN §8, §18; M55).
-    workers = set(vocab.RunKind) - {vocab.RunKind.FIX_CI, vocab.RunKind.SPLIT, vocab.RunKind.NEEDS_PLAN}
+    # and their prompts went with them (DESIGN §8, §18; M55). A feedback plan's one prompt serves both too, apart from
+    # `WORKER`, whose kinds each work a branch (DESIGN §32).
+    apart = {vocab.RunKind.FIX_CI, vocab.RunKind.SPLIT, vocab.RunKind.NEEDS_PLAN, vocab.RunKind.FEEDBACK_PLAN}
+    workers = set(vocab.RunKind) - apart
     assert set(prompts.WORKER) == workers
     assert set(prompts.WORKER_PRIVATE) == workers - {vocab.RunKind.PLAN}
     shipped = {p.name for p in resources.prompts_dir().iterdir()}
     assert "plan-triage.md" not in shipped
+    assert prompts.FEEDBACK_PLAN in shipped
     assert shipped.isdisjoint(prompts.RETIRED_WORKER)
 
 

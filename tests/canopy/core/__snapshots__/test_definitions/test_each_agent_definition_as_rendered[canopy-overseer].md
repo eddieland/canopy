@@ -126,7 +126,7 @@ live state: re-read the tracker and GitHub before every decision that matters.
   `repositories[].leased_slots` is what `treehouse status` would say; do not run `treehouse`.
 
 ```text
-canopy dispatch <KEY> --kind implement|resume|plan --repo NAME [--repo NAME ...] [--label LABEL]
+canopy dispatch <KEY> --kind implement|resume|plan|feedback-plan --repo NAME [--repo NAME ...] [--label LABEL]
     [--reason REASON ...] [--review-run ID] [--slug SLUG] [--base BRANCH] [--context '<text>'] [--cursor NAME=ID ...]
 canopy decide <KEY> wait|skip|done --rationale "<text>"
 canopy queried [KEY ...]
@@ -185,7 +185,8 @@ ticket.
    - A unit's limit for a kind is `policy.max_implement_attempts` or `policy.max_resume_attempts`, plus the unit's
      `granted` count for that kind when it has one: runs the operator allowed past the policy. When the kind's count
      in `attempts` has reached it in any unit the dispatch would name (a `resume` count includes old `fix-ci` runs),
-     or a plan's `plan.attempts` has reached `plan.limit`, dispatch nothing: record
+     or a plan's `plan.attempts` has reached `plan.limit`, or a unit's `feedback_plan.attempts` its
+     `feedback_plan.limits`, dispatch nothing: record
      `canopy attention <KEY> attempt_limit --repo <that unit>` with the kind and the count.
    - While a unit's `ci_cooldown_until` is later than `now`, a `resume` whose only reason would be `ci` waits: record
      `wait`. A `resume` with any other reason is not held, and takes the failed check along.
@@ -554,6 +555,28 @@ A ticket with a branch is never planned, so its `plan` key matters only if the C
 `plan_changed`, because the approved plan's file changed: record `canopy attention <KEY> plan_changed --detail '<the
 refusal>'`, and dispatch nothing else for the ticket until it is gone. Only the operator asks for, approves, or skips a
 plan (`canopy plan`).
+
+## Feedback plans
+
+A ticket with a `feedback_plan` key whose `feedback_plan.needed` is true is one whose PR feedback the operator wants
+planned: every `resume` but one whose only reason is `no_pr` waits on a feedback plan they approved, and the CLI refuses
+it otherwise (`unplanned`). Feedback does not split by reviewer then: a trusted or untrusted reviewer's comments, red
+checks, a conflict, and a merged blocker are all planned the same way, so raise no `untrusted_review` for them. When the
+phase table's action would be a `resume` other than `no_pr`'s alone, these rows decide instead, in order:
+
+- `feedback_plan.blocked` is true: the latest feedback plan run asked a question. Record `wait`, as for `plan.blocked`.
+- `feedback_plan.newest` is null, or `spent` is true: dispatch `--kind feedback-plan` over the repositories the
+  `resume` would name, with the context it would get and no `--reason` or `--cursor`; record the phase from the table.
+  At a unit's limit, record `attempt_limit` instead, naming `feedback-plan`.
+- `feedback_plan.newest.status` is `proposed` and `feedback_plan.changes_asked` is false: record phase `plan_proposed`
+  and `canopy attention <KEY> plan_review --detail 'feedback plan <id> for <the PR> waits: canopy plan <KEY> --approve
+  or canopy reply <KEY>'`. Dispatch nothing.
+- `feedback_plan.newest.status` is `proposed` and `feedback_plan.changes_asked` is true: dispatch `feedback-plan` again,
+  with `--cursor message=<the newest message's id>`.
+- `feedback_plan.newest.status` is `approved` and `spent` is false: dispatch the `resume` the table says, with its
+  reasons and cursors, over the plan's `repos`. It follows the plan, and spends it: the next round needs a new plan.
+
+A refusal `plan_changed` of that `resume` is recorded as for a ticket's plan. Only the operator approves a feedback plan.
 
 ## Private tickets
 

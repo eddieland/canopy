@@ -99,6 +99,16 @@ Controls:
   about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
   cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
   `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR can claim to be it.
+- With `policy.feedback_plan = "approve"` (DESIGN §32, private), D089's gate becomes the operator's approval of a
+  feedback plan, checked in code: every `resume` but one for `no_pr` alone is refused (`unplanned`) until the ticket
+  has an approved feedback plan no `resume` has spent, and `plan_changed` once its file differs from the hash approved.
+  Any reviewer's feedback, trusted or not, then starts a feedback plan run without the operator's go-ahead, but that
+  run reads only: canopy's planner, which writes one file and nothing else, with the PR's items as canopy's reader
+  observed them, data in its desk, each with its author and whether they are trusted. An item id the reader did not
+  return is refused with a note, so a plan cannot name feedback canopy never saw. The `resume` that follows names the
+  approved items by id from the journal, never the plan's text, and spends the approval: one approval, one run.
+  Trust labels then inform the operator rather than gate a run. Residual: the plan's text, model-written from anyone's
+  comments, reaches the worker as its copy, data as an approved plan's is; and approval is of the plan whole for now.
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
@@ -263,6 +273,11 @@ Controls in code, not prompts:
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
   an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
   asks for, and only the operator's channels ask for, skip, or approve a plan.
+- Feedback plans (DESIGN §32): a feedback plan run holds its unit's slot within `capacity.max_workers`, has the
+  worker's timeout, and counts toward `policy.max_feedback_plan_attempts` per unit (6 by default), never reset, raised
+  only by the operator, in config or with `canopy grant KEY feedback-plan`. A new one is refused while the ticket's
+  feedback plan waits on the operator with no change asked, or its approval waits for its `resume`, so a stream of
+  comments from a bot spends a bounded number of plan runs. The quiet period before a re-plan is not built yet.
 - Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
   repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.
@@ -487,7 +502,9 @@ Controls, in code:
 - Those keys are private (DESIGN §12) and are read only from the operator's own files: the user file, in the user
   config directory, and the workspace's private file, in its state directory. A workspace file that sets one is a
   config error and the tick does not run.
-- `policy.*` values from the workspace file apply only when stricter than the built-in defaults.
+- `policy.*` values from the workspace file apply only when stricter than the built-in defaults. `policy.feedback_plan`
+  is private instead (DESIGN §32): it holds a trusted reviewer's feedback for the operator and lets anyone else's
+  start a plan run, so a shared file chooses neither.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
