@@ -413,14 +413,17 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     )
 }
 
-/** What holds a slot: a run's ticket and kind, a review's PR, or the lease holder as the pool names it. */
+/**
+ * What holds a slot: a run's ticket and kind, a review's PR, or the lease holder as the pool names it. A run's ticket
+ * and id stay whole; its kind is what gets cut, whole in its tip, since a resume's reasons can run long.
+ */
 function Holder({ worktree: w }: { worktree: Worktree }) {
     if (w.run) {
         return (
             <span className="flex min-w-0 items-center gap-2">
-                <TicketLink ticketKey={w.run.ticket_key} className="truncate" />
-                <Chip word={runKind(w.run)} />
-                <RunLink id={w.run.id} />
+                <TicketLink ticketKey={w.run.ticket_key} className="shrink-0" />
+                <Chip word={runKind(w.run)} className="min-w-0 shrink" />
+                <RunLink id={w.run.id} className="shrink-0" />
             </span>
         )
     }
