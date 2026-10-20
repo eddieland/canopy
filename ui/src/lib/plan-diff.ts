@@ -5,8 +5,12 @@
 // plans are read by the same parser. Added words are drawn as `ins`, removed ones as a `del` where they were; a block
 // the new plan added whole (a paragraph, a heading, a table's cell) is marked as one, `plan-block-add` or
 // `plan-cell-add`, rather than as a run of `ins`, which its marks and code spans would break into many. A passage
-// rewritten around a few words it kept is the old passage removed and the new one added, not shreds of both. All are
-// decorations, so the plan's Markdown holds nothing of them, and the removed words are the old plan's, set as text.
+// rewritten around a few words it kept is the old passage removed and the new one added, not shreds of both. The
+// plans are first lined up section by section, a section being a heading and what follows it to the next, matched by
+// its headings or, failing that, by its words; the words are compared within each pair. A section that moved is
+// marked `moved` where it is now, and one the new plan dropped is one folded `Section removed` where it was, rather
+// than a wall of struck words. All are decorations, so the plan's Markdown holds nothing of them, and the removed
+// words are the old plan's, set as text.
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
@@ -28,10 +32,52 @@ export interface Change {
     at: number
 }
 
-/** The diff's state: the old plan's text, while changes are shown, what the editor draws, and where each change is. */
+/** A plan as the diff compares it: its text as the editor reads it, cut into sections at its headings. */
+export interface Outline {
+    /** The plan's text, as `docText` reads it. */
+    text: string
+    /** Its sections in order, the first the text before any heading, which may be empty. */
+    sections: Section[]
+}
+
+/** A heading and what follows it up to the next heading, as a slice of its outline's text. */
+export interface Section {
+    /** Its heading's words and those of the headings it sits under, which name it among the plan's sections. */
+    key: string
+    /** Its heading's words, or none for the text before the first heading. */
+    heading: string
+    /** Its heading's level, or 0 for the text before the first heading. */
+    level: number
+    /** Where it starts in the text: where its heading's words start. */
+    start: number
+    /** Where it ends: where the next starts, or the text's end. */
+    end: number
+}
+
+/** What changed between two plans: the runs of words, and the sections moved and removed whole. */
+export interface PlanDiff {
+    /** The runs of words in the new plan's order, each where it is in its text, as `diffWords` gives them. */
+    changes: Change[]
+    /** Where each section the new plan moved starts in its text. */
+    moved: number[]
+    /** The sections the new plan dropped, in the old plan's order. */
+    removed: Removed[]
+}
+
+/** A section the new plan dropped. */
+export interface Removed {
+    /** Where it was, in the new plan's text: where the section that followed it there starts, or the text's end. */
+    at: number
+    /** Its heading's words. */
+    heading: string
+    /** What followed its heading. */
+    body: string
+}
+
+/** The diff's state: the old plan, while changes are shown, what the editor draws, and where each change is. */
 export interface Changes {
-    /** The old plan's text as the editor reads it, while changes are shown. */
-    base: string | undefined
+    /** The old plan as the editor reads it, while changes are shown. */
+    base: Outline | undefined
     /** The added words and the removed ones, as the editor draws them. */
     decorations: DecorationSet
     /** Where each change starts in the plan, in its order, a removal and the words that replaced it one change. */
@@ -44,11 +90,14 @@ const WORD = /[\p{L}\p{N}]/u
 /** How many words may differ before the plans are shown as all changed: past it, the comparison costs too much. */
 export const MAX_EDITS = 2000
 
-/** What a transaction tells the plugin, as its meta under `changesKey`: the old plan's text, or none to stop. */
+/** What a transaction tells the plugin, as its meta under `changesKey`: the old plan, or none to stop. */
 export interface ChangesAction {
-    /** The old plan's text as the editor reads it (`textOf`), or undefined to stop showing changes. */
-    base: string | undefined
+    /** The old plan as the editor reads it (`outlineOf`), or undefined to stop showing changes. */
+    base: Outline | undefined
 }
+
+/** Two sections that share no heading are the same one moved or renamed when this much of their words is shared. */
+export const SAME_SECTION = 0.5
 
 /** The plugin's key: a transaction's meta under it is a `ChangesAction`. */
 export const changesKey = new PluginKey<Changes>('planChanges')
@@ -71,6 +120,65 @@ export const PlanChanges = Extension.create({
         ]
     },
 })
+
+/**
+ * What changed from the plan `before` to the plan `after`: their sections are lined up first, by their headings, then
+ * those left by their words, and the words compared within each pair. A pair out of the old plan's order is a section
+ * moved, the fewest that put the rest in order; a section of the new plan with no pair is added whole, and one of the
+ * old plan's is removed whole, where the section after it in the old plan now is.
+ */
+export function diffPlans(before: Outline, after: Outline, cap = MAX_EDITS): PlanDiff {
+    const pairs = pair(before, after)
+    const kept = inOrder(pairs)
+    const changes: Change[] = []
+    const moved: number[] = []
+    after.sections.forEach((section, index) => {
+        const text = textOf(after, section)
+        const old = pairs.get(index)
+        if (old === undefined) {
+            if (text !== '') {
+                changes.push({ kind: 'add', text, at: section.start })
+            }
+            return
+        }
+        const was = before.sections[old]
+        const words = diffWords(was === undefined ? '' : textOf(before, was), text, cap)
+        for (const change of words) {
+            change.at += section.start
+            changes.push(change)
+        }
+        if (!kept.has(index)) {
+            moved.push(section.start)
+        }
+    })
+    // Where each old section went, for the ones kept in order: a removed one is drawn before the next of them.
+    const where = new Map([...pairs].filter(([index]) => kept.has(index)).map(([index, old]) => [old, index]))
+    const paired = new Set(pairs.values())
+    const removed: Removed[] = []
+    before.sections.forEach((section, old) => {
+        if (paired.has(old)) {
+            return
+        }
+        let later = old + 1
+        while (later < before.sections.length && !where.has(later)) {
+            later += 1
+        }
+        const index = where.get(later)
+        const text = textOf(before, section)
+        const line = text.indexOf('\n')
+        removed.push({
+            at: index === undefined ? after.text.length : (after.sections[index]?.start ?? after.text.length),
+            heading: section.heading,
+            body: line < 0 ? '' : text.slice(line + 1).trim(),
+        })
+    })
+    return { changes, moved, removed }
+}
+
+// A section's text, without the line break that ends it unless it is the plan's last.
+function textOf(outline: Outline, section: Section): string {
+    return outline.text.slice(section.start, section.end).replace(/\n$/u, '')
+}
 
 /**
  * The runs of words that make `after` from `before`, in `after`'s order, a removed run before the run that replaced
@@ -103,10 +211,13 @@ export function diffWords(before: string, after: string, cap = MAX_EDITS): Chang
     return runs(readable([part(b.slice(0, start), 'same'), ...middle, part(b.slice(endB), 'same')], a))
 }
 
-/** The plain text of a plan's Markdown as the editor reads it, to compare with the plan open in `editor`. */
-export function textOf(editor: Editor, markdown: string): string {
+/** A plan's Markdown as the editor reads it, cut into its sections, to compare with the plan open in `editor`. */
+export function outlineOf(editor: Editor, markdown: string): Outline {
     const json = editor.markdown?.parse(markdown)
-    return json === undefined ? markdown : docText(editor.schema.nodeFromJSON(json)).text
+    if (json === undefined) {
+        return { text: markdown, sections: [{ key: '', heading: '', level: 0, start: 0, end: markdown.length }] }
+    }
+    return read(editor.schema.nodeFromJSON(json)).outline
 }
 
 function next(tr: Transaction, prev: Changes, state: EditorState): Changes {
@@ -118,11 +229,181 @@ function next(tr: Transaction, prev: Changes, state: EditorState): Changes {
     return base === undefined ? { base, decorations: DecorationSet.empty, starts: [] } : { base, ...draw(state, base) }
 }
 
-function draw(state: EditorState, base: string): Pick<Changes, 'decorations' | 'starts'> {
-    const { text, positions } = docText(state.doc)
+// A document's outline, and where each character of its text is in the document, as `docText` says.
+function read(doc: ProseMirrorNode): { outline: Outline; positions: number[] } {
+    const { text, positions } = docText(doc)
+    const sections: Section[] = [{ key: '', heading: '', level: 0, start: 0, end: text.length }]
+    // The headings the next one sits under, by level.
+    const path: { level: number; words: string }[] = []
+    // Where the text reaches the node being read: the headings come in the text's order, so it only moves on.
+    let start = 0
+    doc.descendants((node, pos) => {
+        if (node.type.name !== 'heading') {
+            return !node.isTextblock
+        }
+        while (start < positions.length && (positions[start] ?? -1) < pos) {
+            start += 1
+        }
+        const words = node.textContent.replaceAll(/\s+/gu, ' ').trim()
+        // A heading with no words names no section: its text is the one before's.
+        if (words === '' || start >= text.length) {
+            return false
+        }
+        const level = Number(node.attrs['level'])
+        while ((path.at(-1)?.level ?? 0) >= level) {
+            path.pop()
+        }
+        path.push({ level, words })
+        const last = sections.at(-1)
+        if (last !== undefined) {
+            last.end = start
+        }
+        sections.push({
+            key: path.map((heading) => heading.words.toLowerCase()).join('\n'),
+            heading: words,
+            level,
+            start,
+            end: text.length,
+        })
+        return false
+    })
+    return { outline: { text, sections }, positions }
+}
+
+// Which old section each new one is, by index: first those under the same headings, then those of the same heading
+// under others, each in order, then of those left the pairs whose words are most alike, while they share at least
+// `SAME_SECTION` of them. Those still left are paired in order when they are of a level and lie between the same
+// two pairs in order, as a heading rewritten with its words would. The text before the first heading is always the
+// old one's.
+function pair(before: Outline, after: Outline): Map<number, number> {
+    const pairs = new Map<number, number>([[0, 0]])
+    const paired = new Set([0])
+    for (const name of [(section: Section) => section.key, (section: Section) => section.heading.toLowerCase()]) {
+        const named = new Map<string, number[]>()
+        before.sections.forEach((section, old) => {
+            if (!paired.has(old)) {
+                named.set(name(section), [...(named.get(name(section)) ?? []), old])
+            }
+        })
+        after.sections.forEach((section, index) => {
+            const old = pairs.has(index) ? undefined : named.get(name(section))?.shift()
+            if (old !== undefined) {
+                pairs.set(index, old)
+                paired.add(old)
+            }
+        })
+    }
+    const olds = before.sections.flatMap((section, old) =>
+        paired.has(old) ? [] : [{ old, words: wordsOf(before, section) }],
+    )
+    const candidates: { index: number; old: number; score: number }[] = []
+    after.sections.forEach((section, index) => {
+        if (pairs.has(index)) {
+            return
+        }
+        const words = wordsOf(after, section)
+        for (const { old, words: was } of olds) {
+            const score = alike(words, was)
+            if (score >= SAME_SECTION) {
+                candidates.push({ index, old, score })
+            }
+        }
+    })
+    for (const { index, old } of candidates.toSorted((x, y) => y.score - x.score)) {
+        if (!pairs.has(index) && !paired.has(old)) {
+            pairs.set(index, old)
+            paired.add(old)
+        }
+    }
+    const kept = [...inOrder(pairs)].toSorted((x, y) => x - y)
+    kept.forEach((index, i) => {
+        const following = kept[i + 1]
+        const gapOlds = between(
+            pairs.get(index) ?? 0,
+            following === undefined ? before.sections.length : (pairs.get(following) ?? 0),
+        )
+        const left = gapOlds.filter((old) => !paired.has(old))
+        for (const gap of between(index, following ?? after.sections.length)) {
+            const old = left.find((was) => before.sections[was]?.level === after.sections[gap]?.level)
+            if (!pairs.has(gap) && old !== undefined) {
+                pairs.set(gap, old)
+                paired.add(old)
+                left.splice(0, left.indexOf(old) + 1)
+            }
+        }
+    })
+    return pairs
+}
+
+// The numbers after `from` and before `to`.
+function between(from: number, to: number): number[] {
+    return Array.from({ length: Math.max(0, to - from - 1) }, (_, i) => from + 1 + i)
+}
+
+// A section's words, lowercased, each once.
+function wordsOf(outline: Outline, section: Section): Set<string> {
+    return new Set(
+        outline.text
+            .slice(section.start, section.end)
+            .toLowerCase()
+            .match(/[\p{L}\p{N}_]+/gu),
+    )
+}
+
+// How much of their words two sets share: those in both, of those in either.
+function alike(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+    const both = [...a].filter((word) => b.has(word)).length
+    const either = a.size + b.size - both
+    return either === 0 ? 1 : both / either
+}
+
+// The new sections whose pairs are in the old plan's order: the most of them that are, so the fewest are moved.
+function inOrder(pairs: ReadonlyMap<number, number>): Set<number> {
+    const indexes = [...pairs.keys()].toSorted((x, y) => x - y)
+    const olds = indexes.map((index) => pairs.get(index) ?? 0)
+    // For each, how long the longest run in order that ends with it is, and the one before it in that run.
+    const lengths: number[] = []
+    const previous: number[] = []
+    olds.forEach((old, i) => {
+        let best = 1
+        let from = -1
+        for (let j = 0; j < i; j += 1) {
+            const length = (lengths[j] ?? 0) + 1
+            if ((olds[j] ?? 0) < old && length > best) {
+                best = length
+                from = j
+            }
+        }
+        lengths.push(best)
+        previous.push(from)
+    })
+    const kept = new Set<number>()
+    for (let i = lengths.indexOf(Math.max(...lengths)); i >= 0; i = previous[i] ?? -1) {
+        kept.add(indexes[i] ?? 0)
+    }
+    return kept
+}
+
+function draw(state: EditorState, base: Outline): Pick<Changes, 'decorations' | 'starts'> {
+    const { outline, positions } = read(state.doc)
+    const { text } = outline
+    const diff = diffPlans(base, outline)
     const decorations: Decoration[] = []
     const starts = new Set<number>()
-    for (const change of diffWords(base, text)) {
+    for (const offset of diff.moved) {
+        const heading = state.doc.resolve(at(positions, offset))
+        decorations.push(Decoration.widget(heading.end(), () => badge('moved'), { side: 1 }))
+        starts.add(heading.start())
+    }
+    for (const section of diff.removed) {
+        const where =
+            section.at >= text.length ? state.doc.content.size : blockStart(state.doc, at(positions, section.at))
+        decorations.push(
+            Decoration.widget(where, () => folded(section), { side: -1, stopEvent: () => true, ignoreSelection: true }),
+        )
+        starts.add(where)
+    }
+    for (const change of diff.changes) {
         if (change.kind === 'same' || change.text.trim() === '') {
             continue
         }
@@ -196,6 +477,39 @@ function at(positions: readonly number[], offset: number): number {
     }
     const last = positions.findLast((pos) => pos >= 0)
     return last === undefined ? 0 : last + 1
+}
+
+// Where the block holding `pos` starts, before its opening: where a section removed before it is drawn.
+function blockStart(doc: ProseMirrorNode, pos: number): number {
+    const resolved = doc.resolve(pos)
+    return resolved.depth === 0 ? pos : resolved.before(resolved.depth)
+}
+
+// What a moved section's heading carries at its end.
+function badge(text: string): HTMLElement {
+    const element = document.createElement('span')
+    element.className = 'plan-moved'
+    element.contentEditable = 'false'
+    element.textContent = text
+    return element
+}
+
+// A section the new plan removed, folded to its heading, its words struck under it when opened: they are the old
+// plan's, model-written, so set as text.
+function folded(section: Removed): HTMLElement {
+    const element = document.createElement('details')
+    element.className = 'plan-section-del'
+    element.contentEditable = 'false'
+    const summary = document.createElement('summary')
+    summary.textContent = `Section removed: ${section.heading}`
+    element.append(summary)
+    if (section.body !== '') {
+        const body = document.createElement('del')
+        body.className = 'plan-del'
+        body.textContent = section.body
+        element.append(body)
+    }
+    return element
 }
 
 // The words the new plan removed, as text: they are the old plan's, model-written, so never markup.

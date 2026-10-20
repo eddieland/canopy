@@ -49,7 +49,7 @@ import {
 } from '@/components/ui/toolbar'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
-import { changesKey, PlanChanges, textOf } from '@/lib/plan-diff'
+import { changesKey, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import { alignComments, floatUnder, releaseComments } from '@/lib/plan-margin'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
@@ -295,8 +295,8 @@ export function PlanEditor({
     // The plan this one replaces, read as the editor reads a plan, while its changes are shown; none while not.
     const base = showChanges && previous !== undefined ? previous.markdown : undefined
     useEffect(() => {
-        const text = base === undefined ? undefined : textOf(editor, base)
-        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base: text }).setMeta('addToHistory', false))
+        const outline = base === undefined ? undefined : outlineOf(editor, base)
+        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base: outline }).setMeta('addToHistory', false))
     }, [editor, base])
 
     // After an edit, the threads' passages may have moved or changed their words: save their anchors as they are now.
