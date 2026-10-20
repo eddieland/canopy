@@ -93,7 +93,8 @@ Built. The attention list (§14): `canopy status`, `attention.md`, and `notify.c
 (`green_unreviewed`, `approved`), input (`needs_human`, and review comments the overseer judges need a human), and
 failed retries (`attempt_limit`, `worker_failed`, `crashed`, `unpushed`, `unknown_result`).
 
-Gap: DESIGN §15's attention item after three consecutive overseer failures is not built (M3's status line).
+A failing loop is not an attention item: it cannot add to the latest `ok` tick's list. Three consecutive ticks not
+`ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next `ok` (§15, §20).
 
 ### R6. Two-way control: see status of active and recent sessions, and prompt any of them
 

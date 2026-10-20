@@ -428,10 +428,8 @@ function NewestPlan({
             outcome={
                 approved && said !== null && failure === null ? (
                     <Approved key={approvals} text={said} />
-                ) : editable || said !== null || failure !== null ? (
-                    <Notice error={failure} reserve>
-                        {said}
-                    </Notice>
+                ) : said !== null || failure !== null ? (
+                    <Notice error={failure}>{said}</Notice>
                 ) : undefined
             }
         />

@@ -7,7 +7,8 @@ files mark for it:
 
 - the tracker's MCP server and the tools of it the private worker, the planner, and the triage agent may call: its read
   tools, and for the private worker alone, its tools that create a ticket and those that write to a PR (DESIGN §22,
-  §25);
+  §25); and the overseer, its reads only; off a GitHub tracker, the overseer's denial of GitHub's issue reads
+  (DESIGN §13);
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
 - the reviewer's, overseer's, and triage agent's temperature, unless it sets none;
@@ -76,6 +77,26 @@ _REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_
 _REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
+# The line of the shipped overseer definition the tracker's rules are rendered at, above its denials of GitHub's tools
+# by name, so that no allow rendered there reopens a write they close (D021).
+_READS_MARKER = "  # canopy: tracker reads\n"
+# The tracker provider whose tickets are GitHub's issues, on the same server as the PRs (the skill `tracker-github`).
+_GITHUB = "github"
+# The overseer's reads of GitHub, as its definition keeps them, allowed by name when the tracker is GitHub and so the
+# server is the tracker's: the tracker's read tools there include the PR writes a private worker needs.
+_OVERSEER_GITHUB_READS = (
+    "get_me",
+    "issue_read",
+    "list_issues",
+    "search_issues",
+    "pull_request_read",
+    "list_pull_requests",
+    "search_pull_requests",
+    "list_branches",
+)
+# GitHub's issue reads, which the overseer has no use for off a GitHub tracker. Rendered before the tracker's rules: a
+# read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after it.
+_GITHUB_ISSUE_READS = ('  "*issue_read*": deny\n', '  "*list_issues*": deny\n', '  "*search_issues*": deny\n')
 # The line of the shipped reviewer's, overseer's, and triage agent's definitions their temperature is rendered at.
 _TEMPERATURE_MARKER = "# canopy: temperature\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
@@ -129,7 +150,8 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
             found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
     if _OVERSEER_FILE in found:
         skill = _tracker_skill(found, rules.tracker_provider)
-        found[_OVERSEER_FILE] = render_overseer(found[_OVERSEER_FILE].decode(), rules.overseer_prompt, skill).encode()
+        text = render_overseer_reads(found[_OVERSEER_FILE].decode(), rules.tracker_tools, rules.tracker_provider)
+        found[_OVERSEER_FILE] = render_overseer(text, rules.overseer_prompt, skill).encode()
     return found
 
 
@@ -207,6 +229,33 @@ def render_temperature(text: str, name: str, temperature: float | None) -> str:
     if temperature is None:
         return text
     return text.replace(_TEMPERATURE_MARKER, f"{_TEMPERATURE_MARKER}temperature: {temperature}\n", 1)
+
+
+def render_overseer_reads(text: str, tools: McpTools | None, provider: str) -> str:
+    """Return the overseer's definition with the tracker's rules at its marked line: it may only read the tracker.
+
+    As for the planner, every tool of the server is denied by a wildcard and the reads allowed after it (D021): the
+    tracker's read tools, or on a GitHub tracker, whose server the PRs share, the overseer's own reads of GitHub, since
+    the provider's read tools there hold the PR writes a private worker needs. Off a GitHub tracker, GitHub's issue
+    reads are denied first. With no tools known, the marked line stays as it is, and the overseer keeps the tracker's
+    tools and GitHub's issue reads: a pattern could take a read it needs.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the tracker's rules at.
+    """
+    if _READS_MARKER not in text:
+        marker = _READS_MARKER.strip()
+        raise DefinitionsError(f"{_OVERSEER_FILE} has no line {marker!r} to render the tracker's reads at")
+    if tools is None:
+        return text
+    github = provider == _GITHUB
+    reads = _OVERSEER_GITHUB_READS if github else tools.allowed
+    rules = [
+        *(() if github else _GITHUB_ISSUE_READS),
+        f'  "{tools.server}_*": deny\n',
+        *(f'  "{tools.server}_{tool}": allow\n' for tool in reads),
+    ]
+    return text.replace(_READS_MARKER, _READS_MARKER + "".join(rules), 1)
 
 
 def render_overseer(text: str, prompt: str, skill: str | None) -> str:
