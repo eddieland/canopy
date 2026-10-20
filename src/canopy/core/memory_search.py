@@ -13,12 +13,11 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, memory, records
+from canopy.core import db, memory, records, sql
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus, RunStatus
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection
 
 # A query's words past these are not searched for.
 MAX_WORDS = 8
@@ -106,38 +105,48 @@ def search(
     if not found:
         raise ValueError("a search needs a word of letters or digits")
     match = (" AND " if every else " OR ").join(f'"{w}"' for w in found)
-    where, params = _reach(scope, ticket)
-    # Only the fixed clauses of `_reach` are interpolated; the query and every value are bound parameters.
     return records.fetch_all(
         conn,
         records.Memory,
-        "SELECT m.* FROM memories_fts JOIN memories m ON m.id = memories_fts.rowid "  # noqa: S608
-        f"WHERE memories_fts MATCH ? AND m.body IS NOT NULL AND ({where}) "
-        "AND (? IS NULL OR m.scope = ?) AND (? = 0 OR m.status = ?) "
-        f"ORDER BY bm25(memories_fts, {_KEY_WEIGHT}, 1.0), m.id DESC LIMIT ?",
-        (match, *params, kind, kind, in_force, MemoryStatus.ACTIVE, max(1, min(limit, MAX_LIMIT))),
+        sql.select("m.*")
+        .from_("memories_fts")
+        .join("memories m ON m.id = memories_fts.rowid")
+        .where("memories_fts MATCH ?", match)
+        .where("m.body IS NOT NULL")
+        .where("{}", _reach(scope, ticket))
+        .where("? IS NULL OR m.scope = ?", kind, kind)
+        .where("? = 0 OR m.status = ?", in_force, MemoryStatus.ACTIVE)
+        .order_by("bm25(memories_fts, ?, 1.0), m.id DESC", _KEY_WEIGHT)
+        .limit(max(1, min(limit, MAX_LIMIT))),
     )
 
 
-def _reach(scope: RunScope | None, ticket: str | None) -> tuple[str, tuple[object, ...]]:
-    """The clause naming the memories a search may find.
+def _reach(scope: RunScope | None, ticket: str | None) -> sql.Fragment:
+    """The condition naming the memories a search may find.
 
     Returns:
-        The clause, and the values its placeholders bind.
+        The condition, with its values.
     """
     if scope is None:
-        return "? IS NULL OR m.ticket_key = ?", (ticket, ticket)
-    clauses: list[str] = []
-    params: list[object] = []
+        return sql.frag("? IS NULL OR m.ticket_key = ?", ticket, ticket)
+    clauses: list[sql.Fragment] = []
     if scope.notes:
-        clauses.append("(m.scope = ? AND m.ticket_key = ? AND m.status IN (?, ?))")
-        params += [MemoryScope.TICKET, scope.ticket_key, MemoryStatus.ACTIVE, MemoryStatus.SUPERSEDED]
+        clauses.append(
+            sql.frag(
+                "m.scope = ? AND m.ticket_key = ? AND {}",
+                MemoryScope.TICKET,
+                scope.ticket_key,
+                sql.in_("m.status", (MemoryStatus.ACTIVE, MemoryStatus.SUPERSEDED)),
+            )
+        )
     if scope.lessons:
-        clauses.append(f"(m.scope = ? AND m.status = ? AND (m.repo IS NULL OR m.repo IN ({_marks(scope.repos)})))")
-        params += [MemoryScope.LESSON, MemoryStatus.ACTIVE, *sorted(scope.repos)]
-    return " OR ".join(clauses) or "0", tuple(params)
-
-
-def _marks(values: Collection[str]) -> str:
-    # `IN ()` is not SQL; NULL matches no repository.
-    return ",".join("?" * len(values)) or "NULL"
+        # With no repository leased, `IN ()` matches none, and only a lesson for every repository is found.
+        clauses.append(
+            sql.frag(
+                "m.scope = ? AND m.status = ? AND (m.repo IS NULL OR {})",
+                MemoryScope.LESSON,
+                MemoryStatus.ACTIVE,
+                sql.in_("m.repo", sorted(scope.repos)),
+            )
+        )
+    return sql.any_of(*clauses)

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import drafts, drafts_manage, observe
+from canopy.core import drafts, drafts_manage, observe, sql
 from canopy.core.vocab import DraftStatus, PrState
 
 if TYPE_CHECKING:
@@ -23,8 +23,13 @@ if TYPE_CHECKING:
 
 def after_run(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
     """Read the PRs run `run_id`'s drafts wait on, and check them against what was read."""
-    rows = ctx.conn.execute(
-        "SELECT DISTINCT pr_url FROM drafts WHERE run_id = ? AND status = ?", (run_id, DraftStatus.UNCHECKED)
+    rows = sql.execute(
+        ctx.conn,
+        sql.select("pr_url")
+        .unique()
+        .from_("drafts")
+        .where("run_id = ?", run_id)
+        .where("status = ?", DraftStatus.UNCHECKED),
     )
     _read_and_check(ctx, [str(r["pr_url"]) for r in rows], log)
 
@@ -73,21 +78,20 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
     Returns:
         The items, by ticket, then repository, the ticket's own after its units'.
     """
-    rows = conn.execute(
-        "SELECT d.ticket_key, d.repo, d.pr_url, count(*) AS n, sum(d.status = ?) AS unchecked, "
-        "sum(d.status = ?) AS staged "
-        "FROM drafts d LEFT JOIN observed_prs p ON p.url = d.pr_url "
-        "WHERE d.status IN (?, ?, ?) AND (p.state IS NULL OR p.state = ?) "
-        "GROUP BY d.ticket_key, d.repo, d.pr_url "
-        "ORDER BY d.ticket_key, d.repo IS NULL, d.repo, d.pr_url",
-        (
+    rows = sql.execute(
+        conn,
+        sql.select(
+            "d.ticket_key, d.repo, d.pr_url, count(*) AS n, sum(d.status = ?) AS unchecked, "
+            "sum(d.status = ?) AS staged",
             DraftStatus.UNCHECKED,
             DraftStatus.STAGED,
-            DraftStatus.UNCHECKED,
-            DraftStatus.WAITING,
-            DraftStatus.STAGED,
-            PrState.OPEN,
-        ),
+        )
+        .from_("drafts d")
+        .left_join("observed_prs p ON p.url = d.pr_url")
+        .where_in("d.status", (DraftStatus.UNCHECKED, DraftStatus.WAITING, DraftStatus.STAGED))
+        .where("p.state IS NULL OR p.state = ?", PrState.OPEN)
+        .group_by("d.ticket_key, d.repo, d.pr_url")
+        .order_by("d.ticket_key, d.repo IS NULL, d.repo, d.pr_url"),
     ).fetchall()
     found: list[Item] = []
     for r in rows:
