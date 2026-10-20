@@ -440,7 +440,8 @@ Controls:
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
 - The reviewer writes nothing outside its result line (D114). Its definition denies commenting or replying anywhere,
   submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth; the operator's
-  runtime need not grant it a write tool at all.
+  runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied whole but its
+  read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit or subagent tools, a
   shell that runs `canopy chore history` alone, which reads its own chore's earlier runs and writes nothing, and
   denies MCP write tools by name. The agents example chores come with, `canopy-introspect` and
@@ -465,9 +466,9 @@ wherever that sends them, and a finding's link can carry data in its URL. A stee
 characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads
 its destination. A steered reviewer can put what it read into
 its findings, which reach the operator and, through `resume`, a worker on that ticket, who can push and comment; the
-worker reads them as data, as it reads any review comment. A write tool the operator's runtime grants anyway, under a
-name the deny patterns miss, would let a steered reviewer post; that is noise, not authority, since the loop reads
-reviews only from its journal.
+worker reads them as data, as it reads any review comment. A write tool the operator's runtime grants anyway, on
+GitHub's server or another the tracker's rules do not cover, under a name the deny patterns miss, would let a steered
+reviewer post; that is noise, not authority, since the loop reads reviews only from its journal.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs

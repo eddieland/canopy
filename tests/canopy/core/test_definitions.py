@@ -798,6 +798,57 @@ def test_with_no_tracker_tools_known_the_overseer_keeps_the_trackers_and_githubs
         assert not _opencode_disabled(ruleset, tool), tool
 
 
+def test_the_reviewer_may_call_exactly_the_jira_read_tools(canopy_env: CanopyEnv) -> None:
+    # It reads the ticket and posts nothing (DESIGN §21, TRUST_MODEL T6): Atlassian's `execute` tools, which run any
+    # other by name, and a tool no pattern names fail closed under the server's wildcard deny.
+    ruleset = _ruleset(canopy_env, agents.REVIEWER)
+    jira = config.DEFAULT_TRACKER_TOOLS["jira"]
+    reads = {f"{jira.server}_{read}" for read in jira.allowed}
+    tools = (*reads, *(f"{jira.server}_{write}" for write in JIRA_WRITES), "atlassian_getConfluencePage")
+    assert {tool for tool in tools if not _opencode_disabled(ruleset, tool)} == reads
+
+
+@pytest.mark.parametrize(("provider", "issues"), [("jira", False), ("github", True)])
+def test_the_reviewer_is_sent_githubs_issue_reads_only_when_they_are_the_tickets(
+    canopy_env: CanopyEnv, provider: str, *, issues: bool
+) -> None:
+    # It reads the PR, its discussion among it, with `pull_request_read`, and the ticket through the tracker's server.
+    # On a GitHub tracker that server is the PR's too, so its GitHub tools stay as shipped.
+    _set_provider(canopy_env, provider)
+    sent = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(_ruleset(canopy_env, agents.REVIEWER), tool)}
+    shipped = _opencode_ruleset((resources.agents_dir() / f"{agents.REVIEWER}.md").read_text())
+    expected = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(shipped, tool)}
+    assert sent == (expected if issues else expected - GITHUB_ISSUE_READS)
+    assert {"github_pull_request_read", "github_get_commit", "github_list_commits"} <= sent
+
+
+@pytest.mark.parametrize(
+    ("tool", "allowed"),
+    [
+        ("linear_list_issues", True),
+        ("linear_get_issue", True),
+        ("linear_create_issue", False),
+        ("linear_add_comment", False),
+        ("linear_save_comment", False),
+        ("github_list_issues", False),
+        ("github_pull_request_read", True),
+    ],
+)
+def test_the_reviewer_keeps_a_trackers_reads_and_no_write_its_read_tools_name(tool: str, *, allowed: bool) -> None:
+    # The tracker's rules sit above the reviewer's patterns (D021), so an operator's `read_tools` that names a write
+    # reopens none they close, and the tracker's writes canopy knows are left out of the allows.
+    bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
+    linear = agents.McpTools("linear", ("list_issues", "get_issue", "create_issue", "add_comment"), ("create_issue",))
+    ruleset = _opencode_ruleset(opencode_definitions.render_reviewer_reads(bundled, linear, "linear"))
+    assert _opencode_disabled(ruleset, tool) is not allowed
+
+
+def test_with_no_tracker_tools_known_the_reviewer_is_rendered_as_shipped() -> None:
+    # Nothing is rendered, as for the overseer: with no names to allow again, a pattern could take a read it needs.
+    bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
+    assert opencode_definitions.render_reviewer_reads(bundled, None, "linear") == bundled
+
+
 #: GitHub's tools the planner and the triage agent may call when the tracker is GitHub: its reads of issues and PRs,
 #: and the signed-in user. The code they read in their desks.
 PLANNER_GITHUB_READS = {
