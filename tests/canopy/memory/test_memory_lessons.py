@@ -182,18 +182,20 @@ def test_the_lessons_digest_keeps_those_last_vouched_for_in_key_order(
     conn: sqlite3.Connection, canopy_env: CanopyEnv
 ) -> None:
     with_memory(canopy_env, proposals="use")
-    ids = [promoted(conn, canopy_env, f"lesson {i} " + "z" * 500, key=f"k{i}").id for i in range(6)]
-    # Promoted, renewed, or used: the review date says which was last. k1 was last, then k3, k5, and so on down.
+    # Enough lessons of 500 characters that the cap leaves some out, whatever it is.
+    count = memory.MAX_LESSONS_DIGEST // 500 + 2
+    ids = [promoted(conn, canopy_env, f"lesson {i} " + "z" * 500, key=f"k{i:02}").id for i in range(count)]
+    # Promoted, renewed, or used: the review date says which was last. The odd keys were last, then the even ones.
     soon = datetime.now(UTC) + timedelta(days=90)
-    order = [ids[1], ids[3], ids[5], ids[0], ids[2], ids[4]]
+    order = ids[1::2] + ids[::2]
     conn.executemany(
         "UPDATE memories SET review_at = ? WHERE id = ?",
         [(db.format_time(soon - timedelta(days=n)), i) for n, i in enumerate(order)],
     )
     digest = memory.lessons_digest(conn, None, cite=False)
-    assert 0 < len(digest.ids) < 6
+    assert 0 < len(digest.ids) < count
     assert digest.ids == tuple(sorted(order[: len(digest.ids)]))
-    assert digest.left_out == 6 - len(digest.ids)
+    assert digest.left_out == count - len(digest.ids)
     left_out = f"[{digest.left_out} more lessons are left out of this prompt; `{memory.SEARCH_COMMAND}` finds them.]"
     assert left_out in digest.text
 
