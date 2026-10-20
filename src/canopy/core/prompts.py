@@ -2,8 +2,8 @@
 
 A prompt named `overseer.md` is read from `paths.prompt_overrides` if a file of that name is there, otherwise from the
 prompts canopy ships. The overseer's goes into its agent definition (`canopy.runtime.definitions`, DESIGN §13), not a
-tick's message, and its one placeholder is its standing instructions. Worker prompts name their inputs as `{{NAME}}`
-placeholders.
+tick's message, and its only placeholders are for its standing instructions. Worker prompts name their inputs as
+`{{NAME}}` placeholders.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME
 from canopy.core.vocab import ResumeReason, RunKind
@@ -93,16 +93,54 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
 # A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
 # override written before they existed still serves every other resume.
 REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
-# The operator's standing instructions (`paths.worker_instructions`, DESIGN §12), in every worker prompt, and
-# `paths.reviewer_instructions` in the reviewer's. An override written before they existed still serves an operator
-# who sets none; once one is set, it fails to render instead of dropping them. They are in every run's prompt, so they
-# are bounded, and a chore's (`paths.chore_instructions`) too.
-REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
+#: Where a prompt takes the operator's standing instructions to its role (DESIGN §12): the whole section, its heading,
+#: the text, and how to read it (`STANDING_FRAMING`), or nothing when none are set, so a run reads no empty section. It
+#: starts with the blank line before its heading, so it ends the paragraph before it, as `{{WORKSPACE_LESSONS}}` does.
+STANDING_SECTION = "STANDING_SECTION"
+#: The placeholder that held the instructions' text alone, or `None.`, before `STANDING_SECTION`. An override written
+#: then still renders with it.
+STANDING_TEXT = "STANDING_INSTRUCTIONS"
+# A prompt must carry one of them once its role's file is set, so an override written before either existed still
+# serves an operator who sets none, and fails to render instead of dropping them once one is set. They are in every
+# run's prompt, so they are bounded.
+REQUIRED_STANDING = (STANDING_SECTION, STANDING_TEXT)
 MAX_STANDING_BYTES = 4096
-#: Where the overseer's prompt takes the operator's standing instructions to it (`paths.overseer_instructions`, DESIGN
-#: §12), bounded as the workers' are. It is the prompt's only placeholder: an override written before it existed still
-#: serves an operator who sets none, and once one is set, an override without it refuses the snapshot instead.
-OVERSEER_STANDING = "{{STANDING_INSTRUCTIONS}}"
+STANDING_HEADING = "## Standing instructions from the operator"
+#: Whose standing instructions a prompt carries, which says how to read them (`STANDING_FRAMING`).
+Reader = Literal["overseer", "worker", "private", "planner", "reviewer", "chore"]
+#: How each reader is told to read the operator's standing instructions, after them in the section.
+STANDING_FRAMING: Mapping[Reader, str] = {
+    "overseer": (
+        "The operator set these in canopy for the overseer, not on a ticket. They are instructions from the operator, "
+        "as if they had said them to you, except where one conflicts with anything above: the prompt comes first, and "
+        "the CLI's limits hold whatever they say. They are yours, not the workers': never pass them on in `--context`."
+    ),
+    "worker": (
+        "The operator set these in canopy for every worker, not on the ticket. They are instructions from the "
+        "operator, as if they had said them to you, except where one conflicts with an obligation below or anything "
+        "else this prompt requires: the prompt comes first. They reach nobody else: never quote, paraphrase, or "
+        "mention them on the ticket, a PR, or in a commit message."
+    ),
+    "private": (
+        "The operator set these in canopy for every worker. They are instructions from the operator too, as if they "
+        "had said them to you, except where one conflicts with an obligation below or anything else this prompt "
+        "requires: the prompt comes first. Never quote, paraphrase, or mention them in a PR or a commit message."
+    ),
+    "planner": (
+        "The operator set these in canopy for every worker. They are instructions from the operator too, as if they "
+        "had said them to you, except where one conflicts with an obligation below or anything else this prompt "
+        "requires: the prompt comes first. Plan the work so that the worker who follows the plan can keep them."
+    ),
+    "reviewer": (
+        "The operator set these in canopy for every review, not for this PR. They are instructions from the operator, "
+        "as if they had said them to you, except where one conflicts with anything else this prompt requires: the "
+        "prompt comes first. They never let you change, approve, or post anything."
+    ),
+    "chore": (
+        "The operator set these in canopy for every chore, not for this one. Follow them as you follow the text "
+        "above, except where one conflicts with it or with the `## Run` section below: those come first."
+    ),
+}
 #: The persona every planner, reviewer, and worker run gets for `{{PERSONA}}` (DESIGN §31): canopy's own voice, which
 #: the shipped prompts no longer hold, placed below their obligations. Not required: an override without the placeholder
 #: still serves a run whose persona is this one, and keeps whatever voice the override already holds.
@@ -425,24 +463,33 @@ def reviewer_instructions(config: Config) -> str:
     return _standing(config.paths.reviewer_instructions, "reviewer")
 
 
-def chore_instructions(config: Config) -> str | None:
-    """Return the operator's standing instructions to every chore run, or None without any.
+def chore_instructions(config: Config) -> str:
+    """Return the operator's standing instructions to every chore run, or `None.` without any.
 
-    None rather than `None.`: a chore's prompt is the operator's own file, with no placeholder to fill, so without
-    them it gets no section at all. They fail as the workers' do (`standing_instructions`).
+    They fail as the workers' do (`standing_instructions`).
 
     Raises:
         PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
     """
-    text = _standing(config.paths.chore_instructions, "chore")
-    return None if text == "None." else text
+    return _standing(config.paths.chore_instructions, "chore")
+
+
+def standing_section(text: str, reader: Reader) -> str:
+    """Return `{{STANDING_SECTION}}` for `reader`, from `text` as the functions above return it.
+
+    Returns:
+        The section, starting with the blank line before its heading, or the empty string when `text` is `None.`.
+    """
+    if text == "None.":
+        return ""
+    return f"\n\n{STANDING_HEADING}\n\n{text}\n\n{STANDING_FRAMING[reader]}"
 
 
 def render_overseer(config: Config) -> str:
-    """Return the overseer's prompt with `OVERSEER_STANDING` replaced by its standing instructions.
+    """Return the overseer's prompt with its standing instructions in place of `REQUIRED_STANDING`'s placeholders.
 
     Nothing else in it is replaced: an override may hold `{{` text of its own. With `paths.overseer_instructions` set,
-    a prompt without the placeholder is an error, not a prompt that drops them.
+    a prompt without either placeholder is an error, not a prompt that drops them.
 
     Raises:
         PromptError: The prompt or the instructions cannot be read, or the prompt lacks the placeholder they need.
@@ -452,9 +499,11 @@ def render_overseer(config: Config) -> str:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise PromptError(f"cannot read the overseer prompt {path}: {e}") from e
-    if config.paths.overseer_instructions is not None and OVERSEER_STANDING not in text:
-        raise PromptError(f"{path}: missing required placeholder {OVERSEER_STANDING}")
-    return text.replace(OVERSEER_STANDING, overseer_instructions(config))
+    section, plain = (f"{{{{{n}}}}}" for n in REQUIRED_STANDING)
+    if config.paths.overseer_instructions is not None and section not in text and plain not in text:
+        raise PromptError(f"{path}: missing required placeholder {section} or {plain}")
+    standing = overseer_instructions(config)
+    return text.replace(section, standing_section(standing, "overseer")).replace(plain, standing)
 
 
 def persona() -> str:
@@ -498,9 +547,9 @@ def render_worker(
     `REQUIRED_WORKER` (`REQUIRED_PLAN` for a plan's), or of `required`, and, with `runtime.pr_skill` set, a prompt for
     a kind that opens PRs that lacks `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry
     `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
-    its own check. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
-    `paths.worker_instructions` set every prompt must carry it. `{{PERSONA}}` is `DEFAULT_PERSONA`'s text, which a
-    prompt need not carry. `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
+    its own check. `{{STANDING_SECTION}}` comes from the config, not `values`, and with `paths.worker_instructions`
+    set every prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone. `{{PERSONA}}` is
+    `DEFAULT_PERSONA`'s text, which a prompt need not carry. `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
     from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
@@ -512,7 +561,7 @@ def render_worker(
         # the same bytes as before it existed.
         **dict.fromkeys(MEMORY_PARTS, ""),
         **values,
-        "STANDING_INSTRUCTIONS": standing_instructions(config),
+        **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona(),
         "NOTICE": notice if notice is not None else "None.",
         "COMMIT_ATTRIBUTION": commit_attribution(config),
@@ -520,15 +569,15 @@ def render_worker(
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
-    standing = REQUIRED_STANDING if config.paths.worker_instructions is not None else ()
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
-    required = (*pr_skill, *standing, *rebase, *noticed, *required)
-    one_of = _required_attribution(config) if kind in COMMITS else ()
+    required = (*pr_skill, *rebase, *noticed, *required)
+    standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
+    one_of = (*standing, *((_required_attribution(config),) if kind in COMMITS else ()))
     if kind == RunKind.PLAN:
-        return render(config, WORKER[kind], values, required=(*REQUIRED_PLAN, *required))
+        return render(config, WORKER[kind], values, required=(*REQUIRED_PLAN, *required), one_of=one_of)
     if kind == RunKind.FEEDBACK_PLAN:
-        return render(config, FEEDBACK_PLAN, values, required=(*REQUIRED_FEEDBACK_PLAN, *required))
+        return render(config, FEEDBACK_PLAN, values, required=(*REQUIRED_FEEDBACK_PLAN, *required), one_of=one_of)
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)
@@ -542,23 +591,23 @@ def render_reviewer(
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
     a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
     review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `{{PERSONA}}` is
-    `DEFAULT_PERSONA`'s text, as a worker's is. `{{STANDING_INSTRUCTIONS}}` comes from the config, and with
-    `paths.reviewer_instructions` set the prompt must carry it.
+    `DEFAULT_PERSONA`'s text, as a worker's is. `{{STANDING_SECTION}}` comes from the config, and with
+    `paths.reviewer_instructions` set the prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone.
 
     Returns:
         The rendered prompt.
     """
     values = {
         **values,
-        "STANDING_INSTRUCTIONS": reviewer_instructions(config),
+        **_standing_values(reviewer_instructions(config), "reviewer"),
         "NOTICE": notice if notice is not None else "None.",
         "NOTES": notes or "None.",
         "PERSONA": persona(),
     }
-    standing = REQUIRED_STANDING if config.paths.reviewer_instructions is not None else ()
+    standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
-    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *standing, *noticed, *noted))
+    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted), one_of=standing)
 
 
 def render(
@@ -567,16 +616,16 @@ def render(
     values: Mapping[str, str],
     *,
     required: Sequence[str] = (),
-    one_of: Sequence[str] = (),
+    one_of: Sequence[Sequence[str]] = (),
 ) -> str:
     """Return prompt file `name` with every `{{NAME}}` replaced from `values`, in one pass.
 
-    A placeholder with no value is an error, and so is a prompt that lacks one of `required`, or, with `one_of` set,
-    every one of `one_of`.
+    A placeholder with no value is an error, and so is a prompt that lacks one of `required`, or every one of a group
+    in `one_of`.
 
     Raises:
         PromptError: The prompt has a placeholder `values` has no value for, lacks one of `required`, or lacks every
-            one of `one_of`.
+            one of a group in `one_of`.
     """
     path = prompt_path(config, name)
     text = path.read_text(encoding="utf-8")
@@ -590,11 +639,23 @@ def render(
     rendered = _PLACEHOLDER_RE.sub(replace, text)
     used = set(_PLACEHOLDER_RE.findall(text))
     missing = [f"{{{{{n}}}}}" for n in required if n not in used]
-    if one_of and used.isdisjoint(one_of):
-        missing.append(" or ".join(f"{{{{{n}}}}}" for n in one_of))
+    missing.extend(" or ".join(f"{{{{{n}}}}}" for n in group) for group in one_of if group and used.isdisjoint(group))
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered
+
+
+def _worker_reader(kind: str, *, private: bool) -> Reader:
+    # How a worker prompt for `kind` frames the standing instructions: as a plan's, a private ticket's, or a worker's.
+    if kind in {RunKind.PLAN, RunKind.FEEDBACK_PLAN}:
+        return "planner"
+    return "private" if private else "worker"
+
+
+def _standing_values(text: str, reader: Reader) -> dict[str, str]:
+    # Both standing placeholders' values from the instructions' `text`: the section the shipped prompts carry, and the
+    # text alone for an override written before it.
+    return {STANDING_SECTION: standing_section(text, reader), STANDING_TEXT: text}
 
 
 def _standing(path: Path | None, reader: str) -> str:

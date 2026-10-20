@@ -34,7 +34,9 @@ leads back to the ticket.
 
 A plan that replaced one opens with its changes marked: the words added and removed since the plan before, word by
 word, so formatting alone is no change. A paragraph, heading, or table cell that's new whole gets one green block with
-a bar at its left, rather than confetti. **Changes since plan N**, in the Plan panel's header, turns the marks off and
+a bar at its left, rather than confetti. A passage rewritten around a few words it happened to keep reads as the old
+passage struck and the new one after it, since nobody learns anything from a green `the` surviving between two
+strikeouts. **Changes since plan N**, in the Plan panel's header, turns the marks off and
 back on; while they're on, the header counts them, **Previous change** and **Next change** step through them, round
 to the other end, and the comments' highlights step down to a thin underline so a passage never wears two colors,
 but you can still see where your comments are. After asking for

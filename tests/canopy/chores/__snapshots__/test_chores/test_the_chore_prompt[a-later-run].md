@@ -6,8 +6,7 @@ Look at the build queue.
 
 Name a CI job by its workflow file.
 
-The operator set these in canopy for every chore, not for this one. Follow them as you follow the text
-above, except where one conflicts with it or with the `## Run` section below: those come first.
+The operator set these in canopy for every chore, not for this one. Follow them as you follow the text above, except where one conflicts with it or with the `## Run` section below: those come first.
 
 ## Run
 
