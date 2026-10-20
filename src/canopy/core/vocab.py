@@ -68,6 +68,9 @@ class TickStatus(StrEnum):
     SKIPPED = "skipped"
     # `canopy --version` failed from the overseer's environment, so the overseer did not run.
     CANOPY_UNAVAILABLE = "canopy_unavailable"
+    # The state directory's or the workspace's filesystem had less than `loop.min_free_disk_mib` free, so the overseer
+    # did not run.
+    DISK_LOW = "disk_low"
     OVERSEER_FAILED = "overseer_failed"
     RECONCILE_FAILED = "reconcile_failed"
     # The tick raised an unexpected exception; its summary names it.

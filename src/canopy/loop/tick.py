@@ -5,6 +5,7 @@ A tick that closes `ok` notes, on each ticket, what it did about the operator's 
 
 from __future__ import annotations
 
+import shutil
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -49,6 +50,7 @@ DONE_LINE = "CANOPY_TICK_DONE"
 # the overseer (DESIGN §6). When it fails, the tick closes with this status and raises an item of the same name.
 CANOPY_CHECK = ("canopy", "--version")
 CANOPY_CHECK_TIMEOUT_SECONDS = 60
+MIB = 1024 * 1024
 # How long a ticket marked done stays in the state block's `recently_done`, so the overseer leaves it out while a human
 # has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
 # lists it for as long once more.
@@ -290,11 +292,9 @@ def _steps(
     block, owed, title = _render(
         ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due, woken_by=woken_by
     )
-    unavailable = _check_canopy(ctx, tick_id, log)
-    if unavailable is not None:
-        detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
-        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{attention.UNAVAILABLE}", detail)
-        return finish(TickStatus.CANOPY_UNAVAILABLE, unavailable)
+    halted = _halt(ctx, tick_id, log)
+    if halted is not None:
+        return finish(*halted)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
     failure, usage = _run_overseer(ctx, tick_id, block, title, dry_run=dry_run, log=log)
     if failure is not None:
@@ -376,6 +376,53 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             db.record_decision(
                 ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
             )
+
+
+def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
+    """Check what the overseer needs before paying for it: free disk, then `canopy` as it runs it (DESIGN §6 step 5).
+
+    A check that fails records the attention item named for the status the tick closes with.
+
+    Returns:
+        That status and the tick's summary, or None when both checks pass.
+    """
+    low = _check_disk(ctx, log)
+    if low is not None:
+        status, summary, then = TickStatus.DISK_LOW, low, "Free space there, and the next tick runs it"
+    else:
+        unavailable = _check_canopy(ctx, tick_id, log)
+        if unavailable is None:
+            return None
+        status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
+        then = "Make `canopy --version` work where the loop runs"
+    detail = f"{summary}; the overseer did not run. {then}"
+    db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{status}", detail)
+    return status, summary
+
+
+def _check_disk(ctx: Context, log: logs.TickAdapter) -> str | None:
+    """Check the free space where the overseer and its runs write: the state directory, and the workspace (DESIGN §6).
+
+    The pools are in the workspace (§18), so a run's build fills its disk. Each filesystem is checked once.
+
+    Returns:
+        Which has less than `loop.min_free_disk_mib` free, and how much, or None when each has enough or it is off.
+    """
+    least = ctx.config.loop.min_free_disk_mib
+    if least == 0:
+        return None
+    seen: set[int] = set()
+    for path in (ctx.state_dir, ctx.repo_root):
+        device = path.stat().st_dev
+        if device in seen:
+            continue
+        seen.add(device)
+        free = shutil.disk_usage(path).free // MIB
+        if free < least:
+            failure = f"{free} MiB free on {path}, under loop.min_free_disk_mib ({least})"
+            log.error("overseer not started", extra={"reason": failure})
+            return failure
+    return None
 
 
 def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | None:
