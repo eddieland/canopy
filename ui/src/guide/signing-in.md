@@ -24,8 +24,8 @@ session state of its own, so your session survives a restart of the loop.
 - To sign every browser out, run `canopy secret --rotate` and restart the loop. A new secret ends every session at
   once: the turn-it-off-and-on-again of auth, and it works for the same reason.
 
-Everything a signed-in browser does is written down in the journal, refusals included: when, what it asked for, how
-the server answered, and the address it came from, though never what it said or the cookie it said it with. If the
+Everything a signed-in browser does is written down in the journal: when, what it asked for, how the server answered,
+and the address it came from, though never what it said or the cookie it said it with. If the
 secret ever gets out, that's the list of what was done with it. Reads aren't kept; looking is free.
 
 When a session ends while you're using the page, the next request finds it gone and the page turns into the sign-in

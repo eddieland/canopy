@@ -1019,7 +1019,7 @@ class SplitChild(Row):
 
 @dataclass(frozen=True)
 class WebWrite(Row):
-    """A write request the web UI's server answered for a signed-in session, or one that signed in (TRUST_MODEL T8)."""
+    """A write request the web UI's server let through, or a sign-in, as it answered it (TRUST_MODEL T8)."""
 
     TABLE: ClassVar[str] = "web_writes"
 
@@ -1033,7 +1033,7 @@ class WebWrite(Row):
     code: int
     #: The peer's address, as the server saw it.
     client: str | None
-    #: A fingerprint of the session it carried or signed in; None on the mock server, which signs nobody in.
+    #: A fingerprint of the session it was let through as or signed in; None on the mock server, which signs nobody in.
     session: str | None
 
 

@@ -100,8 +100,8 @@ and its controls TRUST_MODEL T8's.
   would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25) and what they
   have seen. It never takes the tick lock. A page needs no CLI verb for what nobody would type. The server, not the
   page, refuses a forget not typed out.
-- It records each write a signed-in session makes, and each sign-in, in the journal, refusals included, so the
-  operator can see what a holder of the secret did; never a request's body or credentials (T8).
+- It records each write it lets through, and each sign-in, in the journal, so the operator can see what a holder of
+  the secret did; never a request's body or credentials (T8).
 - Every value from the journal or a run's log is untrusted and rendered as text (D113). `canopy.serve` alone imports
   the web stack, and calls out to nothing, so T2's "no outbound call" stands. No read costs more as the journal ages,
   but the spend's all-time total and search.

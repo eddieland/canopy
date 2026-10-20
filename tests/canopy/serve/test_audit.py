@@ -24,6 +24,7 @@ def test_a_sessions_writes_are_recorded_from_its_sign_in_with_their_paths_and_st
     c.get("/api/session")
     c.post(f"/api/tickets/{KEY}/start", headers=headers)
     c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers)
+    # Signing out needs no session, so nothing lets it through: it clears this browser's cookie and is not recorded.
     c.delete("/api/session", headers=headers)
 
     rows = writes(ctx.conn)
@@ -31,7 +32,6 @@ def test_a_sessions_writes_are_recorded_from_its_sign_in_with_their_paths_and_st
         ("POST", "/api/session", 200),
         ("POST", f"/api/tickets/{KEY}/start", 200),
         ("POST", f"/api/tickets/{KEY}/stop", 200),
-        ("DELETE", "/api/session", 200),
     ]
     # The session it signed in is the one its writes carry, named by a fingerprint, never by its cookie or token.
     assert len({w.session for w in rows}) == 1
@@ -44,28 +44,27 @@ def test_a_sessions_writes_are_recorded_from_its_sign_in_with_their_paths_and_st
     assert all(db.parse_time(w.at) for w in rows)
 
 
-def test_a_write_with_its_sessions_token_is_recorded_whichever_guard_refuses_it(ctx: Context) -> None:
+def test_a_write_let_through_and_refused_by_a_verbs_guard_is_recorded(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers)
-    c.post(f"/api/tickets/{KEY}/start", headers={**headers, "origin": "http://evil.test"})
-    c.post("/api/nowhere", headers=headers)
 
-    assert [(w.path, w.code) for w in writes(ctx.conn)[1:]] == [
-        (f"/api/tickets/{KEY}/stop", 409),
-        (f"/api/tickets/{KEY}/start", 403),
-        ("/api/nowhere", 405),
-    ]
+    assert [(w.path, w.code) for w in writes(ctx.conn)[1:]] == [(f"/api/tickets/{KEY}/stop", 409)]
 
 
-def test_a_write_with_the_cookie_but_not_the_token_is_not_recorded(ctx: Context) -> None:
-    # A page on another port of this host: its browser sends the operator's cookie, and the guard, which compares host
-    # names alone, lets its Origin by. It cannot read the token, so it is refused, and recorded nowhere.
+def test_a_write_the_guard_or_the_session_check_refuses_is_not_recorded(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
+    start = f"/api/tickets/{KEY}/start"
+    # A page on another port of this host: its browser sends the operator's cookie, and the guard, which compares host
+    # names alone, lets its Origin by. It cannot read the token.
     other_port = {"origin": "http://127.0.0.1:3000"}
     for _ in range(3):
-        assert c.post(f"/api/tickets/{KEY}/start", headers=other_port).status_code == 403
+        assert c.post(start, headers=other_port).status_code == 403
     assert c.post("/api/session", json={"secret": ""}, headers=other_port).status_code == 422
-    assert c.post(f"/api/tickets/{KEY}/start", headers={**headers, "x-canopy-token": "forged"}).status_code == 403
+    assert c.post(start, headers={**headers, "x-canopy-token": "forged"}).status_code == 403
+    assert c.post(start, headers={**headers, "origin": "http://evil.test"}).status_code == 403
+    assert c.post(start, headers={**headers, "host": "evil.test"}).status_code == 403
+    assert c.post(start, headers={"x-canopy-token": headers["x-canopy-token"]}).status_code == 403
+    assert c.post("/api/nowhere", headers=headers).status_code == 405
 
     assert [w.path for w in writes(ctx.conn)] == ["/api/session"]
 
@@ -86,7 +85,7 @@ def test_a_writes_body_query_and_long_path_are_never_kept(ctx: Context) -> None:
     c.post(f"/api/tickets/{KEY}/start", headers=headers)
     said = "Blue, to match the header."
     c.post(f"/api/tickets/{KEY}/replies?q=hidden", json={"body": said, "submission": "form-0001"}, headers=headers)
-    c.post("/api/" + "x" * 1000, headers=headers)
+    c.post(f"/api/tickets/{'X' * 1000}/start", headers=headers)
 
     replied, long = writes(ctx.conn)[2:]
     assert (replied.path, replied.code) == (f"/api/tickets/{KEY}/replies", 200)
@@ -111,15 +110,15 @@ def test_a_write_the_journal_cannot_take_is_logged_and_still_answered(ctx: Conte
     holder.execute("BEGIN IMMEDIATE")
     try:
         with mock.patch.object(db, "BUSY_SECONDS", 0.01), mock.patch.object(audit, "_log", autospec=True) as log:
-            assert c.delete("/api/session", headers=headers).status_code == 200
+            assert c.post("/api/loop/tick", headers=headers).status_code == 200
     finally:
         holder.execute("ROLLBACK")
         holder.close()
 
     log.warning.assert_called_once()
-    assert log.warning.call_args.args == ("web UI write not recorded: %s %s", "DELETE", "/api/session")
-    assert log.warning.call_args.kwargs["extra"]["path"] == "/api/session"
-    assert [w.method for w in writes(ctx.conn)] == ["POST"]
+    assert log.warning.call_args.args == ("web UI write not recorded: %s %s", "POST", "/api/loop/tick")
+    assert log.warning.call_args.kwargs["extra"]["path"] == "/api/loop/tick"
+    assert [w.path for w in writes(ctx.conn)] == ["/api/session"]
 
 
 def test_a_record_that_fails_any_way_is_logged_and_the_request_still_answered(ctx: Context) -> None:
@@ -128,7 +127,7 @@ def test_a_record_that_fails_any_way_is_logged_and_the_request_still_answered(ct
         mock.patch.object(Backend, "open", autospec=True, side_effect=OSError("no space left on device")),
         mock.patch.object(audit, "_log", autospec=True) as log,
     ):
-        assert c.delete("/api/session", headers=headers).status_code == 200
+        assert c.post("/api/loop/tick", headers=headers).status_code == 200
 
     log.warning.assert_called_once()
     assert log.warning.call_args.kwargs["extra"]["error"] == "OSError: no space left on device"

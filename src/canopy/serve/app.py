@@ -73,7 +73,7 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     # Last, so every API route, including an unknown one, is matched before it.
     app.add_route(f"{base}/{{path:path}}", spa.respond, methods=["GET", "HEAD"], include_in_schema=False)
     app.add_middleware(QuietLeaving)
+    # Inside the guard: what it refuses is never recorded.
+    app.add_middleware(Audit, backend=backend)
     app.add_middleware(Guard, api_prefix=f"{base}/api", hosts=options.hosts)
-    # Outermost, so a write the guard refuses is recorded too.
-    app.add_middleware(Audit, backend=backend, sessions=sessions)
     return app

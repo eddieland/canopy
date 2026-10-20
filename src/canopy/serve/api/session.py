@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from canopy.infra import logs
 from canopy.serve.api.deps import SessionsDep
-from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS, SIGNED_IN
+from canopy.serve.auth import AUTHORIZED, FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import ErrorResponse, Session, SignIn
 
 TAG = "session"
@@ -43,6 +43,7 @@ async def sign_in(body: SignIn, request: Request, response: Response, sessions: 
         await asyncio.sleep(FAILED_SIGN_IN_SECONDS)
         raise HTTPException(status_code=401, detail="that is not the listener secret")
     if sessions.open:
+        setattr(request.state, AUTHORIZED, None)
         return Session(signed_in=True, token=OPEN_TOKEN)
     value = sessions.issue()
     response.set_cookie(
@@ -54,7 +55,7 @@ async def sign_in(body: SignIn, request: Request, response: Response, sessions: 
         samesite="strict",
     )
     signed = sessions.check(value)
-    setattr(request.state, SIGNED_IN, signed)
+    setattr(request.state, AUTHORIZED, signed)
     _log.info("web UI signed in")
     return Session(signed_in=True, token=sessions.token(signed) if signed is not None else None)
 
