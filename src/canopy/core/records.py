@@ -8,7 +8,8 @@ table after every migration: the same columns, in order, each with the type and 
 A column holding one of `vocab`'s closed vocabularies is a field of that `StrEnum`, so the row carries the member and a
 value the vocabulary does not hold is refused where the row is read, not where something later branches on it.
 
-Every journal table has a row type; a query still reading `sqlite3.Row` is converted when a PR changes it.
+Every journal table has a row type. A query that reads some of a table's columns, or joins in another's, reads
+`sqlite3.Row`.
 """
 
 from __future__ import annotations
