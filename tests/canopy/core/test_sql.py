@@ -13,7 +13,7 @@ def conn(tmp_path: Path, journals: Journals) -> sqlite3.Connection:
     return journals.open(tmp_path / db.DB_FILE_NAME)
 
 
-def rendered(statement: sql.Composable) -> tuple[str, tuple[sql.Value, ...]]:
+def rendered(statement: sql.Composable) -> tuple[str, tuple[sql.Bound, ...]]:
     built = statement.fragment()
     return built.text, built.params
 
@@ -146,8 +146,64 @@ def test_rows_inserted_many_at_a_time_take_their_values_from_the_rows(conn: sqli
         ("a", "A"),
         ("b", "B"),
     ]
-    with pytest.raises(ValueError, match="from the rows alone"):
+    with pytest.raises(ValueError, match="needs a ROW"):
         sql.execute_many(conn, sql.insert("pr_titles", pr_url="c", title="C", updated_at="t"), [()])
+
+
+def test_a_statement_run_per_row_fills_its_rows_and_keeps_its_other_values(conn: sqlite3.Connection) -> None:
+    ticks = [db.start_tick(conn, dry_run=True) for _ in range(3)]
+    closed = sql.update("ticks").set(status=TickStatus.OK, summary=sql.ROW).where("id = ?", sql.ROW)
+    assert rendered(closed) == (
+        "UPDATE ticks SET status = ?, summary = ? WHERE id = ?",
+        (TickStatus.OK, sql.ROW, sql.ROW),
+    )
+    sql.execute_many(conn, closed, [("first", ticks[0]), ("second", ticks[1])])
+    summaries = sql.select("summary, status").from_("ticks").order_by("id")
+    assert [tuple(r) for r in sql.execute(conn, summaries)] == [("first", "ok"), ("second", "ok"), (None, "running")]
+    sql.execute_many(conn, sql.delete("ticks").where("id = ?", sql.ROW), [(t,) for t in ticks[:2]])
+    assert [int(r[0]) for r in sql.execute(conn, sql.select("id").from_("ticks"))] == ticks[2:]
+
+
+def test_a_row_must_fill_every_row_and_only_execute_many_fills_them(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    closed = sql.update("ticks").set(summary=sql.ROW).where("id = ?", sql.ROW)
+    with pytest.raises(ValueError, match="a row of 1 values for a statement with 2 ROWs"):
+        sql.execute_many(conn, closed, [(tick,)])
+    with pytest.raises(ValueError, match="through execute_many"):
+        sql.execute(conn, closed)
+    with pytest.raises(TypeError, match="takes a piece of SQL"):
+        sql.frag("id IN ({})", sql.ROW)
+
+
+def test_an_insert_takes_a_selects_rows(conn: sqlite3.Connection) -> None:
+    sql.execute_many(conn, sql.insert_rows("pr_titles", ("pr_url", "title", "updated_at")), [("a", "A", "t")])
+    copied = sql.select("pr_url || '/2', title, ?", "t2").from_("pr_titles").where("pr_url = ?", "a")
+    q = sql.insert_from("pr_titles", ("pr_url", "title", "updated_at"), copied)
+    assert rendered(q) == (
+        (
+            "INSERT INTO pr_titles (pr_url, title, updated_at) SELECT pr_url || '/2', title, ? FROM pr_titles "
+            "WHERE pr_url = ?"
+        ),
+        ("t2", "a"),
+    )
+    sql.execute(conn, q)
+    assert sql.execute(conn, q.or_ignore()).rowcount == 0
+    found = sql.select("pr_url, updated_at").from_("pr_titles").order_by("pr_url")
+    assert [tuple(r) for r in sql.execute(conn, found)] == [("a", "t"), ("a/2", "t2")]
+    with pytest.raises(ValueError, match="names no column"):
+        sql.insert_from("pr_titles", (), copied)
+
+
+def test_not_in_keeps_the_rows_outside_the_list_and_every_row_for_none(conn: sqlite3.Connection) -> None:
+    ticks = [db.start_tick(conn, dry_run=True) for _ in range(3)]
+    assert rendered(sql.not_in("id", ticks[:2])) == ("id NOT IN (?, ?)", tuple(ticks[:2]))
+    outside = sql.select("id").from_("ticks").where_not_in("id", ticks[:2])
+    assert [int(r[0]) for r in sql.execute(conn, outside)] == ticks[2:]
+    every = sql.select("count(*)").from_("ticks").where_not_in("id", [])
+    assert sql.execute(conn, every).fetchone()[0] == 3
+    sql.execute(conn, sql.update("ticks").set(summary="kept").where_not_in("id", ticks[:1]))
+    sql.execute(conn, sql.delete("ticks").where_not_in("id", ticks[:1]))
+    assert [int(r[0]) for r in sql.execute(conn, sql.select("id").from_("ticks"))] == ticks[:1]
 
 
 def test_an_update_sets_by_keyword_or_in_sql_and_returns(conn: sqlite3.Connection) -> None:

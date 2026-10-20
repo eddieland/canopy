@@ -472,11 +472,8 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
 
 def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, memories: Sequence[records.Memory]) -> None:
     # Beside the count, so a memory names the runs that relied on it, and a run's page what it relied on.
-    for m in memories:
-        sql.execute(
-            conn,
-            sql.update("memory_reads").set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", m.id),
-        )
+    marked = sql.update("memory_reads").set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", sql.ROW)
+    sql.execute_many(conn, marked, [(m.id,) for m in memories])
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:

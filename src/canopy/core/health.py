@@ -48,14 +48,14 @@ _FAILED: dict[Kind, frozenset[str]] = {
 _RUN_ROWS = sql.select(
     "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd"
 ).from_("runs")
-_PLAN_KINDS = sql.in_("kind", (RunKind.PLAN, RunKind.NEEDS_PLAN))
+_PLAN_KINDS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
 _ROWS: Mapping[Kind, sql.Select] = {
     "overseer": sql.select(
         "id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
         "NULL AS subject, summary AS note, cost_usd"
     ).from_("ticks"),
-    "workers": _RUN_ROWS.where("NOT ({})", _PLAN_KINDS),
-    "plans": _RUN_ROWS.where("{}", _PLAN_KINDS),
+    "workers": _RUN_ROWS.where_not_in("kind", _PLAN_KINDS),
+    "plans": _RUN_ROWS.where_in("kind", _PLAN_KINDS),
     "chores": sql.select("id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd").from_(
         "chore_runs"
     ),

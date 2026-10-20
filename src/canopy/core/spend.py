@@ -49,11 +49,11 @@ IDLE_TICKS = 20
 # old triage before a plan among them (M55), is a row of `runs`, a kind of its own, and every other row there a
 # worker's, an old split's among them. Then every kind, the overseer's ticks included. The tables and conditions are
 # fixed, never input (D125).
-_PLANS = sql.in_("kind", (RunKind.PLAN, RunKind.NEEDS_PLAN))
+_PLANS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
 _EVERY = sql.frag("1")
 _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
-    "workers": ("runs", sql.frag("NOT ({})", _PLANS)),
-    "plans": ("runs", _PLANS),
+    "workers": ("runs", sql.not_in("kind", _PLANS)),
+    "plans": ("runs", sql.in_("kind", _PLANS)),
     "chores": ("chore_runs", _EVERY),
     "reviews": ("review_runs", _EVERY),
 }

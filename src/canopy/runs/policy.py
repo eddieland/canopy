@@ -107,7 +107,7 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
         sql.select("r.ticket_key, s.repo, r.kind, count(DISTINCT r.id)")
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
-        .where("NOT {}", sql.in_("r.kind", _APART))
+        .where_not_in("r.kind", _APART)
         .group_by("r.ticket_key, s.repo, r.kind")
     )
     if ticket is not None:

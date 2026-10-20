@@ -309,14 +309,25 @@ class GitHub(procs.SubprocessRunner):
                         .where("item = 'comment'")
                         .where("id = ?", line["comment"])
                     )
-                    sql.execute(
-                        conn,
-                        sql.frag(
-                            "INSERT INTO observed_reviews (pr_url, item, id, author, bot, created_at, body, url, "
-                            "review_id, thread_id, path, line, side, outdated, resolved, observed_at) {}",
-                            answered,
-                        ),
+                    columns = (
+                        "pr_url",
+                        "item",
+                        "id",
+                        "author",
+                        "bot",
+                        "created_at",
+                        "body",
+                        "url",
+                        "review_id",
+                        "thread_id",
+                        "path",
+                        "line",
+                        "side",
+                        "outdated",
+                        "resolved",
+                        "observed_at",
                     )
+                    sql.execute(conn, sql.insert_from("observed_reviews", columns, answered))
         finally:
             conn.close()
 

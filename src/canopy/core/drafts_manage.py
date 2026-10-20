@@ -619,7 +619,7 @@ def _left_pending(conn: sqlite3.Connection, pr: str) -> str | None:
         .from_("drafts")
         .where("pr_url = ?", pr)
         .where("pending_review IS NOT NULL")
-        .where("NOT ({})", sql.in_("status", (DraftStatus.UNCONFIRMED, DraftStatus.STAGED)))
+        .where_not_in("status", (DraftStatus.UNCONFIRMED, DraftStatus.STAGED))
         .limit(1),
     ).fetchone()
     return None if row is None else str(row["pending_review"])
