@@ -1118,7 +1118,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   section or table reads as one change, not as a pill for each run its code spans and marks break it into), pressed as
   a waiting plan opens, since that is when it is read for what changed; while pressed, how many
   changes it marks (`12 changes`, a removal and what replaced it one) and ghost `icon-xs` buttons that step the cursor
-  to the change before or after it, round to the other end, the plan scrolling to it. Last, a ghost `xs` `Outline ▾`
+  to the change before or after it, round to the other end, the plan scrolling to it. Then `Markdown`, a `Toggle` led
+  by the file-code icon, swaps the document for its Markdown in a plain monospace field (`text-xs`, the plan's measure,
+  as tall as the text), editable where the plan is; while pressed, the changes, the outline, and the toolbar step aside,
+  and the comments are a plain list, since their passages have no place on the page. Last, a ghost `xs` `Outline ▾`
   (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
   section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
   the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a

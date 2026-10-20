@@ -83,6 +83,13 @@ for Alt:
 
 The **Table** menu has no keys. It inserts a table, and inside one adds or deletes rows and columns, or the table.
 
+**Markdown**, in the Plan panel's header, swaps the document for the Markdown it's made of, as plain text you can
+read or edit as written. It's for what a toolbar makes tedious: moving a section, fixing a table by hand, or seeing
+exactly what the planner wrote. The toolbar, the outline, and the changes step aside while it's on, and the comments
+sit in a plain list. Turn it off and the text is read back into the document, as one step of undo, and each comment
+finds its passage again by its words. A passage you rewrote there is `passage gone`, as it would be if you'd rewritten
+it in the document.
+
 Leaving the page with edits not saved or a comment not sent asks first. And if the file changed since you opened it,
 the save is refused rather than overwriting someone else's edit unseen.
 
