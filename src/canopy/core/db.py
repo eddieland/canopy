@@ -727,19 +727,17 @@ def insert_run(
     plan_id: int | None = None,
     reasons: Sequence[str] = (),
     rendered: Callable[[int], None] | None = None,
-    reads: Sequence[str] = (),
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
     Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
-    run's branch. A run that does not work in units, a plan or a triage, leaves the ticket's branch and units as they
+    run's branch. A run that does not work in units, a plan, leaves the ticket's branch and units as they
     are: it pushes nothing (DESIGN §25). `started` builds the `run.started` event from the run's id, recorded in the
     same transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check`
     runs first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
     `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
     `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
-    `reads` are the repositories a run that leases no slot reads, a triage's, by name (DESIGN §25).
 
     Returns:
         The new run's id.
@@ -768,7 +766,6 @@ def insert_run(
             [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch, s.pool) for s in slots],
         )
         sql.execute_many(conn, sql.insert_rows("run_reasons", ("run_id", "reason")), [(run_id, r) for r in reasons])
-        sql.execute_many(conn, sql.insert_rows("run_reads", ("run_id", "repo")), [(run_id, r) for r in reads])
         event = started(run_id) if started is not None else None
         if event is not None:
             record_event(conn, event)
@@ -809,14 +806,6 @@ def run_slots(conn: sqlite3.Connection, run_id: int) -> list[records.RunSlot]:
     return records.fetch_all(
         conn, records.RunSlot, sql.select("*").from_("run_slots").where("run_id = ?", run_id).order_by("repo")
     )
-
-
-def run_reads(conn: sqlite3.Connection, run_id: int) -> list[str]:
-    """Return the repositories run `run_id`, a triage, reads without a slot (DESIGN §25), in the order it named them."""
-    rows = records.fetch_all(
-        conn, records.RunRead, sql.select("*").from_("run_reads").where("run_id = ?", run_id).order_by("rowid")
-    )
-    return [r.repo for r in rows]
 
 
 def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, list[records.RunSlot]]:

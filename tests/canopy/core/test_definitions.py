@@ -46,8 +46,8 @@ def test_no_agent_has_web_tools(name: str) -> None:
 @pytest.mark.parametrize("name", runtime_definitions.agent_names())
 def test_no_bundled_agent_sets_a_temperature(name: str) -> None:
     # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
-    # that sets one. The overseer's, the triage agent's, and the reviewer's come from `runtime`, rendered into the
-    # snapshot rather than set in their bundled files.
+    # that sets one. The overseer's and the reviewer's come from `runtime`, rendered into the snapshot rather than set
+    # in their bundled files.
     frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
     assert "\ntemperature:" not in frontmatter
 
@@ -172,13 +172,10 @@ def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env
 TEMPERATURES = [
     ("canopy-reviewer", "review_temperature"),
     ("canopy-overseer", "overseer_temperature"),
-    ("canopy-plan-triage", "plan_triage_temperature"),
 ]
 
 
-@pytest.mark.parametrize(
-    ("agent", "rendered"), [("canopy-reviewer", None), ("canopy-overseer", "0.1"), ("canopy-plan-triage", "0.1")]
-)
+@pytest.mark.parametrize(("agent", "rendered"), [("canopy-reviewer", None), ("canopy-overseer", "0.1")])
 def test_an_agent_gets_its_default_temperature(canopy_env: CanopyEnv, agent: str, rendered: str | None) -> None:
     """The reviewer sets none, since it often runs on a model that refuses one, such as OpenAI's reasoning models."""
     text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
@@ -282,11 +279,10 @@ def test_the_private_worker_may_create_follow_ups_and_write_nothing_else_to_the_
     assert _allowed(_rules_in(rendered), tool) is allowed
 
 
-@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
-def test_the_planner_and_triage_get_no_create_tool(agent: str) -> None:
-    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+def test_the_planner_gets_no_create_tool() -> None:
+    bundled = (resources.agents_dir() / f"{agents.PLANNER}.md").read_text()
     rendered = opencode_definitions.render_private(
-        bundled, config.DEFAULT_TRACKER_TOOLS["github"], f"agents/{agent}.md"
+        bundled, config.DEFAULT_TRACKER_TOOLS["github"], f"agents/{agents.PLANNER}.md"
     )
     assert not _allowed(_rules_in(rendered), "github_issue_write")
 
@@ -452,14 +448,10 @@ def _outside_bash(definition: str) -> list[str]:
         ("github_pull_request_read", True),
     ],
 )
-# The triage agent is the planner with nothing to edit (DESIGN §25, Triage before a plan).
-@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
-def test_the_planner_reads_the_ticket_and_writes_nothing(
-    canopy_env: CanopyEnv, agent: str, tool: str, *, allowed: bool
-) -> None:
+def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, tool: str, *, allowed: bool) -> None:
     # Rendered with the tracker's server and read tools: every other tool of the server is denied by its wildcard, so
     # a write tool no pattern names fails closed (DESIGN §25, TRUST_MODEL T6).
-    path = f"agents/{agent}.md"
+    path = f"agents/{agents.PLANNER}.md"
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     assert _allowed(_rules_in(rendered), tool) is allowed
 
@@ -501,17 +493,6 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
     assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "allow"
     for permission in ("bash", "task", "webfetch"):
         assert _opencode_disabled(ruleset, permission)
-
-
-def test_the_triage_agent_can_edit_nothing_and_has_no_shell(canopy_env: CanopyEnv) -> None:
-    # It writes nothing anywhere (TRUST_MODEL T6): OpenCode leaves each of these tools out of its toolset.
-    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
-        f"agents/{agents.PLAN_TRIAGE}.md"
-    ]
-    ruleset = _opencode_ruleset(rendered.decode())
-    for permission in ("edit", "bash", "task", "webfetch", "external_directory"):
-        assert _opencode_disabled(ruleset, permission)
-    assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "deny"
 
 
 def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:
@@ -849,7 +830,7 @@ def test_with_no_tracker_tools_known_the_reviewer_is_rendered_as_shipped() -> No
     assert opencode_definitions.render_reviewer_reads(bundled, None, "linear") == bundled
 
 
-#: GitHub's tools the planner and the triage agent may call when the tracker is GitHub: its reads of issues and PRs,
+#: GitHub's tools the planner may call when the tracker is GitHub: its reads of issues and PRs,
 #: and the signed-in user. The code they read in their desks.
 PLANNER_GITHUB_READS = {
     "github_get_me",
@@ -866,18 +847,17 @@ PLANNER_GITHUB_READS = {
 GITHUB_PR_WRITES = ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment")
 
 
-@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
-def test_with_a_github_tracker_the_planner_reads_and_writes_nothing(canopy_env: CanopyEnv, agent: str) -> None:
-    # GitHub's server is the tracker's, the one the private worker's PRs go through too: of its tools, the planner and
-    # the triage agent get only the reads (DESIGN §25, TRUST_MODEL T6).
+def test_with_a_github_tracker_the_planner_reads_and_writes_nothing(canopy_env: CanopyEnv) -> None:
+    # GitHub's server is the tracker's, the one the private worker's PRs go through too: of its tools, the planner gets
+    # only the reads (DESIGN §25, TRUST_MODEL T6).
     canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": "github"}})
-    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    path = f"agents/{agents.PLANNER}.md"
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     rules = _rules_in(rendered)
     assert {tool for tool in GITHUB_TOOLS if _allowed(rules, tool)} == PLANNER_GITHUB_READS
 
 
-@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
-def test_the_planner_gets_no_write_canopy_knows_from_an_operators_read_tools(canopy_env: CanopyEnv, agent: str) -> None:
+def test_the_planner_gets_no_write_canopy_knows_from_an_operators_read_tools(canopy_env: CanopyEnv) -> None:
     # An operator's list as canopy's default for GitHub once was, the private worker's PR tools among the reads, and
     # its create tool too.
     canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": "github"}})
@@ -886,13 +866,13 @@ def test_the_planner_gets_no_write_canopy_knows_from_an_operators_read_tools(can
     # Its replies posted, so that the private worker keeps the reply tool: drafting them denies it.
     canopy_env.write_private('[trust]\nreview_replies = "post"\n')
     files = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))
-    rules = _rules_in(files[f"agents/{agent}.md"].decode())
+    rules = _rules_in(files[f"agents/{agents.PLANNER}.md"].decode())
     assert [tool for tool in read_tools if _allowed(rules, f"github_{tool}")] == ["issue_read"]
     private = _rules_in(files[f"agents/{agents.PRIVATE_WORKER}.md"].decode())
     assert [tool for tool in read_tools if _allowed(private, f"github_{tool}")] == read_tools
 
 
-@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE, agents.PRIVATE_WORKER])
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PRIVATE_WORKER])
 def test_an_operators_read_tools_leave_the_private_worker_its_pr_tools(canopy_env: CanopyEnv, agent: str) -> None:
     # `tracker.read_tools` names the reads; the PR tools are the provider's, as its create tools are.
     canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": "github"}})

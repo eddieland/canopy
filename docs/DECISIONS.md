@@ -499,3 +499,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: SQLAlchemy Core (a schema to keep beside the migrations, and an engine canopy does not need); PyPika (a
   dependency for what one module of ours does); f-strings with a reason on each (a promise no checker holds).
 - Revisit: if a feature builds queries from what the operator picks at run time, such as arbitrary filters.
+
+## D126. Trivial work is planned; no agent waives a plan
+
+- Every ticket `policy.plan` plans is planned, trivial or not; only the operator's own `canopy plan KEY --skip` waives
+  one (DESIGN §25).
+- Why: the operator (2026-10-20) found that M55's triage judged too few tickets trivial for its runs to save what they
+  cost.
+- Rejected: a cheaper agent judging trivial work before the plan, with its verdict waiving it (M55, built and removed).
+- Revisit: when ROADMAP's deferred list's trigger for M55 fires.

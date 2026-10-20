@@ -152,8 +152,8 @@ next tick decides whether to use it.
 
 ### Kind
 
-What a run is for: `implement`, `resume`, or `plan`. Older runs may say `fix-ci`, from before a resume fixed CI, or
-`split`, from before workers filed follow-ups.
+What a run is for: `implement`, `resume`, or `plan`. Older runs may say `fix-ci`, from before a resume fixed CI,
+`split`, from before workers filed follow-ups, or `needs-plan`, a triage from before every planned ticket got its plan.
 Reviews and chores are kinds of their own. Each kind has its own attempt limit. See
 [How the loop works](how-the-loop-works#runs).
 

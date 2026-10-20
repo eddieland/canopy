@@ -105,7 +105,7 @@ def stored_object(result_json: str | None) -> dict[str, object]:
 def stored_note(result: Mapping[str, object]) -> str:
     """What a stored result says about its run: the harness's note when it wrote one, else the agent's summary.
 
-    A triage's summary is its reason (DESIGN §25).
+    An old triage's summary is its reason (M55).
 
     Returns:
         The note or summary as text, still untrusted and not cut, or "" when the result has neither.

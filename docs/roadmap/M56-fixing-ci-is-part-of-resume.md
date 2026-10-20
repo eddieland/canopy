@@ -32,8 +32,8 @@ comes back to a PR), which the PR that builds it folds into §7, §8, §10, and 
   `resume` with `ci` among its reasons.
 - **Under M54.** With `policy.feedback_plan = "approve"`, a `resume` for a failed check alone waits on an approved plan
   like any other, so a CI fix that ran unattended as `fix-ci` now waits for the operator. That is intended: the
-  operator asked for CI rounds to be planned too (2026-10-17). M55's triage, where it is on, can waive the plan for a
-  trivial one. With feedback plans off, a red check sends its `resume` unattended, as `fix-ci` did.
+  operator asked for CI rounds to be planned too (2026-10-17), trivial ones included (D126). With feedback plans off,
+  a red check sends its `resume` unattended, as `fix-ci` did.
 - **What else changes.** M25's `triage-ci`, once built, comes before a `resume` for a failed check as it would have
   before `fix-ci`; M35's notice holds that `resume` as it held `fix-ci`; M38 moves `ci_red`'s `dispatch resume` into
   code under its own evidence rule; the overseer prompt's phase table and the web UI's kind chips and guide pages say

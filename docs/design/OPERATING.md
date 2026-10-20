@@ -78,7 +78,7 @@ Whoever controls a shared workspace file (anyone who can push to the repository 
 choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
 guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
 `chores`, `review`, `serve`, `memory`, `paths`, `capacity`, and `loop` key, the queue labels, the repliers and trusted
-reviewers, the comment marks and commit trailer, `trust.rebase`, and the plan triage. Unknown keys are errors in every
+reviewers, the comment marks and commit trailer, and `trust.rebase`. Unknown keys are errors in every
 file, and a removed key is an error that says what to do instead.
 
 **The private file's provenance.** The private file is under the workspace root, which may be a checkout of a shared
@@ -124,8 +124,7 @@ the runtime reads it: a custom template, such as a sandbox wrapper's, must still
 OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
 `{prompt}`. `runtime.worker_cmd_prefix` and `worker_cmd_suffix` wrap every command a worker run starts (worker, private
 worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; they may not hold `{prompt}`. The
-overseer's, a chore's, a review's, and a triage's templates are not wrapped: each takes a different sandbox role, or
-none.
+overseer's, a chore's, and a review's templates are not wrapped: each takes a different sandbox role, or none.
 
 **Prompt overrides** in `paths.prompt_overrides` replace files of the same name in `prompts/`. An override must keep
 what the guards rely on: an overseer override passes `--label` on every `canopy dispatch`, and a worker override
@@ -257,7 +256,7 @@ too, with the loop's state and the running and recent runs.
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
 raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
 `multi_repo`, `follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
-`review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and `not_trivial`
+`review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review` and `plan_changed`
 (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), `drafts_waiting` (§29), and `connector_failed`
 (§30). An item about one unit names its repository, shown as `KEY (repo)`.
 

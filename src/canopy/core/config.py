@@ -64,6 +64,8 @@ WORKSPACE_STATE_DIR = ".canopy"
 CONFIG_FILE_NAME = "config.toml"
 # Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
 WORKSPACE_MAP_TABLES = ("workspace", "repos")
+# M55: triage before a plan waived too few plans to pay for itself, so trivial work is planned (DESIGN §25).
+_PLANNED = "delete it; every ticket policy.plan plans is planned, and canopy plan KEY --skip waives one"
 # Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
 REMOVED_KEYS = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
@@ -74,6 +76,12 @@ REMOVED_KEYS = {
     # M46: workers file follow-up tickets, which replaced splits (DESIGN §18).
     "policy.max_split_attempts": "delete it; workers file follow-up tickets instead of a split run",
     "runtime.split_cmd": "delete it; workers file follow-up tickets instead of a split run",
+    # M55: a triage's keys.
+    "policy.plan_triage": _PLANNED,
+    "policy.trivial": _PLANNED,
+    "runtime.plan_triage_cmd": _PLANNED,
+    "runtime.plan_triage_temperature": _PLANNED,
+    "runtime.plan_triage_timeout_minutes": _PLANNED,
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -377,8 +385,8 @@ def link_template(placeholder: str) -> AfterValidator:
 
 
 # Each shipped provider's usual MCP server, as an operator's runtime config usually names it, and the tools of it a
-# private worker needs: its read tools, which the planner and the triage agent get too, and for GitHub, whose server is
-# also the one PRs go through, the PR tools, which only the private worker gets. None of the reads writes anything
+# private worker needs: its read tools, which the planner gets too, and for GitHub, whose server is also the one PRs
+# go through, the PR tools, which only the private worker gets. None of the reads writes anything
 # (DESIGN §22, §25). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's MCP server v2.0.1);
 # a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL asks for
 # `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
@@ -439,8 +447,8 @@ class Tracker(Section):
     # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
     # Private: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
     query_every_minutes: Annotated[Count, Scope.PRIVATE] = 0
-    # The tracker's MCP server, as the operator's runtime config names it, and the read tools of it a private worker,
-    # the planner, and the triage agent may call (DESIGN §22, §25). Empty and unset mean the provider's defaults. A
+    # The tracker's MCP server, as the operator's runtime config names it, and the read tools of it a private worker
+    # and the planner may call (DESIGN §22, §25). Empty and unset mean the provider's defaults. A
     # provider's create and PR tools come from its defaults, whatever `read_tools` says. Private: they decide what a
     # private worker can write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_server_name)] = ""
@@ -468,16 +476,6 @@ class Tracker(Section):
         return McpTools(server, tuple(allowed), default.create, default.pr_writes)
 
 
-#: The most `policy.trivial` may say: it is in every triage prompt (DESIGN §25).
-MAX_TRIVIAL = 2000
-
-
-def _trivial(value: str) -> str:
-    if len(value) > MAX_TRIVIAL:
-        raise ValueError(f"must be at most {MAX_TRIVIAL} characters")
-    return value
-
-
 class Policy(Section):
     """The `[policy]` table: attempt limits and cooldowns. A limit counts every run of that kind a ticket has had."""
 
@@ -497,13 +495,6 @@ class Policy(Section):
     # Whether a ticket waits on a plan the operator approved before its implement (DESIGN §25): a guard in code. A
     # ticket's own setting, `canopy plan KEY` or `--skip`, overrides it.
     plan: Annotated[Literal["off", "approve"], Scope.SHARED, Tighten.LATER] = "off"
-    #: Whether a cheaper agent first judges a ticket the policy would plan, and waives its plan for work it judges
-    #: trivial (DESIGN §25, Triage before a plan). Private, unlike the rest of the table: it loosens the operator's
-    #: plan gate, which a shared file must not (TRUST_MODEL T7).
-    plan_triage: Annotated[Literal["off", "on"], Scope.PRIVATE] = "off"
-    #: Plain language for the triage agent: what the operator counts as trivial, in place of its prompt's own measure.
-    #: Optional: without it, the agent judges by that measure.
-    trivial: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trivial)] = ""
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
@@ -614,12 +605,6 @@ class Runtime(Section):
     # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
     # shares the worker's timeout.
     plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLANNER)
-    #: The triage agent, which judges whether a ticket's work needs a plan (DESIGN §25, Triage before a plan): point it
-    #: at a cheaper model than `plan_cmd`'s. It is no worker run, so `worker_cmd_prefix` does not wrap it.
-    plan_triage_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLAN_TRIAGE)
-    #: The triage agent's temperature, or -1 to set none and leave the model's own: set -1 when `plan_triage_cmd`
-    #: names a model that refuses one, such as OpenAI's reasoning models.
-    plan_triage_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.CHORE)
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
@@ -635,8 +620,6 @@ class Runtime(Section):
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45
-    #: How long a triage may run: it ends `timeout` after this, and the ticket is planned (DESIGN §25).
-    plan_triage_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 10
     # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8). Private: it
     # chooses what workers are told to do, which a shared workspace file must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_skill_name)] = ""

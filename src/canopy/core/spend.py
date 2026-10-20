@@ -1,10 +1,10 @@
 """What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
 
 Reads only. Every cost is what the agent runtime reported (§13), summed by the local day a run started on, or by the
-local hour for a window in hours: the overseer of each tick, worker runs (old split runs among them), triage runs before
-a plan and the plan runs (§25), chore runs, and review runs. A dry run's overseer is kept apart from the live ones', and
-idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window cost, what it
-got done: the tickets marked done in it, the plans its triage runs waived, and what each ticket and PR's own runs cost.
+local hour for a window in hours: the overseer of each tick, worker runs (old split runs among them), plan runs (§25,
+old triage runs before a plan among them), chore runs, and review runs. A dry run's overseer is kept apart from the live
+ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window
+cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
 model call reads again.
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
-type Kind = Literal["overseer", "workers", "triage", "plans", "chores", "reviews"]
+type Kind = Literal["overseer", "workers", "plans", "chores", "reviews"]
 type Done = Literal["merged", "closed"]
 #: A table of agent runs, each with a `started_at` and a `cost_usd`: the overseer's ticks, and the others'.
 type _Table = Literal["ticks", "runs", "chore_runs", "review_runs"]
@@ -36,7 +36,7 @@ type _Table = Literal["ticks", "runs", "chore_runs", "review_runs"]
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
-KINDS: tuple[Kind, ...] = ("overseer", "workers", "triage", "plans", "chores", "reviews")
+KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
@@ -45,15 +45,14 @@ MAX_HOURS = 7 * 24
 # The idle ticks the web UI links to: the newest in the window.
 IDLE_TICKS = 20
 
-# Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a triage before a
-# plan and a plan run (§25) are rows of `runs`, each a kind of its own, and every other row there a worker's, an old
-# split's among them. Then every kind, the overseer's ticks included.
-_TRIAGE = sql.frag("kind = ?", RunKind.NEEDS_PLAN)
-_PLANS = sql.frag("kind = ?", RunKind.PLAN)
+# Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a plan run (§25), an
+# old triage before a plan among them (M55), is a row of `runs`, a kind of its own, and every other row there a
+# worker's, an old split's among them. Then every kind, the overseer's ticks included. The tables and conditions are
+# fixed, never input (D125).
+_PLANS = sql.in_("kind", (RunKind.PLAN, RunKind.NEEDS_PLAN))
 _EVERY = sql.frag("1")
 _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
-    "workers": ("runs", sql.frag("NOT ({} OR {})", _TRIAGE, _PLANS)),
-    "triage": ("runs", _TRIAGE),
+    "workers": ("runs", sql.frag("NOT ({})", _PLANS)),
     "plans": ("runs", _PLANS),
     "chores": ("chore_runs", _EVERY),
     "reviews": ("review_runs", _EVERY),
@@ -84,7 +83,6 @@ class Costs:
     idle: float | None = None
     dry_run: float | None = None
     workers: float | None = None
-    triage: float | None = None
     plans: float | None = None
     chores: float | None = None
     reviews: float | None = None
@@ -92,7 +90,7 @@ class Costs:
     @property
     def total(self) -> float | None:
         """Everything, dry runs included, as the web UI's 24 hour and 30 day counters count it; None when none did."""
-        return _sum([self.overseer, self.dry_run, self.workers, self.triage, self.plans, self.chores, self.reviews])
+        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews])
 
 
 @dataclass(frozen=True)
@@ -213,13 +211,11 @@ class Breakdown:
     The window is `[since, until)`, each a journal time: local midnight on its first day, and after its last. A window
     in `hours` has `days` None and lists each hour in `per_day`, from its first hour's start to the end of its last.
     What it got done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer,
-    chores, and the runs of tickets still open are what it cost to get those done. `waived` is how many of the triage
-    runs that started in it waived their ticket's plan (§25), so their cost reads against the planner runs they saved,
-    whether or not the operator undid the waiver since. `tickets` and `pull_requests` list what each one's own runs
-    cost, the most first. `first_calls` is each kind's first model calls by snapshot, the kinds in `KINDS` order and
-    each kind's snapshots by when their first run started; the overseer's include dry runs, whose first call is a live
-    tick's. `tools` is what each kind's tool calls returned, by tool, the most characters first; the overseer's include
-    dry runs too.
+    chores, and the runs of tickets still open are what it cost to get those done. `tickets` and `pull_requests` list
+    what each one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the
+    kinds in `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs,
+    whose first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters
+    first; the overseer's include dry runs too.
     """
 
     since: str
@@ -233,7 +229,6 @@ class Breakdown:
     idle_share: float | None = None
     done: int = 0
     per_done: float | None = None
-    waived: int = 0
     tickets: Sequence[TicketSpend] = ()
     pull_requests: Sequence[PullRequestSpend] = ()
     first_calls: Sequence[FirstCalls] = ()
@@ -341,7 +336,6 @@ def _breakdown(
                 by_day.setdefault(str(day), {})[kind] = cost
         unpriced = _unpriced(conn, since, until, rows)
         done = _done(conn, since, until)
-        waived = _waived(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
         first_calls = _first_calls(conn, since, until)
@@ -369,7 +363,6 @@ def _breakdown(
         idle_share=_idle_share(ticks),
         done=len(done),
         per_done=total / len(done) if done and total is not None else None,
-        waived=waived,
         tickets=tickets,
         pull_requests=pull_requests,
         first_calls=first_calls,
@@ -517,18 +510,6 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
         runs, unpriced = sql.execute(conn, counted).fetchone()
         found.append(Unpriced(kind=kind, runs=int(runs), unpriced=int(unpriced)))
     return found
-
-
-# How many triage runs that started in the window waived their ticket's plan: a waiver is written only when its run
-# closes, from a validated `trivial` verdict, so a run still running has waived nothing yet.
-def _waived(conn: sqlite3.Connection, since: str, until: str) -> int:
-    waivers = (
-        sql.select("count(*)")
-        .from_("plan_waivers w")
-        .join("runs r ON r.id = w.run_id")
-        .where("r.started_at >= ? AND r.started_at < ?", since, until)
-    )
-    return int(sql.execute(conn, waivers).fetchone()[0])
 
 
 # The tickets marked done in the window, each with how and when: its newest `done` decision, as `recently_done` reads
@@ -710,7 +691,6 @@ def _costs(found: Mapping[str, float | None]) -> Costs:
         idle=found.get("idle"),
         dry_run=found.get("dry_run"),
         workers=found.get("workers"),
-        triage=found.get("triage"),
         plans=found.get("plans"),
         chores=found.get("chores"),
         reviews=found.get("reviews"),

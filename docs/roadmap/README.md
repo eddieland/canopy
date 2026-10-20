@@ -91,7 +91,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M52. Memory's verbs from the web UI](M52-memorys-verbs-from-the-web-ui.md): done 2026-10-20.
 - [M53. Review replies the operator sends](M53-review-replies-the-operator-sends.md): in progress.
 - [M54. Plans before feedback runs](M54-plans-before-feedback-runs.md): in progress.
-- [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): in progress.
+- [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): deferred 2026-10-20.
 - [M56. Fixing CI is part of resume](M56-fixing-ci-is-part-of-resume.md): in progress.
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 - [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
@@ -119,3 +119,5 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
   the pinned version is checked first.
 - Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on failures the change did not cause. The
   design (DESIGN §23) and the milestone's bullets stand as written.
+- Triage before a plan (M55): when the spend page shows plan runs on tickets the operator calls trivial costing enough
+  that a cheaper judge would pay for its own runs. The bullets stand as a sketch; DESIGN §25 no longer describes it.

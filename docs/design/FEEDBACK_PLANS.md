@@ -89,13 +89,6 @@ The operator reads the plan on the PR's page, each thread with the plan's propos
 what changed. The `resume` that follows starts each draft from the reply the plan proposed for its item, changing it
 only where the work departed from the plan, and the thread marks those changes, so the operator rereads only them.
 
-### Triage
-
-With triage on (§25), a round of feedback is triaged once, before its first plan, and its re-plans are not. A
-`trivial` verdict returns the round to §7's rules without feedback plans: a trusted reviewer's items dispatch a
-`resume`, and anyone else's wait for the operator's go-ahead (D089), so triage never lets an untrusted reviewer's text
-start a worker. Any other end plans the round.
-
 ### Open
 
 - Whether a `resume` the operator's own message asks for, with no plan waiting, waits on a plan too, its message an
