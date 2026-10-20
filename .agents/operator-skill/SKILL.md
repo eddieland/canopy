@@ -113,10 +113,10 @@ config. Later files win key by key, the private file last; private keys, such as
 Work through these in order and stop at the first that explains it.
 
 1. Did a recent tick run at all? `canopy status` shows the last tick. `skipped` usually means the overseer could not
-   reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `overseer_failed`, and `reconcile_failed`
-   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing. An `overseer_failed`
-   summary that says `left duties undone` names what the overseer skipped (the query, a ticket, or a chore); what that
-   tick dispatched still runs.
+   reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `disk_low`, `overseer_failed`, and
+   `reconcile_failed` have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing. An
+   `overseer_failed` summary that says `left duties undone` names what the overseer skipped (the query, a ticket, or a
+   chore); what that tick dispatched still runs.
 2. What did the overseer decide about KEY?
 
    ```sh
@@ -183,6 +183,7 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `not_trivial` | A triage waived the ticket's plan, but a review judged its PR high impact: read the PR with that in mind. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
+| `disk_low` | The disk of `.canopy/` or the workspace is under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide. Ask for a split below. |
 | `follow_up_filed` | A worker filed follow-up tickets: label or `canopy start` each one you want worked. |
 

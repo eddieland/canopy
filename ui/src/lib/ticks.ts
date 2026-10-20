@@ -7,6 +7,7 @@ import type { RunState } from '@/api/types'
 export const TICK_TONE: Record<string, string> = {
     running: 'text-status-running',
     canopy_unavailable: 'text-status-failed',
+    disk_low: 'text-status-failed',
     overseer_failed: 'text-status-failed',
     reconcile_failed: 'text-status-failed',
     abandoned: 'text-status-failed',

@@ -6,7 +6,7 @@ import { codeSpans } from '@/lib/rich-text'
 /** How urgent an attention item is: the order the attention list shows it in, and its chip's color (DESIGN.md). */
 export type Severity = 'failed' | 'waiting' | 'other' | 'finding'
 
-// Reasons raised because something broke: a run, a chore, a review, or the overseer's `canopy` (DESIGN §14). A
+// Reasons raised because something broke: a run, a chore, a review, the overseer's `canopy`, or the disk (§14). A
 // reason not named here or below, the overseer's phase-table reasons included, is `other`.
 const FAILED = new Set([
     'crashed',
@@ -18,6 +18,7 @@ const FAILED = new Set([
     'review_failed',
     'review_limit',
     'canopy_unavailable',
+    'disk_low',
 ])
 
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
