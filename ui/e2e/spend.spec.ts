@@ -344,6 +344,9 @@ test('a window where nothing reported a cost says so once in By day, and claims 
     await expect(page.getByTestId('spend-idle-share')).toHaveCount(0)
     await expect(page.getByTestId('spend-ticks').getByText('no tick ended in these 7 days')).toBeVisible()
     await expect(page.getByTestId('spend-groups')).toHaveCount(0)
+    // A live event from another test's writes refetches the breakdown, which can still be in the handler when the page
+    // closes and disposes its response: drop it, since it comes after everything this test checks.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 /** The same costs, every one unreported. */
