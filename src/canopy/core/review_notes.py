@@ -201,8 +201,8 @@ def record_review(conn: sqlite3.Connection, review_run_id: int, fields: Fields |
 
     Call inside the transaction that closes the review. The ticket is the review's own, read from its row, never from
     the result. A review rendered with the tier off has no `review_memory` row and writes nothing, whatever it sent; so
-    does one whose result line was not a valid result, which is why `fields` is None. A review drops only notes rendered
-    into its own prompt, and only at `use`.
+    does one whose result line was not a valid result, which is why `fields` is None, and one whose ticket was marked
+    done while it ran. A review drops only notes rendered into its own prompt, and only at `use`.
 
     Returns:
         The entries refused, as recorded in the review's `review_memory.refused`.
@@ -212,6 +212,10 @@ def record_review(conn: sqlite3.Connection, review_run_id: int, fields: Fields |
         return []
     run = db.get_review_run(conn, review_run_id)
     if run is None or run.ticket_key is None:
+        return []
+    ticket = db.get_ticket(conn, run.ticket_key)
+    if ticket is not None and ticket.done:
+        # Marked done while the review ran: its notes ended with it, and these would outlive them (DESIGN §28).
         return []
     writing = _Writing(review_run_id=review_run_id, ticket_key=run.ticket_key, tick_id=run.tick_id, sha=run.sha)
     if rendered.review_notes is MemoryMode.USE:

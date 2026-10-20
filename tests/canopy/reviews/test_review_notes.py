@@ -210,6 +210,15 @@ def test_done_and_forget_invalidate_a_tickets_review_notes(
     assert (ended.status, ended.why, ended.body) == (MemoryStatus.INVALID, why, NOTE)
 
 
+def test_a_review_still_running_when_its_ticket_is_done_writes_no_notes(
+    recording: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    held = scenario.starts_review(reviews(head(git_pool), ticket=KEY), reviewer=reviewer_reports(noting(note())))
+    scenario.overseer("ticket", "set", KEY, "--done")
+    assert held.finishes().status == ReviewRunStatus.DONE
+    assert all_notes(scenario.conn) == []
+
+
 def test_memory_review_notes_says_the_mode_first_and_lists_what_reviewers_wrote(
     recording: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
