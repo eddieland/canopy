@@ -13,6 +13,7 @@ gives an item or event, while the loop serves one, is linked after it under the 
 
 With `--channel` and `--threads`, what is about one ticket, chore, or review goes in its own thread, a new one each
 day, recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest goes in the channel.
+Each thread starts with a post of the same shape, naming what it is about, and everything about it is a reply.
 A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
 question: then it is shown in the channel too.
 
@@ -866,10 +867,10 @@ def post_threaded(
 ) -> tuple[bool, str]:
     """Post `message` as `split` divides it, recording in `threads` each thread it starts and each post it makes.
 
-    What is about a ticket, a chore, or a review's PR goes in its thread for the day; the first post about it that day
-    starts the thread, in the channel. A reply stays in its thread, unless it holds one of `broadcast` (`BROADCASTS`
-    names them): then it is shown in the channel too. The rest, loop events and the digest among it, is posted in the
-    channel first, with the header.
+    What is about a ticket, a chore, or a review's PR goes in its thread for the day, which a post of its own starts in
+    the channel, naming what the thread is about, before the first item. A reply stays in its thread, unless it holds
+    one of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. The rest, loop events and the
+    digest among it, is posted in the channel first, with the header.
 
     Returns:
         Whether Slack accepted every post, and its reply to the last one tried. The first refused post ends the
@@ -883,6 +884,14 @@ def post_threaded(
     for part in split(message, threads.posted):
         started = threads.threads.get(part.thread) if part.thread is not None else None
         ts = started[1] if started is not None and started[0] == day else None
+        if part.thread is not None and ts is None:
+            ok, reply = send(*_starter(part, message, day))
+            if not ok:
+                return ok, reply
+            # Recorded at once, so a retry after a refused reply posts in this thread rather than starting another.
+            if (ts := _ts(reply)) is not None:
+                threads.threads[part.thread] = (day, ts)
+                threads.save()
         cut = part.message(message)
         ok, reply = send(
             render(cut),
@@ -893,11 +902,32 @@ def post_threaded(
         if not ok:
             return ok, reply
         threads.posted.update(_fingerprint(item) for item in part.items())
-        if part.thread is not None and ts is None and (first := _ts(reply)) is not None:
-            threads.threads[part.thread] = (day, first)
         threads.save()
     threads.finish(day)
     return ok, reply
+
+
+def _starter(part: Part, message: Mapping[str, object], day: str) -> tuple[str, list[Block]]:
+    """The post that starts `part`'s thread for `day`: what the thread is about, the same shape for every thread.
+
+    A header names the ticket and its title, the chore, or the review; a line under it the repository, the day, and a
+    review's PR. Everything about it that day, the first item included, is a reply under it.
+
+    Returns:
+        The text for notifications, and the blocks.
+    """
+    items = [*part.added, *part.resolved, *part.events]
+    title = next((i["title"] for i in items if i.get("title")), None)
+    # Every item of a part shares its thread, so the first says which kind it is.
+    first: Mapping[str, object] = items[0] if items else {}
+    pr = first.get("pr") if first.get("kind") == "review.ended" else None
+    ticket = first.get("ticket")
+    subject = (f"review of {ticket}" if ticket else "review") if pr else str(part.thread)
+    named = " ".join((f"{subject} · {title}" if title else subject).split()) or "canopy"
+    repo = Path(str(message.get("repo") or "")).name or "canopy"
+    about = [f"canopy · {escape(repo)} · updates from {escape(day)} in the thread", _linked(pr) if pr else ""]
+    header: Block = {"type": "header", "text": {"type": "plain_text", "text": named[:_MAX_HEADER]}}
+    return escape(named), [header, _context(*(a for a in about if a))]
 
 
 def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -> list[Part]:
