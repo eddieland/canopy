@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -448,6 +449,28 @@ def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
     assert "canopy_unavailable" in (scenario.env.state_dir / "attention.md").read_text()
 
     # Once `canopy` works again, the next tick runs the overseer and the item is gone.
+    scenario.tick(dry_run=True)
+    assert len(agent_runs(scenario.agent_log)) == 2
+    assert scenario.attention() == []
+
+
+def test_too_little_free_disk_closes_the_tick_without_the_overseer(scenario: Scenario) -> None:
+    scenario.tick(dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
+    scenario.configures(loop={"min_free_disk_mib": 2**40})  # more than any disk the tests run on has free
+    low = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+    assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
+
+    assert [t.tick.status for t in low] == [TickStatus.DISK_LOW] * 2
+    summary = present(low[-1].tick.summary)
+    where = re.escape(str(scenario.env.state_dir))
+    assert re.fullmatch(rf"\d+ MiB free on {where}, under loop\.min_free_disk_mib \({2**40}\)", summary)
+    assert scenario.attention() == [(None, "disk_low")]
+    [item] = attention.current(scenario.conn)
+    assert item.detail == f"{summary}; the overseer did not run. Free space there, and the next tick runs it"
+    assert item.since == low[0].decisions[0].created_at  # open since the first tick of the streak
+
+    # `0` turns the check off: the next tick runs the overseer, and the item is gone.
+    scenario.configures(loop={"min_free_disk_mib": 0})
     scenario.tick(dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []

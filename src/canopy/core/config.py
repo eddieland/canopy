@@ -716,6 +716,9 @@ class Loop(Section):
     idle_max_minutes: Annotated[Minutes, Scope.PRIVATE] = 120
     # The least time from one tick's end to the next's start, whatever ends the wait, but `TICK_NOW_KEY` (DESIGN §6).
     min_gap_minutes: Annotated[Minutes, Scope.PRIVATE] = 1
+    # A tick runs no overseer, so dispatches nothing, while the state directory's or the workspace's filesystem has less
+    # than this many MiB free (DESIGN §6 step 5). `0` turns the check off.
+    min_free_disk_mib: Annotated[Count, Scope.PRIVATE] = 2048
 
     @model_validator(mode="after")
     def _cap_not_below_interval(self) -> Loop:
