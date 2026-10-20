@@ -134,10 +134,10 @@ describe('RailSpend', () => {
         total_usd: 12,
     }
 
-    it("shows each window's cost, a dash where nothing reported one", async () => {
+    it("shows each window's cost after its name, a dash where nothing reported one", async () => {
         await renderRouted(<RailSpend />, { client: seeded(keys.spend, SPEND) })
-        expect(screen.getByRole('link', { name: '$1.50 24h' })).toBeDefined()
-        expect(screen.getByRole('link', { name: '– 30d' })).toBeDefined()
+        expect(screen.getByRole('link', { name: '24h $1.50' })).toBeDefined()
+        expect(screen.getByRole('link', { name: '30d –' })).toBeDefined()
         expect(screen.getByTitle('none reported').textContent).toBe('–')
     })
 
@@ -152,7 +152,7 @@ describe('RailSpend', () => {
         ['30d', '/spend?days=30'],
     ])("opens the spend page's breakdown over the %s window", async (window, href) => {
         const { router } = await renderRouted(<RailSpend />, { client: seeded(keys.spend, SPEND) })
-        await follow(screen.getByRole('link', { name: new RegExp(`${window}$`, 'u') }))
+        await follow(screen.getByRole('link', { name: new RegExp(`^${window}`, 'u') }))
         expect(router.state.location.href).toBe(href)
     })
 })
