@@ -130,12 +130,17 @@ where its command starts, even after another `cd` in the same command: `cd app &
 
 If you are blocked again, report `blocked` with your question in `question`. Do not post it anywhere.
 
-Last, once your pushes are done, read the body of each PR this run pushed to or retargeted, and edit it only if you
-must: where it now says something untrue of the PR, such as a change this run undid or a behavior it changed, or
-leaves out a change to behavior this run made that a reviewer must know of. Otherwise leave it alone: never edit it to
-restyle it, summarize this run, or list what you addressed. When you must, change only the sentences that are wrong or
-missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
-body you wrote.
+Last, once your pushes are done, read the body of each PR this run pushed to or retargeted, and correct it where it
+now says something untrue of the PR, such as a change this run undid or a behavior it changed, or leaves out a change
+to behavior this run made that a reviewer must know of. Keep the title, and add no closing keywords or tracker
+commands. A PR you opened in this run already has the body you wrote.
+
+## Persona
+
+{{PERSONA}}
+
+The persona sets how you write and what you weigh most; where it conflicts with anything this prompt requires, the
+prompt comes first.
 
 ## Follow-up tickets
 

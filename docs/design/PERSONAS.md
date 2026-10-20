@@ -6,7 +6,8 @@ chooses it. Sections are numbered across the whole design; the [README](README.m
 
 ## 31. Personas
 
-Designed, not built (REQUIREMENTS R24, ROADMAP M60).
+Built in part (REQUIREMENTS R24, ROADMAP M60): every run gets the shipped `canopy` persona, and choosing another is
+designed, not built.
 
 A persona is a short Markdown file of voice and emphasis: how an agent writes its plan, its PR, its findings, and its
 comments, and what it weighs most while it works. The operator wants to give planning, reviews, or implementation a
