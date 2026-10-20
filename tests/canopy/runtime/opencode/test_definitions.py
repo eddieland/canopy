@@ -56,6 +56,11 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
         f'{READS_MARKER}  "*issue_read*": deny\n  "*list_issues*": deny\n  "*search_issues*": deny\n'
         '  "tracker_*": deny\n  "tracker_read": allow\n'
     ) in text[agents.OVERSEER]
+    # So does the reviewer, ahead of its patterns.
+    assert (
+        f'{READS_MARKER}  "*issue_read*": deny\n  "*list_issues*": deny\n  "*search_issues*": deny\n'
+        '  "tracker_*": deny\n  "tracker_read": allow\n'
+    ) in text[agents.REVIEWER]
     assert "--force-with-lease" in text[agents.WORKER]
     assert '"*reply_to_pull_request_comment*": deny' in text[agents.WORKER]
     assert '"*reply_to_pull_request_comment*": deny' not in text[agents.PRIVATE_WORKER]
@@ -111,6 +116,19 @@ def test_an_overseer_definition_without_its_tracker_reads_line_is_refused(tools:
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     with pytest.raises(agents.DefinitionsError, match="tracker reads"):
         definitions.render_overseer_reads(bundled.replace(READS_MARKER, ""), tools, "github")
+
+
+@pytest.mark.parametrize("tools", [None, agents.McpTools("tracker", ("read",))])
+def test_a_reviewer_definition_without_its_tracker_reads_line_is_refused(tools: agents.McpTools | None) -> None:
+    bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match=r"canopy-reviewer\.md has no line"):
+        definitions.render_reviewer_reads(bundled.replace(READS_MARKER, ""), tools, "jira")
+
+
+def test_a_github_tracker_leaves_the_reviewers_rules_as_shipped() -> None:
+    # The server is the one it reads the PR through; its patterns govern it.
+    bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
+    assert definitions.render_reviewer_reads(bundled, agents.McpTools("github", ("issue_read",)), "github") == bundled
 
 
 def test_a_github_tracker_gives_the_overseer_its_own_reads_of_github() -> None:
