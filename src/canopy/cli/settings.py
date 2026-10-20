@@ -2,7 +2,8 @@
 
 And `canopy config commands`: the commands canopy starts its agents with, rendered, for the operator alone.
 
-Both read only. Config is changed in the files, with the operator's editor: no command here writes one (ROADMAP M41).
+Both read only, but for the definitions snapshot `config commands` writes if it is missing, the one a run would write.
+Config is changed in the files, with the operator's editor: no command here writes one (ROADMAP M41).
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from canopy.cli.render import report_json
 from canopy.core import agent_commands, config, conversation, definitions, settings
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from canopy.core.agent_commands import Command
@@ -71,7 +73,7 @@ def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
     ctx = open_context(click_ctx)
     try:
         snapshot = definitions.ensure(ctx.ws.state_dir, ctx.config)
-    except definitions.DefinitionsError as e:
+    except (definitions.DefinitionsError, OSError) as e:
         raise CliError(f"config commands: {e}") from None
     files = config.config_files(ctx.ws.root)
     layers = dict(zip(files, settings.Layer, strict=True))
@@ -118,7 +120,7 @@ def _note(s: Setting) -> str:
     return f"{where}{default}{choices}{low}{high}"
 
 
-def render_commands(found: list[Command]) -> list[str]:
+def render_commands(found: Sequence[Command]) -> list[str]:
     """The commands as `canopy config commands` prints them: each one's role and keys, then its words on one line.
 
     Returns:
