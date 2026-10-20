@@ -50,6 +50,35 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
     return "\n".join(lines)
 
 
+def for_reviewer(conn: sqlite3.Connection, pr_url: str, *, before: int) -> str | None:
+    """Return `{{PREVIOUS_REVIEW}}` for a review of `pr_url`: its latest `done` review before run `before`, as data.
+
+    A finding the operator dismissed is left out, as it is for a worker; the rest keep their numbers.
+
+    Returns:
+        That review's verdict, summary, and findings; None when the PR has no `done` review before this one.
+    """
+    for run in db.review_runs_of(conn, pr_url):
+        stored = result.stored(run.result_json)
+        if run.id >= before or run.status is not ReviewRunStatus.DONE or stored is None:
+            continue
+        lines = [
+            (
+                f"canopy's review run {run.id} of this PR, at commit `{run.sha}`, ended with verdict {stored.verdict}, "
+                f"impact {stored.impact}."
+            )
+        ]
+        if stored.summary:
+            lines += ["", "Its summary:", *(f"> {line}" for line in printable(stored.summary).splitlines())]
+        kept = _findings(stored, db.review_dismissals(conn, run.id), keep_dismissed=False)
+        if kept:
+            lines += ["", "Its findings:", *kept]
+        elif stored.findings:
+            lines += ["", "Its findings: none the operator kept."]
+        return "\n".join(lines)
+    return None
+
+
 def listed(conn: sqlite3.Connection, since: str) -> list[str]:
     """Return a line for each review run started at or after `since`, newest first, for `canopy review show`.
 
