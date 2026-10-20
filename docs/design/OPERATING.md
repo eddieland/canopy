@@ -151,7 +151,7 @@ Agent definitions ship in `agents/`:
 
 - `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
   workspace, one command per bash call. Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021)
-  and loses every decision not yet recorded. MCP: the tracker, GitHub.
+  and loses every decision not yet recorded. MCP: the tracker; of GitHub, its reads of PRs, branches, and issues only.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels, follow-ups), GitHub (open and
   update a PR, read reviews and checks); merge, review submission, closing, transition, delete, fork, API file and
   branch writes, and other agents or workflow runs denied by name (D084).
@@ -159,6 +159,8 @@ Agent definitions ship in `agents/`:
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19).
 
 None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
+A tool an agent never calls is denied whole, since the runtime sends every schema it allows on every call and none it
+denies: GitHub's tools no prompt asks for, by name, as the server's own name is the operator's.
 
 ### What a run prints
 
@@ -186,9 +188,9 @@ their inputs makes a new snapshot:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
 - `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, then the shipped
-  `tracker-<provider>` skill if any. The body is the system prompt the provider caches across ticks; a tick's message
-  is its state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather
-  than running without the prompt.
+  `tracker-<provider>` skill if any, and then no skill tool, having nothing left to load. The body is the system prompt
+  the provider caches across ticks; a tick's message is its state block alone (§6). An override canopy cannot read
+  fails the tick and every run started from it, rather than running without the prompt.
 
 Nothing is installed into repositories. OpenCode merges canopy's definitions after the repository's config, so a
 repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where
@@ -197,8 +199,9 @@ worker's is a `crashed` run whose slot is returned. A private run (§22) is also
 tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off. A repository can also define its own agents under other names, MCP servers, and permissions
-(TRUST_MODEL T7). `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
+turns none off, but for the overseer whose body holds the tracker's skill. A repository can also define its own
+agents under other names, MCP servers, and permissions (TRUST_MODEL T7). `runtime.pr_skill` names a skill workers
+open PRs with (§8); prefer that to a prompt override.
 
 ### What OpenCode does with a plugin
 
