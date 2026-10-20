@@ -53,7 +53,7 @@ from canopy.serve.schema import (
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present
-from tests.canopy.web_helpers import ORIGIN, SECRET, client, signed_in
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, signed_in
 from tests.conftest import Journals
 
 INDEX = """<!doctype html>
@@ -753,7 +753,7 @@ def a_long_burst(reader: live._Reader) -> list[StreamEvent]:
     cancel would have finished it.
     """
     events = _READ(reader)
-    return events + [StreamEvent(LoopUpdated(paused=None))] * 2000 if events else events
+    return events + [StreamEvent(LoopUpdated(capacity=DEFAULT_CAPACITY, paused=None))] * 2000 if events else events
 
 
 def _teardown() -> ExceptionGroup[anyio.BrokenResourceError]:

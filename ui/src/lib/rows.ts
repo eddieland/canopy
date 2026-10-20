@@ -81,10 +81,14 @@ function fitted(column: FittedColumn, most: number): string {
  * has room for it, every column that gives way after it, and the ones that never do (`rowTiers`).
  */
 export const ROW_COLUMNS = {
-    /** A run with its ticket, on the runs page: the state, the run's id, the ticket, the run's chips, the title. */
+    /**
+     * A run on the runs page: the state, the run's id, what it works for (a ticket, a review's ticket, a chore), its
+     * chips, then its ticket's title, or a review's PR and what it found.
+     */
     run: [
         ['state', '5rem'],
-        ['run', '4rem', 4],
+        // Room for `review:123`, the longest id a run of any kind has.
+        ['run', '5rem', 4],
         ['key', '6rem'],
         // Its chips go before its age: they describe the run, where the age says whether it is current.
         ['kind', '10rem', 2],

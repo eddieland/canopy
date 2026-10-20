@@ -66,7 +66,10 @@ export function PageHeader({
     chips?: ReactNode
     /** Controls at the right of the title's row, such as a tick's steps to the ticks either side of it. */
     controls?: ReactNode
-    /** The page subject's links out, under the description, such as a ticket's `TicketLinks`. */
+    /**
+     * What goes under the description: the page subject's links out, such as a ticket's `TicketLinks`, or a line of
+     * readouts, such as the runs page's capacity.
+     */
     links?: ReactNode
     /** One line of description. */
     children?: ReactNode

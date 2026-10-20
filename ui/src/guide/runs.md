@@ -1,20 +1,40 @@
 # Runs and worktrees
 
-What the workers are doing, what they did, and where. A run's page is the transcript of its session, every tool call
+What every agent is doing, what it did, and where. A run's page is the transcript of its session, every tool call
 and what it cost; the worktrees page is the pools they work in.
 
 ## The runs page
 
-[Runs](/runs) lists each ticket's latest run, the running ones first, then the ones that ended most recently. A ticket
-with earlier runs shows **Show N earlier runs** under it. Each row has the run's state, its id (`run:39`), its ticket
-and kind, with a resume's reasons beside it (`resume (ci, review)`), what it cost, and how long it ran or how long
-since it ended. Under it are the run's summary, its PRs, the worktrees it holds, and, while it runs, its latest tool
-call. A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to
-say doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
+[Runs](/runs) lists every agent canopy runs: workers on tickets, reviews of PRs, and chores. Each gets one row per
+subject, by its latest run: a ticket's, a PR's, a chore's. The running ones come first, then the ones that ended
+most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at every push is
+one row and not a wall of them.
+
+Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
+it ended:
+
+- A **worker run** (`run:39`) names its ticket and kind, with a resume's reasons beside it (`resume (ci, review)`),
+  and the ticket's title. Under it are its summary, its PRs, the worktrees it holds, and, while it runs, its latest
+  tool call.
+- A **review** (`review:4`) names its ticket, if its PR has one, then the PR, the commit it read, and what it found.
+  The findings themselves are on its page.
+- A **chore run** (`#2`, beside its chore, so it reads `chore:deps #2`) has its summary under it. Its chore's page
+  has every run; here you get the latest, and the one before it while one runs.
+
+A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
+doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
 the kind; how long stays.
 
-The chips filter by the latest run's state: `running`, `waiting on you` (the worker stopped to ask something),
-`failed`, `stopped`, and `done`. A cost of `–` means the runtime reported none, which is not the same as free.
+The chips filter by kind, `workers`, `reviews`, or `chores`, and by the latest run's state: `running`, `waiting on
+you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so `reviews`
+then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which is not the
+same as free.
+
+Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
+anything: `workers 2 of 2` is `capacity.max_workers`, which reviews count toward, `reviews 0 of 1` is
+`capacity.max_reviews` within it, and `chores 1 of 1` is `capacity.max_chores`, which stands apart. A full one turns
+amber and says `full`: the next dispatch of its kind waits for a run to end, however urgent the overseer thinks it
+is. When a ticket sits in the queue looking neglected, this line usually explains why. A limit of 0 reads `off`.
 
 ## A run's page
 

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { mockCapacity } from '@/api/mocks'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -11,7 +12,7 @@ import { localTime } from '@/lib/time'
 
 import { NoticeBanner } from './worker-notice'
 
-const QUIET: LoopState = { memory: null, notice: null, paused: null }
+const QUIET: LoopState = { capacity: mockCapacity, memory: null, notice: null, paused: null }
 const TOLD: LoopState = {
     ...QUIET,
     notice: {
