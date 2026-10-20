@@ -36,10 +36,10 @@ const REQUESTED: RequestedReview = {
     channel: 'web',
 }
 
-function renderReviews(reviews: ReviewSummary[], pr?: boolean) {
+function renderReviews(reviews: ReviewSummary[], pr?: boolean, unseen?: ReadonlySet<number>) {
     const client = new QueryClient()
     client.setQueryDefaults(keys.meta, { enabled: false })
-    return renderRouted(<ReviewsTable reviews={reviews} pr={pr} />, { client })
+    return renderRouted(<ReviewsTable reviews={reviews} pr={pr} unseen={unseen} />, { client })
 }
 
 function renderRequested(requestedLast: boolean) {
@@ -98,5 +98,12 @@ describe('ReviewsTable', () => {
         const row = within(screen.getByTestId('pull-request-review-4'))
         expect(row.getAllByRole('link').map((link) => link.textContent)).toEqual(['review:4'])
         expect(row.getByText('at 3f9c2a1')).toBeDefined()
+    })
+
+    it('marks a review whose result the operator has not opened new, and no other', async () => {
+        await renderReviews([REVIEW, { ...REVIEW, id: 3 }], true, new Set([4]))
+        const fresh = within(screen.getByTestId('review-4')).getByText('new')
+        expect(tipOf(fresh)).toBe('new: you have not opened it yet')
+        expect(within(screen.getByTestId('review-3')).queryByText('new')).toBeNull()
     })
 })
