@@ -70,6 +70,8 @@ class TickStatus(StrEnum):
     CANOPY_UNAVAILABLE = "canopy_unavailable"
     OVERSEER_FAILED = "overseer_failed"
     RECONCILE_FAILED = "reconcile_failed"
+    # The tick raised an unexpected exception; its summary names it.
+    ERROR = "error"
     # The tick's process exited without closing it; the next tick closed it.
     ABANDONED = "abandoned"
 
