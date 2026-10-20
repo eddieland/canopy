@@ -20,6 +20,13 @@ codecov:
   notify:
     after_n_builds: 2
 
+# A job that fails skips its upload, so a commit can arrive with one flag's coverage and not the other's. Carryforward
+# fills the missing flag from the nearest parent that has it, so the commit, and main's head on codecov.io, still show
+# both the Python and the web UI's coverage.
+flag_management:
+  default_rules:
+    carryforward: true
+
 # Components show the Python and the web UI's coverage apart on codecov.io.
 component_management:
   individual_components:

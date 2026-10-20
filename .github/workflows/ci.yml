@@ -18,8 +18,11 @@ permissions:
 env:
   UV_LOCKED: "1"
 
+# A pull request's runs share a group, so a new push cancels the run before it. Every other run has a group of its own:
+# GitHub cancels a run left pending in a shared group, so merges in quick succession left many of main's commits
+# untested, and without coverage on Codecov.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
