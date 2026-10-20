@@ -49,11 +49,4 @@ describe('Notice', () => {
         rerender(<Notice>{empty}</Notice>)
         expect(container.childElementCount).toBe(0)
     })
-
-    it('keeps its line while it has nothing to say, when asked to', () => {
-        const { rerender } = render(<Notice reserve>{null}</Notice>)
-        expect(screen.getByRole('status').textContent).toBe('')
-        rerender(<Notice reserve>Recorded message 4 on ABC-1.</Notice>)
-        expect(screen.getByRole('status').textContent).toBe('Recorded message 4 on ABC-1.')
-    })
 })

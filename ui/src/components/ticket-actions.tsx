@@ -111,9 +111,7 @@ export function TicketActions({ ticket, quiet = false }: { ticket: TicketSummary
                     branch on origin stay yours. This cannot be undone here.
                 </ForgetForm>
             )}
-            <Notice error={start.error ?? stop.error ?? forget.error} reserve>
-                {said}
-            </Notice>
+            <Notice error={start.error ?? stop.error ?? forget.error}>{said}</Notice>
         </div>
     )
 }
