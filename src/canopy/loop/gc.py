@@ -294,9 +294,8 @@ def _attention(conn: sqlite3.Connection, now: datetime, retention: Retention) ->
     window = int(oldest[0]) if oldest is not None else 0
     cutoff = _cutoff(now, retention.journal_days)
     harness = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
-    marks = ",".join("?" * len(harness))
     rows = conn.execute(
-        f"SELECT action IN ({marks}) AS harness, count(*) AS n, sum(bytes) AS b, "  # noqa: S608
+        f"SELECT action IN ({db.marks(harness)}) AS harness, count(*) AS n, sum(bytes) AS b, "  # noqa: S608
         "sum(tick_id < ? AND created_at < ?) AS rn, sum(CASE WHEN tick_id < ? AND created_at < ? THEN bytes END) AS rb "
         f"FROM (SELECT action, tick_id, created_at, {_ROW_BYTES} AS bytes FROM decisions WHERE action LIKE ?) "
         "GROUP BY harness",

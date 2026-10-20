@@ -316,11 +316,10 @@ def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draf
     """
     if not whole:
         return []
-    marks = ", ".join("?" * len(whole))
     pending = records.fetch_all(
         conn,
         records.Draft,
-        f"SELECT * FROM drafts WHERE status = ? AND pr_url IN ({marks}) ORDER BY run_id, number",  # noqa: S608
+        f"SELECT * FROM drafts WHERE status = ? AND pr_url IN ({db.marks(whole)}) ORDER BY run_id, number",  # noqa: S608
         (DraftStatus.UNCHECKED, *sorted(whole)),
     )
     now = db.now()
