@@ -160,6 +160,8 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
 | See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page |
 | See which ticks and runs failed lately, and what the guards refused | `canopy health [--days N]` |
+| See each number, switch, and choice in your config, its default, and the file that set it | `canopy config show` |
+| See which MCP servers and skills each of canopy's agents is offered, after your OpenCode config | `canopy agents` |
 | See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
 | Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |

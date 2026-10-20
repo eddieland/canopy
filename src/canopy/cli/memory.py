@@ -1,20 +1,22 @@
 """`canopy memory`: what workers recorded of what they learn, and the operator's lessons (DESIGN §28).
 
 The listing commands say each tier's mode in words first, so recorded memory is never taken for memory in use, and
-print what a worker wrote as plain text with every character that hides text named. The commands that write refuse
-inside canopy's own ticks and runs. `search` is the one a worker's run calls, and finds only what that run's prompt
-could be served.
+print what a worker wrote as plain text with every character that hides text named. With `--json` they print the same
+as one object for an agent to read, the modes under `modes` and the text with the same characters named. The commands
+that write refuse inside canopy's own ticks and runs. `search` is the one a worker's run calls, and finds only what that
+run's prompt could be served.
 """
 
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Any, assert_never
 
 import click
 
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO, TICKET_KEY
+from canopy.cli.render import report_json
 from canopy.core import conversation, db, memory, memory_manage, records
 from canopy.core import memory_search as search
 from canopy.core.memory_text import visible
@@ -37,12 +39,21 @@ def memory_group() -> None:
 @click.option(
     "--digest", is_flag=True, help="Print the notes KEY's next run would get, as its prompt would carry them."
 )
+@click.option("--json", "as_json", is_flag=True, help="Print the modes and the notes as one JSON object instead.")
 @click.pass_context
-def cmd_list(click_ctx: click.Context, key: str | None, *, every: bool, run_id: int | None, digest: bool) -> int:
+def cmd_list(
+    click_ctx: click.Context, key: str | None, *, every: bool, run_id: int | None, digest: bool, as_json: bool
+) -> int:
     """List the ticket notes workers recorded, of KEY or of every ticket, after each tier's mode in words."""
     if digest and key is None:
         raise click.UsageError("--digest prints one ticket's digest: name its KEY")
+    if as_json and (digest or run_id is not None):
+        raise click.UsageError("--json lists notes: give it without --run or --digest")
     ctx = open_context(click_ctx)
+    if as_json:
+        found = memory.notes(ctx.conn, key, every=every)
+        click.echo(report_json({"modes": _modes(ctx), "notes": [_note_json(n) for n in found]}))
+        return 0
     _print_modes(ctx)
     if run_id is not None:
         _print_run(ctx, run_id)
@@ -154,12 +165,16 @@ def cmd_purge(click_ctx: click.Context, key: str | None, run_id: int | None, *, 
 
 
 @memory_group.command("proposals")
+@click.option("--json", "as_json", is_flag=True, help="Print the modes and the proposals as one JSON object instead.")
 @click.pass_context
-def cmd_proposals(click_ctx: click.Context) -> int:
+def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
     """List the lessons workers proposed that wait on you, each with where it came from."""
     ctx = open_context(click_ctx)
-    _print_modes(ctx)
     waiting = memory.pending_proposals(ctx.conn)
+    if as_json:
+        click.echo(report_json({"modes": _modes(ctx), "proposals": [_proposal_json(ctx, p) for p in waiting]}))
+        return 0
+    _print_modes(ctx)
     if not waiting:
         click.echo("\nNo proposals wait on you.")
     for p in waiting:
@@ -180,10 +195,17 @@ def cmd_proposals(click_ctx: click.Context) -> int:
 @memory_group.command("lessons")
 @click.option("--repo", type=REPO, help="Only the lessons a run in this repository is served: its own and every one's.")
 @click.option("--digest", is_flag=True, help="Print the lessons a run would get, as its prompt would carry them.")
+@click.option("--json", "as_json", is_flag=True, help="Print the modes and the lessons as one JSON object instead.")
 @click.pass_context
-def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool) -> int:
+def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_json: bool) -> int:
     """List the lessons you promoted, each with its review date, its use, and any run's report that it is wrong."""
+    if as_json and digest:
+        raise click.UsageError("--json lists lessons: give it without --digest")
     ctx = open_context(click_ctx)
+    if as_json:
+        lessons = [m for m in memory.active_lessons(ctx.conn) if repo is None or m.repo in (None, repo)]
+        click.echo(report_json({"modes": _modes(ctx), "lessons": [_lesson_json(ctx, m) for m in lessons]}))
+        return 0
     _print_modes(ctx)
     if digest:
         found = memory.lessons_digest(ctx.conn, None if repo is None else (repo,), cite=False)
@@ -437,6 +459,73 @@ def _print_modes(ctx: Context) -> None:
     # Each band starts with its mode in words, which no two modes share.
     click.echo(f"{memory.NOTES_TIER}: {memory.notes_band(settings.ticket_notes)}")
     click.echo(f"{memory.LESSONS_TIER}: {memory.lessons_band(settings.proposals)}")
+
+
+def _modes(ctx: Context) -> dict[str, str]:
+    """Each tier's mode, by its key under `[memory]`, as `--json` prints it."""
+    settings = ctx.config.memory
+    return {"ticket_notes": settings.ticket_notes, "proposals": settings.proposals}
+
+
+def _note_json(note: records.Memory) -> dict[str, Any]:
+    """A ticket note as `memory list --json` prints it: `run_id` null for one the operator wrote."""
+    return {
+        "id": note.id,
+        "ticket": note.ticket_key,
+        "key": note.key,
+        "status": note.status,
+        "why": note.why,
+        "run_id": note.run_id,
+        "created_at": note.created_at,
+        "use_count": note.use_count,
+        "last_used_at": note.last_used_at,
+        "text": _text(note),
+    }
+
+
+def _proposal_json(ctx: Context, p: records.Memory) -> dict[str, Any]:
+    """A proposal as `memory proposals --json` prints it, with what `_provenance` says of its run and ticket."""
+    run = db.get_run(ctx.conn, p.run_id) if p.run_id is not None else None
+    ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
+    return {
+        "id": p.id,
+        "key": p.key,
+        "repo": p.repo,
+        "ticket": p.ticket_key,
+        "run_id": p.run_id,
+        "run_kind": run["kind"] if run is not None else None,
+        "run_status": run["status"] if run is not None else None,
+        "private": memory_manage.from_private_run(ctx.conn, p),
+        "ticket_done": ticket is not None and ticket.done,
+        "created_at": p.created_at,
+        "text": _text(p),
+    }
+
+
+def _lesson_json(ctx: Context, lesson: records.Memory) -> dict[str, Any]:
+    """A lesson as `memory lessons --json` prints it, with what it was made from, as `_made` says it."""
+    source = memory.origin(ctx.conn, lesson)
+    return {
+        "id": lesson.id,
+        "key": lesson.key,
+        "repo": lesson.repo,
+        "made": "edited" if memory.edited(lesson) else "promoted",
+        "approved_at": lesson.approved_at,
+        "from": None
+        if source is None
+        else {"scope": source.scope, "id": source.id, "ticket": source.ticket_key, "run_id": source.run_id},
+        "review_at": lesson.review_at,
+        "use_count": lesson.use_count,
+        "last_used_at": lesson.last_used_at,
+        "wrong_at": lesson.wrong_at,
+        "wrong_run_id": lesson.wrong_run_id,
+        "text": _text(lesson),
+    }
+
+
+def _text(entry: records.Memory) -> str | None:
+    """A memory's text with every character that hides text named, or None once it is forgotten."""
+    return visible(entry.body) if entry.body is not None else None
 
 
 def _line(note: records.Memory) -> str:

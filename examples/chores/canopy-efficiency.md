@@ -11,7 +11,13 @@ command will run.
 
 - `canopy spend --json --days 7`, and `--days 28` to compare a week against the month.
 - `canopy health --json --days 7`: each kind of run by how it ended and what that cost.
-- `opencode mcp list`: the MCP servers OpenCode has configured.
+- `canopy agents --json`: what OpenCode offers each of canopy's agents once your OpenCode config is merged into
+  canopy's: every MCP server it has (`servers`, and `disabled_servers`, off for every agent), every skill it finds
+  (`skills`), and for each agent (`agents`), each server's `reach`, `all` of its tools, `some`, or `none`, with the
+  `exceptions` that make it `some`, and the `skills` it is offered and the `denied_skills`.
+- `canopy config show --json`: the settings you may recommend (`settings`), each with its `key`, its `value` now, its
+  `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
+  `choices`, `minimum`, and `maximum` it may take.
 
 ## The agents and what they are offered
 
@@ -23,10 +29,11 @@ canopy's agents, the `kind` each one's runs have in `spend`, and the OpenCode ag
 - the reviewer (`reviews`): `canopy-reviewer`.
 
 Every agent is offered every MCP server OpenCode has, less the tools its definition or the operator's OpenCode config
-denies it, and every skill OpenCode finds, less those denied the same way.
+denies it, and every skill OpenCode finds, less those denied the same way: `canopy agents` says what is left. An agent
+a chore's own `cmd` names is not in it.
 
 MCP servers, as OpenCode names them (the prefix of their tools, `github_pull_request_read`), and which agents need
-each. Keep this list current; `opencode mcp list` shows what is configured.
+each. Keep this list current; `canopy agents` shows what is configured.
 
 - `github`: the overseer, workers, and the reviewer.
 - `jira`: the overseer and workers.
@@ -41,12 +48,14 @@ In `spend`, `tools` lists, per kind, each tool its runs called, with calls, erro
 kind's median first model call (`first_call`, in tokens): its fixed overhead, which every tool and skill offered to it
 adds to, used or not.
 
-1. **Unused MCP servers.** A server from `opencode mcp list` or the list above none of whose tools a kind called in 28
-   days, over 10 or more runs of that kind: a finding with id `unused/<kind>/<server>`. If no kind called it, use
-   `unused/all/<server>`. A server the list above says a kind needs is no finding however little it is used: say in
-   the summary that it went unused.
-2. **Unused skills.** No `skill` call by a kind in 28 days over 10 or more of its runs, while skills are offered to it:
-   a finding with id `unused/<kind>/skills`. `spend` counts skill calls, not which skill each loaded.
+1. **Unused MCP servers.** A server whose `reach` is not `none` for a kind's agents, none of whose tools the kind
+   called in 28 days, over 10 or more runs of that kind: a finding with id `unused/<kind>/<server>`. If no kind called
+   it, use `unused/all/<server>`. A server the list above says a kind needs is no finding however little it is used:
+   say in the summary that it went unused. A server already `none` for every agent of a kind costs that kind nothing.
+2. **Unused skills.** A skill in the `skills` of a kind's agents that none of its runs loaded in 28 days, over 10 or
+   more runs of that kind: a finding with id `unused/<kind>/skill/<name>`. `spend` counts each skill's calls under the
+   tool `skill:<name>`, and calls recorded before it did as `skill` alone. With no skill loaded by the kind at all,
+   one finding with id `unused/<kind>/skills` instead, to deny every skill.
 3. **Heavy reads.** A tool whose `result_chars` in the week are a fifth or more of all its kind's, or whose calls
    return over 20,000 characters each on average, and that you can recommend something for: a finding with id
    `heavy/<kind>/<tool>`. A kind that does not need the tool's server is a Disable; a setting that would make the kind
@@ -78,14 +87,15 @@ Each finding's detail ends with one recommendation, and its title starts with wh
   `opencode.json`: canopy refuses to start one of its agents where the repository's config names it. Turning a server
   off in OpenCode's `mcp` config instead removes it for every agent, the operator's own sessions included; recommend
   that only for `unused/all/<server>`, and say so.
-- **Tune:** a setting in canopy's config, by its key, with the value you would try and why. These are the ones that
-  exist: `loop.interval_minutes`, `loop.idle_max_minutes`, `loop.min_gap_minutes`, `tracker.query_every_minutes`,
-  `capacity.max_workers`, `capacity.max_chores`, `capacity.max_reviews`, `capacity.max_reviews_per_day`,
-  `policy.max_reviews_per_pr`, `review.query`, `review.agent_prs`, and a chore's `every_minutes` and `when`. Name no
-  other key.
+- **Tune:** a setting in canopy's config, by its key, with its value now, the value you would try, and why. Name only
+  a key `canopy config show` lists, and a value within its `choices`, `minimum`, and `maximum`; never recommend the
+  value it already has. Those that bear on spend are most often `loop.*`, `tracker.query_every_minutes`, the
+  `capacity.*` limits, `policy.max_reviews_per_pr`, `review.agent_prs`, and a chore's `every_minutes`. `review.query`
+  and a chore's `when`, which the listing leaves out as text, are the only other keys you may name. A key whose
+  `set_in` is `workspace` is in the shared file: say so.
 - **Feature:** something canopy does not do that would cut the spend, said in a sentence a canopy developer could
   start from, with the figure it would act on: a tool whose results canopy could summarize or record instead of an
-  agent reading them again, or a skill call canopy could count by name.
+  agent reading them again.
 
 Say what the change would save, in dollars or tokens a week, when the figures let you; mark it an estimate.
 
@@ -99,9 +109,9 @@ Say what the change would save, in dollars or tokens a week, when the figures le
 - At most `max_findings` findings. With more, keep those that would save the most first.
 - No findings, with status `ok`, means nothing stands out. Say so in the summary in a sentence, with the week's total
   spend, its tickets done, and its spend per ticket done.
-- If a `canopy` command fails or is refused, report status `failed` with the command and its error in the summary,
-  rather than an `ok` that checked nothing. If only `opencode mcp list` fails, go on from the list above and say so in
-  the summary.
+- If `canopy spend`, `canopy health`, or `canopy config show` fails or is refused, report status `failed` with the
+  command and its error in the summary, rather than an `ok` that checked nothing. If only `canopy agents` fails, go on
+  from the list above, with every server and skill taken as offered to every agent, and say so in the summary.
 
 ## What you read
 

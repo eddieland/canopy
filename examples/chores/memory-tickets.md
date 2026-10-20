@@ -20,14 +20,18 @@ Repositories, through the GitHub MCP server's read tools:
 Only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
 command will run.
 
-- `canopy memory lessons`: the lessons the operator promoted, each with its id, key, repository if it names one, review
-  date, how many runs used it, and any run's report that it is wrong.
-- `canopy memory proposals`: the lessons workers proposed that wait on the operator, each with the ticket and run it
-  came from and whether that ticket is done.
-- `canopy memory list`: the ticket notes in force, by ticket, each with its id, key, the run that wrote it, and how many
-  runs used it.
+- `canopy memory lessons --json`: the lessons the operator promoted (`lessons`), each with its `id`, `key`, `repo` if
+  it names one, `review_at`, how many runs used it (`use_count`), and any run's report that it is wrong (`wrong_at`,
+  `wrong_run_id`).
+- `canopy memory proposals --json`: the lessons workers proposed that wait on the operator (`proposals`), each with the
+  `ticket` and `run_id` it came from, whether that ticket is done (`ticket_done`), and whether its run was a private
+  ticket's (`private`).
+- `canopy memory list --json`: the ticket notes in force (`notes`), each with its `id`, `ticket`, `key`, the run that
+  wrote it (`run_id`), and how many runs used it (`use_count`).
 
-Each listing starts with each tier's mode. A tier that is off lists nothing; that is not a failure.
+Each listing's `modes` gives each tier's mode, `ticket_notes` and `proposals`: `off`, `record`, or `use`. A tier that
+is off lists nothing; that is not a failure. A memory's `text` names each character that hides text, such as
+`<U+200B>`, rather than printing it.
 
 ## What to check
 
@@ -45,8 +49,8 @@ Each listing starts with each tier's mode. A tier that is off lists nothing; tha
    forgets the lesson.
 
 Report each memory once, under the first of these that fits it. Skip a lesson some run reported wrong: it is the
-operator's to renew or forget, and canopy already raises `lesson_wrong` for it. Skip a proposal the listing warns comes
-from a private ticket's run.
+operator's to renew or forget, and canopy already raises `lesson_wrong` for it. Skip a proposal whose `private` is
+true: it comes from a private ticket's run.
 
 Before you report one, search the tracker for an open ticket, and the repository for an open issue or pull request,
 about the same problem, with search words of your own about its subject. If one exists, there is nothing to file: leave

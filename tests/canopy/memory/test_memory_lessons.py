@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -607,6 +608,68 @@ def test_memory_proposals_lists_each_with_its_provenance_and_warns_of_a_private_
     )
     assert "Use `make test-api`<U+200B>." in out
     assert "Warning: from a private ticket's run" in out
+
+
+def test_the_memory_listings_print_json_for_an_agent_to_read(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, ticket_notes="record", proposals="record")
+    note = noted(conn, "Run `make lint`\u200b first.", private=True)
+    proposal = proposed(conn, repo="repo")
+    lesson = promoted(conn, canopy_env, "Use `make test-api`.", key="test-api")
+    assert main(["memory", "list", "--json"]) == 0
+    listed = json.loads(capsys.readouterr().out)
+    assert listed["modes"] == {"ticket_notes": "record", "proposals": "record"}
+    [entry] = listed["notes"]
+    assert {k: entry[k] for k in ("id", "ticket", "key", "status", "run_id", "use_count", "text")} == {
+        "id": note,
+        "ticket": KEY,
+        "key": "lint",
+        "status": "active",
+        "run_id": 1,
+        "use_count": 0,
+        # A character that hides text is named, as the text listing names it.
+        "text": "Run `make lint`<U+200B> first.",
+    }
+    assert main(["memory", "proposals", "--json"]) == 0
+    [waiting] = json.loads(capsys.readouterr().out)["proposals"]
+    assert {k: v for k, v in waiting.items() if k != "created_at"} == {
+        "id": proposal,
+        "key": "api-tests",
+        "repo": "repo",
+        "ticket": KEY,
+        "run_id": 2,
+        "run_kind": "implement",
+        "run_status": "done",
+        "private": False,
+        "ticket_done": False,
+        "text": LESSON,
+    }
+    assert main(["memory", "lessons", "--json"]) == 0
+    [served] = json.loads(capsys.readouterr().out)["lessons"]
+    assert {k: served[k] for k in ("id", "key", "repo", "made", "from", "use_count", "wrong_at", "text")} == {
+        "id": lesson.id,
+        "key": "test-api",
+        "repo": None,
+        "made": "promoted",
+        "from": {"scope": "proposal", "id": lesson.promoted_from, "ticket": KEY, "run_id": 3},
+        "use_count": 0,
+        "wrong_at": None,
+        "text": "Use `make test-api`.",
+    }
+    assert served["review_at"] == lesson.review_at
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["memory", "list", KEY, "--digest", "--json"],
+        ["memory", "list", "--run", "1", "--json"],
+        ["memory", "lessons", "--digest", "--json"],
+    ],
+)
+def test_json_is_for_the_listings_not_a_digest_or_a_run(canopy_env: CanopyEnv, args: list[str]) -> None:
+    assert main(args) == 2
 
 
 def test_with_proposals_at_use_the_cli_says_lessons_are_served(

@@ -56,11 +56,11 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
 | `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands, `--skip` it. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
-| `canopy memory list [KEY]` | Agent memory's tiers in words, then the ticket notes workers recorded; `--run ID`, `--digest`. |
+| `canopy memory list [KEY]` | Agent memory's tiers in words, then the ticket notes workers recorded; `--run ID`, `--digest`, `--json`. |
 | `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
-| `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from. |
+| `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from; `--json`. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
-| `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports; `renew` keeps one. |
+| `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports (`--json`); `renew` keeps one. |
 | `canopy memory edit ID --text T` | Writes a lesson anew (`--repo R`, `--every-repo`); the old version stays in its history. |
 | `canopy memory history ID` | Every version of a lesson or a note, newest first, each with how it was made. |
 | `canopy memory search WORDS` | Every memory with its text, best match first; `--ticket KEY` for one ticket's. |
@@ -68,6 +68,8 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy draft send run:ID N@HASH...` | Posts those drafts as your own words, one comment review a PR; `edit` (text, `--react`), `drop`, `settle`. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
+| `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
+| `canopy agents` | The MCP servers and skills each of canopy's agents is offered, after OpenCode merges the operator's config; `--json`. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up an example chore canopy ships, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |

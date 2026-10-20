@@ -22,7 +22,8 @@ permission:
     "canopy decisions*": allow
     "canopy show run:*": allow
     "canopy show chore:*": allow
-    "opencode mcp list": allow
+    "canopy config show --json": allow
+    "canopy agents --json": allow
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny

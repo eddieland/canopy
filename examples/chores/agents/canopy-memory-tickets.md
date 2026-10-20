@@ -18,9 +18,9 @@ permission:
   bash:
     "*": deny
     "canopy chore history *": allow
-    "canopy memory lessons": allow
-    "canopy memory proposals": allow
-    "canopy memory list": allow
+    "canopy memory lessons --json": allow
+    "canopy memory proposals --json": allow
+    "canopy memory list --json": allow
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny

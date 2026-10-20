@@ -386,13 +386,14 @@ CHORE_AGENTS = {
         "canopy decisions 12",
         "canopy show run:4",
         "canopy show chore:canopy-health",
-        "opencode mcp list",
+        "canopy config show --json",
+        "canopy agents --json",
         "canopy chore history canopy-health",
     ),
     "canopy-memory-tickets": (
-        "canopy memory lessons",
-        "canopy memory proposals",
-        "canopy memory list",
+        "canopy memory lessons --json",
+        "canopy memory proposals --json",
+        "canopy memory list --json",
         "canopy chore history memory-tickets",
     ),
 }
