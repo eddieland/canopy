@@ -28,6 +28,18 @@ def test_a_ticket_is_found_by_its_branchs_slug_the_words_of_its_title(ctx: Conte
     assert where(search.search(ctx.conn, "proj-7")) == [("ticket", "PROJ-7", None)]
 
 
+def test_a_ticket_is_found_by_its_title_which_its_snippet_shows_after_its_key(ctx: Context) -> None:
+    db.set_ticket(ctx.conn, "PROJ-8", ctx.repo, title="Cache the dashboard's slow queries")
+    ctx.conn.execute("UPDATE tickets SET branch = 'agent/PROJ-8' WHERE key = 'PROJ-8'")
+    db.touch_ticket(ctx.conn, "PROJ-9", ctx.repo)
+
+    found = search.search(ctx.conn, "dashboard SLOW")
+    assert where(found) == [("ticket", "PROJ-8", None)]
+    assert found.hits[0].snippet == "PROJ-8 Cache the dashboard's slow queries agent/PROJ-8"
+    # A ticket with no title is still found by its key.
+    assert where(search.search(ctx.conn, "proj-9")) == [("ticket", "PROJ-9", None)]
+
+
 def test_a_runs_report_and_question_are_found_as_its_tickets_messages(ctx: Context) -> None:
     run = running_run(ctx, "PROJ-1")
     result = {"status": "blocked", "summary": "Retries now back off exponentially.", "question": "Cap at 30s?"}
