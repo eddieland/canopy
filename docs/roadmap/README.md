@@ -79,7 +79,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M40. The overseer per decision](M40-the-overseer-per-decision.md): not started.
 - [M41. Limits and trust settings from the web UI](M41-limits-and-trust-settings-from-the-web-ui.md): not started.
 - [M42. Other people's PRs, reviewed on request](M42-other-peoples-prs-reviewed.md): done 2026-10-16.
-- [M43. Publishing a review on someone else's PR](M43-publishing-a-review.md): not started.
+- [M43. Publishing a review on someone else's PR](M43-publishing-a-review.md): in progress.
 - [M44. Plans before implementing](M44-plans-before-implementing.md): done 2026-10-17.
 - [M45. canopy's own worktree pools, replacing treehouse in stages](M45-canopys-own-worktree-pools.md): in progress.
 - [M46. Workers file follow-up tickets](M46-workers-file-follow-up-tickets.md): in progress.
