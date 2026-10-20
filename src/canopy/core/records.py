@@ -39,6 +39,7 @@ from canopy.core.vocab import (
     MemoryScope,
     MemoryStatus,
     MergeState,
+    ModelsRead,
     Phase,
     PlanSetting,
     PlanStatus,
@@ -477,6 +478,36 @@ class RunTool(Row):
     calls: int
     errors: int
     result_chars: int
+
+
+@dataclass(frozen=True)
+class RunModelRead(Row):
+    """How canopy's last read of an agent run's session for its models ended (DESIGN §13): the run, by table and id."""
+
+    TABLE: ClassVar[str] = "run_model_reads"
+
+    run_table: str
+    run_id: int
+    status: ModelsRead
+    #: canopy's words for why it failed; None unless `failed`.
+    error: str | None
+    #: How many times canopy has read it.
+    attempts: int
+    read_at: str
+
+
+@dataclass(frozen=True)
+class RunModel(Row):
+    """One model an agent run's session names as having written its replies (DESIGN §13), and what they cost."""
+
+    TABLE: ClassVar[str] = "run_models"
+
+    run_table: str
+    run_id: int
+    #: As `provider/model`.
+    model: str
+    replies: int
+    cost_usd: float
 
 
 @dataclass(frozen=True)

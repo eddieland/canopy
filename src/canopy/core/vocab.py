@@ -396,3 +396,14 @@ class MergeState(StrEnum):
     HAS_HOOKS = "has_hooks"
     UNSTABLE = "unstable"
     UNKNOWN = "unknown"
+
+
+class ModelsRead(StrEnum):
+    """How canopy's last read of a run's session for its models ended, `run_model_reads.status` (DESIGN §13)."""
+
+    #: The session was read: its models are in `run_models`.
+    FOUND = "found"
+    #: The runtime keeps no session of that id, which reading again would not change.
+    MISSING = "missing"
+    #: The runtime could not be asked, or said what canopy cannot read; read again later.
+    FAILED = "failed"

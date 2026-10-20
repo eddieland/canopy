@@ -218,8 +218,8 @@ does with a plugin, are §33.
 
 ### Each agent's model
 
-Designed, not built (REQUIREMENTS R23). Until it lands, an agent runs on OpenCode's default unless its template passes a
-model, and the journal cannot say which.
+Designed, and built only as far as recording what served (REQUIREMENTS R23). Until the rest lands, an agent runs on
+OpenCode's default unless its template passes a model.
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
@@ -229,17 +229,22 @@ promises:
   `[runtime.models]`, else the runtime's default, fixed when the run starts. `runtime.models` is private (T7): a model
   is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
   operator's `canopy model`, refused inside an agent run (T1); the overseer, a dispatch, and ticket text choose none.
-- **What is recorded is what runs.** canopy writes the model into the agent's rendered definition, so each set of
+- **What is recorded is what served.** No event names the model a call went to, so after each live tick canopy reads a
+  few ended runs' sessions from the runtime's own record, never-read runs the newest first, past ones among them: each
+  model that wrote a run's replies, and what they cost. `canopy spend` breaks each kind's cost down by model. A read
+  never fails a tick; a session the runtime no longer keeps leaves its run unattributed, and a failed read is tried
+  again later, a few times at most.
+- **canopy's choice is the one made.** canopy writes the model into the agent's rendered definition, so each set of
   models gets its own snapshot (D040). A template's model option would override it unseen, so any `runtime` template,
-  prefix, or suffix that passes one is a config error. Each run, review, chore run, and tick records the model asked
-  for, and `canopy spend` breaks cost down by it.
+  prefix, or suffix that passes one is a config error.
 - **No silent fallback.** Before a run starts, canopy checks its model against the list OpenCode would look it up in.
   An unlisted model, or a list that cannot be read, refuses the run with an attention item, spending no attempt and
   leasing no slot, so the work resumes once the model is back. It never falls back to the default, since a canary's run
   on a model nobody chose would read as the canary's.
 
-The PR that builds it proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or ticket labels
-(T1); a list of models shipped with canopy; one override for all of a ticket's agents.
+The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
+ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the
+model asked for, which leaves every run on the default unattributed and splits no run's cost between models.
 
 ### The operator's skill
 
