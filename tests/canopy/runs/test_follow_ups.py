@@ -3,11 +3,13 @@
 import json
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 import pytest
 
-from canopy.core import contract, conversation, db, follow_ups, records, sql
+from canopy.core import contract, conversation, db, follow_ups, outbox, records, sql
 from canopy.loop import attention
+from canopy.notify import message
 from tests.canopy.helpers import (
     KEY,
     agent_runs,
@@ -35,9 +37,15 @@ def records_of(conn: sqlite3.Connection) -> list[records.FollowUp]:
     return records.fetch_all(conn, records.FollowUp, sql.frag("SELECT * FROM follow_ups ORDER BY at, key"))
 
 
-def asked(scenario: Scenario) -> list[tuple[str | None, str]]:
-    """The `follow_up_filed` items on the attention list, each as (ticket, detail)."""
-    return [(i.ticket_key, i.detail) for i in attention.current(scenario.conn) if i.reason == follow_ups.FILED]
+def told(scenario: Scenario) -> list[dict[str, object]]:
+    """The fields of each `follow_ups.filed` event in the outbox, in order."""
+    rows = scenario.conn.execute("SELECT fields FROM notify_events WHERE kind = 'follow_ups.filed' ORDER BY id")
+    return [json.loads(str(r["fields"])) for r in rows]
+
+
+def takes_runs(scenario: Scenario) -> None:
+    """Configure a sink that takes the `runs` events, so they are recorded."""
+    scenario.configures(notify={"sinks": {"slack": {"cmd": "true", "events": ["runs"]}}})
 
 
 def note_of(row: sqlite3.Row) -> str:
@@ -129,54 +137,54 @@ def test_a_follow_ups_runs_file_none(scenario: Scenario, git_pool: GitPool) -> N
     assert f"File no tickets in the tracker: {FOLLOW_UP} is itself a follow-up of {KEY}" in run.prompt
 
 
-def test_a_follow_up_authorizes_nothing_and_canopy_asks_the_operator_about_it(
+def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
     scenario: Scenario, git_pool: GitPool
 ) -> None:
+    takes_runs(scenario)
     run = scenario.run(worker=pushes(created={FOLLOW_UP: "repo", "PROJ-15": None}))
     assert "A follow-up is a request, not work you start" in run.prompt
-    # The overseer owes it nothing: a tick that decides only the parent ends ok, and the harness asks the operator.
-    scenario.tick(*waits(KEY))
-    detail = (
-        f"its workers filed {FOLLOW_UP} (for repo, run:{run.id}), PROJ-15 (for no repository named, run:{run.id}); "
-        "canopy works none of them until you add a queue label to it, or start it privately with `canopy start KEY`"
+    # The run's close tells the sinks, once: filing is an event, not a state.
+    [fields] = told(scenario)
+    assert fields == {"ticket": KEY, "run": run.id, "follow_ups": {FOLLOW_UP: "repo", "PROJ-15": None}, "count": 2}
+    assert message.event_line("follow_ups.filed", fields) == (
+        f"? {KEY} run {run.id} filed follow-ups {FOLLOW_UP} (repo), PROJ-15: "
+        "label or `canopy start` each one you want worked"
     )
-    assert asked(scenario) == [(KEY, detail)]
+    # The overseer owes it nothing, and nothing stands on the attention list: a tick that decides only the parent ends
+    # ok, records no item about the follow-ups, and tells the sinks nothing more.
+    scenario.tick(*waits(KEY))
+    scenario.tick(*waits(KEY))
+    assert [i.reason for i in attention.current(scenario.conn)] == []
+    assert len(told(scenario)) == 1
     # Nothing dispatches it without a label: it is a request.
     assert scenario.refuses(dispatches(FOLLOW_UP, label=None)) == [
         ("refused:unauthorized", f"--label is required: name the queue label you read on {FOLLOW_UP}")
     ]
 
 
-def test_a_follow_up_leaves_the_item_once_labeled_and_dispatched_started_or_done(
-    scenario: Scenario, git_pool: GitPool
-) -> None:
-    scenario.run(worker=pushes(created={FOLLOW_UP: "repo", "PROJ-15": None, "PROJ-16": None}))
-    # Labeled, the overseer dispatches it as any ticket: canopy saw its run.
-    assert scenario.run(dispatches(FOLLOW_UP), worker=pushes()).status == "done"
-    # Started privately by the operator.
-    scenario.operator("start", "PROJ-15")
-    scenario.tick(*waits(KEY, FOLLOW_UP, "PROJ-15"))
-    [(_, detail)] = asked(scenario)
-    assert detail.startswith("its workers filed PROJ-16 (")
-    # Marked done, the last one leaves it, and the item with it.
-    scenario.overseer("ticket", "set", "PROJ-16", "--done")
-    scenario.tick(*waits(KEY, FOLLOW_UP, "PROJ-15"))
-    assert asked(scenario) == []
+def test_a_run_that_files_nothing_tells_the_sinks_nothing(scenario: Scenario, git_pool: GitPool) -> None:
+    takes_runs(scenario)
+    scenario.run(worker=pushes(created={KEY: None}))
+    assert told(scenario) == []
 
 
-def test_the_item_ends_with_its_parent_done_or_forgotten(scenario: Scenario, git_pool: GitPool) -> None:
-    # Attention items have no dismissal: one the operator leaves stops being asked about when its parent's work ends.
+def test_with_no_sink_taking_runs_no_event_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes(created={FOLLOW_UP: "repo"}))
-    scenario.operator("forget", KEY)
-    scenario.tick(*waits(KEY))
-    assert asked(scenario) == []
-    # One filed after the forget is asked about again, until the parent is done.
-    scenario.run(dispatches(slug="again"), worker=pushes(f"agent/{KEY}-again", created={"PROJ-15": None}))
-    scenario.tick(*waits(KEY))
-    assert [key for key, _ in asked(scenario)] == [KEY]
-    scenario.overseer("ticket", "set", KEY, "--done")
-    scenario.tick()
-    assert asked(scenario) == []
+    assert [f.key for f in records_of(scenario.conn)] == [FOLLOW_UP]
+    assert told(scenario) == []
+
+
+def test_the_event_names_at_most_its_bound_and_counts_the_rest(scenario: Scenario, git_pool: GitPool) -> None:
+    takes_runs(scenario)
+    more = outbox.MAX_FOLLOW_UPS + 3
+    scenario.configures(policy={"max_follow_ups": more})
+    scenario.run(worker=pushes(created={f"PROJ-{n}": None for n in range(100, 100 + more)}))
+    [fields] = told(scenario)
+    assert list(cast("dict[str, object]", fields["follow_ups"])) == [f"PROJ-{n}" for n in range(100, 120)]
+    assert fields["count"] == more
+    assert message.event_line("follow_ups.filed", fields).endswith(
+        "PROJ-119, 3 more: label or `canopy start` each one you want worked"
+    )
 
 
 def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
@@ -195,7 +203,6 @@ def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
     # canopy starts nothing for it: no start record, so no private dispatch without the operator's start.
     assert conversation.start_of(scenario.conn, FOLLOW_UP) is None
     scenario.tick(*waits(KEY))
-    assert [key for key, _ in asked(scenario)] == [KEY]
     [(action, _)] = scenario.refuses(dispatches(FOLLOW_UP, label=None))
     assert action == "refused:unauthorized"
 

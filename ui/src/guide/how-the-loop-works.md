@@ -64,10 +64,10 @@ lives on the tracker, where workers write their reports and questions, and canop
 
 A worker may file **follow-up** tickets: a TODO its change leaves, a bug it tripped over and didn't fix. Each one is
 created in the ticket's project, linked to it, with no labels and nobody assigned, and that is all it is: a request.
-canopy works none of them until you say so, the usual way, with your queue label or `canopy start`. Until then the
-[attention list](attention) carries a `follow_up_filed` item on the parent naming each one, and it stays there until
-you label or start each, or the parent is done. Closing one in the tracker is a fine answer too; canopy just won't hear
-it until the parent is done. At most five a run (`policy.max_follow_ups`; 0 turns them
+canopy works none of them until you say so, the usual way, with your queue label or `canopy start`. Your
+notification sinks hear about them once, when the run that filed them ends, and the worker's report lists them too.
+They don't sit on the [attention list](attention): ignoring one, or closing it in the tracker, is a perfectly good
+answer, and canopy has no business nagging you about it. At most five a run (`policy.max_follow_ups`; 0 turns them
 off), and a follow-up files none of its own. A private ticket's worker files them too, the one thing it writes to the
 tracker, so anyone on the tracker can read them. Want a ticket cut into pieces? Reply asking for it, and its next run
 files the pieces as follow-up tickets, for you to label or start.

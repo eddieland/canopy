@@ -149,12 +149,13 @@ its ticket, with no label: a request, which authorizes nothing (TRUST_MODEL T1, 
 that workers notice and ask, and humans authorize: a follow-up is worked only once a human labels it or starts it, as
 any ticket. canopy records the follow-ups an `implement` or `resume` run, public or private, reports in its result's
 `created` (§8), at most `policy.max_follow_ups` per run, and none from a follow-up's own run or from a run that rewrote
-its slot's git, checking only each key's text (D003). It then asks the operator: `follow_up_filed` (§14), about the
-parent, names each recorded follow-up not yet dispatched, started, or done. A refused entry never changes the run's
-status; it raises `follow_up_unrecorded`. An authorized reply asking for a split is guidance to the ticket's next run,
-whose worker files the pieces as follow-ups, ordered with the tracker's blocker relation. Splitting is no longer a run
-kind; `split` survives only as the kind of old runs. Rejected: working a follow-up under its parent's label, since a
-worker would then authorize work for itself.
+its slot's git, checking only each key's text (D003). It then tells the operator once: the run's `follow_ups.filed`
+event (§20) names each, a point event and not an attention item, since a follow-up left unlabeled is a fine answer. A
+refused entry never changes the run's status; it raises `follow_up_unrecorded`. An authorized reply asking for a split
+is guidance to the ticket's next run, whose worker files the pieces as follow-ups, ordered with the tracker's blocker
+relation. Splitting is no longer a run kind; `split` survives only as the kind of old runs. Rejected: working a
+follow-up under its parent's label, since a worker would then authorize work for itself; a standing attention item per
+follow-up, which canopy could clear only on a run, a start, or done, so a declined one stayed until its parent was.
 
 ### Open
 

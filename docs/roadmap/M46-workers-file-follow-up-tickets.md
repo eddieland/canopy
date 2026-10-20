@@ -15,9 +15,9 @@ runs and everything that lands; canopy still never merges (TRUST_MODEL §6).
   pass, with the run that made them, in a journal record of its own. A refused entry leaves the run's status as the
   worker reported it.
 - A recorded follow-up is a request. Nothing dispatches it until a human labels it or the operator starts it; then it is
-  an ordinary ticket. canopy asks the operator instead: the harness raises `follow_up_filed` about the parent, naming
-  each follow-up canopy has no run of, no start record of, and no mark that it is done, with its repository, until
-  each is decided or the parent is done or forgotten (attention items have no dismissal).
+  an ordinary ticket. canopy tells the operator instead, once: the run's close records a `follow_ups.filed` event
+  naming each with its repository (DESIGN §20). Filing is an event, not a state: an attention item would stand until a
+  run, a start, or done, so a follow-up the operator declined stayed on the list until its parent was done (2026-10-20).
 - Volume bounds, in code: at most `policy.max_follow_ups` recorded per run (default 5; 0 records none), and only one
   generation deep. Anything past them, or reported by a run that rewrote its slot's git, is not recorded, and the
   harness raises `follow_up_unrecorded` naming it. The bounds keep the operator's list short; none of it runs anyway.
@@ -46,20 +46,20 @@ runs and everything that lands; canopy still never merges (TRUST_MODEL §6).
   refused entry (bad key, the parent, a known key, another prefix, an unmapped repository, past `max_follow_ups`, from
   a follow-up's run, from a run that rewrote its slot's git, a key another run recorded first) recorded nowhere, named
   in the run's note and in `follow_up_unrecorded`, the run's status unchanged; a follow-up refused without a label;
-  `follow_up_filed` naming each waiting follow-up, and leaving each once it is dispatched under a label, started, or
-  done, and ending with its parent done or forgotten; a private run's follow-up recorded and started only by the
-  operator; `--kind split` refused; the removed keys' errors.
+  `follow_ups.filed` naming each recorded follow-up once, and no attention item for it; a private run's follow-up
+  recorded and started only by the operator; `--kind split` refused; the removed keys' errors.
 - Open: the parent's phase once a split request moved its work into follow-ups; a bound per ticket rather than per
   run; how long `follow_up_unrecorded` stands; and whether a follow-up is a draft under `trust.review_replies =
   "approve"`.
 
 Accept: the tests above pass, and the design names splitting only as old runs' kind. Live, once built: on a labeled
-ticket in the toy workspace (TOY_REPOS), a worker files a follow-up linked to it, with no labels; the next tick raises
-`follow_up_filed`; the operator labels the follow-up, the overseer dispatches it, and its PR lands for review.
+ticket in the toy workspace (TOY_REPOS), a worker files a follow-up linked to it, with no labels; a sink hears
+`follow_ups.filed`; the operator labels the follow-up, the overseer dispatches it, and its PR lands for review.
 
 Status: in progress. Designed 2026-10-19 (DESIGN §18, Follow-up tickets), and the line moved the same day: a follow-up
 is a request the operator decides on, never work a worker authorized. Built: workers, public and private, may file
 follow-ups and are told they are requests; `_run` checks and records them (migration 0049); the harness raises
-`follow_up_filed` and `follow_up_unrecorded`; TRUST_MODEL T1, T3, T6, D123, and D084 as written; and splits removed
-(2026-10-19): every bullet under "Removed", an authorized reply asking for a split as guidance to the next run, and the
-design naming splitting only as old runs' kind. Left: the live check.
+`follow_up_unrecorded`, and the run's close records `follow_ups.filed` (an attention item until 2026-10-20);
+TRUST_MODEL T1, T3, T6, D123, and D084 as written; and splits removed (2026-10-19): every bullet under "Removed", an
+authorized reply asking for a split as guidance to the next run, and the design naming splitting only as old runs'
+kind. Left: the live check.

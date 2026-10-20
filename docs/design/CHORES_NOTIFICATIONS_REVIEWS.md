@@ -134,9 +134,10 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 ### Events
 
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
-worker started or ended, a plan proposed, §25), `chores` (§19), `reviews` (§21), and `loop` (ticks failing and
-recovering, a sink failing). Each carries only bounded fields, its text on one line. `plan.proposed` never carries the
-plan's text. `run.ended` carries a `blocked` run's question, since the needs-human label is not an attention item.
+worker started or ended, a plan proposed, §25, follow-ups filed, §18), `chores` (§19), `reviews` (§21), and `loop`
+(ticks failing and recovering, a sink failing). Each carries only bounded fields, its text on one line. `plan.proposed`
+never carries the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human label is not an
+attention item.
 
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
 net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,

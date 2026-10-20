@@ -186,7 +186,6 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `disk_low` | The disk of `.canopy/` or the workspace is under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide. Ask for a split below. |
-| `follow_up_filed` | A worker filed follow-up tickets: label or `canopy start` each one you want worked. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 

@@ -385,8 +385,8 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             f"{attention.ACTION_PREFIX}awaiting_reply",
             attention.awaiting_detail(waiting),
         )
-    # The tickets runs filed, which wait on the operator's label or start, and those the journal could not record (§18).
-    for item in follow_ups.items(ctx.conn):
+    # The tickets runs reported that the journal could not record (§18). Those it recorded the sinks heard of once.
+    for item in follow_ups.unrecorded(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         action = f"{attention.ACTION_PREFIX}{remembered.reason}"
