@@ -200,7 +200,7 @@ def _spawn(
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
     # Review notes reach only a review of the loop's own PR, by its ticket (DESIGN §28).
-    remembered = review_notes.render(ctx.conn, cfg, ticket=request.ticket)
+    remembered = review_notes.render(ctx.conn, cfg, ticket=request.ticket, review_run_id=run_id)
     if remembered is not None:
         values.update(remembered.values)
     try:

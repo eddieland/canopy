@@ -71,8 +71,8 @@ class Rendered:
     ids: Sequence[int] = ()
 
 
-def render(conn: sqlite3.Connection, config: Config, *, ticket: str | None) -> Rendered | None:
-    """Return review notes' part of the prompt of a review of `ticket`'s PR, or None when they do not reach it.
+def render(conn: sqlite3.Connection, config: Config, *, ticket: str | None, review_run_id: int) -> Rendered | None:
+    """Return review notes' part of review `review_run_id`'s prompt, of `ticket`'s PR; None if they do not reach it.
 
     While the tier records, the prompt carries the contract alone, which asks the reviewer to write. At `use` it carries
     the ticket's digest in `{{REVIEW_MEMORY}}` too, whose ids are the notes the review may drop. The prompt must carry
@@ -90,7 +90,7 @@ def render(conn: sqlite3.Connection, config: Config, *, ticket: str | None) -> R
     required = [REVIEW_MEMORY_CONTRACT]
     ids: tuple[int, ...] = ()
     if mode is MemoryMode.USE:
-        found = digest(conn, ticket)
+        found = digest(conn, ticket, for_review=review_run_id)
         # It starts the line of the heading after it, so it ends with the blank line before that heading.
         values[REVIEW_MEMORY] = f"{found.text}\n\n"
         required.append(REVIEW_MEMORY)
@@ -389,21 +389,23 @@ def read_by(conn: sqlite3.Connection, review_run_id: int) -> list[records.Review
     )
 
 
-def digest(conn: sqlite3.Connection, key: str) -> Digest:
-    """Return ticket `key`'s review notes as its next review's prompt would carry them at `use` (DESIGN §28).
+def digest(conn: sqlite3.Connection, key: str, *, for_review: int | None = None) -> Digest:
+    """Return ticket `key`'s review notes as review run `for_review`'s prompt carries them at `use` (DESIGN §28).
 
     Each active note in key order, with its id and key, the review that wrote it, how many of the ticket's reviews
-    started since, and the commit it read, then its text as a quote. Past `MAX_DIGEST` bytes the oldest are left out,
-    and counted. At `record` the same digest is the operator's to read, never an agent's.
+    started since and before `for_review`, and the commit it read, then its text as a quote. Past `MAX_DIGEST` bytes
+    the oldest are left out, and counted. With `for_review` None, the digest the ticket's next review would get: at
+    `record` the operator's to read, never an agent's.
 
     Returns:
         The section, starting with its heading, the ids it holds, and the count left out.
     """
     active = active_notes(conn, key)
-    reviews = [
-        int(r[0])
-        for r in sql.execute(conn, sql.select("id").from_("review_runs").where("ticket_key = ?", key).order_by("id"))
-    ]
+    earlier = sql.select("id").from_("review_runs").where("ticket_key = ?", key).order_by("id")
+    if for_review is not None:
+        # Its own row is already in the journal as its prompt renders: it is not a review before itself.
+        earlier = earlier.where("id < ?", for_review)
+    reviews = [int(r[0]) for r in sql.execute(conn, earlier)]
     entries = {note.id: _entry(note, reviews) for note in active}
     kept: list[records.ReviewNote] = []
     size = 0
