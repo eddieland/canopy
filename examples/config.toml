@@ -134,6 +134,9 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: a few lines every worker should follow, such as "commit review fixes with `git commit --fixup`". They go
 # into every worker's prompt, at most 4 KiB, so you need not copy a prompt to add them (DESIGN §12).
 # worker_instructions = "~/.config/canopy/worker-instructions.md"
+# Optional: the same for the overseer, such as "dispatch tickets labeled urgent before the rest". They go at the end of
+# its prompt, at most 4 KiB, and never reach a worker (DESIGN §12).
+# overseer_instructions = "~/.config/canopy/overseer-instructions.md"
 
 [notify]
 # Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.

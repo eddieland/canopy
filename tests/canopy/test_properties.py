@@ -183,6 +183,7 @@ def test_every_config_key_declares_a_scope() -> None:
         "notify.cmd",
         "paths.prompt_overrides",
         "paths.worker_instructions",
+        "paths.overseer_instructions",
         "capacity.max_workers",
         "tracker.labels",
         "trust.authorized_repliers",

@@ -832,6 +832,8 @@ class Paths(Section):
     worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
     # The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
     worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
+    # The operator's standing instructions to the overseer, rendered into its prompt (DESIGN §12).
+    overseer_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
