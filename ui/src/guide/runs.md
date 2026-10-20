@@ -77,7 +77,14 @@ The session id in the transcript's header opens the same session in the runtime'
 transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
 `no events yet`); hover it for the whole reason.
 
-Under the transcript, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
+Under the transcript, **Prompt** is what canopy handed the worker to start its session, exactly as rendered: the
+ticket, the instructions for its kind of run, and whatever else canopy chose to tell it. It arrives folded, with its
+length; **Show prompt** opens it, and the copy button beside the length takes it whole, for trying it again by hand.
+When a worker did something baffling, start here: more often than not, it did what it was told. The agent's
+definition and the runtime's own system prompt come first and aren't in it, since no file records them. A prompt over
+1 MiB shows its first 1 MiB, marked `cut`, and a run whose prompt file is gone says `none kept`.
+
+Under the prompt, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
 stderr, and how it exited. The transcript shows only the session's events, so a run that died in `pnpm install`, or
 crashed before its first event, has an empty transcript and its whole story here. **Show output** opens it at its end,
 where the errors live.

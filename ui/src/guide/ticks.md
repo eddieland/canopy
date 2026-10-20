@@ -40,10 +40,11 @@ action, in amber, is an item it put on your list. When you want to know why a ti
 usually the answer.
 
 Under them are the overseer's session, as a run's [Transcript](runs#a-runs-page) shows it, its session id in the
-header, and its raw **Output**, stdout then stderr, under the path of its file, opened with **Show output**. Both fill
-in while the tick runs, so a tick that seems stuck can be watched being stuck. A tick that kept no output file has no
-Output panel; the transcript's header says why, once. **Pretty** lays each event out on its own lines. The output
-opens at its end, where the errors are, since that's usually why you're reading it.
+header; the **Prompt** canopy started it with, folded as a run's is; and its raw **Output**, stdout then stderr, under
+the path of its file, opened with **Show output**. The transcript and the output fill in while the tick runs, so a
+tick that seems stuck can be watched being stuck. A tick that kept no output file has no Output panel; the
+transcript's header says why, once. **Pretty** lays each event out on its own lines. The output opens at its end,
+where the errors are, since that's usually why you're reading it.
 
 ## The spend page
 

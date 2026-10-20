@@ -13,6 +13,7 @@ import { ListPanel } from '@/components/list-panel'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
+import { PromptPanel } from '@/components/prompt-panel'
 import { TranscriptPanel } from '@/components/transcript'
 import { WhenField } from '@/components/when-field'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
@@ -105,6 +106,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
                     page="chore-run"
                     view={view}
                 />
+                <PromptPanel transcript={transcript} />
             </div>
         </>
     )

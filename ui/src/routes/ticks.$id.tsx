@@ -11,6 +11,7 @@ import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
+import { PromptPanel } from '@/components/prompt-panel'
 import { TickOutputPanel } from '@/components/raw-output'
 import { TickSteps } from '@/components/tick-steps'
 import { TranscriptPanel } from '@/components/transcript'
@@ -124,6 +125,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                     )}
                 </Panel>
                 <TranscriptPanel transcript={transcript} running={tick.status === 'running'} page="tick" />
+                <PromptPanel transcript={transcript} />
                 <TickOutputPanel id={tick.id} path={output} />
             </div>
         </>

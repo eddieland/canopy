@@ -11,6 +11,7 @@ import { Field, Fields } from '@/components/fields'
 import { FoldPanel } from '@/components/fold-panel'
 import { MemoryKinds } from '@/components/memory'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
+import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
 import { RunDoing } from '@/components/run-doing'
@@ -81,6 +82,7 @@ function Loaded({ id }: { id: number }) {
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
                 <TranscriptPanel transcript={transcript} running={data.state === 'running'} page="run" view={view} />
+                <PromptPanel transcript={transcript} />
                 <RunOutputPanel id={data.id} />
                 <RunMemoryPanel id={data.id} />
             </div>
