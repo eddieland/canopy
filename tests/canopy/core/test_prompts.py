@@ -146,6 +146,27 @@ def test_an_override_written_before_sections_reads_none_where_one_does_not_apply
     assert text.endswith("\n\n## Context\n\nNone.\n")
 
 
+def test_a_required_placeholder_inside_a_section_left_out_is_missing(canopy_env: CanopyEnv) -> None:
+    # The label check is the worker's own authorization (D051): an override cannot hide it where it does not render.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text(
+        "{{KEY}}\n\n{{#CONTEXT}}\n\n{{CONTEXT}} {{LABELS}}\n\n{{/CONTEXT}}\n"
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert "Look. `agent-ready-alice`" in prompts.render_worker(cfg, "implement", {**PROMPT_VALUES, "CONTEXT": "Look."})
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{LABELS\}\}"):
+        prompts.render_worker(cfg, "implement", PROMPT_VALUES)
+
+
+@pytest.mark.parametrize("kind", ["implement", "resume"])
+def test_a_private_prompt_without_a_conversation_still_renders(canopy_env: CanopyEnv, kind: str) -> None:
+    # `{{CONVERSATION}}` is required of a private prompt; its section left out for want of one still counts.
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, {**PROMPT_VALUES, "CONVERSATION": None}, private=True)
+    assert "## Conversation with the operator" not in text
+
+
 @pytest.mark.parametrize(
     ("override", "error"),
     [

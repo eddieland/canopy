@@ -358,16 +358,16 @@ def map_note(ctx: Context) -> str | None:
     """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18).
 
     Returns:
-        The text, cut to `MAX_MAP`; None, which leaves the prompt's section out, without one, or one that cannot be
-        read or is empty.
+        The text, cut to `MAX_MAP`, or why a `MAP.md` there cannot be read; None, which leaves the prompt's section out,
+        without one or with an empty one.
     """
     path = ctx.workspace.map_prose
     if path is None:
         return None
     try:
         text = path.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError:
-        return None
+    except OSError as e:
+        return f"MAP.md could not be read ({e.strerror})."
     if len(text) > MAX_MAP:
         return f"{text[:MAX_MAP]}\n\n[MAP.md is longer than {MAX_MAP} characters; the rest is left out.]"
     return text or None

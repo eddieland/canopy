@@ -656,8 +656,11 @@ def render(
         value = values[placeholder]
         return value if value is not None else NONE
 
-    rendered = _PLACEHOLDER_RE.sub(replace, _sections(path, text, values))
-    used = set(_PLACEHOLDER_RE.findall(text))
+    kept, left_out = _sections(path, text, values)
+    rendered = _PLACEHOLDER_RE.sub(replace, kept)
+    # A placeholder is used where it renders, or as a section left out for want of its value: one inside another section
+    # left out is not, so an override cannot hide a required check in a section that does not apply.
+    used = set(_PLACEHOLDER_RE.findall(kept)) | left_out
     missing = [f"{{{{{n}}}}}" for n in required if n not in used]
     missing.extend(" or ".join(f"{{{{{n}}}}}" for n in group) for group in one_of if group and used.isdisjoint(group))
     if missing:
@@ -665,16 +668,20 @@ def render(
     return rendered
 
 
-def _sections(path: Path, text: str, values: Mapping[str, str | None]) -> str:
+def _sections(path: Path, text: str, values: Mapping[str, str | None]) -> tuple[str, set[str]]:
     """Return `text` with each `{{#NAME}}` section kept, its markers taken out, or left out while NAME's value is None.
 
     A section left out takes the blank line after it along, or else the one before it, so the sections around it keep
     one blank line between them.
 
+    Returns:
+        The text, and the names of the sections left out.
+
     Raises:
         PromptError: A section names a placeholder `values` has no value for, or a marker has no match.
     """
     pos = 0
+    left_out: set[str] = set()
     while (m := _SECTION_RE.search(text, pos)) is not None:
         name, body = m.group(1), m.group(2)
         if name not in values:
@@ -690,9 +697,10 @@ def _sections(path: Path, text: str, values: Mapping[str, str | None]) -> str:
             start -= 2
         text = text[:start] + text[end:]
         pos = start
+        left_out.add(name)
     if (stray := re.search(r"\{\{[#/][A-Z][A-Z0-9_]*\}\}", text)) is not None:
         raise PromptError(f"{path}: {stray.group()} has no matching section marker")
-    return text
+    return text, left_out
 
 
 def _worker_reader(kind: str, *, private: bool) -> Reader:
