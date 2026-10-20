@@ -134,11 +134,11 @@ def _matching(conn: sqlite3.Connection, sql: str, terms: Collection[str]) -> lis
     ).fetchall()
 
 
-# A ticket's text: its key, then its branch and each unit's branch and PR, each once. Ordered by when a tick last saw
-# it, since a ticket's rowid says only when it was first seen.
+# A ticket's text: its key and title, then its branch and each unit's branch and PR, each once. Ordered by when a tick
+# last saw it, since a ticket's rowid says only when it was first seen.
 _TICKETS = (
     "SELECT t.key, t.phase, t.last_seen_at AS at,"
-    "  t.key || coalesce(' ' || (SELECT group_concat(v, ' ') FROM ("
+    "  t.key || coalesce(' ' || t.title, '') || coalesce(' ' || (SELECT group_concat(v, ' ') FROM ("
     "    SELECT t.branch AS v UNION SELECT u.branch FROM ticket_units u WHERE u.ticket_key = t.key"
     "    UNION SELECT u.pr_url FROM ticket_units u WHERE u.ticket_key = t.key"
     "  ) WHERE v IS NOT NULL AND v != ''), '') AS text,"

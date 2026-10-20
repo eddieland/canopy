@@ -107,9 +107,8 @@ Press `/` from anywhere but a text field to jump to the search box, and type. Th
 or at once on Enter, and Escape leaves the box. A search wants 2 to 200 characters and at most eight words, and finds
 what holds every word, in any case, newest first.
 
-It searches tickets by key and branch, every conversation, chore runs, the overseer's decisions, and ticks, each in
-its own panel, at most 20 of each. It doesn't search transcripts, ticket titles, reviews, or agent memory. A branch
-usually carries its ticket's words, which covers most of what a title would have found.
+It searches tickets by key, title, and branch, every conversation, chore runs, the overseer's decisions, and ticks,
+each in its own panel, at most 20 of each. It doesn't search transcripts, reviews, or agent memory.
 
 ## Acting from the UI
 
