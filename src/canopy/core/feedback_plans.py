@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, drafts, plans, records, replies
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanStatus, Proposal, ResumeReason, ReviewItem, ReviewState, RunKind
+from canopy.core.vocab import PlanStatus, Proposal, ResumeReason, ReviewItem, ReviewState, RunKind, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -174,6 +174,10 @@ def _marked(body: str, trust: Trust) -> bool:
 def _handled(conn: sqlite3.Connection, key: str) -> set[tuple[str, ReviewItem, int]]:
     """The items an earlier feedback plan of `key` covered, whose approval a `resume` went ahead on.
 
+    The approval is spent when the `resume` is recorded, before its worker does anything, so an item counts as handled
+    only while that run works or once it ended `done` or `blocked`. A resume that failed, crashed, timed out, was
+    stopped, or never started hands its items back to the next plan, rather than dropping them unseen.
+
     Returns:
         Each by its PR, kind, and observed id.
     """
@@ -181,8 +185,8 @@ def _handled(conn: sqlite3.Connection, key: str) -> set[tuple[str, ReviewItem, i
         conn,
         records.FeedbackPlanItem,
         "SELECT i.* FROM feedback_plan_items i JOIN feedback_plans p ON p.id = i.plan_id "
-        "WHERE p.ticket_key = ? AND p.spent_run_id IS NOT NULL",
-        (key,),
+        "JOIN runs r ON r.id = p.spent_run_id WHERE p.ticket_key = ? AND r.status IN (?, ?, ?)",
+        (key, RunStatus.RUNNING, RunStatus.DONE, RunStatus.BLOCKED),
     )
     return {(r.pr_url, r.item, r.item_id) for r in rows}
 

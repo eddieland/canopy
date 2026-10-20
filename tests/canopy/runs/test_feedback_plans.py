@@ -23,7 +23,7 @@ from tests.canopy.helpers import (
     reads,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
+from tests.canopy.scenario_helpers import Scenario, dispatches, fails, pushes
 from tests.conftest import CanopyEnv
 
 PR = DRAFTS_PR
@@ -110,6 +110,20 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
     assert f"feedback plan {plan.id} went ahead with run {resume.id} already" in reason
     trust = load(env.root, env.user_file).trust
     assert feedback_plans.offered(conn, trust, KEY, [PR]) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_resume_that_fails_hands_its_items_back_to_the_next_plan(scenario: Scenario, github_state: Path) -> None:
+    # The approval is spent when the resume is recorded, before its worker does anything: a resume that fails has
+    # handled nothing, so the next plan is offered its items again rather than none (DESIGN §32).
+    conn = scenario.conn
+    with_a_pr(scenario)
+    planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve")
+    resume = scenario.run(RESUME, worker=fails())
+    assert resume.status == RunStatus.FAILED
+    trust = load(scenario.env.root, scenario.env.user_file).trust
+    assert [o.id for o in feedback_plans.offered(conn, trust, KEY, [PR])] == [501, 502]
 
 
 @pytest.mark.usefixtures("git_pool")

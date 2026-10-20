@@ -56,8 +56,8 @@ findings does (§21): the plan's text stays data, and the message is the instruc
 The next tick dispatches the `resume` with the approved plan, which its worker follows as in §25 in place of the
 ticket's plan, and the ticked items. Two guards hold it in code: `unplanned` refuses a `resume` under `approve` that
 carries no approved feedback plan, unless its only reason is `no_pr`, and `plan_changed` refuses one whose plan's file
-changed since approval. An approval goes ahead once: the `resume` that starts spends it, and the items it named are
-handled then, as a cursor's are (§7). Feedback that arrives after an approval waits for the next plan.
+changed since approval. An approval goes ahead once, spent by the `resume` that starts; its items stay handled unless
+that run ends other than `done` or `blocked`, when the next plan gets them. Later feedback waits for the next plan.
 
 **A plan that changes nothing.** A plan whose items are all `decline`, `ask`, or `leave` changes no code. Under
 `trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` through: that run
