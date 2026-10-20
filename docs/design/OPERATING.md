@@ -53,9 +53,11 @@ chore that looks at canopy itself reads (`examples/chores/`).
 
 Two more read-only commands serve those chores. `canopy config show` lists each number, switch, and choice in the
 merged config with its default, bounds, and the file that set it; text, commands, and paths are left out, since they
-may carry a host or a token and an agent reports what it reads. `canopy agents` asks the runtime what each of canopy's
-agents is offered, MCP servers and skills, once it has merged the operator's own runtime config into canopy's
-definitions, so a recommendation to deny one rests on the merge the runtime makes, not on canopy's files alone.
+may carry a host or a token and an agent reports what it reads. `canopy config commands` shows those commands,
+rendered as a run would start them, to the operator alone: it is refused inside a tick or a run. `canopy agents` asks
+the runtime what each of canopy's agents is offered, MCP servers and skills, once it has merged the operator's own
+runtime config into canopy's definitions, so a recommendation to deny one rests on the merge the runtime makes, not on
+canopy's files alone.
 
 ## 12. Configuration
 

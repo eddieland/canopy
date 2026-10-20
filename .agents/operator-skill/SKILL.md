@@ -69,6 +69,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
+| `canopy config commands` | Each agent's command as a run starts it, rendered from the templates, and the keys it is made of; `--json`. |
 | `canopy agents` | The MCP servers and skills each of canopy's agents is offered, after OpenCode merges the operator's config; `--json`. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up an example chore canopy ships, replacing its prompt and table; no NAME lists them. |
