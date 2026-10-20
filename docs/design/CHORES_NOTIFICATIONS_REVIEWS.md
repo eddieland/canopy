@@ -72,7 +72,7 @@ Result contract, one JSON line, last line of the agent's text (§13), validated 
 
 `ok` means the check ran, and no findings means nothing needs a human; `failed`, that it could not check. A finding's
 `id` is stable across runs for the same problem. Text is bounded, a `link` is a plain `https://` URL, and
-`more_findings` only counts what was left out.
+`more_findings` only counts what was left out. An optional field that is null or empty is read as left out.
 
 ### History
 
