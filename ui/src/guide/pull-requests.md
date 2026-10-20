@@ -113,6 +113,11 @@ becomes a refactor nobody asked for.
 
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once.
 
+A review of a new commit isn't starting from scratch: it reads canopy's last finished review of the PR, the summary
+and every finding you didn't dismiss, and checks whether each still holds. A finding the worker fixed stops coming back,
+and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
+looked is useful; being told where not to look is how a bug lives through three reviews.
+
 The reviewer runs its own command, `runtime.review_cmd`, so point it at another model than your workers': a second
 model misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
 (`runtime.review_temperature = -1`, the default), because OpenAI's reasoning models refuse a request that sets one, and

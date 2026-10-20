@@ -771,6 +771,64 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert db.review_dismissals(conn, review_id) == frozenset({2})
 
 
+def previous_review(prompt: str) -> str:
+    """The `## The previous review` section of a reviewer's prompt, its framing left out."""
+    return prompt.split("## The previous review\n\n", 1)[1].split("\n\nThis, when there is one,", 1)[0]
+
+
+def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_dismissed(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    sha = head(git_pool)
+    first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS))
+    assert previous_review(first.prompt) == "None."
+    scenario.operator("dismiss", f"review:{first.id}", "2")
+    # Another PR's review reaches none of this PR's.
+    other = scenario.review(reviews(sha, f"{PR}0"), reviewer=reviewer_reports(CLEAN))
+    assert previous_review(other.prompt) == "None."
+
+    # A commit origin does not have: the run fails, so the next review still reads the first.
+    second = scenario.review(reviews("b" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    third = scenario.review(reviews("c" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    assert second.status == third.status == "failed"
+    expected = (
+        f"canopy's review run {first.id} of this PR, at commit `{sha}`, ended with verdict findings, impact normal.\n"
+        "\n"
+        "Its summary:\n"
+        f"> {FINDINGS['summary']}\n"
+        "\n"
+        "Its findings:\n"
+        "1. **blocking** `src/retry.py:42`: retry never stops\n"
+        "   > The loop resets attempts on every error.\n"
+        "   > A failing call retries forever."
+    )
+    assert previous_review(second.prompt) == previous_review(third.prompt) == expected
+
+    scenario.operator("dismiss", f"review:{first.id}", "1")
+    scenario.operator("grant", PR, "review")
+    fourth = scenario.review(reviews("d" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    assert previous_review(fourth.prompt) == (
+        f"canopy's review run {first.id} of this PR, at commit `{sha}`, ended with verdict findings, impact normal.\n"
+        "\n"
+        "Its summary:\n"
+        f"> {FINDINGS['summary']}\n"
+        "\n"
+        "Its findings: none the operator kept."
+    )
+
+
+def test_a_reviewer_override_without_the_previous_review_serves_only_a_prs_first_review(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    overrides = reviewing.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "reviewer.md").write_text("Review {{PR_URL}} at {{SHA}} in {{CHECKOUT}}.\n")
+    assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).status == "done"
+    [(action, reason)] = scenario.refuses(reviews("b" * 40))
+    assert action == "refused:bad_prompt"
+    assert reason.endswith("missing required placeholder {{PREVIOUS_REVIEW}}")
+
+
 def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -953,7 +953,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   chip, how many decisions, its cost, tokens, and peak context, and when it ended; its summary under, from its id.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each with
   its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line breaks,
-  its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line says what it
+  its reasoning muted and italic under a `thinking` label; past four lines, its first four and rich text's
+  `show N more lines` toggle (`foldText`), whole when All open is on or a search holds a line it hides. A tool call
+  is a native `<details>` whose line says what it
   did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name at its own width up
   to 14rem, the first to give way, and in monospace a shell call's command (the agent's description of it on hover),
   else the runtime's title, else its input's short values as `key=value`; under that, muted, its error's first line in
@@ -1277,8 +1279,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   tab stop with the arrow keys between them.
   Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
   component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
-  and rich text's `show N more lines` shows more of text already on screen rather than opening a part, so it is a
-  plain button with `aria-expanded`.
+  and rich text's `show N more lines` (`MoreLines`, a transcript's thinking's too) shows more of text already on
+  screen rather than opening a part, so it is a plain button with `aria-expanded`.
   A new wrapper is shadcn's, added or ported as `button.tsx` was.
 - **Modes and disclosures** follow one rule each, so a control says which it is before it is clicked:
   - A **mode**, a way of showing what is already there, is a pressed `Toggle`, a ghost `xs` button raised while on,

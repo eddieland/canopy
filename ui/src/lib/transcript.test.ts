@@ -11,6 +11,7 @@ import {
     elapsed,
     endedOn,
     findQueryOf,
+    foldText,
     hitsIn,
     moreLabel,
     outcome,
@@ -260,6 +261,30 @@ describe('hitsIn', () => {
         expect(hitsIn(error, '(after')).toEqual({ row: 1, body: 0 })
         expect(hitsIn(error, 'a.i')).toEqual({ row: 0, body: 0 })
         expect(hitsIn(step(1, 'stop'), 'stop')).toEqual({ row: 0, body: 0 })
+    })
+})
+
+describe('foldText', () => {
+    it('shows text up to one line over its lines whole', () => {
+        expect(foldText('a\nb\nc\nd\ne', 4)).toEqual({ shown: 'a\nb\nc\nd\ne', hidden: 0 })
+        expect(foldText('one line', 4)).toEqual({ shown: 'one line', hidden: 0 })
+    })
+
+    it('keeps the first lines of longer text, and counts the rest', () => {
+        expect(foldText('a\nb\nc\nd\ne\nf', 4)).toEqual({ shown: 'a\nb\nc\nd', hidden: 2 })
+    })
+
+    it('counts a long line as the lines it wraps to, and cuts it where a word ends', () => {
+        const long = 'word '.repeat(200).trim()
+        const { shown, hidden } = foldText(long, 4)
+        expect(hidden).toBe(6)
+        expect(shown.endsWith('word…')).toBe(true)
+        expect(shown.length).toBeLessThanOrEqual(400)
+    })
+
+    it('cuts one long word mid-word, past an indent, rather than to the ellipsis alone', () => {
+        const { shown } = foldText(`    ${'x'.repeat(600)}`, 4)
+        expect(shown).toBe(`    ${'x'.repeat(395)}…`)
     })
 })
 

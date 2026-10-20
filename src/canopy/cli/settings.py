@@ -1,23 +1,27 @@
 """`canopy config show`: the keys a person or an agent tunes, with each one's value, default, and the file that set it.
 
-It reads only. Config is changed in the files, with the operator's editor: no command here writes one (ROADMAP M41).
+And `canopy config commands`: the commands canopy starts its agents with, rendered, for the operator alone.
+
+Both read only. Config is changed in the files, with the operator's editor: no command here writes one (ROADMAP M41).
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import shlex
 from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import Group, open_context
+from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.render import report_json
-from canopy.core import config, settings
+from canopy.core import agent_commands, config, conversation, definitions, settings
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from canopy.core.agent_commands import Command
     from canopy.core.settings import Setting
 
 
@@ -43,6 +47,40 @@ def cmd_show(click_ctx: click.Context, *, as_json: bool) -> int:
         click.echo(report_json({"files": layers, "settings": [dataclasses.asdict(s) for s in found]}))
         return 0
     for line in render(found, files):
+        click.echo(line)
+    return 0
+
+
+@config_group.command("commands")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Print the commands as one JSON object instead, each as its argv."
+)
+@click.pass_context
+def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
+    """Print each command canopy starts its agents with, rendered from your config as a run would render it.
+
+    Each is quoted for a shell, so you can see where one word ends: `<prompt>` stands for the prompt, the title is an
+    example, and the definitions directory is the one a run would use. A worker run's prefix and suffix are in place,
+    and each chore with a command of its own, and `runtime.setup_cmd`, follow. A command may carry a token, so only you
+    read them: it is refused inside one of canopy's own ticks or runs.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"config commands refused ({r.guard}): {r.reason}") from None
+    ctx = open_context(click_ctx)
+    try:
+        snapshot = definitions.ensure(ctx.ws.state_dir, ctx.config)
+    except definitions.DefinitionsError as e:
+        raise CliError(f"config commands: {e}") from None
+    files = config.config_files(ctx.ws.root)
+    layers = dict(zip(files, settings.Layer, strict=True))
+    origin = config.origins(ctx.ws.root, runner=ctx.runner)
+    found = agent_commands.commands(ctx.config, {key: layers[path] for key, path in origin.items()}, snapshot)
+    if as_json:
+        click.echo(report_json({"definitions_dir": str(snapshot), "commands": [dataclasses.asdict(c) for c in found]}))
+        return 0
+    for line in render_commands(found):
         click.echo(line)
     return 0
 
@@ -78,3 +116,16 @@ def _note(s: Setting) -> str:
     low = f"; at least {s.minimum}" if s.minimum is not None else ""
     high = f"; at most {s.maximum}" if s.maximum is not None else ""
     return f"{where}{default}{choices}{low}{high}"
+
+
+def render_commands(found: list[Command]) -> list[str]:
+    """The commands as `canopy config commands` prints them: each one's role and keys, then its words on one line.
+
+    Returns:
+        Its lines, without line ends.
+    """
+    lines = [f"Each command as a run starts it, with no shell; {agent_commands.PROMPT} stands for the prompt."]
+    for command in found:
+        keys = ", ".join(f"{k.key} ({f'{k.set_in} file' if k.set_in is not None else 'default'})" for k in command.keys)
+        lines.extend(["", f"{command.role}: {keys}", f"  {shlex.join(command.argv)}"])
+    return lines
