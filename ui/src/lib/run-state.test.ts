@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
 import type { ChoreSummary, ReviewSummary, Run } from '@/api/types'
 
-import { byTicket, railWork, workingOn } from './run-state'
-import type { RailItem } from './run-state'
+import { busy, byTicket, railWork, runsListed, subjectRuns, workingOn } from './run-state'
+import type { RailItem, SubjectRuns } from './run-state'
 
 const running = mockRuns[0] as Run
 
@@ -114,5 +114,58 @@ describe('railWork', () => {
         const chores = [chore('deps', 3, '2026-10-08T13:00:00Z')]
         expect(railWork({ runs: runs.slice(0, 4), chores }, 4).moreAt).toBe('/chores')
         expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/runs')
+    })
+})
+
+// Each subject as its kind, its latest run's id, and its earlier runs' ids, for comparing an order.
+function subjects(groups: SubjectRuns[]): [string, number, number[]][] {
+    return groups.map((g) => [g.of, g.latest.id, g.earlier.map((r) => r.id)])
+}
+
+function finished<T extends Run | ReviewSummary>(item: T, endedAt: string): T {
+    return { ...item, status: 'done', state: 'done', ended_at: endedAt }
+}
+
+describe('subjectRuns', () => {
+    it('lists the running runs of every kind first, the first to start leading, then the rest by their end', () => {
+        const runs = [
+            at(9, 'running', '2026-10-08T12:10:00Z', 'A'),
+            finished(at(8, 'done', '2026-10-08T09:00:00Z', 'B'), '2026-10-08T10:00:00Z'),
+        ]
+        const reviews = [
+            review(7, 'running', '2026-10-08T12:05:00Z'),
+            finished(
+                { ...review(6, 'done', '2026-10-08T10:30:00Z'), pr_url: 'https://github.com/acme/api/pull/3' },
+                '2026-10-08T11:00:00Z',
+            ),
+        ]
+        const chores = [chore('deps', 3, '2026-10-08T12:15:00Z'), { ...chore('idle', null), latest: null }]
+        expect(subjects(subjectRuns({ runs, reviews, chores }))).toEqual([
+            ['review', 7, []],
+            ['worker', 9, []],
+            ['chore', 3, [2]],
+            ['review', 6, []],
+            ['worker', 8, []],
+        ])
+    })
+
+    it("folds a PR's earlier reviews under its latest, and lists a chore by its latest run when none runs", () => {
+        const reviews = [review(7, 'done', '2026-10-08T12:05:00Z'), review(4, 'failed', '2026-10-08T10:00:00Z')]
+        const groups = subjectRuns({ runs: [], reviews, chores: mockChores })
+        expect(subjects(groups)).toEqual([
+            ['review', 7, [4]],
+            ['chore', 2, []],
+        ])
+        expect(runsListed(groups)).toBe(3)
+    })
+})
+
+describe('busy', () => {
+    it('counts the reviews among the workers, as max_workers does, and the chores apart', () => {
+        const runs = [at(1, 'running', '2026-10-08T12:00:00Z'), at(2, 'blocked', '2026-10-08T11:00:00Z')]
+        const reviews = [review(7, 'running', '2026-10-08T12:05:00Z'), review(6, 'done', '2026-10-08T11:00:00Z')]
+        const chores = [chore('deps', 3), chore('idle', null)]
+        expect(busy({ runs, reviews, chores })).toEqual({ workers: 2, reviews: 1, chores: 1 })
+        expect(busy({ runs })).toEqual({ workers: 1, reviews: 0, chores: 0 })
     })
 })

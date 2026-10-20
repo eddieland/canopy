@@ -195,6 +195,37 @@ test('the runs page lists a ticket once, by its latest run, and opens its earlie
     await expect(page.getByTestId('run-40')).toBeVisible()
 })
 
+test('the runs page lists the reviews and chore runs beside the workers, and what runs against capacity', async ({
+    page,
+}) => {
+    await page.goto('runs')
+    await settled(page)
+    // Two workers run, and a chore: both limits are full, so the next dispatch of either waits for one to end.
+    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 2 of 2 · full')
+    await expect(page.getByTestId('capacity-reviews')).toHaveText('reviews 0 of 1')
+    await expect(page.getByTestId('capacity-chores')).toHaveText('chores 1 of 1 · full')
+    // The running chore is among the running workers; a PR reviewed twice is one row, by its latest review.
+    await expect(page.getByTestId('chore-run-build-health-4')).toContainText('running')
+    const pr = page.getByTestId('review-4')
+    await expect(pr.getByRole('link', { name: 'acme/web#88', exact: true })).toBeVisible()
+    await pr.getByRole('button', { name: 'Show 1 earlier run' }).click()
+    await expect(pr.getByTestId('earlier-reviews-4').getByRole('link', { name: 'review:1' })).toBeVisible()
+
+    await page.goto('runs?kind=review')
+    const filters = page.getByRole('navigation', { name: 'Filter by kind' })
+    await expect(filters.getByRole('link', { name: 'reviews' })).toHaveAttribute('data-selected', 'true')
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(3)
+    await expect(page.getByTestId('runs-count')).toHaveText('4')
+
+    // The two filters keep each other: a state chosen under a kind keeps the kind.
+    await page.getByRole('navigation', { name: 'Filter by state' }).getByRole('link', { name: 'running' }).click()
+    await expect(page).toHaveURL(/kind=review/u)
+    await expect(page.getByText('no reviews running now')).toBeVisible()
+    await filters.getByRole('link', { name: 'chores' }).click()
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
+    await expect(page.getByTestId('chore-run-build-health-4')).toBeVisible()
+})
+
 test('an unknown route renders the not-found page inside the shell', async ({ page }) => {
     await page.goto('nowhere')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing here')

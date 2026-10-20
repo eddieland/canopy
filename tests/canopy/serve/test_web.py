@@ -35,7 +35,7 @@ from tests.canopy.helpers import (
     running_run,
 )
 from tests.canopy.scenario_helpers import raises
-from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 
@@ -342,9 +342,18 @@ def test_an_item_about_a_pr_no_ticket_owns_names_the_pr(ctx: Context) -> None:
     assert (item["pr"], item["ticket_key"], item["ticket_title"], item["subject"]) == (pr, None, None, f"pr:{pr}")
 
 
+def test_the_loop_state_carries_what_may_run_at_once_as_the_config_sets_it(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user("\n[capacity]\nmax_workers = 4\nmax_reviews = 2\nmax_chores = 0\n")
+    found = context(canopy_env)
+    db.migrate(found.conn, resources.migrations_dir())
+    c, _ = signed_in_client(found)
+    assert c.get("/api/loop").json()["capacity"] == {"workers": 4, "reviews": 2, "chores": 0}
+
+
 def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_do(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
-    assert c.get("/api/loop").json() == {"paused": None, "notice": None, "memory": None}
+    idle = {"capacity": DEFAULT_CAPACITY.model_dump(), "paused": None, "notice": None, "memory": None}
+    assert c.get("/api/loop").json() == idle
     # A write without the session's token is refused, as every other write is.
     assert c.post("/api/loop/pause", headers={"origin": ORIGIN}).status_code == 403
     assert pause.paused(ctx.conn) is None
@@ -360,7 +369,7 @@ def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_
 
     assert c.post("/api/loop/resume", headers=headers).json() == {
         "already": False,
-        "loop": {"paused": None, "notice": None, "memory": None},
+        "loop": idle,
     }
     assert pause.paused(ctx.conn) is None
     assert c.post("/api/loop/resume", headers=headers).json()["already"] is True
@@ -408,7 +417,7 @@ def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
     backend = web.backend(ctx, reread.Reload(), tick_now.TickNow())
     sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
     first = [e.root for e in sent.changes(backend, ctx)]
-    assert LoopUpdated(paused=None) in first
+    assert LoopUpdated(capacity=DEFAULT_CAPACITY, paused=None) in first
     assert sent.changes(backend, ctx) == []
     pause.pause(ctx.conn, channel="cli")
     [event] = [e.root for e in sent.changes(backend, ctx)]

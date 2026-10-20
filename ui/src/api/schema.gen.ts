@@ -1611,6 +1611,27 @@ export type components = {
             type: "attention.updated";
         };
         /**
+         * Capacity
+         * @description What may run at once, `[capacity]`: the limits the runs page counts what is running against (DESIGN §8).
+         */
+        Capacity: {
+            /**
+             * Chores
+             * @description `max_chores`: chore runs, apart from `workers` (DESIGN §19); 0 turns chores off.
+             */
+            chores: number;
+            /**
+             * Reviews
+             * @description `max_reviews`: review runs, within `workers`; 0 turns reviews off.
+             */
+            reviews: number;
+            /**
+             * Workers
+             * @description `max_workers`: worker runs and review runs together (DESIGN §21).
+             */
+            workers: number;
+        };
+        /**
          * ChoreDetail
          * @description One chore: what `canopy show chore:NAME` prints.
          */
@@ -2559,11 +2580,13 @@ export type components = {
         LimitKind: "implement" | "resume" | "review";
         /**
          * LoopState
-         * @description Whether the loop is paused, the notice to workers in force, and agent memory's tiers.
+         * @description Whether the loop is paused, the notice to workers in force, agent memory's tiers, and what may run at once.
          *
          *     While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
          */
         LoopState: {
+            /** @description What may run at once, from the config the loop serves. */
+            capacity: components["schemas"]["Capacity"];
             /** @description Agent memory's tiers; None while both are off, when memory shows nowhere. */
             memory: components["schemas"]["MemoryState"] | null;
             /** @description The notice to workers in force; None without one. */
@@ -2573,11 +2596,13 @@ export type components = {
         };
         /**
          * LoopUpdated
-         * @description The loop was paused or resumed, or a notice to workers was set, cleared, or lapsed.
+         * @description The loop was paused or resumed, a notice to workers was set, cleared, or lapsed, or a reload changed capacity.
          *
          *     The payload is what `GET /loop` returns.
          */
         LoopUpdated: {
+            /** @description What may run at once, from the config the loop serves. */
+            capacity: components["schemas"]["Capacity"];
             /** @description Agent memory's tiers; None while both are off. */
             memory: components["schemas"]["MemoryState"] | null;
             /** @description The notice to workers in force; None without one. */

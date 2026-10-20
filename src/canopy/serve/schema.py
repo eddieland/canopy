@@ -1274,12 +1274,25 @@ class MemoryState(_Model):
     """How many proposals wait on the operator to promote or reject them; 0 while proposals are off."""
 
 
+class Capacity(_Model):
+    """What may run at once, `[capacity]`: the limits the runs page counts what is running against (DESIGN §8)."""
+
+    workers: int
+    """`max_workers`: worker runs and review runs together (DESIGN §21)."""
+    reviews: int
+    """`max_reviews`: review runs, within `workers`; 0 turns reviews off."""
+    chores: int
+    """`max_chores`: chore runs, apart from `workers` (DESIGN §19); 0 turns chores off."""
+
+
 class LoopState(_Model):
-    """Whether the loop is paused, the notice to workers in force, and agent memory's tiers.
+    """Whether the loop is paused, the notice to workers in force, agent memory's tiers, and what may run at once.
 
     While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
     """
 
+    capacity: Capacity
+    """What may run at once, from the config the loop serves."""
     paused: Pause | None = None
     """The pause; None when the loop is not paused."""
     notice: WorkerNotice | None = None
@@ -2195,13 +2208,15 @@ class TickUpdated(_Model):
 
 
 class LoopUpdated(_Model):
-    """The loop was paused or resumed, or a notice to workers was set, cleared, or lapsed.
+    """The loop was paused or resumed, a notice to workers was set, cleared, or lapsed, or a reload changed capacity.
 
     The payload is what `GET /loop` returns.
     """
 
     type: Literal["loop.updated"] = "loop.updated"
     """What the event is."""
+    capacity: Capacity
+    """What may run at once, from the config the loop serves."""
     paused: Pause | None = None
     """The pause; None when the loop is not paused."""
     notice: WorkerNotice | None = None

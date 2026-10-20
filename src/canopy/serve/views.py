@@ -33,6 +33,7 @@ from canopy.runtime import entries, transcript
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
     AttentionItem,
+    Capacity,
     ChoreDetail,
     ChoreFinding,
     ChoreRun,
@@ -272,7 +273,7 @@ def last_tick(ctx: Context) -> LastTick:
 
 
 def loop_state(ctx: Context) -> LoopState:
-    """Whether the operator paused the loop, since when, and how, the notice to workers in force, and memory's tiers.
+    """Whether the operator paused the loop, and how, the notice to workers, memory's tiers, and what may run at once.
 
     Returns:
         No pause while the loop runs, and no notice without one in force. A pause's channel the schema does not know
@@ -283,16 +284,18 @@ def loop_state(ctx: Context) -> LoopState:
     if held is not None:
         paused = Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop"))
     remembered = memory_views.state(ctx)
+    limits = ctx.config.capacity
+    capacity = Capacity(workers=limits.max_workers, reviews=limits.max_reviews, chores=limits.max_chores)
     told = notice.current(ctx.conn)
     if told is None:
-        return LoopState(paused=paused, memory=remembered)
+        return LoopState(capacity=capacity, paused=paused, memory=remembered)
     worker_notice = WorkerNotice(
         text=told.text,
         since=db.parse_time(told.set_at),
         lapses_at=db.parse_time(told.lapses_at),
         channel=_NOTICE_CHANNELS.get(told.channel, "cli"),
     )
-    return LoopState(paused=paused, notice=worker_notice, memory=remembered)
+    return LoopState(capacity=capacity, paused=paused, notice=worker_notice, memory=remembered)
 
 
 def tick(ctx: Context) -> Tick | None:

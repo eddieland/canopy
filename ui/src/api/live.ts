@@ -130,7 +130,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         }
         case 'loop.updated': {
-            client.setQueryData(keys.loop, { paused: event.paused, notice: event.notice, memory: event.memory })
+            const { capacity, paused, notice, memory } = event
+            client.setQueryData(keys.loop, { capacity, paused, notice, memory })
             break
         }
         case 'stream.ending': {
@@ -220,10 +221,16 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
     }
     if (type === 'loop.updated') {
-        const { paused, notice, memory } = value as { paused?: unknown; notice?: unknown; memory?: unknown }
+        const { capacity, paused, notice, memory } = value as {
+            capacity?: unknown
+            paused?: unknown
+            notice?: unknown
+            memory?: unknown
+        }
         // `typeof null` is 'object' too: running is `paused: null`, no notice `notice: null`, memory off
-        // `memory: null`, and a missing key is no event.
-        return typeof paused === 'object' && typeof notice === 'object' && typeof memory === 'object'
+        // `memory: null`, and a missing key is no event. Capacity is always there, never null.
+        const known = typeof capacity === 'object' && capacity !== null
+        return known && typeof paused === 'object' && typeof notice === 'object' && typeof memory === 'object'
             ? (value as StreamEvent)
             : null
     }

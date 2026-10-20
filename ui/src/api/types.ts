@@ -99,6 +99,8 @@ export type Tick = Schemas['Tick']
 export type LastTick = Schemas['LastTick']
 /** Whether the operator paused the loop (no tick starts until it is resumed), and the notice to workers in force. */
 export type LoopState = Schemas['LoopState']
+/** What may run at once, `[capacity]`: the limits the runs page counts what is running against (DESIGN §8). */
+export type Capacity = Schemas['Capacity']
 /** The operator's notice to workers in force (DESIGN §8): what it says, when it was set, and when it lapses. */
 export type WorkerNotice = Schemas['WorkerNotice']
 /** What setting or clearing a notice did, and the state it left. */

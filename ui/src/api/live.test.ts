@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
 import { keys } from './queries'
 import type { ChoreDetail, ChoreRunDetail, ReviewDetail, ReviewSummary, Run, TicketDetail } from './types'
 
@@ -152,20 +152,21 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryData(keys.reviewRequests)).toEqual([])
     })
 
-    it('writes the pause whole, and lifts it', () => {
+    it('writes the pause and the capacity whole, and lifts the pause', () => {
         const client = new QueryClient()
         const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
 
-        applyStreamEvent(client, { type: 'loop.updated', paused, notice: null, memory: null })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused, notice: null, memory: null })
+        const capacity = mockCapacity
+        applyStreamEvent(client, { type: 'loop.updated', capacity, paused, notice: null, memory: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ capacity, paused, notice: null, memory: null })
         const notice = {
             text: 'CI is down.',
             since: '2026-10-08T11:50:00Z',
             lapses_at: '2026-10-08T15:50:00Z',
             channel: 'web',
         } as const
-        applyStreamEvent(client, { type: 'loop.updated', paused: null, notice, memory: null })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused: null, notice, memory: null })
+        applyStreamEvent(client, { type: 'loop.updated', capacity, paused: null, notice, memory: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ capacity, paused: null, notice, memory: null })
     })
 
     it('marks the ticks and the tickets stale when the latest tick changes', () => {
@@ -326,19 +327,18 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent('{"type":"tick.updated","tick":null,"acknowledged":"7"}')).toBeNull()
         const paused = {
             type: 'loop.updated',
+            capacity: mockCapacity,
             paused: { since: '2026-10-08T11:50:00Z', channel: 'web' },
             notice: { text: 'CI is down.', since: '2026-10-08T11:50:00Z', lapses_at: '2026-10-08T15:50:00Z' },
             memory: null,
         }
         expect(parseStreamEvent(JSON.stringify(paused))).toEqual(paused)
-        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null,"memory":null}')).toEqual({
-            type: 'loop.updated',
-            paused: null,
-            notice: null,
-            memory: null,
-        })
-        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null}')).toBeNull()
-        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null,"memory":"on"}')).toBeNull()
+        const running = { type: 'loop.updated', capacity: mockCapacity, paused: null, notice: null, memory: null }
+        expect(parseStreamEvent(JSON.stringify(running))).toEqual(running)
+        expect(parseStreamEvent(JSON.stringify({ ...running, capacity: null }))).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null,"memory":null}')).toBeNull()
+        expect(parseStreamEvent(JSON.stringify({ ...running, memory: undefined }))).toBeNull()
+        expect(parseStreamEvent(JSON.stringify({ ...running, memory: 'on' }))).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":"CI is down."}')).toBeNull()

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { mockCapacity } from '@/api/mocks'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -11,8 +12,8 @@ import { StreamContext } from '@/hooks/use-loop-down'
 import { LoopPause } from './loop-pause'
 
 const SINCE = '2026-10-08T11:57:00Z'
-const RUNNING: LoopState = { memory: null, notice: null, paused: null }
-const PAUSED: LoopState = { memory: null, notice: null, paused: { channel: 'cli', since: SINCE } }
+const RUNNING: LoopState = { capacity: mockCapacity, memory: null, notice: null, paused: null }
+const PAUSED: LoopState = { ...RUNNING, paused: { channel: 'cli', since: SINCE } }
 
 // Every request the button sends, and what the server stand-in answers each.
 let sent: string[] = []

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { keys } from '@/api/queries'
+import { mockCapacity } from '@/api/mocks'
 import type { LoopState, MemoryState, Meta, Tick } from '@/api/types'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { StreamContext } from '@/hooks/use-loop-down'
@@ -75,7 +76,7 @@ function renderReadouts(
     }
     client.setQueryData(keys.meta, meta)
     client.setQueryData(keys.tick, { tick, acknowledged: null })
-    client.setQueryData<LoopState>(keys.loop, { memory, notice: null, paused: null })
+    client.setQueryData<LoopState>(keys.loop, { capacity: mockCapacity, memory, notice: null, paused: null })
     return renderRouted(
         <StreamContext value={{ status: stream, downSince }}>
             <StreamReadout stream={stream} />

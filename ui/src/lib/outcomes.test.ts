@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import { draft } from '@/api/mocks'
+import { draft, mockCapacity } from '@/api/mocks'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
@@ -79,7 +79,7 @@ describe('outcomes', () => {
         expect(
             noticeSetText({
                 already: false,
-                loop: { paused: null, notice: { ...notice, channel: 'web' }, memory: null },
+                loop: { capacity: mockCapacity, paused: null, notice: { ...notice, channel: 'web' }, memory: null },
             }),
         ).toBe('Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.')
         const unchanged = 'Nothing changed: the config files say what the loop already runs on.'
