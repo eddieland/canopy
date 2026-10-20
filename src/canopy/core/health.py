@@ -215,10 +215,10 @@ def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> l
 
 def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[Failure]:
     statuses = sorted(_FAILED[kind])
-    marks = ", ".join("?" * len(statuses))
     rows = conn.execute(
         f"SELECT * FROM ({_ROWS[kind]}) "  # noqa: S608 (a fixed query, and a mark per status)
-        f"WHERE started_at >= ? AND started_at < ? AND status IN ({marks}) ORDER BY started_at DESC, id DESC LIMIT ?",
+        f"WHERE started_at >= ? AND started_at < ? AND status IN ({db.marks(statuses)}) "
+        "ORDER BY started_at DESC, id DESC LIMIT ?",
         (since, until, *statuses, FAILURES),
     )
     for run_id, what, status, started, subject, note, cost in rows:

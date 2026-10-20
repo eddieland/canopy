@@ -73,8 +73,7 @@ def events_after(
     if not groups:
         return []
     # Only the placeholder count is interpolated; the groups are bound parameters.
-    marks = ",".join("?" * len(groups))
-    sql = f"SELECT * FROM notify_events WHERE id > ? AND id <= ? AND grp IN ({marks}) ORDER BY id"  # noqa: S608
+    sql = f"SELECT * FROM notify_events WHERE id > ? AND id <= ? AND grp IN ({db.marks(groups)}) ORDER BY id"  # noqa: S608
     params = [cursor, upto if upto is not None else newest_event_id(conn), *groups]
     return records.fetch_all(conn, records.NotifyEvent, sql, params)
 
