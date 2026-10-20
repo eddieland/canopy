@@ -723,7 +723,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         branch=str(row["branch"]) if row["branch"] else None,
         active_at=db.parse_time(str(row["active_at"])),
         latest_message_id=db.latest_message_of(conn, conversation.TICKET, key),
-        awaiting=int(waiting["id"]) if waiting is not None else None,
+        awaiting=waiting.id if waiting is not None else None,
         running_run=int(running["id"]) if running is not None else None,
         plan_waits=ticket is not None and plans.waits(conn, ticket),
     )

@@ -108,7 +108,7 @@ def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(scenario: Sc
     run = scenario.run(PLAN, worker=planner_does(plan=None, result=blocked))
     assert run.status == RunStatus.BLOCKED
     asked = present(plans.question(scenario.conn, KEY))
-    assert str(asked["body"]) == QUESTION
+    assert asked.body == QUESTION
 
     # The harness raises it: the planner wrote nothing to the ticket, so no label or comment says it waits.
     scenario.tick(*waits(KEY, rationale="the planner asked"))

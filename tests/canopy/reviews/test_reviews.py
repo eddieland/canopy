@@ -750,16 +750,16 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     assert f"{ref} findings 1 went to PROJ-1 as message" in scenario.operator("send", ref, "1").out
     [message] = conversation.operator_messages_after(conn, "PROJ-1", 0)
     body = f"Address finding 1 of canopy's review run {review_id}, of commit {sha[:12]}. Leave its finding 2 alone."
-    assert (message["body"], message["channel"]) == (body, "cli")
+    assert (message.body, message.channel) == (body, "cli")
     # The reviewer's words stay data: the operator's message names the finding and never quotes it.
-    assert "retry never stops" not in message["body"]
+    assert "retry never stops" not in message.body
     # The same command again records nothing new.
     assert "already went to PROJ-1" in scenario.operator("send", ref, "1").out
 
     # The next tick reads it as the operator's go-ahead, and a resume for the review hears both.
     scenario.tick(*waits("PROJ-1"), dry_run=True)
     assert [m["body"] for m in scenario.ticket_state()["operator"]["new_operator_messages"]] == [body]
-    command = resume(review_id, ResumeReason.REPLY, cursors={"message": str(message["id"])})
+    command = resume(review_id, ResumeReason.REPLY, cursors={"message": str(message.id)})
     prompt = scenario.run(command, worker=pushes()).prompt
     assert body in prompt
     assert "1. **blocking** `src/retry.py:42`: retry never stops" in prompt

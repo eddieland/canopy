@@ -698,7 +698,7 @@ def _show_conversation(ctx: Context, key: str, record: records.Start | None) -> 
     # A public ticket's questions are on the tracker, but for a planner's, which canopy holds (DESIGN §25).
     waiting = plans.question(ctx.conn, key) if record is None else conversation.latest_question(ctx.conn, key)
     if waiting is not None and (record is None or conversation.is_started(record)):
-        click.echo(f"\nMessage {waiting['id']} waits on your answer: canopy reply {key} 'your answer'")
+        click.echo(f"\nMessage {waiting.id} waits on your answer: canopy reply {key} 'your answer'")
 
 
 def _echo_message(m: sqlite3.Row) -> None:
