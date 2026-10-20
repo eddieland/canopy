@@ -409,6 +409,40 @@ describe('TranscriptPanel', () => {
         expect(chart().getByRole('radiogroup')).toBeDefined()
     })
 
+    it('folds long thinking to its first lines, and shows the rest on a click', () => {
+        const thought = Array.from({ length: 8 }, (_, i) => `thought ${i + 1}`).join('\n')
+        const entries: TranscriptEntry[] = [
+            { kind: 'text', call: 1, at: AT, text: thought, reasoning: true, cut: false },
+        ]
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        expect(rows().getByText(/thought 4/u)).toBeDefined()
+        expect(rows().queryByText(/thought 5/u)).toBeNull()
+
+        fireEvent.click(rows().getByRole('button', { name: 'show 4 more lines', expanded: false }))
+        expect(rows().getByText(/thought 8/u)).toBeDefined()
+        fireEvent.click(rows().getByRole('button', { name: 'show less', expanded: true }))
+        expect(rows().queryByText(/thought 8/u)).toBeNull()
+    })
+
+    it('shows long thinking whole with All open, or when the search holds a line it folds away', () => {
+        const thought = Array.from({ length: 8 }, (_, i) => `thought ${i + 1}`).join('\n')
+        const entries: TranscriptEntry[] = [
+            { kind: 'text', call: 1, at: AT, text: thought, reasoning: true, cut: false },
+            ...ENTRIES,
+        ]
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        fireEvent.click(allOpen())
+        expect(rows().getByText(/thought 8/u)).toBeDefined()
+        fireEvent.click(allOpen())
+        expect(rows().queryByText(/thought 8/u)).toBeNull()
+
+        search('thought 2')
+        expect(rows().queryByText(/thought 8/u)).toBeNull()
+        search('thought 7')
+        expect(rows().getByRole('mark').textContent).toBe('thought 7')
+        expect(rows().getByRole('button', { name: 'show less' })).toBeDefined()
+    })
+
     it('draws a page of a long transcript’s rows, and a fold after them that shows more', () => {
         render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} page="run" />)
         expect(rows().getByText(`said ${PAGE}`)).toBeDefined()

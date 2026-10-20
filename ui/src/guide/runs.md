@@ -54,7 +54,9 @@ scrolling past a few hundred rows to find it. A chore run's page has the same fi
 
 The **Transcript** is the run's session, from its log, oldest first:
 
-- its text, with its reasoning set in italics and marked `thinking`;
+- its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and
+  **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
+  search that finds a line in the folded part, shows it whole;
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
   harness refused is marked `refused`, with the guard;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
