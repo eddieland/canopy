@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox
+from canopy.core import db, outbox, sql
 from canopy.core.config import Sink, notify_words
 from canopy.infra import procs
 from canopy.notify import journal, message
@@ -150,15 +150,21 @@ def status(ctx: Context) -> list[SinkStatus]:
 
 def _record_loop_events(ctx: Context) -> None:
     """Record `loop.failing` once when the latest ticks all failed, and `loop.recovered` at the first `ok` after it."""
-    latest = ctx.conn.execute(
-        "SELECT id, status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1"
+    latest = sql.execute(
+        ctx.conn,
+        sql.select("id, status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
     ).fetchone()
     if latest is None:
         return
     tick_id, status = int(latest[0]), str(latest[1])
     # Pruning always keeps the newest of these (journal.prune_events), so a long streak is never taken for a new one.
-    last = ctx.conn.execute(
-        "SELECT kind FROM notify_events WHERE kind IN ('loop.failing', 'loop.recovered') ORDER BY id DESC LIMIT 1"
+    last = sql.execute(
+        ctx.conn,
+        sql.select("kind")
+        .from_("notify_events")
+        .where("kind IN ('loop.failing', 'loop.recovered')")
+        .order_by("id DESC")
+        .limit(1),
     ).fetchone()
     failing = last is not None and last[0] == "loop.failing"
     if status == "ok":
@@ -177,13 +183,15 @@ def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
     Returns:
         The count, 0 when the last ended tick before `tick_id` was `ok`.
     """
-    return int(
-        conn.execute(
-            "SELECT count(*) FROM ticks WHERE id < ? AND status NOT IN ('running', 'ok') "
-            "AND id > coalesce((SELECT max(id) FROM ticks WHERE id < ? AND status = 'ok'), 0)",
-            (tick_id, tick_id),
-        ).fetchone()[0]
+    last_ok = sql.select("max(id)").from_("ticks").where("id < ?", tick_id).where("status = 'ok'")
+    q = (
+        sql.select("count(*)")
+        .from_("ticks")
+        .where("id < ?", tick_id)
+        .where("status NOT IN ('running', 'ok')")
+        .where("id > coalesce(({}), 0)", last_ok)
     )
+    return int(sql.execute(conn, q).fetchone()[0])
 
 
 def _deliver(
@@ -215,7 +223,9 @@ def _deliver(
     )
     if msg.is_empty():
         # Nothing to say; the cursor still moves past events of groups this sink does not take.
-        ctx.conn.execute("UPDATE notify_sinks SET cursor = max(cursor, ?) WHERE name = ?", (cursor, name))
+        sql.execute(
+            ctx.conn, sql.update("notify_sinks").set_to("cursor = max(cursor, ?)", cursor).where("name = ?", name)
+        )
         return Delivery(name, "nothing")
     fields = {
         "sink": name,

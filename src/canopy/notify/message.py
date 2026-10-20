@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import quote
 
-from canopy.core import contract, db, records
+from canopy.core import contract, db, records, sql
 from canopy.core.items import Item, age
 from canopy.core.vocab import RunStatus
 
@@ -290,7 +290,8 @@ def titles(conn: sqlite3.Connection) -> dict[str, str]:
     Returns:
         Titles by ticket key. A ticket with no title is left out.
     """
-    return {str(r[0]): str(r[1]) for r in conn.execute("SELECT key, title FROM tickets WHERE title IS NOT NULL")}
+    q = sql.select("key, title").from_("tickets").where("title IS NOT NULL")
+    return {str(r[0]): str(r[1]) for r in sql.execute(conn, q)}
 
 
 def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now: datetime) -> Digest:
@@ -299,9 +300,15 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
     Returns:
         The digest, read from the journal and `items` only.
     """
-    ticks = Counter(str(r[0]) for r in conn.execute("SELECT status FROM ticks WHERE started_at >= ?", (since,)))
-    started = Counter(str(r[0]) for r in conn.execute("SELECT kind FROM runs WHERE started_at >= ?", (since,)))
-    ended_rows = records.fetch_all(conn, records.Run, "SELECT * FROM runs WHERE ended_at >= ? ORDER BY id", (since,))
+    ticks = Counter(
+        str(r[0]) for r in sql.execute(conn, sql.select("status").from_("ticks").where("started_at >= ?", since))
+    )
+    started = Counter(
+        str(r[0]) for r in sql.execute(conn, sql.select("kind").from_("runs").where("started_at >= ?", since))
+    )
+    ended_rows = records.fetch_all(
+        conn, records.Run, sql.select("*").from_("runs").where("ended_at >= ?", since).order_by("id")
+    )
     ended = Counter(str(r.status) for r in ended_rows)
     named = titles(conn)
     done: list[DoneRun] = [
