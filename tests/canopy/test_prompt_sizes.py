@@ -1,4 +1,5 @@
-"""Each bundled prompt, agent definition, and skill, checked against the size `.agents/sizes.toml` records for it.
+"""Each bundled prompt, persona, agent definition, and skill, checked against the size `.agents/sizes.toml` records
+for it.
 
 An agent run reads these files whole, and the overseer's prompt goes out on every tick, so a change to one's size
 changes what every run after it costs. The recorded size is a record, not a limit: a prompt grows or shrinks as the
@@ -17,7 +18,7 @@ from pathlib import Path
 #: Where the bundled files sit in a checkout. The record names each file by its path relative to this.
 AGENTS = Path(__file__).resolve().parents[2] / ".agents"
 #: The directories whose every file has a recorded size: what agent runs read. The operator's skill is not among them.
-HELD = ("agents", "prompts", "skills")
+HELD = ("agents", "personas", "prompts", "skills")
 #: The record: each file's size in characters, one line per file.
 SIZES = AGENTS / "sizes.toml"
 #: The record's path as the messages name it, from the repository root.

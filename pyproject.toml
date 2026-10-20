@@ -84,6 +84,7 @@ packages = ["src/canopy"]
 [tool.hatch.build.targets.wheel.force-include]
 "migrations" = "canopy/_data/migrations"
 ".agents/prompts" = "canopy/_data/prompts"
+".agents/personas" = "canopy/_data/personas"
 ".agents/agents" = "canopy/_data/agents"
 ".agents/skills" = "canopy/_data/skills"
 ".agents/operator-skill" = "canopy/_data/operator-skill"

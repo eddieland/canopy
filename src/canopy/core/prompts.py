@@ -103,6 +103,10 @@ MAX_STANDING_BYTES = 4096
 #: §12), bounded as the workers' are. It is the prompt's only placeholder: an override written before it existed still
 #: serves an operator who sets none, and once one is set, an override without it refuses the snapshot instead.
 OVERSEER_STANDING = "{{STANDING_INSTRUCTIONS}}"
+#: The persona every planner, reviewer, and worker run gets for `{{PERSONA}}` (DESIGN §31): canopy's own voice, which
+#: the shipped prompts no longer hold, placed below their obligations. Not required: an override without the placeholder
+#: still serves a run whose persona is this one, and keeps whatever voice the override already holds.
+DEFAULT_PERSONA = "canopy"
 # The operator's notice to workers (`canopy notice`, DESIGN §8), in every prompt that builds, tests, or reads CI: every
 # worker's, and the reviewer's. An override written before notices existed still serves while none is in force; while
 # one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
@@ -412,6 +416,19 @@ def render_overseer(config: Config) -> str:
     return text.replace(OVERSEER_STANDING, overseer_instructions(config))
 
 
+def persona() -> str:
+    """Return the text of `DEFAULT_PERSONA`, from the personas canopy ships, for `{{PERSONA}}` (DESIGN §31).
+
+    Raises:
+        PromptError: The file cannot be read or is not UTF-8.
+    """
+    try:
+        path = resources.personas_dir() / f"{DEFAULT_PERSONA}.md"
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError) as e:
+        raise PromptError(f"cannot read persona {DEFAULT_PERSONA}: {e}") from e
+
+
 class PromptError(Exception):
     """A prompt file cannot be rendered."""
 
@@ -441,7 +458,8 @@ def render_worker(
     a kind that opens PRs that lacks `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry
     `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
     its own check. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
-    `paths.worker_instructions` set every prompt must carry it. `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
+    `paths.worker_instructions` set every prompt must carry it. `{{PERSONA}}` is `DEFAULT_PERSONA`'s text, which a
+    prompt need not carry. `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
     from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
@@ -454,6 +472,7 @@ def render_worker(
         **dict.fromkeys(MEMORY_PARTS, ""),
         **values,
         "STANDING_INSTRUCTIONS": standing_instructions(config),
+        "PERSONA": persona(),
         "NOTICE": notice if notice is not None else "None.",
         "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
@@ -492,12 +511,18 @@ def render_reviewer(
 
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
     a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
-    review answers, for `{{NOTES}}`, which the prompt must carry when there are some.
+    review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `{{PERSONA}}` is
+    `DEFAULT_PERSONA`'s text, as a worker's is.
 
     Returns:
         The rendered prompt.
     """
-    values = {**values, "NOTICE": notice if notice is not None else "None.", "NOTES": notes or "None."}
+    values = {
+        **values,
+        "NOTICE": notice if notice is not None else "None.",
+        "NOTES": notes or "None.",
+        "PERSONA": persona(),
+    }
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
     return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted))

@@ -58,5 +58,8 @@ ticket's reviewer to `skeptic` and its worker to `minimalist` from its page, its
 both runs record them; the next ticket, with no override, runs `canopy`; and a persona file removed after it was set
 refuses that ticket's next run with an attention item.
 
-Status: in progress. Stage 0's list is in its PR (2026-10-19), for the operator to read before Stage 1 starts.
-Designed 2026-10-19 (DESIGN §31).
+Status: in progress. Stage 0's list, in #996, was read and merged by the operator (2026-10-19). Stage 1 is built
+(2026-10-20): `.agents/personas/canopy.md` holds the lines that list moved, and every planner, reviewer, and worker run
+renders it as `{{PERSONA}}`, after the obligations. The plan and resume prompts shrank; the reviewer and implement
+prompts grew by the persona's section, since they gave up only a sentence or a phrase. Stage 2 is next. Designed
+2026-10-19 (DESIGN §31).

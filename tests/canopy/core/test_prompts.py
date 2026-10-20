@@ -59,7 +59,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     assert text.startswith("# canopy worker: plan\n")
     assert "{{" not in text
     assert "If `/ws/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces." in text
-    assert "Write the plan as markdown to `/ws/desks/PROJ-1/.canopy-new-plan.md`" in text
+    assert "as markdown to `/ws/desks/PROJ-1/.canopy-new-plan.md`" in text
     assert "within 100,000 characters" in text
     assert text.rstrip().endswith(
         '{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>",'

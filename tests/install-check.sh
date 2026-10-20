@@ -147,7 +147,8 @@ canopy chore install memory-tickets >/dev/null || fail "canopy chore install mem
 agent="$workspace/.canopy/chore-agents/memory-tickets/agents/canopy-memory-tickets.md"
 [ -s "$agent" ] || fail "canopy chore install did not copy the agent to $agent"
 
-# The migrations, prompts, agent definitions, skills, and example chores came from the wheel, not from this checkout.
+# The migrations, prompts, personas, agent definitions, skills, and example chores came from the wheel, not from
+# this checkout.
 state="$workspace/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
 "$UV_TOOL_DIR/canopy/bin/python" -c '
@@ -158,6 +159,7 @@ tool = Path(sys.argv[1]).resolve()  # resources resolves symlinks, such as macOS
 for found in (
     resources.migrations_dir(),
     resources.prompts_dir(),
+    resources.personas_dir(),
     resources.agents_dir(),
     resources.skills_dir(),
     resources.example_chores_dir(),

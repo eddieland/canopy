@@ -95,9 +95,10 @@ def run_replies(conn: sqlite3.Connection, run_id: int) -> records.RunReplies | N
 
 
 def posted_values(marks: str, label: str) -> dict[str, str]:
-    """Each placeholder's text under `post`: what the prompts said before the setting existed, word for word.
+    """Each placeholder's text under `post`: what the prompts said before the setting existed, but for their voice.
 
-    `marks` is the instruction to mark each comment (`prompts.mark_comments`), and `label` the needs-human label.
+    The voice, such as how briefly a worker replies, is the persona's now (DESIGN §31). `marks` is the instruction to
+    mark each comment (`prompts.mark_comments`), and `label` the needs-human label.
 
     Returns:
         The values, by placeholder; `{{DRAFTS}}` is empty.
@@ -114,7 +115,7 @@ def posted_values(marks: str, label: str) -> dict[str, str]:
         # worker-resume.md
         "CI_NOTE": "Comment on each PR whose checks you fixed, describing the fix.",
         "PR_REPLIES": (
-            f"Reply on the PR to each comment you addressed, briefly. {marks} You post as the\noperator, so that is "
+            f"Reply on the PR to each comment you addressed. {marks} You post as the\noperator, so that is "
             "how canopy knows the comment is yours and never reads it back as review feedback or as a reply."
         ),
         "DECLINE": (
@@ -128,7 +129,7 @@ def posted_values(marks: str, label: str) -> dict[str, str]:
         ),
         # worker-resume-private.md
         "PRIVATE_PR_REPLIES": (
-            "Reply on the PR to each review comment you addressed, briefly, and post nothing else\n"
+            "Reply on the PR to each review comment you addressed, and post nothing else\n"
             "but the edit to a PR's body below, when one is needed.\n"
             f"{marks} You post as the operator, so that is how canopy knows the reply is yours and never reads it "
             "back as\nreview feedback."
@@ -152,7 +153,7 @@ def _drafted_values(ticket_marks: str, label: str, *, ticket: bool) -> dict[str,
     )
     replies = (
         "Post no comment, reply, or reaction on a PR: put your reply to each review comment you addressed in a\n"
-        "`thread` draft (Result, below), briefly, for the operator to send as their own."
+        "`thread` draft (Result, below), for the operator to send as their own."
     )
     decline = (
         "If a review comment asks for a change you believe is wrong, make the case in a\n"
