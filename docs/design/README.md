@@ -101,7 +101,7 @@ not go in the middle of the sequence.
   - [32. Plans before feedback runs](FEEDBACK_PLANS.md#32-plans-before-feedback-runs)
 - [Published reviews](PUBLISHED_REVIEWS.md): a review of a PR the loop does not own, revised in canopy and published
   as the operator's comment review.
-  - [33. Publishing a review](PUBLISHED_REVIEWS.md#33-publishing-a-review)
+  - [34. Publishing a review](PUBLISHED_REVIEWS.md#34-publishing-a-review)
 
 ## 1. Problem
 

@@ -4,7 +4,7 @@ Part of the canopy design, normative like all of it: a review of a PR the loop d
 published on the PR as the operator's own comment review. Sections are numbered across the whole design; the
 [README](README.md) has the map. Previous: [Feedback plans](FEEDBACK_PLANS.md).
 
-## 33. Publishing a review
+## 34. Publishing a review
 
 Designed, not built (ROADMAP M43). Building it changes D114 and TRUST_MODEL (Trust model changes).
 
