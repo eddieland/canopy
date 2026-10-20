@@ -415,15 +415,14 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
     Returns:
         The ids of the ticks marked `abandoned`.
     """
-    ids = [int(r[0]) for r in sql.execute(conn, sql.select("id").from_("ticks").where("status = 'running'"))]
-    for i in ids:
-        sql.execute(
-            conn,
-            sql.update("ticks")
-            .set(ended_at=now())
-            .set_to("status = 'abandoned', summary = 'the tick process exited without finishing'")
-            .where("id = ?", i),
-        )
+    running = sql.select("id").from_("ticks").where("status = ?", TickStatus.RUNNING)
+    ids = [int(r[0]) for r in sql.execute(conn, running)]
+    abandon = (
+        sql.update("ticks")
+        .set(ended_at=sql.ROW, status=TickStatus.ABANDONED, summary="the tick process exited without finishing")
+        .where("id = ?", sql.ROW)
+    )
+    sql.execute_many(conn, abandon, [(now(), i) for i in ids])
     return ids
 
 
@@ -1842,21 +1841,18 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
         .where("key = ?", key)
     )
     sql.execute(conn, forget)
-    # INSERT ... SELECT, which `sql.insert` does not build.
-    sql.execute(
-        conn,
-        sql.frag(
-            "INSERT INTO forgets (ticket_key, at, channel, run_id, message_id, branch, prs) {}",
-            sql.select(
-                "key, forgotten_at, ?, forgotten_run_id, forgotten_message_id, ?, ?",
-                channel,
-                branch,
-                json.dumps(list(prs)),
-            )
-            .from_("tickets")
-            .where("key = ?", key),
-        ),
+    forgotten = (
+        sql.select(
+            "key, forgotten_at, ?, forgotten_run_id, forgotten_message_id, ?, ?",
+            channel,
+            branch,
+            json.dumps(list(prs)),
+        )
+        .from_("tickets")
+        .where("key = ?", key)
     )
+    columns = ("ticket_key", "at", "channel", "run_id", "message_id", "branch", "prs")
+    sql.execute(conn, sql.insert_from("forgets", columns, forgotten))
     sql.execute(conn, sql.delete("ticket_units").where("ticket_key = ?", key))
     sql.execute(
         conn,
