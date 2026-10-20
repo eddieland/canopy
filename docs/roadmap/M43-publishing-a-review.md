@@ -1,11 +1,11 @@
 # M43. Publishing a review on someone else's PR
 
-REQUIREMENTS R17, DESIGN §21, §29, and §33, TRUST_MODEL T1, T3, T5, T6, T8, and §6, D114. Needs M32 and M53, and M42
+REQUIREMENTS R17, DESIGN §21, §29, and §34, TRUST_MODEL T1, T3, T5, T6, T8, and §6, D114. Needs M32 and M53, and M42
 for the PRs it applies to most. Asked for by the operator (2026-10-15): on a review of a PR the loop does not own,
 where M32's `send to a worker` does not apply, iterate on the review in canopy, by hand or with an agent, and then send
 it to GitHub as a review on the PR. This is D114's revisit trigger, "the operator wants the web UI's shadow review
 published": D114 changes, with the operator's approval, from "posts nothing" to "posts nothing the operator has not
-approved, word for word". The design is DESIGN §33.
+approved, word for word". The design is DESIGN §34.
 
 - Only for reviews of PRs that are not the loop's own (`review.query` matches, M42's requests): the loop's own PRs
   keep M32's send to a worker, and their reviews stay in the journal. A review that names a ticket, or of a PR a
@@ -29,7 +29,7 @@ approved, word for word". The design is DESIGN §33.
   writes the review.
 - TRUST_MODEL, in the PR that builds it, which the operator approves by merging: §6, T1, T3, T5 (a published review
   speaks in the operator's name, unmarked, with no bot identity), T6, and T8 (publishing from the web channel), and
-  D114, as DESIGN §33 lists them.
+  D114, as DESIGN §34 lists them.
 - Tests with the fakes: a `done` review of a requested PR makes a draft whose first version is its findings, one off
   the diff in the body; an own review makes none; an edit, a drop, and a dismissal each make a new version; a note
   starts a revision on the next tick, under the review guards and its own limit; publishing posts the version verbatim
@@ -44,7 +44,7 @@ version under their name, as one comment review at the reviewed commit, its comm
 nothing; publishing it again is refused; on a second PR, a staged review waits on GitHub until the operator submits it
 there, and the next read records it as published.
 
-Status: in progress. Designed 2026-10-20 (DESIGN §33, Publishing a review, beside §21's reviews and §29's drafts). The
+Status: in progress. Designed 2026-10-20 (DESIGN §34, Publishing a review, beside §21's reviews and §29's drafts). The
 design settles what the sketch left open: a draft is M53's, with a review as its source and no attention item, and a
 review that names a ticket or of a PR the loop holds has none; a version is exactly what posts, a finding off the
 kept diff going in the body as the version is made; a revision is a review run at the same commit, which a tick
