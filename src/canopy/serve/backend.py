@@ -25,8 +25,7 @@ from canopy.core.context import Context, db_path
 from canopy.infra import procs
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.config import Config
     from canopy.core.conversation import Ref
     from canopy.core.items import Item
@@ -85,7 +84,7 @@ class Backend:
     # The attention list as `canopy status` shows it.
     attention: Callable[[Context], list[Item]]
     # End a running run as `canopy stop --now` does; False if it had already ended.
-    end_run: Callable[[Context, sqlite3.Row], bool]
+    end_run: Callable[[Context, records.Run], bool]
     # Ask the loop to read its config again, as SIGHUP does. Raises ConfigError, naming the file, when it does not load.
     reload: Callable[[Context], Reloading]
     # Ask the loop for a tick now, as `t` at its terminal does. Returns whether a tick is running, which the one asked

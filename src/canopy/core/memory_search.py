@@ -68,7 +68,7 @@ def run_scope(conn: sqlite3.Connection, run_id: int) -> RunScope:
         ticket_key=str(run["ticket_key"]),
         notes=rendered is not None and rendered.ticket_notes is MemoryMode.USE,
         lessons=rendered is not None and rendered.proposals is MemoryMode.USE,
-        repos=frozenset(str(s["repo"]) for s in db.run_slots(conn, run_id) if s["repo"] is not None),
+        repos=frozenset(str(s.repo) for s in db.run_slots(conn, run_id) if s.repo is not None),
     )
 
 

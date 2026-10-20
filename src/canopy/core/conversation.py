@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, memory, outbox, review_result
+from canopy.core import chore_view, contract, db, memory, outbox, records, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, StartStatus
@@ -35,7 +35,6 @@ from canopy.infra.text import printable
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from canopy.core import records
     from canopy.core.config import Chore, Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
@@ -216,7 +215,7 @@ class Started:
     """What `start` did: whether the ticket was already started, and a run already working it."""
 
     already: bool
-    running: sqlite3.Row | None
+    running: records.Run | None
 
 
 def start(
@@ -250,8 +249,8 @@ def start(
         running = db.running_run_of(conn, ref.id)
         if plan_lock is not None and ticket is not None and ticket.branch:
             raise Refused("bad_plan", f"{ref} already has work on {ticket.branch}; a started ticket is not planned")
-        if plan_lock is not None and running is not None and running["kind"] == RunKind.PLAN:
-            raise Refused("bad_plan", f"plan run {running['id']} for {ref} is running; wait for it to end")
+        if plan_lock is not None and running is not None and running.kind == RunKind.PLAN:
+            raise Refused("bad_plan", f"plan run {running.id} for {ref} is running; wait for it to end")
         db.touch_ticket(conn, ref.id, repo)
         if plan_lock is not None:
             db.change_ticket(conn, ref.id, "plan_setting", PlanSetting.PLAN)
@@ -279,7 +278,7 @@ class Stopped:
     """What `stop` did: whether the ticket was already stopped, and the run still working it, if one is."""
 
     already: bool
-    running: sqlite3.Row | None
+    running: records.Run | None
 
 
 def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
@@ -360,7 +359,7 @@ def reply(
                 f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
             )
         question = latest_question(conn, ref.id) if ref.kind == TICKET else None
-        answers = int(question["id"]) if question is not None else None
+        answers = question.id if question is not None else None
         if submission is None:
             stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
         else:
@@ -381,7 +380,7 @@ def reply(
     if not new:
         # The same submission again: what it answered then, whatever is waiting now.
         recorded = db.get_message(conn, message_id)
-        answers = int(recorded["answers"]) if recorded is not None and recorded["answers"] is not None else None
+        answers = recorded.answers if recorded is not None else None
     return Replied(message_id=message_id, answers=answers, new=new)
 
 
@@ -562,7 +561,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
         if running is not None:
             raise Refused(
                 "running",
-                f"run {running['id']} ({running['kind']}) is working {ref}; wait for it to end, or on a started "
+                f"run {running.id} ({running.kind}) is working {ref}; wait for it to end, or on a started "
                 f"ticket end it with `canopy stop {ref} --now`",
             )
         if not db.worked_since_forget(conn, ticket):
@@ -570,7 +569,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
                 "already_forgotten",
                 f"{ref} has had no run, message, branch, or PR since you forgot it, so there is nothing new to forget",
             )
-        prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
+        prs = [str(u.pr_url) for u in db.units(conn, ref.id) if u.pr_url]
         db.forget_ticket(conn, ref.id, channel=channel, branch=ticket.branch, prs=prs)
         # Its notes are about work that is gone, as its earlier runs' reports are (DESIGN §28, Retention).
         memory.end_ticket_notes(conn, ref.id, "forgotten work")
@@ -659,8 +658,8 @@ def mirror(
     return Mirrored(
         message_id=message_id,
         new=before is None,
-        source=str(before["source"]) if before is not None else source,
-        truncated=bool(before["truncated"]) if before is not None else truncated,
+        source=before.source if before is not None else source,
+        truncated=before.truncated if before is not None else truncated,
     )
 
 
@@ -704,17 +703,19 @@ def _comment_time(text: str) -> str:
 # What the harness reads
 
 
-def latest_question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | None:
     """Return a ticket's latest question if no operator message came after it, else None.
 
     A question asked before the operator forgot the ticket's work waits on nothing.
     """
-    row: sqlite3.Row | None = conn.execute(
+    row = records.fetch_one(
+        conn,
+        records.Message,
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' AND id > ? "
         "ORDER BY id DESC LIMIT 1",
         (TICKET, key, db.forgotten_message_id(conn, key)),
-    ).fetchone()
-    if row is None or operator_messages_after(conn, key, int(row["id"])):
+    )
+    if row is None or operator_messages_after(conn, key, row.id):
         return None
     return row
 
@@ -740,7 +741,7 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
         key = str(row[0])
         question = latest_question(conn, key)
         if question is not None:
-            found.append(Awaiting(key, int(question["id"]), str(question["body"])))
+            found.append(Awaiting(key, question.id, question.body))
     return found
 
 
@@ -752,13 +753,15 @@ def stopped(conn: sqlite3.Connection) -> list[str]:
     return [str(row[0]) for row in rows]
 
 
-def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[sqlite3.Row]:
+def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[records.Message]:
     """Return a ticket's operator messages newer than message id `after`, oldest first."""
-    return conn.execute(
+    return records.fetch_all(
+        conn,
+        records.Message,
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ? "
         "ORDER BY id",
         (TICKET, key, after),
-    ).fetchall()
+    )
 
 
 class OperatorMessage(TypedDict):
@@ -817,7 +820,7 @@ def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSe
         ],
         "awaiting_reply": None
         if question is None
-        else {"message_id": question["id"], "run_id": question["run_id"], "at": question["at"]},
+        else {"message_id": question.id, "run_id": question.run_id, "at": question.at},
     }
 
 
@@ -842,8 +845,8 @@ def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> Operat
     }
 
 
-def _operator_message(row: sqlite3.Row) -> OperatorMessage:
-    return {"id": row["id"], "at": row["at"], "answers": row["answers"], "body": row["body"]}
+def _operator_message(row: records.Message) -> OperatorMessage:
+    return {"id": row.id, "at": row.at, "answers": row.answers, "body": row.body}
 
 
 def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
@@ -864,11 +867,13 @@ def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
     """
     if not has_operator_messages(conn, key):
         return "No messages from the operator."
-    rows = conn.execute(
+    rows = records.fetch_all(
+        conn,
+        records.Message,
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
         "AND (source = 'operator' OR kind = 'question') ORDER BY id DESC LIMIT ?",
         (TICKET, key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
-    ).fetchall()
+    )
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")
 
 
@@ -879,11 +884,13 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     triage's report: model text written from the ticket, which no other run hears (DESIGN §25, Triage before a plan).
     So are canopy's notes: they say what the loop did, which the worker knows, and quote the overseer's reasons.
     """
-    rows = conn.execute(
+    rows = records.fetch_all(
+        conn,
+        records.Message,
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? AND source != ? "
         "AND (run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)) ORDER BY id DESC LIMIT ?",
         (TICKET, key, db.forgotten_message_id(conn, key), CANOPY, RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
-    ).fetchall()
+    )
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
 
 
@@ -901,7 +908,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
         ended = f" at {run['ended_at']}" if run["ended_at"] else ""
         lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
         for m in db.run_messages(conn, int(run["id"])):
-            lines += [f"Its {m['kind']}:", _quoted(str(m["body"]))]
+            lines += [f"Its {m.kind}:", _quoted(m.body)]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks) or "None: no earlier run of this ticket has ended."
 
@@ -916,10 +923,7 @@ class ChoreNote(TypedDict):
 
 def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     """Return what a chore's prompt carries of the operator's notes to it: the latest, oldest first (DESIGN §19)."""
-    return [
-        {"id": m["id"], "at": m["at"], "note": printable(str(m["body"]))}
-        for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)
-    ]
+    return [{"id": m.id, "at": m.at, "note": printable(m.body)} for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)]
 
 
 def _bounded(blocks: Sequence[str], empty: str) -> str:
@@ -939,16 +943,16 @@ def _bounded(blocks: Sequence[str], empty: str) -> str:
     return "\n\n".join([*note, *kept])
 
 
-def _prompt_message(m: sqlite3.Row) -> str:
-    if m["source"] == "operator":
-        what = "the operator's reply" + (f" to message {m['answers']}" if m["answers"] else "")
-    elif m["comment_id"] is not None:
+def _prompt_message(m: records.Message) -> str:
+    if m.source == "operator":
+        what = "the operator's reply" + (f" to message {m.answers}" if m.answers else "")
+    elif m.comment_id is not None:
         # A tracker comment the overseer mirrored: data, whoever wrote it (DESIGN §22).
-        whose = "an earlier worker's" if m["source"] == "worker" else f"account {m['author']}'s"
-        what = f"{whose} tracker comment {m['comment_id']}, data"
+        whose = "an earlier worker's" if m.source == "worker" else f"account {m.author}'s"
+        what = f"{whose} tracker comment {m.comment_id}, data"
     else:
-        what = f"an earlier worker's {m['kind']}" + (f", run {m['run_id']}" if m["run_id"] else "")
-    return f"Message {m['id']}, {what}, at {m['at']}:\n{_quoted(str(m['body']))}"
+        what = f"an earlier worker's {m.kind}" + (f", run {m.run_id}" if m.run_id else "")
+    return f"Message {m.id}, {what}, at {m.at}:\n{_quoted(m.body)}"
 
 
 def _quoted(text: str) -> str:

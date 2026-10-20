@@ -190,7 +190,7 @@ def _print_started(ctx: Context) -> None:
         phase = phase_of(ctx.conn, ticket) if ticket is not None else "not seen by a tick yet"
         done = ", done" if ticket is not None and ticket.done else ""
         waiting = conversation.latest_question(ctx.conn, key) if conversation.is_started(r) else None
-        note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
+        note = f"  awaiting your reply to message {waiting.id}" if waiting is not None else ""
         title = ticket.title if ticket is not None else None
         since = attention.age(r.stopped_at or r.started_at)
         click.echo(f"  {named(key, title)}  {r.status} {since} ago  phase {phase}{done}{note}")
@@ -215,7 +215,7 @@ def _print_workers(ctx: Context) -> None:
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories.
-        where = ", ".join(f"{s['repo']} {s['slot_path']}" for s in slots[int(r["id"])])
+        where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
         )

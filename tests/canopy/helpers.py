@@ -247,13 +247,13 @@ def tools_printed(agent_log: Path, agent: str) -> list[ToolRow]:
     return [("bash", len(ran), 0, sum(len(c["stdout"]) for c in ran))] if ran else []
 
 
-def slot_of(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row:
+def slot_of(conn: sqlite3.Connection, run_id: int) -> records.RunSlot:
     """The one slot a run in one repository leased."""
     [row] = db.run_slots(conn, run_id)
     return row
 
 
-def unit_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
+def unit_of(conn: sqlite3.Connection, key: str) -> records.TicketUnit:
     """The one unit of a ticket in one repository."""
     [row] = db.units(conn, key)
     return row

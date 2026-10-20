@@ -14,7 +14,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, pause
 from canopy.core.context import Context
-from canopy.core.vocab import RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
@@ -158,8 +158,8 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
     assert first["new"] is True
     assert again == {**first, "new": False}
     [message] = db.messages_of(ctx.conn, conversation.TICKET, KEY, 10)
-    assert (message["source"], message["kind"], message["channel"]) == ("operator", "reply", "web")
-    assert (message["body"], message["submission"]) == ("Blue, to match the header.", "web:form-0003")
+    assert (message.source, message.kind, message.channel) == ("operator", "reply", "web")
+    assert (message.body, message.submission) == ("Blue, to match the header.", "web:form-0003")
 
     stopped = c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers).json()
     assert stopped == {"already": False, "running_run": None, "ended": False}
@@ -207,7 +207,7 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     pr = "https://example.test/pr/1"
     assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith("unknown")
     run_id = running_run(ctx, KEY)
-    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase="in_review")
+    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase=Phase.REVIEW_PENDING)
     ctx.conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (f"agent/{KEY}-work", KEY))
     ctx.conn.commit()
 
@@ -309,7 +309,7 @@ def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_doe
     assert refused(grant(KEY)).startswith("bad_ref")
 
     ended_run(ctx, KEY, "implement")
-    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase="in_review")
+    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase=Phase.REVIEW_PENDING)
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.insert_review_run(
         ctx.conn,

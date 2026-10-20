@@ -71,7 +71,7 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert plan.sha256 == hashlib.sha256(TEXT.encode()).hexdigest()
     assert plan.size == len(TEXT.encode())
     # Its report is the planner's summary, as any run's.
-    assert [(m["kind"], m["body"]) for m in db.run_messages(conn, run.id)] == [("report", "planned it")]
+    assert [(m.kind, m.body) for m in db.run_messages(conn, run.id)] == [("report", "planned it")]
 
 
 def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(
@@ -136,7 +136,7 @@ def test_a_blocked_plan_records_its_question(scenario: Scenario, git_pool: GitPo
     blocked = {"status": "blocked", "summary": "the ticket leaves a choice", "question": QUESTION}
     run = scenario.run(PLAN, worker=planner_does(plan=None, result=blocked))
     assert run.status == RunStatus.BLOCKED
-    messages = [(m["kind"], m["body"]) for m in db.run_messages(scenario.conn, run.id)]
+    messages = [(m.kind, m.body) for m in db.run_messages(scenario.conn, run.id)]
     assert messages == [("report", "the ticket leaves a choice"), ("question", QUESTION)]
     assert plans.history(scenario.conn, KEY) == []
 

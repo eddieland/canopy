@@ -310,21 +310,21 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     stopped = set(conversation.stopped(conn))
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):
-        reason = run_reason(RunStatus(run["status"]))
-        if reason is None or key in done or key in stopped or run["kind"] == RunKind.NEEDS_PLAN:
+        reason = run_reason(run.status)
+        if reason is None or key in done or key in stopped or run.kind == RunKind.NEEDS_PLAN:
             continue
         items.append(RunItem(key, reason, _detail(run)))
     return items
 
 
-def _detail(run: sqlite3.Row) -> str:
-    note = contract.stored_note(contract.stored_object(run["result_json"]))
+def _detail(run: records.Run) -> str:
+    note = contract.stored_note(contract.stored_object(run.result_json))
     # A plan works on no branch. The run is named as `canopy show` reads it, and as the web UI names it.
-    what = f"{run['kind']}, {run['branch']}" if run["branch"] else str(run["kind"])
-    text = f"run:{run['id']} ({what}) ended {run['status']}"
+    what = f"{run.kind}, {run.branch}" if run.branch else str(run.kind)
+    text = f"run:{run.id} ({what}) ended {run.status}"
     if note:
         text += f": {note}"
-    return f"{text}; log {run['log_path']}"[:2000]
+    return f"{text}; log {run.log_path}"[:2000]
 
 
 @dataclass(frozen=True)

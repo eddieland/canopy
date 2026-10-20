@@ -170,7 +170,7 @@ def _render(
     planned = _plans(ctx, tickets)
     recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
     chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
-    shown = [int(r["id"]) for r in [*running, *last_runs.values()]]
+    shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
     block = state.state_block(
         ctx.config,
         ctx.repo_root,

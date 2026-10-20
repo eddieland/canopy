@@ -37,7 +37,7 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
         dispatches(slug="work"), worker=worker_does(*commit_and_push(OLD), result=done(OLD, OLD_PR))
     )
     assert first_run.status == "done"
-    assert unit_of(conn, KEY)["pr_url"] == OLD_PR
+    assert unit_of(conn, KEY).pr_url == OLD_PR
     # Before forgetting, a later implement continues the ticket's branch and names no other.
     [(action, _)] = scenario.refuses(dispatches(slug="again"))
     assert action == "refused:bad_slug"
@@ -63,8 +63,8 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
     assert again.branch == NEW
     ticket = present(db.get_ticket(conn, KEY))
     assert ticket.branch == NEW
-    assert unit_of(conn, KEY)["pr_url"] == NEW_PR
-    assert db.latest_runs(conn)[KEY]["branch"] == NEW
+    assert unit_of(conn, KEY).pr_url == NEW_PR
+    assert db.latest_runs(conn)[KEY].branch == NEW
 
     # Both implements count toward the limit (D030): forgetting resets no guard.
     [(action, _), _] = scenario.refuses(dispatches())
@@ -119,7 +119,7 @@ def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
     # A reply after forgetting answers nothing, and is what the next worker reads.
     scenario.operator("reply", KEY, "Start over: blue.")
     [reply] = db.messages_of(conn, "ticket", KEY, 10, after=question)
-    assert reply["answers"] is None
+    assert reply.answers is None
     section = present(conversation.state_section(conn, ticket))
     new = section["new_operator_messages"]
     assert isinstance(new, list)

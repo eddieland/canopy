@@ -214,7 +214,7 @@ def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_eac
     joint = ws_scenario.run(dispatches(repo=both), worker=pushes(repos=both))
     assert (joint.status, joint.branch) == ("done", "agent/PROJ-1-work")
     assert all(ws.remote_head(name, "agent/PROJ-1-work") is not None for name in both)
-    assert {u["repo"]: u["pr_url"] for u in db.units(ws_scenario.conn, "PROJ-1")} == {
+    assert {u.repo: u.pr_url for u in db.units(ws_scenario.conn, "PROJ-1")} == {
         "api": "https://example.test/api/pr/1",
         "web": "https://example.test/web/pr/1",
     }

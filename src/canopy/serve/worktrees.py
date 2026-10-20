@@ -68,7 +68,7 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
     by_lease: dict[str, sqlite3.Row] = {}
     for run_id, slots in db.all_run_slots(ctx.conn, [int(r["id"]) for r in running]).items():
         row = next(r for r in running if int(r["id"]) == run_id)
-        by_lease |= {str(s["lease_id"]): row for s in slots}
+        by_lease |= {str(s.lease_id): row for s in slots}
     reviews = {str(r["lease_id"]): r for r in db.running_runs(ctx.conn, "review_runs") if r["lease_id"]}
     root = ctx.workspace.root
     sizes = {repo.name: ctx.config.capacity.slots_for(repo.name) for repo in ctx.workspace.repos}

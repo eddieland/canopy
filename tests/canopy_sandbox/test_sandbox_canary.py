@@ -486,7 +486,7 @@ def test_canopys_sandboxed_worker_is_pushed(
     pushed = present(git_pool.remote_head("agent/PROJ-1-work"))
     primary, _ = worktree_pool
     assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok
-    slot = Path(slot_of(conn, run_id)["slot_path"])
+    slot = Path(slot_of(conn, run_id).slot_path)
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert list((sandbox_runtime / f"canopy-sandbox-{os.getuid()}").iterdir()) == []

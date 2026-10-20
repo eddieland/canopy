@@ -106,7 +106,7 @@ class RunState(TypedDict):
 class RunRepo(TypedDict):
     """A repository a run worked in, and the branch its slot was based on."""
 
-    repo: str
+    repo: str | None
     base: str | None
 
 
@@ -185,7 +185,7 @@ class RunningWorker(TypedDict):
 
     run_id: int
     ticket: str
-    repos: list[str]
+    repos: list[str | None]
     kind: str
     reasons: NotRequired[list[str]]
     branch: str | None
@@ -221,9 +221,9 @@ def state_block(
     tickets: Iterable[records.Ticket],
     stopped: Sequence[str],
     recently_done: Sequence[sqlite3.Row] = (),
-    units: Mapping[str, Sequence[sqlite3.Row]],
-    last_runs: Mapping[str, sqlite3.Row],
-    run_slots: Mapping[int, Sequence[sqlite3.Row]],
+    units: Mapping[str, Sequence[records.TicketUnit]],
+    last_runs: Mapping[str, records.Run],
+    run_slots: Mapping[int, Sequence[records.RunSlot]],
     run_reasons: Mapping[int, Sequence[str]] | None = None,
     attempts: Mapping[policy.Unit, Mapping[str, int]],
     grants: Mapping[policy.Unit, Mapping[str, int]],
@@ -272,21 +272,21 @@ def state_block(
     operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
-    def unit_summary(key: str, u: sqlite3.Row) -> UnitState:
-        name = str(u["repo"])
+    def unit_summary(key: str, u: records.TicketUnit) -> UnitState:
+        name = str(u.repo)
         unit = policy.unit(key, name)
         summary: UnitState = {
             "repo": name,
-            "branch": u["branch"],
-            "pr_url": u["pr_url"],
-            "phase": u["phase"],
-            "cursors": {cursor: u[column] for cursor, column in db.UNIT_CURSORS.items()},
+            "branch": u.branch,
+            "pr_url": u.pr_url,
+            "phase": u.phase,
+            "cursors": {cursor: getattr(u, column) for cursor, column in db.UNIT_CURSORS.items()},
             "attempts": dict(attempts.get(unit, no_attempts)),
             "ci_cooldown_until": _stamp(ci_cooldowns.get(unit)),
         }
         if unit in grants:
             summary["granted"] = dict(grants[unit])
-        sent = operator_sent.get(str(u["pr_url"])) if u["pr_url"] else None
+        sent = operator_sent.get(u.pr_url) if u.pr_url else None
         if sent is not None:
             summary["operator_sent"] = {"comments": list(sent["comments"]), "reviews": list(sent["reviews"])}
         return summary
@@ -415,31 +415,33 @@ def state_block(
 
 
 def _run_summary(
-    run: sqlite3.Row | None, run_slots: Mapping[int, Sequence[sqlite3.Row]], run_reasons: Mapping[int, Sequence[str]]
+    run: records.Run | None,
+    run_slots: Mapping[int, Sequence[records.RunSlot]],
+    run_reasons: Mapping[int, Sequence[str]],
 ) -> RunState | None:
     if run is None:
         return None
     summary: RunState = {
-        "run_id": run["id"],
-        "kind": run["kind"],
-        "status": run["status"],
-        "branch": run["branch"],
-        "repos": [{"repo": s["repo"], "base": s["base_branch"]} for s in run_slots.get(int(run["id"]), [])],
-        "started_at": run["started_at"],
-        "ended_at": run["ended_at"],
+        "run_id": run.id,
+        "kind": run.kind,
+        "status": run.status,
+        "branch": run.branch,
+        "repos": [{"repo": s.repo, "base": s.base_branch} for s in run_slots.get(run.id, [])],
+        "started_at": run.started_at,
+        "ended_at": run.ended_at,
     }
-    if int(run["id"]) in run_reasons:
-        summary["reasons"] = list(run_reasons[int(run["id"])])
+    if run.id in run_reasons:
+        summary["reasons"] = list(run_reasons[run.id])
     return summary
 
 
 def _running_summary(
-    run: sqlite3.Row, run_slots: Mapping[int, Sequence[sqlite3.Row]], run_reasons: Mapping[int, Sequence[str]]
+    run: sqlite3.Row, run_slots: Mapping[int, Sequence[records.RunSlot]], run_reasons: Mapping[int, Sequence[str]]
 ) -> RunningWorker:
     summary: RunningWorker = {
         "run_id": run["id"],
         "ticket": run["ticket_key"],
-        "repos": [s["repo"] for s in run_slots.get(int(run["id"]), [])],
+        "repos": [s.repo for s in run_slots.get(int(run["id"]), [])],
         "kind": run["kind"],
         "branch": run["branch"],
         "started_at": run["started_at"],
