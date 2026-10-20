@@ -214,14 +214,8 @@ turns none off, but for the overseer whose body holds the tracker's skill. A rep
 agents under other names, MCP servers, and permissions (TRUST_MODEL T7). `runtime.pr_skill` names a skill workers
 open PRs with (§8); prefer that to a prompt override.
 
-### What OpenCode does with a plugin
-
-canopy ships no plugin. One in the snapshot would rest on this, read from OpenCode's source at 1.19.3 (2026-10-19) and
-read again before one is built: OpenCode loads plugins from every config directory, the snapshot's last, so a
-repository's run first; a hook that throws fails the tool call after the tool has run; an MCP tool's result is
-truncated after the hook, keeping the head. With any plugin configured, OpenCode waits on an npm install into every
-writable config directory it loads, so a snapshot that ships a plugin must be unwritable. A variable canopy sets for a
-run reaches a sandboxed agent unchanged.
+canopy ships no plugin yet. The one designed, a clock that tells a running agent the minutes left, and what OpenCode
+does with a plugin, are §33.
 
 ### Each agent's model
 

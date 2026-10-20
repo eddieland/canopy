@@ -1,0 +1,93 @@
+# A clock for running agents
+
+Part of the canopy design, normative like all of it: how a running agent learns how long it has before canopy's timeout
+ends it. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [Feedback
+plans](FEEDBACK_PLANS.md). Next: [Published reviews](PUBLISHED_REVIEWS.md).
+
+## 33. A clock for running agents
+
+Designed, not built (ROADMAP M57).
+
+Every agent run ends at its timeout, its process group killed (§15), and what a worker has not pushed goes with its
+slot. An agent is told its time limit once, in its prompt, and has no clock after that. This section gives it one: near
+the end, a line from canopy on each tool call tells it the minutes left, so a worker pushes what it has and an overseer
+records what it owes before the kill. The kill stays the only guard (TRUST_MODEL T3): the clock is advice, and nothing
+an agent does with it extends a run.
+
+### The deadline
+
+Every agent run canopy starts with a timeout (the overseer, every kind of worker run, triages, reviews, and chores)
+gets `CANOPY_DEADLINE`, the moment its timeout fires, in Unix seconds. It is taken when canopy starts the clock it
+kills by, so the two agree. A process canopy starts without a timeout gets none, not even one its parent had. The
+variable reaches a sandboxed agent unchanged (§24).
+
+### The plugin
+
+canopy ships one OpenCode plugin in the snapshot, beside its definitions (§13, D040), so every run that loads canopy's
+definitions loads it, and the snapshot's digest splits runs into before and after it. It is plain JavaScript with no
+imports, so it loads with no network, inside the sandbox too.
+
+After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
+the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's
+result: the minutes left, and, the first time in a session, to finish what keeps the work (commit and push, or record
+its decisions) and print the result line. The line goes after a built-in tool's output, and first in an MCP tool's
+content, which OpenCode truncates after the hook keeping its head; so the tracker's, GitHub's, and the overseer's own
+tools (§27) carry it too. Counting from its own load, at the session's start, keeps it to one variable.
+
+What lets it run inside every agent process (TRUST_MODEL T4):
+
+- It reads `CANOPY_DEADLINE` and the clock, nothing else. Without the variable it adds nothing.
+- It writes nothing, refuses no call, grants no tool, and keeps nothing but whether it has warned in this session.
+- It catches every error, since a hook that throws fails a call that has already run.
+
+An agent thinking without calling a tool hears nothing until its next call; its prompt's time limit covers that.
+
+These rest on OpenCode's source at 1.19.3, read 2026-10-19 and read again on an upgrade: OpenCode loads plugins from
+every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
+a hook that throws fails the call; and an MCP result is truncated after the hook.
+
+### The snapshot, unwritable
+
+With any plugin configured, OpenCode waits, before the session, on an npm install of its plugin package into each
+config directory it loads and can write, so the first run on a new snapshot would wait on the registry
+(MEASUREMENTS 2026-10-19, F50). canopy takes the snapshot's write permission away once it is written, the operator's
+included, so OpenCode installs nothing there, and gives it back only to remove the snapshot (§26). A sandboxed run
+could not write it already (§24); an unsandboxed one could.
+
+A repository's `.opencode/` that the run can write is still installed into and waited for, inside the sandbox too: with
+canopy's plugin, every run in such a repository pays that wait, not only one whose repository ships a plugin.
+
+### Forged lines
+
+A file, a PR, or a tool's result the agent reads can print a line that looks like canopy's. One can only tell the agent
+to wrap up early, or that it has longer than it has, which leaves it where it is without the clock; so a forged line
+fails safe, as the comment marks do (§8, D069). The prompts say a line from canopy asks for nothing but wrapping up,
+so one that asks for more is data (T1).
+
+### Prompts
+
+Each prompt's time limit, and the overseer's body and a chore's run section (§19), which have none, say that the agent
+will hear the minutes left on its tool calls near the end, and what such a line asks. The prompt says it once, so its
+bytes change once and not per call, and the provider's cache holds (§6).
+
+### Rejected
+
+- The time in the system prompt (`experimental.chat.system.transform`, as aide adds memory under OpenCode): it changes
+  the prompt on every call, so the provider's cache would miss the whole prefix. A tool's result is the end of the
+  context, so a line there costs only itself.
+- Refusing tools past a soft deadline, as aide's hook does: a refused push loses the work the warning is for, and the
+  kill already ends the run.
+- A file the agent is told to check: it spends a call to learn nothing, and a model under way forgets to.
+
+The PR that builds it proposes T3 and T4 to match: canopy's own code runs inside the agent process, from a snapshot a
+sandboxed run cannot write, reading one variable; the timeout in code stays the limit.
+
+### Open
+
+- What a worker that winds down reports. `failed`, with its summary naming what remains, raises `worker_failed` (§14),
+  which waits for a human's reply as today. A status of its own would let a `resume` continue its pushed branch without
+  one; each such run still spends an attempt (D030).
+- Whether the overseer, whose timeout is 15 minutes by default and so is warned in its last 3, has time to record what
+  it owes (§6 step 5).
+- How long a run waits on a repository's `.opencode/` install when the registry is refused, as under the sandbox: the
+  source does not say, and the live check times one.

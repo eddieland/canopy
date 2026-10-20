@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: a plan for what comes back to a PR, approved by the operator
 before the `resume` that acts on it. Sections are numbered across the whole design; the [README](README.md) has the
-map. Previous: [Personas](PERSONAS.md).
+map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK.md).
 
 ## 32. Plans before feedback runs
 
