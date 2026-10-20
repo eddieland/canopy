@@ -8,6 +8,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Tip } from '@/components/tip'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import { isNew } from '@/lib/seen-reviews'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
@@ -20,7 +21,8 @@ const NONE_REQUESTED: RequestedReview[] = []
  * its impact, its PR and the commit it read, cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR
  * are left out, as `RunsTable` leaves out a ticket on the ticket's page. The reviews page passes the PRs the operator
  * asked to have reviewed that no review of has started yet as `requested`, a row each, before the runs, or after them
- * with `requestedLast`: what comes next is the newest end of the list.
+ * with `requestedLast`: what comes next is the newest end of the list. A review whose result is new to the operator
+ * (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said `new` on hover and to a screen reader.
  */
 export function ReviewsTable({
     reviews,
@@ -92,6 +94,13 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
                 <Clipped text={verdictText(review)} />
+                {isNew(review) && (
+                    <Tip fact="new: you have not seen it yet">
+                        <span className="inline-flex size-1.5 shrink-0 rounded-full bg-accent">
+                            <span className="sr-only">new</span>
+                        </span>
+                    </Tip>
+                )}
             </span>
             <ReviewLink id={review.id} />
             {pr && (

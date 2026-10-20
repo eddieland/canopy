@@ -37,7 +37,7 @@ test('the nav lists the sections by how often the operator opens them, and the f
         /^Attention/u,
         'Tickets',
         'Pull requests',
-        'Reviews',
+        /^Reviews/u,
         'Runs',
         'Chores',
         'Spend',

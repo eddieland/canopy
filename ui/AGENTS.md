@@ -73,7 +73,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   briefly takes every pool's lock: `runs.updated` marks them stale when the running runs' worktrees change, the page's
   Read again button refetches them, and they refetch every 10 seconds while a page shows them in a visible tab, the
   one `refetchInterval`.
-- **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, and the
+- **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, or, for
+  what no command would do, a core function of its own with its guards, which TRUST_MODEL T8 names (D127); the
   client adds the session's token (`writeToken` in `src/api/client.ts`). A refusal is an `ApiError` with its `guard`;
   show it with `Notice`, which names the guard as the CLI does. Say what an action did in the CLI's words
   (`src/lib/outcomes.ts`).

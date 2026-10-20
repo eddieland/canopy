@@ -1054,6 +1054,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark subjects seen
+         * @description Each subject's result is no longer new to the operator, as `canopy review show ID` marks one. All, or none.
+         */
+        post: operations["markSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -4274,6 +4294,13 @@ export type components = {
              */
             repo: string | null;
             /**
+             * Seen
+             * @description Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run that ended
+             *     with a verdict and is not seen is new to them.
+             * @default false
+             */
+            seen: boolean;
+            /**
              * Sha
              * @description The commit it reviewed.
              */
@@ -4617,6 +4644,33 @@ export type components = {
          * @enum {string}
          */
         SearchSource: "ticket" | "message" | "chore_run" | "decision" | "tick";
+        /**
+         * SeenMarked
+         * @description What a mark of subjects seen recorded: every subject named, and the ones not seen before.
+         */
+        SeenMarked: {
+            /**
+             * New
+             * @description The ones not seen before, which this mark recorded.
+             */
+            new: string[];
+            /**
+             * Refs
+             * @description Each subject named, as its reference, once.
+             */
+            refs: string[];
+        };
+        /**
+         * SeenRequest
+         * @description Subjects the operator has seen, by their references, `review:4` (DESIGN §22).
+         */
+        SeenRequest: {
+            /**
+             * Refs
+             * @description Each subject's reference: `review:ID`, a review run whose result they saw.
+             */
+            refs: string[];
+        };
         /**
          * Session
          * @description Whether this browser is signed in, and if so the token its writes must carry.
@@ -9967,6 +10021,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    markSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeenMarked"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */

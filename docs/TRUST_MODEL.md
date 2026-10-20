@@ -138,7 +138,10 @@ Controls:
   dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
   So does `send`, which sends a review's findings to a worker as an operator message on its ticket (§21): an agent
   that could send them could start work in the operator's name. The message names findings by number and never quotes
-  them, so the reviewer's text stays data. So does `gc` (DESIGN §26): an agent that could remove history early
+  them, so the reviewer's text stays data. So does the mark `canopy review show ID` makes of a review's result seen,
+  which the web UI then no longer counts new (DESIGN §22): an agent that could mark one could hide from the operator
+  the review it was steered to hide. Inside a run the show still prints, and marks nothing.
+  So does `gc` (DESIGN §26): an agent that could remove history early
   could remove the transcript that shows what it did, and no flag of it shortens retention, which only the
   operator's private config sets. So does `notice`, when it sets or clears the operator's notice to workers
   (DESIGN §8): a notice reaches every later worker's, review's, and chore's prompt as the operator's words, so an agent
@@ -616,7 +619,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
-- The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
+- The web channel writes only through `canopy.core`'s functions, with their guards, and only what this list names:
+  mostly what the CLI's verbs write, through the functions they use (T1). It can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, try a chore as a recorded `canopy chore try` does,
   dismiss a chore's or a review's finding or take that
@@ -628,7 +632,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction, drop, send, and stage
   them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), ask the loop to read its config files
   again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
-  Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
+  Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
+  marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
+  are the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
   editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else. It cannot write

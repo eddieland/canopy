@@ -28,6 +28,7 @@ const REVIEW: ReviewSummary = {
     cost_usd: 0.31,
     started_at: '2026-10-08T11:00:00Z',
     ended_at: '2026-10-08T11:04:00Z',
+    seen: true,
 }
 
 const REQUESTED: RequestedReview = {
@@ -98,5 +99,15 @@ describe('ReviewsTable', () => {
         const row = within(screen.getByTestId('pull-request-review-4'))
         expect(row.getAllByRole('link').map((link) => link.textContent)).toEqual(['review:4'])
         expect(row.getByText('at 3f9c2a1')).toBeDefined()
+    })
+
+    it('marks a review whose result the operator has not seen new, and no other', async () => {
+        const running = { ...REVIEW, id: 2, state: 'running', ended_at: null, verdict: null, seen: false } as const
+        await renderReviews([{ ...REVIEW, seen: false }, { ...REVIEW, id: 3 }, running])
+        const fresh = within(screen.getByTestId('review-4')).getByText('new')
+        expect(tipOf(fresh)).toBe('new: you have not seen it yet')
+        // Seen, or still running with no result to see.
+        expect(within(screen.getByTestId('review-3')).queryByText('new')).toBeNull()
+        expect(within(screen.getByTestId('review-2')).queryByText('new')).toBeNull()
     })
 })

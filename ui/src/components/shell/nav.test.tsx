@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockAttention, mockCapacity } from '@/api/mocks'
+import { mockAttention, mockCapacity, mockReviews } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { AttentionItem, LoopState, MemoryState } from '@/api/types'
+import type { AttentionItem, LoopState, MemoryState, ReviewSummary } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
 import { Nav } from './nav'
@@ -19,15 +19,26 @@ const ITEMS: AttentionItem[] = [
     { ...WAITING, id: 'a3', reason: 'finding', finding: true, chore: 'deps', ticket_key: null },
 ]
 
+// A review run that ended with `fields`.
+function ended(id: number, fields: Partial<ReviewSummary>): ReviewSummary {
+    const running = mockReviews[0] as ReviewSummary
+    return { ...running, id, status: 'ok', state: 'done', ended_at: '2026-10-08T12:05:00Z', seen: false, ...fields }
+}
+
 const TIER: MemoryState['lessons'] = { mode: 'record', words: 'recording', band: 'Recording only.' }
 
-function renderNav({ at = '/attention', items, compact = false, waiting }: Partial<NavSetup> = {}) {
+function renderNav({ at = '/attention', items, compact = false, waiting, reviews }: Partial<NavSetup> = {}) {
     const client = new QueryClient()
-    // Nothing is fetched: the attention list and the loop's state are what the test seeds, as the stream would send.
+    // Nothing is fetched: the attention list, the loop's state, and the reviews are what the test seeds, as the stream
+    // would send.
     client.setQueryDefaults(keys.attention, { enabled: false })
     client.setQueryDefaults(keys.loop, { enabled: false })
+    client.setQueryDefaults(keys.reviews, { enabled: false })
     if (items !== undefined) {
         client.setQueryData(keys.attention, items)
+    }
+    if (reviews !== undefined) {
+        client.setQueryData(keys.reviews, reviews)
     }
     if (waiting !== undefined) {
         const memory: MemoryState = {
@@ -48,6 +59,8 @@ interface NavSetup {
     compact: boolean
     // How many proposals the loop's state says wait; no memory state when undefined.
     waiting: number | undefined
+    // The reviews list; not arrived when undefined.
+    reviews: ReviewSummary[] | undefined
 }
 
 // The links the nav marks as the page shown.
@@ -123,6 +136,25 @@ describe('Nav', () => {
     ])('shows no count beside Memory when %s', async (_, waiting) => {
         await renderNav({ items: [], waiting })
         expect(screen.getByRole('link', { name: 'Memory' }).textContent).toBe('Memory')
+    })
+
+    it("counts the reviews new to the operator beside Reviews, in their worst finding's color", async () => {
+        // Review 3 was seen; 6 and 7 ended since, and 8 still runs.
+        const reviews = [
+            ended(8, { state: 'running', status: 'running', ended_at: null, verdict: null }),
+            ended(7, { verdict: 'clean' }),
+            ended(6, { verdict: 'findings', findings: 2, worst: 'major', worst_count: 1 }),
+            ended(3, { verdict: 'findings', findings: 1, worst: 'blocking', worst_count: 1, seen: true }),
+        ]
+        await renderNav({ at: '/runs', items: [], reviews })
+        expect(screen.getByRole('link', { name: 'Reviews 2 new reviews to read' })).toBeDefined()
+        expect(screen.getByTitle('2 new reviews to read').textContent).toBe('22 new reviews to read')
+        expect(screen.getByTestId('nav-reviews-count').className).toContain('text-status-blocked')
+    })
+
+    it('shows no count beside Reviews when every result is seen', async () => {
+        await renderNav({ items: [], reviews: [ended(6, { verdict: 'clean', seen: true })] })
+        expect(screen.getByRole('link', { name: 'Reviews' }).textContent).toBe('Reviews')
     })
 
     it('names each icon in a compact nav, and gives Attention its total, said in words', async () => {

@@ -54,6 +54,7 @@ from canopy.core.vocab import (
     ReviewState,
     RunKind,
     RunStatus,
+    SeenKind,
     SourceKind,
     StartStatus,
     TicketState,
@@ -960,6 +961,22 @@ class FindingDismissal(Row):
     finding_id: str
     dismissed_at: str
     channel: str
+
+
+@dataclass(frozen=True)
+class Seen(Row):
+    """A subject whose result the operator has seen (DESIGN §22), named as its reference names it."""
+
+    TABLE: ClassVar[str] = "seen"
+
+    #: The kind of subject: a reference's kind, such as `review` for `review:4`.
+    kind: SeenKind
+    #: The subject's id within its kind: a review run's id, as text.
+    subject: str
+    #: When the operator first saw it; for a review that had ended before the table, when it ended.
+    at: str
+    #: Where they saw it, `cli` or `web`; None for what was taken as seen when the table was made.
+    channel: str | None
 
 
 @dataclass(frozen=True)

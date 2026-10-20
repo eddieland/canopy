@@ -423,3 +423,9 @@ class ModelsRead(StrEnum):
     MISSING = "missing"
     #: The runtime could not be asked, or said what canopy cannot read; read again later.
     FAILED = "failed"
+
+
+class SeenKind(StrEnum):
+    """What kind of subject the operator saw, `seen.kind` (DESIGN §22): the kind its reference names."""
+
+    REVIEW = "review"

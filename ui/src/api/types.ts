@@ -69,6 +69,8 @@ export type Dismissed = Schemas['Dismissed']
 export type ReviewDismissed = Schemas['ReviewDismissed']
 /** What sending a review's findings recorded: the operator message on the review's ticket that names them. */
 export type ReviewSent = Schemas['ReviewSent']
+/** What a mark of subjects seen recorded: every subject named, and the ones not seen before. */
+export type SeenMarked = Schemas['SeenMarked']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
 /** One repository's pool of worktrees, read when asked for. */

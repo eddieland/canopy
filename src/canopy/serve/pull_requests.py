@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db, review_requests
 from canopy.serve import threads
-from canopy.serve.reviews import summary
+from canopy.serve.reviews import summaries
 from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail, ReviewRequest
 from canopy.serve.views import decision, limit, run
 
@@ -64,7 +64,7 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
         pull_request=found,
         review_limit=limit(reviewed, repo=found.repo) if reviewed is not None else None,
         runs=[run(r, ctx.workspace.root) for r in runs[:PR_RUNS]],
-        reviews=[summary(r) for r in reviews],
+        reviews=summaries(ctx.conn, reviews),
         decisions=[decision(d) for d in decisions],
         cost=_cost(runs, reviews),
         threads=threads.known(ctx.conn, url),
@@ -105,7 +105,7 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
         active_at=db.parse_time(str(row["active_at"])),
         running_run=running.id if running is not None else None,
         reviews=len(reviews),
-        latest_review=summary(reviews[0]) if reviews else None,
+        latest_review=summaries(conn, reviews[:1])[0] if reviews else None,
         review_request=review_request(request) if request is not None else None,
     )
 

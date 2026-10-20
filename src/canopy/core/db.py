@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
 
 from canopy.core import records, sql
-from canopy.core.vocab import Phase, PlanStatus, PoolKind, ResumeReason, StartStatus, TickStatus
+from canopy.core.vocab import Phase, PlanStatus, PoolKind, ResumeReason, SeenKind, StartStatus, TickStatus
 from canopy.infra import procs
 from canopy.runtime.report import ToolUse, Usage
 
@@ -1263,6 +1263,29 @@ def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int)
     """
     taken = sql.delete("review_dismissals").where("review_run_id = ? AND finding = ?", run_id, finding)
     return sql.execute(conn, taken).rowcount > 0
+
+
+def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], *, channel: str) -> list[str]:
+    """Record that the operator saw each of `subjects` of `kind` now, through `channel` (DESIGN §22).
+
+    One seen before keeps the time and channel it was first seen at.
+
+    Returns:
+        The subjects not seen before, in the order given.
+    """
+    at = now()
+    new: list[str] = []
+    for subject in subjects:
+        mark = sql.insert("seen", kind=kind, subject=subject, at=at, channel=channel)
+        if sql.execute(conn, mark.on_conflict("(kind, subject) DO NOTHING")).rowcount > 0:
+            new.append(subject)
+    return new
+
+
+def seen_among(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str]) -> frozenset[str]:
+    """Return which of `subjects` of `kind` the operator has seen: a read by key, however many they have seen."""
+    query = sql.select("subject").from_("seen").where("kind = ?", kind).where_in("subject", list(subjects))
+    return frozenset(str(r[0]) for r in sql.execute(conn, query))
 
 
 def set_review_slot(

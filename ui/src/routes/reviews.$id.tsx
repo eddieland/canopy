@@ -29,6 +29,7 @@ import { reviewSentText } from '@/lib/outcomes'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef } from '@/lib/refs'
 import { findingAnchor, placeFindings, SEVERITY_TONE, shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import { useSeesReview } from '@/lib/seen-reviews'
 import { tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +58,8 @@ function Loaded({ id }: { id: number }) {
     // The file of the finding whose link the operator last followed, a new object each time, so the diff shows it.
     const [wanted, setWanted] = useState<Wanted | null>(null)
     const { data, error } = query
+    // Its result is seen once shown here, so the nav's count of new reviews no longer counts it.
+    useSeesReview(data?.review)
     if (error instanceof ApiError && error.status === 404) {
         return <NoReview title={reviewRef(id)}>{error.message}</NoReview>
     }
