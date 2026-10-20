@@ -193,7 +193,10 @@ Controls:
   reaches, as it always could; every label check is agent judgment, and review of every PR is the backstop.
 - The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
   operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
-  classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment.
+  classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment. The next
+  review of the same PR reads the latest `done` one's summary and undismissed findings as data, so a steered review can
+  reach only a later reviewer of the PR whose text steered it, which reads that text anyway; the worst it does is lead
+  that review to miss a defect, as a steered reviewer already could by reporting clean.
   `review.query` authorizes a review, and only the operator writes it (private, T7). A review request (`canopy start
   URL --review`, ROADMAP M42) authorizes one review of one PR the same way: a journal fact made only through the
   operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
