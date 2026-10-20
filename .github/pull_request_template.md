@@ -1,11 +1,38 @@
 ## Summary
 
 <!--
-What this PR does and why, in two to five sentences. Name the milestone (M50) and the PR it is stacked on, if any. For
-a fix, say what was wrong. For a change to docs/TRUST_MODEL.md, .agents/prompts/overseer.md, or .agents/agents/, say
-what it lets the loop do.
+What this PR does and why, in a few sentences. Name the milestone (M50) if it is part of one, and the PR it is stacked
+on, if any. One concern per PR (AGENTS.md, How to work). For a fix, say what was wrong before what changes. For a
+change to docs/TRUST_MODEL.md, .agents/prompts/overseer.md, or .agents/agents/, say what it lets the loop do.
 
-The diff is the record: never list the files, tests, or docs it touches, or how many tests passed. Add a bullet only
-for what a reviewer would miss reading the diff: a behavior change outside it, a choice it does not explain, a live
-check you ran. For a change under ui/, say which screenshots change. Under 15 lines in all.
+Keep every section short: a reviewer should take the whole description in at a glance, with the detail in the diff.
 -->
+
+## What changes
+
+<!-- The behavior a reader would notice, one short bullet each. How the code does it only where review needs it. -->
+
+-
+
+## Tests
+
+<!--
+What the new tests hold and what you ran, in a line or two: not each case, and no pass counts. New behavior has a
+test using the fakes. A live check worth running again goes in docs/SCENARIOS.md; a live measurement a milestone
+cites, in docs/MEASUREMENTS.md.
+-->
+
+- `make all` passes.
+
+## Docs
+
+<!--
+The design sentence this changes, if it states a promise this PR changes; most PRs change none (docs/design/README.md,
+"What belongs here"). Also README.md if the install path or daily surface changed, the milestone's Status line in
+docs/roadmap/ if this meets its acceptance criteria, and docs/DECISIONS.md only if the change passes the bar at the top
+of that file. Delete what does not apply.
+-->
+
+## Screenshots
+
+<!-- For a change under ui/: which screenshots change, and whether the Screenshots workflow has run. Else delete. -->

@@ -32,8 +32,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   from. A milestone the operator closes on real use, before every live check in its Accept has run, moves the
   unrun ones there.
 - Small PRs. One concern per PR. Conventional commit messages.
-- A PR description is short, as `.github/pull_request_template.md` lays out: what and why in a few sentences, and only
-  what a reviewer would miss reading the diff. It never lists the files, tests, or docs a PR touches.
+- A PR description fills `.github/pull_request_template.md` briefly: a reviewer takes it in at a glance, and the
+  detail stays in the diff. Not a wall of text.
 - The design (`docs/design/`) is a map, not a spec of every behavior: what each part promises, the guards, the
   contracts between parts, and why, briefly. Its bar is at the top of `docs/design/README.md`; read it before adding
   a line. The default for a PR is no design change. A PR that changes a promise the design states changes that
