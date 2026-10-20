@@ -23,8 +23,9 @@ function ChoresPage() {
     return (
         <>
             <PageHeader title="Chores">
-                Each configured chore, as <code className="font-mono text-xs">canopy status</code> lists it. The
-                overseer decides when one runs; a note tells its next runs what to leave out or look at.
+                Scheduled agents that read your CI, PRs, tracker, or anything else their tools reach, and report what
+                needs you to the attention list. They change nothing. The overseer runs each when it is due and worth
+                it; a note tells its next runs what to leave out or look at.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Chores">
@@ -34,7 +35,8 @@ function ChoresPage() {
                     <PanelSkeleton className="min-h-40" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no chores yet: define <code className="font-mono text-xs">[chores.NAME]</code> in{' '}
+                        no chores yet: <code className="font-mono text-xs">canopy chore install</code> lists the ones
+                        canopy ships, or define <code className="font-mono text-xs">[chores.NAME]</code> in{' '}
                         <code className="font-mono text-xs">.canopy/config.toml</code>, with{' '}
                         <code className="font-mono text-xs">capacity.max_chores</code> above 0
                     </Empty>

@@ -39,8 +39,9 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Reviews](/reviews): the PR reviews canopy kept to itself instead of posting, with their findings pinned to the diff.
 - [Runs](/runs): the workers running now, then the ones that finished most recently, each with its session's
   transcript. When you want to know what an agent was thinking, this is the receipt.
-- [Chores](/chores): the scheduled chores, their runs, and what they found. Try now on a chore's page runs it at once,
-  whatever its schedule.
+- [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
+  what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
+  schedule.
 - [Spend](/spend): what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of
   the priciest answers are "no".
 - [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
