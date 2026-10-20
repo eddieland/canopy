@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from canopy.chores import execute, history, start
 from canopy.core import chore_view as view
-from canopy.core import conversation, db, notice, outbox
+from canopy.core import conversation, db, notice, outbox, prompts
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.runtime import stdout
@@ -50,7 +50,7 @@ class Recorded:
 
 @dataclass(frozen=True)
 class Prepared:
-    """A chore ready to try: its definition and prompt file's text, where it runs, and an unrecorded try's command."""
+    """A chore ready to try: its definition, its prompt as `start.read_body` gives it, where it runs, its command."""
 
     name: str
     chore: Chore
@@ -67,15 +67,16 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         The chore's definition and prompt, the directory it runs in, and the command with the rendered prompt.
 
     Raises:
-        TrialError: no such chore for this workspace, its prompt cannot be read, or its working directory is unusable.
+        TrialError: no such chore for this workspace, its prompt or the standing instructions to chores cannot be read,
+            or its working directory is unusable.
     """
     chore = view.defined(ctx.config, ctx.workspace).get(name)
     if chore is None:
         raise TrialError(f"no chore named {name!r} is defined for this workspace")
     try:
-        body = chore.prompt.read_text(encoding="utf-8").rstrip("\n")
-    except OSError as e:
-        raise TrialError(f"cannot read {chore.prompt}: {e.strerror}") from e
+        body = start.read_body(ctx.config, chore)
+    except prompts.PromptError as e:
+        raise TrialError(str(e)) from e
     state = view.state_of(ctx.conn, name, chore)
     prompt = start.render(
         body, state, None, context, conversation.chore_notes(ctx.conn, name), held=notice.for_prompt(ctx.conn)

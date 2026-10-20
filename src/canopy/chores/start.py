@@ -18,12 +18,12 @@ from canopy.chores import history
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
-from canopy.core import conversation, db, notice, outbox
+from canopy.core import conversation, db, notice, outbox, prompts
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
-    from canopy.core.config import Chore
+    from canopy.core.config import Chore, Config
     from canopy.core.context import Context
 
 CHORES_DIR = "chores"
@@ -118,9 +118,9 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         chore = _guard(ctx, name)
         try:
-            body = chore.prompt.read_text(encoding="utf-8").rstrip("\n")
-        except OSError as e:
-            raise Refusal("bad_prompt", f"cannot read {chore.prompt}: {e.strerror}") from e
+            body = read_body(ctx.config, chore)
+        except prompts.PromptError as e:
+            raise Refusal("bad_prompt", str(e)) from e
         state = next(s for s in view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name)
         return launch(ctx, tick_id=tick_id, state=state, body=body, context=context)
 
@@ -163,6 +163,30 @@ def launch(ctx: Context, *, tick_id: int | None, state: view.ChoreState, body: s
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "chore_runs", run_id, pid)
     return Started(run_id, pid)
+
+
+def read_body(config: Config, chore: Chore) -> str:
+    """Return the part of `chore`'s prompt the operator wrote, for `render`'s `body`.
+
+    That is its prompt file, then the standing instructions to every chore (`paths.chore_instructions`, DESIGN §12)
+    when they are set.
+
+    Raises:
+        PromptError: The chore's prompt file cannot be read, or the standing instructions cannot be used. A run without
+            them would work as if they had never been written.
+    """
+    try:
+        body = chore.prompt.read_text(encoding="utf-8").rstrip("\n")
+    except OSError as e:
+        raise prompts.PromptError(f"cannot read {chore.prompt}: {e.strerror}") from e
+    standing = prompts.chore_instructions(config)
+    if standing is None:
+        return body
+    return (
+        f"{body}\n\n## Standing instructions from the operator\n\n{standing}\n\n"
+        "The operator set these in canopy for every chore, not for this one. Follow them as you follow the text\n"
+        "above, except where one conflicts with it or with the `## Run` section below: those come first."
+    )
 
 
 def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -> Chore:
@@ -213,7 +237,7 @@ def render(
     *,
     held: str | None,
 ) -> str:
-    """Return the chore's prompt: the operator's file, then a `## Run` section the harness writes (DESIGN §19).
+    """Return the chore's prompt: `body`, from `read_body`, then a `## Run` section the harness writes (DESIGN §19).
 
     `run_id` is None for a `canopy chore try` that records nothing, so has no run row. `notes` are the operator's, from
     `conversation.chore_notes`. `held` is the operator's notice in force (`notice.for_prompt`), in the `## Run` object

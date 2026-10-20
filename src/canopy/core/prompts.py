@@ -93,9 +93,10 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
 # A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
 # override written before they existed still serves every other resume.
 REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
-# The operator's standing instructions (`paths.worker_instructions`, DESIGN §12), in every worker prompt. An
-# override written before they existed still serves an operator who sets none; once one is set, it fails to render
-# instead of dropping them. They are in every run's prompt, so they are bounded.
+# The operator's standing instructions (`paths.worker_instructions`, DESIGN §12), in every worker prompt, and
+# `paths.reviewer_instructions` in the reviewer's. An override written before they existed still serves an operator
+# who sets none; once one is set, it fails to render instead of dropping them. They are in every run's prompt, so they
+# are bounded, and a chore's (`paths.chore_instructions`) too.
 REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
 MAX_STANDING_BYTES = 4096
 #: Where the overseer's prompt takes the operator's standing instructions to it (`paths.overseer_instructions`, DESIGN
@@ -412,6 +413,31 @@ def overseer_instructions(config: Config) -> str:
     return _standing(config.paths.overseer_instructions, "overseer")
 
 
+def reviewer_instructions(config: Config) -> str:
+    """Return the operator's standing instructions to every reviewer, or `None.` without any.
+
+    They fail as the workers' do (`standing_instructions`): a review without them would judge as if they had never
+    been written.
+
+    Raises:
+        PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
+    """
+    return _standing(config.paths.reviewer_instructions, "reviewer")
+
+
+def chore_instructions(config: Config) -> str | None:
+    """Return the operator's standing instructions to every chore run, or None without any.
+
+    None rather than `None.`: a chore's prompt is the operator's own file, with no placeholder to fill, so without
+    them it gets no section at all. They fail as the workers' do (`standing_instructions`).
+
+    Raises:
+        PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
+    """
+    text = _standing(config.paths.chore_instructions, "chore")
+    return None if text == "None." else text
+
+
 def render_overseer(config: Config) -> str:
     """Return the overseer's prompt with `OVERSEER_STANDING` replaced by its standing instructions.
 
@@ -516,20 +542,23 @@ def render_reviewer(
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
     a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
     review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `{{PERSONA}}` is
-    `DEFAULT_PERSONA`'s text, as a worker's is.
+    `DEFAULT_PERSONA`'s text, as a worker's is. `{{STANDING_INSTRUCTIONS}}` comes from the config, and with
+    `paths.reviewer_instructions` set the prompt must carry it.
 
     Returns:
         The rendered prompt.
     """
     values = {
         **values,
+        "STANDING_INSTRUCTIONS": reviewer_instructions(config),
         "NOTICE": notice if notice is not None else "None.",
         "NOTES": notes or "None.",
         "PERSONA": persona(),
     }
+    standing = REQUIRED_STANDING if config.paths.reviewer_instructions is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
-    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted))
+    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *standing, *noticed, *noted))
 
 
 def render(
