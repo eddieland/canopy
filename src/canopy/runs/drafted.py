@@ -1,8 +1,9 @@
 """Reading the threads a run's drafts answer (DESIGN §29): once the run closes, and each tick until a read is whole.
 
 A draft for a PR waits `unchecked` until a whole read of that PR says its thread exists. `_run` reads its own PRs as
-soon as it has closed the run, its slots already returned, and the tick's reconcile reads every PR a draft still waits
-on. A read that fails refuses nothing: the drafts stay unchecked, so an outage delays the replies and never drops them.
+soon as it has closed the run, its slots already returned, and each tick's `vcs` connector run reads every PR a draft
+still waits on (DESIGN §30). A read that fails refuses nothing: the drafts stay unchecked, so an outage delays the
+replies and never drops them.
 """
 
 from __future__ import annotations
@@ -29,22 +30,29 @@ def after_run(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
     _read_and_check(ctx, [str(r["pr_url"]) for r in rows], log)
 
 
-def reconcile(ctx: Context, log: logs.TickAdapter) -> None:
-    """Read every PR a draft waits on, a send left unconfirmed, or one staged, and settle its drafts (§6 step 3)."""
-    _read_and_check(ctx, {*drafts.unchecked_prs(ctx.conn), *drafts_manage.unsettled_prs(ctx.conn)}, log)
+def reconcile(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
+    """Check or settle the drafts of the PRs the `vcs` run read whole (§6 step 3, DESIGN §30).
+
+    That run's request names every PR a draft waits on, a send left unconfirmed, or one staged, so it is this tick's
+    read of them.
+    """
+    _check(ctx, whole, log)
 
 
 def _read_and_check(ctx: Context, prs: Collection[str], log: logs.TickAdapter) -> None:
     if not prs:
         return
-    read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
-    settled = drafts_manage.settle_by_read(ctx.conn, read.whole)
+    _check(ctx, observe.read(ctx.conn, ctx.config, ctx.runner, prs, log).whole, log)
+
+
+def _check(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
+    settled = drafts_manage.settle_by_read(ctx.conn, whole)
     if settled:
         log.info("drafts settled", extra={"drafts": {d.id: d.status for d in settled}})
-    checked = drafts.check(ctx.conn, read.whole)
+    checked = drafts.check(ctx.conn, whole)
     if checked:
         counts = {s: sum(d.status is s for d in checked) for s in (DraftStatus.WAITING, DraftStatus.REFUSED)}
-        log.info("drafts checked", extra={"prs": sorted(read.whole), **counts})
+        log.info("drafts checked", extra={"prs": sorted(whole), **counts})
 
 
 # The attention reason drafts waiting on the operator raise (DESIGN §14, §29): the harness's, and the operator's alone.

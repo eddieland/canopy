@@ -22,10 +22,12 @@ in order:
    refused (D068).
 3. **Reconcile local state.** A run, chore run, or review run whose own process is gone is marked `crashed`, what is
    left of its agent killed, and its slots returned. A slot leased under canopy's prefix with no live run is returned,
-   in every pool (§18). Memory proposals expire (§28) and drafts are checked (§29). Capacity is `max_workers` less the
-   running runs and review runs. If the pool cannot be read or a return fails, the tick fails and the overseer does not
-   run. The tick records the newest journal message it could read, which marks what was acknowledged (§22) and what
-   idle pacing compares against, and records the harness's own attention items (§14).
+   in every pool (§18). Memory proposals expire (§28). Each source that reads runs its connector once, and what it
+   read whole replaces what the journal held; a source that fails changes nothing and the tick goes on (§30). Drafts
+   are checked against what the `vcs` run read (§29). Capacity is `max_workers` less the running runs and review runs.
+   If the pool cannot be read or a return fails, the tick fails and the overseer does not run. The tick records the
+   newest journal message it could read, which marks what was acknowledged (§22) and what idle pacing compares
+   against, and records the harness's own attention items (§14).
 4. **Render the state block**, the overseer's whole message: one JSON object holding what the overseer needs to decide
    every ticket not done or stopped, ordered from what changes rarely to what changes every tick so the provider can
    cache it. The overseer's prompt is its agent definition's system prompt (§13), not part of the block. The block
@@ -76,7 +78,8 @@ Every kind of detached run shares this lifecycle and crash rule; a new kind join
 4. Print what the tick did and what the overseer cost (§13).
 5. Wait the configured interval, lengthened after idle ticks and ended at a gate (Idle pacing, below). An operator
    message (§22) or a run ending ends the wait early, but never sooner than `loop.min_gap_minutes` after the tick
-   ended, which bounds how often the overseer runs. The operator can end the wait by hand.
+   ended, which bounds how often the overseer runs. The operator can end the wait by hand. During the wait the loop
+   polls the connectors (Ticks and polls, below).
 6. Repeat from 3 until the operator stops the loop or a set number of ticks has run.
 
 Pausing holds the loop's ticks while the web UI and workers go on. The pause is a journal fact (§11) that outlives the
@@ -91,11 +94,24 @@ before every tick (a half-saved edit would apply itself). Prompt files are read 
 The daemon runs the same loop in its own session, so it outlives the terminal (D042). Nothing is installed with the OS
 and nothing restarts it. Rejected: launchd or systemd units (an install step the operator did not want).
 
+### Ticks and polls
+
+A tick is the overseer's turn and costs a model run; a poll only runs the connectors (§30), at no model's cost. So the
+loop polls apart from how it paces ticks: during each wait it runs every source every `connect.every_minutes` after the
+last read, a tick's or a poll's, whatever `loop.interval_minutes` and `loop.min_gap_minutes` are. An operator who ticks
+rarely still has observations as fresh as they ask for (operator, 2026-10-19). A poll takes the tick lock, and is
+skipped, not waited for, while a tick holds it; none runs while the loop is paused. It records its runs with no tick
+and checks the drafts its `vcs` run read (§29). It raises no attention item, since the list is a tick's and the next
+tick runs every source again before recording its items, and it ends no wait: nothing acts on an observation yet
+(§30), and M39's early tick on one is not built. A hand-run `canopy tick` runs the sources as any tick does, and
+nothing polls without the loop.
+
 ### Idle pacing
 
 A tick that finds nothing new costs a full overseer run and buys nothing. So the loop waits longer after each idle tick
 in a row, and wakes early on the events it can see itself. It does not poll GitHub or the tracker from Python (D003),
-run a cheaper pre-check agent, or take webhooks (TRUST_MODEL T8).
+run a cheaper pre-check agent, or take webhooks (TRUST_MODEL T8); the connectors' polls (above) read the world through
+their own programs, and wake nothing.
 
 A tick is **idle** when it closed `ok`, dispatched nothing (a dry run paces as a live one would), and nothing reached
 the journal after the previous tick read it (step 3): no run started or ended, and the operator did nothing. Rejected:

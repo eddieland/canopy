@@ -7,7 +7,8 @@ trust change: the overseer runs when the journal leaves it something to judge, n
   closes `ok`, and does not run the overseer: the common tick overnight, and after a run ends with nothing to
   classify. `ticks` says whether the overseer ran, and M33's spend page splits ticks by it.
 - Connectors poll between ticks: the loop runs them every `connect.every_minutes` (default 2, 2026-10-12 F10) during
-  its wait, writes their observations, and ticks early when the derivation over them yields a decision the latest
+  its wait and writes their observations, which M36 built at the operator's request (2026-10-19). What M39 adds: it ticks
+  early when the derivation over them yields a decision the latest
   tick did not record, a gate comes due, or the operator acts, as today. An external event is then seen within one
   poll, not up to `loop.idle_max_minutes` later (M21's trade, lifted). Idle pacing paces only the overseer's runs. A
   connector that fails during a poll raises `connector_failed` and the loop falls back to today's pacing.

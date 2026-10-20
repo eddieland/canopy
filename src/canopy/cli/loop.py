@@ -13,7 +13,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, run_kind, spent
-from canopy.core import chore_view, contract, conversation, db, memory, notice, pause, review_requests
+from canopy.core import chore_view, connector_runs, contract, conversation, db, memory, notice, pause, review_requests
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
@@ -134,8 +134,26 @@ def cmd_status(click_ctx: click.Context) -> int:
     _print_workers(ctx)
     _print_recent_runs(ctx)
     _print_chores(ctx)
+    _print_connectors(ctx)
     _print_sinks(ctx)
     return 0
+
+
+def _print_connectors(ctx: Context) -> None:
+    """A line per source that reads (DESIGN §30): how its last run ended, and how old its oldest observation is."""
+    sources = connector_runs.statuses(ctx.conn, ctx.config, datetime.now(UTC))
+    click.echo(f"\nConnectors ({len(sources)}):")
+    for s in sources:
+        if s.latest is None:
+            click.echo(f"  {s.name}  {s.kind}  never ran")
+            continue
+        how = f"{s.latest.status}: {s.latest.missed}" if s.latest.missed else str(s.latest.status)
+        ages = [f"oldest observation {attention.age(s.oldest)} old"] if s.oldest is not None else []
+        if s.never:
+            ages.append(f"{s.never} never observed")
+        stale = ", stale" if s.stale else ""
+        seen = f"; {', '.join(ages)}{stale}" if ages else ""
+        click.echo(f"  {s.name}  {s.kind}  last ran {attention.age(s.latest.ended_at)} ago, {how}{seen}")
 
 
 def _print_sinks(ctx: Context) -> None:

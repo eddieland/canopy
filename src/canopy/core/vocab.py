@@ -331,3 +331,67 @@ class ReviewState(StrEnum):
     APPROVED = "approved"
     CHANGES_REQUESTED = "changes_requested"
     DISMISSED = "dismissed"
+
+
+class SourceKind(StrEnum):
+    """What a connector reads, `connector_runs.kind` and a `[connect.sources]` table's `kind` (DESIGN §30)."""
+
+    TRACKER = "tracker"
+    VCS = "vcs"
+
+
+class ConnectorRunStatus(StrEnum):
+    """How one run of a connector ended, `connector_runs.status` (DESIGN §30)."""
+
+    #: It read everything it was asked.
+    OK = "ok"
+    #: It ended with its `end` line but read less than it was asked; what it read whole was recorded.
+    PARTIAL = "partial"
+    #: It did not start, timed out, printed too much, or ended without its `end` line; it recorded nothing.
+    FAILED = "failed"
+
+
+class TicketState(StrEnum):
+    """A ticket's state as the tracker connector last saw it, `observed_tickets.state` (DESIGN §30)."""
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class CheckStatus(StrEnum):
+    """Where a CI context stands, `observed_checks.status` (DESIGN §30), in words a connector maps its host's onto."""
+
+    REQUESTED = "requested"
+    QUEUED = "queued"
+    WAITING = "waiting"
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class CheckConclusion(StrEnum):
+    """How a completed CI context ended, `observed_checks.conclusion` (DESIGN §30)."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    ERROR = "error"
+    NEUTRAL = "neutral"
+    CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+    TIMED_OUT = "timed_out"
+    ACTION_REQUIRED = "action_required"
+    STARTUP_FAILURE = "startup_failure"
+    STALE = "stale"
+
+
+class MergeState(StrEnum):
+    """Whether a PR can merge as its host says, `observed_prs.mergeable_state` (DESIGN §30)."""
+
+    CLEAN = "clean"
+    BEHIND = "behind"
+    BLOCKED = "blocked"
+    DIRTY = "dirty"
+    DRAFT = "draft"
+    HAS_HOOKS = "has_hooks"
+    UNSTABLE = "unstable"
+    UNKNOWN = "unknown"

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
     chore_view,
+    connector_runs,
     conversation,
     db,
     definitions,
@@ -28,7 +29,7 @@ from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, attention, duties, state
+from canopy.loop import acknowledge, attention, connectors, duties, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -280,7 +281,8 @@ def _steps(
         return finish(TickStatus.RECONCILE_FAILED, str(e))
     chore_reconcile.run(ctx, log)
     memory_reconcile.run(ctx, log)
-    drafted.reconcile(ctx, log)
+    # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
+    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log), log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
@@ -369,6 +371,7 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
         action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
         db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
+    _record_connector_failed(ctx, tick_id)
     for repo in ctx.workspace.repos:
         # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
         if not repo.cloned:
@@ -376,6 +379,14 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             db.record_decision(
                 ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
             )
+
+
+def _record_connector_failed(ctx: Context, tick_id: int) -> None:
+    """Record one item for every source whose run this tick read less than it was asked, each named in its detail."""
+    sources = connector_runs.failures(ctx.conn, tick_id)
+    if sources:
+        action = f"{attention.ACTION_PREFIX}{connector_runs.FAILED_REASON}"
+        db.record_decision(ctx.conn, tick_id, None, action, "; ".join(s.detail for s in sources))
 
 
 def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:

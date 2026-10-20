@@ -121,6 +121,10 @@ def github(program: str, request: object) -> tuple[int, list[dict[str, object]]]
 
 
 def test_the_github_fake_reads_what_its_state_holds_and_posts_into_it(github_state: Path) -> None:
+    # With no state file, GitHub holds every PR asked, with nothing on it; with one, only the PRs it names.
+    code, lines = github("connect", {"prs": [PR]})
+    assert (code, [line["kind"] for line in lines]) == (0, ["pr", "end"])
+    github_state.write_text(json.dumps({"prs": {}}))
     assert github("connect", {"prs": [PR]}) == (1, [{"kind": "end", "prs": []}])
     github_state.write_text(json.dumps({"prs": {PR: {"reviews": [COMMENT]}}}))
     code, lines = github("connect", {"prs": [PR]})

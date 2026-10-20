@@ -107,6 +107,19 @@ def github_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
 
 
 @pytest.fixture
+def connector_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
+    """The fake connector on PATH, configured by the yielded state file, which does not exist until the test writes it.
+
+    Each run appends what it was asked to `connector.jsonl` beside it. See tests/fakes/connector for its keys.
+    """
+    state = tmp_path / "connector.json"
+    with mock.patch.dict(
+        os.environ, {"FAKE_CONNECTOR_STATE": str(state), "FAKE_CONNECTOR_LOG": str(tmp_path / "connector.jsonl")}
+    ):
+        yield state
+
+
+@pytest.fixture
 def agent_log(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """Fake agent on PATH with default behavior. Yields the file each run appends its argv and cwd to.
 

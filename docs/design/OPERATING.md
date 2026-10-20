@@ -258,8 +258,8 @@ Reasons are the phase table's attention rows (§7), the run reasons below, `atte
 raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
 `multi_repo`, `follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and `not_trivial`
-(§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and `drafts_waiting` (§29). An item about one unit
-names its repository, shown as `KEY (repo)`.
+(§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), `drafts_waiting` (§29), and `connector_failed`
+(§30). An item about one unit names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The
@@ -267,8 +267,9 @@ cause is gone when a newer run starts or the ticket is done. The overseer does n
 an authorized replier comments, or the operator sends a message, after the run ended (§22, D093): that is how a human
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's or a planner's unanswered question (§22, §25), `repo_missing` for a
-mapped repository with no clone (§18), and `canopy_unavailable` or `disk_low` for a tick whose `canopy --version` or
-free-disk check failed (§6 step 5). It raises `follow_up_filed` about a ticket not done whose runs filed follow-ups
+mapped repository with no clone (§18), `connector_failed` about the workspace, one item naming every source whose run
+that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick whose `canopy --version`
+or free-disk check failed (§6 step 5). It raises `follow_up_filed` about a ticket not done whose runs filed follow-ups
 since its latest forget, naming each with its repository while canopy has no run of it, no start record, and no mark
 that it is done: a queue label, which the overseer then dispatches on, or the operator's start ends its wait. Items have
 no dismissal, so a follow-up the operator leaves stops being asked about when its parent is done or forgotten. It raises

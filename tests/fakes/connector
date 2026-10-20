@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Fake connector for tests (DESIGN §30): prints the lines a test configured, then an `end` line.
+
+    connector [NAME]
+
+Reads the request on stdin and answers as the source NAME (default `default`) is configured, so one state file can
+script a `tracker` and a `vcs` source at once. Configured through the environment:
+
+    FAKE_CONNECTOR_STATE    the state file, JSON, {NAME: {...}}. Missing, or no entry for NAME: an `end` line naming
+                            everything asked, and nothing else.
+    FAKE_CONNECTOR_LOG      if set, one JSON line {"name": NAME, "request": {...}} is appended per run.
+
+Keys of a source's entry, each optional:
+
+    lines   [object or string]: printed in order before the `end` line; an object as one JSON line, a string as is.
+    end     "asked" (the default): an `end` line naming every ticket, PR, and repository the request names, the query's
+            result when the request has a query, and the review query's when it has one. An object: those fields,
+            printed as the `end` line with `kind` added. null: no `end` line, as a connector cut off.
+    query   [key]: the query's result for an "asked" `end` line. Default none.
+    stderr  text printed on stderr.
+    exit    the exit code. Default 0.
+    sleep   seconds to sleep before printing anything, as a source that never answers.
+
+Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
+"""
+
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+
+def main() -> int:
+    name = sys.argv[1] if len(sys.argv) > 1 else "default"
+    request = json.loads(sys.stdin.read() or "{}")
+    log = os.environ.get("FAKE_CONNECTOR_LOG")
+    if log:
+        with Path(log).open("a") as f:
+            f.write(json.dumps({"name": name, "request": request}) + "\n")
+    path = Path(os.environ.get("FAKE_CONNECTOR_STATE", "/nonexistent"))
+    state: dict[str, Any] = (json.loads(path.read_text()) if path.is_file() else {}).get(name, {})
+    if state.get("sleep"):
+        time.sleep(float(state["sleep"]))
+    for line in state.get("lines", []):
+        print(line if isinstance(line, str) else json.dumps(line), flush=True)
+    end = state.get("end", "asked")
+    if end == "asked":
+        end = asked(request, state)
+    if end is not None:
+        print(json.dumps({"kind": "end", **end}), flush=True)
+    if state.get("stderr"):
+        print(state["stderr"], file=sys.stderr)
+    return int(state.get("exit", 0))
+
+
+def asked(request: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    end: dict[str, Any] = {
+        "tickets": [t["key"] for t in request.get("tickets", [])],
+        "prs": list(request.get("prs", [])),
+        "repositories": [r["name"] for r in request.get("repositories", [])],
+    }
+    if "query" in request:
+        end["query"] = state.get("query", [])
+    if "review_query" in request:
+        end["review_query"] = []
+    return end
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -915,6 +915,8 @@ SOURCE_NAME_RE = SINK_NAME_RE
 # The commands a `vcs` source runs when none is configured: canopy's own GitHub programs (DESIGN §29).
 GITHUB_READER = "canopy-connect-github"
 GITHUB_POSTER = "canopy-post-github"
+# The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
+DEFAULT_SOURCE = "github"
 
 
 def _source_name(value: str) -> str:
@@ -956,13 +958,30 @@ class Connect(Section):
     """
 
     sources: Annotated[dict[SourceName, Source], Scope.PRIVATE] = {}
+    #: An observation older than this is stale (DESIGN §30): `canopy status` marks it so.
+    max_age_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
+    #: How often `canopy loop` polls the connectors between ticks, apart from how often it ticks (DESIGN §6).
+    every_minutes: Annotated[Minutes, Scope.PRIVATE] = 2
 
     @model_validator(mode="after")
     def _one_per_kind(self) -> Connect:
         kinds = [source.kind for source in self.sources.values()]
         if len(kinds) != len(set(kinds)):
             raise ValueError("at most one source of each kind, vcs and tracker")
+        if self.max_age_minutes < self.every_minutes:
+            raise ValueError("max_age_minutes must be at least every_minutes")
         return self
+
+    def named(self) -> dict[str, Source]:
+        """Each source that reads, by name, the `tracker` source first: the order a tick runs them in (DESIGN §30).
+
+        Returns:
+            The sources with a `cmd`, canopy's own GitHub reader named `github` when no `vcs` source is configured.
+        """
+        found = {name: s for name, s in self.sources.items() if notify_words(s.cmd)}
+        if self._of("vcs") is None:
+            found[DEFAULT_SOURCE if DEFAULT_SOURCE not in found else f"{DEFAULT_SOURCE}-vcs"] = self.vcs()
+        return dict(sorted(found.items(), key=lambda item: (item[1].kind != "tracker", item[0])))
 
     def vcs(self) -> Source:
         """The `vcs` source: the operator's, or canopy's own GitHub reader and poster.

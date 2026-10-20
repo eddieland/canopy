@@ -24,7 +24,10 @@ from typing import Any, ClassVar
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
 from canopy.core.vocab import (
+    CheckConclusion,
+    CheckStatus,
     ChoreRunStatus,
+    ConnectorRunStatus,
     DraftAuthor,
     DraftKind,
     DraftStance,
@@ -34,6 +37,7 @@ from canopy.core.vocab import (
     MemoryMode,
     MemoryScope,
     MemoryStatus,
+    MergeState,
     Phase,
     PlanSetting,
     PlanStatus,
@@ -47,7 +51,9 @@ from canopy.core.vocab import (
     ReviewState,
     RunKind,
     RunStatus,
+    SourceKind,
     StartStatus,
+    TicketState,
     TickStatus,
 )
 
@@ -488,6 +494,9 @@ class ObservedPr(Row):
     mergeable: str | None
     author: str | None
     observed_at: str
+    #: Its labels' names, as a JSON list.
+    labels: str
+    mergeable_state: MergeState | None
 
 
 @dataclass(frozen=True)
@@ -513,6 +522,100 @@ class ObservedReview(Row):
     outdated: bool | None
     resolved: bool | None
     observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedTicket(Row):
+    """A ticket as the tracker connector last read it whole (DESIGN §30). Text, never authority."""
+
+    TABLE: ClassVar[str] = "observed_tickets"
+
+    key: str
+    title: str
+    body: str
+    state: TicketState
+    #: Its labels, as a JSON list of `{"name", "added_at"}`.
+    labels: str
+    updated_at: str | None
+    #: The keys it names as blocking it, as a JSON list.
+    blockers: str
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedComment(Row):
+    """A tracker comment as the tracker connector first read it (DESIGN §30). Text, never authority."""
+
+    TABLE: ClassVar[str] = "observed_comments"
+
+    ticket: str
+    id: str
+    author: str
+    commented_at: str
+    #: The comment's text, cut at the mirror's length.
+    body: str
+    truncated: bool
+    #: `worker` when it carries the workers' marks (D069), else `tracker`.
+    source: str
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedBranch(Row):
+    """A branch under the branch prefix, as the `vcs` connector last read its repository whole (DESIGN §30)."""
+
+    TABLE: ClassVar[str] = "observed_branches"
+
+    repository: str
+    name: str
+    head_sha: str
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedCheck(Row):
+    """A named CI context at a PR's head, as the `vcs` connector last read the PR whole (DESIGN §30)."""
+
+    TABLE: ClassVar[str] = "observed_checks"
+
+    pr_url: str
+    name: str
+    head_sha: str
+    status: CheckStatus
+    conclusion: CheckConclusion | None
+    run_id: int | None
+    url: str | None
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ConnectorRun(Row):
+    """One run of a source (DESIGN §30): what it was asked, how it ended, and what it read."""
+
+    TABLE: ClassVar[str] = "connector_runs"
+
+    id: int
+    #: The tick that made it; None for the loop's poll between ticks (DESIGN §6).
+    tick_id: int | None
+    source: str
+    kind: SourceKind
+    started_at: str
+    ended_at: str
+    status: ConnectorRunStatus
+    #: What it was sent, as JSON.
+    request: str
+    #: The lines it recorded of each kind, as a JSON object.
+    recorded: str
+    #: The lines it refused of each kind, as a JSON object.
+    refused: str
+    #: The harness's words for what it did not read; None for an `ok` run.
+    missed: str | None
+    #: The last of its stderr.
+    stderr: str
+    #: The query's result, the keys in order, as a JSON list, when it read the query to the end.
+    query_result: str | None
+    #: The review query's result, the URLs in order, as a JSON list, when it read it to the end.
+    review_query_result: str | None
 
 
 @dataclass(frozen=True)

@@ -61,7 +61,7 @@ MIRRORS_PER_TICK = 100
 MIRROR_ACTION = "mirror"
 # A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
 # whitespace.
-_COMMENT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
+COMMENT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 MAX_AUTHOR = 200
 MAX_TIME = 64
 # How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
@@ -98,7 +98,7 @@ _PR_WORK = (
     "{ref} is a PR; canopy only reviews PRs it does not own, and works them once PR-scoped work exists (ROADMAP M14)"
 )
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
-_PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
+PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
 
 
 class Refused(Exception):  # noqa: N818  (an outcome the operator is told about, not an error)
@@ -145,7 +145,7 @@ def parse_ref(text: str) -> Ref:
         if CHORE_NAME_RE.fullmatch(name):
             return Ref(CHORE, name)
     elif text.startswith("https://"):
-        if contract.plain_url(text, MAX_PR_URL) and _PR_URL_RE.fullmatch(text):
+        if contract.plain_url(text, MAX_PR_URL) and PR_URL_RE.fullmatch(text):
             return Ref(PR, text)
     elif "#" in text:
         if _PR_SHORT_RE.fullmatch(text):
@@ -619,8 +619,8 @@ def mirror(
             body, and `mirror_limit` once the tick has mirrored its most.
     """
     check_verb(ref, MIRROR_ACTION)
-    if not _COMMENT_ID_RE.fullmatch(comment_id):
-        raise Refused("bad_comment", f"{comment_id[:MAX_KEY]!r} is not a comment id: {_COMMENT_ID_RE.pattern}")
+    if not COMMENT_ID_RE.fullmatch(comment_id):
+        raise Refused("bad_comment", f"{comment_id[:MAX_KEY]!r} is not a comment id: {COMMENT_ID_RE.pattern}")
     if not author or len(author) > MAX_AUTHOR or not author.isprintable() or any(c.isspace() for c in author):
         raise Refused(
             "bad_author", f"the author is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces"
