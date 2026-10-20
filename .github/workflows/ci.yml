@@ -38,15 +38,18 @@ concurrency:
 jobs:
   # A pull request that changes only docs needs none of the checks below, so they are skipped and take no runner;
   # `ci-passed` accepts a skip only when this job said code=false. Docs are anything under docs/ and any Markdown file
-  # outside .agents/, src/, and packages/, whose Markdown ships in the wheel. Pushes to main and manual runs always
-  # check everything, so a Markdown lint error a docs-only PR let through fails there.
-  # The jobs that need this one run even if it fails, and anything but code=false runs them in full, so an unexpected
-  # output checks too much, never too little.
+  # outside .agents/, src/, and packages/, whose Markdown ships in the wheel, and below ui/'s top level, where the
+  # guide's pages are bundled into the UI. One that changes only ui/ and docs (python=false) skips the Python tests,
+  # the sandbox canary, and the pool contract, none of which reads ui/; the lint still runs, since it covers ui/'s
+  # files too. Pushes to main and manual runs always check everything, so whatever a PR's skips let through fails there.
+  # The jobs that need this one run even if it fails, and anything but code=false or python=false runs them in full, so
+  # an unexpected output checks too much, never too little.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      python: ${{ steps.classify.outputs.python }}
     steps:
       - name: Check out repository
         if: github.event_name == 'pull_request'
@@ -55,7 +58,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # --no-renames lists both sides of a rename, so moving code into docs/ still counts as a code change.
+      # --no-renames lists both sides of a rename, so moving code into docs/ still counts as a code change. A case
+      # pattern's * matches a slash, so ui/*/* is anything below ui/'s top level, Markdown included.
       - name: Classify the changed files
         id: classify
         env:
@@ -64,20 +68,28 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
             echo "code=true" >>"$GITHUB_OUTPUT"
+            echo "python=true" >>"$GITHUB_OUTPUT"
             exit 0
           fi
           code=false
+          python=false
           while IFS= read -r file; do
             case "$file" in
               docs/*) ;;
-              .agents/* | src/* | packages/*) code=true ;;
+              .agents/* | src/* | packages/*) code=true python=true ;;
+              ui/*/*) code=true ;;
               *.md) ;;
-              *) code=true ;;
+              ui/*) code=true ;;
+              *) code=true python=true ;;
             esac
           done <<<"$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
           echo "code=$code" >>"$GITHUB_OUTPUT"
+          echo "python=$python" >>"$GITHUB_OUTPUT"
           if [ "$code" = false ]; then
             echo "Only docs changed; the checks pass without running." | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$python" = false ]; then
+            echo "Only ui/ and docs changed; the Python tests, sandbox canary, and pool contract are skipped." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
   lint-and-test:
@@ -107,14 +119,21 @@ jobs:
 
       # `make check` is these two and `ui-check`, which runs in the job below so neither waits on the other.
       # `make all` would run `fmt`, which rewrites files; these only verify. `lint` includes `ruff format --check`,
-      # so unformatted code still fails. COVERAGE=1 writes coverage.xml for the Python tests.
-      - name: Lint, type check, and test
-        run: make lint test COVERAGE=1
+      # so unformatted code still fails.
+      - name: Lint and type check
+        run: make lint
+
+      # COVERAGE=1 writes coverage.xml for the Python tests. Skipped on a PR that changes only ui/ and docs; Codecov
+      # carries the python flag forward from the parent (.github/codecov.yml).
+      - name: Test
+        if: needs.changes.outputs.python != 'false'
+        run: make test COVERAGE=1
 
       # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
       # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
       # Each job's upload carries its own flag (.github/codecov.yml says why).
       - name: Upload coverage to Codecov
+        if: needs.changes.outputs.python != 'false'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.xml
@@ -175,7 +194,7 @@ jobs:
   sandbox-canary:
     runs-on: ubuntu-latest
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.changes.outputs.python != 'false' }}
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -220,7 +239,7 @@ jobs:
   pool-contract:
     runs-on: ubuntu-latest
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.changes.outputs.python != 'false' }}
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -331,8 +350,9 @@ jobs:
 
   # The one check branch protection requires, so a new job, or a new OS in a matrix, needs no change to the ruleset:
   # list the job in `needs` here, or nothing requires it. It runs whatever happened above and fails unless every job
-  # it needs succeeded, since a required check that is skipped counts as passing. The one exception is a docs-only pull
-  # request, where `changes` succeeded and said code=false: then the checks it gates may be skipped.
+  # it needs succeeded, since a required check that is skipped counts as passing. The exceptions are the skips `changes`
+  # asked for, when it succeeded: on a docs-only pull request (code=false) any check it gates, and on one that changes
+  # only ui/ and docs (python=false) the sandbox canary and the pool contract.
   ci-passed:
     runs-on: ubuntu-latest
     needs: [changes, lint-and-test, ui-check, sandbox-canary, pool-contract, ui-e2e, install-check]
@@ -345,7 +365,10 @@ jobs:
         run: |
           jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
           jq -e '
-            (.changes.result == "success" and .changes.outputs.code == "false") as $docs
+            (.changes.result == "success") as $classified
+            | ($classified and .changes.outputs.code == "false") as $docs
+            | ($classified and .changes.outputs.python == "false") as $ui
             | all(to_entries[]; .value.result == "success"
-                or ($docs and .key != "changes" and .value.result == "skipped"))
+                or (.value.result == "skipped" and .key != "changes"
+                  and ($docs or ($ui and (.key == "sandbox-canary" or .key == "pool-contract")))))
           ' <<<"$NEEDS" >/dev/null
