@@ -88,7 +88,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M49. Config per workspace](M49-config-per-workspace.md): done 2026-10-17.
 - [M50. Agent memory, opt-in](M50-agent-memory-opt-in.md): in progress.
 - [M51. The loop, detached](M51-the-loop-detached.md): done 2026-10-17.
-- [M52. Memory's verbs from the web UI](M52-memorys-verbs-from-the-web-ui.md): in progress.
+- [M52. Memory's verbs from the web UI](M52-memorys-verbs-from-the-web-ui.md): done 2026-10-20.
 - [M53. Review replies the operator sends](M53-review-replies-the-operator-sends.md): in progress.
 - [M54. Plans before feedback runs](M54-plans-before-feedback-runs.md): in progress.
 - [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): in progress.

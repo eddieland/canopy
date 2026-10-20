@@ -169,6 +169,12 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and
   time `GET /search` in the browser's network tab. Over a quarter of a second is the cue to revisit FTS5 (DESIGN §22).
 
+### Memory
+
+- **S55. Memory's verbs from the web UI** (M52). With `memory.proposals` at `record`, promote a done ticket's note in
+  your own words from its page, and reject a proposal from the attention list. Expect `canopy memory lessons` to show
+  the lesson, named as from that note, and `canopy memory proposals` no longer to list the rejected one.
+
 ### Worktree pools
 
 canopy's own pool (DESIGN §18, ROADMAP M45) doing treehouse's work on the toy workspace (`TOY_REPOS.md`): leasing,
