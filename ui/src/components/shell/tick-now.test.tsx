@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -91,6 +91,43 @@ describe('TickNow', () => {
         const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Tick now' })
         expect(button.disabled).toBe(true)
         expect(button.title).toBe('A tick is running now.')
+    })
+
+    it('waits from the click until the tick it asked for starts, and that tick ends', async () => {
+        const client = new QueryClient()
+        client.setQueryDefaults(keys.tick, { enabled: false })
+        client.setQueryData(keys.tick, { tick: { id: 7, status: 'ok' } as Tick, acknowledged: null })
+        render(
+            <QueryClientProvider client={client}>
+                <StreamContext value={{ status: 'open', downSince: null }}>
+                    <TickNow />
+                </StreamContext>
+            </QueryClientProvider>,
+        )
+        const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Tick now' })
+        fireEvent.click(button)
+        await waitFor(() => {
+            expect(asked).toEqual(['/api/loop/tick'])
+        })
+        await waitFor(() => {
+            expect(button.title).toBe('A tick is starting.')
+        })
+        expect(button.disabled).toBe(true)
+
+        act(() => {
+            client.setQueryData(keys.tick, { tick: { id: 8, status: 'running' } as Tick, acknowledged: null })
+        })
+        await waitFor(() => {
+            expect(button.title).toBe('A tick is running now.')
+        })
+        expect(button.disabled).toBe(true)
+
+        act(() => {
+            client.setQueryData(keys.tick, { tick: { id: 8, status: 'ok' } as Tick, acknowledged: null })
+        })
+        await waitFor(() => {
+            expect(button.disabled).toBe(false)
+        })
     })
 
     it('says why it failed', async () => {

@@ -145,6 +145,42 @@ describe('LiveReadouts', () => {
         })
     })
 
+    it('says the tick Tick now asked for is starting until its row lands, then shows it', async () => {
+        const client = new QueryClient()
+        client.setQueryDefaults(keys.tick, { enabled: false })
+        client.setQueryDefaults(keys.loop, { enabled: false })
+        client.setQueryData(keys.tick, { tick: TICK, acknowledged: null })
+        await renderRouted(
+            <StreamContext value={{ status: 'open', downSince: null }}>
+                <LiveReadouts />
+            </StreamContext>,
+            { client },
+        )
+        expect(screen.getByTestId('last-tick').textContent).toBe('tick:12 · 3m ago')
+
+        // Tick now's request, answered: the loop was asked, after tick 12.
+        await act(async () => {
+            await client
+                .getMutationCache()
+                .build(client, { mutationKey: keys.tickNow, mutationFn: () => Promise.resolve({ after_tick: false }) })
+                .execute(12)
+        })
+        await waitFor(() => {
+            expect(screen.getByTestId('last-tick').textContent).toBe('tick starting')
+        })
+
+        // The stream sends the tick asked for as it starts: the readout becomes it.
+        act(() => {
+            client.setQueryData(keys.tick, {
+                tick: { ...TICK, id: 13, status: 'running', started_at: '2026-10-08T12:00:00Z', ended_at: null },
+                acknowledged: null,
+            })
+        })
+        await waitFor(() => {
+            expect(screen.getByTestId('last-tick').textContent).toBe('tick:13 running · for 0s')
+        })
+    })
+
     it("names the latest tick as `canopy status` does, its summary on hover, and opens the tick's page", async () => {
         const { router } = await renderReadouts('open', { tick: TICK })
         expect(screen.getByTitle(TICK.summary ?? '').textContent).toBe('tick:12 · 3m ago')
