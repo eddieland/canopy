@@ -22,6 +22,25 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; a chore must not reach them.
   task: deny
+  # A chore reads the tracker and writes nothing to it (TRUST_MODEL T6). At the marked line canopy renders, off a GitHub
+  # tracker, the tracker's server denied by a wildcard and each of its read tools allowed by name: OpenCode sends no
+  # other tool of it, and a write no pattern names fails closed (D021). GitHub's issue reads stay, as the chore's prompt
+  # is the operator's. On a GitHub tracker, whose server the PRs share, and with no read tools known, the line stays as
+  # it is. The patterns below come after, so no allow reopens a write they close.
+  # canopy: tracker reads
+  "atlassian_*": deny
+  "atlassian_atlassianUserInfo": allow
+  "atlassian_getAccessibleAtlassianResources": allow
+  "atlassian_getJiraIssue": allow
+  "atlassian_getJiraIssueTypeMetaWithFields": allow
+  "atlassian_listJiraIssueChangelogs": allow
+  "atlassian_listJiraIssueComments": allow
+  "atlassian_listJiraIssueLinkTypes": allow
+  "atlassian_listJiraIssueRemoteIssueLinks": allow
+  "atlassian_listJiraProjectIssueTypesMetadata": allow
+  "atlassian_listJiraProjects": allow
+  "atlassian_lookupJiraAccountId": allow
+  "atlassian_searchJiraIssuesUsingJql": allow
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth: no tool that writes to the tracker, GitHub, or files, or asks Copilot to review or work.
   "*create*": deny

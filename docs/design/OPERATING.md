@@ -169,7 +169,8 @@ Agent definitions ship in `agents/`:
   branch writes, and other agents or workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; MCP read tools only (§21): of the tracker's server, its read tools
   by name, and of GitHub, issue reads only when they are the tickets.
-- `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19).
+- `canopy-chore`: no edits or subagents, and no shell but its own history; MCP write tools denied by name, and of the
+  tracker's server, its read tools only, by name (§19).
 
 None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 A tool an agent never calls is denied whole, since the runtime sends every schema it allows on every call and none it

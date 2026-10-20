@@ -1,5 +1,6 @@
 """canopy's agent definitions in OpenCode's format: what is rendered into them, and a file that cannot take it."""
 
+from collections.abc import Callable
 from dataclasses import replace
 
 import pytest
@@ -64,11 +65,12 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
     assert "--force-with-lease" in text[agents.WORKER]
     assert '"*reply_to_pull_request_comment*": deny' in text[agents.WORKER]
     assert '"*reply_to_pull_request_comment*": deny' not in text[agents.PRIVATE_WORKER]
+    # And the chore, keeping GitHub's issue reads: its prompt is the operator's.
+    assert f'{READS_MARKER}  "tracker_*": deny\n  "tracker_read": allow\n' in text[agents.CHORE]
     assert "\ntemperature: 0.3\n" in text[agents.REVIEWER]
     assert "\ntemperature:" not in text[agents.OVERSEER]
     assert text[agents.OVERSEER].endswith("---\n\nDecide.\n")
-    # What the rules do not name stays as shipped, and the input is left as it was.
-    assert rendered[f"agents/{agents.CHORE}.md"] == files[f"agents/{agents.CHORE}.md"]
+    # The input is left as it was.
     assert files == definitions.bundled()
 
 
@@ -118,17 +120,36 @@ def test_an_overseer_definition_without_its_tracker_reads_line_is_refused(tools:
         definitions.render_overseer_reads(bundled.replace(READS_MARKER, ""), tools, "github")
 
 
+#: The agents whose tracker reads are rendered as the reviewer's, and the function that renders them.
+READERS: dict[str, Callable[[str, agents.McpTools | None, str], str]] = {
+    agents.REVIEWER: definitions.render_reviewer_reads,
+    agents.CHORE: definitions.render_chore_reads,
+}
+
+
+@pytest.mark.parametrize("agent", sorted(READERS))
 @pytest.mark.parametrize("tools", [None, agents.McpTools("tracker", ("read",))])
-def test_a_reviewer_definition_without_its_tracker_reads_line_is_refused(tools: agents.McpTools | None) -> None:
-    bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
-    with pytest.raises(agents.DefinitionsError, match=r"canopy-reviewer\.md has no line"):
-        definitions.render_reviewer_reads(bundled.replace(READS_MARKER, ""), tools, "jira")
+def test_a_readers_definition_without_its_tracker_reads_line_is_refused(
+    agent: str, tools: agents.McpTools | None
+) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line"):
+        READERS[agent](bundled.replace(READS_MARKER, ""), tools, "jira")
 
 
-def test_a_github_tracker_leaves_the_reviewers_rules_as_shipped() -> None:
-    # The server is the one it reads the PR through; its patterns govern it.
-    bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
-    assert definitions.render_reviewer_reads(bundled, agents.McpTools("github", ("issue_read",)), "github") == bundled
+@pytest.mark.parametrize("agent", sorted(READERS))
+def test_a_github_tracker_leaves_a_readers_rules_as_shipped(agent: str) -> None:
+    # The server is the one it reads PRs through; its patterns govern it.
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    assert READERS[agent](bundled, agents.McpTools("github", ("issue_read",)), "github") == bundled
+
+
+def test_the_chore_keeps_githubs_issue_reads_off_a_github_tracker() -> None:
+    # Unlike the reviewer's: a chore's prompt is the operator's, and may read GitHub's issues whatever the tracker.
+    bundled = (resources.agents_dir() / f"{agents.CHORE}.md").read_text()
+    rendered = definitions.render_chore_reads(bundled, agents.McpTools("atlassian", ("getJiraIssue",)), "jira")
+    rules = rendered.split(READS_MARKER, 1)[1].split("  # ", 1)[0]
+    assert rules == '  "atlassian_*": deny\n  "atlassian_getJiraIssue": allow\n'
 
 
 def test_a_github_tracker_gives_the_overseer_its_own_reads_of_github() -> None:

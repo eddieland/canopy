@@ -445,9 +445,10 @@ Controls:
   read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit or subagent tools, a
   shell that runs `canopy chore history` alone, which reads its own chore's earlier runs and writes nothing, and
-  denies MCP write tools by name. The agents example chores come with, `canopy-introspect` and
-  `canopy-memory-tickets`, which `canopy chore install` copies into the workspace's state directory for a chore's
-  `cmd` to name, are the same with a shell for canopy's read-only commands as well: `canopy health --json`,
+  denies MCP write tools by name. Off a GitHub tracker, the tracker's server is denied whole but its read tools, allowed
+  by name, as for the reviewer. The agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`,
+  which `canopy chore install` copies into the workspace's state directory for a chore's `cmd` to name, are the same,
+  but for that rendering, with a shell for canopy's read-only commands as well: `canopy health --json`,
   `canopy spend --json`, `canopy decisions`, `canopy show` of a run or a chore, and `opencode mcp list`; and
   `canopy memory lessons`, `proposals`, and `list`. None of those writes, and the memory commands that do refuse inside
   any run.
