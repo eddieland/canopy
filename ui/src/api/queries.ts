@@ -45,6 +45,8 @@ export const keys = {
     spendBreakdown: (range: SpendBreakdownRange) =>
         ['spend', 'breakdown', range.hours === undefined ? `${range.days}d` : `${range.hours}h`] as const,
     tick: ['tick'] as const,
+    // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
+    tickNow: ['tick-now'] as const,
     search: (q: string) => ['search', q] as const,
     // The reviews list, the reviews waiting on a tick, and each review's page share a prefix, so one invalidation
     // marks them all stale.

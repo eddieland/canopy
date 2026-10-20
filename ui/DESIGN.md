@@ -228,7 +228,8 @@ Rules:
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - **Tick now** stands after the pause, a ghost button beside the latest tick's readout, which shows the tick it starts:
   `t` at the loop's terminal, so the loop's wait ends at once, paused or not. It is disabled while the latest tick
-  runs. Like the
+  runs, and from the click until the tick it asked for starts, which the readout and the logo show as starting
+  meanwhile: the loop takes the ask at its wait's next step, after a poll of the sources if one is under way. Like the
   pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
@@ -493,8 +494,8 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
   drawn by CSS.
 - The nav's highlight (its tint and hairline) is one element that slides to the active item, changing into that
   item's section color as it goes.
-- The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
-  a ripple leaves it when a new tick appears.
+- The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs or
+  one Tick now asked for is starting, and a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
 - Skeletons shimmer: a light passes over them.
 - Fun moves as its code says, within these rules. A cleared item's fold is the one animation that fills forwards:

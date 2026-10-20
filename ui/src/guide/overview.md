@@ -80,8 +80,10 @@ The bar across the top of every page. From the left:
   tick starts and the button says for how long. A tick already running finishes, and so does every worker: a pause
   stops new decisions, not the work under way. It's kept in the journal, so it outlives a restart of the loop.
 - **Tick now**, as `t` at the loop's terminal: it cuts the loop's wait short and starts the next tick at once, even
-  while paused. It doesn't unpause anything; a pause stays a pause. While a tick is running, the button waits for it
-  to finish.
+  while paused. It doesn't unpause anything; a pause stays a pause. The moment you press it, the readout says
+  `tick starting` and the logo's arc starts sweeping, so you know it heard you; the tick's own line takes over once the
+  loop opens it, after any [poll](how-the-loop-works) already under way. While a tick is running, the button waits for
+  it to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok; it opens the tick.
   Before the first one, it says `no tick yet`.
   `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page.
