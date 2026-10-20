@@ -1222,7 +1222,10 @@ attempt 1 of 3.
 ## Task
 
 Read the ticket through the tracker MCP. The tracker is jira. Implement the ticket. Follow the repository's AGENTS.md
-and conventions. Run the tests that cover your change.
+and conventions. Before each push, run the checks the repository's contributors run before opening a PR, as its
+AGENTS.md, contributing guide, Makefile, or CI workflows name them: formatting, lint, type checks, and tests, not only
+the tests near your change. Fix what they find, and push once they pass. A check that fails without your change too, or
+cannot run here, is not yours to fix: say which and why in your summary.
 
 ## Messages from the operator
 
