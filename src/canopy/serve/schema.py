@@ -1691,10 +1691,10 @@ class SpendCosts(_Model):
 
 
 class SpendDay(_Model):
-    """One UTC day's costs."""
+    """One local day's costs."""
 
     day: str
-    """The day, `YYYY-MM-DD`, in UTC."""
+    """The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on."""
     costs: SpendCosts
     """What the runs that started on it cost."""
     done: int = 0
@@ -1792,10 +1792,10 @@ class SpendUnpriced(_Model):
 
 
 class SpendBreakdown(_Model):
-    """What a window of whole UTC days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33)."""
+    """What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33)."""
 
     since: datetime
-    """When the window starts: midnight UTC on its first day."""
+    """When the window starts: local midnight on its first day."""
     days: int
     """How many days it spans."""
     per_day: list[SpendDay]

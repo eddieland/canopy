@@ -10,7 +10,7 @@ import click
 
 from canopy.cli.common import open_context
 from canopy.cli.render import report_json
-from canopy.core import spend
+from canopy.core import db, spend
 from canopy.runtime.report import count_text
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ _TOOL_WIDTH = 32
     default=spend.DEFAULT_DAYS,
     show_default=True,
     metavar="N",
-    help="How many UTC days to read, today's so far included.",
+    help="How many local days to read, today's so far included.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Print the breakdown as one JSON object instead.")
 @click.pass_context
@@ -102,9 +102,9 @@ def render(found: Breakdown) -> list[str]:
     Returns:
         Its lines, without line ends.
     """
-    since = found.since[:10]
+    since = since_text(found.since)
     lines = [
-        f"Spend over {found.days} day{'s' if found.days != 1 else ''}, since {since} UTC, as the runtime reported it.",
+        f"Spend over {found.days} day{'s' if found.days != 1 else ''}, since {since}, as the runtime reported it.",
         "",
         f"{'day':<{_DAY_WIDTH}}" + "".join(f"{title:>{_COST_WIDTH}}" for title, _ in _COLUMNS),
     ]
@@ -128,6 +128,15 @@ def render(found: Breakdown) -> list[str]:
     unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced if u.unpriced)
     lines.extend(["", f"No cost reported: {unpriced}." if unpriced else "Every run that ended reported a cost."])
     return lines
+
+
+def since_text(stamp: str) -> str:
+    """When a window starts, as a report's first line says it: its first day in local time, and the zone.
+
+    Returns:
+        The day and the zone's abbreviation, `2026-10-02 PDT`.
+    """
+    return db.parse_time(stamp).astimezone().strftime("%Y-%m-%d %Z")
 
 
 def cost_text(usd: float | None) -> str:
@@ -154,7 +163,7 @@ def _tickets(found: Breakdown) -> list[str]:
     lines.append(f"{'ticket':<{_KEY_WIDTH}}{'runs':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}  done")
     lines.extend(
         f"{t.key:<{_KEY_WIDTH}}{t.runs + t.reviews:>{_COST_WIDTH}}{cost_text(t.cost_usd):>{_COST_WIDTH}}"
-        + (f"  {t.done_at[:10]} {t.done}" if t.done_at is not None else "")
+        + (f"  {spend.local_day(t.done_at)} {t.done}" if t.done_at is not None else "")
         for t in found.tickets[:_TICKETS]
     )
     if len(found.tickets) > _TICKETS:

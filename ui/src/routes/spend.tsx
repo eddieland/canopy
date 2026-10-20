@@ -43,7 +43,7 @@ interface SpendSearch {
 
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
-    "What agent runs cost each UTC day, as the runtime reported it: the overseer, idle ticks' part of it apart, and " +
+    "What agent runs cost each day, as the runtime reported it: the overseer, idle ticks' part of it apart, and " +
     'the workers, plan triages, plans, chores, and reviews it started; beside it, the tickets the loop marked done, ' +
     "the plans triage waived, and what each ticket's and PR's own runs cost; and which tools put the most into the " +
     "runs' context. As canopy spend --days N prints it."
@@ -97,7 +97,7 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
 }
 
 /**
- * What agent runs cost per UTC day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
+ * What agent runs cost per day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
  * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?days=`, a
  * week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  */
