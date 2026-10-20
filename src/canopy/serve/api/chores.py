@@ -152,7 +152,7 @@ def dismiss(name: ChoreName, body: DismissRequest, backend: BackendDep) -> Dismi
     with backend.open() as ctx:
         try:
             defined = chore_view.defined(ctx.config, ctx.workspace)
-            conversation.dismiss(ctx.conn, ref, body.finding, channel=WEB, chores=defined, undo=body.undo)
+            conversation.dismiss(ctx.conn, ref, [body.finding], channel=WEB, chores=defined, undo=body.undo)
         except conversation.Refused as r:
             raise RefusedError(r) from None
         backend.write_attention(ctx)

@@ -427,11 +427,11 @@ def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -
 
 @click.command("dismiss")
 @click.argument("ref", metavar="REF")
-@click.argument("finding")
-@click.option("--undo", is_flag=True, help="Take the dismissal back.")
+@click.argument("findings", metavar="FINDING...", nargs=-1, required=True)
+@click.option("--undo", is_flag=True, help="Take the dismissals back.")
 @click.pass_context
-def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool) -> int:
-    """Dismiss a chore's open FINDING (`chore:NAME`, by its id) or a review's (`review:ID`, by its number).
+def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *, undo: bool) -> int:
+    """Dismiss a chore's open FINDINGs (`chore:NAME`, by their ids) or a review's (`review:ID`, by their numbers).
 
     A chore's finding is off the attention list until the chore stops reporting it: `canopy show chore:NAME` still
     lists it, marked dismissed, and if it comes back after a run leaves it out, it is listed again. To have the chore
@@ -439,33 +439,42 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
 
     A review's finding stays in `canopy review show ID`, marked, and is left out of what a resume hands a worker and of
     what the overseer reads. It is one run's finding: a new commit's review starts fresh.
+
+    The findings are dismissed together or not at all: one refused leaves every other as it was.
     """
     _operator("dismiss")
     subject = _ref(ref, "dismiss")
     ctx = open_context(click_ctx)
     try:
         conversation.dismiss(
-            ctx.conn, subject, finding, channel=CLI, chores=chore_view.defined(ctx.config, ctx.workspace), undo=undo
+            ctx.conn, subject, findings, channel=CLI, chores=chore_view.defined(ctx.config, ctx.workspace), undo=undo
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
+    named = list(dict.fromkeys(findings))
     log = logs.for_tick(None)
-    log.info(
-        "finding dismissal taken back" if undo else "finding dismissed",
-        extra={"subject": str(subject), "finding": finding, "channel": CLI},
-    )
+    for finding in named:
+        log.info(
+            "finding dismissal taken back" if undo else "finding dismissed",
+            extra={"subject": str(subject), "finding": finding, "channel": CLI},
+        )
+    listed = ", ".join(named)
+    # One finding reads as before; several take the plural.
+    is_, they, it = ("are", "they", "them") if len(named) > 1 else ("is", "it", "it")
     if subject.kind == conversation.REVIEW:
+        noun = f"{subject} finding{'s' if len(named) > 1 else ''} {listed}"
         if undo:
-            click.echo(f"{subject} finding {finding} is no longer dismissed: a resume hands it to the worker again.")
+            click.echo(f"{noun} {is_} no longer dismissed: a resume hands {it} to the worker again.")
         else:
-            click.echo(f"{subject} finding {finding} is dismissed: no worker or tick acts on it.")
+            click.echo(f"{noun} {is_} dismissed: no worker or tick acts on {it}.")
         return 0
     attention.write(ctx, log)
     if undo:
-        click.echo(f"{subject} {finding} is listed again while the chore reports it.")
+        click.echo(f"{subject} {listed} {is_} listed again while the chore reports {it}.")
     else:
         click.echo(
-            f"{subject} {finding} is dismissed: it is off the attention list until the chore stops reporting it."
+            f"{subject} {listed} {is_} dismissed: "
+            f"{they} {is_} off the attention list until the chore stops reporting {it}."
         )
     return 0
 
