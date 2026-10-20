@@ -112,6 +112,24 @@ describe('ReviewRequestForm', () => {
         expect(notesField().value).toBe('')
     })
 
+    it('sends from the notes on the key Settings names, Shift+Enter making a new line', async () => {
+        renderWith(<ReviewRequestForm />)
+        const review = screen.getByRole('button', { name: 'Review' })
+        expect(review.getAttribute('aria-keyshortcuts')).toBe('Enter')
+        // With no URL there is nothing to review, so Enter sends nothing.
+        fireEvent.change(notesField(), { target: { value: 'Look hard at the retry loop.' } })
+        fireEvent.keyDown(notesField(), { key: 'Enter' })
+        expect(sent).toEqual([])
+
+        fireEvent.change(field(), { target: { value: PR } })
+        fireEvent.keyDown(notesField(), { key: 'Enter', shiftKey: true })
+        expect(sent).toEqual([])
+        fireEvent.keyDown(notesField(), { key: 'Enter' })
+        await screen.findByRole('status')
+        expect(sent).toEqual([{ path: '/api/pull-request/start', url: PR }])
+        expect(bodies).toEqual([{ notes: 'Look hard at the retry loop.' }])
+    })
+
     it("says the notes replaced the open request's own when the PR was already requested", async () => {
         answer = Response.json({ already: true, request: { ...OPEN, notes: 'Look again.' } })
         renderWith(<ReviewRequestForm />)

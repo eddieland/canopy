@@ -1,9 +1,11 @@
+import type { KeyboardEvent } from 'react'
+
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
- * Which key sends a reply or note (src/components/reply-form.tsx): Enter, as a chat does, with Shift+Enter for a new
- * line; Ctrl+Enter (⌘+Enter on a Mac), Enter making a new line; or neither, only the button. Kept in localStorage like
- * the theme, and synced across tabs.
+ * Which key sends what the operator writes to send, in every such field (`useSendKeys`): Enter, as a chat does, with
+ * Shift+Enter for a new line; Ctrl+Enter (⌘+Enter on a Mac), Enter making a new line; or neither, only the button.
+ * Kept in localStorage like the theme, and synced across tabs.
  */
 
 /** Which key sends: Enter, Ctrl+Enter (⌘+Enter on a Mac), or none, only the button. */
@@ -78,4 +80,35 @@ export function useSendKey(): SendKey {
 /** Stores the setting and applies it now. */
 export function setSendKey(next: SendKey): void {
     setting.set(next)
+}
+
+const APPLE = isApple(navigator.userAgent)
+
+/** A field's send key, as Settings names it, and what its send button says of it. */
+export interface SendKeys {
+    /**
+     * Submits the form the field is in when a key press is the one that sends, as its send button would; any other
+     * Enter makes a new line.
+     */
+    onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+    /** The keys that send, for the send button's `aria-keyshortcuts` and `SendKeycap`; undefined under Button only. */
+    shortcut: string | undefined
+}
+
+/**
+ * The send key for any field the operator writes in and sends, so every one sends on the same key. Re-renders on a
+ * change of the setting, from this tab or another. A form it submits checks it may send, as its disabled button does.
+ */
+export function useSendKeys(): SendKeys {
+    const sendKey = useSendKey()
+    return {
+        onKeyDown: (event) => {
+            const { key, shiftKey, ctrlKey, metaKey } = event
+            if (sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) {
+                event.preventDefault()
+                event.currentTarget.form?.requestSubmit()
+            }
+        },
+        shortcut: sendShortcut(sendKey, APPLE),
+    }
 }

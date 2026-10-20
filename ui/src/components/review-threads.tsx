@@ -18,6 +18,7 @@ import { DiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
+import { SendKeycap } from '@/components/send-keycap'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -48,6 +49,7 @@ import {
     draftsStagedToast,
 } from '@/lib/outcomes'
 import { shortSha } from '@/lib/reviews'
+import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 /**
@@ -588,6 +590,7 @@ function EditDraft({
     onCancel: () => void
 }) {
     const id = useId()
+    const sendKeys = useSendKeys()
     const [text, setText] = useState(draft.text)
     const [reaction, setReaction] = useState(draft.reaction)
     const edit = useMutation({
@@ -600,7 +603,7 @@ function EditDraft({
 
     function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (fits) {
+        if (fits && !edit.isPending) {
             edit.mutate()
         }
     }
@@ -628,6 +631,7 @@ function EditDraft({
                 id={`${id}-text`}
                 value={text}
                 onChange={(event) => setText(event.target.value)}
+                onKeyDown={sendKeys.onKeyDown}
                 spellCheck
                 className="min-h-20"
             />
@@ -656,8 +660,14 @@ function EditDraft({
                 </span>
             )}
             <span className="flex flex-wrap items-center gap-2">
-                <Button type="submit" size="sm" disabled={edit.isPending || !fits}>
+                <Button
+                    type="submit"
+                    size="sm"
+                    disabled={edit.isPending || !fits}
+                    aria-keyshortcuts={sendKeys.shortcut}
+                >
                     Save
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
                 <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={edit.isPending}>
                     Cancel

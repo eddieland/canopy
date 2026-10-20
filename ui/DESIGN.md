@@ -1240,12 +1240,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   and the runs counted over the whole journal (`GET /api/runs/since`), not the runs list's recent few. With no fresh
   list within 30 seconds, as while the loop is down, it says nothing. A tab never hidden, as on a second monitor,
   never shows it.
-- **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
-  a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
-  composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:
-  `Reply`, `Note`, or `Reply to message 5` while a question waits. The send button names its key in a keycap (`Kbd`)
-  after its label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only
-  shows none. The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **Every field the operator writes in to send** (a reply or note, a plan comment, a review request's notes, a draft
+  or a lesson in their own words, the notice to workers) sends on the key Settings names, through `useSendKeys`: Enter
+  by default, as a chat does; Ctrl+Enter (⌘+Enter on a Mac), Enter making a new line; or Button only. Shift+Enter
+  always starts a new line, and an Enter that ends an IME composition only commits it (`src/lib/send-key.ts`). The key
+  submits the form, so the form's submit checks what its disabled button does. A reply's field is named for the form,
+  as its panel is for its page: `Reply`, `Note`, or `Reply to message 5` while a question waits. The send button names
+  its key in a keycap (`SendKeycap`) after its label, tinted with the button's own color: ⏎, or ⌘⏎ on an Apple
+  keyboard and Ctrl⏎ elsewhere; Button only shows none. The keycap is `aria-hidden`; the button carries the same keys
+  as `aria-keyshortcuts`.
 - **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the lint
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
