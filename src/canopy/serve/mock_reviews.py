@@ -44,7 +44,8 @@ _STALE = ReviewResult(
         )
     ],
 )
-_LATEST = ReviewResult(
+# What review 4 reported, its reviewer's last line in its transcript too.
+LATEST = ReviewResult(
     status="done",
     verdict="findings",
     impact="normal",
@@ -142,7 +143,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         (1, PR_88, SHA_88_FIRST, "ABC-099", "web", -100, -97, "done", _STALE.model_dump_json(), 0.21, None),
         (2, PR_12, SHA_12, None, "api", -80, -79, "done", _CLEAN.model_dump_json(), 0.06, DIFF_12),
         (3, PR_91, SHA_91, "ABC-103", "web", -70, -69, "unknown", json.dumps({"harness": _UNKNOWN}), 0.02, None),
-        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", _LATEST.model_dump_json(), 0.24, DIFF_88),
+        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", LATEST.model_dump_json(), 0.24, DIFF_88),
     )
     for run_id, pr, sha, ticket, repo, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"

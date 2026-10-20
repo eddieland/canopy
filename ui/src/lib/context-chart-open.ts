@@ -7,8 +7,8 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  * kept in localStorage as Pretty is, and synced across tabs.
  */
 
-/** The pages a transcript sits on, each keeping its own choice: a run's, a chore run's, and a tick's. */
-export const PAGES = ['run', 'chore-run', 'tick'] as const
+/** The pages a transcript sits on, each keeping its own choice: a run's, a chore run's, a tick's, and a review's. */
+export const PAGES = ['run', 'chore-run', 'tick', 'review'] as const
 
 /** A kind of page a transcript sits on. */
 export type TranscriptPage = (typeof PAGES)[number]
