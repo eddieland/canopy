@@ -281,6 +281,11 @@ describe('foldText', () => {
         expect(shown.endsWith('word…')).toBe(true)
         expect(shown.length).toBeLessThanOrEqual(400)
     })
+
+    it('cuts one long word mid-word, past an indent, rather than to the ellipsis alone', () => {
+        const { shown } = foldText(`    ${'x'.repeat(600)}`, 4)
+        expect(shown).toBe(`    ${'x'.repeat(395)}…`)
+    })
 })
 
 describe('shownOutput', () => {

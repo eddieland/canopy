@@ -459,11 +459,13 @@ function wraps(line: string): number {
     return Math.max(1, Math.ceil(line.length / WRAP))
 }
 
-// The first `chars` characters of `line`, the ellipsis among them, cut where a word ends when one does.
+// The first `chars` characters of `line`, the ellipsis among them, cut where a word ends when one does. A line whose
+// only break is its indent, before one long word, is cut mid-word rather than to the ellipsis alone.
 function cutWords(line: string, chars: number): string {
     const head = line.slice(0, chars - 1)
     const end = head.search(/\s\S*$/u)
-    return `${(end > 0 ? head.slice(0, end) : head).trimEnd()}…`
+    const words = end > 0 ? head.slice(0, end).trimEnd() : ''
+    return `${words === '' ? head.trimEnd() : words}…`
 }
 
 /**
