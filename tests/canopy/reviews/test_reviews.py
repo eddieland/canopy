@@ -588,7 +588,7 @@ def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
         (resume(failed), f"review run {failed} ended failed with no findings to address"),
         (
             dispatches(review_run=of_ticket),
-            "--review-run names findings for a resume to address; it is for resume only",
+            "review_run (--review-run) names findings for a resume to address; it is for resume only",
         ),
     ]:
         assert scenario.refuses(command) == [("refused:bad_review", why)]

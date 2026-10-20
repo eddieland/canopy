@@ -72,7 +72,8 @@ def cmd_attention(
     click_ctx: click.Context, words: tuple[str, ...], detail: str, repo: str | None, pr: str | None
 ) -> int:
     """Record an attention item about a ticket, or about a PR with --pr (overseer only)."""
-    if len(words) > 2 or (len(words) == 1 and pr is None):  # noqa: PLR2004
+    # A REASON with neither KEY nor --pr is the request's to refuse, in the words its tool's refusal uses.
+    if len(words) > 2:  # noqa: PLR2004
         raise click.UsageError("expected KEY REASON, or REASON with --pr", click_ctx)
     key, reason = (None, words[0]) if len(words) == 1 else words
     if key is not None and not valid_key(key):
@@ -172,10 +173,25 @@ def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: s
                 comment=comment_id,
                 author=author,
                 at=at,
-                body=body if body is not None else sys.stdin.read(),
+                body=_body(ref, body),
             ),
         )
     except tools.Refused as e:
         raise CliError(str(e)) from None
     click.echo(said)
     return 0
+
+
+def _body(ref: str, body: str | None) -> str:
+    """Return a mirrored comment's body: `body`, or else stdin, read only once `ref` is a reference.
+
+    A bad ref is refused without reading stdin, which would wait on an open one: the verb refuses the ref, and records
+    it, before it looks at the body, so it is given none.
+    """
+    if body is not None:
+        return body
+    try:
+        conversation.parse_ref(ref)
+    except conversation.Refused:
+        return ""
+    return sys.stdin.read()
