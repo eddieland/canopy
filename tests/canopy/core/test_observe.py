@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
-from canopy.core import observe, records
+from canopy.core import observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import logs
@@ -33,7 +33,9 @@ def run(ctx: Context, request: observe.Request = ASKED) -> observe.Observed:
 
 def branches(ctx: Context) -> list[tuple[str, str]]:
     """Each observed branch, as (repository, name)."""
-    found = records.fetch_all(ctx.conn, records.ObservedBranch, "SELECT * FROM observed_branches ORDER BY name")
+    found = records.fetch_all(
+        ctx.conn, records.ObservedBranch, sql.frag("SELECT * FROM observed_branches ORDER BY name")
+    )
     return [(b.repository, b.name) for b in found]
 
 
@@ -101,7 +103,7 @@ def test_a_time_without_an_offset_is_the_sources_utc(ctx: Context, connector_sta
     assert found.refused == {"review": 1}
     prints(connector_state, pr, check, review)
     run(ctx)
-    [seen] = records.fetch_all(ctx.conn, records.ObservedReview, "SELECT * FROM observed_reviews")
+    [seen] = records.fetch_all(ctx.conn, records.ObservedReview, sql.frag("SELECT * FROM observed_reviews"))
     assert seen.created_at == "2026-10-18T09:00:00.000Z"
 
 
