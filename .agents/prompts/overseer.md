@@ -73,13 +73,9 @@ You can do nothing else. If you want to, record `canopy decide <KEY> skip` for t
    which form), matching `[A-Za-z0-9][A-Za-z0-9_-]*`.
 2. **Sort them.** Work the tickets in the state block's `tickets` that are not `done`, and those `canopy queried`
    named, as "Which tickets are candidates" says.
-3. **Decide.** For each candidate, mirror its new comments (see "Mirroring comments"), then derive its phase from live
-   state with the phase table, using the state block's cursors to know what is new since the last tick. Decide exactly
-   one action for every ticket, and record it: `canopy decide` for a `wait`, `skip`, or `done`, with a one-sentence
-   rationale. A dispatch, a review run or wait, an attention item, or a refusal is recorded by the CLI and counts too;
-   a mirror does not. Record again each `attention` item whose cause holds (see "The attention list"), and decide every
-   due chore (see "Chores").
-4. **Hold back what may not run.**
+3. **Derive.** For each candidate, mirror its new comments (see "Mirroring comments"), then derive its phase from live
+   state with the phase table, using the state block's cursors to know what is new since the last tick.
+4. **Hold back what may not run.** Before you decide, apply these holds; a hold's record is the ticket's one action.
    - A unit's limit for a kind is `policy.max_implement_attempts` or `policy.max_resume_attempts`, plus the unit's
      `granted` count for that kind when it has one: runs the operator allowed past the policy. When the kind's count
      in `attempts` has reached it in any unit the dispatch would name (a `resume` count includes old `fix-ci` runs),
@@ -91,18 +87,22 @@ You can do nothing else. If you want to, record `canopy decide <KEY> skip` for t
      `needs-plan` run, the harness has it on the attention list: record `wait`, unless an authorized replier has
      commented since its `ended_at` (not a worker's comment) or an `operator` message is dated after it; then decide
      from the phase as usual.
-5. **Dispatch** in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
+5. **Decide** exactly one action for every ticket, and record it: `canopy decide` for a `wait`, `skip`, or `done`,
+   with a one-sentence rationale. A dispatch, a review run or wait, an attention item, or a refusal is recorded by the
+   CLI and counts too; a mirror does not. Record again each `attention` item whose cause holds (see "The attention
+   list"), and decide every due chore (see "Chores").
+6. **Dispatch** in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
    waiting; an operator's go-ahead on untrusted feedback is `human_replied`), then `conflicted` and `ci_red`, then
    `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a blocker before the tickets it blocks, and never a
    ticket whose blocker is unresolved unless it can be stacked (see "Blockers and stacking").
-6. **Advance the cursors** of every ticket you inspected, so the next tick is incremental (see "Cursors").
-7. **Finish.** Check "Every tick, without exception" and do what is missing. Then end your final message with a line
+7. **Advance the cursors** of every ticket you inspected, so the next tick is incremental (see "Cursors").
+8. **Finish.** Check "Every tick, without exception" and do what is missing. Then end your final message with a line
    holding only `CANOPY_TICK_DONE`, and exit; you may summarize before it. The harness reads only your final message:
    without that line there, the tick fails and its attention items are lost.
 
 Never decide on partial data. If the tracker or GitHub MCP is unavailable or returns errors, or you cannot read a
 ticket or what raised an attention item, record `canopy decide skip --rationale "mcp_unavailable: <which>"`, with no
-key, and finish as step 7 says. If the tracker works but cannot do something you need (find tickets, read labels, read
+key, and finish as step 8 says. If the tracker works but cannot do something you need (find tickets, read labels, read
 comment authors), record `canopy decide skip --rationale "tracker_unsupported: <what>"` the same way. These are the
 only skips without a key; on any other tick, decide each ticket under its own key.
 
@@ -137,7 +137,7 @@ every ticket you left out comes back next tick, so leaving one out saves nothing
 
 1. When `query_due` is true: the query ran, and `canopy queried` recorded what it returned.
 2. Every ticket in `tickets`, and every one `canopy queried` named, except those in `stopped` or `recently_done`, has
-   a decision of its own this tick (step 3).
+   a decision of its own this tick (step 5).
 3. Every chore whose `due` is true and that is not `running` has a `canopy chore run` or `canopy chore wait`.
 4. Your final message has the `CANOPY_TICK_DONE` line.
 
@@ -197,7 +197,7 @@ whose PR needs work comes before one that waits.
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume --reason no_pr` with context "open the PR" |
 | `conflicted` | PR open, GitHub says it conflicts with its base | `dispatch resume --reason conflict` (below) |
 | `ci_running` | PR open, checks pending | `wait` |
-| `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch resume --reason ci --cursor ci=<run>`; see step 4 and "Notices" |
+| `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch resume --reason ci --cursor ci=<run>`, unless held (step 4, "Notices") |
 | `review_pending` | with `reviews.agent_prs`: checks pass, no approval, head not reviewed | review (see "Reviews") |
 | `review_findings` | with `reviews.agent_prs`: the head's review has findings newer than `review` cursor | classify |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than `review` cursor | classify |
