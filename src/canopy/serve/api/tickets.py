@@ -67,8 +67,8 @@ def start(key: TicketKey, backend: BackendDep) -> Started:
     run = started.running
     return Started(
         already=started.already,
-        running_run=int(run["id"]) if run is not None else None,
-        running_private=bool(run["private"]) if run is not None else None,
+        running_run=run.id if run is not None else None,
+        running_private=run.private if run is not None else None,
     )
 
 
@@ -84,7 +84,7 @@ def stop(key: TicketKey, body: StopRequest, backend: BackendDep) -> Stopped:
         _log.info("ticket stopped", extra={"ticket": ref.id, "now": body.now, "channel": WEB})
         run = stopped.running
         ended = run is not None and body.now and backend.end_run(ctx, run)
-    return Stopped(already=stopped.already, running_run=int(run["id"]) if run is not None else None, ended=ended)
+    return Stopped(already=stopped.already, running_run=run.id if run is not None else None, ended=ended)
 
 
 @router.post("/tickets/{key}/replies", operation_id="replyTicket", summary="Reply on a ticket", responses=REFUSED)

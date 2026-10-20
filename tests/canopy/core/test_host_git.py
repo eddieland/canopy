@@ -52,7 +52,7 @@ def test_host_git_runs_no_hook_or_monitor_from_the_shared_git_directory(
     # Left unpushed, so `_run` fetches, checks out, reads refs, and pushes: every git step it has.
     run = scenario.run(WORK, worker=worker_does(WORKER_COMMIT))
     assert run.status == "done"
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
     assert not fired.exists(), fired.read_text()
 
@@ -77,7 +77,7 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
     run = scenario.run(WORK, worker=worker_does(WORKER_COMMIT, ["sh", "-c", rewrite]))
 
     assert run.status == "crashed"
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     result = json.loads(run.row["result_json"])
     assert result["harness"] == f"repo: the worker rewrote {slot / '.git'}; nothing was checked or pushed"
     assert result["status"] == "done"  # what the worker claimed is kept
@@ -123,7 +123,7 @@ def test_a_worker_that_rewrites_commondir_crashes_the_run_and_commondir_is_put_b
     run = scenario.run(WORK, worker=worker_does(WORKER_COMMIT, ["sh", "-c", plant_common_dir(fired)]))
 
     assert run.status == "crashed"
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     own = present(commondirs[slot])
     result = json.loads(run.row["result_json"])
     assert result["harness"] == f"repo: the worker rewrote {own / 'commondir'}; nothing was checked or pushed"

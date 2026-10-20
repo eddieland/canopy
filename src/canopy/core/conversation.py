@@ -215,7 +215,7 @@ class Started:
     """What `start` did: whether the ticket was already started, and a run already working it."""
 
     already: bool
-    running: sqlite3.Row | None
+    running: records.Run | None
 
 
 def start(
@@ -249,8 +249,8 @@ def start(
         running = db.running_run_of(conn, ref.id)
         if plan_lock is not None and ticket is not None and ticket.branch:
             raise Refused("bad_plan", f"{ref} already has work on {ticket.branch}; a started ticket is not planned")
-        if plan_lock is not None and running is not None and running["kind"] == RunKind.PLAN:
-            raise Refused("bad_plan", f"plan run {running['id']} for {ref} is running; wait for it to end")
+        if plan_lock is not None and running is not None and running.kind == RunKind.PLAN:
+            raise Refused("bad_plan", f"plan run {running.id} for {ref} is running; wait for it to end")
         db.touch_ticket(conn, ref.id, repo)
         if plan_lock is not None:
             db.change_ticket(conn, ref.id, "plan_setting", PlanSetting.PLAN)
@@ -278,7 +278,7 @@ class Stopped:
     """What `stop` did: whether the ticket was already stopped, and the run still working it, if one is."""
 
     already: bool
-    running: sqlite3.Row | None
+    running: records.Run | None
 
 
 def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
@@ -380,7 +380,7 @@ def reply(
     if not new:
         # The same submission again: what it answered then, whatever is waiting now.
         recorded = db.get_message(conn, message_id)
-        answers = int(recorded["answers"]) if recorded is not None and recorded["answers"] is not None else None
+        answers = recorded.answers if recorded is not None else None
     return Replied(message_id=message_id, answers=answers, new=new)
 
 
@@ -561,7 +561,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
         if running is not None:
             raise Refused(
                 "running",
-                f"run {running['id']} ({running['kind']}) is working {ref}; wait for it to end, or on a started "
+                f"run {running.id} ({running.kind}) is working {ref}; wait for it to end, or on a started "
                 f"ticket end it with `canopy stop {ref} --now`",
             )
         if not db.worked_since_forget(conn, ticket):
@@ -569,7 +569,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
                 "already_forgotten",
                 f"{ref} has had no run, message, branch, or PR since you forgot it, so there is nothing new to forget",
             )
-        prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
+        prs = [str(u.pr_url) for u in db.units(conn, ref.id) if u.pr_url]
         db.forget_ticket(conn, ref.id, channel=channel, branch=ticket.branch, prs=prs)
         # Its notes are about work that is gone, as its earlier runs' reports are (DESIGN §28, Retention).
         memory.end_ticket_notes(conn, ref.id, "forgotten work")
@@ -658,8 +658,8 @@ def mirror(
     return Mirrored(
         message_id=message_id,
         new=before is None,
-        source=str(before["source"]) if before is not None else source,
-        truncated=bool(before["truncated"]) if before is not None else truncated,
+        source=before.source if before is not None else source,
+        truncated=before.truncated if before is not None else truncated,
     )
 
 
@@ -908,7 +908,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
         ended = f" at {run['ended_at']}" if run["ended_at"] else ""
         lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
         for m in db.run_messages(conn, int(run["id"])):
-            lines += [f"Its {m['kind']}:", _quoted(str(m["body"]))]
+            lines += [f"Its {m.kind}:", _quoted(m.body)]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks) or "None: no earlier run of this ticket has ended."
 
@@ -923,10 +923,7 @@ class ChoreNote(TypedDict):
 
 def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     """Return what a chore's prompt carries of the operator's notes to it: the latest, oldest first (DESIGN §19)."""
-    return [
-        {"id": m["id"], "at": m["at"], "note": printable(str(m["body"]))}
-        for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)
-    ]
+    return [{"id": m.id, "at": m.at, "note": printable(m.body)} for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)]
 
 
 def _bounded(blocks: Sequence[str], empty: str) -> str:

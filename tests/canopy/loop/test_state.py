@@ -126,7 +126,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         )
     with clock("09:40"):
         db.finish_run(conn, "runs", implement, RunStatus.DONE, None)
-        db.set_unit(conn, "PROJ-1", root, "repo", phase="ci_failed", pr_url=PR, cursors={"ci": "5551"})
+        db.set_unit(conn, "PROJ-1", root, "repo", phase="ci_red", pr_url=PR, cursors={"ci": "5551"})
         decide(conn, earlier, "PROJ-1", "attention:needs_reviewer", "no reviewer is assigned", repo="repo")
         # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
         conn.execute(

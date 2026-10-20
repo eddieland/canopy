@@ -300,7 +300,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     [ticket] = db.open_tickets(conn)
     assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["repo"], unit["phase"], unit["last_ci_run_id"], unit["branch"]) == ("api", "ci_red", "run-7", None)
+    assert (unit.repo, unit.phase, unit.last_ci_run_id, unit.branch) == ("api", "ci_red", "run-7", None)
     [decision] = db.decisions_for_tick(conn, tick)
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = present(db.last_tick(conn))

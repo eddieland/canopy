@@ -26,8 +26,7 @@ from canopy.serve.options import ServeOptions
 from canopy.serve.server import WebServer
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
 
@@ -82,7 +81,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
         The backend the server calls into, bound to `ctx`, `reload`, and `asked`.
     """
 
-    def end_run(run_ctx: Context, run: sqlite3.Row) -> bool:
+    def end_run(run_ctx: Context, run: records.Run) -> bool:
         return halt.end(run_ctx, run, logs.for_tick(None))
 
     def reload_config(current: Context) -> Reloading:

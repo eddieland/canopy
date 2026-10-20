@@ -54,7 +54,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "question": None,
     }
     [w] = agent_runs(scenario.agent_log)
-    assert w["cwd"] == slot_of(scenario.conn, run.id)["slot_path"]
+    assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
     # CANOPY_RUN_ID: the operator's commands refuse inside the run (DESIGN §22).
     snapshot = definitions.ensure(scenario.env.state_dir, config.load(scenario.env.root))
@@ -71,13 +71,13 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     assert argv[:4] == ["run", "--agent", "canopy-worker", "--title=PROJ-1 implement"]
     assert argv[4] == run.prompt
 
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     # Detached: the worker pushed HEAD to the branch, which started from origin/main.
     assert git("rev-parse", "--abbrev-ref", "HEAD", cwd=slot) == "HEAD"
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
     assert git("rev-parse", "HEAD~1", cwd=slot) == git_pool.remote_head("main")
     assert all(s["status"] == "available" for s in pool(treehouse_state))
-    assert unit_of(scenario.conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
+    assert unit_of(scenario.conn, "PROJ-1").pr_url == "https://example.test/pr/1"
     assert "run 1: done" in run.printed.out
 
 
@@ -128,7 +128,7 @@ def test_a_run_makes_no_local_branch(scenario: Scenario, git_pool: GitPool) -> N
     assert commands[0]["returncode"] == 1  # detached
     assert commands[1]["stdout"] == ""
     assert commands[3]["returncode"] != 0  # not on a branch: nothing a bare push could target, the base included
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("main") == git("rev-parse", "HEAD~1", cwd=slot)
 
 
@@ -137,7 +137,7 @@ def test_unpushed_commits_are_pushed_once(scenario: Scenario, git_pool: GitPool)
         worker=worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: forgot to push"])
     )
     assert run.status == "done"
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
 
@@ -194,7 +194,7 @@ def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(scenario:
         )
     )
     assert run.status == "done", run.row["result_json"]
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
 
@@ -237,7 +237,7 @@ def test_with_rebase_a_worker_that_rebased_and_pushed_with_a_lease_is_done(
         )
     )
     assert run.status == "done", run.row["result_json"]
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
     assert git("merge-base", "--is-ancestor", "origin/main", "HEAD", cwd=slot) == ""
 
@@ -247,7 +247,7 @@ def test_with_rebase_canopy_pushes_a_rebased_branch_with_a_lease(scenario: Scena
     branch_behind_main(git_pool)
     run = scenario.run(worker=worker_does(["git", "rebase", "--quiet", "origin/main"]))
     assert run.status == "done", run.row["result_json"]
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
 
@@ -283,7 +283,7 @@ def test_a_local_branch_an_earlier_canopy_left_is_dropped_unless_it_holds_commit
             git("branch", "--force", "agent/PROJ-1-work", stray, cwd=slot)
     run = scenario.run(worker=pushes())
     assert run.status == "done"
-    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
     left = git("for-each-ref", "--format=%(refname)", "refs/heads/agent/PROJ-1-work", cwd=slot)
     assert left == ("refs/heads/agent/PROJ-1-work" if only_here else "")
 
@@ -436,7 +436,7 @@ def test_a_worker_records_the_session_and_cost_it_reported(scenario: Scenario, g
     # The result line is read from the events' text, as it is from stdout without them.
     assert run.status == "done"
     assert json.loads(run.row["result_json"])["summary"] == "did it"
-    assert unit_of(scenario.conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
+    assert unit_of(scenario.conn, "PROJ-1").pr_url == "https://example.test/pr/1"
     # Two model calls, summed.
     row = run.row
     assert row["session_id"] == "ses_w1"

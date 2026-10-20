@@ -324,9 +324,9 @@ def _not_planning(conn: sqlite3.Connection, key: str) -> None:
         Refused: (`bad_plan`) a plan run for `key` is running.
     """
     running = db.running_run_of(conn, key)
-    if running is not None and running["kind"] == RunKind.PLAN:
+    if running is not None and running.kind == RunKind.PLAN:
         raise Refused(
-            "bad_plan", f"plan run {running['id']} for {key} is running; wait for it to end, then decide on its plan"
+            "bad_plan", f"plan run {running.id} for {key} is running; wait for it to end, then decide on its plan"
         )
 
 
@@ -421,7 +421,7 @@ def waits(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
     if newest is None or newest.status is not PlanStatus.PROPOSED:
         return False
     running = db.running_run_of(conn, ticket.key)
-    if running is not None and running["kind"] == RunKind.PLAN:
+    if running is not None and running.kind == RunKind.PLAN:
         return False
     return changes_asked(conn, ticket) is None
 

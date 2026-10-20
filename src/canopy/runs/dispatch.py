@@ -649,7 +649,7 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
         raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; --slug is for implement")
     if recorded is None:
         raise Refusal("no_branch", f"{key} has no branch in the journal for {kind} to continue; dispatch implement")
-    with_branch = {str(u["repo"]) for u in db.units(ctx.conn, key) if u["branch"]}
+    with_branch = {str(u.repo) for u in db.units(ctx.conn, key) if u.branch}
     for repo in repos:
         if repo not in with_branch:
             raise Refusal(
@@ -1086,7 +1086,7 @@ def _render(
     if remembered is not None:
         values = {**values, **remembered.values}
         required = (*required, *remembered.required)
-    units = {str(u["pr_url"]) for u in db.units(ctx.conn, key) if u["pr_url"] and u["repo"] in repos}
+    units = {str(u.pr_url) for u in db.units(ctx.conn, key) if u.pr_url and u.repo in repos}
     sent = {pr: ids for pr, ids in drafts.sent_by_pr(ctx.conn).items() if pr in units}
     replied = replies.render(ctx.config, kind, private=private, sent=sent)
     if replied is not None:
@@ -1148,8 +1148,8 @@ def _unit_prs(ctx: Context, key: str) -> dict[str, str]:
     """Return the PR the journal recorded for each of `key`'s units, by repository name."""
     found: dict[str, str] = {}
     for u in db.units(ctx.conn, key):
-        if u["pr_url"]:
-            found[str(u["repo"])] = str(u["pr_url"])
+        if u.pr_url:
+            found[str(u.repo)] = str(u.pr_url)
     return found
 
 

@@ -17,15 +17,14 @@ from canopy.infra import procs
 from canopy.runs import reconcile
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.infra import logs
 
 NOTE = "the operator stopped the ticket with `canopy stop --now`"
 
 
-def end(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> bool:
+def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:
     """Kill run `run`'s processes and close it `stopped`.
 
     Returns:
@@ -34,12 +33,11 @@ def end(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> bool:
     Raises:
         pools.PoolError: a slot could not be returned; the next tick's reconcile returns it.
     """
-    for column in ("pid", "worker_pid"):
-        pid = run[column]
+    for pid in (run.pid, run.worker_pid):
         # Never this process's own group: a `_run` claimed in-process, as tests run it, has this pid.
-        if pid is not None and int(pid) not in (os.getpid(), os.getpgid(0)):
-            procs.kill_group(int(pid))
-    current = db.get_run(ctx.conn, int(run["id"]))
+        if pid is not None and pid not in (os.getpid(), os.getpgid(0)):
+            procs.kill_group(pid)
+    current = db.get_run(ctx.conn, run.id)
     if current is None or current["status"] != "running":
         return False
     reconcile.end_run(ctx, current, RunStatus.STOPPED, NOTE, log)

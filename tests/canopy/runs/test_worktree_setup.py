@@ -85,7 +85,7 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(scenario: S
     commands = w["commands"]
     assert isinstance(commands, list)
     assert commands[0]["returncode"] == 0  # the worker found what setup left
-    assert w["cwd"] == slot_of(scenario.conn, run.id)["slot_path"]
+    assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
 
 
 def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
@@ -179,7 +179,7 @@ def test_every_lease_passes_the_operators_include_file(
     [get] = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
     # Absolute, with ~ expanded: treehouse reads a relative one from the repository.
     assert get[get.index("--include-file") + 1] == str(manifest)
-    leased = next(s for s in pool(treehouse_state) if s["path"] == slot_of(scenario.conn, run.id)["slot_path"])
+    leased = next(s for s in pool(treehouse_state) if s["path"] == slot_of(scenario.conn, run.id).slot_path)
     assert leased["include_manifest"] == "user.bazelrc\n.env.local\n"
 
 

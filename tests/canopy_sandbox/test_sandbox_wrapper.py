@@ -581,7 +581,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     assert definitions in call["settings"]["filesystem"]["allowRead"]
     pushed = present(git_pool.remote_head("agent/PROJ-1-work"))
     assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok  # never in the shared one
-    slot = Path(slot_of(conn, run_id)["slot_path"])
+    slot = Path(slot_of(conn, run_id).slot_path)
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
     assert not (canopy_env.state_dir / "runs" / f"{run_id}.objects").exists()
     assert all(s["status"] == "available" for s in pool(treehouse_state))

@@ -50,14 +50,14 @@ def test_dispatch_leases_records_and_spawns(
         assert run["pid"] == os.getpid()
         assert run["log_path"] == str(canopy_env.state_dir / "runs" / "1.log")
         leased = slot_of(conn, 1)
-        assert (leased["repo"], leased["base_branch"], leased["lease_holder"]) == ("repo", "main", "canopy:PROJ-1")
+        assert (leased.repo, leased.base_branch, leased.lease_holder) == ("repo", "main", "canopy:PROJ-1")
         [slot] = [s for s in pool(treehouse_state) if s["status"] == "leased"]
-        assert (slot["path"], slot["lease_id"]) == (leased["slot_path"], leased["lease_id"])
+        assert (slot["path"], slot["lease_id"]) == (leased.slot_path, leased.lease_id)
 
         assert runner.spawned == [(sys.executable, "-m", "canopy", "_run", "1")]
         [(action, rationale)] = decisions(conn, tick_id)
         assert action == "dispatch:implement"
-        assert rationale == f"run 1: agent/PROJ-1-add-login in repo at {leased['slot_path']}; label agent-ready-tester"
+        assert rationale == f"run 1: agent/PROJ-1-add-login in repo at {leased.slot_path}; label agent-ready-tester"
         # The worker is told which labels authorize it, so it can check the ticket itself (D051).
         assert "`agent-ready-tester`" in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
         ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
@@ -68,8 +68,8 @@ def test_dispatch_leases_records_and_spawns(
         text = prompt.read_text()
         assert text.startswith("# canopy worker: implement")
         assert "{{" not in text
-        assert f"ticket PROJ-1 in {leased['slot_path']}." in text
-        assert "This run works in one repository:\n- `repo` at `" + str(leased["slot_path"]) in text
+        assert f"ticket PROJ-1 in {leased.slot_path}." in text
+        assert "This run works in one repository:\n- `repo` at `" + str(leased.slot_path) in text
         assert ": branch `agent/PROJ-1-add-login` from `main`; PR: not recorded; look up the PR for " in text
         assert '"prs":{"repo":"<url or null>"}' in text
         assert text.lower().count("add the label") == 1, "only the ticket's needs-human label, never the PR's"

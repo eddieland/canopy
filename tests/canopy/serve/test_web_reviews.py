@@ -190,8 +190,8 @@ def test_findings_sent_from_the_web_reach_the_ticket_as_the_cli_sends_them(backe
     }
     with backend.open() as ctx:
         message = present(db.get_message(ctx.conn, recorded["message_id"]))
-        assert (message["subject_id"], message["source"], message["channel"]) == ("ABC-099", "operator", "web")
-        assert message["body"] == (
+        assert (message.subject_id, message.source, message.channel) == ("ABC-099", "operator", "web")
+        assert message.body == (
             f"Address findings 1 and 3 of canopy's review run 4, of commit {mock_reviews.SHA_88[:12]}. "
             "Leave its finding 2 alone."
         )

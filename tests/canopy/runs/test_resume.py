@@ -69,7 +69,7 @@ def test_a_red_check_resumes_the_recorded_branch_with_the_checks_named(scenario:
     resumed = scenario.run(fix, worker=pushes("agent/PROJ-1-add-login", "PROJ-1: fix the build"))
     assert (resumed.kind, resumed.status, resumed.branch) == ("resume", "done", "agent/PROJ-1-add-login")
     assert resumed.reasons == (CI,)
-    assert unit_of(scenario.conn, "PROJ-1")["last_ci_run_id"] == "run-77"
+    assert unit_of(scenario.conn, "PROJ-1").last_ci_run_id == "run-77"
 
     # The worker started from the pushed branch, not from main.
     log = git("log", "--format=%s", "agent/PROJ-1-add-login", cwd=git_pool.origin)
@@ -104,7 +104,7 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
         "PROJ-1: fix and address"
     )
     unit = unit_of(scenario.conn, "PROJ-1")
-    assert (unit["last_ci_run_id"], unit["last_review_id"]) == ("run-77", "2026-10-17T09:30:00Z")
+    assert (unit.last_ci_run_id, unit.last_review_id) == ("run-77", "2026-10-17T09:30:00Z")
     assert "- `ci`: checks failed" in run.prompt
     assert "- `review`: review comments" in run.prompt
 
@@ -363,7 +363,7 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario
     ]
     assert scenario.attention() == [("PROJ-1", "attempt_limit")]
     # Advanced by the dispatches that started, not by the refused ones.
-    assert unit_of(scenario.conn, "PROJ-1")["last_ci_run_id"] == "run-1"
+    assert unit_of(scenario.conn, "PROJ-1").last_ci_run_id == "run-1"
 
 
 def test_status_shows_a_resumes_reasons_beside_its_kind(scenario: Scenario, git_pool: GitPool) -> None:

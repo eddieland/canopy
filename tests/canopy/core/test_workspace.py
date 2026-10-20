@@ -258,8 +258,8 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
 
     run = ws_scenario.run(dispatches(repo="api", slug="login"), worker=pushes("agent/PROJ-1-login"))
     [slot] = db.run_slots(conn, run.id)
-    assert (slot["repo"], run.branch) == ("api", "agent/PROJ-1-login")
-    assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    assert (slot.repo, run.branch) == ("api", "agent/PROJ-1-login")
+    assert Path(slot.slot_path) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
     state = json.loads(treehouse_state.read_text())
     [(lease, where)] = [(c, x) for c, x in zip(state["calls"], state["contexts"], strict=True) if c[0] == "get"]
     assert lease == [
@@ -273,7 +273,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     ]
     assert where == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
     assert decisions(conn, int(run.row["tick_id"])) == [
-        ("dispatch:implement", f"run {run.id}: agent/PROJ-1-login in api at {slot['slot_path']}; label {LABEL}")
+        ("dispatch:implement", f"run {run.id}: agent/PROJ-1-login in api at {slot.slot_path}; label {LABEL}")
     ]
 
     # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
@@ -297,8 +297,8 @@ def test_two_tickets_in_two_repositories_end_to_end(
     for run, slot in zip(ticked.runs, slots, strict=True):
         assert run.status == "done", Path(run.row["log_path"]).read_text()
         # Every worktree is under the workspace root.
-        assert Path(slot["slot_path"]).is_relative_to(ws.root / ".treehouse")
-    assert [s["repo"] for s in slots] == ["api", "web"]
+        assert Path(slot.slot_path).is_relative_to(ws.root / ".treehouse")
+    assert [s.repo for s in slots] == ["api", "web"]
     assert ws.remote_head("api", "agent/PROJ-1-work") is not None
     assert ws.remote_head("web", "agent/PROJ-2-work") is not None
     assert ws.remote_head("web", "agent/PROJ-1-work") is None
@@ -307,7 +307,7 @@ def test_two_tickets_in_two_repositories_end_to_end(
     # The tick's overseer ran first, in the workspace root; each worker in its run's slot, though the order the two
     # workers started in is theirs.
     workers = [w for w in agent_runs(agent_log) if w["argv"][:3] == ["run", "--agent", "canopy-worker"]]
-    assert sorted(w["cwd"] for w in workers) == sorted(s["slot_path"] for s in slots)
+    assert sorted(w["cwd"] for w in workers) == sorted(s.slot_path for s in slots)
 
 
 def test_reconcile_returns_leases_in_each_pool(ws_scenario: Scenario, ws: Ws, treehouse_state: Path) -> None:
@@ -332,7 +332,7 @@ def test_reconcile_returns_leases_in_each_pool(ws_scenario: Scenario, ws: Ws, tr
     assert [s["status"] for p in state["pools"].values() for s in p["slots"]] == ["available", "available"]
     returns = [(c, x) for c, x in zip(state["calls"], state["contexts"], strict=True) if c[0] == "return"]
     assert [(c[-1], x["cwd"]) for c, x in returns] == [
-        (db.run_slots(conn, 1)[0]["slot_path"], str(ws.clone("api"))),
+        (db.run_slots(conn, 1)[0].slot_path, str(ws.clone("api"))),
         (str(ws.root / ".treehouse" / "web-fake" / "1" / "web"), str(ws.clone("web"))),
     ]
 

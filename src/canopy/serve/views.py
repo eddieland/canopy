@@ -425,7 +425,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         return None
     root = ctx.workspace.root
     held = db.all_run_slots(ctx.conn, [run_id] if row["status"] == "running" else []).get(run_id, [])
-    return run(row, root, [shown_path(str(s["slot_path"]), root) for s in held])
+    return run(row, root, [shown_path(str(s.slot_path), root) for s in held])
 
 
 def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
@@ -537,7 +537,7 @@ def runs(ctx: Context) -> list[Run]:
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
     return [
-        *(run(r, root, [shown_path(str(s["slot_path"]), root) for s in slots[int(r["id"])]]) for r in running),
+        *(run(r, root, [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]]) for r in running),
         *(run(r, root) for r in db.recent_runs(ctx.conn, RECENT_RUNS)),
     ]
 
@@ -724,7 +724,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         active_at=db.parse_time(str(row["active_at"])),
         latest_message_id=db.latest_message_of(conn, conversation.TICKET, key),
         awaiting=waiting.id if waiting is not None else None,
-        running_run=int(running["id"]) if running is not None else None,
+        running_run=running.id if running is not None else None,
         plan_waits=ticket is not None and plans.waits(conn, ticket),
     )
 
@@ -741,9 +741,9 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
     [row] = rows
     units = [
         Unit(
-            repo=str(u["repo"]) if u["repo"] else None,
-            pr_url=str(u["pr_url"]) if u["pr_url"] else None,
-            phase=str(u["phase"]) if u["phase"] else None,
+            repo=str(u.repo) if u.repo else None,
+            pr_url=str(u.pr_url) if u.pr_url else None,
+            phase=str(u.phase) if u.phase else None,
         )
         for u in db.units(ctx.conn, key)
     ]
@@ -811,33 +811,31 @@ def limit(found: served.Limit, *, repo: str | None = None) -> Limit:
     )
 
 
-def message(row: sqlite3.Row) -> Message:
+def message(row: records.Message) -> Message:
     """One message, its body without control characters.
 
     Returns:
         The message as the API sends it, with the tracker comment it came from, if any. A source or kind the schema
         does not know reads as a tracker comment.
     """
-    source = str(row["source"])
-    kind = str(row["kind"])
     comment = None
-    if row["comment_id"] is not None:
+    if row.comment_id is not None:
         comment = Comment(
-            id=str(row["comment_id"]),
-            author=str(row["author"]),
-            at=str(row["commented_at"]),
-            truncated=bool(row["truncated"]),
+            id=row.comment_id,
+            author=str(row.author),
+            at=str(row.commented_at),
+            truncated=row.truncated,
         )
     return Message(
-        id=int(row["id"]),
-        at=db.parse_time(str(row["at"])),
+        id=row.id,
+        at=db.parse_time(row.at),
         # Anything the schema does not know is shown as the least trusted: a tracker comment.
-        source=_SOURCES.get(source, "tracker"),
-        kind=_KINDS.get(kind, "comment"),
-        channel=str(row["channel"]),
-        run_id=int(row["run_id"]) if row["run_id"] is not None else None,
-        answers=int(row["answers"]) if row["answers"] is not None else None,
-        body=conversation.printable(str(row["body"])),
+        source=_SOURCES.get(row.source, "tracker"),
+        kind=_KINDS.get(row.kind, "comment"),
+        channel=row.channel,
+        run_id=row.run_id,
+        answers=row.answers,
+        body=conversation.printable(row.body),
         comment=comment,
     )
 

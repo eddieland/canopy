@@ -40,8 +40,6 @@ from canopy.reviews import grants
 from canopy.runs import halt, policy
 
 if TYPE_CHECKING:
-    import sqlite3
-
     from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
@@ -204,8 +202,8 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, notes: str | 
         )
     if started.running is not None:
         run = started.running
-        kind = "private" if run["private"] else "public, dispatched before this start, so it may write to the ticket"
-        click.echo(f"Run {run['id']} ({run['kind']}, {kind}) is still working it.")
+        kind = "private" if run.private else "public, dispatched before this start, so it may write to the ticket"
+        click.echo(f"Run {run.id} ({run.kind}, {kind}) is still working it.")
     else:
         click.echo("The next tick picks it up. Follow it with `canopy show`; answer questions with `canopy reply`.")
     return 0
@@ -258,12 +256,12 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
     if run is None:
         return 0
     if not now:
-        click.echo(f"Run {run['id']} ({run['kind']}) is still working it and will finish; --now ends it.")
+        click.echo(f"Run {run.id} ({run.kind}) is still working it and will finish; --now ends it.")
         return 0
     if halt.end(ctx, run, log):
-        click.echo(f"Run {run['id']} ({run['kind']}) was ended and its slots returned.")
+        click.echo(f"Run {run.id} ({run.kind}) was ended and its slots returned.")
     else:
-        click.echo(f"Run {run['id']} ({run['kind']}) had already ended.")
+        click.echo(f"Run {run.id} ({run.kind}) had already ended.")
     return 0
 
 
@@ -592,7 +590,7 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
         if ticket.forgotten_at:
             click.echo("  the runs and messages before the latest forget are history: the loop reads only later ones")
         for unit in db.units(ctx.conn, key):
-            click.echo(f"  {unit['repo']}  PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
+            click.echo(f"  {unit.repo}  PR {unit.pr_url or 'none recorded'}  phase {unit.phase or 'unknown'}")
         _show_plans(ctx, ticket, every=every_plan)
     _show_runs(ctx, key)
     _show_conversation(ctx, key, record)
@@ -701,26 +699,26 @@ def _show_conversation(ctx: Context, key: str, record: records.Start | None) -> 
         click.echo(f"\nMessage {waiting.id} waits on your answer: canopy reply {key} 'your answer'")
 
 
-def _echo_message(m: sqlite3.Row) -> None:
+def _echo_message(m: records.Message) -> None:
     click.echo(_message_head(m))
-    for line in conversation.printable(str(m["body"])).splitlines():
+    for line in conversation.printable(m.body).splitlines():
         click.echo(f"    {line}")
 
 
-def _message_head(m: sqlite3.Row) -> str:
-    who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(str(m["source"]), str(m["source"]))
-    if m["comment_id"] is not None:
+def _message_head(m: records.Message) -> str:
+    who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(m.source, m.source)
+    if m.comment_id is not None:
         # A tracker comment the overseer mirrored: a copy, which authorizes nothing (DESIGN §22).
-        cut = ", truncated" if m["truncated"] else ""
+        cut = ", truncated" if m.truncated else ""
         return (
-            f"  #{m['id']}  {attention.age(str(m['at']))} ago  {who} comment {m['comment_id']} by {m['author']}, "
-            f"written {m['commented_at']}{cut}"
+            f"  #{m.id}  {attention.age(m.at)} ago  {who} comment {m.comment_id} by {m.author}, "
+            f"written {m.commented_at}{cut}"
         )
-    about = f" (run:{m['run_id']})" if m["run_id"] else ""
-    if m["answers"]:
-        about += f" answering {m['answers']}"
-    via = f" via {m['channel']}" if m["source"] == "operator" else ""
-    return f"  #{m['id']}  {attention.age(str(m['at']))} ago  {who} {m['kind']}{about}{via}"
+    about = f" (run:{m.run_id})" if m.run_id else ""
+    if m.answers:
+        about += f" answering {m.answers}"
+    via = f" via {m.channel}" if m.source == "operator" else ""
+    return f"  #{m.id}  {attention.age(m.at)} ago  {who} {m.kind}{about}{via}"
 
 
 def _show_run(ctx: Context, run_id: int) -> None:
@@ -735,7 +733,7 @@ def _show_run(ctx: Context, run_id: int) -> None:
     if run["branch"]:
         click.echo(f"  branch {run['branch']}")
     for s in db.run_slots(ctx.conn, run_id):
-        click.echo(f"  {s['repo']}  slot {s['slot_path']}, from {s['base_branch']}")
+        click.echo(f"  {s.repo}  slot {s.slot_path}, from {s.base_branch}")
     result = result_of(run)
     for pr in prs_of(result):
         click.echo(f"  PR {pr}")

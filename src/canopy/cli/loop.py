@@ -215,7 +215,7 @@ def _print_workers(ctx: Context) -> None:
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories.
-        where = ", ".join(f"{s['repo']} {s['slot_path']}" for s in slots[int(r["id"])])
+        where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
         )

@@ -369,7 +369,7 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
 def test_the_review_phases_are_a_units(reviewing: CanopyEnv, scenario: Scenario, phase: str) -> None:
     scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", phase)
     [unit] = db.units(scenario.conn, "PROJ-1")
-    assert unit["phase"] == phase
+    assert unit.phase == phase
 
 
 def test_a_commit_origin_does_not_have_fails_the_review(
