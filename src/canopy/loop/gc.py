@@ -98,6 +98,7 @@ def measure(ctx: Context, now: datetime) -> Report:
         _log_files(ctx.state_dir, retention),
         *_attention(ctx.conn, now, retention),
         _connector_runs(ctx.conn, now, retention),
+        _derivations(ctx.conn, now, retention),
         *_journal_space(ctx.conn, journal),
         *_git_objects(ctx, notes),
         _sandbox_caches(),
@@ -400,6 +401,46 @@ def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retentio
         int(row["rb"] or 0),
         f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks, newest kept",
     )
+
+
+def _derivations(conn: sqlite3.Connection, now: datetime, retention: Retention) -> Kind:
+    """What each tick derived in shadow (DESIGN §30), which a pass removes as it does the harness's attention rows.
+
+    A tick's go once it is outside the attention list's window and started before `journal_days`: the measurement in
+    `MEASUREMENTS.md` outlives them.
+
+    Returns:
+        The kind.
+    """
+    cutoff = _cutoff(now, retention.journal_days)
+    window = _window(conn)
+    rows = (
+        sql.select("{} AS bytes, d.tick_id < ? AND t.started_at < ? AS removable", _DERIVED_BYTES, window, cutoff)
+        .from_("derivations d")
+        .join("ticks t ON t.id = d.tick_id")
+    )
+    row = sql.execute(
+        conn,
+        sql.select(
+            "count(*) AS n, sum(bytes) AS b, sum(removable) AS rn, sum(CASE WHEN removable THEN bytes END) AS rb"
+        ).from_("({})", rows),
+    ).fetchone()
+    return Kind(
+        "derivations",
+        "rows",
+        int(row["n"]),
+        int(row["b"] or 0),
+        int(row["rn"] or 0),
+        int(row["rb"] or 0),
+        f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks",
+    )
+
+
+# The bytes of a derivation's row: what it holds, not the pages it fills.
+_DERIVED_BYTES = sql.frag(
+    "length(CAST(d.ticket_key AS BLOB)) + coalesce(length(CAST(d.repo AS BLOB)), 0) + length(CAST(d.phases AS BLOB)) + "
+    "coalesce(length(CAST(d.stale AS BLOB)), 0) + coalesce(length(CAST(d.overseer_phase AS BLOB)), 0)"
+)
 
 
 def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:

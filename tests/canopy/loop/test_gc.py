@@ -223,6 +223,25 @@ def test_a_polls_connector_run_is_outside_the_window_once_it_started_before_the_
     assert (kinds["connector runs"]["count"], kinds["connector runs"]["removable"]) == (2, 1)
 
 
+def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    conn = canopy_env.journal()
+    now = datetime.now(UTC)
+    for started in (earlier(now, 200), earlier(now, 200), db.now()):
+        conn.execute(
+            "INSERT INTO derivations (tick_id, ticket_key, repo, candidate, closed, phases) "
+            "VALUES (?, ?, NULL, 1, 0, ?)",
+            (tick(conn, started), KEY, '["ready"]'),
+        )
+    conn.commit()
+    assert dry_run(capsys)["derivations"]["removable"] == 0, "nothing goes while the window holds every tick"
+    with mock.patch.object(attention, "HISTORY_TICKS", 1):
+        kinds = dry_run(capsys)
+    # The newest tick is inside the window; both older ones are past journal_days.
+    assert (kinds["derivations"]["count"], kinds["derivations"]["removable"]) == (3, 2)
+
+
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
 def test_an_agent_cannot_run_gc(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], env: str) -> None:
     with mock.patch.dict(os.environ, {env: "3"}):

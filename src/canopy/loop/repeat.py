@@ -52,7 +52,7 @@ from rich.text import Text
 
 from canopy.core import config, db, notice, pause
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import attention, duties, pacing, poll, reread, tick, tick_now
+from canopy.loop import attention, duties, pacing, phases, poll, reread, tick, tick_now
 
 if TYPE_CHECKING:
     import sqlite3
@@ -443,13 +443,20 @@ def _ticks(
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
         wait = None if last or stop.requested else _wait_after(ctx, pace, idle_count)
-        if wait is not None:
-            logs.for_tick(outcome.tick_id).info(
-                "loop waits",
-                extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait), "churn": churn},
-            )
+        # The derivation in shadow, against what the overseer did (DESIGN §30): measured, never acted on.
+        derived = phases.tally(ctx.conn, outcome.tick_id) if outcome.tick_id is not None else Counter[phases.Verdict]()
+        _log_wait(outcome, wait, idle=idle, idle_count=idle_count, churn=churn, derived=derived)
         # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
-        _report(console, ctx, outcome, before.attention, elapsed=ended - started, wait=wait, idle_count=idle_count)
+        _report(
+            console,
+            ctx,
+            outcome,
+            before.attention,
+            elapsed=ended - started,
+            wait=wait,
+            idle_count=idle_count,
+            derived=derived,
+        )
         if wait is None:
             break
         # The operator's starts, stops, and grants after the tick read the journal wake the wait, or after it began if
@@ -479,6 +486,31 @@ def _ticks(
         )
         _log_woken(log, woken, seen=seen, since=since, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
+
+
+def _log_wait(
+    outcome: tick.Outcome,
+    wait: float | None,
+    *,
+    idle: bool,
+    idle_count: int,
+    churn: Sequence[str],
+    derived: Counter[phases.Verdict],
+) -> None:
+    """Log the `loop waits` line for the wait after a tick, with the tickets the derivation disagreed on."""
+    if wait is None:
+        return
+    logs.for_tick(outcome.tick_id).info(
+        "loop waits",
+        extra={
+            "idle": idle,
+            "idle_count": idle_count,
+            "wait_seconds": round(wait),
+            "churn": churn,
+            "disagreements": derived["disagrees"],
+            "derived_stale": derived["stale"],
+        },
+    )
 
 
 def _wait_after(ctx: Context, pace: pacing.Pace, idle_count: int) -> float:
@@ -831,8 +863,12 @@ def _report(
     elapsed: float,
     wait: float | None,
     idle_count: int = 0,
+    derived: Counter[phases.Verdict] | None = None,
 ) -> None:
-    """Print what one tick did: its status, the decisions that change something, and how the attention list moved."""
+    """Print what one tick did: its status, the decisions that change something, and how the attention list moved.
+
+    `derived` counts the tick's tickets by how the derivation compared with the overseer (DESIGN §30).
+    """
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
     console.print(
         Text.assemble(
@@ -872,6 +908,8 @@ def _report(
     footer.append(f"attention {len(after)}", style="bold yellow" if after else "dim")
     if outcome.usage is not None:
         footer.append(f"  ·  cost {outcome.usage.describe()}")
+    if derived:
+        footer.append(f"  ·  {phases.describe(derived)}", style="yellow" if derived["disagrees"] else "")
     if wait is not None and pause.paused(ctx.conn) is not None:
         footer.append("  ·  paused: no tick until resumed", style="yellow")
     elif wait is not None:

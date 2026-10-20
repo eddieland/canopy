@@ -88,6 +88,7 @@ def load_both(root: Path, user_file: Path) -> None:
         ),
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "http://x.test/a/tree/{branch}"\n', "plain https://"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/{repo}/tree/{branch}"\n', "braces"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = [""]\n', "repos.api.human_checks"),
         ("[desks]\nx = 1\n", "unknown key desks.x"),
     ],
 )
