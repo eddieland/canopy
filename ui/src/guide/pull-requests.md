@@ -9,8 +9,10 @@ a PR, so this is the only place, besides `canopy review show`, you'll read them.
 review, most recent activity first. Each row shows where the PR stands (a run working it, or its latest review's
 verdict), the PR as `org/repo#123`, its phase, its ticket and title, and how long since anything happened. A PR canopy
 only reviews has no ticket, so it shows `none` there; hover it for why. The name opens canopy's page for the PR; the
-small icon beside it opens the PR itself. The PR column is only as wide as the longest name in the list, and in a
-narrow window the phase goes first, then the age, so the title keeps the room.
+small icon beside it opens the PR itself. A link into a PR, say to one review thread, gets the same name wherever
+an agent's text mentions it: the name still opens the PR's page, and the icon takes you to that exact thread. The PR
+column is only as wide as the longest name in the list, and in a narrow window the phase goes first, then the age, so
+the title keeps the room.
 
 The title is the PR's own, as the worker that opened it or canopy's last review of it read it, so it says what the PR
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
@@ -121,8 +123,9 @@ one: the reviewer is wrong often enough that you'll want to read a few before it
 ## Asking for a review
 
 To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the
-[reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. The next tick reviews the
-PR once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
+[reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. A link to one of its
+threads or its files tab works too: the page trims it back to the PR, so you needn't. The next tick reviews the PR
+once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
 Until then it's a `requested` row at the head of the reviews list, so you can see it landed, and it waits on the
 [pull requests page](#the-pull-requests-page) wearing `requested` too. The PR's page shows the open request, with
 **Stop** to withdraw it.

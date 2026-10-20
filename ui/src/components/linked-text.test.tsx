@@ -49,6 +49,15 @@ describe('LinkedText', () => {
         expect(out.getAttribute('rel')).toBe('noreferrer noopener')
     })
 
+    it('names a link into a PR, such as a thread, as the PR, in to its page and out to the thread', async () => {
+        const thread = `${PR}/files#r123`
+        await renderRouted(<LinkedText text={`See ${thread}.`} pullRequests />)
+        const name = screen.getByRole('link', { name: 'acme/web#88' })
+        expect(name.getAttribute('href')).toBe(`/pull-requests/pr?url=${encodeURIComponent(PR)}`)
+        expect(name.getAttribute('title')).toBe(thread)
+        expect(screen.getByRole('link', { name: 'acme/web#88 on GitHub' }).getAttribute('href')).toBe(thread)
+    })
+
     it("leaves a PR's address as written without being asked", () => {
         render(<LinkedText text={`Opened ${PR}.`} />)
         expect(screen.getByRole('link').textContent).toBe(PR)

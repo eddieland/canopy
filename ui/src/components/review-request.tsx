@@ -9,6 +9,7 @@ import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
+import { pullRequestUrl } from '@/lib/pull-request-label'
 import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
@@ -25,10 +26,12 @@ export function ReviewRequestForm({ className }: { className?: string }) {
     const [url, setUrl] = useState('')
     const [notes, setNotes] = useState('')
     const [said, setSaid] = useState<string | null>(null)
+    // A link into a GitHub PR, such as one of its threads, names the PR: the server takes only its own address.
+    const target = pullRequestUrl(url.trim()) ?? url.trim()
     const request = useMutation({
-        mutationFn: () => requestReview(url.trim(), notes.trim()),
+        mutationFn: () => requestReview(target, notes.trim()),
         onSuccess: (requested) => {
-            setSaid(reviewRequestedText(url.trim(), requested, notes.trim() !== ''))
+            setSaid(reviewRequestedText(target, requested, notes.trim() !== ''))
             setUrl('')
             setNotes('')
             void refreshReviewRequests(client)

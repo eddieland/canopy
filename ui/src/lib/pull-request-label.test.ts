@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest'
 
-import { pullRequestLabel } from './pull-request-label'
+import { isPullRequest, pullRequestLabel, pullRequestUrl } from './pull-request-label'
+
+// Links into a PR that GitHub writes: a tab, a thread, a review, a comment, a query.
+const INTO = [
+    'https://github.com/acme/web/pull/88/files',
+    'https://github.com/acme/web/pull/88/files#r123',
+    'https://github.com/acme/web/pull/88#discussion_r123',
+    'https://github.com/acme/web/pull/88#pullrequestreview-456',
+    'https://github.com/acme/web/pull/88/commits/abc123',
+    'https://github.com/acme/web/pull/88?notification_referrer_id=x',
+]
+
+// Addresses that are not a GitHub PR's.
+const NOT = [
+    'https://git.example/acme/web/pull/88',
+    'https://github.com/acme/web/issues/88',
+    'https://github.com/acme/web/pull/88abc',
+    'https://github.com/acme/web/pull/',
+    'http://github.com/acme/web/pull/88',
+]
 
 describe('pullRequestLabel', () => {
     it('names a GitHub PR as GitHub writes a reference', () => {
@@ -8,10 +27,37 @@ describe('pullRequestLabel', () => {
         expect(pullRequestLabel('https://github.com/acme/web/pull/88/')).toBe('acme/web#88')
     })
 
+    it('names a link into a GitHub PR, such as a thread, as the PR', () => {
+        for (const url of INTO) {
+            expect(pullRequestLabel(url)).toBe('acme/web#88')
+        }
+    })
+
     it('keeps any other address as written, without https://', () => {
         expect(pullRequestLabel('https://git.example/acme/web/pull/88')).toBe('git.example/acme/web/pull/88')
-        expect(pullRequestLabel('https://github.com/acme/web/pull/88/files')).toBe('github.com/acme/web/pull/88/files')
         expect(pullRequestLabel('https://github.com/acme/web/issues/88')).toBe('github.com/acme/web/issues/88')
-        expect(pullRequestLabel('https://github.com/acme/web/pull/88?x=1')).toBe('github.com/acme/web/pull/88?x=1')
+        expect(pullRequestLabel('https://github.com/acme/web/pull/88abc')).toBe('github.com/acme/web/pull/88abc')
+    })
+})
+
+describe('isPullRequest', () => {
+    it("is a GitHub PR's address or a link into one, and nothing else", () => {
+        expect(isPullRequest('https://github.com/acme/web/pull/88')).toBe(true)
+        expect(INTO.filter((url) => !isPullRequest(url))).toEqual([])
+        expect(NOT.filter((url) => isPullRequest(url))).toEqual([])
+    })
+})
+
+describe('pullRequestUrl', () => {
+    it("is the PR's own address, from it or any link into it, and null for any other", () => {
+        const pr = 'https://github.com/acme/web/pull/88'
+        expect(pullRequestUrl(pr)).toBe(pr)
+        expect(pullRequestUrl(`${pr}/`)).toBe(pr)
+        for (const url of INTO) {
+            expect(pullRequestUrl(url)).toBe(pr)
+        }
+        for (const url of NOT) {
+            expect(pullRequestUrl(url)).toBeNull()
+        }
     })
 })

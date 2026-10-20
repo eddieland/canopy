@@ -1,6 +1,6 @@
 import type { AttentionItem } from '@/api/types'
 import { splitLinks } from '@/lib/links'
-import { isPullRequest } from '@/lib/pull-request-label'
+import { pullRequestUrl } from '@/lib/pull-request-label'
 import { codeSpans } from '@/lib/rich-text'
 
 /** How urgent an attention item is: the order the attention list shows it in, and its chip's color (DESIGN.md). */
@@ -171,13 +171,18 @@ export function commandOf(item: AttentionItem): string | null {
     return command?.text ?? null
 }
 
-/** The first PR an item's detail names, as `needs_reviewer`'s does: its URL, or null when it names none. */
+/**
+ * The first PR an item's detail names, as `needs_reviewer`'s does: its own URL, even where the detail links into it, or
+ * null when it names none.
+ */
 export function pullRequestOf(item: AttentionItem): string | null {
     for (const piece of codeSpans(item.detail)) {
         if (piece.kind === 'text') {
-            const found = splitLinks(piece.text).find((part) => part.href !== undefined && isPullRequest(part.href))
-            if (found?.href !== undefined) {
-                return found.href
+            for (const part of splitLinks(piece.text)) {
+                const url = part.href === undefined ? null : pullRequestUrl(part.href)
+                if (url !== null) {
+                    return url
+                }
             }
         }
     }
