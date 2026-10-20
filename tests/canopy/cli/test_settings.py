@@ -3,12 +3,13 @@
 import json
 import os
 import shlex
+from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation
+from canopy.core import config, conversation, definitions
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (
@@ -26,6 +27,7 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
             "runtime": {
                 "plan_cmd": PLAN_CMD,
                 "worker_cmd_prefix": "wrap --net off",
+                "worker_cmd_suffix": "--log-level DEBUG",
                 "setup_cmd": "make setup",
             },
             "chores": {"build-health": {"prompt": "~/b.md", "every_minutes": 60, "cmd": "mytool --ask {prompt}"}},
@@ -48,6 +50,7 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
     assert planner["keys"] == [
         {"key": "runtime.worker_cmd_prefix", "set_in": "private"},
         {"key": "runtime.plan_cmd", "set_in": "private"},
+        {"key": "runtime.worker_cmd_suffix", "set_in": "private"},
     ]
     # The quoted model stays one word, and the title, the definitions, and the prompt land where the template put them.
     assert planner["argv"] == [
@@ -64,7 +67,16 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
         "some model",
         "--title=PROJ-1 plan: Example ticket",
         "<prompt>",
+        "--log-level",
+        "DEBUG",
     ]
+    # The definitions are the workspace's own snapshot, the one a run would start with.
+    definitions_dir = Path(data["definitions_dir"])
+    assert definitions_dir.parent == canopy_env.root / config.WORKSPACE_STATE_DIR / definitions.RUNTIME_DIR
+    assert definitions_dir.is_dir()
+    for role in ("worker", "private worker"):
+        argv = found[role]["argv"]
+        assert (argv[:3], argv[-3:]) == (["wrap", "--net", "off"], ["<prompt>", "--log-level", "DEBUG"]), role
     overseer = found["overseer"]
     assert overseer["keys"] == [{"key": "runtime.overseer_cmd", "set_in": "user"}]
     assert f"OPENCODE_CONFIG_DIR={data['definitions_dir']}" in overseer["argv"]
@@ -80,6 +92,7 @@ def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys:
     assert main(["config", "commands"]) == 0
     out = capsys.readouterr().out
     [definitions_dir] = {w.partition("=")[2] for w in shlex.split(out) if w.startswith("OPENCODE_CONFIG_DIR=")}
+    assert Path(definitions_dir).parent == canopy_env.root / config.WORKSPACE_STATE_DIR / definitions.RUNTIME_DIR
     assert "\nplanner: runtime.plan_cmd (private file)\n" in out
     assert "\noverseer: runtime.overseer_cmd (user file)\n" in out
     assert "\nreviewer: runtime.review_cmd (default)\n" in out
@@ -104,3 +117,10 @@ def test_it_is_refused_inside_a_tick(canopy_env: CanopyEnv, capsys: pytest.Captu
     captured = capsys.readouterr()
     assert "config commands refused (inside_run)" in captured.err
     assert "s3cret" not in captured.out + captured.err
+
+
+@pytest.mark.usefixtures("canopy_env")
+def test_a_snapshot_it_cannot_write_is_an_error_not_a_traceback(capsys: pytest.CaptureFixture[str]) -> None:
+    with mock.patch.object(definitions, "ensure", autospec=True, side_effect=PermissionError("read-only state")):
+        assert main(["config", "commands"]) == 1
+    assert "config commands: read-only state" in capsys.readouterr().err
