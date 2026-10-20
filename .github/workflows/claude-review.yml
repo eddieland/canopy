@@ -1,11 +1,12 @@
 name: Claude Review
 
 # Claude Code reviews each pull request when it opens, reopens, or leaves draft, and leaves inline comments and a
-# summary. It authenticates with the operator's Claude subscription: the CLAUDE_CODE_OAUTH_TOKEN repository secret,
-# made by running `claude setup-token` locally. It does not re-review on every push, which would spend the
-# subscription's usage on each fix commit; close and reopen the PR, or mark it draft and ready again, for another pass.
-# A push reviews only a PR that has no finished review yet. GitHub runs no pull_request workflow while the PR has a
-# merge conflict, so a PR that leaves draft conflicted gets its review from the push that resolves the conflict.
+# summary. Each push after that gets a follow-up review: Claude reads its earlier comments, says which findings the new
+# commits fixed, and comments only on what is new, so a fix commit does not repeat the first review. A push that lands
+# while a review runs cancels it, and the next review covers both. It authenticates with the operator's Claude
+# subscription: the CLAUDE_CODE_OAUTH_TOKEN repository secret, made by running `claude setup-token` locally; every
+# review spends its usage, so mark a PR draft while pushing a series of fixes, and ready again for one pass over them.
+# GitHub runs no pull_request workflow while the PR has a merge conflict, so the push that resolves one is reviewed.
 # It reads AGENTS.md (through CLAUDE.md) on its own; the action restores .claude/ and CLAUDE.md from the base branch,
 # so a PR cannot add hooks or settings to the run. AGENTS.md is not restored: CLAUDE.md imports it from the checkout, so
 # a PR that edits it changes what the reviewer is told, and the prompt has it flag that. The action also skips any PR
@@ -23,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gate:
+  review:
     # A fork's pull request gets no secrets, so it would only fail. Nor does Dependabot's: it gets only Dependabot
     # secrets, and a version bump is not worth the subscription's usage.
     if: >-
@@ -32,36 +33,6 @@ jobs:
         && github.event.pull_request.head.repo.full_name == github.repository
         && github.event.pull_request.user.login != 'dependabot[bot]'
       }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      pull-requests: read
-    outputs:
-      review: ${{ steps.decide.outputs.review }}
-    steps:
-      - name: Decide whether to review
-        id: decide
-        # A finished review leaves the action's tracking comment, which starts "**Claude finished". One that failed or
-        # was cancelled does not, so the next push tries again.
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTION: ${{ github.event.action }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-        run: |
-          review=true
-          if [ "$ACTION" = synchronize ]; then
-            finished=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq \
-              '.[] | select(.user.login == "claude[bot]" and (.body | startswith("**Claude finished"))) | .id')
-            if [ -n "$finished" ]; then
-              review=false
-            fi
-          fi
-          echo "review=$review" >> "$GITHUB_OUTPUT"
-
-  review:
-    needs: gate
-    if: ${{ needs.gate.outputs.review == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -73,6 +44,8 @@ jobs:
       # Strip the OAuth token and other secrets from the environment of every command Claude runs, so text in the PR
       # cannot get it to echo one into a comment. The action turns this on only for non-write users unless asked.
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+      # The API path of this PR's inline comments, which a follow-up review reads; named here to fit its lines below.
+      INLINE_COMMENTS: repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,8 +102,19 @@ jobs:
             Skip what ruff, pyrefly, rumdl, and the tests already enforce. Comment inline on specific lines, only
             where something is wrong or risky, and say why. Finish with one short top-level comment summarizing the
             review; if there is nothing to fix, say so in a line.
+
+            You may have reviewed this pull request before: look for comments by claude[bot] in
+            `gh pr view ${{ github.event.pull_request.number }} --comments` and, inline, in
+            `gh api --paginate ${{ env.INLINE_COMMENTS }}` (run each exactly as written, with no pipe or filter).
+            If you have, this is a follow-up review of the head ${{ github.event.pull_request.head.sha }}. Find the
+            commits pushed since your latest summary with
+            `gh pr view ${{ github.event.pull_request.number }} --json commits`, and read them closely, still
+            judging the change as a whole. Do not post a finding again that an earlier comment of yours already
+            made: name it in the summary instead, as fixed by the new commits or still open. Comment inline only on
+            what is new, and begin the summary by saying it is a follow-up.
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment"
             --allowedTools "Bash(gh pr comment ${{ github.event.pull_request.number }}:*)"
             --allowedTools "Bash(gh pr diff ${{ github.event.pull_request.number }}:*)"
             --allowedTools "Bash(gh pr view ${{ github.event.pull_request.number }}:*)"
+            --allowedTools "Bash(gh api --paginate ${{ env.INLINE_COMMENTS }})"
