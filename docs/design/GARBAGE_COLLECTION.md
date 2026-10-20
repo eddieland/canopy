@@ -33,9 +33,9 @@ third column says, and §6, §11, §12, §18, and §22 describe canopy as it is;
 
 - A record a guard counts: runs, their slots, review runs, attempt and review grants, and dismissals. Limits count
   over all time, and a guard that history can reset is not a guard (D030, D086).
-- Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, and the overseer's own
-  decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22); plan files, the operator's to remove
-  (§25).
+- Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, the web UI's record of
+  its writes, and the overseer's own decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22); plan
+  files, the operator's to remove (§25).
 - Anything a live run uses, or a run's lifelock holds; remote branches, which `canopy gc` lists and deletes none of,
   since deleting one is outward-facing and may lose work (§22); and what is not canopy's: a chore's working
   directory (§19), ignored files in a pool slot (§18), the runtime's own data.

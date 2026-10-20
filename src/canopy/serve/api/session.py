@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from canopy.infra import logs
 from canopy.serve.api.deps import SessionsDep
-from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
+from canopy.serve.auth import AUTHORIZED, FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import ErrorResponse, Session, SignIn
 
 TAG = "session"
@@ -33,7 +33,7 @@ def session(request: Request, sessions: SessionsDep) -> Session:
     summary="Sign in",
     responses={401: {"model": ErrorResponse, "description": "Not the listener secret."}},
 )
-async def sign_in(body: SignIn, response: Response, sessions: SessionsDep) -> Session:
+async def sign_in(body: SignIn, request: Request, response: Response, sessions: SessionsDep) -> Session:
     """Sign in with the listener secret: a right one sets the session cookie for 30 days, and returns its token.
 
     A wrong one is answered after a second; guesses sent at once are not slowed, so the secret must be random.
@@ -43,6 +43,7 @@ async def sign_in(body: SignIn, response: Response, sessions: SessionsDep) -> Se
         await asyncio.sleep(FAILED_SIGN_IN_SECONDS)
         raise HTTPException(status_code=401, detail="that is not the listener secret")
     if sessions.open:
+        setattr(request.state, AUTHORIZED, None)
         return Session(signed_in=True, token=OPEN_TOKEN)
     value = sessions.issue()
     response.set_cookie(
@@ -54,6 +55,7 @@ async def sign_in(body: SignIn, response: Response, sessions: SessionsDep) -> Se
         samesite="strict",
     )
     signed = sessions.check(value)
+    setattr(request.state, AUTHORIZED, signed)
     _log.info("web UI signed in")
     return Session(signed_in=True, token=sessions.token(signed) if signed is not None else None)
 
