@@ -17,6 +17,10 @@ you do that the loop should hear about ends the wait early: a reply, a start or 
 So does a run ending, a cooldown running out, or a chore coming due. Even then it waits at least
 `loop.min_gap_minutes` after the last tick ends, one minute by default. **Tick now** in the header skips even that.
 
+While it waits, the loop also polls: every `connect.every_minutes`, two by default, it runs the connectors that read
+your tracker and GitHub into canopy's own record. A poll runs no overseer, so it keeps that record fresh however long
+you set the wait between ticks. For now nothing acts on what a poll reads, and a poll never starts a tick early.
+
 ## Runs
 
 A run is a worker agent doing one piece of work on one ticket. The overseer starts it; the run leases a worktree from

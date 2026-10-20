@@ -23,7 +23,18 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_view, contract, conversation, db, follow_ups, memory, plans, review_result, sql
+from canopy.core import (
+    chore_view,
+    connector_runs,
+    contract,
+    conversation,
+    db,
+    follow_ups,
+    memory,
+    plans,
+    review_result,
+    sql,
+)
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs
@@ -83,6 +94,7 @@ HARNESS_REASONS = frozenset(
         chore_view.FAILED_REASON,
         "repo_missing",
         *HALTS,
+        connector_runs.FAILED_REASON,
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
         follow_ups.REASON,

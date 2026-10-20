@@ -4,14 +4,19 @@
 Run under either name (the two are links to this file); each speaks the real program's contract on stdin and stdout,
 from a state file that stands in for GitHub. Configured through the environment:
 
-    FAKE_GITHUB_STATE   the state file, JSON. Missing, GitHub holds nothing: the reader reads no PR whole.
+    FAKE_GITHUB_STATE   the state file, JSON. Missing, GitHub holds every PR asked, open, with nothing on it.
     FAKE_GITHUB_LOG     if set, one JSON line {"program": "connect"|"post", "request": {...}} is appended per run.
 
 State keys, each optional:
 
-    prs         {URL: {"pr": {...}, "reviews": [...]}}: each PR's `pr` line fields and its `review` lines, without
-                `kind` and `pr`, which the reader adds. A `pr` line's fields default from the URL.
-    unread      [URL]: PRs the reader cannot read whole, which it leaves off its `end` line.
+    prs         {URL: {"pr": {...}, "reviews": [...], "checks": [...]}}: each PR's `pr` line fields and its `review`
+                and `check` lines, without `kind` and `pr`, which the reader adds. A `pr` line's fields default from
+                the URL. With a state file, a PR not here is one the reader cannot read.
+    unread      [URL or repository name]: PRs and repositories the reader cannot read whole, which it leaves off its
+                `end` line.
+    branches    {repository name: {branch: head sha}}: each repository's branches, printed when the request names
+                the repository. A repository not here has none.
+    review      [URL]: the review query's result, when the request has one. Default none.
     down        true: the reader prints nothing, not even its `end` line, and exits 1.
     hang        PATH: the reader creates PATH, then sleeps a minute before it reads, as a reader GitHub never answers.
     login       who the poster posts as. Default `me`.
@@ -50,7 +55,8 @@ def main() -> int:
         with Path(log).open("a") as f:
             f.write(json.dumps({"program": program, "request": request}) + "\n")
     path = Path(os.environ.get("FAKE_GITHUB_STATE", "/nonexistent"))
-    state = json.loads(path.read_text()) if path.is_file() else {}
+    nothing: dict[str, Any] = {}
+    state = json.loads(path.read_text()) if path.is_file() else {"prs": dict.fromkeys(request.get("prs", []), nothing)}
     if program == "connect":
         return connect(state, request)
     code = post(state, request)
@@ -72,7 +78,12 @@ def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
         return 1
     prs = state.get("prs", {})
     whole = []
-    for url in request["prs"]:
+    asked = request.get("prs", [])
+    if not asked:
+        # The real reader refuses a request that names no PR.
+        print('canopy-connect-github: stdin must name the PRs to read: {"prs": ["https://..."]}', file=sys.stderr)
+        return 2
+    for url in asked:
         if url not in prs or url in state.get("unread", []):
             print(f"canopy-connect-github: cannot read {url}", file=sys.stderr)
             continue
@@ -93,9 +104,28 @@ def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
         emit({"kind": "pr", **pr})
         for review in prs[url].get("reviews", []):
             emit({"kind": "review", "pr": url, **review})
+        for check in prs[url].get("checks", []):
+            emit({"kind": "check", "pr": url, "head_sha": pr["head_sha"], **check})
         whole.append(url)
-    emit({"kind": "end", "prs": whole})
-    return 0 if len(whole) == len(request["prs"]) else 1
+    end: dict[str, object] = {"kind": "end", "prs": whole}
+    if "repositories" in request:
+        end["repositories"] = branches(state, request["repositories"])
+    if "review_query" in request:
+        end["review_query"] = state.get("review", [])
+    emit(end)
+    return 0 if len(whole) == len(asked) else 1
+
+
+def branches(state: dict[str, Any], repositories: list[dict[str, str]]) -> list[str]:
+    """Print each repository's branches, and return the names of those read whole."""
+    whole = []
+    for repo in repositories:
+        if repo["name"] in state.get("unread", []):
+            continue
+        for name, sha in state.get("branches", {}).get(repo["name"], {}).items():
+            emit({"kind": "branch", "repository": repo["name"], "name": name, "head_sha": sha})
+        whole.append(repo["name"])
+    return whole
 
 
 def post(state: dict[str, Any], request: dict[str, Any]) -> int:

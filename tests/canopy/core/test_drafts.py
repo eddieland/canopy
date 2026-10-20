@@ -14,6 +14,8 @@ from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, TRACKER_POSTS, all_dra
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from tests.canopy.scenario_helpers import Ran, Scenario
 
 PR = DRAFTS_PR
@@ -24,6 +26,12 @@ THREAD = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": RE
 WORK = dispatches(slug="work")
 #: Workers post their own replies, as before drafts (DESIGN §29); APPROVE has them draft replies for the operator.
 POST = {"review_replies": "post"}
+
+
+@pytest.fixture(autouse=True)
+def github_down(github_state: Path) -> None:
+    """GitHub cannot be reached, so the read after a run reads nothing and its drafts stay unchecked."""
+    github_state.write_text(json.dumps({"down": True}))
 
 
 def refused(conn: sqlite3.Connection, run: Ran) -> list[tuple[int, str]]:

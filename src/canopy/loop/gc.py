@@ -97,6 +97,7 @@ def measure(ctx: Context, now: datetime) -> Report:
         files.unrecorded(now),
         _log_files(ctx.state_dir, retention),
         *_attention(ctx.conn, now, retention),
+        _connector_runs(ctx.conn, now, retention),
         *_journal_space(ctx.conn, journal),
         *_git_objects(ctx, notes),
         _sandbox_caches(),
@@ -287,15 +288,7 @@ def _attention(conn: sqlite3.Connection, now: datetime, retention: Retention) ->
     Returns:
         The harness's kind, then the overseer's.
     """
-    oldest = sql.execute(
-        conn,
-        sql.select("id")
-        .from_("ticks")
-        .where("status = ?", TickStatus.OK)
-        .order_by("id DESC")
-        .limit(1, offset=attention.HISTORY_TICKS - 1),
-    ).fetchone()
-    window = int(oldest[0]) if oldest is not None else 0
+    window = _window(conn)
     cutoff = _cutoff(now, retention.journal_days)
     harness = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
     attended = (
@@ -339,6 +332,63 @@ def _attention(conn: sqlite3.Connection, now: datetime, retention: Retention) ->
         "kept: the evaluation corpus",
     )
     return [raised, overseer]
+
+
+def _window(conn: sqlite3.Connection) -> int:
+    """The oldest tick inside the attention list's window, the newest `attention.HISTORY_TICKS` that closed `ok`.
+
+    Returns:
+        Its id, or 0 when the journal has fewer `ok` ticks than the window.
+    """
+    oldest = sql.execute(
+        conn,
+        sql.select("id")
+        .from_("ticks")
+        .where("status = ?", TickStatus.OK)
+        .order_by("id DESC")
+        .limit(1, offset=attention.HISTORY_TICKS - 1),
+    ).fetchone()
+    return int(oldest[0]) if oldest is not None else 0
+
+
+# The bytes of a connector run's row: what it holds, not the pages it fills.
+_RUN_BYTES = (
+    "length(CAST(request AS BLOB)) + length(CAST(recorded AS BLOB)) + length(CAST(refused AS BLOB)) + "
+    "length(CAST(stderr AS BLOB)) + coalesce(length(CAST(missed AS BLOB)), 0) + "
+    "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)"
+)
+
+
+def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retention) -> Kind:
+    """The connectors' runs (DESIGN §30), which a pass removes as it does the harness's attention rows.
+
+    One goes once it is outside the attention list's window and older than `journal_days`, unless it is its source's
+    newest run, or its newest that recorded the query's result. A poll's run, made between ticks, is outside the window
+    once it started before the window's oldest tick.
+
+    Returns:
+        The kind.
+    """
+    cutoff = _cutoff(now, retention.journal_days)
+    row = conn.execute(
+        f"SELECT count(*) AS n, sum({_RUN_BYTES}) AS b, "  # noqa: S608
+        f"sum(removable) AS rn, sum(CASE WHEN removable THEN {_RUN_BYTES} END) AS rb FROM ("
+        "SELECT *, coalesce(tick_id < ?, started_at < (SELECT started_at FROM ticks WHERE id = ?)) "
+        "AND started_at < ? AND id NOT IN ("
+        "SELECT max(id) FROM connector_runs GROUP BY source UNION "
+        "SELECT max(id) FROM connector_runs WHERE query_result IS NOT NULL GROUP BY source) AS removable "
+        "FROM connector_runs)",
+        (window := _window(conn), window, cutoff),
+    ).fetchone()
+    return Kind(
+        "connector runs",
+        "rows",
+        int(row["n"]),
+        int(row["b"] or 0),
+        int(row["rn"] or 0),
+        int(row["rb"] or 0),
+        f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks, newest kept",
+    )
 
 
 def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:
