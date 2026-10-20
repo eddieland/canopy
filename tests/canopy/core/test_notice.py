@@ -23,7 +23,7 @@ from tests.canopy.helpers import (
     present,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
-from tests.canopy.web_helpers import refused, signed_in_client
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
 OUTAGE = "Artifactory is down: CI builds that fetch dependencies will likely fail."
@@ -245,7 +245,7 @@ def test_the_web_channel_sets_and_clears_the_notice_as_canopy_notice_does(ctx: C
     assert c.get("/api/loop").json() == response["loop"]
 
     cleared = c.post("/api/loop/notice/clear", headers=headers).json()
-    assert cleared == {"already": False, "loop": {"paused": None, "notice": None, "memory": None}}
+    assert cleared == {"already": False, "loop": {**response["loop"], "notice": None}}
     assert notice.current(ctx.conn) is None
     assert c.post("/api/loop/notice/clear", headers=headers).json()["already"] is True
     [row] = ctx.conn.execute("SELECT ended_channel FROM notices").fetchall()
@@ -274,7 +274,7 @@ def test_the_stream_sends_a_notice_and_its_lapse_which_commits_nothing(ctx: Cont
 
         with mock.patch.object(notice, "datetime", Later), mock.patch.object(live, "datetime", Later):
             [event] = [e.root for e in reader.read()]
-            assert event == LoopUpdated(paused=None, notice=None)
+            assert event == LoopUpdated(capacity=DEFAULT_CAPACITY, paused=None, notice=None)
             assert reader.read() == []
     finally:
         reader.close()

@@ -1,12 +1,17 @@
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
-import type { Run } from '@/api/types'
+import type { ChoreRun, ReviewSummary, Run, RunState } from '@/api/types'
 import { Age } from '@/components/age'
+import { ChoreLink } from '@/components/chore-link'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
+import { None } from '@/components/none'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewLink } from '@/components/review-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
@@ -16,11 +21,13 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { choreRunRef } from '@/lib/refs'
+import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
-import type { TicketRuns } from '@/lib/run-state'
+import type { SubjectRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
-import { runKind } from '@/lib/words'
+import { NO_TICKET, runKind } from '@/lib/words'
 
 // A run's worktrees named in its row before `+N more`: three repositories' worth, on one line in most panels.
 const WORKTREES_SHOWN = 3
@@ -41,17 +48,33 @@ export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?
 }
 
 /**
- * Runs grouped by ticket, one row each: the ticket's latest run, as `RunsTable` shows it, and a toggle that opens the
- * runs before it, so a ticket that asked twice is one row.
+ * Every run on the runs page, a row per subject by its latest run (`subjectRuns`): a ticket's worker run, as
+ * `RunsTable` shows it, a PR's review, or a chore's run, each in the same columns, its kind in the kind's. A toggle
+ * under it opens the runs before it, so a ticket that asked twice, or a PR reviewed at each push, is one row.
  */
-export function TicketRunsTable({ groups }: { groups: TicketRuns[] }) {
+export function SubjectRunsTable({ groups }: { groups: SubjectRuns[] }) {
     return (
         <ul className="divide-y" data-testid="runs">
             {groups.map((group) => (
-                <TicketRow key={group.latest.ticket_key} group={group} />
+                <SubjectRow key={subjectKey(group)} group={group} />
             ))}
         </ul>
     )
+}
+
+// Unique across the three kinds: a ticket's key, a PR's URL, and a chore's name are each their own namespace.
+function subjectKey(group: SubjectRuns): string {
+    switch (group.of) {
+        case 'worker': {
+            return `worker-${group.latest.ticket_key}`
+        }
+        case 'review': {
+            return `review-${group.latest.pr_url}`
+        }
+        case 'chore': {
+            return `chore-${group.chore}`
+        }
+    }
 }
 
 function RunRow({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr: string | undefined }) {
@@ -62,13 +85,64 @@ function RunRow({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr: stri
     )
 }
 
-function TicketRow({ group }: { group: TicketRuns }) {
+function SubjectRow({ group }: { group: SubjectRuns }) {
+    switch (group.of) {
+        case 'worker': {
+            return (
+                <Folding
+                    testId={`run-${group.latest.id}`}
+                    earlierTestId={`earlier-runs-${group.latest.ticket_key}`}
+                    head={<RunBody run={group.latest} ticket />}
+                    earlier={group.earlier.map((run) => (
+                        <EarlierRow key={run.id} run={run} />
+                    ))}
+                />
+            )
+        }
+        case 'review': {
+            return (
+                <Folding
+                    testId={`review-${group.latest.id}`}
+                    earlierTestId={`earlier-reviews-${group.latest.id}`}
+                    head={<ReviewBody review={group.latest} />}
+                    earlier={group.earlier.map((review) => (
+                        <EarlierReviewRow key={review.id} review={review} />
+                    ))}
+                />
+            )
+        }
+        case 'chore': {
+            return (
+                <Folding
+                    testId={`chore-run-${group.chore}-${group.latest.id}`}
+                    earlierTestId={`earlier-chore-runs-${group.chore}`}
+                    head={<ChoreRunBody chore={group.chore} run={group.latest} />}
+                    earlier={group.earlier.map((run) => (
+                        <EarlierChoreRow key={run.id} chore={group.chore} run={run} />
+                    ))}
+                />
+            )
+        }
+    }
+}
+
+/** A subject's row: its latest run's cells, then a toggle that opens its earlier runs, one line each, under it. */
+function Folding({
+    testId,
+    earlierTestId,
+    head,
+    earlier,
+}: {
+    testId: string
+    earlierTestId: string
+    head: ReactNode
+    earlier: ReactNode[]
+}) {
     const [open, setOpen] = useState(false)
-    const { latest, earlier } = group
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
-            <ListRow kind="run" className="group/copy" data-testid={`run-${latest.id}`}>
-                <RunBody run={latest} ticket />
+            <ListRow kind="run" className="group/copy" data-testid={testId}>
+                {head}
                 {earlier.length > 0 && (
                     <>
                         <RowLine from="title">
@@ -82,11 +156,9 @@ function TicketRow({ group }: { group: TicketRuns }) {
                         <CollapsibleContent asChild>
                             <ul
                                 className={cn('flex flex-col gap-1.5 pt-1', rowLineFrom('state'))}
-                                data-testid={`earlier-runs-${latest.ticket_key}`}
+                                data-testid={earlierTestId}
                             >
-                                {earlier.map((run) => (
-                                    <EarlierRow key={run.id} run={run} />
-                                ))}
+                                {earlier}
                             </ul>
                         </CollapsibleContent>
                     </>
@@ -113,6 +185,120 @@ function EarlierRow({ run }: { run: Run }) {
             </Clipped>
             <RunReadouts run={run} />
         </ListRow>
+    )
+}
+
+/**
+ * A review on the runs page, in a worker run's columns: how its run went, its id, its ticket, `review`, then the PR
+ * and the commit it read with what it found, cost, and when. Its findings are on its page.
+ */
+function ReviewBody({ review }: { review: ReviewSummary }) {
+    return (
+        <>
+            <StateCell state={review.state} status={review.status} />
+            <ReviewLink id={review.id} />
+            <span className="truncate">
+                {review.ticket_key === null ? (
+                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
+                ) : (
+                    <TicketLink ticketKey={review.ticket_key} />
+                )}
+            </span>
+            <span className="flex min-w-0 items-center gap-3">
+                <Chip word="review" />
+            </span>
+            <span className="flex min-w-0 items-center gap-3">
+                <PullRequestLink url={review.pr_url} />
+                <ReviewFound review={review} />
+            </span>
+            <Readouts cost={review.cost_usd} started={review.started_at} ended={review.ended_at} />
+        </>
+    )
+}
+
+/** One of a PR's earlier reviews, on one line in the columns of the row it sits in: the PR is the row's. */
+function EarlierReviewRow({ review }: { review: ReviewSummary }) {
+    return (
+        <ListRow kind="run" className="p-0" data-testid={`review-${review.id}`}>
+            <StateCell state={review.state} status={review.status} />
+            <ReviewLink id={review.id} />
+            <span />
+            <span className="flex min-w-0 items-center gap-3">
+                <Chip word="review" />
+            </span>
+            <span className="flex min-w-0 items-center gap-3">
+                <ReviewFound review={review} />
+            </span>
+            <Readouts cost={review.cost_usd} started={review.started_at} ended={review.ended_at} />
+        </ListRow>
+    )
+}
+
+/** The commit a review read, and what it found in the color of its worst finding. */
+function ReviewFound({ review }: { review: ReviewSummary }) {
+    return (
+        <>
+            <Tip fact={review.sha} mono>
+                <span className="readout shrink-0 text-xs text-muted-foreground">at {shortSha(review.sha)}</span>
+            </Tip>
+            <Clipped text={verdictText(review)} className={cn('font-mono text-xs', verdictTone(review))} />
+        </>
+    )
+}
+
+/**
+ * A chore's run on the runs page, in a worker run's columns: how it went, its number, its chore, `chore`, cost, and
+ * when, and under them what it said. Its findings, and its runs before these, are on its chore's page.
+ */
+function ChoreRunBody({ chore, run }: { chore: string; run: ChoreRun }) {
+    return (
+        <>
+            <StateCell state={run.state} status={run.status} />
+            <ChoreRunNumber chore={chore} id={run.id} />
+            <ChoreLink name={chore} className="truncate" />
+            <span className="flex min-w-0 items-center gap-3">
+                <Chip word="chore" />
+            </span>
+            <span />
+            <Readouts cost={run.cost_usd} started={run.started_at} ended={run.ended_at} />
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom('title')} />}
+        </>
+    )
+}
+
+/** A chore's run before the one its row leads with, on one line: the first line of what it said. */
+function EarlierChoreRow({ chore, run }: { chore: string; run: ChoreRun }) {
+    const said = run.summary?.split('\n', 1)[0] ?? ''
+    return (
+        <ListRow kind="run" className="p-0" data-testid={`chore-run-${chore}-${run.id}`}>
+            <StateCell state={run.state} status={run.status} />
+            <ChoreRunNumber chore={chore} id={run.id} />
+            <span />
+            <span className="flex min-w-0 items-center gap-3">
+                <Chip word="chore" />
+            </span>
+            <Clipped text={said} className="text-sm text-muted-foreground">
+                <LinkedText text={said} />
+            </Clipped>
+            <Readouts cost={run.cost_usd} started={run.started_at} ended={run.ended_at} />
+        </ListRow>
+    )
+}
+
+/**
+ * A chore run's number, `#2`, opening its page: its chore is named in the next column, so the two read as its
+ * reference, `chore:deps#2`, which its hover gives whole.
+ */
+function ChoreRunNumber({ chore, id }: { chore: string; id: number }) {
+    return (
+        <Link
+            to="/chores/$name/runs/$id"
+            params={{ name: chore, id: String(id) }}
+            title={choreRunRef(chore, id)}
+            className="readout text-xs text-accent underline-offset-4 hover:underline"
+        >
+            #{id}
+        </Link>
     )
 }
 
@@ -199,22 +385,32 @@ function RunChips({ run }: { run: Run }) {
 }
 
 function RunStatus({ run }: { run: Run }) {
+    return <StateCell state={run.state} status={run.status} />
+}
+
+/** A run's state cell: its dot in its state's color, and its status in the journal's word. */
+function StateCell({ state, status }: { state: RunState; status: string }) {
     return (
-        <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
-            <RunDot state={run.state} />
-            <Word word={run.status} />
+        <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[state])}>
+            <RunDot state={state} />
+            <Word word={status} />
         </span>
     )
 }
 
 /** A run's cost and when, a cell each, in the row's `cost` and `age` columns. */
 function RunReadouts({ run }: { run: Run }) {
+    return <Readouts cost={run.cost_usd} started={run.started_at} ended={run.ended_at} />
+}
+
+/** Any run's cost and when, a cell each, in the row's `cost` and `age` columns. */
+function Readouts({ cost, started, ended }: { cost: number | null; started: string; ended: string | null }) {
     return (
         <>
             <span className="text-right text-xs text-muted-foreground" data-testid="run-cost">
-                <Cost usd={run.cost_usd} />
+                <Cost usd={cost} />
             </span>
-            <Age variant="span" started={run.started_at} ended={run.ended_at} className="text-right" />
+            <Age variant="span" started={started} ended={ended} className="text-right" />
         </>
     )
 }

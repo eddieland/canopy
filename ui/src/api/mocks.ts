@@ -2,6 +2,7 @@
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
 import type {
     AttentionItem,
+    Capacity,
     ChoreSummary,
     Draft,
     PlanTriage,
@@ -12,6 +13,9 @@ import type {
     SearchHit,
     TicketSummary,
 } from './types'
+
+/** The default `[capacity]`: two workers, one review among them, and one chore apart. */
+export const mockCapacity: Capacity = { workers: 2, reviews: 1, chores: 1 }
 
 /** Two runs: one running, one blocked on a question. */
 export const mockRuns: Run[] = [

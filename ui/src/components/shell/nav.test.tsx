@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockAttention } from '@/api/mocks'
+import { mockAttention, mockCapacity } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, LoopState, MemoryState } from '@/api/types'
 import { renderRouted } from '@/test-utils'
@@ -37,7 +37,7 @@ function renderNav({ at = '/attention', items, compact = false, waiting }: Parti
             lessons: TIER,
             proposals_waiting: waiting,
         }
-        client.setQueryData<LoopState>(keys.loop, { paused: null, notice: null, memory })
+        client.setQueryData<LoopState>(keys.loop, { capacity: mockCapacity, paused: null, notice: null, memory })
     }
     return renderRouted(<Nav compact={compact} />, { at, client })
 }

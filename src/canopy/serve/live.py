@@ -231,7 +231,11 @@ class _Sent:
         loop = views.loop_state(ctx)
         if loop != self.loop:
             self.loop = loop
-            found.append(StreamEvent(LoopUpdated(paused=loop.paused, notice=loop.notice, memory=loop.memory)))
+            found.append(
+                StreamEvent(
+                    LoopUpdated(capacity=loop.capacity, paused=loop.paused, notice=loop.notice, memory=loop.memory)
+                )
+            )
         return found
 
 

@@ -37,8 +37,9 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Pull requests](/pull-requests): every PR canopy knows about, the ones it opened and the ones it reviewed, with their
   runs and reviews.
 - [Reviews](/reviews): the PR reviews canopy kept to itself instead of posting, with their findings pinned to the diff.
-- [Runs](/runs): the workers running now, then the ones that finished most recently, each with its session's
-  transcript. When you want to know what an agent was thinking, this is the receipt.
+- [Runs](/runs): every agent canopy runs, workers, reviews, and chores alike, the ones running now first, and how
+  full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
+  thinking, this is the receipt.
 - [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
   what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
   schedule.
