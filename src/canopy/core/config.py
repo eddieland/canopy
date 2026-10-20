@@ -490,11 +490,17 @@ class Policy(Section):
     max_follow_ups: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 5
     # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.
     max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    #: Feedback plan runs per unit (DESIGN §32), whatever they ended as, never reset.
+    max_feedback_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 6
     # Review runs per PR, whatever they ended as (DESIGN §21).
     max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Whether a ticket waits on a plan the operator approved before its implement (DESIGN §25): a guard in code. A
     # ticket's own setting, `canopy plan KEY` or `--skip`, overrides it.
     plan: Annotated[Literal["off", "approve"], Scope.SHARED, Tighten.LATER] = "off"
+    #: Whether every `resume` but one for `no_pr` alone waits on a feedback plan the operator approved (DESIGN §32): a
+    #: guard in code. Private, unlike `plan`: it holds a trusted reviewer's feedback for the operator, and lets anyone
+    #: else's start a plan run that reads only, so a shared file must choose neither (TRUST_MODEL T7).
+    feedback_plan: Annotated[Literal["off", "approve"], Scope.PRIVATE] = "off"
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 

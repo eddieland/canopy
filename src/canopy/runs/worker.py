@@ -11,6 +11,10 @@ A plan run checks each slot out at its base and pushes nothing, and always works
 the desk holds a copy of the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its
 plan to a file at the desk's root, the one file it may edit; a `done` one is read from there, bounded, written to the
 plan's own file, and recorded `proposed` (DESIGN §25).
+
+A feedback plan run checks each slot out at the ticket's branch, its PR's head, reads each PR whole through the `vcs`
+source, and puts the items it may cover in its desk; the planner runs as a plan's does, and its result's items are
+checked against those it was given, an id it was not given refused with a note (DESIGN §32).
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import (
     contract,
@@ -32,9 +36,11 @@ from canopy.core import (
     db,
     definitions,
     drafts,
+    feedback_plans,
     follow_ups,
     hostgit,
     memory,
+    observe,
     outbox,
     plans,
     pools,
@@ -42,7 +48,7 @@ from canopy.core import (
     review_diff,
 )
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import PoolKind, ReplyMode, RunKind, RunStatus
+from canopy.core.vocab import PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, drafted, policy, tidy
@@ -72,6 +78,7 @@ class _SetupError(Exception):
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(contract.MAX_PR_TITLE)]
+Reply = Annotated[StrictStr, contract.bounded(feedback_plans.MAX_REPLY)]
 
 
 class WorkerResult(BaseModel):
@@ -116,6 +123,22 @@ class PlanResult(BaseModel):
     status: Literal["done", "blocked", "failed"]
     summary: Text = ""
     question: Text | None = None
+
+
+class FeedbackItem(BaseModel):
+    """One item a feedback plan's result names: an observed id, what it proposes, and the reply it would draft."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    id: StrictInt
+    proposal: Proposal
+    reply: Reply | None = None
+
+
+class FeedbackPlanResult(PlanResult):
+    """A feedback plan's result contract (DESIGN §32): a plan's, with the items it covers. Untrusted, so bounded."""
+
+    items: Annotated[list[FeedbackItem], Field(max_length=4 * feedback_plans.MAX_ITEMS)] = []
 
 
 @dataclass(frozen=True)
@@ -260,6 +283,8 @@ def _doer(kind: RunKind) -> _Doer:
             raise _SetupError(f"{kind} is retired; nothing runs it")
         case RunKind.PLAN:
             return _plan
+        case RunKind.FEEDBACK_PLAN:
+            return _feedback_plan
         case RunKind.IMPLEMENT | RunKind.FIX_CI | RunKind.RESUME:
             return _work
         case _:
@@ -376,7 +401,7 @@ def _run_agent(
     desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if desked else []
     places = [path for _, path in trees] + desk_parents
     tools = ctx.config.tracker.tools()
-    read_only = run["private"] or run["kind"] == policy.PLAN
+    read_only = run["private"] or run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
     refused = project_config.refusal(places, tracker_server=tools.server if read_only and tools is not None else None)
     if refused is not None:
         raise _SetupError(refused)
@@ -508,6 +533,87 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
     plan = plans.record(ctx.conn, key, run_id, written, event=outbox.plan_proposed(ctx.config, key=key, run_id=run_id))
     log.info("plan recorded", extra={"run_id": run_id, "plan_id": plan.id, "size": written.size})
     return Outcome(RunStatus.DONE, parsed)
+
+
+def _feedback_plan(
+    ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter
+) -> Outcome:
+    """Run the planner on what came back to the run's PRs, and write and record the feedback plan (DESIGN §32).
+
+    Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
+    `vcs` source first: the items the planner may cover are what that read observed, written to its desk with a copy
+    of the feedback plan this one replaces, if the ticket has one. An item the result names that it was not given is
+    refused, with a harness note; the rest are recorded with the plan.
+
+    Returns:
+        The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
+        whose file in the desk is not a plan; or `crashed` when the plan's own file could not be written.
+
+    Raises:
+        _SetupError: a PR could not be read whole, so the planner would plan from less than its feedback.
+    """
+    stopped = _stopped(ctx, run)
+    if stopped:
+        log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
+        return Outcome(RunStatus.STOPPED, None, stopped)
+    key = str(run["ticket_key"])
+    for slot in slots:
+        _check_out(slot, str(run["branch"]))
+    units = {str(u.repo): str(u.pr_url) for u in db.units(ctx.conn, key) if u.pr_url}
+    prs = [units[s.repo] for s in slots if s.repo in units]
+    read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
+    if not prs or read.failure is not None:
+        raise _SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
+    offered = feedback_plans.offered(ctx.conn, ctx.config.trust, key, prs)
+    desk_files = {feedback_plans.ITEMS: feedback_plans.items_file(offered)}
+    replaced = feedback_plans.current(ctx.conn, key)
+    copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
+    if copy is not None:
+        desk_files[plans.REPLACED] = copy
+    result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
+    timeout_minutes = ctx.config.runtime.worker_timeout_minutes
+    parsed = contract.last_line(FeedbackPlanResult, text)
+    if result.timed_out:
+        return Outcome(RunStatus.TIMEOUT, parsed, f"the planner timed out after {timeout_minutes} minutes")
+    if parsed is None:
+        return Outcome(RunStatus.UNKNOWN, None, "the planner's last line was not a valid feedback plan result")
+    if parsed.status != "done":
+        return Outcome(RunStatus(parsed.status), parsed)
+    written = plans.read(desks.path(ctx.workspace.root, key) / plans.WRITTEN)
+    if written.text is None:
+        note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
+        return Outcome(RunStatus.UNKNOWN, parsed, note)
+    matched = feedback_plans.match(offered, [feedback_plans.Named(i.id, i.proposal, i.reply) for i in parsed.items])
+    return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, log=log)
+
+
+def _record_feedback_plan(
+    ctx: Context,
+    run: sqlite3.Row,
+    parsed: FeedbackPlanResult,
+    text: str,
+    *,
+    matched: feedback_plans.Matched,
+    log: logs.TickAdapter,
+) -> Outcome:
+    """Write a `done` feedback plan's `text` to its own file and record it `proposed`, with its items (DESIGN §32).
+
+    Returns:
+        `done` once it is recorded, with a note naming the items refused, or `crashed` when its file could not be
+        written, and nothing is recorded.
+    """
+    key = str(run["ticket_key"])
+    run_id = int(run["id"])
+    try:
+        file = plans.write(ctx.state_dir, key, run_id, text)
+    except (plans.PlanFileError, OSError) as e:
+        return Outcome(RunStatus.CRASHED, parsed, f"the plan was not written: {e}")
+    plan = feedback_plans.record(ctx.conn, key, run_id, file, matched.kept)
+    log.info(
+        "feedback plan recorded",
+        extra={"run_id": run_id, "plan_id": plan.id, "items": len(matched.kept), "refused": len(matched.refused)},
+    )
+    return Outcome(RunStatus.DONE, parsed, matched.note())
 
 
 def _check_out(slot: _Slot, branch: str = "") -> _Start:
@@ -690,6 +796,8 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     Raises:
         _SetupError: the plan was superseded or approved again since the dispatch, or its file changed or is gone.
     """
+    if run["feedback_plan_id"] is not None:
+        return _feedback_plan_copy(ctx, run)
     if run["plan_id"] is None:
         return None
     approved = plans.approved_of(ctx.conn, str(run["ticket_key"]))
@@ -705,6 +813,31 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
         path = plans.path_for(ctx.state_dir, approved.ticket_key, approved.run_id)
         raise _SetupError(
             f"plan {approved.id}'s file {path} is no longer the text the operator approved; the worker did not start"
+        )
+    return text
+
+
+def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
+    """Return the approved feedback plan a `resume` follows, which it spent, read again from its file (DESIGN §32).
+
+    Returns:
+        The plan's text.
+
+    Raises:
+        _SetupError: the plan was superseded since the dispatch, is not the one this run spent, or its file changed.
+    """
+    plan = feedback_plans.get(ctx.conn, int(run["feedback_plan_id"]))
+    if plan is None or plan.spent_run_id != run["id"] or feedback_plans.current(ctx.conn, plan.ticket_key) != plan:
+        raise _SetupError(
+            f"feedback plan {run['feedback_plan_id']}, which the worker's prompt names, is no longer the one approved "
+            f"for {run['ticket_key']} when the run was dispatched; the worker did not start"
+        )
+    text = feedback_plans.approved_text(ctx.state_dir, plan)
+    if text is None:
+        path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
+        raise _SetupError(
+            f"feedback plan {plan.id}'s file {path} is no longer the text the operator approved; the worker did not "
+            "start"
         )
     return text
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import conversation, db, plans, pools
+from canopy.core import conversation, db, feedback_plans, plans, pools
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -67,6 +67,7 @@ class TicketState(TypedDict):
     private: NotRequired[conversation.PrivateSection]
     operator: NotRequired[conversation.OperatorSection]
     plan: NotRequired[plans.PlanState]
+    feedback_plan: NotRequired[feedback_plans.FeedbackPlanState]
 
 
 class UnitState(TypedDict):
@@ -235,6 +236,7 @@ def state_block(
     private: Mapping[str, conversation.PrivateSection] | None = None,
     operator: Mapping[str, conversation.OperatorSection] | None = None,
     planned: Mapping[str, plans.PlanState] | None = None,
+    feedback_planned: Mapping[str, feedback_plans.FeedbackPlanState] | None = None,
     mirror_delimiter: str,
     attention: list[OpenItem] | None = None,
     query_due: bool,
@@ -254,7 +256,9 @@ def state_block(
     key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages
     newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `planned`
     holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest plan's id,
-    status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key. `mirror_delimiter`
+    status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key. `feedback_planned`
+    holds a ticket's feedback plan, by key, likewise; a ticket feedback plans do not touch has no `feedback_plan` key
+    (DESIGN §32). `mirror_delimiter`
     ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict
     it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one
     out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or works the
@@ -268,6 +272,7 @@ def state_block(
     private = private or {}
     operator = operator or {}
     planned = planned or {}
+    feedback_planned = feedback_planned or {}
     run_reasons = run_reasons or {}
     operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
@@ -315,6 +320,8 @@ def state_block(
             summary["operator"] = operator[key]
         if key in planned:
             summary["plan"] = planned[key]
+        if key in feedback_planned:
+            summary["feedback_plan"] = feedback_planned[key]
         return summary
 
     state: OverseerState = {

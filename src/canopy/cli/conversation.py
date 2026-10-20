@@ -353,7 +353,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 @click.argument(
     "kind",
     type=click.Choice(
-        [*(str(k) for k in (*policy.KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND, str(policy.RETIRED)]
+        [*(str(k) for k in (*policy.UNIT_GRANT_KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND, str(policy.RETIRED)]
     ),
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")

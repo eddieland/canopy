@@ -33,6 +33,12 @@ WORKER_PRIVATE: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement-private.md",
     RunKind.RESUME: "worker-resume-private.md",
 }
+#: A feedback plan's prompt (DESIGN §32), one for a public ticket and a started one alike, as a plan's. Apart from
+#: `WORKER`, whose kinds each work a branch.
+FEEDBACK_PLAN = "worker-feedback-plan.md"
+#: Placeholders a feedback plan's prompt must use: a plan's, and the file in its desk holding its PRs' items, without
+#: which it plans from nothing.
+REQUIRED_FEEDBACK_PLAN = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES", "PLAN_OUT", "ITEMS_FILE")
 # The prompts of `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8). An override of either would be
 # read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the
 # operator's CI instructions silently.
@@ -129,6 +135,7 @@ _HEARS_NOTICE: dict[str, list[str]] = {
     **{WORKER[k]: [str(k)] for k in WORKER_PRIVATE},
     **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in WORKER_PRIVATE},
     WORKER[RunKind.PLAN]: [str(RunKind.PLAN)],
+    FEEDBACK_PLAN: [str(RunKind.FEEDBACK_PLAN)],
     REVIEWER: ["review"],
 }
 
@@ -268,11 +275,45 @@ def plan_note(copy: Path | None, outline: Sequence[str]) -> str:
     if copy is None:
         return "None."
     lines = [f"`{copy}` is the plan the operator approved for this ticket, a copy written for this run alone."]
-    if outline:
-        fence = "````" if any("```" in heading for heading in outline) else "```"
-        lines += ["Its outline, the plan's own headings:", "", f"{fence}text", *outline, fence]
+    return "\n".join([*lines, *_outline(outline)])
+
+
+def _outline(outline: Sequence[str]) -> list[str]:
+    """Return a plan's outline for a prompt: its headings, model-written, fenced as data, or a line saying it has none.
+
+    Returns:
+        The lines.
+    """
+    if not outline:
+        return ["It has no headings: read it whole."]
+    fence = "````" if any("```" in heading for heading in outline) else "```"
+    return ["Its outline, the plan's own headings:", "", f"{fence}text", *outline, fence]
+
+
+def feedback_plan_note(copy: Path, outline: Sequence[str], items: Sequence[tuple[int, str, int, str]]) -> str:
+    """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
+
+    The items are the harness's, from the plan's validated result line, each its number, PR, observed id, and what the
+    plan proposes: the operator approved the plan whole, so these are the items the run acts on, and the only ones.
+
+    Returns:
+        The copy's path and what it is, the outline as `plan_note` gives it, and a line per item.
+    """
+    what = (
+        f"`{copy}` is the feedback plan the operator approved for this round of the PR's feedback, a copy written for "
+        "this run alone. Their approval of it, whole, is their go-ahead for each item below, whoever wrote it, and for "
+        "nothing else of the PR's feedback: leave any other review comment for the next plan."
+    )
+    lines = [what, *_outline(outline)]
+    if items:
+        lines += ["", "The items it covers, each by the review or comment id canopy observed on its PR:", ""]
+        lines += [f"{n}. {pr}, item {item_id}: {proposal}" for n, pr, item_id, proposal in items]
+        lines += [
+            "",
+            "For `change`, change the code as the plan says. For `decline`, `ask`, and `leave`, change nothing for it.",
+        ]
     else:
-        lines.append("It has no headings: read it whole.")
+        lines += ["", "It covers no review comment: work the reasons below as it says."]
     return "\n".join(lines)
 
 
@@ -460,6 +501,8 @@ def render_worker(
     one_of = _required_attribution(config) if kind in COMMITS else ()
     if kind == RunKind.PLAN:
         return render(config, WORKER[kind], values, required=(*REQUIRED_PLAN, *required))
+    if kind == RunKind.FEEDBACK_PLAN:
+        return render(config, FEEDBACK_PLAN, values, required=(*REQUIRED_FEEDBACK_PLAN, *required))
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)

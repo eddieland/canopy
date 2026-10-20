@@ -1,4 +1,4 @@
-"""`canopy plan`: the operator asks for a ticket's plan, approves it, or skips it (DESIGN §25).
+"""`canopy plan`: the operator asks for a ticket's plan, approves it or its feedback plan, or skips it (§25, §32).
 
 Each writes through `canopy.core.plans`, which every channel shares, and refuses inside canopy's own ticks and runs.
 """
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, plans
+from canopy.core import conversation, feedback_plans, plans
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -21,7 +21,12 @@ CLI = "cli"
 
 @click.command("plan")
 @click.argument("ref", metavar="KEY")
-@click.option("--approve", is_flag=True, help="Approve its newest plan as its file stands now, your edits included.")
+@click.option(
+    "--approve",
+    is_flag=True,
+    help="Approve its newest plan as its file stands now, your edits included: its feedback plan, whole, when one "
+    "waits.",
+)
 @click.option("--skip", is_flag=True, help="Waive its plan: its implement goes ahead without one.")
 @click.pass_context
 def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -> int:
@@ -30,6 +35,9 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
     Without a flag, the next tick dispatches a planner, which writes down how the work will be done; nothing is
     implemented until you approve the plan. Asking again supersedes the plan it has. Read a plan with
     `canopy show KEY`, edit its file if you like, then approve it, or ask for changes with `canopy reply KEY`.
+
+    Under `policy.feedback_plan = "approve"`, a ticket's PR feedback is planned before its resume: while its feedback
+    plan waits, `--approve` approves that plan, whole, and its next resume goes ahead on it once.
     """
     if approve and skip:
         raise click.UsageError("--approve and --skip are each a decision of their own; pass one")
@@ -51,11 +59,26 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
 
 
 def _approve(ctx: Context, key: str) -> None:
+    if feedback_plans.waiting(ctx.conn, key):
+        _approve_feedback(ctx, key)
+        return
     plan = plans.approve(ctx.conn, ctx.state_dir, key, channel=CLI, dispatch_lock=ctx.dispatch_lock_path)
     logs.for_tick(None).info("plan approved", extra={"ticket": key, "plan": plan.id, "channel": CLI})
     path = plans.path_for(ctx.state_dir, key, plan.run_id)
     click.echo(f"Plan {plan.id} of {key} is approved as {path} stands now. The next tick can implement it.")
     click.echo("Its implement refuses (plan_changed) if the file changes before then; approve it again if it does.")
+
+
+def _approve_feedback(ctx: Context, key: str) -> None:
+    plan = feedback_plans.approve(ctx.conn, ctx.state_dir, key, channel=CLI, dispatch_lock=ctx.dispatch_lock_path)
+    logs.for_tick(None).info("feedback plan approved", extra={"ticket": key, "feedback_plan": plan.id, "channel": CLI})
+    path = plans.path_for(ctx.state_dir, key, plan.run_id)
+    covered = len(feedback_plans.items(ctx.conn, plan.id))
+    click.echo(
+        f"Feedback plan {plan.id} of {key}, covering {covered} item{'s' if covered != 1 else ''}, is approved whole as "
+        f"{path} stands now. The next tick can resume {key} on it, once."
+    )
+    click.echo("Its resume refuses (plan_changed) if the file changes before then; approve it again if it does.")
 
 
 def _ask(ctx: Context, key: str, *, skip: bool) -> None:

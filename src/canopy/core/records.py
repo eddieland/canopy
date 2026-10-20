@@ -43,6 +43,7 @@ from canopy.core.vocab import (
     PlanSetting,
     PlanStatus,
     PoolKind,
+    Proposal,
     PrState,
     Reaction,
     ReplyMode,
@@ -313,6 +314,45 @@ class Plan(Row):
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlan(Row):
+    """A plan a feedback plan run wrote for a ticket's PRs (DESIGN §32): its status, hashes, and approval. No text."""
+
+    TABLE: ClassVar[str] = "feedback_plans"
+
+    id: int
+    ticket_key: str
+    run_id: int
+    created_at: str
+    status: PlanStatus
+    #: The file's SHA-256, hex, and its size in bytes, as the planner wrote it.
+    sha256: str
+    size: int
+    #: The file's SHA-256 when the operator approved it, their edits included; set with the time and the channel.
+    approved_sha256: str | None
+    approved_at: str | None
+    approved_channel: str | None
+    #: The `resume` that went ahead on the approval, which it spent: an approval goes ahead once.
+    spent_run_id: int | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlanItem(Row):
+    """An item a feedback plan covers: a review or review comment by its observed id, and what the plan proposes."""
+
+    TABLE: ClassVar[str] = "feedback_plan_items"
+
+    plan_id: int
+    #: Its place in the planner's result line, from 1: what an approval names it by.
+    number: int
+    pr_url: str
+    item: ReviewItem
+    item_id: int
+    proposal: Proposal
+    #: The reply the plan would draft, for a change or a decline: model text, never an instruction.
+    reply: str | None
 
 
 @dataclass(frozen=True)
@@ -723,6 +763,8 @@ class Run(Row):
     activity: str | None
     activity_at: str | None
     plan_id: int | None
+    #: The feedback plan this run wrote, or the approved one its `resume` follows (DESIGN §32).
+    feedback_plan_id: int | None
 
 
 @dataclass(frozen=True)

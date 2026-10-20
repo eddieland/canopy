@@ -357,7 +357,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - `trust.trusted_reviewers` (private, empty by default; `canopy:review` for canopy's reviewer). Anyone else's
   feedback is `untrusted_review` attention until the operator answers with `canopy reply` or the web UI.
-- Enforced by prompt only: the harness cannot read a comment's author (D003).
+- Enforced by prompt only: the harness cannot read a comment's author (D003). With `policy.feedback_plan = "approve"`
+  (DESIGN §32) the go-ahead is the approval of a feedback plan instead, in code, and trust only informs the operator.
 - Rejected: an untrusted list (new bots trusted until noticed); the go-ahead as a tracker comment.
 - Revisit: if the overseer dispatches without a go-ahead; then a `--review-from` claim checked like `--label`.
 
