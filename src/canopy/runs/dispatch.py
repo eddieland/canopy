@@ -972,6 +972,9 @@ def _spawn(
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
+        "PLAN_REVIEW": prompts.plan_review(
+            on=planning and cfg.policy.planner_may_approve, feedback=kind == policy.FEEDBACK_PLAN
+        ),
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {

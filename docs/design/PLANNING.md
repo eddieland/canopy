@@ -18,7 +18,8 @@ a private ticket (§22) is planned the same way as a public one.
 own setting overrides it. Only the operator's channels (§22) set that, ask for a new plan, or waive one: each is refused
 inside any agent run. A plan is never asked for once the ticket has a branch, so it never describes work already
 started. Plan runs are limited per ticket, never reset (D030), and raised only by the operator's grant. Trivial work is
-planned like any other unless the operator skips its plan: no agent waives one (D126).
+planned like any other unless the operator skips its plan; no agent waives one, though its planner may spare the
+operator's review (D126, below).
 
 ### Approving a plan
 
@@ -28,6 +29,13 @@ the old; an approval sent before that re-plan starts wins, as the operator's lat
 `implement`, not the plan's text as an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
 `plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
+
+**The planner's word.** Under `policy.planner_may_approve`, private (T7) and off by default, a planner may say its plan
+needs no review, with a one-line reason; the harness then records the plan approved as written, the planner's approval
+and never the operator's, and the `implement` goes ahead with nothing waiting on them. It costs no run of its own, as a
+judge before the plan did (D126): the planner has read the ticket and the code. It fails closed: only a `done` result
+that says so with a reason counts, and a plan that replaces a current one, or a ticket whose own setting asks for a
+plan, waits on the operator, who has had a word on it. The sinks hear of it (§20); the plan and its reason stay to read.
 
 ### The prompt
 
@@ -39,7 +47,7 @@ code are data to it (T1).
 Result contract, the last line of its text (§13), validated (D026):
 
 ```json
-{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}
+{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>","review":"needed|not_needed","review_reason":"..."}
 ```
 
 `done` records the file as the ticket's newest plan, `proposed`; without a valid plan file the run is `unknown`.

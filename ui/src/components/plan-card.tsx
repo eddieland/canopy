@@ -7,6 +7,7 @@ import { decidePlan, refreshTicket } from '@/api/mutations'
 import type { PlanChanged, TicketPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { Field, Fields } from '@/components/fields'
+import { LinkedText } from '@/components/linked-text'
 import { None } from '@/components/none'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
@@ -70,6 +71,11 @@ export function PlanCard({
                         </>
                     )}
                 </Field>
+                {newest?.approved_channel === 'planner' && (
+                    <Field label="approved by">
+                        the planner: <LinkedText text={newest.approved_reason ?? ''} />
+                    </Field>
+                )}
                 <Field label="open comments" mono>
                     {open}
                 </Field>

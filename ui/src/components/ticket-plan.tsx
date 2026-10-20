@@ -19,6 +19,7 @@ import type { PlanChanged, PlanFile, PlanSummary, TicketPlans } from '@/api/type
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { Leaf } from '@/components/leaf'
+import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PlanChip } from '@/components/plan-card'
@@ -128,9 +129,19 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
     const { plan } = newest
     // A plan skipped or otherwise put aside, its ticket needing none now: no planner comes for it.
     const needless = plan.status === 'superseded' && !plans.needed
+    // The harness approved it on its planner's word that it needs no review (policy.planner_may_approve).
+    const byPlanner = plan.approved_at !== null && plan.approved_channel === 'planner'
     const next: [string, ReactNode][] = []
     if (plans.planning !== null) {
         next.push(['planning', `Run ${plans.planning} is writing a new plan.`])
+    }
+    if (byPlanner) {
+        next.push([
+            'planner',
+            <span key="planner">
+                It said the plan needs no review: <LinkedText text={plan.approved_reason ?? ''} />
+            </span>,
+        ])
     }
     if (planWaits(plans)) {
         next.push(['waits', 'It waits on you: read it, comment, then approve it or ask for changes.'])
@@ -148,8 +159,8 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
             Written by <RunLink id={plan.run_id} className="text-sm" />
             {plan.approved_at !== null && (
                 <>
-                    , approved <Age at={plan.approved_at} variant="ago" className="text-sm" /> via{' '}
-                    {plan.approved_channel}
+                    , approved <Age at={plan.approved_at} variant="ago" className="text-sm" />{' '}
+                    {byPlanner ? 'by the planner' : `via ${plan.approved_channel}`}
                 </>
             )}
             {newest.edited && ', edited since the planner wrote it'}

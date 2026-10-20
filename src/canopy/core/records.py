@@ -316,6 +316,8 @@ class Plan(Row):
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None
+    #: Why the planner said its plan needs no review, when the harness approved it so (channel `planner`, DESIGN §25).
+    approved_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -338,6 +340,8 @@ class FeedbackPlan(Row):
     approved_channel: str | None
     #: The `resume` that went ahead on the approval, which it spent: an approval goes ahead once.
     spent_run_id: int | None
+    #: Why the planner said its plan needs no review, when the harness approved it so (channel `planner`, DESIGN §25).
+    approved_reason: str | None
 
 
 @dataclass(frozen=True)

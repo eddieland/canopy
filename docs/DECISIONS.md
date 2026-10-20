@@ -501,12 +501,13 @@ such as a shipped migration, may still cite one, and git history has its text.
   dependency for what one module of ours does); f-strings with a reason on each (a promise no checker holds).
 - Revisit: if a feature builds queries from what the operator picks at run time, such as arbitrary filters.
 
-## D126. Trivial work is planned; no agent waives a plan
+## D126. Trivial work is planned; only its own planner may spare the operator's review
 
-- Every ticket `policy.plan` plans is planned, trivial or not; only the operator's own `canopy plan KEY --skip` waives
-  one (DESIGN §25).
+- Every ticket `policy.plan` plans is planned, trivial or not; only the operator's `canopy plan KEY --skip` waives one.
+  Under the private `policy.planner_may_approve`, the planner that wrote a plan may say it needs no review, and the
+  harness approves it as the planner's; no other agent approves or waives a plan (DESIGN §25, TRUST_MODEL T1).
 - Why: the operator (2026-10-20) found that M55's triage judged too few tickets trivial for its runs to save what they
-  cost.
+  cost, while the planner has read the ticket and the code already, at no run of its own (#1050).
 - Rejected: a cheaper agent judging trivial work before the plan, with its verdict waiving it (M55, built and removed).
 - Revisit: when ROADMAP's deferred list's trigger for M55 fires.
 
