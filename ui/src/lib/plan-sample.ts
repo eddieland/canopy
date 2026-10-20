@@ -37,13 +37,19 @@ In **api**, \`ReportQuery\` gains an \`iter_rows()\` method beside \`rows()\`, w
 
 > The reports page renders through a template cache. A new button may need the cache cleared on deploy.`
 
+// The sample's last section, which the plan before it had second.
+const RISKS = SAMPLE_PLAN.slice(SAMPLE_PLAN.indexOf('\n## Risks'))
+
 /**
  * The plan the sample replaces, as the planner first wrote it: the sample is its answer to the operator's comments, so
- * the editor's Changes shows what that answer changed.
+ * the editor's Changes shows what that answer changed, words, a section moved, and one dropped among them.
  */
-export const SAMPLE_PREVIOUS = SAMPLE_PLAN.replace('a header and three lines', 'a header and a row per line')
+export const SAMPLE_PREVIOUS = SAMPLE_PLAN.replace(RISKS, '')
+    .replace('a header and three lines', 'a header and a row per line')
     .replace(', so a large report never sits whole in memory', '')
     .replace('\n- Scheduling exports.', '')
+    .replace('\n## Files', `${RISKS}\n\n## Files`)
+    .replace('\n## Tests', '\n## Rollout\n\nBehind a flag, on for one team first.\n\n## Tests')
 
 const AT = '2026-10-08T11:40:00Z'
 

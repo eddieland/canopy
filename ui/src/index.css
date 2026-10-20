@@ -985,5 +985,21 @@
         & del.plan-del {
             @apply mx-0.5 rounded-xs bg-diff-del/14 text-muted-foreground line-through decoration-diff-del;
         }
+        /* A section that moved: a quiet label at its heading's end, in the body's type rather than the heading's. */
+        & .plan-moved {
+            @apply ml-2 rounded-xs border px-1 align-middle font-sans text-2xs font-normal text-muted-foreground;
+        }
+        /* A section removed: one line where it was, on the removed tint with the removed bar, as an added block has */
+        /* the added one, its words struck under it, a block to a line, when opened. */
+        & details.plan-section-del {
+            @apply -ml-2 rounded-r-xs bg-diff-del/8 py-1 pl-2 text-sm;
+            box-shadow: inset 2px 0 var(--color-diff-del);
+            & summary {
+                @apply cursor-pointer text-muted-foreground;
+            }
+            & del.plan-del {
+                @apply mx-0 block bg-transparent whitespace-pre-line;
+            }
+        }
     }
 }

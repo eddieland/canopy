@@ -1119,7 +1119,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   (the words added on `diff-add` at 18%, those removed struck through on `diff-del` at 14%, where they were, as `ins`
   and `del`; a block added whole, a paragraph or heading, as one: `diff-add` at 10% behind it and a 2px bar of it at
   its left, in a negative margin so its words stay put, and a table's cell added whole on the tint alone, so a new
-  section or table reads as one change, not as a pill for each run its code spans and marks break it into), pressed as
+  section or table reads as one change, not as a pill for each run its code spans and marks break it into; a section
+  moved, a `moved` label in `text-2xs` `muted-foreground` with a hairline border at its heading's end; a section
+  removed, one `<details>` line where it was, `Section removed: Risks`, on `diff-del` at 8% with a 2px bar of it as an
+  added block has, its words struck under it when opened, so a dropped section is one change, not a wall), pressed as
   a waiting plan opens, since that is when it is read for what changed; while pressed, how many
   changes it marks (`12 changes`, a removal and what replaced it one) and ghost `icon-xs` buttons that step the cursor
   to the change before or after it, round to the other end, the plan scrolling to it. Then `Markdown`, a `Toggle` led

@@ -578,6 +578,12 @@ test('Changes marks what the plan changed since the one it replaces, and off, ma
     // A paragraph added whole is marked as one block, not as its words.
     await expect(plan(page).locator('.plan-block-add').filter({ hasText: 'Scheduling exports' })).toBeVisible()
     await expect(plan(page).locator('ins').filter({ hasText: 'Scheduling exports' })).toHaveCount(0)
+    // A section that moved says so at its heading, and one dropped is one line where it was, its words folded in it.
+    await expect(plan(page).getByRole('heading', { name: 'Risks' })).toContainText('moved')
+    const dropped = plan(page).getByText('Section removed: Rollout')
+    await expect(plan(page).getByText('Behind a flag, on for one team first.')).toBeHidden()
+    await dropped.click()
+    await expect(plan(page).getByText('Behind a flag, on for one team first.')).toBeVisible()
     // What it marks is no part of the plan: its Markdown is as it was.
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).not.toContainText('a row per line')
