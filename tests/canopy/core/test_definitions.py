@@ -732,6 +732,63 @@ def test_the_overseer_keeps_the_trackers_reads(canopy_env: CanopyEnv) -> None:
         assert not _opencode_disabled(ruleset, tool), tool
 
 
+#: GitHub's tools the planner and the triage agent may call when the tracker is GitHub: its reads of issues and PRs,
+#: and the signed-in user. The code they read in their desks.
+PLANNER_GITHUB_READS = {
+    "github_get_me",
+    "github_issue_read",
+    "github_list_issues",
+    "github_search_issues",
+    "github_list_issue_types",
+    "github_get_label",
+    "github_pull_request_read",
+    "github_list_pull_requests",
+    "github_search_pull_requests",
+}
+#: The tools the private worker opens, updates, and replies on its PRs with, through GitHub's server.
+GITHUB_PR_WRITES = ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment")
+
+
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
+def test_with_a_github_tracker_the_planner_reads_and_writes_nothing(canopy_env: CanopyEnv, agent: str) -> None:
+    # GitHub's server is the tracker's, the one the private worker's PRs go through too: of its tools, the planner and
+    # the triage agent get only the reads (DESIGN §25, TRUST_MODEL T6).
+    canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": "github"}})
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    rules = _rules_in(rendered)
+    assert {tool for tool in GITHUB_TOOLS if _allowed(rules, tool)} == PLANNER_GITHUB_READS
+
+
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE])
+def test_the_planner_gets_no_write_canopy_knows_from_an_operators_read_tools(canopy_env: CanopyEnv, agent: str) -> None:
+    # An operator's list as canopy's default for GitHub once was, the private worker's PR tools among the reads, and
+    # its create tool too.
+    canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": "github"}})
+    read_tools = ["issue_read", *GITHUB_PR_WRITES, "issue_write"]
+    canopy_env.configure(canopy_env.user_file, {"tracker": {"read_tools": read_tools}})
+    # Its replies posted, so that the private worker keeps the reply tool: drafting them denies it.
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
+    files = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))
+    rules = _rules_in(files[f"agents/{agent}.md"].decode())
+    assert [tool for tool in read_tools if _allowed(rules, f"github_{tool}")] == ["issue_read"]
+    private = _rules_in(files[f"agents/{agents.PRIVATE_WORKER}.md"].decode())
+    assert [tool for tool in read_tools if _allowed(private, f"github_{tool}")] == read_tools
+
+
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.PLAN_TRIAGE, agents.PRIVATE_WORKER])
+def test_an_operators_read_tools_leave_the_private_worker_its_pr_tools(canopy_env: CanopyEnv, agent: str) -> None:
+    # `tracker.read_tools` names the reads; the PR tools are the provider's, as its create tools are.
+    canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": "github"}})
+    canopy_env.configure(canopy_env.user_file, {"tracker": {"read_tools": ["issue_read"]}})
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    rules = _rules_in(rendered)
+    assert _allowed(rules, "github_issue_read")
+    assert not _allowed(rules, "github_list_issues")
+    for tool in GITHUB_PR_WRITES:
+        assert _allowed(rules, f"github_{tool}") is (agent == agents.PRIVATE_WORKER), tool
+
+
 def test_the_overseer_has_no_todo_list_and_no_skill_tool_with_the_trackers_skill_in_its_body() -> None:
     # The prompt has it load the tracker's skill by name only where canopy ships none, so the skill tool stays then.
     bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
@@ -744,14 +801,22 @@ def test_the_overseer_has_no_todo_list_and_no_skill_tool_with_the_trackers_skill
 
 
 @pytest.mark.parametrize(
-    ("agent", "tracker_posts", "issue_comments"),
-    [("canopy-worker", False, True), ("canopy-worker", True, False), (agents.PRIVATE_WORKER, False, False)],
+    ("agent", "provider", "tracker_posts", "issue_comments"),
+    [
+        ("canopy-worker", "jira", False, True),
+        ("canopy-worker", "jira", True, False),
+        (agents.PRIVATE_WORKER, "jira", False, False),
+        # GitHub's server is the tracker's then, and the tracker's rules allow the private worker its PR tools by name:
+        # the reply tool among them is denied after them.
+        (agents.PRIVATE_WORKER, "github", False, False),
+    ],
 )
 def test_under_approve_workers_lose_the_tools_that_comment(
-    canopy_env: CanopyEnv, agent: str, *, tracker_posts: bool, issue_comments: bool
+    canopy_env: CanopyEnv, agent: str, provider: str, *, tracker_posts: bool, issue_comments: bool
 ) -> None:
     """Under `trust.review_replies = "approve"` a worker drafts its comments (DESIGN §29); denied by name in depth."""
     path = f"agents/{agent}.md"
+    canopy_env.configure(canopy_env.shared_file, {"tracker": {"provider": provider}})
     canopy_env.write_private('[trust]\nreview_replies = "post"\n')
     before = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     assert _allowed(_rules_in(before), "github_add_reply_to_pull_request_comment")
@@ -767,4 +832,5 @@ def test_under_approve_workers_lose_the_tools_that_comment(
     assert _allowed(tools, "github_add_issue_comment") is issue_comments
     assert _allowed(bash, "gh issue comment 1 --body x") is issue_comments
     assert _allowed(tools, "github_create_pull_request")
+    assert _allowed(tools, "github_update_pull_request")
     assert _allowed(bash, "git push origin HEAD:refs/heads/agent/PROJ-1-x")

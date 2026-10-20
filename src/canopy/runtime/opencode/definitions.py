@@ -5,8 +5,9 @@ canopy ships its agents and skills as OpenCode reads them from a config director
 decides from config, what each agent may do (`canopy.runtime.agents.Rules`), `render` writes at the lines the shipped
 files mark for it:
 
-- the tracker's MCP server and the tools of it the private worker, the planner, and the triage agent may call, its read
-  tools (DESIGN §22, §25);
+- the tracker's MCP server and the tools of it the private worker, the planner, and the triage agent may call: its read
+  tools, and for the private worker alone, its tools that create a ticket and those that write to a PR (DESIGN §22,
+  §25);
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
 - the reviewer's, overseer's, and triage agent's temperature, unless it sets none;
@@ -15,8 +16,9 @@ files mark for it:
   (DESIGN §6). With the skill there, the overseer's skill tool is denied, so that OpenCode sends neither it nor the
   list of skills.
 
-OpenCode applies the last matching permission rule (D021), so every catch-all `"*"` comes before its exceptions, and
-a rendered rule that allows goes after the deny it narrows.
+OpenCode applies the last matching permission rule (D021), so every catch-all `"*"` comes before its exceptions, a
+rendered rule that allows goes after the deny it narrows, and a rendered deny goes after every allow it must beat: the
+private worker's reply tools are marked below its tracker tools, which allow GitHub's reply tool by name.
 """
 
 from __future__ import annotations
@@ -135,8 +137,9 @@ def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE)
     """Return definition `name`, the private worker's, the planner's, or the triage's, with the tracker's rules.
 
     Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
-    (D021). The private worker's also allows the server's create tools, whole, to file follow-ups (DESIGN §18); the
-    planner and the triage write nothing. With no tools known, the marked line stays as it is; dispatch refuses a
+    (D021). The private worker's also allows the server's PR tools, for its own PRs, and its create tools, whole, to
+    file follow-ups (DESIGN §18). The planner and the triage write nothing: they get the read tools only, less any of
+    those writes that config's read tools name. With no tools known, the marked line stays as it is; dispatch refuses a
     private run or a plan then (`no_read_tools`, DESIGN §22, §25).
 
     Raises:
@@ -146,7 +149,11 @@ def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE)
         raise DefinitionsError(f"{name} has no line {_TOOLS_MARKER.strip()!r} to render the tracker's tools at")
     if tools is None:
         return text
-    allowed = (*tools.allowed, *tools.create) if name == _PRIVATE_FILE else tools.allowed
+    writes = (*tools.pr_writes, *tools.create)
+    if name == _PRIVATE_FILE:
+        allowed = list(dict.fromkeys((*tools.allowed, *writes)))
+    else:
+        allowed = [tool for tool in tools.allowed if tool not in writes]
     rules = [f'  "{tools.server}_*": deny\n', *(f'  "{tools.server}_{tool}": allow\n' for tool in allowed)]
     return text.replace(_TOOLS_MARKER, _TOOLS_MARKER + "".join(rules), 1)
 
@@ -170,7 +177,8 @@ def render_replies(text: str, name: str, *, approve: bool, ticket_comments: bool
     """Return worker definition `name` denying the GitHub server's comment tools and `gh`'s, if `approve`.
 
     Under `trust.review_replies = "approve"` a worker drafts every comment it would post (DESIGN §29), so the tools that
-    comment are denied by name, as defense in depth: the prompt is what keeps it from posting. A worker that still
+    comment are denied by name, as defense in depth: the prompt is what keeps it from posting. They are marked after
+    the private worker's tracker tools, which allow GitHub's reply tool for a GitHub tracker. A worker that still
     posts its ticket comments itself (`ticket_comments`) keeps the issue-comment ones, which GitHub's issues share with
     a PR's top-level comments.
 
