@@ -265,7 +265,7 @@ too, with the loop's state and the running and recent runs.
 
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
 raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
-`multi_repo`, `follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
+`multi_repo` and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review` and `plan_changed`
 (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), `drafts_waiting` (§29), and `connector_failed`
 (§30). An item about one unit names its repository, shown as `KEY (repo)`.
@@ -278,10 +278,8 @@ says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the o
 raises `awaiting_reply` for a started ticket's or a planner's unanswered question (§22, §25), `repo_missing` for a
 mapped repository with no clone (§18), `connector_failed` about the workspace, one item naming every source whose run
 that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick whose `canopy --version`
-or free-disk check failed (§6 step 5). It raises `follow_up_filed` about a ticket not done whose runs filed follow-ups
-since its latest forget, naming each with its repository while canopy has no run of it, no start record, and no mark
-that it is done: a queue label, which the overseer then dispatches on, or the operator's start ends its wait. Items have
-no dismissal, so a follow-up the operator leaves stops being asked about when its parent is done or forgotten. It raises
+or free-disk check failed (§6 step 5). Follow-ups a run filed are an event, not an item: the sinks hear of them once,
+as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has decided on one. It raises
 `follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not record, until the ticket is done
 or forgotten (§18).
 
