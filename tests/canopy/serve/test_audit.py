@@ -44,19 +44,30 @@ def test_a_sessions_writes_are_recorded_from_its_sign_in_with_their_paths_and_st
     assert all(db.parse_time(w.at) for w in rows)
 
 
-def test_a_signed_in_write_any_guard_refuses_is_recorded(ctx: Context) -> None:
+def test_a_write_with_its_sessions_token_is_recorded_whichever_guard_refuses_it(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers)
-    c.post(f"/api/tickets/{KEY}/start", headers={"origin": ORIGIN})
     c.post(f"/api/tickets/{KEY}/start", headers={**headers, "origin": "http://evil.test"})
     c.post("/api/nowhere", headers=headers)
 
     assert [(w.path, w.code) for w in writes(ctx.conn)[1:]] == [
         (f"/api/tickets/{KEY}/stop", 409),
         (f"/api/tickets/{KEY}/start", 403),
-        (f"/api/tickets/{KEY}/start", 403),
         ("/api/nowhere", 405),
     ]
+
+
+def test_a_write_with_the_cookie_but_not_the_token_is_not_recorded(ctx: Context) -> None:
+    # A page on another port of this host: its browser sends the operator's cookie, and the guard, which compares host
+    # names alone, lets its Origin by. It cannot read the token, so it is refused, and recorded nowhere.
+    c, headers = signed_in_client(ctx)
+    other_port = {"origin": "http://127.0.0.1:3000"}
+    for _ in range(3):
+        assert c.post(f"/api/tickets/{KEY}/start", headers=other_port).status_code == 403
+    assert c.post("/api/session", json={"secret": ""}, headers=other_port).status_code == 422
+    assert c.post(f"/api/tickets/{KEY}/start", headers={**headers, "x-canopy-token": "forged"}).status_code == 403
+
+    assert [w.path for w in writes(ctx.conn)] == ["/api/session"]
 
 
 def test_a_write_without_a_session_and_a_read_are_not_recorded(ctx: Context) -> None:
@@ -109,6 +120,18 @@ def test_a_write_the_journal_cannot_take_is_logged_and_still_answered(ctx: Conte
     assert log.warning.call_args.args == ("web UI write not recorded: %s %s", "DELETE", "/api/session")
     assert log.warning.call_args.kwargs["extra"]["path"] == "/api/session"
     assert [w.method for w in writes(ctx.conn)] == ["POST"]
+
+
+def test_a_record_that_fails_any_way_is_logged_and_the_request_still_answered(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    with (
+        mock.patch.object(Backend, "open", autospec=True, side_effect=OSError("no space left on device")),
+        mock.patch.object(audit, "_log", autospec=True) as log,
+    ):
+        assert c.delete("/api/session", headers=headers).status_code == 200
+
+    log.warning.assert_called_once()
+    assert log.warning.call_args.kwargs["extra"]["error"] == "OSError: no space left on device"
 
 
 def test_a_second_sign_in_is_a_new_session(backend: Backend) -> None:

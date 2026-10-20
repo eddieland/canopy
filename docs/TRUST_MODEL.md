@@ -619,10 +619,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
-- Each write request of a signed-in session, any method but GET and HEAD, and each sign-in is recorded in the journal
-  once it is answered, refused or not: when, its method and path, its status, the peer's address, and a fingerprint of
-  the session that signs nothing. Never its body, headers, query, cookie, or token, so a forget still deletes the
-  operator's words. A request with no valid session is not recorded, so only the secret's holder adds rows.
+- Each write request, any method but GET and HEAD, that carries a signed-in session and its token, and each sign-in, is
+  recorded in the journal once it is answered, refused or not: when, its method and path, its status, the peer's
+  address, and a fingerprint of the session that signs nothing. Never its body, headers, query, cookie, or token, so a
+  forget still deletes the operator's words. A request without both is not recorded: a page on another port of this
+  host is sent the cookie but cannot read the token, so only a page of this server or the secret's holder adds rows.
 - The web channel writes only through `canopy.core`'s functions, with their guards, and only what this list names:
   mostly what the CLI's verbs write, through the functions they use (T1). It can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,

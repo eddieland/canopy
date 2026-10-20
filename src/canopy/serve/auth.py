@@ -35,6 +35,8 @@ OPEN_TOKEN = "open"  # noqa: S105  (not a credential: the open server checks non
 _VERSION = "v1"
 #: The methods that read; any other is a write, which needs the session's token (`Sessions.require`).
 READ_METHODS = frozenset({"GET", "HEAD"})
+#: Where a sign-in leaves the session it issued in the request's state, for audit.py.
+SIGNED_IN = "canopy_signed_in"
 
 
 @dataclass(frozen=True)
@@ -141,6 +143,21 @@ class Sessions:
             The session, or None without a valid cookie.
         """
         return self.check(request.cookies.get(self.cookie_name))
+
+    def writer(self, request: Request) -> Signed | None:
+        """The session `request` writes as: its cookie's, when it also carries that session's token.
+
+        A page on another port of this host is sent the cookie but cannot read the token, so only a page of this server
+        or a holder of the secret writes as a session.
+
+        Returns:
+            The session, or None without a valid cookie and its token. Always None on an open server.
+        """
+        session = self.of(request)
+        if session is None:
+            return None
+        given = request.headers.get(TOKEN_HEADER, "")
+        return session if hmac.compare_digest(given.encode(), self.token(session).encode()) else None
 
     def require(self, request: Request) -> None:
         """A FastAPI dependency: refuse a request without a session, and a write without its token and an Origin.
