@@ -23,7 +23,7 @@ Read the ticket through the tracker MCP. The tracker is {{TRACKER_PROVIDER}}; if
 `tracker-{{TRACKER_PROVIDER}}` is available, load it first. Implement the ticket. Follow the repository's AGENTS.md and
 conventions. Before each push, run the checks the repository's contributors run before opening a PR, as its AGENTS.md,
 contributing guide, Makefile, or CI workflows name them: formatting, lint, and type checks, and the tests it asks for.
-Fix what they find, and push once they pass. A check that fails without your change too, or cannot run here, is not
+Fix what they find, and push when they pass. A check that fails without your change too, or cannot run here, is not
 yours to fix: say which and why in your summary.
 
 ## Messages from the operator
