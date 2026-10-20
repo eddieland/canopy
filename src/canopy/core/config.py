@@ -1160,27 +1160,9 @@ def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None 
             alone; a file cannot be read or is not valid TOML; a key is unknown or removed; or a value does not
             validate.
     """
-    user_file = user_file or user_config_path()
-    shared_file = root / WORKSPACE_FILE_NAME
-    private_file = private_config_path(root)
-    check_untracked(runner or procs.SubprocessRunner(), root)
-    shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
-    for name in shared:
-        if SPECS[name].scope is Scope.PRIVATE:
-            raise ConfigError(
-                f"{shared_file}: {name} is private and cannot be set in the workspace file; set it in {private_file}, "
-                f"or in {user_file} for every workspace"
-            )
-    user_values = _read(user_file) if user_file.exists() else None
-    private_values = _read_private(private_file)
-    if user_values is None and private_values is None:
-        raise ConfigError(f"no config at {private_file} or {user_file}; run `canopy init` in the workspace")
-    private_values = {
-        name: _in_state_dir(value, private_file.parent) if name.startswith("paths.") else value
-        for name, value in (private_values or {}).items()
-    }
-
-    layers = ((shared_file, shared), (user_file, user_values or {}), (private_file, private_values))
+    files = config_files(root, user_file)
+    shared_file, user_file, _ = files
+    layers = _layers(root, files, runner)
     merged, origin = _merge(layers, shared_file)
     # Unset or empty: `prompts/` in the user config directory.
     if merged["paths"].get("prompt_overrides", "") == "":
@@ -1189,7 +1171,33 @@ def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None 
     try:
         return Config.model_validate(merged)
     except ValidationError as e:
-        raise ConfigError(_describe(e, origin, (shared_file, user_file, private_file))) from e
+        raise ConfigError(_describe(e, origin, files)) from e
+
+
+def config_files(root: Path, user_file: Path | None = None) -> tuple[Path, Path, Path]:
+    """Return the files `load` reads for the workspace at `root`, in the order it merges them.
+
+    Returns:
+        The workspace file, the user file (`user_file`, or the one in the user config directory), and the private file.
+        Any of them may not exist.
+    """
+    return root / WORKSPACE_FILE_NAME, user_file or user_config_path(), private_config_path(root)
+
+
+def origins(root: Path, user_file: Path | None = None, runner: procs.Runner | None = None) -> dict[str, Path]:
+    """Return the file each key's value comes from, as `load` merges them; a key set in no file is its default's.
+
+    A table section, such as `chores`, is one key, from the last file that has it. A workspace file's policy value that
+    does not tighten the default is not its value, so it is not its origin either.
+
+    Returns:
+        The file by `section.key` name, for each key some file sets.
+
+    Raises:
+        ConfigError: as `load` raises it for the files, before any value is validated.
+    """
+    files = config_files(root, user_file)
+    return _merge(_layers(root, files, runner), files[0])[1]
 
 
 def check_untracked(runner: procs.Runner, root: Path) -> None:
@@ -1214,6 +1222,37 @@ def check_untracked(runner: procs.Runner, root: Path) -> None:
             f"commands or supply a journal. Remove it from the repository (`git rm -r --cached {WORKSPACE_STATE_DIR}`) "
             "and check what it holds before running canopy."
         )
+
+
+def _layers(
+    root: Path, files: tuple[Path, Path, Path], runner: procs.Runner | None
+) -> tuple[tuple[Path, dict[str, object]], ...]:
+    """Read each file `load` merges, checked as it checks them, into its keys by `section.key` name.
+
+    Returns:
+        Each file and its keys, in the order `load` merges them.
+
+    Raises:
+        ConfigError: as `load` raises it, for everything but a value that does not validate.
+    """
+    shared_file, user_file, private_file = files
+    check_untracked(runner or procs.SubprocessRunner(), root)
+    shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
+    for name in shared:
+        if SPECS[name].scope is Scope.PRIVATE:
+            raise ConfigError(
+                f"{shared_file}: {name} is private and cannot be set in the workspace file; set it in {private_file}, "
+                f"or in {user_file} for every workspace"
+            )
+    user_values = _read(user_file) if user_file.exists() else None
+    private_values = _read_private(private_file)
+    if user_values is None and private_values is None:
+        raise ConfigError(f"no config at {private_file} or {user_file}; run `canopy init` in the workspace")
+    private_values = {
+        name: _in_state_dir(value, private_file.parent) if name.startswith("paths.") else value
+        for name, value in (private_values or {}).items()
+    }
+    return ((shared_file, shared), (user_file, user_values or {}), (private_file, private_values))
 
 
 def _merge(
