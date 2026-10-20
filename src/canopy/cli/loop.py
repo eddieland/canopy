@@ -36,8 +36,8 @@ RECENT_RUNS = 10
     type=click.IntRange(min=1),
     metavar="MINUTES",
     help=(
-        "Minutes to wait after each tick ends, kept on a reload; never less than loop.min_gap_minutes from the tick's"
-        " start. Default: loop.interval_minutes."
+        "Minutes to wait after each tick ends, kept on a reload; never less than loop.min_gap_minutes."
+        " Default: loop.interval_minutes."
     ),
 )
 @click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
