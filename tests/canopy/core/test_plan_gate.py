@@ -81,6 +81,31 @@ def test_skip_lets_the_implement_through_and_supersedes_the_plan(scenario: Scena
     scenario.run(IMPLEMENT)
 
 
+def test_a_waiver_an_old_triage_wrote_lets_nothing_through(scenario: Scenario, git_pool: GitPool) -> None:
+    """Triage before a plan was removed (M55): a waiver one wrote stays in the journal, read by nothing."""
+    scenario.configures("workspace", policy=APPROVE)
+    seen(scenario.conn, scenario.env)
+    tick_id = db.start_tick(scenario.conn, dry_run=False)
+    triage = db.insert_run(
+        scenario.conn,
+        tick_id=tick_id,
+        key=KEY,
+        kind=RunKind.NEEDS_PLAN,
+        branch="",
+        slots=[],
+        runs_dir=scenario.env.state_dir,
+        works_units=False,
+    )
+    with db.transaction(scenario.conn):
+        scenario.conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (triage,))
+        scenario.conn.execute(
+            "INSERT INTO plan_waivers (ticket_key, run_id, reason, at) VALUES (?, ?, 'A typo.', ?)",
+            (KEY, triage, db.now()),
+        )
+    assert scenario.refuses(IMPLEMENT) == [("refused:unplanned", UNPLANNED.format("it has no plan approved"))]
+    planned(scenario)
+
+
 def test_asking_for_a_plan_gates_a_ticket_whatever_the_policy(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.seen()
     assert "the next tick dispatches a planner" in scenario.operator("plan", KEY).out

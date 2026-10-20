@@ -16,11 +16,14 @@ from canopy.runs import dispatch, policy, worker
 
 @click.command("dispatch", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
-# `fix-ci` and `split` are taken only to be refused naming what replaced them, a refusal the decisions record.
+# `fix-ci`, `split`, and `needs-plan` are taken only to be refused naming what replaced them, a refusal the decisions
+# record.
 @click.option(
     "--kind",
     required=True,
-    type=click.Choice([*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED), str(policy.SPLIT)]),
+    type=click.Choice(
+        [*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED), str(policy.SPLIT), str(policy.NEEDS_PLAN)]
+    ),
     help="What the worker does.",
 )
 @click.option(

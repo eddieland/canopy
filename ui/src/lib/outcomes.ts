@@ -345,18 +345,15 @@ export function planText(key: string, changed: PlanChanged): string {
     }
     const superseded =
         changed.superseded === null ? '' : `Plan ${changed.superseded} of ${key} is superseded; its file stays. `
-    // The waiver a triage gave stands only while the ticket's own setting is unset (DESIGN §25).
-    const undone = changed.action === 'skip' ? 'your skip takes its place' : 'it is undone'
-    const waived = changed.waived === null ? '' : `Triage run ${changed.waived} had waived ${key}'s plan; ${undone}. `
     if (changed.action === 'skip') {
         const state = changed.already ? 'was already skipped' : 'is skipped'
-        return `${superseded}${waived}${key}'s plan ${state}: its implement goes ahead without one.`
+        return `${superseded}${key}'s plan ${state}: its implement goes ahead without one.`
     }
     if (changed.already) {
         return `${key} already waits on a plan: the next tick dispatches a planner if none is running.`
     }
     return (
-        `${superseded}${waived}${key} is planned first: the next tick dispatches a planner, and nothing is ` +
+        `${superseded}${key} is planned first: the next tick dispatches a planner, and nothing is ` +
         'implemented until you approve its plan.'
     )
 }

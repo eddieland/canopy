@@ -345,10 +345,6 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
     """Record the attention items the harness raises itself, every tick their cause holds (DESIGN §14)."""
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
-    # The reviewer's second opinion on a triage's waiver: a review that judged the waived ticket's PR high (§25).
-    for unit in attention.not_trivial(ctx.conn):
-        action = f"{attention.ACTION_PREFIX}{unit.reason}"
-        db.record_decision(ctx.conn, tick_id, unit.ticket_key, action, unit.detail, repo=unit.repo)
     # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
     # public ticket, since the planner writes nothing to the ticket (DESIGN §25).
     for waiting in [*conversation.awaiting(ctx.conn), *plans.awaiting(ctx.conn)]:

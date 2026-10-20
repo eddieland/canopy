@@ -17,7 +17,8 @@ a private ticket (§22) is planned the same way as a public one.
 `policy.plan` is off or `"approve"` (every ticket is planned), and a repository may only tighten it (§12); a ticket's
 own setting overrides it. Only the operator's channels (§22) set that, ask for a new plan, or waive one: each is refused
 inside any agent run. A plan is never asked for once the ticket has a branch, so it never describes work already
-started. Plan runs are limited per ticket, never reset (D030), and raised only by the operator's grant.
+started. Plan runs are limited per ticket, never reset (D030), and raised only by the operator's grant. Trivial work is
+planned like any other unless the operator skips its plan: no agent waives one (D126).
 
 ### Approving a plan
 
@@ -25,13 +26,13 @@ The operator approves the newest plan as its file stands, their edits included. 
 for changes: the overseer dispatches `plan` again with the reply in the planner's prompt, and the new plan supersedes
 the old; an approval sent before that re-plan starts wins, as the operator's later word. The approval authorizes the
 `implement`, not the plan's text as an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
-`unplanned` refuses an `implement` while the ticket needs a plan and has none approved, nor a triage's waiver;
+`unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
 `plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
 
 ### The prompt
 
 A plan runs in a desk of worktrees at their bases (§18), with no branch and nothing pushed, within
-`capacity.max_workers`; under `tracker.private` (§22), a ticket's first plan or triage starts it privately. The planner,
+`capacity.max_workers`; under `tracker.private` (§22), a ticket's first plan starts it privately. The planner,
 `canopy-planner` (§13), has no shell, web fetch, or subagent tools, reads only inside its desk and through the private
 worker's tracker read tools (§22), without which it is not run, and writes one file, its plan. The ticket's text and the
 code are data to it (T1).
@@ -50,8 +51,8 @@ Plans add the phase `plan_proposed` to §7: the newest plan waits on the operato
 (§14), holding no run or slot, until a reply makes the next action a new `plan`. A `ready` ticket that needs a plan and
 has none waiting or approved dispatches `plan`; one whose planner is blocked with no reply since is `needs_human`, and
 the harness raises `awaiting_reply` rather than re-plan until attempts run out. The state block gives the plan's status,
-attempts, and facts the harness computes so the overseer compares no times (`changes_asked`, `blocked`, `triage_due`,
-`waived`), never its text.
+attempts, and facts the harness computes so the overseer compares no times (`changes_asked`, `blocked`), never
+its text.
 
 ### Workers follow the plan
 
@@ -76,35 +77,6 @@ never rendered, an image never fetched, and a link is not a link (D113). A comme
 words, found again on each new plan; asking for changes sends the open threads as one reply (§22). A saved edit never
 overwrites unseen one made elsewhere. Only the web channel writes threads and edits, behind its token (T8).
 
-### Triage before a plan
-
-REQUIREMENTS R22. With plans on, a typo fix still costs a planner run and the operator's reading. A **triage** is a
-cheaper run that judges from the ticket and the code whether the work is trivial enough to need no plan, by its prompt's
-own measure or, where the operator gave them, the operator's words for it. If trivial, the plan is waived; otherwise,
-or if anything goes wrong, the ticket is planned. Triage's keys are private, unlike the rest of `policy.*`, since
-triage loosens the operator's plan gate (T7).
-
-A triage is due only when the ticket needs a plan by `policy.plan` alone (a ticket the operator marked is always
-planned) and has had no branch, plan run, or triage, so it is triaged at most once, never reset or granted (D030).
-While one is due, the overseer's plan is refused in code: only the operator's own word plans a ticket ahead of its
-triage. It reads only, holds no slot, and writes nothing, as the planner with nothing to edit. Result contract (D026):
-
-```json
-{"status":"done|failed","reason":"one sentence","verdict":"trivial|plan"}
-```
-
-Only `done` with `trivial` waives the plan; any other end fails closed, with the triage spent and nothing retried. The
-waiver is written by the harness from the validated result, never by an agent or a command, so `unplanned` stays a guard
-in code. It holds only while the ticket's own setting is unset. No worker hears of it, nor the triage's reason. A round
-of PR feedback is triaged before its feedback plan, and a `trivial` one follows the rules for feedback without plans
-(§32), so triage never lets an untrusted reviewer's text start a worker. Spend counts triage runs and plan runs each as
-a kind of their own, with the plans triage waived, so its cost reads against the planner runs it saved.
-
-**A second opinion after.** Where `review.agent_prs` is on, the reviewer, not told of the waiver, judges each PR's
-impact (§21); one judged `high` raises `not_trivial` until the ticket is done or forgotten or the operator replaces the
-waiver. It stops nothing: the PR's human review is the gate.
-
 ### Open
 
 - A plan-and-go mode that implements without waiting.
-- Which sandbox role holds the triage (§24): it reads primary clones, which neither role expects.

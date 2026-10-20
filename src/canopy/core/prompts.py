@@ -33,13 +33,6 @@ WORKER_PRIVATE: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement-private.md",
     RunKind.RESUME: "worker-resume-private.md",
 }
-#: A triage's prompt, one for a public ticket and a started one alike, as a plan's (DESIGN §25, Triage before a plan).
-#: Not a worker prompt: a triage changes no code and reads no CI, so it carries neither the standing instructions nor
-#: the notice.
-TRIAGE = "plan-triage.md"
-#: Placeholders a triage's prompt must use: its own authorization check, which names the queue labels on a public
-#: ticket (D051), and the operator's words for what is trivial, which take the place of the prompt's own measure.
-REQUIRED_TRIAGE = ("AUTHORIZATION", "TRIVIAL")
 # The prompts of `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8). An override of either would be
 # read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the
 # operator's CI instructions silently.
@@ -166,25 +159,6 @@ def plan_authorization(key: str, labels: Sequence[str], *, private: bool) -> str
     return (
         f"Before any other work, read {key} through the tracker. If it is closed, or carries none of the labels "
         f"{named}, the overseer should not have dispatched you: write no plan, and report `failed` with a summary that "
-        "starts `not authorized:` and says which it was."
-    )
-
-
-def triage_authorization(key: str, labels: Sequence[str], *, private: bool) -> str:
-    """Return a triage's `{{AUTHORIZATION}}`: the label check on a public ticket, or why a started one has none.
-
-    As the planner's (`plan_authorization`): a triage writes nothing, so one it should not have run costs only its
-    spend, and the check keeps the rule every worker follows (D051).
-    """
-    if private:
-        return (
-            f"The operator started {key} in canopy, which authorized this run; there is no label to check. Its "
-            "conversation stays with the operator."
-        )
-    named = ", ".join(f"`{label}`" for label in labels)
-    return (
-        f"Before any other work, read {key} through the tracker. If it is closed, or carries none of the labels "
-        f"{named}, the overseer should not have dispatched you: judge nothing, and report `failed` with a reason that "
         "starts `not authorized:` and says which it was."
     )
 
@@ -489,19 +463,6 @@ def render_worker(
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)
-
-
-def render_triage(config: Config, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
-    """Return a triage's prompt (DESIGN §25) with every `{{NAME}}` from `values`.
-
-    One prompt serves a public ticket and a started one, as a plan's does: `values` gives each its own authorization
-    and operator's messages. It must carry `REQUIRED_TRIAGE` and `required`: `{{OPERATOR_MESSAGES}}` once the operator
-    has written to the ticket (D093).
-
-    Returns:
-        The rendered prompt.
-    """
-    return render(config, TRIAGE, values, required=(*REQUIRED_TRIAGE, *required))
 
 
 def render_reviewer(

@@ -27,7 +27,7 @@ live state: re-read the tracker and GitHub before every decision that matters.
   `repositories[].leased_slots` is what `treehouse status` would say; do not run `treehouse`.
 
 ```text
-canopy dispatch <KEY> --kind implement|resume|plan|needs-plan --repo NAME [--repo NAME ...] [--label LABEL]
+canopy dispatch <KEY> --kind implement|resume|plan --repo NAME [--repo NAME ...] [--label LABEL]
     [--reason REASON ...] [--review-run ID] [--slug SLUG] [--base BRANCH] [--context '<text>'] [--cursor NAME=ID ...]
 canopy decide <KEY> wait|skip|done --rationale "<text>"
 canopy queried [KEY ...]
@@ -90,7 +90,7 @@ ticket.
      `canopy attention <KEY> attempt_limit --repo <that unit>` with the kind and the count.
    - While a unit's `ci_cooldown_until` is later than `now`, a `resume` whose only reason would be `ci` waits: record
      `wait`. A `resume` with any other reason is not held, and takes the failed check along.
-   - When the ticket's `last_run` ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed` and is not a
+   - When the ticket's `last_run` ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed` and is not an old
      `needs-plan` run, the harness has it on the attention list: record `wait`, unless an authorized replier has
      commented since its `ended_at` (not a worker's comment) or an `operator` message is dated after it; then decide
      from the phase as usual.
@@ -200,7 +200,7 @@ have", each run in full: `wait` is `canopy decide <KEY> wait --rationale ...`, a
 | Phase | Live evidence | Action |
 |---|---|---|
 | `running` | a running worker exists for this key in the state block | `wait` |
-| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `needs-plan` or `plan` (see "Plans") |
+| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `plan` (see "Plans") |
 | `plan_proposed` | the ticket's newest plan waits on the operator (see "Plans") | `attention plan_review`, or `dispatch plan` |
 | `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume --reason no_pr` with context "open the PR" |
@@ -431,20 +431,13 @@ listed in its `units`. Every unit uses the ticket's one branch.
 
 A ticket with a `plan` key is one the operator wants planned: a written plan they approve before its `implement`.
 `plan.needed` says whether its `implement` waits on an approved plan, by the policy or the operator's word for this
-ticket, unless a triage waived it (`plan.waived`). You never read the plan. A `plan` or `needs-plan` dispatch names
-every repository the ticket will touch, with the usual `--context` and no `--slug` or `--base`. When `plan.needed` is
-true, these rows come before the phase table's `ready` row, in order:
+ticket. You never read the plan. A `plan` dispatch names every repository the ticket will touch, with the usual
+`--context` and no `--slug` or `--base`. When `plan.needed` is true, these rows come before the phase table's `ready`
+row, in order:
 
 - `plan.blocked` is true: the latest plan run asked a question the operator has not answered. The phase is
   `needs_human`; record `wait`. The harness has the question on the attention list (`awaiting_reply`), on a public
   ticket too; never comment on the ticket about it.
-- `plan.triage_due` is true, and the ticket is otherwise `ready`: the operator turned triage on, so the ticket first
-  gets one cheaper run that judges whether its work is trivial enough to need no plan. Dispatch `--kind needs-plan`,
-  with no `--cursor` (the triage and the run after it read the operator's messages themselves), and record phase
-  `ready`. Never dispatch `plan` while `plan.triage_due` is true. Once the triage has run it is false for good: if the
-  verdict waived the plan, `plan.waived` names the triage and `plan.needed` is false, so `ready` dispatches
-  `implement`, unplanned; otherwise the next row dispatches `plan` at once, even after a `needs-plan` run that ended
-  `failed`, `unknown`, `timeout`, or `crashed`, which step 4 does not hold.
 - `plan.newest` is null or `superseded`, and the ticket is otherwise `ready`: dispatch `--kind plan` and record phase
   `ready`. When the ticket has new operator messages, such as the answer to a blocked plan's question, pass `--cursor
   message=<the newest one's id>` and name the message ids in the context. At `plan.limit`, record `attempt_limit`
@@ -461,7 +454,7 @@ true, these rows come before the phase table's `ready` row, in order:
 A ticket with a branch is never planned, so its `plan` key matters only if the CLI refuses an `implement` or `resume` as
 `plan_changed`, because the approved plan's file changed: record `canopy attention <KEY> plan_changed --detail '<the
 refusal>'`, and dispatch nothing else for the ticket until it is gone. Only the operator asks for, approves, or skips a
-plan (`canopy plan`), and only a triage's verdict waives one.
+plan (`canopy plan`).
 
 ## Private tickets
 
@@ -615,7 +608,7 @@ its latest run started from. Later:
 
 ## Refusals and dry runs
 
-The CLI holds the hard limits (labels, kinds, reasons and cursors, repositories, branches, plans and triage, capacity,
+The CLI holds the hard limits (labels, kinds, reasons and cursors, repositories, branches, plans, capacity,
 attempts, cooldowns, running workers, notices) and refuses what breaks one, naming the guard and why. It records the
 refusal as the ticket's decision; an `attempt_limit` refusal records its attention item too. A refusal is correct: do
 not work around it.

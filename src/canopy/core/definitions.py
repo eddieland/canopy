@@ -44,8 +44,8 @@ _STALE_TMP_SECONDS = 3600
 def sources(config: Config | None = None) -> dict[str, bytes]:
     """Return the snapshot's files by relative path.
 
-    They are the bundled agents and skills, with the workers', the reviewer's, the triage agent's, and the overseer's
-    definitions rendered from `config` when it is given.
+    They are the bundled agents and skills, with the workers', the reviewer's, and the overseer's definitions rendered
+    from `config` when it is given.
 
     Raises:
         DefinitionsError: The overseer's prompt cannot be rendered, or a shipped definition cannot be rendered.
@@ -68,7 +68,6 @@ def rules(config: Config) -> agents.Rules:
     temperatures = {
         agents.REVIEWER: runtime.review_temperature,
         agents.OVERSEER: runtime.overseer_temperature,
-        agents.PLAN_TRIAGE: runtime.plan_triage_temperature,
     }
     return agents.Rules(
         tracker_tools=config.tracker.tools(),

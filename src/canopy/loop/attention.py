@@ -23,9 +23,9 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_view, connector_runs, contract, conversation, db, follow_ups, memory, plans, review_result
+from canopy.core import chore_view, connector_runs, contract, conversation, db, follow_ups, memory
 from canopy.core.items import Item, age, fingerprint, one_line, subject
-from canopy.core.vocab import ReviewRunStatus, RunKind, RunStatus, TickStatus
+from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.notify import deliver
 from canopy.runs import drafted
@@ -72,14 +72,11 @@ UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
 DISK_LOW: str = TickStatus.DISK_LOW
 #: The statuses of a tick that did not run the overseer for a cause of canopy's own, each raising an item of its name.
 HALTS = frozenset({UNAVAILABLE, DISK_LOW})
-#: A review judged `high` the PR of a ticket whose plan a triage waived (DESIGN §25, A second opinion after).
-NOT_TRIVIAL = "not_trivial"
 # What the harness records itself (`tick._record_harness_items`, and `HALTS`), so the overseer does not.
 HARNESS_REASONS = frozenset(
     {
         *filter(None, map(run_reason, RunStatus)),
         "awaiting_reply",
-        NOT_TRIVIAL,
         chore_view.FAILED_REASON,
         "repo_missing",
         *HALTS,
@@ -309,8 +306,8 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
 
     The cause holds until a newer run starts for the ticket, the ticket is marked done, or the operator forgets its
     work. It is set aside while the operator has stopped the ticket, which nothing dispatches, so no reply could answer
-    it, and holds again once they start it (DESIGN §14, §22). A triage raises none, however it ended: the ticket is
-    planned next, as if triage were off (DESIGN §25, Triage before a plan).
+    it, and holds again once they start it (DESIGN §14, §22). An old triage raises none, however it ended: the ticket
+    is planned next (M55).
     """
     done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
     stopped = set(conversation.stopped(conn))
@@ -331,52 +328,6 @@ def _detail(run: records.Run) -> str:
     if note:
         text += f": {note}"
     return f"{text}; log {run.log_path}"[:2000]
-
-
-@dataclass(frozen=True)
-class UnitItem:
-    """An attention item the harness raises about one unit of a ticket: its work in one repository (DESIGN §18)."""
-
-    ticket_key: str
-    #: The unit's repository.
-    repo: str | None
-    reason: str
-    detail: str
-
-
-def not_trivial(conn: sqlite3.Connection) -> list[UnitItem]:
-    """Return a `not_trivial` item for each unit whose PR a review judged `high` while a triage waived its plan.
-
-    Any `done` review of the unit's PR counts, whatever it was run for: the reviewer is not told of the waiver, so its
-    impact is a second opinion on the triage's `trivial`. The cause holds until the ticket is marked done, or the
-    waiver is no longer in force: forgotten, or replaced by the operator's own setting. The item stops nothing; the
-    PR's review is still the gate (DESIGN §25, A second opinion after).
-
-    Returns:
-        One item per unit, naming its newest `high` review and the triage run's reason, sorted by ticket and repository.
-    """
-    rows = conn.execute(
-        "SELECT r.id, r.pr_url, r.result_json, u.ticket_key, u.repo FROM review_runs r "
-        "JOIN ticket_units u ON u.pr_url = r.pr_url AND (r.repo IS NULL OR u.repo IS NULL OR r.repo = u.repo) "
-        "JOIN tickets t ON t.key = u.ticket_key "
-        "WHERE r.status = ? AND t.done = 0 AND u.ticket_key IN (SELECT ticket_key FROM plan_waivers) ORDER BY r.id",
-        (ReviewRunStatus.DONE,),
-    ).fetchall()
-    found: dict[tuple[str, str | None], UnitItem] = {}
-    for row in rows:
-        stored = review_result.stored(row["result_json"])
-        ticket = db.get_ticket(conn, str(row["ticket_key"]))
-        waived = plans.waiver(conn, ticket) if ticket is not None else None
-        if stored is None or stored.impact != "high" or waived is None:
-            continue
-        key, repo = str(row["ticket_key"]), None if row["repo"] is None else str(row["repo"])
-        detail = (
-            f"review:{row['id']} judged {row['pr_url']} high impact, but triage run:{waived.run_id} waived its plan "
-            f"as trivial: {one_line(waived.reason)}"
-        )
-        # The newest high review names the item: rows come oldest first.
-        found[key, repo] = UnitItem(key, repo, NOT_TRIVIAL, detail[:2000])
-    return [found[k] for k in sorted(found, key=lambda k: (k[0], k[1] or ""))]
 
 
 def awaiting_detail(waiting: conversation.Awaiting) -> str:

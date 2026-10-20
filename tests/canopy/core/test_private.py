@@ -392,7 +392,7 @@ def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
     tools = config.DEFAULT_TRACKER_TOOLS["github"]
     assert tools.server == "github"
     # Creating follow-ups and writing to a PR are apart from the read tools: only the private worker's definition
-    # allows them, and the planner's and the triage's get the reads alone.
+    # allows them, and the planner's gets the reads alone.
     assert tools.create == ("issue_write",)
     assert tools.pr_writes == ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment")
     for write in (*tools.pr_writes, "issue_write", "add_issue_comment", "sub_issue_write", "merge_pull_request"):

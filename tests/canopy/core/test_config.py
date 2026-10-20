@@ -170,15 +170,23 @@ def test_workspace_policy_only_tightens(canopy_env: CanopyEnv) -> None:
     assert policy.max_resume_attempts == 1  # tighter: used
 
 
-def test_triage_is_off_by_default_and_only_the_operator_turns_it_on(canopy_env: CanopyEnv) -> None:
-    # It loosens the plan gate, so unlike the rest of `[policy]` a shared file may not touch it (TRUST_MODEL T7).
-    cfg = load(canopy_env.root, canopy_env.user_file)
-    assert (cfg.policy.plan_triage, cfg.policy.trivial, cfg.runtime.plan_triage_timeout_minutes) == ("off", "", 10)
-    # The operator need not say what is trivial: the triage's prompt has its own measure.
-    canopy_env.append_user('\n[policy]\nplan_triage = "on"\n')
-    assert load(canopy_env.root, canopy_env.user_file).policy.plan_triage == "on"
-    canopy_env.append_shared('[policy]\ntrivial = "Anything at all."\n')
-    with pytest.raises(ConfigError, match=r"policy\.trivial is private"):
+@pytest.mark.parametrize(
+    ("table", "key"),
+    [
+        ("policy", 'plan_triage = "on"'),
+        ("policy", 'trivial = "A typo."'),
+        ("runtime", "plan_triage_cmd = 'opencode run {prompt}'"),
+        ("runtime", "plan_triage_temperature = 0.1"),
+        ("runtime", "plan_triage_timeout_minutes = 10"),
+    ],
+)
+def test_triages_keys_were_removed_and_say_how_to_skip_a_plan(canopy_env: CanopyEnv, table: str, key: str) -> None:
+    """Triage before a plan waived too few plans to pay for itself, so trivial work is planned (M55)."""
+    text = canopy_env.user_file.read_text()
+    heading = f"\n[{table}]\n"
+    canopy_env.write_user(text.replace(heading, f"{heading}{key}\n") if heading in text else f"{text}{heading}{key}\n")
+    name = key.split(" ", 1)[0]
+    with pytest.raises(ConfigError, match=rf"{table}\.{name} was removed: delete it; .* canopy plan KEY --skip"):
         load(canopy_env.root, canopy_env.user_file)
 
 
@@ -266,15 +274,11 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
             "[loop]\nidle_max_minutes = 14\n",
             r"loop\.idle_max_minutes \(14\) must be at least loop\.interval_minutes \(15\)",
         ),
-        (f"[policy]\ntrivial = '{'x' * 2001}'\n", "at most 2000 characters"),
-        ('[policy]\nplan_triage = "yes"\n', "Input should be 'off' or 'on'"),
-        ("[runtime]\nplan_triage_timeout_minutes = 0\n", "greater than or equal to 1"),
         ("[runtime]\nreview_temperature = -0.1\n", "must be from 0 to 2, or -1 to set none"),
         ("[runtime]\nreview_temperature = 2.5\n", "must be from 0 to 2, or -1 to set none"),
         ("[runtime]\nreview_temperature = true\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\nreview_temperature = '0.1'\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
-        ("[runtime]\nplan_triage_temperature = 3.0\n", "must be from 0 to 2, or -1 to set none"),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
@@ -406,7 +410,6 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.worker_cmd,
         runtime.private_worker_cmd,
         runtime.plan_cmd,
-        runtime.plan_triage_cmd,
         runtime.chore_cmd,
         runtime.review_cmd,
     ):

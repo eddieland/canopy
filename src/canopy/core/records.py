@@ -425,7 +425,7 @@ class RunReason(Row):
 
 @dataclass(frozen=True)
 class RunRead(Row):
-    """A repository a run that leases no slot reads, by name, as its dispatch named it (DESIGN §25)."""
+    """A repository an old triage run read without a slot, by name (M55). Kept as history; nothing reads it now."""
 
     TABLE: ClassVar[str] = "run_reads"
 
@@ -435,7 +435,7 @@ class RunRead(Row):
 
 @dataclass(frozen=True)
 class PlanWaiver(Row):
-    """A plan a triage run waived for its ticket, because its validated result judged the work trivial (DESIGN §25)."""
+    """A plan an old triage run waived (M55). Kept as history: nothing reads it, so no waiver holds (DESIGN §25)."""
 
     TABLE: ClassVar[str] = "plan_waivers"
 
@@ -443,7 +443,7 @@ class PlanWaiver(Row):
     ticket_key: str
     #: The `needs-plan` run whose result waived it.
     run_id: int
-    #: The triage's one-sentence reason, model text written from the ticket, shown to the operator and no worker.
+    #: The triage's one-sentence reason, model text written from the ticket.
     reason: str
     at: str
 

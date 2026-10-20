@@ -215,7 +215,6 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
         idle_ticks=list(starmap(tick_of, spending.idle_ticks(ctx.conn, found.since, found.until))),
         done=found.done,
         per_done=found.per_done,
-        waived=found.waived,
         tickets=[
             SpendTicket(
                 key=t.key,
@@ -255,7 +254,6 @@ def _spend_costs(costs: spending.Costs) -> SpendCosts:
         idle=costs.idle,
         dry_run=costs.dry_run,
         workers=costs.workers,
-        triage=costs.triage,
         plans=costs.plans,
         chores=costs.chores,
         reviews=costs.reviews,

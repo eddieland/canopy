@@ -9,9 +9,9 @@ covered the unit and worked on CI: a `resume` with `ci` among its reasons, or an
 these; the overseer's state block shows them.
 
 A plan is not a unit's work: it writes down how the ticket will be done across every repository it touches (DESIGN
-§25). Nor is a triage, which judges whether it needs a plan at all, nor an old `split`, a kind follow-up tickets
-replaced (M46). Their runs are counted per ticket, and never in a unit's counts. The operator grants a ticket more
-plans (`grant_ticket`); a triage's limit is one, which nothing raises.
+§25). Nor is an old `split`, a kind follow-up tickets replaced (M46), nor an old `needs-plan`, the triage before a plan
+the operator removed (M55). Their runs are counted per ticket, and never in a unit's counts. The operator grants a
+ticket more plans (`grant_ticket`).
 """
 
 from __future__ import annotations
@@ -34,20 +34,18 @@ Unit = tuple[str, str | None]
 
 # The kinds that work in a unit, and every kind `canopy dispatch` takes. Typed as str, since the counts below key on
 # `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
-# none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor is `split`, retired too: its old runs
-# count per ticket, and nothing dispatches it.
+# none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor are `split` and `needs-plan`, retired
+# too: their old runs count per ticket, and nothing dispatches them.
 KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
 RETIRED = RunKind.FIX_CI
 SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
 NEEDS_PLAN = RunKind.NEEDS_PLAN
-#: A ticket's triages: one, before its first plan, never reset or granted (DESIGN §25, Triage before a plan).
-TRIAGES_PER_TICKET = 1
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
 TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, NEEDS_PLAN)
 # The kinds counted per ticket that `canopy grant` takes.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
-DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT))
+DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT, NEEDS_PLAN))
 
 
 def limits(config: Config) -> dict[str, int]:
@@ -67,13 +65,11 @@ def _limit(config: Config, kind: RunKind) -> int:
             return p.max_implement_attempts
         case RunKind.FIX_CI | RunKind.RESUME:
             return p.max_resume_attempts
-        case RunKind.SPLIT:
-            # Retired (M46): nothing dispatches it.
+        case RunKind.SPLIT | RunKind.NEEDS_PLAN:
+            # Retired (M46, M55): nothing dispatches them.
             return 0
         case RunKind.PLAN:
             return p.max_plan_attempts
-        case RunKind.NEEDS_PLAN:
-            return TRIAGES_PER_TICKET
         case _:
             assert_never(kind)
 

@@ -1,7 +1,6 @@
 """How the loop's runs ended, and what its guards refused (DESIGN §11): `canopy health` over a journal by hand."""
 
 import json
-import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -134,8 +133,8 @@ def test_failures_are_the_newest_first_with_a_note_on_one_line(tmp_path: Path, j
     assert notes[4] == "overseer exited 1: no done line"
 
 
-def test_triage_and_plan_runs_are_kinds_of_their_own(tmp_path: Path, journals: Journals) -> None:
-    """A triage before a plan and a plan run (DESIGN §25) are rows of `runs`, but neither counts as a worker."""
+def test_plan_runs_are_a_kind_of_their_own_with_old_triages_among_them(tmp_path: Path, journals: Journals) -> None:
+    """A plan run (DESIGN §25) is a row of `runs`, but no worker's, nor is an old triage before a plan (M55)."""
     conn = journals.open(tmp_path / "canopy.db")
     t = tick(conn, earlier(NOW, 1), "ok")
     conn.execute(
@@ -151,7 +150,7 @@ def test_triage_and_plan_runs_are_kinds_of_their_own(tmp_path: Path, journals: J
     found = health.report(conn, NOW, 7)
     assert [(o.kind, o.what, o.status, o.failed, o.cost_usd) for o in found.outcomes if o.kind != "overseer"] == [
         ("workers", "implement", "done", False, 2.0),
-        ("triage", "needs-plan", "done", False, 0.05),
+        ("plans", "needs-plan", "done", False, 0.05),
         ("plans", "plan", "timeout", True, 0.5),
     ]
     assert [(f.kind, f.what, f.subject) for f in found.failures] == [("plans", "plan", "PROJ-1")]
@@ -184,109 +183,6 @@ def test_an_empty_window_has_nothing(tmp_path: Path, journals: Journals) -> None
     assert (found.outcomes, found.failures, found.refusals) == ([], [], [])
 
 
-def journal_of_waivers(conn: sqlite3.Connection, now: datetime) -> None:
-    """Plans triage waived: one in force, done, with a failed run and reviews; one the operator asked a plan for; one
-    forgotten, with a run after the forget; one before the window; and a triage that judged a plan needed."""
-    tick_id = tick(conn, earlier(now, 9), "ok")
-    for key, setting, done in (
-        ("PROJ-1", None, 1),
-        ("PROJ-2", "plan", 0),
-        ("PROJ-3", None, 0),
-        ("PROJ-4", None, 0),
-        ("PROJ-5", None, 0),
-    ):
-        conn.execute(
-            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, plan_setting, done) "
-            "VALUES (?, 'ws', ?, ?, ?, ?)",
-            (key, earlier(now, 9), earlier(now, 9), setting, done),
-        )
-
-    def run(key: str, kind: str, started: str, status: str, cost: float | None = None) -> int:
-        cursor = conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path, cost_usd) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'l', ?)",
-            (tick_id, key, kind, f"agent/{key}", started, status, cost),
-        )
-        assert cursor.lastrowid is not None
-        return cursor.lastrowid
-
-    def waive(key: str, started: str, reason: str) -> int:
-        run_id = run(key, "needs-plan", started, "done", 0.05)
-        conn.execute(
-            "INSERT INTO plan_waivers (ticket_key, run_id, reason, at) VALUES (?, ?, ?, ?)",
-            (key, run_id, reason, started),
-        )
-        return run_id
-
-    def review(key: str, started: str, impact: str) -> None:
-        result = {"status": "done", "verdict": "clean", "impact": impact}
-        conn.execute(
-            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, status, result_json, log_path) "
-            "VALUES (?, ?, 'abc', ?, ?, 'done', ?, 'l')",
-            (tick_id, f"https://e.test/{key}/pr/1", key, started, json.dumps(result)),
-        )
-
-    waive("PROJ-4", earlier(now, 8), "before the window")
-    waive("PROJ-1", earlier(now, 3), "a typo in\n the README")
-    run("PROJ-1", "implement", earlier(now, 3, -1), "timeout", 1.0)
-    run("PROJ-1", "implement", earlier(now, 2), "done", 2.0)
-    review("PROJ-1", earlier(now, 2, -1), "high")
-    review("PROJ-1", earlier(now, 1), "normal")
-    waive("PROJ-2", earlier(now, 2), "one config line")
-    run("PROJ-2", "plan", earlier(now, 1), "done", 0.5)
-    waive("PROJ-3", earlier(now, 1), "rename a flag")
-    forgotten = run("PROJ-3", "implement", earlier(now, 1, -1), "done", 1.0)
-    conn.execute(
-        "UPDATE tickets SET forgotten_run_id = ?, forgotten_at = ? WHERE key = 'PROJ-3'",
-        (forgotten, earlier(now, 0, 2)),
-    )
-    run("PROJ-3", "implement", earlier(now, 0, 1), "running")
-    run("PROJ-5", "needs-plan", earlier(now, 1), "done", 0.05)
-
-
-def test_waivers_are_the_newest_first_with_what_came_of_their_tickets(tmp_path: Path, journals: Journals) -> None:
-    conn = journals.open(tmp_path / "canopy.db")
-    journal_of_waivers(conn, NOW)
-    found = health.report(conn, NOW, 7)
-    # Before the window, and a triage that waived nothing, are not listed.
-    assert [(w.ticket, w.standing, w.done) for w in found.waivers] == [
-        ("PROJ-3", "forgotten", False),
-        ("PROJ-2", "planned", False),
-        ("PROJ-1", "in_force", True),
-    ]
-    forgotten, planned, in_force = found.waivers
-    # The reason on one line; the runs after the triage, a failed one marked; the highest impact a review judged.
-    assert in_force.reason == "a typo in the README"
-    assert [(r.kind, r.status, r.failed, r.cost_usd) for r in in_force.runs] == [
-        ("implement", "timeout", True, 1.0),
-        ("implement", "done", False, 2.0),
-    ]
-    assert in_force.impact == "high"
-    assert in_force.review_id is not None
-    # A plan the operator asked for after the waiver is among its runs.
-    assert [(r.kind, r.status) for r in planned.runs] == [("plan", "done")]
-    assert (planned.impact, planned.review_id) == (None, None)
-    # What follows a forget is no longer the waiver's.
-    assert [(r.kind, r.status) for r in forgotten.runs] == [("implement", "done")]
-
-
-def test_a_newer_waiver_after_a_forget_leaves_the_old_one_forgotten(tmp_path: Path, journals: Journals) -> None:
-    conn = journals.open(tmp_path / "canopy.db")
-    journal_of_waivers(conn, NOW)
-    triage = conn.execute(
-        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path) "
-        "SELECT tick_id, ticket_key, 'needs-plan', branch, ?, 'done', 'l' FROM runs "
-        "WHERE ticket_key = 'PROJ-3' LIMIT 1",
-        (earlier(NOW, 0),),
-    ).lastrowid
-    conn.execute(
-        "INSERT INTO plan_waivers (ticket_key, run_id, reason, at) VALUES ('PROJ-3', ?, 'again', ?)",
-        (triage, earlier(NOW, 0)),
-    )
-    found = health.report(conn, NOW, 7)
-    assert [(w.ticket, w.standing) for w in found.waivers][:2] == [("PROJ-3", "in_force"), ("PROJ-3", "forgotten")]
-
-
 def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     journal_of_failures(canopy_env.journal(), datetime.now(UTC))
     assert main(["health"]) == 0
@@ -303,28 +199,6 @@ def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.C
     assert any("review " in line and "of https://e.test/pr/7  crashed" in line for line in out)
     assert out[-3] == "Refused by a guard:"
     assert out[-2].startswith("  capacity: 3 times in 2 ticks, last in tick ")
-
-
-def test_canopy_health_prints_the_waivers(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    journal_of_waivers(canopy_env.journal(), datetime.now(UTC))
-    assert main(["health"]) == 0
-    out = capsys.readouterr().out.splitlines()
-    start = out.index("Plans triage waived:")
-    waived = [re.sub(r"run:\d+", "run:N", re.sub(r"review \d+", "review N", line)) for line in out[start + 1 :]]
-    assert waived == [
-        "  PROJ-3  run:N  forgotten, 1 run",
-        "    rename a flag",
-        "  PROJ-2  run:N  planned, 1 run",
-        "    one config line",
-        "  PROJ-1  run:N  in force, done, 2 runs, 1 failed, review N high",
-        "    a typo in the README",
-    ]
-
-
-def test_canopy_health_lists_no_waivers_without_any(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    journal_of_failures(canopy_env.journal(), datetime.now(UTC))
-    assert main(["health"]) == 0
-    assert "Plans triage waived:" not in capsys.readouterr().out
 
 
 def test_canopy_health_on_an_empty_journal(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

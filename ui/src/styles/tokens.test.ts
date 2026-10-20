@@ -65,7 +65,6 @@ const SERIES = [
     'spend-overseer',
     'spend-idle',
     'spend-workers',
-    'spend-triage',
     'spend-plans',
     'spend-chores',
     'spend-reviews',

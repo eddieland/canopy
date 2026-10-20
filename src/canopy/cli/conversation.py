@@ -608,8 +608,7 @@ def _forget_line(forget: records.Forget) -> str:
 def _show_plans(ctx: Context, ticket: records.Ticket, *, every: bool) -> None:
     """Print the ticket's newest plan as its file stands, or with `every` each of its plans and its open comments.
 
-    Nothing is printed for a ticket plans do not touch, as the state block carries nothing for one (DESIGN §25). A plan
-    a triage waived says so, by which run, why, and how to undo it.
+    Nothing is printed for a ticket plans do not touch, as the state block carries nothing for one (DESIGN §25).
     """
     key = ticket.key
     found = plans.history(ctx.conn, key)
@@ -617,18 +616,9 @@ def _show_plans(ctx: Context, ticket: records.Ticket, *, every: bool) -> None:
     needed = plans.needed(policy_plan, ticket.plan_setting)
     if not found and not needed:
         return
-    waived = plans.waiver(ctx.conn, ticket)
     why = f"your word, `{ticket.plan_setting}`" if ticket.plan_setting is not None else f"policy.plan {policy_plan}"
-    if waived is not None:
-        click.echo(
-            f"\nPlan: waived {attention.age(waived.at)} ago by triage run:{waived.run_id}, which judged it trivial:"
-        )
-        click.echo(f"  {one_line(waived.reason)}")
-        if ticket.branch is None:
-            click.echo(f"  `canopy plan {key}` asks for a plan instead, until its implement starts")
-    else:
-        click.echo(f"\nPlan: {'needed' if needed else 'not needed'}, by {why}")
-    if not found and waived is None:
+    click.echo(f"\nPlan: {'needed' if needed else 'not needed'}, by {why}")
+    if not found:
         click.echo("  none yet: the next tick dispatches a planner")
     for plan in found if every else found[-1:]:
         _show_plan(ctx, plan)

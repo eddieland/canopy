@@ -40,7 +40,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
-| `spend-overseer`, `-idle`, `-workers`, `-triage`, `-plans`, `-chores`, `-reviews`, `-dry-run` | Spend series fills. |
+| `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-dry-run` | Spend series fills. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
@@ -404,17 +404,14 @@ Rules:
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
   and status chip in its header (`PlanChip`: `waiting on you` in `status-blocked` while the plan waits on the
   operator, as everything that waits on them reads; `changes asked` in `status-running` while changes the operator
-  asked for wait on the next tick's planner; else its status; with no plan, `needed`, `not needed`, or
-  `waived` while a triage's waiver is in force, its reason on hover, and only then), the run that wrote it and its
-  open comments as fields, then a triage's run, its verdict or how it ended, and its reason, model text, when the
-  ticket had one; and in its foot `Approve`, the primary, while the plan can be approved, `Ask for a plan`, outlined,
-  while a waiver can still be undone, then `Open plan`, outlined, and a line on what comes next or what approving
-  leaves out. Changes asked that no planner has started on are a band (`ChangesAsked`), the chore limit's shape on the
-  `status-running` tint, since the loop acts on them next: in the card above its foot, and under the plan page's
-  header, never a muted line a request can hide in. A ticket whose plan waits on the operator (proposed, no planner
-  running) leads with the card, above its Work panel, since the plan is what they came to answer; otherwise the card
-  follows the lists. Where it sits is settled as the page opens, so a plan approved meanwhile leaves its card where it
-  was read.
+  asked for wait on the next tick's planner; else its status; with no plan, `needed` or `not needed`), the run that
+  wrote it and its open comments as fields; and in its foot `Approve`, the primary, while the plan can be approved, then
+  `Open plan`, outlined, and a line on what comes next or what approving leaves out. Changes asked that no planner has
+  started on are a band (`ChangesAsked`), the chore limit's shape on the `status-running` tint, since the loop acts on
+  them next: in the card above its foot, and under the plan page's header, never a muted line a request can hide in.
+  A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its Work panel,
+  since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is settled as the
+  page opens, so a plan approved meanwhile leaves its card where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no

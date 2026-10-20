@@ -16,8 +16,6 @@ if TYPE_CHECKING:
 WORKER = "canopy-worker"
 PRIVATE_WORKER = "canopy-worker-private"
 PLANNER = "canopy-planner"
-#: The triage agent: the planner with nothing to edit (DESIGN §25, Triage before a plan).
-PLAN_TRIAGE = "canopy-plan-triage"
 REVIEWER = "canopy-reviewer"
 OVERSEER = "canopy-overseer"
 CHORE = "canopy-chore"
@@ -37,8 +35,8 @@ class McpTools:
     #: The tools that create a ticket, which a private worker may call to file its follow-ups (DESIGN §18, §22).
     create: Sequence[str] = ()
     #: The tools that open, update, and reply on a PR, where the server is also the one PRs go through (GitHub's): the
-    #: private worker's, for its own PRs. The planner and the triage agent write nothing, so get neither these nor
-    #: `create`, even where `allowed` names them.
+    #: private worker's, for its own PRs. The planner writes nothing, so gets neither these nor `create`, even where
+    #: `allowed` names them.
     pr_writes: Sequence[str] = ()
 
 
