@@ -20,6 +20,7 @@ from canopy.cli.render import report_json
 from canopy.core import agent_commands, config, conversation, definitions, settings
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from canopy.core.agent_commands import Command
@@ -119,7 +120,7 @@ def _note(s: Setting) -> str:
     return f"{where}{default}{choices}{low}{high}"
 
 
-def render_commands(found: list[Command]) -> list[str]:
+def render_commands(found: Sequence[Command]) -> list[str]:
     """The commands as `canopy config commands` prints them: each one's role and keys, then its words on one line.
 
     Returns:
