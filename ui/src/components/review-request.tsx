@@ -7,9 +7,11 @@ import type { ReviewRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
+import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
 import { reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
 import { pullRequestUrl } from '@/lib/pull-request-label'
+import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
@@ -23,6 +25,7 @@ const MAX_NOTES = 4000
 export function ReviewRequestForm({ className }: { className?: string }) {
     const client = useQueryClient()
     const id = useId()
+    const sendKeys = useSendKeys()
     const [url, setUrl] = useState('')
     const [notes, setNotes] = useState('')
     const [said, setSaid] = useState<string | null>(null)
@@ -66,10 +69,12 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     type="submit"
                     disabled={!ready}
                     title="canopy start URL --review"
+                    aria-keyshortcuts={sendKeys.shortcut}
                     data-testid="review-request-submit"
                 >
                     <ScanSearch />
                     Review
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -82,6 +87,7 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     value={notes}
                     maxLength={MAX_NOTES}
                     onChange={(event) => setNotes(event.target.value)}
+                    onKeyDown={sendKeys.onKeyDown}
                     placeholder="What the author asked for, or the part of the change that worries you"
                     data-testid="review-request-notes"
                 />

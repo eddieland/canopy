@@ -25,9 +25,10 @@ follows along, the ones you hover for included. Ages (`3m ago`) don't change; mi
 
 ## Replies
 
-Which key sends a reply, a note, or a comment: **Enter**, **Ctrl+Enter** (⌘+Enter on a Mac), or **Button only**, if
-you've ever sent half a sentence to a worker and would rather not again. Shift+Enter always makes a new line. The key
-you pick shows on each send button.
+Which key sends what you write: **Enter**, **Ctrl+Enter** (⌘+Enter on a Mac), or **Button only**, if you've ever
+sent half a sentence to a worker and would rather not again. It holds in every box you write in to send: a reply, a
+note, a comment on a plan, the notes on a review request, a draft or a lesson in your words, and the notice to workers.
+Shift+Enter always makes a new line. The key you pick shows on each send button.
 
 ## Notice to workers
 

@@ -285,10 +285,14 @@ test('settings sets a notice to workers, every page shows it, and its banner cle
     await expect(banner).toHaveCount(0)
 })
 
-test('an oversized notice is refused, naming its guard', async ({ page }) => {
+test('an oversized notice, sent with Enter as a reply is, is refused, naming its guard', async ({ page }) => {
     await page.goto('settings')
-    await page.getByTestId('notice-text').fill('x'.repeat(1025))
-    await page.getByTestId('notice-set').click()
+    const text = page.getByTestId('notice-text')
+    // A blank notice sends nothing, as its disabled button does.
+    await text.press('Enter')
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await text.fill('x'.repeat(1025))
+    await text.press('Enter')
     await expect(page.getByRole('alert')).toContainText('refused (too_long)')
     await expect(page.getByTestId('worker-notice')).toHaveCount(0)
 })
