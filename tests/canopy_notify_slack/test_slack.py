@@ -524,8 +524,20 @@ def threaded(api: str, tmp_path: Path) -> Generator[_Threaded]:
 
 
 def _posts() -> list[tuple[str | None, bool, list[str]]]:
-    """Each post's thread, whether it is also shown in the channel, and its text, in the order made."""
-    return [(p.get("thread_ts"), p.get("reply_broadcast", False), _texts(p["blocks"])) for _, p in _Api.received]
+    """Each post's thread, whether it is also shown in the channel, and its text, a header's after `# `, in order."""
+    return [
+        (
+            p.get("thread_ts"),
+            p.get("reply_broadcast", False),
+            [f"# {b['text']['text']}" for b in p["blocks"] if b["type"] == "header"] + _texts(p["blocks"]),
+        )
+        for _, p in _Api.received
+    ]
+
+
+def _starts(subject: str, *more: str) -> list[str]:
+    """What a post starting a thread on 2026-09-24 shows: what it is about, then the repository and the day."""
+    return [f"# {subject}", "canopy · api · updates from 2026-09-24 in the thread", *more]
 
 
 def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Threaded, tmp_path: Path) -> None:
@@ -536,15 +548,21 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
         {"id": 4, "kind": "review.ended", "pr": "https://x.test/pr/9", "ticket": "PROJ-1", "run": 4, "status": "done"},
     ]
     assert threaded(_delivery("2026-09-24T12:30:00Z", first)) == 0
-    # The channel's own post first, with the header; then one post starting each thread, in the order named.
+    # The channel's own post first, with its header. Then each thread, in the order named: a post of the same shape
+    # starts it, naming what it is about, and its first item is a reply under it.
     assert _posts() == [
-        (None, False, ["1 event", ":white_check_mark: *The loop recovered* after 3 failed ticks"]),
-        (None, False, [":arrow_forward: *PROJ-1* · implement run 1 started\nattempt 1 of 3 on `agent/PROJ-1`"]),
-        (None, False, [":white_check_mark: *chore:deps* · run 2 ended *done* · 0 findings"]),
-        (None, False, [":white_check_mark: *PROJ-1* · review run 4 ended *done*\n<https://x.test/pr/9>"]),
+        (None, False, ["# canopy · api", "1 event", ":white_check_mark: *The loop recovered* after 3 failed ticks"]),
+        (None, False, _starts("PROJ-1")),
+        (
+            "1790.000002",
+            False,
+            [":arrow_forward: *PROJ-1* · implement run 1 started\nattempt 1 of 3 on `agent/PROJ-1`"],
+        ),
+        (None, False, _starts("chore:deps")),
+        ("1790.000004", False, [":white_check_mark: *chore:deps* · run 2 ended *done* · 0 findings"]),
+        (None, False, _starts("review of PROJ-1", "<https://x.test/pr/9>")),
+        ("1790.000006", False, [":white_check_mark: *PROJ-1* · review run 4 ended *done*\n<https://x.test/pr/9>"]),
     ]
-    assert _Api.received[0][1]["blocks"][0]["type"] == "header"
-    assert all(p["blocks"][0]["type"] == "section" for _, p in _Api.received[1:])
 
     _Api.received.clear()
     later = [
@@ -554,9 +572,14 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
     ]
     added = [{"ticket": "chore:deps", "reason": "lodash", "detail": "CVE"}]
     assert threaded(_delivery("2026-09-24T12:31:00Z", later, added)) == 0
-    # The same day: replies in each thread, none shown in the channel unasked. The chore's thread first: attention
-    # items come before events.
-    assert [(ts, shown) for ts, shown, _ in _posts()] == [("1790.000003", False), ("1790.000002", False), (None, False)]
+    # The same day: replies in each thread, none shown in the channel unasked, and PROJ-2's thread started. The
+    # chore's thread first: attention items come before events.
+    assert [(ts, shown) for ts, shown, _ in _posts()] == [
+        ("1790.000004", False),
+        ("1790.000002", False),
+        (None, False),
+        ("1790.000003", False),
+    ]
     assert _posts()[0][2] == [
         ":bell: *chore:deps* · lodash\nCVE",
         ":x: *chore:deps* · run 6 ended *failed* · 1 finding",
@@ -565,7 +588,7 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
     _Api.received.clear()
     assert threaded(_delivery("2026-09-26T12:30:00Z", [_run("PROJ-1", 8, "done")])) == 0
     # A new day starts a new thread, and forgets the old day's.
-    assert [(ts, shown) for ts, shown, _ in _posts()] == [(None, False)]
+    assert [(ts, shown) for ts, shown, _ in _posts()] == [(None, False), ("1790.000001", False)]
     state = json.loads((tmp_path / "state" / "canopy" / "slack-threads.json").read_text())
     assert state == {
         "version": 1,
@@ -596,22 +619,48 @@ def test_a_reply_is_shown_in_the_channel_only_for_what_broadcast_names(
     added = [{"ticket": "PROJ-3", "reason": "ci_red", "detail": "lint"}]
     assert threaded(_delivery("2026-09-24T12:31:00Z", later, added), *flags) == 0
     assert {ts: on for ts, on, _ in _posts()} == dict(
-        zip(["1790.000001", "1790.000002", "1790.000003"], shown, strict=True)
+        zip(["1790.000001", "1790.000003", "1790.000005"], shown, strict=True)
     )
+
+
+def test_a_threads_first_item_is_a_reply_like_the_rest(threaded: _Threaded) -> None:
+    blocked = {**_run("PROJ-1", 1, "blocked"), "title": "Retry <!channel>\ncheckout"}
+    assert threaded(_delivery("2026-09-24T12:30:00Z", [blocked]), "--broadcast", "blocked") == 0
+    # The starter names the ticket by its title, on one line; the run is a reply, shown in the channel as asked.
+    assert _posts() == [
+        (None, False, _starts("PROJ-1 · Retry <!channel> checkout")),
+        (
+            "1790.000001",
+            True,
+            [":raising_hand: *PROJ-1* Retry &lt;!channel&gt; checkout · implement run 1 ended *blocked*"],
+        ),
+    ]
+    starter = _Api.received[0][1]
+    assert starter["blocks"][0]["text"]["type"] == "plain_text"
+    assert starter["text"] == "PROJ-1 · Retry &lt;!channel&gt; checkout"
 
 
 def test_a_threaded_delivery_refused_partway_posts_the_rest_on_retry(threaded: _Threaded) -> None:
     delivery = _delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1), _run("PROJ-2", 2), _run("PROJ-3", 3)])
-    _Api.refuse = {2}
+    # PROJ-2's thread is started, and its first reply refused.
+    _Api.refuse = {4}
     assert threaded(delivery) == 1
     _Api.refuse = set()
     assert threaded(delivery) == 0
-    # PROJ-1 was posted once; PROJ-2, refused, and PROJ-3, never tried, were posted on the retry.
-    tickets = [p["blocks"][0]["text"]["text"].split("*")[1] for _, p in _Api.received]
-    assert tickets == ["PROJ-1", "PROJ-2", "PROJ-2", "PROJ-3"]
+    # PROJ-1 was posted once; PROJ-2's reply, refused, went in the thread already started, and PROJ-3, never tried,
+    # was posted on the retry.
+    assert [(ts, texts[0].split("*")[1] if ts else texts[0]) for ts, _, texts in _posts()] == [
+        (None, "# PROJ-1"),
+        ("1790.000001", "PROJ-1"),
+        (None, "# PROJ-2"),
+        ("1790.000003", "PROJ-2"),
+        ("1790.000003", "PROJ-2"),
+        (None, "# PROJ-3"),
+        ("1790.000006", "PROJ-3"),
+    ]
     assert threaded(delivery) == 0
-    # Once a delivery posts whole, the same items are new again: canopy sends an item once.
-    assert len(_Api.received) == 7
+    # Once a delivery posts whole, the same items are new again: canopy sends an item once, in the threads started.
+    assert [ts for ts, _, _ in _posts()[7:]] == ["1790.000001", "1790.000003", "1790.000006"]
 
 
 def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: _Threaded, tmp_path: Path) -> None:
@@ -620,13 +669,13 @@ def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: _Threaded, t
     scope = '["C0123ABCD", "/r/api"]'
     path.write_text(json.dumps({"scopes": {scope: {"threads": {"PROJ-1": {"day": "2026-09-24", "ts": "<!channel>"}}}}}))
     assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 0
-    assert _Api.received[-1][1].get("thread_ts") is None
+    assert [ts for ts, _, _ in _posts()] == [None, "1790.000001"]
     assert json.loads(path.read_text())["scopes"][scope]["threads"] == {
         "PROJ-1": {"day": "2026-09-24", "ts": "1790.000001"}
     }
     path.write_text("not json")
     assert threaded(_delivery("2026-09-24T12:31:00Z", [_run("PROJ-1", 2)])) == 0
-    assert _Api.received[-1][1].get("thread_ts") is None
+    assert [ts for ts, _, _ in _posts()] == [None, "1790.000001", None, "1790.000003"]
 
 
 def test_a_threads_file_that_cannot_be_used_refuses_before_posting(

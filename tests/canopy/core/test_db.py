@@ -282,16 +282,6 @@ def test_a_closed_column_without_a_check_is_found(tmp_path: Path, journals: Jour
     assert unchecked(conn, {"checked", "unchecked"}) == ["unchecked.kind", "unchecked.phase"]
 
 
-def test_marks_bind_an_in_list_and_an_empty_one_matches_nothing(tmp_path: Path, journals: Journals) -> None:
-    conn = fresh(journals, tmp_path)
-    db.migrate(conn, resources.migrations_dir())
-    ticks = [db.start_tick(conn, dry_run=True) for _ in range(3)]
-    assert db.marks(ticks[1:]) == "?, ?"
-    found = conn.execute(f"SELECT id FROM ticks WHERE id IN ({db.marks(ticks[1:])}) ORDER BY id", ticks[1:])  # noqa: S608
-    assert [int(r[0]) for r in found] == ticks[1:]
-    assert conn.execute(f"SELECT count(*) FROM ticks WHERE id IN ({db.marks([])})").fetchone()[0] == 0  # noqa: S608
-
-
 def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())

@@ -1285,7 +1285,8 @@ sliver beside four others; and its axis names short call numbers without measuri
     then its order, By call, and All open.
   - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
     header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
-    only once opened. A run's Memory is one.
+    only once opened. A run's Memory is one, and the Prompt on a run's, a tick's, and a chore run's pages
+    (`PromptPanel`), its length and a copy button as its readout, `none kept` alone when canopy kept none.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
