@@ -377,10 +377,11 @@ def link_template(placeholder: str) -> AfterValidator:
 
 
 # Each shipped provider's usual MCP server, as an operator's runtime config usually names it, and the tools of it a
-# private worker needs: reading tickets, and for GitHub, whose server is also the one PRs go through, the PR tools. None
-# of them writes to an issue (DESIGN §22). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's
-# MCP server v2.0.1); a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL
-# asks for `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
+# private worker needs: its read tools, which the planner and the triage agent get too, and for GitHub, whose server is
+# also the one PRs go through, the PR tools, which only the private worker gets. None of the reads writes anything
+# (DESIGN §22, §25). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's MCP server v2.0.1);
+# a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL asks for
+# `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
 # The create tools are the ones a private worker files follow-ups with. GitHub's `issue_write` also edits and closes
 # issues, which has no narrower tool to name; the prompt keeps it to creating (TRUST_MODEL T6).
 DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
@@ -414,14 +415,12 @@ DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
             "pull_request_read",
             "list_pull_requests",
             "search_pull_requests",
-            "create_pull_request",
-            "update_pull_request",
-            "add_reply_to_pull_request_comment",
             "actions_get",
             "actions_list",
             "get_job_logs",
         ),
         ("issue_write",),
+        ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment"),
     ),
 }
 
@@ -440,9 +439,10 @@ class Tracker(Section):
     # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
     # Private: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
     query_every_minutes: Annotated[Count, Scope.PRIVATE] = 0
-    # The tracker's MCP server, as the operator's runtime config names it, and the tools of it a private worker may
-    # call (DESIGN §22). Empty and unset mean the provider's defaults. Private: they decide what a private worker can
-    # write, which a shared workspace file must not (TRUST_MODEL T7).
+    # The tracker's MCP server, as the operator's runtime config names it, and the read tools of it a private worker,
+    # the planner, and the triage agent may call (DESIGN §22, §25). Empty and unset mean the provider's defaults. A
+    # provider's create and PR tools come from its defaults, whatever `read_tools` says. Private: they decide what a
+    # private worker can write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_server_name)] = ""
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.PRIVATE] = None
     # Whether a labeled ticket canopy has never worked is started privately by its first dispatch, as if the operator
@@ -455,15 +455,17 @@ class Tracker(Section):
 
         Returns:
             The configured server and read tools, each falling back to the provider's default, and the provider's
-            create tools, none for a provider canopy ships no defaults for; or None when the server or the read tools
-            are still missing.
+            create and PR tools, none for a provider canopy ships no defaults for; or None when the server or the read
+            tools are still missing.
         """
         default = DEFAULT_TRACKER_TOOLS.get(self.provider)
         server = self.mcp_server or (default.server if default is not None else "")
         allowed = self.read_tools if self.read_tools is not None else (default.allowed if default is not None else ())
         if not server or not allowed:
             return None
-        return McpTools(server, tuple(allowed), default.create if default is not None else ())
+        if default is None:
+            return McpTools(server, tuple(allowed))
+        return McpTools(server, tuple(allowed), default.create, default.pr_writes)
 
 
 #: The most `policy.trivial` may say: it is in every triage prompt (DESIGN §25).

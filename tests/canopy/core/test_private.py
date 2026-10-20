@@ -391,11 +391,13 @@ def test_the_private_worker_definition_allows_only_the_trackers_read_and_create_
 def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
     tools = config.DEFAULT_TRACKER_TOOLS["github"]
     assert tools.server == "github"
-    assert "create_pull_request" in tools.allowed
-    # Creating follow-ups is apart from the read tools, and only the private worker's definition allows it.
+    # Creating follow-ups and writing to a PR are apart from the read tools: only the private worker's definition
+    # allows them, and the planner's and the triage's get the reads alone.
     assert tools.create == ("issue_write",)
-    for write in ("issue_write", "add_issue_comment", "sub_issue_write", "merge_pull_request", "actions_run_trigger"):
+    assert tools.pr_writes == ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment")
+    for write in (*tools.pr_writes, "issue_write", "add_issue_comment", "sub_issue_write", "merge_pull_request"):
         assert write not in tools.allowed
+    assert "actions_run_trigger" not in tools.allowed
 
 
 def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path, journals: Journals) -> None:

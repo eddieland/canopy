@@ -117,14 +117,10 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
-  # With `trust.review_replies = "approve"`, canopy renders the denial of the GitHub server's comment tools here.
-  # canopy: reply tools
-  "*reply_to_pull_request_comment*": deny
-  "*add_comment_to_pending_review*": deny
-  "*add_issue_comment*": deny
-  # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools, and the tool that creates
-  # a ticket, are allowed by name, whole: the last matching rule wins (D021), so a write tool missing from both lists
-  # fails closed. GitHub's `issue_write` also edits and closes issues; the prompt keeps it to filing follow-ups.
+  # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools, the tool that creates a
+  # ticket, and, where it is GitHub's, the tools that open, update, and reply on a PR, are allowed by name, whole: the
+  # last matching rule wins (D021), so a write tool missing from these lists fails closed. GitHub's `issue_write` also
+  # edits and closes issues; the prompt keeps it to filing follow-ups.
   # canopy: tracker tools
   "atlassian_*": deny
   "atlassian_atlassianUserInfo": allow
@@ -140,6 +136,12 @@ permission:
   "atlassian_lookupJiraAccountId": allow
   "atlassian_searchJiraIssuesUsingJql": allow
   "atlassian_createJiraIssue": allow
+  # With `trust.review_replies = "approve"`, canopy renders the denial of the GitHub server's comment tools here, last,
+  # so that it beats the tracker's allow of GitHub's reply tool.
+  # canopy: reply tools
+  "*reply_to_pull_request_comment*": deny
+  "*add_comment_to_pending_review*": deny
+  "*add_issue_comment*": deny
 ---
 
 The system prompt is supplied by the harness at invocation time via the

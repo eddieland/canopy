@@ -31,9 +31,14 @@ class McpTools:
     """An MCP server, and the only tools of it an agent may call: every other one is denied."""
 
     server: str
+    #: Its read tools, which every agent rendered with it may call.
     allowed: Sequence[str]
     #: The tools that create a ticket, which a private worker may call to file its follow-ups (DESIGN §18, §22).
     create: Sequence[str] = ()
+    #: The tools that open, update, and reply on a PR, where the server is also the one PRs go through (GitHub's): the
+    #: private worker's, for its own PRs. The planner and the triage agent write nothing, so get neither these nor
+    #: `create`, even where `allowed` names them.
+    pr_writes: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
