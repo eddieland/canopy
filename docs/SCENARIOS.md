@@ -164,7 +164,7 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   banner on every page and the line in `canopy status`; the next worker's summary to take the notice into account; the
   overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `resume`
   for it; once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no
-  `resume` for it before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
+  `resume` for it before that newer run; and the next worker's prompt after the lapse to have no notice section.
 - **S32. Search** (M31). After a week of `canopy loop`, type into the web UI's search box a word of a ticket's title,
   then a phrase from a run's summary. Expect the ticket, by its branch, and the run's report among the hits, each
   opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and

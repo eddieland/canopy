@@ -72,6 +72,12 @@ REQUIRED_OPERATOR = ("OPERATOR_MESSAGES",)
 # override would otherwise run the work without the plan the operator approved for it.
 REQUIRED_PLAN_COPY = ("PLAN",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
+# A section that renders only while its placeholder has a value: `{{#NAME}}` ending a line, a blank line, the section,
+# a blank line, and `{{/NAME}}`, so each marker is a paragraph of its own to a Markdown linter. Not nested.
+_SECTION_RE = re.compile(r"\{\{#([A-Z][A-Z0-9_]*)\}\}\n\n(.*?)\n\n\{\{/\1\}\}", re.DOTALL)
+#: What a placeholder whose value is None renders outside its section: an override written before the sections existed
+#: names it bare, and reads what it always did.
+NONE = "None."
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
 REQUIRED_WORKER = ("LABELS",)
@@ -305,17 +311,15 @@ def retired_overrides(config: Config) -> list[Path]:
     ]
 
 
-def plan_note(copy: Path | None, outline: Sequence[str]) -> str:
+def plan_note(copy: Path, outline: Sequence[str]) -> str:
     """Return an implement's or a resume's `{{PLAN}}`: where its copy of the approved plan is, and the plan's outline.
 
     The plan's text is never in the prompt: the worker reads the sections it needs from its copy (DESIGN §25). The
     outline is the plan's own headings, model-written, so it is fenced as data.
 
     Returns:
-        `None.` without a copy; else the copy's path, then the headings in a fenced block, or a line saying it has none.
+        The copy's path, then the headings in a fenced block, or a line saying it has none.
     """
-    if copy is None:
-        return "None."
     lines = [f"`{copy}` is the plan the operator approved for this ticket, a copy written for this run alone."]
     return "\n".join([*lines, *_outline(outline)])
 
@@ -537,7 +541,7 @@ def prompt_path(config: Config, name: str) -> Path:
 def render_worker(
     config: Config,
     kind: str,
-    values: Mapping[str, str],
+    values: Mapping[str, str | None],
     *,
     required: Sequence[str] = (),
     private: bool = False,
@@ -545,8 +549,9 @@ def render_worker(
 ) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
-    Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
-    is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
+    Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is, and a value of None leaves
+    its section out (`render`). A placeholder with no value is an error: an override with a typo must not reach a
+    worker half rendered. So is a prompt that lacks one of
     `REQUIRED_WORKER` (`REQUIRED_PLAN` for a plan's), or of `required`, and, with `runtime.pr_skill` set, a prompt for
     a kind that opens PRs that lacks `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry
     `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
@@ -566,10 +571,10 @@ def render_worker(
         **values,
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona(),
-        "NOTICE": notice if notice is not None else "None.",
+        "NOTICE": notice,
         "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
-        "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
+        "BRANCH_UPDATE": branch_update(config, values.get("BRANCH") or ""),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
@@ -588,7 +593,7 @@ def render_worker(
 
 def render_reviewer(
     config: Config,
-    values: Mapping[str, str],
+    values: Mapping[str, str | None],
     *,
     notice: str | None = None,
     notes: str | None = None,
@@ -599,7 +604,8 @@ def render_reviewer(
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
     a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
     review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `previous` is the PR's latest
-    `done` review, for `{{PREVIOUS_REVIEW}}`, which the prompt must carry when there is one. `{{PERSONA}}` is
+    `done` review, for `{{PREVIOUS_REVIEW}}`, which the prompt must carry when there is one. Each of the three that is
+    None or empty leaves its section out. `{{PERSONA}}` is
     `DEFAULT_PERSONA`'s text, as a worker's is. `{{STANDING_SECTION}}` comes from the config, and with
     `paths.reviewer_instructions` set the prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone.
 
@@ -609,9 +615,9 @@ def render_reviewer(
     values = {
         **values,
         **_standing_values(reviewer_instructions(config), "reviewer"),
-        "NOTICE": notice if notice is not None else "None.",
-        "NOTES": notes or "None.",
-        "PREVIOUS_REVIEW": previous or "None.",
+        "NOTICE": notice,
+        "NOTES": notes or None,
+        "PREVIOUS_REVIEW": previous or None,
         "PERSONA": persona(),
     }
     standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
@@ -625,19 +631,20 @@ def render_reviewer(
 def render(
     config: Config,
     name: str,
-    values: Mapping[str, str],
+    values: Mapping[str, str | None],
     *,
     required: Sequence[str] = (),
     one_of: Sequence[Sequence[str]] = (),
 ) -> str:
     """Return prompt file `name` with every `{{NAME}}` replaced from `values`, in one pass.
 
-    A placeholder with no value is an error, and so is a prompt that lacks one of `required`, or every one of a group
-    in `one_of`.
+    A value of None is a section that does not apply to this run: a `{{#NAME}}` section is left out whole, and a bare
+    `{{NAME}}` outside one renders `NONE`. A placeholder with no value is an error, and so is a prompt that lacks one of
+    `required`, or every one of a group in `one_of`, or that opens a section it never closes.
 
     Raises:
-        PromptError: The prompt has a placeholder `values` has no value for, lacks one of `required`, or lacks every
-            one of a group in `one_of`.
+        PromptError: The prompt has a placeholder `values` has no value for, lacks one of `required`, lacks every
+            one of a group in `one_of`, or has a section marker without its match.
     """
     path = prompt_path(config, name)
     text = path.read_text(encoding="utf-8")
@@ -646,15 +653,46 @@ def render(
         placeholder = m.group(1)
         if placeholder not in values:
             raise PromptError(f"{path}: unknown placeholder {{{{{placeholder}}}}}")
-        return values[placeholder]
+        value = values[placeholder]
+        return value if value is not None else NONE
 
-    rendered = _PLACEHOLDER_RE.sub(replace, text)
+    rendered = _PLACEHOLDER_RE.sub(replace, _sections(path, text, values))
     used = set(_PLACEHOLDER_RE.findall(text))
     missing = [f"{{{{{n}}}}}" for n in required if n not in used]
     missing.extend(" or ".join(f"{{{{{n}}}}}" for n in group) for group in one_of if group and used.isdisjoint(group))
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered
+
+
+def _sections(path: Path, text: str, values: Mapping[str, str | None]) -> str:
+    """Return `text` with each `{{#NAME}}` section kept, its markers taken out, or left out while NAME's value is None.
+
+    A section left out takes the blank line after it along, or else the one before it, so the sections around it keep
+    one blank line between them.
+
+    Raises:
+        PromptError: A section names a placeholder `values` has no value for, or a marker has no match.
+    """
+    pos = 0
+    while (m := _SECTION_RE.search(text, pos)) is not None:
+        name, body = m.group(1), m.group(2)
+        if name not in values:
+            raise PromptError(f"{path}: unknown placeholder {{{{#{name}}}}}")
+        start, end = m.span()
+        if values[name] is not None:
+            text = text[:start] + body + text[end:]
+            pos = start + len(body)
+            continue
+        if text.startswith("\n\n", end):
+            end += 2
+        elif text.endswith("\n\n", 0, start):
+            start -= 2
+        text = text[:start] + text[end:]
+        pos = start
+    if (stray := re.search(r"\{\{[#/][A-Z][A-Z0-9_]*\}\}", text)) is not None:
+        raise PromptError(f"{path}: {stray.group()} has no matching section marker")
+    return text
 
 
 def _worker_reader(kind: str, *, private: bool) -> Reader:

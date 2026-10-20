@@ -30,8 +30,10 @@ OUTAGE = "Artifactory is down: CI builds that fetch dependencies will likely fai
 SECTION = "## Notice from the operator\n\n"
 
 
-def notice_of(prompt: str) -> str:
-    """The notice section of a rendered worker prompt."""
+def notice_of(prompt: str) -> str | None:
+    """The notice section of a rendered worker prompt, or None when it has none."""
+    if SECTION not in prompt:
+        return None
     return prompt.split(SECTION, 1)[1].split("\n\nThe operator set this notice", 1)[0]
 
 
@@ -44,12 +46,12 @@ def lapse(conn: sqlite3.Connection) -> None:
     ("then", "heard"),
     [
         pytest.param(None, OUTAGE, id="in force"),
-        pytest.param(["notice", "--clear"], "None.", id="cleared"),
-        pytest.param("lapsed", "None.", id="lapsed"),
+        pytest.param(["notice", "--clear"], None, id="cleared"),
+        pytest.param("lapsed", None, id="lapsed"),
     ],
 )
 def test_the_next_worker_hears_the_notice_in_force_and_no_other(
-    scenario: Scenario, git_pool: GitPool, then: list[str] | str | None, heard: str
+    scenario: Scenario, git_pool: GitPool, then: list[str] | str | None, heard: str | None
 ) -> None:
     scenario.operator("notice", OUTAGE, "--for", "2h")
     if then == "lapsed":
@@ -70,7 +72,8 @@ def test_every_shipped_prompt_that_builds_carries_the_notice(
     values = {**PROMPT_VALUES, "CONVERSATION": "No messages yet."}
     text = prompts.render_worker(cfg, kind, values, private=private, notice=OUTAGE)
     assert notice_of(text) == OUTAGE
-    assert notice_of(prompts.render_worker(cfg, kind, values, private=private)) == "None."
+    # With none in force, the prompt has no section for one.
+    assert notice_of(prompts.render_worker(cfg, kind, values, private=private)) is None
 
 
 def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -> None:
@@ -85,12 +88,12 @@ def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -
         "LOW_IMPACT": "Only docs change.",
         "ATTEMPT": "1",
         "MAX_ATTEMPTS": "3",
-        "CONTEXT": "None.",
+        "CONTEXT": None,
         "TIMEOUT_MINUTES": "20",
         "CONTRACT": "{}",
     }
     assert f"{SECTION}{OUTAGE}\n" in prompts.render_reviewer(cfg, values, notice=OUTAGE)
-    assert f"{SECTION}None.\n" in prompts.render_reviewer(cfg, values)
+    assert SECTION not in prompts.render_reviewer(cfg, values)
 
 
 @pytest.mark.parametrize("in_force", [False, True], ids=["no notice", "a notice"])
