@@ -614,7 +614,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
             assert sum(time.slept) == 900
             assert not log_lines(canopy_env, "a run ending ended the wait")
             return
-        # Woken at once, but no sooner than a minute after the tick began, not fifteen.
+        # Woken at once, but no sooner than a minute after the tick ended, not fifteen.
         assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
         message = (
             "an operator message ended the wait" if when == "an operator message" else "a run ending ended the wait"
@@ -680,7 +680,7 @@ def test_the_operators_acts_end_the_wait(
             clock=time.clock,
         )
 
-    # Woken at once, but no sooner than a minute after the tick began, whatever the pacing; and the tick it woke is
+    # Woken at once, but no sooner than a minute after the tick ended, whatever the pacing; and the tick it woke is
     # not idle.
     assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
     assert recorded(canopy_env) == [(0, "start"), (0, woken)]
@@ -771,7 +771,7 @@ def test_a_gate_opening_just_after_a_tick_waits_for_the_gap(
     canopy_env.append_user(chore_toml())
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
-    # Due 20 seconds after the tick: the gap holds the next tick to a minute after this one began.
+    # Due 20 seconds after the tick: the gap holds the next tick to a minute after this one ended.
     chore_started(ctx.conn, datetime.now(UTC) - timedelta(minutes=120, seconds=-20))
     with overseer_does():
         time = FakeTime()
@@ -796,6 +796,34 @@ def test_a_configured_gap_holds_an_early_wake(canopy_env: CanopyEnv, treehouse_s
     with overseer_does():
         loop_ticks(ctx, time)
     assert sum(time.slept) == pytest.approx(300)
+    assert [w for _, w in recorded(canopy_env)] == ["start", "message"]
+
+
+def test_the_gap_runs_from_the_end_of_a_long_tick(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    canopy_env.append_user("\n[loop]\nmin_gap_minutes = 2\n")
+    ctx = context(canopy_env)
+    time = FakeTime()
+    run = tick.run
+
+    def runs_ninety_seconds(
+        tick_ctx: Context, *, dry_run: bool, woken_by: tick.WokenBy | None = None, ui: str | None = None
+    ) -> tick.Outcome:
+        time.now += 90
+        return run(tick_ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
+
+    def reply_once() -> None:
+        if len(time.slept) == 1:
+            assert main(["reply", KEY, "Go ahead."]) == 0
+
+    time.on_sleep = reply_once
+    db.migrate(ctx.conn, resources.migrations_dir())
+    db.touch_ticket(ctx.conn, KEY, "/r")
+    with overseer_does(), mock.patch.object(tick, "run", autospec=True, side_effect=runs_ninety_seconds):
+        loop_ticks(ctx, time)
+    # Two minutes from the first tick's end, not 30 seconds: the gap is quiet time between ticks.
+    assert sum(time.slept) == pytest.approx(120)
     assert [w for _, w in recorded(canopy_env)] == ["start", "message"]
 
 

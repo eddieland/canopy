@@ -10,7 +10,7 @@ operator's acts since the last tick read the journal end the wait early (DESIGN 
 `canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set or cleared. With idle
 pacing on, a run ending after the tick read the journal does too. A config reload does not: it applies at the wait's
 next step and leaves its deadline as it was. Nothing but the operator asking for a tick now, with `TICK_NOW_KEY` on a
-terminal or from the web UI (`tick_now`), starts a tick sooner than `loop.min_gap_minutes` after the last one began:
+terminal or from the web UI (`tick_now`), starts a tick sooner than `loop.min_gap_minutes` after the last one ended:
 not a gate, not an early wake. A deferred start waits the same way before the first tick, from when the loop started.
 Each tick's row records whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so
 spend can be split by what it bought (ROADMAP M33).
@@ -407,7 +407,7 @@ def _ticks(
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
-        wait = None if last or stop.requested else _wait_after(ctx, pace, idle_count, ended - started)
+        wait = None if last or stop.requested else _wait_after(ctx, pace, idle_count)
         if wait is not None:
             logs.for_tick(outcome.tick_id).info(
                 "loop waits",
@@ -436,7 +436,7 @@ def _ticks(
             sleep=sleep,
             clock=clock,
             wake=wake,
-            earliest=started + _gap_seconds(ctx),
+            earliest=ended + _gap_seconds(ctx),
             keys=keys,
             asked=settings.asked.take,
             log=log,
@@ -446,17 +446,17 @@ def _ticks(
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
 
 
-def _wait_after(ctx: Context, pace: pacing.Pace, idle_count: int, elapsed: float) -> float:
-    """Seconds to wait after a tick that ran `elapsed`: `pacing`'s, but at least what is left of `loop.min_gap_minutes`.
+def _wait_after(ctx: Context, pace: pacing.Pace, idle_count: int) -> float:
+    """Seconds to wait after a tick ends: `pacing`'s, but at least `loop.min_gap_minutes`.
 
     Returns:
-        The longer of `pacing.wait` and what is left of the gap.
+        The longer of `pacing.wait` and the gap.
     """
-    return max(pacing.wait(ctx, pace, idle_count, datetime.now(UTC)), _gap_seconds(ctx) - elapsed)
+    return max(pacing.wait(ctx, pace, idle_count, datetime.now(UTC)), _gap_seconds(ctx))
 
 
 def _gap_seconds(ctx: Context) -> float:
-    """The least time from one tick's start to the next's, `loop.min_gap_minutes`.
+    """The least time from one tick's end to the next's start, or from the loop's start to its first tick.
 
     Returns:
         The gap in seconds.

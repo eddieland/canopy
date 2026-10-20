@@ -15,7 +15,7 @@ Between ticks the loop waits `loop.interval_minutes`, 15 by default. When a tick
 longer, doubling up to `loop.idle_max_minutes`, so a quiet afternoon doesn't cost a tick every quarter hour. Anything
 you do that the loop should hear about ends the wait early: a reply, a start or stop, a grant, a notice to workers.
 So does a run ending, a cooldown running out, or a chore coming due. Even then it waits at least
-`loop.min_gap_minutes` after the last tick, one minute by default. **Tick now** in the header skips even that.
+`loop.min_gap_minutes` after the last tick ends, one minute by default. **Tick now** in the header skips even that.
 
 ## Runs
 
