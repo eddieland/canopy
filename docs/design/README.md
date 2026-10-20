@@ -186,6 +186,7 @@ canopy (harness, Python)
 
 ```text
 prompts/         the overseer's, workers', and the reviewer's prompts
+personas/        the voices a planner, a reviewer, or a worker writes in (§31), `canopy.md` among them
 agents/          agent definitions in the runtime's format, one per kind of run
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
@@ -195,10 +196,10 @@ packages/        uv workspace members: separate programs canopy ships, run only 
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 
-`prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository; the wheel bundles
-them with `migrations/` and the built UI. canopy installs from git with `uv tool install` (D046), which puts `canopy`
-and every workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached processes via
-`sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it.
+`prompts/`, `personas/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository; the
+wheel bundles them with `migrations/` and the built UI. canopy installs from git with `uv tool install` (D046), which
+puts `canopy` and every workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached
+processes via `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it.
 
 Where later work goes:
 
