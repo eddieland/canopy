@@ -367,8 +367,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   the chore 1. Once the overseer is offered only the tracker's reads, expect it sent of the tracker's server only its
   read tools (Jira's 12 by default), and off a GitHub tracker 5 of GitHub's tools, its issue reads gone (about 1.5k
   tokens less). Once the reviewer is too, expect the same of it: of the tracker's server only its read tools, and off
-  a GitHub tracker none of GitHub's issue reads. Then let `canopy loop` run a week and expect no run or tick whose
-  transcript shows a call to a tool it was not offered (`tool not found`).
+  a GitHub tracker none of GitHub's issue reads. Once the chore is too, expect of the tracker's server only its read
+  tools, GitHub's issue reads kept, and the reviewer sent none of GitHub's issue types, issue fields, or `get_label`.
+  Then let `canopy loop` run a week and expect no run or tick whose transcript shows a call to a tool it was not
+  offered (`tool not found`).
 
 ## Retired
 

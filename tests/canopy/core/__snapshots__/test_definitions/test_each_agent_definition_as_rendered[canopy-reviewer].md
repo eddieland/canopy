@@ -82,6 +82,11 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # And GitHub's reads that only a write needs, for an issue the reviewer never files or labels: its types and fields,
+  # and a label's definition.
+  "*list_issue_types*": deny
+  "*list_issue_fields*": deny
+  "*get_label*": deny
 ---
 
 The system prompt is supplied by the harness at invocation time via the
