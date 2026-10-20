@@ -20,7 +20,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, drafts, plans, records, replies
+from canopy.core import conversation, db, drafts, plans, records, replies, sql
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus, Proposal, ResumeReason, ReviewItem, ReviewState, RunKind, RunStatus
 from canopy.infra import lock
@@ -118,8 +118,7 @@ def offered(conn: sqlite3.Connection, trust: Trust, key: str, prs: Sequence[str]
         rows = records.fetch_all(
             conn,
             records.ObservedReview,
-            "SELECT * FROM observed_reviews WHERE pr_url = ? ORDER BY created_at, item, id",
-            (pr,),
+            sql.select("*").from_("observed_reviews").where("pr_url = ?", pr).order_by("created_at, item, id"),
         )
         by_pr = sent.get(pr, {})
         for row in rows:
@@ -184,9 +183,12 @@ def _handled(conn: sqlite3.Connection, key: str) -> set[tuple[str, ReviewItem, i
     rows = records.fetch_all(
         conn,
         records.FeedbackPlanItem,
-        "SELECT i.* FROM feedback_plan_items i JOIN feedback_plans p ON p.id = i.plan_id "
-        "JOIN runs r ON r.id = p.spent_run_id WHERE p.ticket_key = ? AND r.status IN (?, ?, ?)",
-        (key, RunStatus.RUNNING, RunStatus.DONE, RunStatus.BLOCKED),
+        sql.select("i.*")
+        .from_("feedback_plan_items i")
+        .join("feedback_plans p ON p.id = i.plan_id")
+        .join("runs r ON r.id = p.spent_run_id")
+        .where("p.ticket_key = ?", key)
+        .where_in("r.status", (RunStatus.RUNNING, RunStatus.DONE, RunStatus.BLOCKED)),
     )
     return {(r.pr_url, r.item, r.item_id) for r in rows}
 
@@ -263,13 +265,21 @@ def record(
         [plan] = records.fetch_all(
             conn,
             records.FeedbackPlan,
-            "INSERT INTO feedback_plans (ticket_key, run_id, created_at, status, sha256, size) "
-            "VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
-            (key, run_id, db.now(), PlanStatus.PROPOSED, written.sha256, written.size),
+            sql.insert(
+                "feedback_plans",
+                ticket_key=key,
+                run_id=run_id,
+                created_at=db.now(),
+                status=PlanStatus.PROPOSED,
+                sha256=written.sha256,
+                size=written.size,
+            ).returning("*"),
         )
-        conn.executemany(
-            "INSERT INTO feedback_plan_items (plan_id, number, pr_url, item, item_id, proposal, reply) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        sql.execute_many(
+            conn,
+            sql.insert_rows(
+                "feedback_plan_items", ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply")
+            ),
             [
                 (plan.id, number, o.pr_url, o.item, o.id, n.proposal, n.reply)
                 for number, (o, n) in enumerate(kept, start=1)
@@ -287,8 +297,7 @@ def current(conn: sqlite3.Connection, key: str) -> records.FeedbackPlan | None:
     return records.fetch_one(
         conn,
         records.FeedbackPlan,
-        "SELECT * FROM feedback_plans WHERE ticket_key = ? AND status != ?",
-        (key, PlanStatus.SUPERSEDED),
+        sql.select("*").from_("feedback_plans").where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
     )
 
 
@@ -298,7 +307,9 @@ def get(conn: sqlite3.Connection, plan_id: int) -> records.FeedbackPlan | None:
     Returns:
         The plan's row, or None when there is none.
     """
-    return records.fetch_one(conn, records.FeedbackPlan, "SELECT * FROM feedback_plans WHERE id = ?", (plan_id,))
+    return records.fetch_one(
+        conn, records.FeedbackPlan, sql.select("*").from_("feedback_plans").where("id = ?", plan_id)
+    )
 
 
 def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
@@ -308,7 +319,7 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
         The plans' rows, oldest first.
     """
     return records.fetch_all(
-        conn, records.FeedbackPlan, "SELECT * FROM feedback_plans WHERE ticket_key = ? ORDER BY id", (key,)
+        conn, records.FeedbackPlan, sql.select("*").from_("feedback_plans").where("ticket_key = ?", key).order_by("id")
     )
 
 
@@ -321,8 +332,7 @@ def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanIt
     return records.fetch_all(
         conn,
         records.FeedbackPlanItem,
-        "SELECT * FROM feedback_plan_items WHERE plan_id = ? ORDER BY number",
-        (plan_id,),
+        sql.select("*").from_("feedback_plan_items").where("plan_id = ?", plan_id).order_by("number"),
     )
 
 
@@ -332,7 +342,9 @@ def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ..
     Returns:
         Their names, in order.
     """
-    rows = conn.execute("SELECT repo FROM run_slots WHERE run_id = ? ORDER BY repo", (plan.run_id,)).fetchall()
+    rows = sql.execute(
+        conn, sql.select("repo").from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo")
+    ).fetchall()
     return tuple(str(r[0]) for r in rows)
 
 
@@ -408,9 +420,12 @@ def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
     Returns:
         False when the plan is no longer approved and unspent, and nothing was recorded: the run must not start.
     """
-    row = conn.execute(
-        "UPDATE feedback_plans SET spent_run_id = ? WHERE id = ? AND status = ? AND spent_run_id IS NULL RETURNING id",
-        (run_id, plan_id, PlanStatus.APPROVED),
+    row = sql.execute(
+        conn,
+        sql.update("feedback_plans")
+        .set(spent_run_id=run_id)
+        .where("id = ? AND status = ? AND spent_run_id IS NULL", plan_id, PlanStatus.APPROVED)
+        .returning("id"),
     ).fetchone()
     return row is not None
 
@@ -476,9 +491,15 @@ def approve(
         [approved] = records.fetch_all(
             conn,
             records.FeedbackPlan,
-            "UPDATE feedback_plans SET status = ?, approved_sha256 = ?, approved_at = ?, approved_channel = ? "
-            "WHERE id = ? RETURNING *",
-            (PlanStatus.APPROVED, reading.sha256, db.now(), channel, plan.id),
+            sql.update("feedback_plans")
+            .set(
+                status=PlanStatus.APPROVED,
+                approved_sha256=reading.sha256,
+                approved_at=db.now(),
+                approved_channel=channel,
+            )
+            .where("id = ?", plan.id)
+            .returning("*"),
         )
     return approved
 
@@ -504,9 +525,11 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     """
     key = ticket.key
     plan = current(conn, key)
-    started = conn.execute(
-        "SELECT max(started_at) FROM runs WHERE ticket_key = ? AND kind = ? AND id > ?",
-        (key, RunKind.FEEDBACK_PLAN, ticket.forgotten_run_id or 0),
+    started = sql.execute(
+        conn,
+        sql.select("max(started_at)")
+        .from_("runs")
+        .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.FEEDBACK_PLAN, ticket.forgotten_run_id or 0),
     ).fetchone()[0]
     replied = _replied(conn, ticket)
     since = max(plan.created_at if plan is not None else "", str(started) if started is not None else "")
@@ -514,9 +537,12 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
 
 
 def _replied(conn: sqlite3.Connection, ticket: records.Ticket) -> str | None:
-    found = conn.execute(
-        "SELECT max(at) FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
-        (conversation.TICKET, ticket.key, ticket.forgotten_message_id or 0),
+    found = sql.execute(
+        conn,
+        sql.select("max(at)")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ?", conversation.TICKET, ticket.key)
+        .where("source = 'operator' AND id > ?", ticket.forgotten_message_id or 0),
     ).fetchone()[0]
     return None if found is None else str(found)
 
@@ -561,20 +587,27 @@ def state_section(
     """
     key = ticket.key
     on = config.policy.feedback_plan == "approve"
-    run = conn.execute(
-        "SELECT * FROM runs WHERE ticket_key = ? AND kind = ? AND id > ? ORDER BY id DESC LIMIT 1",
-        (key, RunKind.FEEDBACK_PLAN, ticket.forgotten_run_id or 0),
-    ).fetchone()
+    run = records.fetch_one(
+        conn,
+        records.Run,
+        sql.select("*")
+        .from_("runs")
+        .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.FEEDBACK_PLAN, ticket.forgotten_run_id or 0)
+        .order_by("id DESC")
+        .limit(1),
+    )
     if not on and run is None:
         return None
     newest = records.fetch_one(
-        conn, records.FeedbackPlan, "SELECT * FROM feedback_plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
+        conn,
+        records.FeedbackPlan,
+        sql.select("*").from_("feedback_plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
     )
     replied = _replied(conn, ticket)
     blocked = (
         run is not None
-        and run["status"] == "blocked"
-        and (replied is None or run["ended_at"] is None or replied <= str(run["ended_at"]))
+        and run.status is RunStatus.BLOCKED
+        and (replied is None or run.ended_at is None or replied <= run.ended_at)
     )
     return {
         "needed": on,
@@ -596,7 +629,9 @@ def state_section(
 
 def _supersede(conn: sqlite3.Connection, key: str) -> None:
     """Supersede the ticket's current feedback plan, if it has one. Call inside a transaction."""
-    conn.execute(
-        "UPDATE feedback_plans SET status = ? WHERE ticket_key = ? AND status != ?",
-        (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
+    sql.execute(
+        conn,
+        sql.update("feedback_plans")
+        .set(status=PlanStatus.SUPERSEDED)
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
     )

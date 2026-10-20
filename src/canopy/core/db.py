@@ -1864,9 +1864,11 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
         .set(status=PlanStatus.SUPERSEDED)
         .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
     )
-    conn.execute(
-        "UPDATE feedback_plans SET status = ? WHERE ticket_key = ? AND status != ?",
-        (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
+    sql.execute(
+        conn,
+        sql.update("feedback_plans")
+        .set(status=PlanStatus.SUPERSEDED)
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
     )
 
 

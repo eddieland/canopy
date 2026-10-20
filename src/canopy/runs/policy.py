@@ -123,10 +123,13 @@ def feedback_plan_attempts(conn: sqlite3.Connection) -> dict[Unit, int]:
 
     A feedback plan run leases its unit's slot, so it counts in each repository it read, as a `resume` would.
     """
-    rows = conn.execute(
-        "SELECT r.ticket_key, s.repo, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.kind = ? GROUP BY r.ticket_key, s.repo",
-        (FEEDBACK_PLAN,),
+    rows = sql.execute(
+        conn,
+        sql.select("r.ticket_key, s.repo, count(DISTINCT r.id)")
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .where("r.kind = ?", FEEDBACK_PLAN)
+        .group_by("r.ticket_key, s.repo"),
     )
     return {unit(str(row[0]), row[1]): int(row[2]) for row in rows}
 
