@@ -283,8 +283,8 @@ So every attention item this prompt names is recorded every tick its cause holds
   the queue. When you drop one, the ticket's rationale says what ended it.
 - Do not drop an item because nothing about it is new. A cursor that has not moved means nothing changed, not that the
   cause went away: a PR waiting on a reviewer (`needs_reviewer`) waits until someone reviews it.
-- The harness re-raises its own items: run failures, `awaiting_reply`, `repo_missing`, chores', `follow_up_filed` for
-  the follow-up tickets a ticket's workers filed, and `follow_up_unrecorded` for those it could not record. They are
+- The harness re-raises its own items: run failures, `awaiting_reply`, `repo_missing`, chores', and
+  `follow_up_unrecorded` for follow-up tickets a ticket's workers reported that it could not record. They are
   not in `attention`; never record them. A follow-up is an ordinary ticket, a candidate only once it is labeled or
   started.
 

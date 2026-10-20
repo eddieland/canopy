@@ -253,8 +253,8 @@ def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: l
 def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
-    That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), so a run reconcile closed first writes
-    none.
+    That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
+    them, so a run reconcile closed first writes none.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
@@ -264,6 +264,10 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
         log = logs.for_tick(int(run["tick_id"]))
         log.info("follow-ups recorded", extra={"run_id": run_id, "ticket": key, "follow_ups": recorded})
+        filed = {k: outcome.follow_ups.recorded[k] for k in recorded}
+        event = outbox.follow_ups_filed(ctx.config, key=key, run_id=run_id, filed=filed)
+        if event is not None:
+            db.record_event(ctx.conn, event)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]

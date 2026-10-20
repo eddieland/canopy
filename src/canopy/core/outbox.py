@@ -8,7 +8,7 @@ event is recorded. Text fields are cut to the limits DESIGN §20 lists and kept 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import contract, review_result
@@ -25,6 +25,8 @@ CHORES = "chores"
 REVIEWS = "reviews"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
+#: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
+MAX_FOLLOW_UPS = 20
 
 
 class RunStarted(TypedDict):
@@ -59,6 +61,18 @@ class PlanProposed(TypedDict):
     ticket: str
     run: int
     plan: int
+
+
+class FollowUpsFiled(TypedDict):
+    """A `follow_ups.filed` event's fields: the follow-ups one run filed, each with its repository or null (§18).
+
+    `follow_ups` names at most `MAX_FOLLOW_UPS`; `count` is how many the run filed.
+    """
+
+    ticket: str
+    run: int
+    follow_ups: dict[str, str | None]
+    count: int
 
 
 class ChoreEnded(TypedDict):
@@ -191,6 +205,26 @@ def plan_proposed(config: Config, *, key: str, run_id: int) -> Callable[[int], E
         return Event(RUNS, "plan.proposed", fields)
 
     return build
+
+
+def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[str, str | None]) -> Event | None:
+    """Return the `follow_ups.filed` event for the follow-ups run `run_id` of `key` filed, for the run's close.
+
+    It is reported once, when the run records them, as a point event and not an attention item: a follow-up waits on
+    nothing canopy watches, and the operator labels or starts the ones they want worked (DESIGN §18).
+
+    Returns:
+        The event, or None if no sink takes runs or nothing was filed.
+    """
+    if not filed or not config.notify.takes(RUNS):
+        return None
+    fields: FollowUpsFiled = {
+        "ticket": key,
+        "run": run_id,
+        "follow_ups": dict(list(filed.items())[:MAX_FOLLOW_UPS]),
+        "count": len(filed),
+    }
+    return Event(RUNS, "follow_ups.filed", fields)
 
 
 def chore_ended(

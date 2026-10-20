@@ -4,8 +4,8 @@ An `implement` or `resume` worker on a ticket that is not itself a follow-up, pu
 outside its own and name them in its result line's `created` field, each with the repository it is for or null. `_run`
 checks each entry alone, on its text, since the harness reads no tracker (D003), and records the ones that pass with the
 run; a refused entry is named in the run's note and stored with its result, and raises `follow_up_unrecorded`
-(`unrecorded`) until the run's ticket is done or forgotten. A recorded follow-up authorizes nothing: canopy raises
-`follow_up_filed` about its parent (`filed`) until the operator labels or starts it, as any ticket is authorized.
+(`unrecorded`) until the run's ticket is done or forgotten. A recorded follow-up authorizes nothing: the run's close
+tells the sinks once (`follow_ups.filed`, DESIGN §20); a label or the operator's start authorizes it, as any ticket.
 """
 
 from __future__ import annotations
@@ -27,8 +27,6 @@ if TYPE_CHECKING:
 STORED = "follow_ups_unrecorded"
 #: The attention item a refused entry raises, about the run's ticket (DESIGN §14).
 REASON = "follow_up_unrecorded"
-#: The attention item a recorded follow-up raises, about its parent, until the operator labels or starts it (§14).
-FILED = "follow_up_filed"
 #: How many refused keys a note or an item names; the rest are counted.
 MAX_NAMED = 20
 #: How long an attention item's detail may be.
@@ -167,64 +165,11 @@ def record(conn: sqlite3.Connection, checked: Checked, *, parent: str, run_id: i
 
 @dataclass(frozen=True)
 class Item:
-    """An attention item the harness raises about follow-ups, about one ticket: `FILED` or `REASON`."""
+    """The attention item the harness raises about follow-ups a run reported and the journal did not record."""
 
     ticket_key: str
     reason: str
     detail: str
-
-
-def items(conn: sqlite3.Connection) -> list[Item]:
-    """Return the attention items about follow-ups the harness raises every tick (DESIGN §14, §18).
-
-    Returns:
-        Each `follow_up_filed` item (`filed`), then each `follow_up_unrecorded` one (`unrecorded`).
-    """
-    return [*filed(conn), *unrecorded(conn)]
-
-
-def filed(conn: sqlite3.Connection) -> list[Item]:
-    """Return a `follow_up_filed` item for each ticket not done whose runs filed follow-ups not yet decided on.
-
-    A follow-up authorizes nothing: it waits until a human does what authorizes any ticket (DESIGN §18). It stops
-    waiting once canopy has a run of it, which only a queue label or the operator's start lets the overseer dispatch;
-    once the operator started it; or once it is marked done. Attention items have no dismissal (§14), so one the
-    operator does not want stops being asked about when its parent is done or forgotten: only follow-ups recorded since
-    the parent's latest forget count.
-
-    Returns:
-        One item per parent, by key, naming each waiting follow-up with its repository and the run that filed it.
-    """
-    unworked = (
-        sql.select("f.key, f.parent_key, f.repo, f.run_id")
-        .from_("follow_ups f")
-        .join("tickets p ON p.key = f.parent_key")
-        .left_join("tickets t ON t.key = f.key")
-        .where("p.done = 0")
-        .where("p.forgotten_at IS NULL OR f.at > p.forgotten_at")
-        .where("coalesce(t.done, 0) = 0")
-        .where("NOT EXISTS (SELECT 1 FROM runs r WHERE r.ticket_key = f.key)")
-        .where(
-            "NOT EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = ? AND s.subject_id = f.key)", conversation.TICKET
-        )
-        .order_by("f.parent_key, f.at, f.key")
-    )
-    rows = sql.execute(conn, unworked).fetchall()
-    by_parent: dict[str, list[str]] = {}
-    for row in rows:
-        repo = f"for {row['repo']}" if row["repo"] is not None else "for no repository named"
-        by_parent.setdefault(str(row["parent_key"]), []).append(f"{row['key']} ({repo}, run:{row['run_id']})")
-    return [
-        Item(
-            parent,
-            FILED,
-            (
-                f"its workers filed {', '.join(waiting)}; canopy works none of them until you add a queue label to it, "
-                "or start it privately with `canopy start KEY`"
-            )[:MAX_DETAIL],
-        )
-        for parent, waiting in sorted(by_parent.items())
-    ]
 
 
 def unrecorded(conn: sqlite3.Connection) -> list[Item]:
