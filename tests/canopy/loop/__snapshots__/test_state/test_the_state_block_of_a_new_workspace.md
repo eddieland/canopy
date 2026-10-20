@@ -31,7 +31,6 @@ This is a live tick.
     "max_implement_attempts": 2,
     "max_resume_attempts": 6,
     "ci_cooldown_minutes": 30,
-    "max_split_attempts": 1,
     "stacking": "auto"
   },
   "repositories": [
@@ -47,7 +46,6 @@ This is a live tick.
   "tickets": [],
   "stopped": [],
   "recently_done": [],
-  "split_children": [],
   "attention": [],
   "capacity": {
     "max_workers": 2,

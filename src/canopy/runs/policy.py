@@ -8,10 +8,10 @@ its grants (M56). The CI cooldown holds a `resume` whose only reason is `ci`, fr
 covered the unit and worked on CI: a `resume` with `ci` among its reasons, or an old `fix-ci`. `dispatch.py` enforces
 these; the overseer's state block shows them.
 
-A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Nor is a plan, which writes
-down how the ticket will be done across every repository it touches (DESIGN §25), nor a triage, which judges whether it
-needs a plan at all. Their runs are counted per ticket, and never in a unit's counts. The operator grants a ticket more
-plans (`grant_ticket`); a split's limit only config raises, and a triage's is one, which nothing raises.
+A plan is not a unit's work: it writes down how the ticket will be done across every repository it touches (DESIGN
+§25). Nor is a triage, which judges whether it needs a plan at all, nor an old `split`, a kind no longer dispatched
+(M46). Their runs are counted per ticket, and never in a unit's counts. The operator grants a ticket more plans
+(`grant_ticket`); a triage's limit is one, which nothing raises.
 """
 
 from __future__ import annotations
@@ -37,6 +37,8 @@ Unit = tuple[str, str | None]
 # none of them: its old runs and grants count as `resume`'s (`counted_as`).
 KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
 RETIRED = RunKind.FIX_CI
+#: Retired too (M46): workers file follow-ups, and a request to split is guidance to the ticket's next run (DESIGN §18).
+#: Its old runs still read, counted per ticket and in no unit's attempts; nothing dispatches it.
 SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
 NEEDS_PLAN = RunKind.NEEDS_PLAN
@@ -44,10 +46,9 @@ NEEDS_PLAN = RunKind.NEEDS_PLAN
 TRIAGES_PER_TICKET = 1
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
 TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, NEEDS_PLAN)
-# The kinds counted per ticket that `canopy grant` takes: a split creates tickets in the tracker, so only config raises
-# its limit.
+# The kinds counted per ticket that `canopy grant` takes: not a triage, which runs once.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
-DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k is not RETIRED)
+DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT))
 
 
 def limits(config: Config) -> dict[str, int]:
@@ -68,7 +69,8 @@ def _limit(config: Config, kind: RunKind) -> int:
         case RunKind.FIX_CI | RunKind.RESUME:
             return p.max_resume_attempts
         case RunKind.SPLIT:
-            return p.max_split_attempts
+            # Retired: nothing dispatches one, and `limits` names none.
+            return 0
         case RunKind.PLAN:
             return p.max_plan_attempts
         case RunKind.NEEDS_PLAN:
@@ -141,8 +143,8 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         The unit's repository, named or found, and its runs of `kind` and its limit for them with the grant counted.
 
     Raises:
-        Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_kind` for a kind with no unit limit (a
-            split's is the ticket's, and only config raises it) or for `fix-ci`, whose runs count as `resume`'s,
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_kind` for a kind with no unit limit or
+            for `fix-ci`, whose runs count as `resume`'s,
             `unknown` for a ticket canopy has no record of,
             `unknown_repo` for a repository the ticket has had no runs in, or none named when it has had them in
             several.

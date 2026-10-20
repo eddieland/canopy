@@ -319,7 +319,7 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
 
 def _detail(run: sqlite3.Row) -> str:
     note = contract.stored_note(contract.stored_object(run["result_json"]))
-    # A split works on no branch. The run is named as `canopy show` reads it, and as the web UI names it.
+    # A plan or a triage works on no branch. The run is named as `canopy show` reads it, and as the web UI names it.
     what = f"{run['kind']}, {run['branch']}" if run["branch"] else str(run["kind"])
     text = f"run:{run['id']} ({what}) ended {run['status']}"
     if note:

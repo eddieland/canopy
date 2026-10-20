@@ -121,7 +121,9 @@ tick. On a public ticket it reaches the workers and never the ticket. See [Atten
 
 ### Split
 
-A ticket too big for one PR, broken into child tickets by a `split` run. Its phase is then `split`.
+Breaking a ticket too big for one PR into tickets of their own, which you ask for in a reply. Its next worker
+files the pieces as follow-ups, for you to label or start, and asks what becomes of the ticket. Older tickets may
+show a `split` run and phase, from when canopy split them itself.
 
 ### Ticket
 
@@ -156,7 +158,7 @@ next tick decides whether to use it.
 
 ### Kind
 
-What a run is for: `implement`, `resume`, `split`, or `plan`, and `fix-ci` on runs from before a resume fixed CI.
+What a run is for: `implement`, `resume`, or `plan`, and `fix-ci` or `split` on runs from before those were retired.
 Reviews and chores are kinds of their own. Each kind has its own attempt limit. See
 [How the loop works](how-the-loop-works#runs).
 

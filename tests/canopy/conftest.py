@@ -63,8 +63,8 @@ def ws_scenario(
     ws: "Ws", canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, tmp_path: Path
 ) -> Iterator[Scenario]:
     """The scenario told in `ws`, the workspace of two repositories, `api` and `web`, each pool a slot of its own
-    (`seed_pools`), for a story of a joint run, a split, or a ticket in each repository. The test names the
-    repositories each dispatch works in.
+    (`seed_pools`), for a story of a joint run or a ticket in each repository. The test names the repositories each
+    dispatch works in.
 
     Yields:
         The scenario, whose runs still held at work are stopped once the test ends.

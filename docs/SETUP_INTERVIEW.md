@@ -181,7 +181,7 @@ closed" item. If they decline, note it in your summary and go to stage 8. If the
    toolchains they build with that exist on this machine, and their credential helper's files, such as `~/.config/gh`.
    A workspace outside `$HOME` goes in `denyRead`. Leave the placeholders as they are.
 3. Prefix every command template in `~/.config/canopy/config.toml`, never a workspace file, as SANDBOX.md step 5 shows:
-   `worker_cmd_prefix` for `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, then `chore_cmd`,
+   `worker_cmd_prefix` for `worker_cmd`, `private_worker_cmd`, and `plan_cmd`, then `chore_cmd`,
    `review_cmd`, and `setup_cmd` if one is set. Ask whether any chore sets a `cmd` of its own: each needs the
    `canopy-sandbox chore --` prefix there too, as step 5 shows, and the check below does not catch one that lacks it.
    Leave `overseer_cmd` as it is.

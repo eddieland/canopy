@@ -56,7 +56,7 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
     assert "\ntemperature:" not in text[agents.OVERSEER]
     assert text[agents.OVERSEER].endswith("---\n\nDecide.\n")
     # What the rules do not name stays as shipped, and the input is left as it was.
-    assert rendered[f"agents/{agents.SPLITTER}.md"] == files[f"agents/{agents.SPLITTER}.md"]
+    assert rendered[f"agents/{agents.CHORE}.md"] == files[f"agents/{agents.CHORE}.md"]
     assert files == definitions.bundled()
 
 

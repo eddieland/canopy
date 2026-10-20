@@ -22,12 +22,11 @@ What it records, and why:
   it (§6), so spend can be split by what it bought. A tick that cannot take the lock writes nothing.
 - **Tickets and units**: each ticket seen, with its derived phase, its branch, whether it is done or forgotten (§22),
   and its cursors; each unit, a ticket's work in one repository (§18), with its branch, PR, phase, and cursors (§7).
-- **Runs**: every worker, split, plan, review, and chore run (§19, §21), with its status, a summary of its result, and
+- **Runs**: every worker, plan, review, and chore run (§19, §21), with its status, a summary of its result, and
   each slot it leased. Capacity, crash detection, attempt counts, and the CI cooldown are derived from runs, never
   stored (D030); a unit's limit adds the operator's grants.
 - **Cost**: what the runtime reported for each tick's overseer and each run (§13), nothing when it reported nothing.
-- **Grants** of attempts, plan runs, and review runs (§21, §22, §25), only ever added to; and the tickets a split
-  created, written only from a validated split result (§18).
+- **Grants** of attempts, plan runs, and review runs (§21, §22, §25), only ever added to.
 - **Decisions**: each overseer decision and its rationale. The audit log, the attention list's source (§14), and the
   prompt-evaluation corpus.
 - **Notifications**: what each sink was told, so an open item is notified once per sink (§14, §20).
@@ -116,7 +115,7 @@ agent template contains `{prompt}` exactly once and `{definitions_dir}` (§13) a
 the runtime reads it: a custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it, or
 OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
 `{prompt}`. `runtime.worker_cmd_prefix` and `worker_cmd_suffix` wrap every command a worker run starts (worker, private
-worker, split, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; they may not hold `{prompt}`. The
+worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; they may not hold `{prompt}`. The
 overseer's, a chore's, a review's, and a triage's templates are not wrapped: each takes a different sandbox role, or
 none.
 
@@ -128,7 +127,7 @@ workspace supply them; in the private file a relative value resolves against the
 root (TRUST_MODEL T7). The state directory is always `<workspace>/.canopy/` (§18), written `<state_dir>` here.
 
 `paths.worker_instructions` names a short file of the operator's standing instructions, rendered into every worker
-prompt but a split's, after the obligations (§8). Prefer it to an override, and a skill for know-how (§13). A file
+prompt, after the obligations (§8). Prefer it to an override, and a skill for know-how (§13). A file
 canopy cannot use refuses the dispatch as `bad_prompt` rather than running a worker without it. A passing condition,
 such as a CI outage, belongs in a notice to workers (§8).
 
@@ -156,7 +155,6 @@ Agent definitions ship in `agents/`:
   and branch writes, and other agents or workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; MCP read tools only (§21).
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19).
-- `canopy-splitter`: read-only file tools; MCP: the tracker's create, link, and comment tools only (§18).
 
 None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 
@@ -248,7 +246,7 @@ too, with the loop's state and the running and recent runs.
 
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
 raise them define: `canopy_unavailable` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`, `multi_repo`,
-`split_unlabeled`, `split_self_labeled`, `follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and
+`follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and
 chore findings (§19), `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`,
 `plan_changed`, and `not_trivial` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and
 `drafts_waiting` (§29). An item about one unit names its repository, shown as `KEY (repo)`.

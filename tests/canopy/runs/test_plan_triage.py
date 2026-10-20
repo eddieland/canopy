@@ -18,7 +18,7 @@ from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
 from canopy.core import db, plans
-from canopy.core.vocab import PlanSetting, RunKind, RunStatus, TickStatus
+from canopy.core.vocab import PlanSetting, RunKind, RunStatus
 from canopy.loop import attention
 from tests.canopy.helpers import (
     KEY,
@@ -27,7 +27,6 @@ from tests.canopy.helpers import (
     agent_runs,
     approve_policy,
     commands_run,
-    context,
     decisions,
     dispatch_and_run,
     dispatch_refused,
@@ -255,21 +254,6 @@ def test_the_operators_own_plan_skips_a_due_triage(
     assert conn.execute("SELECT count(*) FROM runs WHERE kind = ?", (RunKind.NEEDS_PLAN,)).fetchone()[0] == 0
 
 
-def test_a_split_ticket_is_not_triaged(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
-    triage_on(canopy_env)
-    ctx = context(canopy_env)
-    tick_id = db.start_tick(conn, dry_run=False)
-    db.touch_ticket(conn, KEY, ctx.repo)
-    split = db.insert_run(
-        conn, tick_id=tick_id, key=KEY, kind="split", branch="", slots=[], runs_dir=ctx.state_dir, works_units=False
-    )
-    db.record_split_children(conn, KEY, split, {"PROJ-3": "repo"})
-    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-    assert dispatch_refused(conn, *TRIAGE) == [
-        ("refused:bad_triage", f"{KEY} was split into PROJ-3; triage those instead")
-    ]
-
-
 @pytest.mark.parametrize(
     ("args", "guard", "reason"),
     [
@@ -279,10 +263,9 @@ def test_a_split_ticket_is_not_triaged(canopy_env: CanopyEnv, treehouse_state: P
             "bad_base",
             "a triage judges the work and starts from no branch; leave out --base",
         ),
-        (["--request", "1"], "bad_request", "--request names the comment asking for a split; it is for split only"),
     ],
 )
-def test_a_triage_takes_no_slug_base_or_request(
+def test_a_triage_takes_no_slug_or_base(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, args: list[str], guard: str, reason: str
 ) -> None:
     triage_on(canopy_env)

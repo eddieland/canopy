@@ -4273,7 +4273,7 @@ export type components = {
         ReviewVerdict: "clean" | "findings";
         /**
          * Run
-         * @description One worker or split run (`run:ID`).
+         * @description One worker run (`run:ID`).
          */
         Run: {
             /**
@@ -4303,7 +4303,7 @@ export type components = {
             id: number;
             /**
              * Kind
-             * @description implement | resume | split | plan, or fix-ci for a run from before a resume fixed CI (DESIGN §8)
+             * @description implement | resume | plan | needs-plan, or fix-ci or split for a run from before they were retired (DESIGN §8)
              */
             kind: string;
             /**

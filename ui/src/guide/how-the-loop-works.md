@@ -28,11 +28,11 @@ outlive the tick that started them, so a long one spans many ticks. Each run has
   your reply, a conflict with its base, a branch with no PR yet, or a blocker that merged. A resume names its reasons,
   and the run's chip shows them, as in `resume (ci, review)`. One resume takes all of a PR's reasons at once, so a red
   build and a reviewer's comment get one run and one push, not two runs racing for the same branch.
-- `split`: breaks a ticket too big for one PR into child tickets. It works on no branch.
 - `plan`: writes a plan for you to approve before the first implement. See [Plans](plans).
 
 Older runs may say `fix-ci`: that was a kind of its own before a resume took over fixing CI. They still show as they
-ran, and count toward the ticket's resume limit.
+ran, and count toward the ticket's resume limit. Older still, a `split` broke a ticket into child tickets on its
+own; now you ask for a split in a reply, and the ticket's next worker files the pieces as follow-ups.
 
 A run ends `done`; `waiting on you`, when the worker stopped to ask you something; `stopped`, when you ended it; or
 failed, in one of several ways: `failed`, `crashed`, `timeout`, `unpushed` (it said done, with work it never pushed),
@@ -45,7 +45,7 @@ reports findings, and a chore is recurring work no ticket asked for. [Pull reque
 ## Phases
 
 Every ticket has a phase, and so does each of its PRs: where it stands, as the overseer last worked it out. A ticket
-is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another ticket), `plan proposed`, or `split`. A PR
+is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another ticket), or `plan proposed`. A PR
 goes through phases such as `ci running`, `ci red`, `review pending`, `review findings`, `changes requested`,
 `green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one, or Tab to it, for the
 CLI's spelling.

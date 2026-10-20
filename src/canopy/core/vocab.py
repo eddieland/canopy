@@ -17,7 +17,7 @@ from enum import StrEnum
 
 
 class RunStatus(StrEnum):
-    """A worker or split run's status, `runs.status` (DESIGN §8)."""
+    """A worker run's status, `runs.status` (DESIGN §8)."""
 
     RUNNING = "running"
     DONE = "done"
@@ -82,9 +82,11 @@ class RunKind(StrEnum):
     # `resume` runs (DESIGN §8); nothing dispatches it.
     FIX_CI = "fix-ci"
     RESUME = "resume"
-    # Splits a ticket into children (DESIGN §18): it works on no branch, and counts attempts per ticket, not per unit.
+    # Retired (M46): a worker files follow-up tickets, and a request to split a ticket is guidance to its next run
+    # (DESIGN §18). Kept so the runs it named still read, counted per ticket as they were and in no unit's attempts;
+    # nothing dispatches it.
     SPLIT = "split"
-    # Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket, as a split.
+    # Writes a plan before a ticket's first implement (DESIGN §25): no branch, and attempts counted per ticket.
     PLAN = "plan"
     # Judges, before a ticket's first plan, whether its work is trivial enough to need none (DESIGN §25, Triage before a
     # plan): it leases no slot, reads the primary clones, writes nothing, and runs once per ticket.
@@ -127,6 +129,7 @@ class Phase(StrEnum):
     MERGED = "merged"
     NEEDS_HUMAN = "needs_human"
     HUMAN_REPLIED = "human_replied"
+    # Retired (M46), with splits: kept so a ticket's last phase from before still reads; nothing sets it.
     SPLIT = "split"
     # The newest plan waits on the operator (DESIGN §25): no run, and the slot is free while they read it.
     PLAN_PROPOSED = "plan_proposed"

@@ -9,7 +9,7 @@ work: most operators never need stage 5.
 | [1](#1-one-repository) | One repository | `canopy init`, a queue label, the loop |
 | [2](#2-slots-that-need-setup) | A repository whose checkouts need local files or an install | Seeding and `setup_cmd` |
 | [3](#3-a-pool-of-a-set-size) | Runs that should start in a ready slot | A sized pool, made ahead of time, on a fast disk |
-| [4](#4-several-repositories) | Tickets that land in several repositories | More repositories, `MAP.md`, joint runs, splits |
+| [4](#4-several-repositories) | Tickets that land in several repositories | More repositories, `MAP.md`, joint runs, follow-ups |
 | [5](#5-a-bazel-repository-with-several-slots) | A large Bazel repository in the workspace | Shared caches, warm hooks, a sized pool |
 
 This guide assumes README's install steps 1 to 3: treehouse and canopy installed, and your agent runtime connected to
@@ -166,8 +166,8 @@ How the overseer works a ticket across repositories:
   repository linking the others.
 - **A change that builds on another repository's merged PR is worked in sequence**: the next repository once the first
   PR merges.
-- **A split, only when you ask.** Comment on the ticket asking for a split into one ticket per repository: a worker
-  creates the children without a queue label, and you label each one you want worked.
+- **A split, only when you ask.** Comment on the ticket asking for it to be split: its next worker files the pieces
+  as follow-up tickets without a queue label, and you label each one you want worked.
 
 To drop a repository, remove its table from the map and run `canopy workspace sync`. It removes the clone and its slots
 only when nothing in them would be lost, and reports what it kept. DESIGN §18 has the details.

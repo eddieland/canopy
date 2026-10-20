@@ -111,7 +111,7 @@ def test_grant_refusals(scenario: Scenario, git_pool: GitPool) -> None:
     fail_twice(scenario)
     refused = scenario.operator("grant", KEY, "resume", "--repo", "other", code=1)
     assert f"grant refused (unknown_repo): {KEY} has had no runs in other" in refused.err
-    # A split's limit is the ticket's, not a unit's: only config raises it.
+    # A split is retired (DESIGN §18): no kind to grant.
     scenario.operator("grant", KEY, "split", code=2)
     scenario.operator("grant", KEY, "resume", "--runs", "0", code=2)
     # A resume fixes CI now, and fix-ci runs count as resume runs (DESIGN §8).

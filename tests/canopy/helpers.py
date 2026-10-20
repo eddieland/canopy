@@ -67,7 +67,6 @@ PROMPT_VALUES = {
     "CONTEXT": "None.",
     "AUTHORIZED_REPLIERS": "`alice`",
     "LABELS": "`agent-ready-alice`",
-    "REQUEST": "10234",
     "MAP": "/ws/MAP.md",
     "WORKER_COMMENT": "starts with `CANOPY:` outside any quote",
     "MARK_COMMENTS": "In every comment and reply you post, start it with `CANOPY:` and a space.",
@@ -575,14 +574,6 @@ def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unp
 def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iterator[None]:
     """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
     with scripted("WORKER_PRIVATE", {"COMMANDS": json.dumps(commands), "RESULT": json.dumps(result)}):
-        yield
-
-
-@contextmanager
-def splitter_reports(report: object, *commands: list[str]) -> Iterator[None]:
-    """Until the block ends, the fake splitter prints `report`, verbatim if it is a string, after running `commands` if
-    given."""
-    with scripted("SPLITTER", reported(report, commands)):
         yield
 
 

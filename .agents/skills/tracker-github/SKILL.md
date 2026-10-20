@@ -42,19 +42,14 @@ If `needs_human_label` does not exist in the repository, report `blocked` and sa
 When a label was added is in the issue timeline (`labeled` events). If the server cannot read the timeline, use the
 timestamp of the worker's question comment instead.
 
-When a split child's label was added (DESIGN §18) is the `labeled` event for that label in the child's timeline, the
-latest one if it was added more than once. The question comment does not stand in for it: without the timeline, a split
-child's label cannot be checked, and the ticket is not split.
-
 ## Creating tickets
 
-A split worker creates its children, and an `implement` or `resume` worker the follow-ups its prompt allows (DESIGN
-§18); no other agent creates issues. Create each with the issue write tool (`issue_write` with method `create`) in the
-same repository as the parent issue, with no labels and no assignees. Refer to the parent in the body on a line of its
-own, `Part of #N`, never with a closing keyword. Order the new issues with GitHub's issue dependencies ("blocked by")
-if the server exposes them, otherwise with a line `Blocked by #N` in the later issue's body. Do not make them
-sub-issues of the parent: sub-issues are not blockers, and nothing in the loop reads them. The new issue's key is
-`GH-<number>` of the issue created.
+An `implement` or `resume` worker creates the follow-ups its prompt allows (DESIGN §18); no other agent creates issues.
+Create each with the issue write tool (`issue_write` with method `create`) in the same repository as the parent issue,
+with no labels and no assignees. Refer to the parent in the body on a line of its own, `Part of #N`, never with a
+closing keyword. Order the new issues with GitHub's issue dependencies ("blocked by") if the server exposes them,
+otherwise with a line `Blocked by #N` in the later issue's body. Do not make them sub-issues of the parent: sub-issues
+are not blockers, and nothing in the loop reads them. The new issue's key is `GH-<number>` of the issue created.
 
 ## Comments and ordering
 

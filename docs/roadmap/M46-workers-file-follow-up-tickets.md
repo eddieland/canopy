@@ -60,5 +60,9 @@ ticket in the toy workspace (TOY_REPOS), a worker files a follow-up linked to it
 Status: in progress. Designed 2026-10-19 (DESIGN §18, Follow-up tickets), and the line moved the same day: a follow-up
 is a request the operator decides on, never work a worker authorized. Built: workers, public and private, may file
 follow-ups and are told they are requests; `_run` checks and records them (migration 0049); the harness raises
-`follow_up_filed` and `follow_up_unrecorded`; TRUST_MODEL T1, T3, T6, D123, and D084 as written. Left: removing splits
-(every bullet under "Removed", splitting as guidance, the design's other sections that name splits) and the live check.
+`follow_up_filed` and `follow_up_unrecorded`; TRUST_MODEL T1, T3, T6, D123, and D084 as written. Splits are removed:
+`--kind split` is refused `bad_kind`, everything else under "Removed" is gone (its two keys to `REMOVED_KEYS`),
+an authorized reply asking for a split is guidance to the ticket's next run, whose worker files the pieces as
+follow-ups and reports `blocked`, and the design names splitting only as old runs' kind. Old `split` runs, and a
+ticket's old `split` phase, still read; nothing records the phase again, so no migration was needed. Left: the live
+check.

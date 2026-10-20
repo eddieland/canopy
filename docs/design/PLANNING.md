@@ -30,7 +30,7 @@ the old; an approval sent before that re-plan starts wins, as the operator's lat
 
 ### The prompt
 
-A plan runs as a split does (§18), with no branch and nothing pushed, within `capacity.max_workers`; under
+A plan runs in a desk (§18), with no branch and nothing pushed, within `capacity.max_workers`; under
 `tracker.private` (§22), a ticket's first plan or triage starts it privately. The planner, `canopy-planner` (§13), has
 no shell, web fetch, or subagent tools, reads only inside its desk and through the private worker's tracker read tools
 (§22), without which it is not run, and writes one file, its plan. The ticket's text and the code are data to it (T1).

@@ -132,6 +132,38 @@ def test_fix_cis_keys_were_removed_and_say_what_replaced_them(
         load(canopy_env.root, canopy_env.user_file)
 
 
+@pytest.mark.parametrize(
+    ("table", "key", "value", "says"),
+    [
+        (
+            "policy",
+            "max_split_attempts",
+            1,
+            r"policy\.max_split_attempts was removed: delete it; splits are retired, and policy\.max_follow_ups",
+        ),
+        (
+            "runtime",
+            "split_cmd",
+            "agent run --agent canopy-splitter {prompt}",
+            r"runtime\.split_cmd was removed: delete it; splits are retired, and workers file follow-up tickets",
+        ),
+    ],
+)
+def test_splits_keys_were_removed_and_say_what_replaced_them(
+    canopy_env: CanopyEnv, table: str, key: str, value: object, says: str
+) -> None:
+    """Workers file follow-up tickets, and a request to split a ticket is guidance to its next run (DESIGN §18)."""
+    canopy_env.configure(canopy_env.user_file, {table: {key: value}})
+    with pytest.raises(ConfigError, match=says):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_max_split_attempts_was_removed_from_the_workspace_file_too(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_shared("[policy]\nmax_split_attempts = 1\n")
+    with pytest.raises(ConfigError, match=r"policy\.max_split_attempts was removed"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 @pytest.mark.parametrize("where", ["workspace", "user"])
 def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
     if where == "workspace":
@@ -385,7 +417,6 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.overseer_cmd,
         runtime.worker_cmd,
         runtime.private_worker_cmd,
-        runtime.split_cmd,
         runtime.plan_cmd,
         runtime.plan_triage_cmd,
         runtime.chore_cmd,

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, OverseerCommand, open_context, require_tick
-from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
+from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.infra import logs
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
 
 @click.command("dispatch", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
-# `fix-ci` is taken only to be refused naming `resume --reason ci`, a refusal the overseer's decisions record.
+# `fix-ci` and `split` are taken only to be refused naming what replaced them, a refusal the overseer's decisions keep.
 @click.option(
     "--kind",
     required=True,
-    type=click.Choice([*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED)]),
+    type=click.Choice([*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED), str(policy.SPLIT)]),
     help="What the worker does.",
 )
 @click.option(
@@ -56,12 +56,6 @@ if TYPE_CHECKING:
     metavar="BRANCH",
     help="Stack on another ticket's branch, <prefix><KEY>-<slug>, whose PR is open and green: start from it and target "
     "the PR at it. Default: the repository's base branch.",
-)
-@click.option(
-    "--request",
-    type=COMMENT_ID,
-    metavar="COMMENT_ID",
-    help="split only, and required for it: the authorized replier's comment on the ticket that asked for the split.",
 )
 @click.option(
     "--review-run",
@@ -102,7 +96,6 @@ def cmd_dispatch(
     repos: tuple[str, ...],
     slug: str | None,
     base: str | None,
-    request: str | None,
     review_run: int | None,
     reasons: tuple[str, ...],
     context: str | None,
@@ -135,7 +128,6 @@ def cmd_dispatch(
                 slug=slug,
                 base=base,
                 repos=repos,
-                request=request,
                 reasons=reasons,
                 cursors=_handles(cursor_pairs, review_run),
             )
@@ -152,7 +144,6 @@ def cmd_dispatch(
                 base=base,
                 context=context,
                 repos=repos,
-                request=request,
                 review=review,
                 reasons=reasons,
                 cursors=_handles(cursor_pairs, review_run),
@@ -173,8 +164,7 @@ def cmd_dispatch(
     authorized += "; starts it privately (tracker.private)" if starts else ""
     in_repo = f" in {', '.join(repo_names)}"
     work = _work(key, kind, branch, base, repo_names)
-    requested = f"; request {request}" if request is not None else ""
-    requested += f"; review run {review_run}" if review_run is not None else ""
+    requested = f"; review run {review_run}" if review_run is not None else ""
     requested += f"; {_for(reasons)}" if reasons else ""
     if started is None:
         extras = [
@@ -191,7 +181,6 @@ def cmd_dispatch(
                         else f"dry run: not dispatched; would work on {work}{in_repo}"
                     ),
                     authorized,
-                    f"request {request}" if request is not None else "",
                     f"review run {review_run}" if review_run is not None else "",
                     _for(reasons) if reasons else "",
                     *extras,
@@ -230,11 +219,9 @@ def _where(started: dispatch.Started) -> str:
 def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
     """Return what a dispatch's decision says the run works on: its branch, or for a kind counted per ticket, its key.
 
-    A split, a plan, or a triage works on no branch: it reads its repositories, and creates a ticket for each, writes a
-    plan, or judges whether the ticket needs one.
+    A plan or a triage works on no branch: it reads its repositories, and writes a plan or judges whether the ticket
+    needs one.
     """
-    if kind == policy.SPLIT:
-        return f"split {key} into {', '.join(repos)}"
     if kind == policy.PLAN:
         return f"plan {key} over {', '.join(repos)}"
     if kind == policy.NEEDS_PLAN:

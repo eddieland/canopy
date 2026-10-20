@@ -14,7 +14,7 @@ Memory comes in two tiers, split by how far a worker's words can travel.
   words if you like, or reject it; a lesson is your text, read by every worker in the workspace beside your standing
   instructions. A lesson reaches every run, which is exactly why a proposal waits for you.
 
-The overseer reads no memory and writes none, and reviews, chores, and splits get neither tier: a reviewer stays
+The overseer reads no memory and writes none, and reviews and chores get neither tier: a reviewer stays
 independent of what the author believed.
 
 ## How it protects you
