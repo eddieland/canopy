@@ -48,6 +48,19 @@ permission:
   "*run_trigger*": deny
   "*rerun*": deny
   "*cancel*": deny
+  # GitHub's tools that no canopy prompt asks for, denied by name: OpenCode sends no tool a rule denies whole, so each
+  # request is smaller. Its teams, users, and UI data; releases and tags; repository search; and collaborators.
+  "*get_teams*": deny
+  "*get_team_members*": deny
+  "*search_users*": deny
+  "*ui_get*": deny
+  "*list_releases*": deny
+  "*get_latest_release*": deny
+  "*get_release_by_tag*": deny
+  "*list_tags*": deny
+  "*get_tag*": deny
+  "*search_repositories*": deny
+  "*list_repository_collaborators*": deny
   # Every edit is denied but of `.canopy-new-plan.md` (`plans.WRITTEN`), which canopy reads from the desk's root when
   # the planner exits. Here, after the patterns above: OpenCode matches each key as a wildcard on the permission's name
   # too, so `*edit*` denies the edit tool, and a rule after this block would undo it. OpenCode matches an edit's path

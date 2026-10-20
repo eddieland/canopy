@@ -23,7 +23,7 @@ permission:
   # Subagents run with their own, wider permissions; a chore must not reach them.
   task: deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
-  # in depth: no tool that writes to the tracker, GitHub, or files.
+  # in depth: no tool that writes to the tracker, GitHub, or files, or asks Copilot to review or work.
   "*create*": deny
   "*comment*": deny
   "*label*": deny
@@ -43,6 +43,7 @@ permission:
   "*push*": deny
   "*branch*": deny
   "*fork*": deny
+  "*copilot*": deny
 ---
 
 The system prompt is supplied by the harness at invocation time via the
