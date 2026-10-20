@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { settled, signIn, STORAGE_KEY, storeTheme } from './helpers.ts'
+import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme } from './helpers.ts'
 
 declare global {
     // A `var` in `declare global` is a property of globalThis, where the page's scripts set these.
@@ -97,7 +97,7 @@ test.describe('the toggle', () => {
         await expect(page.locator('html')).toHaveClass(/\bdark\b/u)
         await expect(themes.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
         await page.keyboard.press('Tab')
-        await expect(page.getByTestId('clock-24')).toBeFocused()
+        await expect(page.getByTestId('palette-light-lavender')).toBeFocused()
     })
 
     test('a change in one tab reaches the others', async ({ context }) => {
@@ -113,5 +113,59 @@ test.describe('the toggle', () => {
 
         await first.getByTestId('theme-system').click()
         await expect(second.locator('html')).toHaveAttribute('data-theme', 'system')
+    })
+})
+
+test.describe('palettes', () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    test("the settings page picks the dark theme's palette, and the canvas follows", async ({ page }) => {
+        await storeTheme(page, 'dark')
+        await page.goto('settings')
+        await settled(page)
+        const canvas = () =>
+            page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--background'))
+        const before = await canvas()
+
+        await page.getByTestId('palette-dark-grey').click()
+
+        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', 'grey')
+        await expect(
+            page.getByRole('radiogroup', { name: 'Dark palette' }).getByRole('radio', { name: 'Grey' }),
+        ).toHaveAttribute('aria-checked', 'true')
+        await expect.poll(canvas).not.toBe(before)
+        expect(await page.evaluate((key) => localStorage.getItem(key), PALETTE_KEY)).toBe(
+            '{"light":"lavender","dark":"grey"}',
+        )
+    })
+
+    test('a reload with a palette stored has it before the body', async ({ page }) => {
+        await storeTheme(page, 'light')
+        await storePalette(page, 'light', 'solarized')
+        await page.addInitScript(() => {
+            new MutationObserver((_, observer) => {
+                if (document.querySelector('body') !== null) {
+                    document.documentElement.dataset.paletteAtBody = document.documentElement.dataset.lightPalette
+                    observer.disconnect()
+                }
+            }).observe(document, { childList: true, subtree: true })
+        })
+        await page.goto('runs')
+        await expect(page.locator('html')).toHaveAttribute('data-palette-at-body', 'solarized')
+    })
+
+    test('a pick in one tab reaches the others, on any page', async ({ context }) => {
+        const first = await context.newPage()
+        const second = await context.newPage()
+        await signIn(first)
+        await first.goto('settings')
+        await second.goto('runs')
+        await settled(second)
+
+        await first.getByTestId('palette-light-off-white').click()
+
+        await expect(second.locator('html')).toHaveAttribute('data-light-palette', 'off-white')
     })
 })

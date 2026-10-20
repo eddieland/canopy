@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { LogOut, Megaphone, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { reloadConfig, setNotice, showLoop, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
@@ -33,8 +34,10 @@ import type { SendKey } from '@/lib/send-key'
 import { stamp, useNow } from '@/lib/time'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
-import type { ThemePreference } from '@/theme/store'
-import { switchTheme } from '@/theme/transition'
+import { usePalettes } from '@/theme/palette'
+import type { Palette } from '@/theme/palette'
+import type { ResolvedTheme, ThemePreference } from '@/theme/store'
+import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
@@ -48,6 +51,22 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
     { value: 'light', label: 'Light', icon: Sun },
     { value: 'dark', label: 'Dark', icon: Moon },
     { value: 'system', label: 'System', icon: Monitor },
+]
+
+const LIGHT_PALETTES: { value: Palette<'light'>; label: string }[] = [
+    { value: 'lavender', label: 'Lavender' },
+    { value: 'off-white', label: 'Off-white' },
+    { value: 'solarized', label: 'Solarized' },
+    { value: 'nord', label: 'Nord' },
+    { value: 'gruvbox', label: 'Gruvbox' },
+]
+
+const DARK_PALETTES: { value: Palette<'dark'>; label: string }[] = [
+    { value: 'indigo', label: 'Indigo' },
+    { value: 'grey', label: 'Grey' },
+    { value: 'black', label: 'Black' },
+    { value: 'solarized', label: 'Solarized' },
+    { value: 'gruvbox', label: 'Gruvbox' },
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
@@ -81,35 +100,13 @@ const SEND_KEYS: { value: SendKey; label: string }[] = [
 ]
 
 function SettingsPage() {
-    const { preference } = useTheme()
     return (
         <>
             <PageHeader title="Settings">
                 The theme, the clock, the send key, and the fun are kept in this browser. Everything else canopy reads
                 from its config files.
             </PageHeader>
-            <Panel>
-                <PanelHeader label="Theme" />
-                <div className="flex items-center justify-between gap-4 p-3">
-                    <p className="max-w-3xl text-sm text-muted-foreground">
-                        Follows the system unless you pick one. Syncs across tabs.
-                    </p>
-                    {/* Switched on click, not on a value change, so the transition grows from the item pressed. */}
-                    <ToggleGroup type="single" value={preference} aria-label="Theme">
-                        {THEMES.map(({ value, label, icon: Icon }) => (
-                            <ToggleGroupItem
-                                key={value}
-                                value={value}
-                                data-testid={`theme-${value}`}
-                                onClick={(event) => switchTheme(value, event.currentTarget)}
-                            >
-                                <Icon />
-                                {label}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
-                </div>
-            </Panel>
+            <ThemePanel />
             <ClockPanel />
             <SendKeyPanel />
             <NoticePanel />
@@ -118,6 +115,74 @@ function SettingsPage() {
             <FunPanel />
             <SessionPanel />
         </>
+    )
+}
+
+/** The theme, then the palette each theme wears. Each switches on click, with the theme toggle's reveal. */
+function ThemePanel() {
+    const { preference } = useTheme()
+    const palettes = usePalettes()
+    return (
+        <Panel>
+            <PanelHeader label="Theme" />
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    Follows the system unless you pick one. Syncs across tabs.
+                </p>
+                {/* Switched on click, not on a value change, so the transition grows from the item pressed. */}
+                <ToggleGroup type="single" value={preference} aria-label="Theme">
+                    {THEMES.map(({ value, label, icon: Icon }) => (
+                        <ToggleGroupItem
+                            key={value}
+                            value={value}
+                            data-testid={`theme-${value}`}
+                            onClick={(event) => switchTheme(value, event.currentTarget)}
+                        >
+                            <Icon />
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
+            </div>
+            <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
+                The light theme&apos;s neutrals: lavender, which tints the canvas with the accent&apos;s hue, a warm
+                off-white, or an editor scheme&apos;s light tones.
+            </PaletteRow>
+            <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
+                The dark theme&apos;s: an indigo slate, a plain grey, a near black, or a scheme&apos;s dark tones.
+            </PaletteRow>
+        </Panel>
+    )
+}
+
+/** One theme's palette, beside the line that says what each is. */
+function PaletteRow<T extends ResolvedTheme>({
+    theme,
+    value,
+    options,
+    children,
+}: {
+    theme: T
+    value: Palette<T>
+    options: { value: Palette<T>; label: string }[]
+    children: ReactNode
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 border-b p-3 last:border-b-0">
+            <p className="max-w-3xl text-sm text-muted-foreground">{children}</p>
+            <ToggleGroup type="single" value={value} aria-label={theme === 'light' ? 'Light palette' : 'Dark palette'}>
+                {options.map((option) => (
+                    <ToggleGroupItem
+                        key={option.value}
+                        value={option.value}
+                        data-testid={`palette-${theme}-${option.value}`}
+                        onClick={(event) => switchPalette(theme, option.value, event.currentTarget)}
+                    >
+                        {option.label}
+                    </ToggleGroupItem>
+                ))}
+            </ToggleGroup>
+        </div>
     )
 }
 

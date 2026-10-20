@@ -3,6 +3,9 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { PALETTES } from '@/theme/palette'
+import type { ResolvedTheme } from '@/theme/store'
+
 // Every color token that is text, read against what it sits on, in both themes, at WCAG AA for small text
 // (ui/DESIGN.md, "Tokens"). The colors are the ones tokens.css writes, converted from oklch as a browser does; a tint
 // is the token at that strength over its base, as Tailwind's `bg-status-failed/12` paints it.
@@ -15,7 +18,17 @@ type Rgb = [number, number, number]
 type Theme = Record<string, Rgb>
 
 const css = readFileSync(resolve(import.meta.dirname, 'tokens.css'), 'utf8')
-const THEMES: Record<string, Theme> = { light: theme(':root'), dark: theme('.dark') }
+// Each theme's default, then every other palette in PALETTES, which sets some tokens over its theme's default, so each
+// is that default with those replaced. A palette with no rule here fails, as theme() throws.
+const DEFAULTS: Record<ResolvedTheme, Theme> = { light: theme(':root'), dark: theme('.dark') }
+const THEMES: Record<string, Theme> = Object.fromEntries(
+    (['light', 'dark'] as const).flatMap((mode) =>
+        PALETTES[mode].map((palette, index) => [
+            `${palette} ${mode}`,
+            index === 0 ? DEFAULTS[mode] : { ...DEFAULTS[mode], ...theme(paletteRule(mode, palette)) },
+        ]),
+    ),
+)
 
 // Text tokens, each read on the canvas, a surface, and a raised surface.
 const TEXT = [
@@ -136,9 +149,19 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
     })
 })
 
-/** A theme's opaque oklch tokens, by name, as sRGB. */
+/** The selector of the rule that sets `palette` over `mode`'s default. */
+function paletteRule(mode: ResolvedTheme, palette: string): string {
+    return mode === 'light'
+        ? `:root[data-light-palette='${palette}']:not(.dark)`
+        : `.dark[data-dark-palette='${palette}']`
+}
+
+/** The opaque oklch tokens a rule sets, by name, as sRGB. */
 function theme(selector: string): Theme {
-    const start = css.indexOf(`${selector} {`)
+    const start = css.indexOf(`\n${selector} {`)
+    if (start === -1) {
+        throw new Error(`tokens.css has no rule for ${selector}`)
+    }
     const body = css.slice(start, css.indexOf('\n}', start))
     const colors: Theme = {}
     for (const [, name, l, c, h] of body.matchAll(/--([\w-]+): oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/gu)) {

@@ -7,6 +7,13 @@ import { E2E_SECRET } from './secret.ts'
 
 /** Where the page keeps the theme preference: the same key as src/theme/store.ts. */
 export const STORAGE_KEY = 'canopy-theme'
+/** Each theme's palettes besides its default (lavender, indigo), as src/theme/palette.ts names them. */
+export const OTHER_PALETTES = {
+    light: ['off-white', 'solarized', 'nord', 'gruvbox'],
+    dark: ['grey', 'black', 'solarized', 'gruvbox'],
+} as const
+/** Where the page keeps each theme's palette: the same key as src/theme/palette.ts. */
+export const PALETTE_KEY = 'canopy-palette'
 /** Every page, by its path and any query; a screenshot each in dark, of its main pane alone unless in WHOLE_ROUTES. */
 export const ROUTES = [
     'attention',
@@ -78,6 +85,16 @@ export async function storeTheme(page: Page, theme: 'light' | 'dark'): Promise<v
             globalThis.localStorage.setItem(key, value)
         },
         [STORAGE_KEY, theme] as const,
+    )
+}
+
+/** Stores `palette` as `theme`'s before any page script runs, as if picked on an earlier visit. */
+export async function storePalette(page: Page, theme: 'light' | 'dark', palette: string): Promise<void> {
+    await page.addInitScript(
+        ([key, value]) => {
+            globalThis.localStorage.setItem(key, value)
+        },
+        [PALETTE_KEY, JSON.stringify({ [theme]: palette })] as const,
     )
 }
 
