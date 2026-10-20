@@ -920,6 +920,116 @@ def paced(env: CanopyEnv, minutes: int) -> None:
     env.write_user(user_toml() + f"\n[loop]\ninterval_minutes = {minutes}\nidle_max_minutes = {minutes}\n")
 
 
+def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
+    """Write the user config with ticks `interval` minutes apart, idle pacing off, and one `vcs` connector polled
+    every `every` minutes.
+    """
+    env.write_user(
+        user_toml()
+        + f"\n[loop]\ninterval_minutes = {interval}\nidle_max_minutes = {interval}\n"
+        + f"\n[connect]\nevery_minutes = {every}\n"
+        + '\n[connect.sources.github]\nkind = "vcs"\ncmd = "connector github"\ntimeout_minutes = 1\n'
+    )
+
+
+def connector_ticks(env: CanopyEnv) -> list[int | None]:
+    """The tick that made each connector run, in order; None for a poll between ticks."""
+    conn = env.journal(migrate=False)
+    return [r["tick_id"] for r in conn.execute("SELECT tick_id FROM connector_runs ORDER BY id")]
+
+
+@pytest.mark.usefixtures("connector_state")
+def test_the_loop_polls_the_connectors_between_ticks_at_their_own_pace(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    polled(canopy_env, interval=10, every=3)
+    with overseer_does():
+        time = FakeTime()
+        term, _ = console()
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 2}
+    assert sum(time.slept) == 600  # the polls end no wait: the second tick is the interval's
+    first, second = (r["id"] for r in canopy_env.journal(migrate=False).execute("SELECT id FROM ticks ORDER BY id"))
+    # Each tick ran the source, and the ten minutes between them polled it at three, six, and nine.
+    assert connector_ticks(canopy_env) == [first, None, None, None, second]
+    assert [line["msg"] for line in log_messages(canopy_env)].count("connector ran") == 5
+
+
+@pytest.mark.usefixtures("connector_state")
+def test_the_loop_does_not_poll_while_paused(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+    polled(canopy_env, interval=10, every=3)
+    with overseer_does():
+        keys = FakeKeys()
+        time = FakeTime()
+
+        def operator() -> None:
+            if len(time.slept) in {1, 2400}:  # paused for twenty minutes, then resumed past the deadline
+                keys.type(repeat.PAUSE_KEY)
+
+        time.on_sleep = operator
+        term, _ = console()
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            keys=keys.pressed,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 2}
+    first, second = (r["id"] for r in canopy_env.journal(migrate=False).execute("SELECT id FROM ticks ORDER BY id"))
+    assert connector_ticks(canopy_env) == [first, second]
+
+
+@pytest.mark.usefixtures("connector_state")
+def test_a_poll_due_while_a_tick_holds_the_lock_is_skipped(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    polled(canopy_env, interval=10, every=3)
+    with overseer_does(), contextlib.ExitStack() as held:
+        time = FakeTime()
+
+        def by_hand() -> None:
+            # A `canopy tick` by hand holds the lock from the wait's start until past the first poll's time.
+            if len(time.slept) == 1:
+                held.enter_context(lock.hold(context(canopy_env).lock_path))
+            elif len(time.slept) == 400:
+                held.close()
+
+        time.on_sleep = by_hand
+        term, _ = console()
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 2}
+    first, second = (r["id"] for r in canopy_env.journal(migrate=False).execute("SELECT id FROM ticks ORDER BY id"))
+    # Skipped at three minutes, not waited for: the next polls are at six and nine.
+    assert connector_ticks(canopy_env) == [first, None, None, second]
+    assert "poll skipped: a tick holds the lock" in [line["msg"] for line in log_messages(canopy_env)]
+
+
 @dataclass
 class Asked(reread.Reload):
     """A reload request that records whether a tick was running each time one was asked for."""

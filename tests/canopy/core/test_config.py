@@ -519,6 +519,8 @@ def test_review_replies_and_the_vcs_source_default_to_drafting_and_canopys_own_p
     assert cfg.trust.review_replies == "approve"
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="canopy-connect-github", post_cmd="canopy-post-github")
     assert cfg.connect.tracker() is None
+    assert list(cfg.connect.named()) == [config.DEFAULT_SOURCE]
+    assert (cfg.connect.max_age_minutes, cfg.connect.every_minutes) == (30, 2)
 
 
 def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: CanopyEnv) -> None:
@@ -531,6 +533,8 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
     assert cfg.trust.review_replies == "post"
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="ghe-read --host ghe.example.com", timeout_minutes=5)
     assert cfg.connect.tracker() == config.Source(kind="tracker", post_cmd="canopy-post-github")
+    # A tick runs only a source that reads: `issues` only posts.
+    assert list(cfg.connect.named()) == ["ghe"]
 
 
 @pytest.mark.parametrize(
@@ -541,6 +545,7 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
         ('[connect.sources.a]\nkind = "tracker"\n', "set cmd, post_cmd, or both"),
         ('[connect.sources.a]\nkind = "vcs"\ncmd = "read {prompt}"\n', "must not contain {prompt}"),
         ('[connect.sources.a]\nkind = "mail"\ncmd = "read"\n', r"connect\.sources\[a\]\[kind\]"),
+        ("[connect]\nmax_age_minutes = 1\nevery_minutes = 2\n", "max_age_minutes must be at least every_minutes"),
         ('[connect.sources.A]\nkind = "vcs"\ncmd = "read"\n', "source name 'A' must match"),
         (
             '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n[connect.sources.b]\nkind = "vcs"\ncmd = "s"\n',

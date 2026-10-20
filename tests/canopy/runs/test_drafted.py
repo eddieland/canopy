@@ -31,6 +31,7 @@ from tests.canopy.helpers import (
     present,
     reads,
     thread,
+    tick_reads,
     waits,
 )
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
@@ -89,16 +90,17 @@ def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whol
     assert drafts.unchecked_prs(conn) == [PR]
 
     github_has(github_state, comment(501), unread=[PR])
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     assert present(drafts.get(conn, draft.id)).status is DraftStatus.UNCHECKED
 
     github_has(github_state, comment(501))
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     assert present(drafts.get(conn, draft.id)).status is DraftStatus.WAITING
     assert drafted.waiting(conn)[0].detail == f"1 draft waits on you, for {PR}"
-    assert len(reads(github_state)) == 3
-    drafted.reconcile(ctx, logs.for_tick(None))
-    assert len(reads(github_state)) == 3, "a PR with no unchecked draft is not read again"
+    assert [r["prs"] for r in reads(github_state)] == [[PR], [PR], [PR]]
+    tick_reads(ctx)
+    # The PR is still read each tick, as its unit's (DESIGN §30), and a checked draft stays checked.
+    assert present(drafts.get(conn, draft.id)).status is DraftStatus.WAITING
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -224,18 +226,19 @@ def test_dropping_drafts_takes_them_off_the_attention_list_without_a_tick(
     assert "\nAttention (0):" in scenario.operator("status").out
 
 
-def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_use(
+def test_a_read_records_only_what_it_read_whole_and_a_line_it_cannot_use_leaves_its_pr_unread(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
     other = "https://github.com/acme/api/pull/8"
+    third = "https://github.com/acme/api/pull/9"
     lines = [
         {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7, "state": "open"},
         {"kind": "review", "pr": PR, **comment(501)},
-        {"kind": "review", "pr": PR, "item": "comment", "id": 502, "body": "no thread"},
-        {"kind": "review", "pr": PR, "item": "comment", "id": "x"},
-        {"kind": "check", "pr": PR},
+        {"kind": "ticket", "key": "PROJ-1", "title": "a tracker's line, which a vcs source does not own"},
         {"kind": "review", "pr": other, **comment(601)},
-        {"kind": "end", "prs": [PR]},
+        {"kind": "review", "pr": other, "item": "comment", "id": 602, "body": "no thread"},
+        {"kind": "review", "pr": third, **comment(701)},
+        {"kind": "end", "prs": [PR, other]},
     ]
     reader = tmp_path / "reader"
     reader.write_text(
@@ -244,8 +247,13 @@ def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_
     reader.chmod(0o755)
     canopy_env.write_private(f'[connect.sources.github]\nkind = "vcs"\ncmd = "{reader}"\n')
     found = observe.read(
-        conn, load(canopy_env.root, canopy_env.user_file), procs.SubprocessRunner(), [PR, other], logs.for_tick(None)
+        conn,
+        load(canopy_env.root, canopy_env.user_file),
+        procs.SubprocessRunner(),
+        [PR, other, third],
+        logs.for_tick(None),
     )
+    # `other` has a line canopy refused, so it is not whole; `third` is not named whole.
     assert found.whole == {PR}
     assert found.failure == "the reader did not read it whole"
     observed = records.fetch_all(conn, records.ObservedReview, "SELECT * FROM observed_reviews")

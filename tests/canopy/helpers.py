@@ -25,6 +25,8 @@ from canopy.core import config, db, plans, prompts, records, replies, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
+from canopy.loop import connectors
+from canopy.runs import drafted
 from tests.conftest import CanopyEnv, Journals
 
 KEY = "PROJ-1"
@@ -547,6 +549,18 @@ def github_has(state: Path, *reviews: dict[str, Any], **more: object) -> None:
 def thread(n: int, did: str = "changed", text: str = "Renamed.") -> dict[str, object]:
     """A worker's draft replying on the thread of review comment `n` of `DRAFTS_PR`."""
     return {"on": "thread", "pr": DRAFTS_PR, "comment": n, "did": did, "text": text}
+
+
+def tick_reads(ctx: Context) -> int:
+    """Run the connectors as a tick's reconcile does, in a tick of their own, and check the drafts they read.
+
+    Returns:
+        The tick's id.
+    """
+    log = logs.for_tick(None)
+    with in_tick(ctx.conn) as tick_id:
+        drafted.reconcile(ctx, connectors.run(ctx, tick_id, log), log)
+    return tick_id
 
 
 def reads(state: Path, program: str = "connect") -> list[dict[str, Any]]:

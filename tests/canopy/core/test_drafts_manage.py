@@ -12,7 +12,6 @@ import pytest
 
 from canopy.core import drafts, drafts_manage, observe
 from canopy.core.vocab import DraftStatus, Reaction, ResumeReason, RunKind
-from canopy.infra import logs, procs
 from canopy.runs import drafted
 from tests.canopy.helpers import (
     APPROVE,
@@ -25,6 +24,7 @@ from tests.canopy.helpers import (
     present,
     reads,
     thread,
+    tick_reads,
 )
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 from tests.conftest import executable
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
     from canopy.core.context import Context
+    from canopy.infra import logs, procs
     from tests.canopy.scenario_helpers import Scenario
 
 PR = DRAFTS_PR
@@ -151,7 +152,7 @@ def test_a_comment_since_the_draft_refuses_the_send_once_and_names_it(scenario: 
     assert "comment 510 by bob: Also the docstring." in err
     assert reads(github_state, "post") == []
     [draft] = all_drafts(scenario.conn)
-    assert draft.basis == "2099-01-01T00:00:00Z"
+    assert draft.basis == "2099-01-01T00:00:00.000Z"
     # The operator has seen it: sending again posts.
     scenario.operator("draft", "send", f"run:{run_id}", wanted)
     assert len(reads(github_state, "post")) == 1
@@ -229,7 +230,7 @@ def test_an_unconfirmed_send_is_settled_by_a_read_never_by_sending_again(
     refused = scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1)
     assert "send refused (unconfirmed)" in refused.err
     assert len(reads(github_state, "post")) == 1
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     settled = present(drafts.get(conn, draft.id))
     assert settled.status is status
     if posted:
@@ -265,7 +266,8 @@ def test_list_and_show_print_each_draft_with_its_thread_and_hash(scenario: Scena
     out = scenario.operator("draft", "list").out
     assert "Review replies: approve." in out
     assert f"run:{run_id} 1  waiting  a reply to comment 501 on {PR} (changed)" in out
-    assert f"> alice at {OLD}: Rename this." in out
+    # The fake reader's times come back in the journal's own format.
+    assert "> alice at 2020-01-01T00:00:00.000Z: Rename this." in out
     # Each line of a draft prints as a line, never as a named line feed.
     assert f"hash {drafts_manage.hash_of(reply, None)}:\n    Renamed.\n    \n    The old name stays an alias.\n" in out
     assert "comment 999" not in out
@@ -444,10 +446,10 @@ def test_staged_drafts_wait_in_one_pending_review_until_the_operator_submits_it_
     refused = scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "Other.", code=1)
     assert "edit refused (staged)" in refused.err
 
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     assert {d.status for d in all_drafts(conn)} == {DraftStatus.STAGED}
     on_github(github_state, review, then="submit")
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     first, second, body = all_drafts(conn)
     assert {d.status for d in (first, second, body)} == {DraftStatus.SENT}
     assert body.sent_review_id == review
@@ -466,7 +468,7 @@ def test_a_staged_review_deleted_on_github_leaves_its_drafts_waiting_to_send_aga
     scenario.operator("draft", "stage", f"run:{run_id}", wanted)
     [draft] = all_drafts(conn)
     on_github(github_state, present(draft.pending_review_id), then="delete")
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     [draft] = all_drafts(conn)
     assert draft.status is DraftStatus.WAITING
     assert draft.why == "the review you staged was deleted on GitHub"
@@ -485,7 +487,7 @@ def test_a_reply_taken_out_of_the_staged_review_before_it_is_submitted_is_droppe
     run_id = drafted_run(scenario, github_state, [thread(501), thread(502)])
     scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), hashed(conn, run_id, 2))
     on_github(github_state, present(all_drafts(conn)[0].pending_review_id), then="out")
-    drafted.reconcile(ctx, logs.for_tick(None))
+    tick_reads(ctx)
     first, second = all_drafts(conn)
     assert first.status is DraftStatus.DROPPED
     assert first.why == "taken out of the review you staged before you submitted it"
