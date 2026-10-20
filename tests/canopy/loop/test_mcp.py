@@ -20,10 +20,12 @@ from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp
+from canopy.runs import policy
 from tests.canopy.helpers import (
     LABEL,
     LIST_TOOLS,
     MCP_OPENING,
+    InlineRunner,
     ancestors,
     chore_reports,
     chore_toml,
@@ -33,6 +35,7 @@ from tests.canopy.helpers import (
     operator,
     present,
     tool_call,
+    worker_does,
 )
 from tests.conftest import CanopyEnv
 
@@ -201,11 +204,13 @@ RECORDS = [
     pytest.param(
         Verb(
             "ticket-set",
+            # A tracker's ids sent as numbers are taken as strings, and a null as the field left out.
             {
                 "key": "PROJ-1",
                 "repo": "repo",
                 "phase": "ci_red",
-                "cursors": {"comment": "7", "ci": "99"},
+                "cursors": {"comment": 7, "ci": 99},
+                "done": None,
                 "title": "Fix the\nlogin",
             },
             [
@@ -222,7 +227,7 @@ RECORDS = [
     pytest.param(
         Verb(
             "mirror",
-            {"ref": "PROJ-1", "comment": "10", "author": "acct-1", "at": "2026-10-15T10:00:00Z", "body": "Looks good."},
+            {"ref": "PROJ-1", "comment": 10, "author": "acct-1", "at": "2026-10-15T10:00:00Z", "body": "Looks good."},
             [
                 *("mirror", "PROJ-1", "--comment", "10", "--author", "acct-1", "--at", "2026-10-15T10:00:00Z"),
                 *("--body", "Looks good."),
@@ -299,7 +304,7 @@ REFUSALS = [
             ["decide", "PROJ-1", "wait", "--rationale", "r"],
             ticking=False,
         ),
-        "no tick is running (CANOPY_TICK_ID is not set); this command runs inside a tick",
+        "no tick is running (CANOPY_TICK_ID is not set); the overseer's verbs run only inside one",
         1,
         id="no-tick",
     ),
@@ -321,7 +326,7 @@ REFUSALS = [
             {"key": "PROJ-1", "action": "skip", "rationale": "mcp_unavailable: down"},
             ["decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: down"],
         ),
-        "'mcp_unavailable' skips the whole tick and names no key",
+        "'mcp_unavailable' skips the whole tick, so it names no key: leave key out",
         2,
         id="decide-a-tick-wide-reason-under-a-key",
     ),
@@ -357,7 +362,7 @@ REFUSALS = [
             {"reason": "needs_reviewer", "detail": "d"},
             ["attention", "needs_reviewer", "--detail", "d"],
         ),
-        "expected KEY REASON, or REASON with --pr",
+        "key or pr is required (KEY, or --pr)",
         2,
         id="attention-about-nothing",
     ),
@@ -377,9 +382,19 @@ REFUSALS = [
             {"key": "PROJ-1", "cursors": {"review": "2026-10-07T20:58:50Z"}},
             ["ticket", "set", "PROJ-1", "--cursor", "review=2026-10-07T20:58:50Z"],
         ),
-        "a review cursor belongs to one unit: name its repository with --repo",
+        "repo is required (--repo): a review cursor belongs to one unit",
         2,
         id="ticket-set-a-units-cursor",
+    ),
+    pytest.param(
+        Verb(
+            "dispatch",
+            {"key": "PROJ-1", "kind": "implement", "repos": ["api", "web"], "cursors": {"ci": "99"}},
+            ["dispatch", "PROJ-1", "--kind", "implement", "--repo", "api", "--repo", "web", "--cursor", "ci=99"],
+        ),
+        "cursors: a ci cursor belongs to one unit",
+        2,
+        id="dispatch-a-units-cursor-in-several",
     ),
     pytest.param(
         Verb(
@@ -411,6 +426,18 @@ REFUSALS = [
         "dispatch refused (unauthorized)",
         1,
         id="dispatch-without-a-label",
+    ),
+    pytest.param(
+        # A null is the field left out: the guard refuses it, and records it, as it does the command without --repo.
+        Verb(
+            "dispatch",
+            {"key": "PROJ-1", "kind": "implement", "label": LABEL, "repos": None, "reasons": None, "cursors": None},
+            ["dispatch", "PROJ-1", "--kind", "implement", "--label", LABEL],
+            dry_run=True,
+        ),
+        "dispatch refused (unknown_repo): --repo is required",
+        1,
+        id="dispatch-in-no-repository",
     ),
     pytest.param(
         Verb(
@@ -516,7 +543,10 @@ def test_the_server_lists_each_tool_only_inside_a_running_tick_and_never_inside_
     decide = tool_call("decide", key="PROJ-1", action="wait", rationale="r")
     outside = mcp_session(LIST_TOOLS, decide, tool_call("ticket-set", key="PROJ-1", title="Login"))
     assert outside.listed() == []
-    assert outside.said(2) == ("no tick is running (CANOPY_TICK_ID is not set); this command runs inside a tick", True)
+    assert outside.said(2) == (
+        "no tick is running (CANOPY_TICK_ID is not set); the overseer's verbs run only inside one",
+        True,
+    )
     # The command takes `ticket set` outside a tick; the tool takes nothing there.
     assert outside.said(3).error
     with in_tick(conn):
@@ -543,13 +573,61 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
     conn = overseen.journal()
     with in_tick(conn):
         served = mcp_session(LIST_TOOLS)
-    [listed] = [t for t in served.responses[1]["result"]["tools"] if t["name"] == "ticket-set"]
-    schema = listed["inputSchema"]
+    schemas = {t["name"]: t["inputSchema"] for t in served.responses[1]["result"]["tools"]}
+    schema = schemas["ticket-set"]
     assert (schema["type"], schema["additionalProperties"], schema["required"]) == ("object", False, ["key"])
     # A field named `title` is a field, though a schema's titles are left out.
     assert "title" in schema["properties"]
     assert "$ref" not in json.dumps(served.responses[1])
     assert "split" not in schema["properties"]["phase"]["anyOf"][0]["enum"]
+    # A field that defaults to nothing takes a null for it.
+    assert {"type": "null"} in schema["properties"]["done"]["anyOf"]
+    assert {"type": "null"} in schema["properties"]["cursors"]["anyOf"]
+    # What a guard refuses left out is listed as required, though the request takes it, to be refused and recorded.
+    assert schemas["dispatch"]["required"] == ["key", "kind", "repos"]
+    assert "default" not in schemas["dispatch"]["properties"]["repos"]
+    assert schemas["review-run"]["required"] == ["pr", "sha", "repo"]
+
+
+def test_a_tool_takes_no_text_for_a_flag_or_a_number_and_names_only_the_kinds_it_dispatches(
+    overseen: CanopyEnv,
+) -> None:
+    conn = overseen.journal()
+    with in_tick(conn):
+        served = mcp_session(
+            tool_call("ticket-set", key="PROJ-1", done="yes"),
+            tool_call(
+                "dispatch",
+                key="PROJ-1",
+                kind="resume",
+                label=LABEL,
+                repos=["repo"],
+                reasons=["review"],
+                review_run=True,
+            ),
+            tool_call("dispatch", key="PROJ-1", kind="bogus", label=LABEL, repos=["repo"]),
+        )
+    assert served.said(1) == ("done: Input should be a valid boolean", True)
+    assert served.said(2) == ("review_run: Input should be a valid integer", True)
+    assert served.said(3) == (f"kind: choose from {', '.join(policy.DISPATCH_KINDS)}", True)
+    assert "fix-ci" not in served.said(3).text
+    assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
+    assert db.get_ticket(conn, "PROJ-1") is None
+
+
+def test_a_lone_surrogate_a_client_sends_is_answered_and_the_server_goes_on(overseen: CanopyEnv) -> None:
+    # JSON takes an escaped lone surrogate, which has no UTF-8: echoed as it came, it would end the server mid-session.
+    served = mcp_session(
+        raw=[
+            json.dumps({"jsonrpc": "2.0", "id": "\ud800", "method": "ping"}),
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "\ud800"}}),
+            json.dumps({"jsonrpc": "2.0", "id": 2, "method": "ping"}),
+        ]
+    )
+    assert served.responses["\ud800"]["result"] == {}
+    assert served.responses[1]["error"]["code"] == -32602
+    assert served.responses[2]["result"] == {}
+    assert (served.stderr, served.returncode) == ("", 0)
 
 
 def test_the_server_answers_in_the_version_asked_or_its_newest_writes_no_stderr_and_exits_when_stdin_closes(
@@ -597,12 +675,43 @@ def test_a_run_a_tool_starts_outlives_the_server(overseen: CanopyEnv) -> None:
         pass
 
 
+@pytest.mark.usefixtures("git_pool")
+def test_a_worker_a_tool_dispatches_is_recorded_and_not_the_servers_descendant(overseen: CanopyEnv) -> None:
+    if not Path("/proc/self/stat").exists():
+        pytest.skip("needs /proc")
+    conn = overseen.journal()
+    lines = [json.dumps(m).encode() for m in MCP_OPENING]
+    arguments = {"key": "PROJ-1", "kind": "implement", "label": LABEL, "repos": ["repo"], "cursors": {"comment": 7}}
+    call = {"jsonrpc": "2.0", "id": 1, **tool_call("dispatch", **arguments)}
+    out = io.StringIO()
+    runner = procs.SubprocessRunner(reparent=True)
+    with in_tick(conn, ends_ok=True) as tick_id, worker_does(sleep=60):
+        mcp.serve([*lines, json.dumps(call).encode()], out.write, lambda: opened(overseen, runner))
+    [*_, said] = [json.loads(line) for line in out.getvalue().splitlines()]
+    assert said["result"]["isError"] is False, said
+    [text] = [c["text"] for c in said["result"]["content"]]
+    assert text.startswith("dispatched implement for PROJ-1: run 1: ")
+    assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
+        ("PROJ-1", "dispatch:implement")
+    ]
+    assert present(db.get_ticket(conn, "PROJ-1")).last_comment_id == "7"
+    with worked(conn) as pid:
+        assert os.getpid() not in ancestors(pid)
+
+
 def test_canopy_mcp_spawns_through_an_intermediate() -> None:
     with mock.patch.object(mcp, "run_stdio", autospec=True, return_value=0) as served:
         assert main(["_mcp"]) == 0
-    [(runner,), _] = served.call_args
-    assert isinstance(runner, procs.SubprocessRunner)
-    assert runner.reparent
+        assert main(["_mcp"], runner=procs.SubprocessRunner(unset=["SECRET"])) == 0
+        inline = InlineRunner()
+        assert main(["_mcp"], runner=inline) == 0
+    [(default,), _], [(given,), _], [(fake,), _] = served.call_args_list
+    assert isinstance(default, procs.SubprocessRunner)
+    assert default.reparent
+    # The runner `main` is given is kept: what it removes from a child's environment, it still removes.
+    assert isinstance(given, procs.SubprocessRunner)
+    assert (given.reparent, given.unset) == (True, {"SECRET"})
+    assert fake is inline
     assert mcp_cli.cmd_mcp.hidden
 
 
@@ -628,4 +737,21 @@ def stopped(conn: sqlite3.Connection) -> Iterator[int]:
         yield pid
     finally:
         procs.kill_group(agent)
+        procs.kill_group(pid)
+
+
+@contextlib.contextmanager
+def worked(conn: sqlite3.Connection) -> Iterator[int]:
+    """Run 1 while it runs, its worker started, and then its `_run` and its worker stopped. Yields its `_run`'s pid."""
+    deadline = time.monotonic() + 30
+    run = present(db.get_run(conn, 1))
+    while run["worker_pid"] is None and time.monotonic() < deadline:
+        time.sleep(0.05)
+        run = present(db.get_run(conn, 1))
+    pid, worker = int(run["pid"]), int(present(run["worker_pid"]))
+    try:
+        assert procs.running(Path(run["log_path"]), pid)
+        yield pid
+    finally:
+        procs.kill_group(worker)
         procs.kill_group(pid)

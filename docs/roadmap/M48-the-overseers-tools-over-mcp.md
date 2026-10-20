@@ -40,6 +40,11 @@ PRs, a stage starting only once the one before has passed its check, recorded on
   allows each tool by exact name and denies `bash`, `treehouse status*` included; every other definition denies
   `canopy_*`; `project_config.shadowing` refuses a workspace config that names a `canopy` server; §6's preflight starts
   the server and sends `initialize`, closing the tick `canopy_unavailable` if it fails.
+- A run a tool starts is spawned by `canopy _mcp`'s own runner (`cli/mcp.py`), not `canopy dispatch`'s: the entry is
+  removed in that runner's `unset` too.
+- The guards' refusals still name the CLI's flags and commands (`runs/dispatch.py`, `reviews/start.py`,
+  `core/review_requests.py`, `core/conversation.py`), as the decisions record them: each gets one wording that names
+  the field, its flag in brackets, as `loop/tools.py`'s do (`repo is required (--repo): ...`).
 - The prompt names tools, not commands; a mirror's body is a field; the state block drops the heredoc delimiter.
 - TRUST_MODEL T1 and T7; DESIGN §6, §13, §22; D020 edited in place, D081 superseded.
 - Tests with the fakes: the fake agent gains `FAKE_AGENT_TOOLS`, tool calls it makes through the server its config
