@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: a review of a PR the loop does not own, revised in canopy and
 published on the PR as the operator's own comment review. Sections are numbered across the whole design; the
-[README](README.md) has the map. Previous: [Feedback plans](FEEDBACK_PLANS.md).
+[README](README.md) has the map. Previous: [A clock for running agents](CLOCK.md).
 
 ## 34. Publishing a review
 

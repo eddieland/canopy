@@ -99,6 +99,8 @@ not go in the middle of the sequence.
 - [Feedback plans](FEEDBACK_PLANS.md): a plan for what comes back to a PR, approved by the operator before the
   `resume` that acts on it.
   - [32. Plans before feedback runs](FEEDBACK_PLANS.md#32-plans-before-feedback-runs)
+- [A clock for running agents](CLOCK.md): the minutes left, told to a running agent near its timeout.
+  - [33. A clock for running agents](CLOCK.md#33-a-clock-for-running-agents)
 - [Published reviews](PUBLISHED_REVIEWS.md): a review of a PR the loop does not own, revised in canopy and published
   as the operator's comment review.
   - [34. Publishing a review](PUBLISHED_REVIEWS.md#34-publishing-a-review)
