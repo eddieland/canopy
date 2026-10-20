@@ -518,13 +518,16 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     """Return when the operator asked for changes no feedback planner has read, or None if they have not.
 
     That is their latest message on the ticket, newer than its current feedback plan and than its latest feedback plan
-    run's start: a reply on a waiting plan asks for changes, as on a ticket's plan (DESIGN §32, Approving).
+    run's start: a reply on a waiting plan asks for changes, as on a ticket's plan (DESIGN §32, Approving). A reply
+    after an approval, spent or not, asks for none.
 
     Returns:
         The message's time as the journal holds it, or None.
     """
     key = ticket.key
     plan = current(conn, key)
+    if plan is not None and plan.status is PlanStatus.APPROVED:
+        return None
     started = sql.execute(
         conn,
         sql.select("max(started_at)")
