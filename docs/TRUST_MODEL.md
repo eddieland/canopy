@@ -395,7 +395,8 @@ Controls:
 - The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
   path but that file's name, and it has no shell, web, or subagent tools. Its definition is rendered
   as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are
-  allowed, and other servers' write tools are denied by name. A plan is refused (`no_read_tools`) when no read tools
+  allowed, never the private worker's create or PR tools even where that list names them, and other servers' write
+  tools are denied by name. A plan is refused (`no_read_tools`) when no read tools
   are known, and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the
   worktrees linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
   into an operator-only file under the state directory (T2), and never sends it to the tracker, public ticket or
@@ -417,8 +418,9 @@ Controls:
   whatever the setting. canopy posts what the operator sent through `canopy-post-github` (T2), never through an agent.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
-  `tracker.read_tools`, and the provider's tools that create a ticket (`issue_write` on GitHub, `createJiraIssue` on
-  Jira), are allowed by name, so a write tool missing from both lists fails closed; the tracker CLIs canopy
+  `tracker.read_tools`, the provider's tools that create a ticket (`issue_write` on GitHub, `createJiraIssue` on
+  Jira), and on GitHub, whose server PRs go through too, the tools that open, update, and reply on its PR, are allowed
+  by name, so a write tool missing from these lists fails closed; the tracker CLIs canopy
   knows (`gh`, `acli`, `jira`) are denied in its bash rules but for `gh pr view`, `gh pr checks`, `gh pr diff`, and
   `gh run view`, which read a PR and its CI and never the ticket; and other MCP tools are denied by name as for
   `canopy-worker` (D084). A run is refused where the worktree's OpenCode config names any of that server's tools,
