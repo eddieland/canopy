@@ -4,7 +4,8 @@
 // The words are compared as the editor reads them (`docText`), so a change of formatting alone is no change, and both
 // plans are read by the same parser. Added words are drawn as `ins`, removed ones as a `del` where they were; a block
 // the new plan added whole (a paragraph, a heading, a table's cell) is marked as one, `plan-block-add` or
-// `plan-cell-add`, rather than as a run of `ins`, which its marks and code spans would break into many. All are
+// `plan-cell-add`, rather than as a run of `ins`, which its marks and code spans would break into many. A passage
+// rewritten around a few words it kept is the old passage removed and the new one added, not shreds of both. All are
 // decorations, so the plan's Markdown holds nothing of them, and the removed words are the old plan's, set as text.
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
@@ -99,7 +100,7 @@ export function diffWords(before: string, after: string, cap = MAX_EDITS): Chang
         part(removed, 'del'),
         part(added, 'add'),
     ]
-    return runs([part(b.slice(0, start), 'same'), ...middle, part(b.slice(endB), 'same')])
+    return runs(readable([part(b.slice(0, start), 'same'), ...middle, part(b.slice(endB), 'same')], a))
 }
 
 /** The plain text of a plan's Markdown as the editor reads it, to compare with the plan open in `editor`. */
@@ -221,6 +222,68 @@ function tokens(text: string): string[] {
 // Words as one part of a diff, as `diffArrays` writes its parts.
 function part(words: string[], kind: Change['kind']): ArrayChange<string> {
     return { value: words, added: kind === 'add', removed: kind === 'del', count: words.length }
+}
+
+// The parts with each short run of kept words between two changes folded into them, as diff-match-patch's semantic
+// cleanup does: a passage rewritten around a few words it kept (`the`, `to`) reads as the old passage and the new one,
+// rather than as shreds of each. A kept run is short when it is no longer than the larger side of the change before it
+// and of the change after it. A run that holds a line break is never folded, so a change stays in its blocks. A kept
+// part holds the new text's words, so a folded run is removed as the old text's, from `before`, which may space it
+// otherwise.
+function readable(parts: readonly ArrayChange<string>[], before: readonly string[]): ArrayChange<string>[] {
+    const out: Piece[] = []
+    let old = 0
+    for (const { value, added, removed } of parts) {
+        const last = out.at(-1)
+        if (!added) {
+            old += value.length
+        }
+        if (value.length === 0) {
+            continue
+        }
+        if (!added && !removed) {
+            out.push({ kind: 'same', words: [...value], old: before.slice(old - value.length, old) })
+            continue
+        }
+        if (last?.kind === 'change') {
+            last[removed ? 'del' : 'add'].push(...value)
+        } else {
+            out.push({ kind: 'change', del: removed ? [...value] : [], add: added ? [...value] : [] })
+        }
+        fold(out)
+    }
+    return out.flatMap((piece) =>
+        piece.kind === 'same' ? [part(piece.words, 'same')] : [part(piece.del, 'del'), part(piece.add, 'add')],
+    )
+}
+
+// A run of kept words, as the new text and the old one space them, or a change: the words it removed and those it
+// added in their place.
+type Piece = { kind: 'same'; words: string[]; old: string[] } | { kind: 'change'; del: string[]; add: string[] }
+
+// Folds the kept run before the last change into the changes on each side while it is short, and goes on with the
+// run before, since the change it makes is larger.
+function fold(out: Piece[]): void {
+    for (;;) {
+        const [before, kept, after] = out.slice(-3)
+        if (before?.kind !== 'change' || kept?.kind !== 'same' || after?.kind !== 'change') {
+            return
+        }
+        const length = kept.words.join('').length
+        if (kept.words.includes('\n') || length > size(before) || length > size(after)) {
+            return
+        }
+        out.splice(-3, 3, {
+            kind: 'change',
+            del: [...before.del, ...kept.old, ...after.del],
+            add: [...before.add, ...kept.words, ...after.add],
+        })
+    }
+}
+
+// How long a change is: its larger side, in characters.
+function size(change: { del: string[]; add: string[] }): number {
+    return Math.max(change.del.join('').length, change.add.join('').length)
 }
 
 // The parts as runs of text, each with where it is in the new text. A kept part is the new plan's words, as
