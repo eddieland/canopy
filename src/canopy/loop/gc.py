@@ -352,7 +352,7 @@ def _window(conn: sqlite3.Connection) -> int:
 
 
 # The bytes of a connector run's row: what it holds, not the pages it fills.
-_RUN_BYTES = (
+_RUN_BYTES = sql.frag(
     "length(CAST(request AS BLOB)) + length(CAST(recorded AS BLOB)) + length(CAST(refused AS BLOB)) + "
     "length(CAST(stderr AS BLOB)) + coalesce(length(CAST(missed AS BLOB)), 0) + "
     "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)"
@@ -370,15 +370,26 @@ def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retentio
         The kind.
     """
     cutoff = _cutoff(now, retention.journal_days)
-    row = conn.execute(
-        f"SELECT count(*) AS n, sum({_RUN_BYTES}) AS b, "  # noqa: S608
-        f"sum(removable) AS rn, sum(CASE WHEN removable THEN {_RUN_BYTES} END) AS rb FROM ("
-        "SELECT *, coalesce(tick_id < ?, started_at < (SELECT started_at FROM ticks WHERE id = ?)) "
-        "AND started_at < ? AND id NOT IN ("
-        "SELECT max(id) FROM connector_runs GROUP BY source UNION "
-        "SELECT max(id) FROM connector_runs WHERE query_result IS NOT NULL GROUP BY source) AS removable "
-        "FROM connector_runs)",
-        (window := _window(conn), window, cutoff),
+    window = _window(conn)
+    newest = sql.union(
+        sql.select("max(id)").from_("connector_runs").group_by("source"),
+        sql.select("max(id)").from_("connector_runs").where("query_result IS NOT NULL").group_by("source"),
+    )
+    runs = sql.select(
+        "*, coalesce(tick_id < ?, started_at < (SELECT started_at FROM ticks WHERE id = ?)) "
+        "AND started_at < ? AND id NOT IN ({}) AS removable",
+        window,
+        window,
+        cutoff,
+        newest,
+    ).from_("connector_runs")
+    row = sql.execute(
+        conn,
+        sql.select(
+            "count(*) AS n, sum({}) AS b, sum(removable) AS rn, sum(CASE WHEN removable THEN {} END) AS rb",
+            _RUN_BYTES,
+            _RUN_BYTES,
+        ).from_("({})", runs),
     ).fetchone()
     return Kind(
         "connector runs",
