@@ -29,7 +29,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, plans, pools, workspace
+from canopy.core import chore_view, config, conversation, db, plans, pools, sql, workspace
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
@@ -319,17 +319,23 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
     p = ctx.config.policy
     base = {"implement": p.max_implement_attempts, "resume": p.max_resume_attempts}
     counts: dict[str, dict[str, int]] = {}
-    for repo, kind, runs in ctx.conn.execute(
-        "SELECT s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.ticket_key = ? AND r.kind NOT IN ('split', 'plan') AND s.repo IS NOT NULL GROUP BY s.repo, r.kind",
-        (key,),
-    ):
+    counted = (
+        sql.select("s.repo, r.kind, count(DISTINCT r.id)")
+        .from_("runs r")
+        .join("run_slots s ON s.run_id = r.id")
+        .where("r.ticket_key = ?", key)
+        .where("r.kind NOT IN ('split', 'plan')")
+        .where("s.repo IS NOT NULL")
+        .group_by("s.repo, r.kind")
+    )
+    for repo, kind, runs in sql.execute(ctx.conn, counted):
         of = counts.setdefault(str(repo), dict.fromkeys(base, 0))
         of[_counted_as(str(kind))] += int(runs)
     granted: dict[tuple[str, str], int] = {}
-    for r in ctx.conn.execute(
-        "SELECT repo, kind, sum(runs) FROM attempt_grants WHERE ticket_key = ? GROUP BY repo, kind", (key,)
-    ):
+    grants = (
+        sql.select("repo, kind, sum(runs)").from_("attempt_grants").where("ticket_key = ?", key).group_by("repo, kind")
+    )
+    for r in sql.execute(ctx.conn, grants):
         unit = (str(r[0]), _counted_as(str(r[1])))
         granted[unit] = granted.get(unit, 0) + int(r[2])
     return [
@@ -348,7 +354,9 @@ def _review_limit(ctx: Context, url: str) -> Limit | None:
     runs = len(db.review_runs_of(ctx.conn, url))
     if runs == 0:
         return None
-    row = ctx.conn.execute("SELECT coalesce(sum(runs), 0) FROM review_grants WHERE pr_url = ?", (url,)).fetchone()
+    row = sql.execute(
+        ctx.conn, sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", url)
+    ).fetchone()
     granted = int(row[0])
     return Limit("review", None, url, runs, granted, ctx.config.policy.max_reviews_per_pr + granted)
 
@@ -371,9 +379,7 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
                 raise conversation.Refused(
                     "unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant"
                 )
-            ctx.conn.execute(
-                "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (ref.id, db.format_time(T0))
-            )
+            sql.execute(ctx.conn, sql.insert("review_grants", pr_url=ref.id, runs=1, granted_at=db.format_time(T0)))
             return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
         units = {(found.repo, found.kind): found for found in _limits(ctx, ref.id)}
         repos = {r for r, _ in units}
@@ -382,9 +388,11 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
         current = units.get((repo, kind))
         if repo is None or current is None:
             raise conversation.Refused("unknown_repo", f"{ref} has had no runs in {repo or 'one repository only'}")
-        ctx.conn.execute(
-            "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, 1, ?)",
-            (ref.id, repo, kind, db.format_time(T0)),
+        sql.execute(
+            ctx.conn,
+            sql.insert(
+                "attempt_grants", ticket_key=ref.id, repo=repo, kind=kind, runs=1, granted_at=db.format_time(T0)
+            ),
         )
         return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
 
@@ -402,7 +410,7 @@ def _try_chore(ctx: Context, name: str) -> int:
     if running is not None:
         raise conversation.Refused("running", f"chore run {running['id']} of {name} is running")
     run_id = db.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=ctx.state_dir / "chore-runs" / name)
-    ctx.conn.execute("UPDATE chore_runs SET started_at = ? WHERE id = ?", (db.format_time(T0), run_id))
+    sql.execute(ctx.conn, sql.update("chore_runs").set(started_at=db.format_time(T0)).where("id = ?", run_id))
     return run_id
 
 
@@ -418,39 +426,61 @@ async def changes(backend: Backend, seconds: float | None) -> None:
 
 def _add_a_cent(backend: Backend) -> None:
     with backend.open() as ctx:
-        ctx.conn.execute(
-            "UPDATE runs SET cost_usd = round(cost_usd + 0.01, 2) WHERE id = ? AND status = 'running'", (LIVE_RUN,)
+        sql.execute(
+            ctx.conn,
+            sql.update("runs")
+            .set_to("cost_usd = round(cost_usd + 0.01, 2)")
+            .where("id = ?", LIVE_RUN)
+            .where("status = 'running'"),
         )
 
 
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     repo = str(root)
-    conn.executemany(
-        # The second read every seeded message: a reply the operator adds waits for the next tick. The loop ran both:
-        # the first as it started, the second, idle, when its wait ran out (DESIGN §6, Idle pacing). A fixed release,
-        # not this build's version, so a screenshot of a tick does not change with every commit.
-        "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id, session_id, cost_usd, idle, "
-        "woken_by, canopy_version) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?, ?, ?, '0.3.1')",
-        [
-            (
-                1,
-                at(-121),
-                at(-119),
-                "dispatched 2, waiting on 1:\n- ABC-099 implement\n- ABC-103 implement",
-                3,
-                "ses_tick1",
-                0.28,
-                0,
-                "start",
-            ),
-            (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31, 1, "timer"),
-        ],
+    # The second read every seeded message: a reply the operator adds waits for the next tick. The loop ran both: the
+    # first as it started, the second, idle, when its wait ran out (DESIGN §6, Idle pacing). A fixed release, not this
+    # build's version, so a screenshot of a tick does not change with every commit.
+    ticks = (
+        # id, started, ended, summary, message, session, cost, idle, woken by
+        (
+            1,
+            at(-121),
+            at(-119),
+            "dispatched 2, waiting on 1:\n- ABC-099 implement\n- ABC-103 implement",
+            3,
+            "ses_tick1",
+            0.28,
+            0,
+            "start",
+        ),
+        (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31, 1, "timer"),
     )
+    for tick_id, started, ended, summary, message_id, session, cost, idle, woken_by in ticks:
+        sql.execute(
+            conn,
+            sql.insert(
+                "ticks",
+                id=tick_id,
+                started_at=started,
+                ended_at=ended,
+                status="ok",
+                summary=summary,
+                message_id=message_id,
+                session_id=session,
+                cost_usd=cost,
+                idle=idle,
+                woken_by=woken_by,
+                canopy_version="0.3.1",
+            ),
+        )
     # Their overseers' tokens, in the proportions the runs' are below.
-    conn.execute(
-        "UPDATE ticks SET tokens_input = CAST(cost_usd * 40000 AS INTEGER), "
-        "tokens_output = CAST(cost_usd * 6000 AS INTEGER), tokens_cache_read = CAST(cost_usd * 400000 AS INTEGER), "
-        "tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)"
+    sql.execute(
+        conn,
+        sql.update("ticks")
+        .set_to("tokens_input = CAST(cost_usd * 40000 AS INTEGER)")
+        .set_to("tokens_output = CAST(cost_usd * 6000 AS INTEGER)")
+        .set_to("tokens_cache_read = CAST(cost_usd * 400000 AS INTEGER)")
+        .set_to("tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)"),
     )
     tickets = (
         # key, title (None: not named yet), phase, branch, last seen
@@ -462,22 +492,34 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         ("ABC-104", None, "ci_red", "agent/ABC-104-retry-queue", 5),
     )
     for key, title, phase, branch, seen in tickets:
-        conn.execute(
-            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at, title, phase, branch) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (key, repo, at(-300), at(seen), at(seen), title, phase, branch),
+        sql.execute(
+            conn,
+            sql.insert(
+                "tickets",
+                key=key,
+                repo=repo,
+                first_seen_at=at(-300),
+                last_seen_at=at(seen),
+                changed_at=at(seen),
+                title=title,
+                phase=phase,
+                branch=branch,
+            ),
         )
-    conn.execute(
-        "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
-        ("ABC-099", "agent/ABC-099-search", "https://github.com/acme/web/pull/88", "review_pending"),
-    )
-    conn.execute(
-        "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
-        ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91", "review_pending"),
-    )
+    for key, branch, pr_url in (
+        ("ABC-099", "agent/ABC-099-search", "https://github.com/acme/web/pull/88"),
+        ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91"),
+    ):
+        sql.execute(
+            conn,
+            sql.insert(
+                "ticket_units", ticket_key=key, repo="web", branch=branch, pr_url=pr_url, phase="review_pending"
+            ),
+        )
     # Each PR's own title, as its worker or its review reported it: not its ticket's, and #12 has no ticket at all.
-    conn.executemany(
-        "INSERT INTO pr_titles (pr_url, title, updated_at) VALUES (?, ?, ?)",
+    sql.execute_many(
+        conn,
+        sql.insert_rows("pr_titles", ("pr_url", "title", "updated_at")),
         [
             ("https://github.com/acme/web/pull/88", "ABC-099: debounce the search box by 250 ms", at(-59)),
             ("https://github.com/acme/web/pull/91", "ABC-103: move billing to v2 and drop the v1 client", at(-125)),
@@ -572,28 +614,27 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (43, "ABC-104", "resume", "agent/ABC-104-retry-queue", 5, None, "running", None, 1, 0.12),
     )
     for run_id, key, kind, branch, started, ended, status, result, private, cost in runs:
-        conn.execute(
-            "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
-            "log_path, private, session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, "
-            "tokens_peak_context) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                run_id,
-                key,
-                kind,
-                branch,
-                at(started),
-                at(ended) if ended is not None else None,
-                status,
-                json.dumps(result) if result is not None else None,
-                str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
-                private,
-                f"ses_mock{run_id}",
-                cost,
-                int(cost * 40_000),
-                int(cost * 6_000),
-                int(cost * 400_000),
-                int(cost * 60_000),
+        sql.execute(
+            conn,
+            sql.insert(
+                "runs",
+                id=run_id,
+                tick_id=1,
+                ticket_key=key,
+                kind=kind,
+                branch=branch,
+                started_at=at(started),
+                ended_at=at(ended) if ended is not None else None,
+                status=status,
+                result_json=json.dumps(result) if result is not None else None,
+                log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
+                private=private,
+                session_id=f"ses_mock{run_id}",
+                cost_usd=cost,
+                tokens_input=int(cost * 40_000),
+                tokens_output=int(cost * 6_000),
+                tokens_cache_read=int(cost * 400_000),
+                tokens_peak_context=int(cost * 60_000),
             ),
         )
     # What each running run's worker did last, as `_run` records it from the events its log holds (_transcripts).
@@ -602,12 +643,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (43, "bash", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
     )
     for run_id, tool, did, minutes in activities:
-        conn.execute(
-            "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ?",
-            (tool, did, at(minutes), run_id),
+        sql.execute(
+            conn,
+            sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
         )
     # Run 39's peak is the most one model call in its transcript was sent (_transcripts), as its page's chart shows.
-    conn.execute("UPDATE runs SET tokens_peak_context = 30200 WHERE id = 39")
+    sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
         (37, "web", 4, "lease-37", "canopy:ABC-100"),
@@ -617,22 +658,38 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (43, "mobile", 1, "lease-3", "canopy:ABC-104"),
     )
     for run_id, name, slot, lease, holder in run_slots:
-        conn.execute(
-            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch) "
-            "VALUES (?, ?, ?, ?, ?, 'main')",
-            (run_id, name, slot_path(root, name, slot), lease, holder),
+        sql.execute(
+            conn,
+            sql.insert(
+                "run_slots",
+                run_id=run_id,
+                repo=name,
+                slot_path=slot_path(root, name, slot),
+                lease_id=lease,
+                lease_holder=holder,
+                base_branch="main",
+            ),
         )
     # Run 43 fixes a failed check and answers review feedback in one run (DESIGN §8).
-    conn.executemany("INSERT INTO run_reasons (run_id, reason) VALUES (43, ?)", [("ci",), ("review",)])
+    sql.execute_many(conn, sql.insert_rows("run_reasons", ("run_id", "reason")), [(43, "ci"), (43, "review")])
     for key, started in (("ABC-102", -35), ("ABC-104", -20)):
-        conn.execute(
-            "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) VALUES ('ticket', ?, ?, ?, ?)",
-            (key, "started", at(started), "web"),
+        sql.execute(
+            conn,
+            sql.insert(
+                "starts", subject_kind="ticket", subject_id=key, status="started", started_at=at(started), channel="web"
+            ),
         )
-    conn.execute(
-        "INSERT INTO starts (subject_kind, subject_id, status, started_at, stopped_at, channel) "
-        "VALUES ('ticket', ?, 'stopped', ?, ?, 'cli')",
-        ("ABC-103", at(-160), at(-100)),
+    sql.execute(
+        conn,
+        sql.insert(
+            "starts",
+            subject_kind="ticket",
+            subject_id="ABC-103",
+            status="stopped",
+            started_at=at(-160),
+            stopped_at=at(-100),
+            channel="cli",
+        ),
     )
     messages = (
         # id, ticket, at, source, kind, channel, run, body, answers
@@ -694,16 +751,38 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         ),
     )
     for message_id, key, when, source, kind, channel, run_id, body, answers in messages:
-        conn.execute(
-            "INSERT INTO messages (id, subject_kind, subject_id, at, source, kind, channel, run_id, body, answers) "
-            "VALUES (?, 'ticket', ?, ?, ?, ?, ?, ?, ?, ?)",
-            (message_id, key, at(when), source, kind, channel, run_id, body, answers),
+        sql.execute(
+            conn,
+            sql.insert(
+                "messages",
+                id=message_id,
+                subject_kind="ticket",
+                subject_id=key,
+                at=at(when),
+                source=source,
+                kind=kind,
+                channel=channel,
+                run_id=run_id,
+                body=body,
+                answers=answers,
+            ),
         )
-    conn.execute(
-        "INSERT INTO messages (id, subject_kind, subject_id, at, source, kind, channel, body, comment_id, author, "
-        "commented_at) VALUES (6, 'ticket', 'ABC-101', ?, 'tracker', 'comment', 'tracker', ?, '10001', "
-        "'557058:ann', ?)",
-        (at(-50), "Please keep the old login route working until the mobile app ships. <b>Thanks!</b>", at(-52)),
+    sql.execute(
+        conn,
+        sql.insert(
+            "messages",
+            id=6,
+            subject_kind="ticket",
+            subject_id="ABC-101",
+            at=at(-50),
+            source="tracker",
+            kind="comment",
+            channel="tracker",
+            body="Please keep the old login route working until the mobile app ships. <b>Thanks!</b>",
+            comment_id="10001",
+            author="557058:ann",
+            commented_at=at(-52),
+        ),
     )
     _chore_fixtures(conn, root)
     _decisions(conn)
@@ -787,24 +866,39 @@ _PLAN_THREADS = (
 
 
 def _plans(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:
-    conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at, title, phase) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("ABC-105", str(root), at(-90), at(-8), at(-8), "Schedule report exports", "plan_proposed"),
+    sql.execute(
+        conn,
+        sql.insert(
+            "tickets",
+            key="ABC-105",
+            repo=str(root),
+            first_seen_at=at(-90),
+            last_seen_at=at(-8),
+            changed_at=at(-8),
+            title="Schedule report exports",
+            phase="plan_proposed",
+        ),
     )
     for run_id, started, ended, summary in (
         (35, -60, -52, "A schedule menu and a job that emails the CSV."),
         (44, -30, -14, "A schedule menu, a job that emails a link to the CSV, and the owner's timezone."),
     ):
-        conn.execute(
-            "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
-            "log_path, private, cost_usd) VALUES (?, 1, 'ABC-105', 'plan', '', ?, ?, 'done', ?, ?, 0, 0.64)",
-            (
-                run_id,
-                at(started),
-                at(ended),
-                json.dumps({"status": "done", "summary": summary}),
-                str(state_dir / "runs" / f"{run_id}.log"),
+        sql.execute(
+            conn,
+            sql.insert(
+                "runs",
+                id=run_id,
+                tick_id=1,
+                ticket_key="ABC-105",
+                kind="plan",
+                branch="",
+                started_at=at(started),
+                ended_at=at(ended),
+                status="done",
+                result_json=json.dumps({"status": "done", "summary": summary}),
+                log_path=str(state_dir / "runs" / f"{run_id}.log"),
+                private=0,
+                cost_usd=0.64,
             ),
         )
     for plan_id, run_id, text, status, created in (
@@ -812,21 +906,33 @@ def _plans(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:
         (2, 44, _PLAN, "proposed", -14),
     ):
         written = plans.write(state_dir, "ABC-105", run_id, text)
-        conn.execute(
-            "INSERT INTO plans (id, ticket_key, run_id, created_at, status, sha256, size) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (plan_id, "ABC-105", run_id, at(created), status, written.sha256, written.size),
+        sql.execute(
+            conn,
+            sql.insert(
+                "plans",
+                id=plan_id,
+                ticket_key="ABC-105",
+                run_id=run_id,
+                created_at=at(created),
+                status=status,
+                sha256=written.sha256,
+                size=written.size,
+            ),
         )
     for quote, prefix, suffix, body, minutes, resolved, replies in _PLAN_THREADS:
-        thread_id = conn.execute(
-            "INSERT INTO plan_threads (ticket_key, quote, prefix, suffix, body, created_at, resolved_at) "
-            "VALUES ('ABC-105', ?, ?, ?, ?, ?, ?) RETURNING id",
-            (quote, prefix, suffix, body, at(minutes), at(minutes + 1) if resolved else None),
-        ).fetchone()[0]
+        thread = sql.insert(
+            "plan_threads",
+            ticket_key="ABC-105",
+            quote=quote,
+            prefix=prefix,
+            suffix=suffix,
+            body=body,
+            created_at=at(minutes),
+            resolved_at=at(minutes + 1) if resolved else None,
+        ).returning("id")
+        thread_id = sql.execute(conn, thread).fetchone()[0]
         for reply in replies:
-            conn.execute(
-                "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (?, ?, ?)",
-                (thread_id, reply, at(minutes + 2)),
-            )
+            sql.execute(conn, sql.insert("plan_replies", thread_id=thread_id, body=reply, created_at=at(minutes + 2)))
 
 
 def _memory(conn: sqlite3.Connection) -> None:
@@ -837,8 +943,9 @@ def _memory(conn: sqlite3.Connection) -> None:
     were recording, so it read nothing; run 40 read run 37's note and had a secret refused. Two proposals wait, one from
     a private ticket's run, and one promoted earlier is a lesson, recorded and served to no run.
     """
-    conn.executemany(
-        "INSERT INTO run_memory (run_id, ticket_notes, proposals, refused) VALUES (?, ?, ?, ?)",
+    sql.execute_many(
+        conn,
+        sql.insert_rows("run_memory", ("run_id", "ticket_notes", "proposals", "refused")),
         [
             (37, "record", "record", "[]"),
             (39, "use", "record", "[]"),
@@ -970,25 +1077,51 @@ def _memory(conn: sqlite3.Connection) -> None:
             None,
         ),
     )
-    conn.executemany(
-        "INSERT INTO memories (id, scope, ticket_key, repo, key, body, status, why, author, run_id, tick_id, head, "
-        "created_at, last_used_at, use_count, promoted_from) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'worker', ?, 1, ?, ?, ?, ?, ?)",
-        notes,
+    sql.execute_many(
+        conn,
+        sql.insert_rows(
+            "memories",
+            (
+                "id",
+                "scope",
+                "ticket_key",
+                "repo",
+                "key",
+                "body",
+                "status",
+                "why",
+                "run_id",
+                "head",
+                "created_at",
+                "last_used_at",
+                "use_count",
+                "promoted_from",
+                "author",
+                "tick_id",
+            ),
+        ),
+        [(*n, "worker", 1) for n in notes],
     )
     # Note 2 is the second version of `flaky-checkout`, as `_run` links a note to the one under its key it replaced.
-    conn.execute("UPDATE memories SET supersedes = 1 WHERE id = 2")
-    conn.execute(
-        "INSERT INTO memories (id, scope, repo, key, body, status, author, promoted_from, created_at, approved_at, "
-        "review_at) VALUES (8, 'lesson', 'web', 'billing-client', ?, 'active', 'operator', 7, ?, ?, ?)",
-        (
-            "Billing goes through src/billing/client.ts alone; the v1 endpoints are gone.",
-            at(-100),
-            at(-100),
-            db.format_time(T0 + timedelta(days=90)),
+    sql.execute(conn, sql.update("memories").set(supersedes=1).where("id = 2"))
+    sql.execute(
+        conn,
+        sql.insert(
+            "memories",
+            id=8,
+            scope="lesson",
+            repo="web",
+            key="billing-client",
+            body="Billing goes through src/billing/client.ts alone; the v1 endpoints are gone.",
+            status="active",
+            author="operator",
+            promoted_from=7,
+            created_at=at(-100),
+            approved_at=at(-100),
+            review_at=db.format_time(T0 + timedelta(days=90)),
         ),
     )
-    conn.execute("INSERT INTO memory_reads (run_id, memory_id, cited) VALUES (40, 1, 'used')")
+    sql.execute(conn, sql.insert("memory_reads", run_id=40, memory_id=1, cited="used"))
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
@@ -1016,30 +1149,40 @@ def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (4, "build-health", -10, None, "running", None, 0.05),
     )
     for run_id, name, started, ended, status, result, cost in chore_runs:
-        conn.execute(
-            "INSERT INTO chore_runs (id, tick_id, chore, started_at, ended_at, status, result_json, log_path, "
-            "session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, tokens_peak_context) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                run_id,
-                name,
-                at(started),
-                at(ended) if ended is not None else None,
-                status,
-                json.dumps(result) if result is not None else None,
-                str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chore-runs" / name / f"{run_id}.log"),
-                f"ses_chore{run_id}",
-                cost,
-                int(cost * 40_000),
-                int(cost * 6_000),
-                int(cost * 400_000),
-                int(cost * 60_000),
+        sql.execute(
+            conn,
+            sql.insert(
+                "chore_runs",
+                id=run_id,
+                tick_id=1,
+                chore=name,
+                started_at=at(started),
+                ended_at=at(ended) if ended is not None else None,
+                status=status,
+                result_json=json.dumps(result) if result is not None else None,
+                log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chore-runs" / name / f"{run_id}.log"),
+                session_id=f"ses_chore{run_id}",
+                cost_usd=cost,
+                tokens_input=int(cost * 40_000),
+                tokens_output=int(cost * 6_000),
+                tokens_cache_read=int(cost * 400_000),
+                tokens_peak_context=int(cost * 60_000),
             ),
         )
-    conn.execute(
-        "INSERT INTO messages (id, subject_kind, subject_id, at, source, kind, channel, body, submission) "
-        "VALUES (8, 'chore', ?, ?, 'operator', 'reply', 'cli', ?, 'mock-note-8')",
-        (CHORE, at(-300), "Leave out the docs site's lockfile: it is never deployed."),
+    sql.execute(
+        conn,
+        sql.insert(
+            "messages",
+            id=8,
+            subject_kind="chore",
+            subject_id=CHORE,
+            at=at(-300),
+            source="operator",
+            kind="reply",
+            channel="cli",
+            body="Leave out the docs site's lockfile: it is never deployed.",
+            submission="mock-note-8",
+        ),
     )
 
 
@@ -1085,10 +1228,19 @@ def _decisions(conn: sqlite3.Connection) -> None:
         ),
     )
     for tick_id, when, key, repo, chore, pr, action, rationale in decisions:
-        conn.execute(
-            "INSERT INTO decisions (tick_id, created_at, ticket_key, repo, chore, pr, action, rationale) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (tick_id, at(when), key, repo, chore, pr, action, rationale),
+        sql.execute(
+            conn,
+            sql.insert(
+                "decisions",
+                tick_id=tick_id,
+                created_at=at(when),
+                ticket_key=key,
+                repo=repo,
+                chore=chore,
+                pr=pr,
+                action=action,
+                rationale=rationale,
+            ),
         )
 
 
@@ -1122,8 +1274,8 @@ def _tools(conn: sqlite3.Connection) -> None:
         ("review_runs", 2, "read", 7, 0, 26_000),
         ("review_runs", 4, "bash", 5, 0, 8_800),
     )
-    conn.executemany(
-        "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) VALUES (?, ?, ?, ?, ?, ?)", calls
+    sql.execute_many(
+        conn, sql.insert_rows("run_tools", ("run_table", "run_id", "tool", "calls", "errors", "result_chars")), calls
     )
 
 

@@ -11,7 +11,7 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from canopy.core import db, records
+from canopy.core import db, records, sql
 from canopy.core.items import Item, fingerprint, subject
 
 # Events every sink has passed are deleted once they are this old.
@@ -24,13 +24,13 @@ def newest_event_id(conn: sqlite3.Connection) -> int:
     Returns:
         The id, or 0 before the first event.
     """
-    row = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'notify_events'").fetchone()
+    row = sql.execute(conn, sql.select("seq").from_("sqlite_sequence").where("name = 'notify_events'")).fetchone()
     return int(row[0]) if row is not None else 0
 
 
 def sink(conn: sqlite3.Connection, name: str) -> records.NotifySink | None:
     """Return sink `name`'s row, or None if it has never been published to."""
-    return records.fetch_one(conn, records.NotifySink, "SELECT * FROM notify_sinks WHERE name = ?", (name,))
+    return records.fetch_one(conn, records.NotifySink, sql.select("*").from_("notify_sinks").where("name = ?", name))
 
 
 def ensure_sink(conn: sqlite3.Connection, name: str) -> records.NotifySink:
@@ -39,9 +39,11 @@ def ensure_sink(conn: sqlite3.Connection, name: str) -> records.NotifySink:
     Raises:
         RuntimeError: The row is missing right after it was inserted.
     """
-    conn.execute(
-        "INSERT INTO notify_sinks (name, cursor, created_at) VALUES (?, ?, ?) ON CONFLICT (name) DO NOTHING",
-        (name, newest_event_id(conn), db.now()),
+    sql.execute(
+        conn,
+        sql.insert("notify_sinks", name=name, cursor=newest_event_id(conn), created_at=db.now()).on_conflict(
+            "(name) DO NOTHING"
+        ),
     )
     row = sink(conn, name)
     if row is None:
@@ -56,13 +58,13 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
         The names forgotten, sorted.
     """
     kept = set(keep)
-    names = {str(r[0]) for r in conn.execute("SELECT name FROM notify_sinks")}
-    names |= {str(r[0]) for r in conn.execute("SELECT DISTINCT sink FROM notifications")}
+    names = {str(r[0]) for r in sql.execute(conn, sql.select("name").from_("notify_sinks"))}
+    names |= {str(r[0]) for r in sql.execute(conn, sql.select("sink").unique().from_("notifications"))}
     gone = sorted(names - kept)
     with db.transaction(conn):
         for name in gone:
-            conn.execute("DELETE FROM notify_sinks WHERE name = ?", (name,))
-            conn.execute("DELETE FROM notifications WHERE sink = ?", (name,))
+            sql.execute(conn, sql.delete("notify_sinks").where("name = ?", name))
+            sql.execute(conn, sql.delete("notifications").where("sink = ?", name))
     return gone
 
 
@@ -72,10 +74,15 @@ def events_after(
     """Return the events after `cursor`, and up to `upto` if given, in `groups`, oldest first."""
     if not groups:
         return []
-    # Only the placeholder count is interpolated; the groups are bound parameters.
-    sql = f"SELECT * FROM notify_events WHERE id > ? AND id <= ? AND grp IN ({db.marks(groups)}) ORDER BY id"  # noqa: S608
-    params = [cursor, upto if upto is not None else newest_event_id(conn), *groups]
-    return records.fetch_all(conn, records.NotifyEvent, sql, params)
+    q = (
+        sql.select("*")
+        .from_("notify_events")
+        .where("id > ?", cursor)
+        .where("id <= ?", upto if upto is not None else newest_event_id(conn))
+        .where_in("grp", groups)
+        .order_by("id")
+    )
+    return records.fetch_all(conn, records.NotifyEvent, q)
 
 
 def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
@@ -84,15 +91,19 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
     Returns:
         How many were deleted. The newest `loop.failing` or `loop.recovered` event is kept.
     """
-    cursors = [int(r[0]) for r in conn.execute("SELECT cursor FROM notify_sinks")]
+    cursors = [int(r[0]) for r in sql.execute(conn, sql.select("cursor").from_("notify_sinks"))]
     passed = min(cursors) if cursors else newest_event_id(conn)
     # The newest `loop.failing` or `loop.recovered` stays: it is how a long streak is told from a new one.
-    marker = conn.execute(
-        "SELECT coalesce(max(id), 0) FROM notify_events WHERE kind IN ('loop.failing', 'loop.recovered')"
+    marker = sql.execute(
+        conn,
+        sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind IN ('loop.failing', 'loop.recovered')"),
     ).fetchone()[0]
-    cur = conn.execute(
-        "DELETE FROM notify_events WHERE id <= ? AND at < ? AND id != ?",
-        (passed, db.format_time(now - KEEP_EVENTS), marker),
+    cur = sql.execute(
+        conn,
+        sql.delete("notify_events")
+        .where("id <= ?", passed)
+        .where("at < ?", db.format_time(now - KEEP_EVENTS))
+        .where("id != ?", marker),
     )
     return cur.rowcount
 
@@ -137,8 +148,9 @@ def diff(conn: sqlite3.Connection, sink_name: str, items: Sequence[Item], dismis
     """
     told = {
         str(r["fingerprint"]): (r["ticket_key"], str(r["reason"]), r["repo"])
-        for r in conn.execute(
-            "SELECT fingerprint, ticket_key, reason, repo FROM notifications WHERE sink = ?", (sink_name,)
+        for r in sql.execute(
+            conn,
+            sql.select("fingerprint, ticket_key, reason, repo").from_("notifications").where("sink = ?", sink_name),
         )
     }
     now_open = {item_fingerprint(i) for i in items}
@@ -162,22 +174,28 @@ def mark_delivered(conn: sqlite3.Connection, sink_name: str, change: Diff | None
     ts = db.now()
     with db.transaction(conn):
         if change is not None:
-            conn.executemany(
-                "DELETE FROM notifications WHERE sink = ? AND fingerprint = ?",
-                [(sink_name, fp) for fp in change.resolved_fingerprints],
+            sql.execute(
+                conn,
+                sql.delete("notifications")
+                .where("sink = ?", sink_name)
+                .where_in("fingerprint", change.resolved_fingerprints),
             )
-            conn.executemany(
-                "INSERT OR REPLACE INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+            sql.execute_many(
+                conn,
+                sql.insert_rows(
+                    "notifications", ("sink", "fingerprint", "ticket_key", "reason", "repo", "sent_at")
+                ).or_replace(),
                 [(sink_name, item_fingerprint(i), i.ticket_key, i.reason, i.repo, ts) for i in change.added],
             )
-        conn.execute(
-            "UPDATE notify_sinks SET cursor = max(cursor, ?), last_delivery_at = ?, failures = 0, last_error = NULL "
-            "WHERE name = ?",
-            (cursor, ts, sink_name),
+        sql.execute(
+            conn,
+            sql.update("notify_sinks")
+            .set_to("cursor = max(cursor, ?)", cursor)
+            .set(last_delivery_at=ts, failures=0, last_error=None)
+            .where("name = ?", sink_name),
         )
         if digest:
-            conn.execute("UPDATE notify_sinks SET last_digest_at = ? WHERE name = ?", (ts, sink_name))
+            sql.execute(conn, sql.update("notify_sinks").set(last_digest_at=ts).where("name = ?", sink_name))
 
 
 def mark_failed(conn: sqlite3.Connection, sink_name: str, error: str) -> int:
@@ -186,8 +204,12 @@ def mark_failed(conn: sqlite3.Connection, sink_name: str, error: str) -> int:
     Returns:
         How many deliveries in a row have failed, or 0 when the sink has no row.
     """
-    conn.execute(
-        "UPDATE notify_sinks SET failures = failures + 1, last_error = ? WHERE name = ?", (error[-500:], sink_name)
+    sql.execute(
+        conn,
+        sql.update("notify_sinks")
+        .set_to("failures = failures + 1")
+        .set(last_error=error[-500:])
+        .where("name = ?", sink_name),
     )
     row = sink(conn, sink_name)
     return row.failures if row is not None else 0
