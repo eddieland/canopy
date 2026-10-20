@@ -14,11 +14,14 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { attentionQuery, loopQuery } from '@/api/queries'
+import { attentionQuery, loopQuery, reviewsQuery } from '@/api/queries'
+import type { ReviewSummary } from '@/api/types'
 import { useSection } from '@/hooks/use-section'
 import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
 import { counted } from '@/lib/descriptions'
+import { verdictTone } from '@/lib/reviews'
+import { unseenOf, unseenText, worstOf } from '@/lib/seen-reviews'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
 import { cn } from '@/lib/utils'
@@ -69,8 +72,9 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
  * ticket's page keeps Tickets active, a PR's Pull requests, a review's Reviews, a chore's Chores, and a tick's Ticks.
- * Attention shows how many items it lists, on every page, split by severity, and Memory how many proposals wait on
- * the operator, while proposals are on. Hovering an item says what its page holds.
+ * Attention shows how many items it lists, on every page, split by severity, Reviews how many results the operator has
+ * not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item says what
+ * its page holds.
  *
  * `compact`, in the rail's strip under `lg`, shows the icons alone, each still named for a screen reader and on hover,
  * and each count as one number on its icon's corner: Attention's in its most severe item's color.
@@ -79,6 +83,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
     const attention = useQuery(attentionQuery)
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const waiting = useQuery(loopQuery).data?.memory?.proposals_waiting ?? 0
+    const unseen = unseenOf(useQuery(reviewsQuery).data)
     const section = useSection()
     const active = ITEMS.findIndex(({ to }) => to === section)
     // With no section active the highlight is hidden; it keeps a color so it fades rather than flashes.
@@ -129,6 +134,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                     {to === '/attention' && counts !== undefined && (
                         <AttentionCount counts={counts} compact={compact} />
                     )}
+                    {to === '/reviews' && unseen.length > 0 && <ReviewCount unseen={unseen} compact={compact} />}
                     {to === '/memory' && waiting > 0 && <ProposalCount waiting={waiting} compact={compact} />}
                 </Link>
             ))}
@@ -169,6 +175,31 @@ function AttentionCount({ counts, compact }: { counts: Record<Severity, number>;
                     {count}
                 </span>
             ))}
+            <span className="sr-only">{said}</span>
+        </span>
+    )
+}
+
+/**
+ * How many reviews' results the operator has not opened beside Reviews' nav item (src/lib/seen-reviews.ts), in the
+ * color of the worst finding among them, as a verdict wears it: a blocking one's in the failure color, a major one's
+ * in the color of what waits on the operator, the rest muted. Said in words on hover and to a screen reader
+ * (`2 new reviews to read`). `compact`, on the icon's corner.
+ */
+function ReviewCount({ unseen, compact }: { unseen: ReviewSummary[]; compact: boolean }) {
+    const said = unseenText(unseen.length)
+    const tone = verdictTone({ worst: worstOf(unseen) })
+    return (
+        <span
+            className={cn(
+                'readout',
+                tone === '' ? 'text-muted-foreground' : tone,
+                compact ? 'absolute top-0 right-0.5 text-2xs' : 'ml-auto text-xs',
+            )}
+            title={said}
+            data-testid="nav-reviews-count"
+        >
+            <span aria-hidden>{unseen.length}</span>
             <span className="sr-only">{said}</span>
         </span>
     )

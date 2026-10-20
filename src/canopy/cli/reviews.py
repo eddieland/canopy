@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from datetime import UTC, datetime
@@ -10,9 +11,12 @@ import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, open_context
 from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import db, review_requests
+from canopy.core import conversation, db, review_requests
 from canopy.loop import tick, tools
 from canopy.reviews import execute, findings, view
+
+#: The channel `show` marks a review seen through (DESIGN §22).
+CLI = "cli"
 
 
 @click.group("review", cls=Group)
@@ -61,7 +65,8 @@ def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
 def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
     """List the last 14 days' reviews, newest first, or show review run RUN_ID in full.
 
-    canopy's reviews post nothing on the PR; this, and the state block, are where they are.
+    canopy's reviews post nothing on the PR; this, and the state block, are where they are. A review whose result you
+    have not seen ends its line with `new`; showing it in full marks it seen, as its page in the web UI does.
     """
     ctx = open_context(click_ctx)
     if run_id is not None:
@@ -69,6 +74,11 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
             click.echo(findings.described(ctx.conn, run_id))
         except findings.Unusable as e:
             raise CliError(str(e)) from None
+        # Seen once shown to the operator. Inside one of canopy's own runs it marks nothing, and a review still running
+        # has no result to see yet: either refusal leaves it as it was, and the show stands.
+        with contextlib.suppress(conversation.Refused):
+            conversation.check_operator()
+            conversation.see(ctx.conn, [conversation.Ref(conversation.REVIEW, str(run_id))], channel=CLI)
         return 0
     lines = findings.listed(ctx.conn, db.format_time(datetime.now(UTC) - view.RECENT))
     click.echo("\n".join(lines) if lines else "no reviews in the last 14 days")

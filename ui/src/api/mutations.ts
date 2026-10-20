@@ -29,6 +29,8 @@ import type {
     ReviewRequested,
     ReviewRequestStopped,
     ReviewSent,
+    ReviewSummary,
+    SeenMarked,
     Session,
     PromoteRequest,
     Started,
@@ -221,6 +223,11 @@ export async function dismissReviewFinding(run: number, finding: number, undo: b
     )
 }
 
+/** Marks review runs' results seen, as their pages do: each is no longer new to the operator (DESIGN §22). */
+export async function markReviewsSeen(runs: number[]): Promise<SeenMarked> {
+    return unwrap(await api.POST('/api/seen', { body: { refs: runs.map((run) => `review:${run}`) } }))
+}
+
 /**
  * `canopy send review:ID N...`: a reply on the review's ticket naming `findings` by number, which the next tick reads
  * as the operator's go-ahead on them. Idempotent on `submission`, drawn when the findings were picked, as a reply is.
@@ -392,6 +399,17 @@ export async function refreshFindings(client: QueryClient, name: string): Promis
 /** After a dismissal of a review's finding: read the review again now. */
 export function refreshReview(client: QueryClient, run: number): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.review(run) })
+}
+
+/**
+ * After reviews are marked seen: the reviews list says so now, rather than when the stream next sends it, and each
+ * review's page is read again.
+ */
+export async function refreshSeen(client: QueryClient, runs: number[]): Promise<void> {
+    client.setQueryData<ReviewSummary[]>(keys.reviews, (reviews) =>
+        reviews?.map((review) => (runs.includes(review.id) ? { ...review, seen: true } : review)),
+    )
+    await Promise.all(runs.map((run) => client.invalidateQueries({ queryKey: keys.review(run) })))
 }
 
 /** After a grant: read the ticket and the PR the limit is on again now; the stream sends neither for a grant. */

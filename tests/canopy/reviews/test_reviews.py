@@ -10,10 +10,10 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, review_diff
+from canopy.core import conversation, db, definitions, records, review_diff, sql
 from canopy.core import review_result as result
 from canopy.core.config import load
-from canopy.core.vocab import ResumeReason, RunKind
+from canopy.core.vocab import ResumeReason, RunKind, SeenKind
 from canopy.infra import procs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -654,12 +654,14 @@ def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Sc
     run_id = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer).id
     [line] = scenario.operator("review", "show").out.splitlines()
     assert line.startswith(f"{run_id}  ")
-    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}")
+    # New to the operator until they read it in full (DESIGN §22).
+    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}  new")
     shown = scenario.operator("review", "show", str(run_id)).out
     assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}\ndone, started ")
     assert "\x1b" not in shown
     assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
     scenario.operator("review", "show", "99", code=1)
+    assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}\n")
 
 
 def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
@@ -839,3 +841,51 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
     query = scenario.review(reviews(sha, other), reviewer=reviewer_reports(FINDINGS)).id
     purposes = {r["id"]: r["purpose"] for r in scenario.conn.execute("SELECT id, purpose FROM review_runs")}
     assert purposes == {own: "own", query: "query"}
+
+
+def test_a_review_is_new_to_the_operator_until_they_see_it(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    """`canopy review show ID` marks a review's result seen, as its page does; only for the operator (DESIGN §22)."""
+    sha = head(git_pool)
+    first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
+    second = scenario.review(reviews(sha, "https://github.com/acme/api/pull/9"), reviewer=reviewer_reports(CLEAN)).id
+    running = scenario.starts_review(reviews(sha, "https://github.com/acme/api/pull/10"))
+
+    def new() -> list[int]:
+        return [
+            int(line.split()[0])
+            for line in scenario.operator("review", "show").out.splitlines()
+            if line.endswith("  new")
+        ]
+
+    assert new() == [second, first]
+    # An agent cannot hide a review from the operator by reading it in full: the show stands, and it stays new.
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "1"}):
+        assert main(["review", "show", str(first)]) == 0
+    assert new() == [second, first]
+    # A review still running has no result to see yet: its show marks nothing.
+    scenario.operator("review", "show", str(running.id))
+
+    scenario.operator("review", "show", str(first))
+    assert new() == [second]
+    [mark] = records.fetch_all(
+        scenario.conn, records.Seen, sql.select("*").from_("seen").where("subject = ?", str(first))
+    )
+    assert (mark.kind, mark.channel) == (SeenKind.REVIEW, "cli")
+
+    # The guards every channel's mark goes through: all of them are marked, or none.
+    def refused(*refs: str) -> str:
+        with pytest.raises(conversation.Refused) as refusal:
+            conversation.see(scenario.conn, [conversation.parse_ref(r) for r in refs], channel="web")
+        return refusal.value.guard
+
+    assert refused(f"review:{second}", f"review:{running.id}") == "running"
+    assert refused(f"review:{second}", "review:99") == "unknown"
+    assert refused(f"review:{second}", "PROJ-1") == "unsupported"
+    assert new() == [second]
+    ref = conversation.Ref(conversation.REVIEW, str(second))
+    assert conversation.see(scenario.conn, [ref, ref], channel="web") == [ref]
+    assert conversation.see(scenario.conn, [ref], channel="web") == []
+    assert new() == []
+    running.finishes()

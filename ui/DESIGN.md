@@ -216,7 +216,11 @@ Rules:
   under its value, on the one page that shows both (Counters, below). The Memory item shows how many proposals wait on
   the operator, in `status-blocked` as what waits on their answer is, said in words (`2 proposals waiting on you`), and
   nothing while none waits or proposals are off. It comes with the loop's state on the stream, so it moves as a run
-  proposes and as the operator promotes or rejects.
+  proposes and as the operator promotes or rejects. The Reviews item shows how many reviews ended with a verdict the
+  operator has not seen, in the color of the worst finding among them as a verdict wears it, the rest muted, said in
+  words (`2 new reviews to read`). What they have seen is the journal's (DESIGN §22), on each review in the list: a
+  review's page marks it as it shows the result, and the reviews list's header marks every new one. A new review's
+  row, wherever a list shows it, has a dot in `accent` after its verdict.
 - **The pause** is the header's standing action, since it is about the loop, not a page's subject: a ghost Pause
   button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it

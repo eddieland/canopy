@@ -868,6 +868,22 @@ class ReviewDismissed(_Model):
     """Whether it is now dismissed: false after an `undo`."""
 
 
+class SeenRequest(_Model):
+    """Subjects the operator has seen, by their references, `review:4` (DESIGN §22)."""
+
+    refs: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(min_length=1, max_length=100)]
+    """Each subject's reference: `review:ID`, a review run whose result they saw."""
+
+
+class SeenMarked(_Model):
+    """What a mark of subjects seen recorded: every subject named, and the ones not seen before."""
+
+    refs: list[str]
+    """Each subject named, as its reference, once."""
+    new: list[str]
+    """The ones not seen before, which this mark recorded."""
+
+
 class ReviewSendRequest(_Model):
     """Some of a review run's findings to send to a worker, by number, with the submission id the form drew."""
 
@@ -1901,6 +1917,9 @@ class ReviewSummary(_Model):
     """When it ended; None while it runs."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
+    seen: bool = False
+    """Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run that ended
+    with a verdict and is not seen is new to them."""
 
 
 class RequestedReview(_Model):
