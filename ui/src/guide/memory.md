@@ -113,7 +113,7 @@ a note would be a worker's link you'd read as canopy's. Any character that hides
 such as a zero-width space, is shown by its code point, as `<U+200B>`, and boxed in red. If you see one, someone was
 being clever.
 
-The prompt's share of memory is capped, 3 KiB for a ticket's notes and 2 KiB for the lessons. A memory in force that
+The prompt's share of memory is capped, 3 KiB for a ticket's notes and 8 KiB for the lessons. A memory in force that
 the cap leaves out says so on its row: `left out of the prompt, past its cap`, or `would be left out at use` while
 recording. A worker can still find it with `canopy memory search`.
 
