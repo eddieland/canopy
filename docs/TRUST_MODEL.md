@@ -185,8 +185,8 @@ Controls:
   of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
   may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
   run's validated result names, only for a key new to the journal and, as far as the key's text shows it, in the
-  parent's project, and tells the operator of it once (`follow_ups.filed`); nothing dispatches it until it carries a queue
-  label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
+  parent's project, and tells the operator of it once (`follow_ups.filed`); nothing dispatches it until it carries a
+  queue label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
   reported key's text only (D003), so a worker can record a ticket it did not file, one a stranger filed in the same
   project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the event
   names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it

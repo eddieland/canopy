@@ -477,8 +477,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - An `implement` or `resume` worker, public or private, may create tickets for work outside its own and report them;
   canopy records them and tells the operator once (`follow_ups.filed`), and works one only once a human labels or
-  starts it, as any ticket (DESIGN §18, TRUST_MODEL T1). Settled by the operator (2026-10-19): workers notice and ask, humans
-  authorize.
+  starts it, as any ticket (DESIGN §18, TRUST_MODEL T1). Settled by the operator (2026-10-19): workers notice and
+  ask, humans authorize.
 - Rejected: working a follow-up under its parent's label (a worker would authorize work for itself); a `canopy` verb
   that records one (anything with a shell could).
 - Revisit: if asking about each follow-up proves noise the operator wants gone; then bound them per ticket.
