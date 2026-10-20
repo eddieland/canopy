@@ -260,6 +260,11 @@ operator's own copy (§19), so runs the PR's code (§7).
 The prompt carries the notice to workers (§8) and asks only for what the diff itself gets wrong, so a `resume` is never
 sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend.
 
+It also carries the PR's latest `done` review, its summary and the findings the operator did not dismiss, as data to
+check at the new commit: what still holds is reported again, since each review's result stands alone, and the review
+still reads the whole change. Rejected: notes reviewers write for later reviews, which would tell the next one what to
+skip.
+
 Result contract, the last line of the reviewer's text (§13), validated (D026); anything else is `unknown`:
 
 ```json

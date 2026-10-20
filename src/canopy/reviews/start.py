@@ -21,7 +21,7 @@ from canopy.core import contract, db, notice, outbox, pools, prompts, review_req
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
-from canopy.reviews import grants
+from canopy.reviews import findings, grants
 
 if TYPE_CHECKING:
     import sqlite3
@@ -200,7 +200,13 @@ def _spawn(
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
     try:
-        prompt = prompts.render_reviewer(cfg, values, notice=notice.for_prompt(ctx.conn), notes=_notes(ctx.conn, run))
+        prompt = prompts.render_reviewer(
+            cfg,
+            values,
+            notice=notice.for_prompt(ctx.conn),
+            notes=_notes(ctx.conn, run),
+            previous=findings.for_reviewer(ctx.conn, request.pr, before=run_id),
+        )
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
         db.delete_review_run(ctx.conn, run_id)

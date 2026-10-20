@@ -152,6 +152,9 @@ REQUIRED_NOTICE = ("NOTICE",)
 # The operator's notes on a review request reach its reviewer through `{{NOTES}}`; a reviewer's override without it
 # still serves every review with none, and fails to render one with notes rather than drop them.
 REQUIRED_NOTES = ("NOTES",)
+# The PR's latest `done` review reaches the next one through `{{PREVIOUS_REVIEW}}`; an override without it still serves
+# a PR's first review, and fails to render a later one rather than drop it.
+REQUIRED_PREVIOUS_REVIEW = ("PREVIOUS_REVIEW",)
 # The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
 # `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
 # or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
@@ -584,13 +587,19 @@ def render_worker(
 
 
 def render_reviewer(
-    config: Config, values: Mapping[str, str], *, notice: str | None = None, notes: str | None = None
+    config: Config,
+    values: Mapping[str, str],
+    *,
+    notice: str | None = None,
+    notes: str | None = None,
+    previous: str | None = None,
 ) -> str:
     """Return the reviewer's prompt (DESIGN §21) with every `{{NAME}}` replaced from `values`.
 
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
     a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
-    review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `{{PERSONA}}` is
+    review answers, for `{{NOTES}}`, which the prompt must carry when there are some. `previous` is the PR's latest
+    `done` review, for `{{PREVIOUS_REVIEW}}`, which the prompt must carry when there is one. `{{PERSONA}}` is
     `DEFAULT_PERSONA`'s text, as a worker's is. `{{STANDING_SECTION}}` comes from the config, and with
     `paths.reviewer_instructions` set the prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone.
 
@@ -602,12 +611,15 @@ def render_reviewer(
         **_standing_values(reviewer_instructions(config), "reviewer"),
         "NOTICE": notice if notice is not None else "None.",
         "NOTES": notes or "None.",
+        "PREVIOUS_REVIEW": previous or "None.",
         "PERSONA": persona(),
     }
     standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
     noted = REQUIRED_NOTES if notes else ()
-    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted), one_of=standing)
+    followed = REQUIRED_PREVIOUS_REVIEW if previous else ()
+    required = (*REQUIRED_REVIEWER, *noticed, *noted, *followed)
+    return render(config, REVIEWER, values, required=required, one_of=standing)
 
 
 def render(
