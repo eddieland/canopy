@@ -31,7 +31,9 @@ export function NoticeBanner() {
     const clock = useClock()
     const client = useQueryClient()
     const told = useQuery(loopQuery).data?.notice ?? null
-    const [editing, setEditing] = useState(false)
+    // The notice being edited, by when it was set: one that lapses, is cleared, or is replaced from elsewhere ends the
+    // edit, so the next notice never arrives with its form already open.
+    const [editingSince, setEditingSince] = useState<string | null>(null)
     const clear = useMutation({
         mutationFn: clearNotice,
         onSuccess: (changed) => showLoop(client, changed.loop),
@@ -43,6 +45,7 @@ export function NoticeBanner() {
     if (told === null) {
         return null
     }
+    const editing = editingSince === told.since
     const lasts = durationText(minutesSetFor(told.since, told.lapses_at))
     const pending = clear.isPending || renew.isPending
     return (
@@ -57,16 +60,14 @@ export function NoticeBanner() {
             <Megaphone aria-hidden className="mt-0.5 size-4 shrink-0 text-status-blocked" />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 {editing ? (
-                    // Keyed by the notice, so one replaced from elsewhere while the form is open starts it over.
                     <NoticeForm
-                        key={told.since}
                         initial={told.text}
                         until={told.lapses_at}
                         submit="Save notice"
                         label="The notice's words"
                         testId="notice-edit"
-                        onSet={() => setEditing(false)}
-                        onCancel={() => setEditing(false)}
+                        onSet={() => setEditingSince(null)}
+                        onCancel={() => setEditingSince(null)}
                     >
                         <p className="text-sm font-medium text-status-blocked">Edit the notice to workers</p>
                     </NoticeForm>
@@ -96,7 +97,7 @@ export function NoticeBanner() {
                         onClick={() => {
                             clear.reset()
                             renew.reset()
-                            setEditing(true)
+                            setEditingSince(told.since)
                         }}
                     >
                         <Pencil />

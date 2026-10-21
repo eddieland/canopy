@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { mockCapacity } from '@/api/mocks'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +49,7 @@ afterEach(() => {
     cleanup()
 })
 
-function renderBanner(loop: LoopState | undefined) {
+function renderBanner(loop: LoopState | undefined): QueryClient {
     const client = new QueryClient()
     // Nothing is fetched: the loop's state is what the test seeds, as the stream would send it.
     client.setQueryDefaults(keys.loop, { enabled: false })
@@ -61,6 +61,7 @@ function renderBanner(loop: LoopState | undefined) {
             <NoticeBanner />
         </QueryClientProvider>,
     )
+    return client
 }
 
 describe('NoticeBanner', () => {
@@ -156,6 +157,24 @@ describe('NoticeBanner', () => {
         expect(screen.queryByRole('textbox')).toBeNull()
         expect(screen.getByRole('region', { name: 'Notice to workers' }).textContent).toContain('Freeze on main')
         expect(sent).toEqual([])
+    })
+
+    it.each([
+        ['lapses or is cleared', [QUIET, { ...QUIET, notice: { ...FREEZE, since: '2026-10-08T13:00:00Z' } }]],
+        ['is replaced from elsewhere', [{ ...QUIET, notice: { ...FREEZE, since: '2026-10-08T13:00:00Z' } }]],
+    ] as const)('ends an open edit when the notice %s, so the next one shows as told', async (_, states) => {
+        const client = renderBanner(TOLD)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        expect(screen.getByRole('textbox')).toBeDefined()
+        for (const state of states) {
+            act(() => {
+                client.setQueryData(keys.loop, state)
+            })
+        }
+        await screen.findByRole('button', { name: 'Edit' })
+        expect(screen.queryByRole('textbox')).toBeNull()
+        expect(screen.getByRole('button', { name: 'Renew' })).toBeDefined()
     })
 
     it('keeps the edit open and names the guard when the server refuses it', async () => {
