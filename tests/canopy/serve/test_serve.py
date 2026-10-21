@@ -980,6 +980,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/tickets/{key}/replies",
         "/api/tickets/{key}/forget",
         "/api/tickets/{key}/grants",
+        "/api/tickets/{key}/personas",
         "/api/tickets/{key}/plans",
         "/api/tickets/{key}/plans/{plan_id}",
         "/api/tickets/{key}/plan",

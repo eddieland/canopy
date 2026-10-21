@@ -1,12 +1,12 @@
 # M60. Personas
 
-REQUIREMENTS R24, DESIGN §31, §8, §12, §21, and §25, TRUST_MODEL T1, T5, T7, and T8, D040. Needs M58, whose
-per-ticket override and web UI control this one follows. Asked for by the operator (2026-10-19): personas that give
-planning, reviews, or implementation a flair of their own, with a default persona that holds canopy's standard
-personality. The operator settled four points the same day: only the operator chooses a persona, from config and a
-per-ticket override; a persona changes voice and emphasis only, never a guard, a contract, or a model; the default is
-canopy's voice taken out of the shipped prompts; and canopy ships a few personas, which the operator adds to or shadows
-in a private directory.
+REQUIREMENTS R24, DESIGN §31, §8, §12, §21, and §25, TRUST_MODEL T1, T5, T7, and T8, D040. Its per-ticket override was
+to follow M58's; the operator had it built first (2026-10-21), and M58's model override can share its journal fact.
+Asked for by the operator (2026-10-19): personas that give planning, reviews, or implementation a flair of their own,
+with a default persona that holds canopy's standard personality. The operator settled four points the same day: only the
+operator chooses a persona, from config and a per-ticket override; a persona changes voice and emphasis only, never a
+guard, a contract, or a model; the default is canopy's voice taken out of the shipped prompts; and canopy ships a few
+personas, which the operator adds to or shadows in a private directory.
 
 - **Stage 0, canopy's voice found.** List every line of the shipped planner, reviewer, implement, and resume prompts,
   public and private, that sets voice or emphasis rather than a task, an obligation, or a contract, and record the list
@@ -67,6 +67,10 @@ personas`; a run whose persona has no file refused `persona_missing`, and one wh
 `bad_persona`, each with its attention item, no attempt spent and no slot leased; an override without `{{PERSONA}}`
 serving `canopy` runs alone; each run's and review's persona and digest recorded, in `canopy status` and the web API;
 and `skeptic`, `minimalist`, and `explainer` shipped, for the operator to keep, rename, or drop. A feedback plan takes
-no persona, since its prompt carries none. Next, once M58's model override per ticket and its web UI control are built:
-the override per ticket, `canopy persona`, the ticket page's control, and the run and review pages' display of a run's
-persona. Designed 2026-10-19 (DESIGN §31).
+no persona, since its prompt carries none. The override per ticket is built (2026-10-21), ahead of M58 at the
+operator's word: `canopy persona KEY NAME`, `--agent planner` or `reviewer`, and `--clear`, refused inside a run and
+for a persona with no file, and the ticket page's control of it through the same function (T8). It is a row of
+`ticket_overrides`, one table of the operator's choices per ticket, agent, and kind, whose `model` kind M58's override
+per ticket can take without a migration. An override whose file has gone refuses the ticket's next run
+`persona_missing`, never falling back to `[personas]`. The run and review pages show each run's persona and digest.
+Next: the live checks in Accept. Designed 2026-10-19 (DESIGN §31).

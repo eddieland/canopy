@@ -378,6 +378,25 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
     await expect(grant).toHaveCount(0)
 })
 
+test("a ticket's worker persona is chosen from its page and cleared, as canopy persona does", async ({ page }) => {
+    await page.goto('tickets/ABC-104')
+    const personas = page.getByTestId('ticket-personas')
+    await expect(personas).toContainText("canopy's default")
+    await personas.getByRole('button', { name: 'worker persona: canopy' }).click()
+    await page.getByRole('menuitemradio', { name: 'minimalist' }).click()
+    await expect(personas.getByRole('status')).toHaveText(
+        "ABC-104's worker runs write in minimalist from their next run: this ticket's override.",
+    )
+    const chosen = personas.getByRole('button', { name: 'worker persona: minimalist' })
+    await expect(chosen).toBeVisible()
+    await chosen.click()
+    await page.getByRole('menuitem', { name: 'Clear the override' }).click()
+    await expect(personas.getByRole('status')).toHaveText(
+        "ABC-104's worker runs write in canopy from their next run: canopy's default.",
+    )
+    await expect(personas.getByRole('button', { name: 'worker persona: canopy' })).toBeVisible()
+})
+
 test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
     await page.goto('attention')
     await page.getByTestId('attention-list').getByText('acme/web#88 waits on a reviewer').click()
