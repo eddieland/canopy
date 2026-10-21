@@ -220,29 +220,57 @@ test("each ticket's and PR's own runs, the costliest first, open their pages bes
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
 })
 
-test('the tools whose calls returned the most, by kind, the most first', async ({ page }) => {
+test("the tools whose calls returned the most, every kind's summed, or one kind's from the header", async ({
+    page,
+}) => {
     await page.goto('spend')
     await settled(page)
     const tools = page.getByTestId('spend-tool-table').getByTestId('spend-tool')
-    await expect(tools).toHaveCount(11)
-    // The overseer's PR reads over both mock ticks, then the workers' shell calls.
-    await expect(tools.first().getByRole('cell')).toHaveText(['overseer', '25', '0', '325.0k', '81.3k'])
+    // Five tools, each once whatever kinds called it.
+    await expect(tools).toHaveCount(5)
+    // The PR reads lead, the overseer's over both mock ticks and a worker's, then every kind's shell calls.
     await expect(tools.first().getByRole('rowheader')).toHaveText('github_pull_request_read')
+    await expect(tools.first().getByRole('cell')).toHaveText(['27', '0', '346.0k', '86.5k'])
     await expect(tools.nth(1).getByRole('rowheader')).toHaveText('bash')
-    await expect(tools.nth(1).getByRole('cell')).toHaveText(['workers', '119', '11', '279.0k', '69.8k'])
+    await expect(tools.nth(1).getByRole('cell')).toHaveText(['149', '13', '325.1k', '81.3k'])
+    await expect(page.getByTestId('spend-tool_kind').getByRole('link', { name: 'all' })).toHaveAttribute(
+        'data-selected',
+        'true',
+    )
+
+    await page.getByTestId('spend-tool_kind').getByRole('link', { name: 'workers' }).click()
+    await expect(page).toHaveURL(/\/spend\?tool_kind=workers$/u)
+    await expect(tools.first().getByRole('rowheader')).toHaveText('bash')
+    await expect(tools.first().getByRole('cell')).toHaveText(['119', '11', '279.0k', '69.8k'])
+    // The other filter, and the window, keep what they show.
+    await expect(page.getByTestId('spend-model_kind').getByRole('link', { name: 'all' })).toHaveAttribute(
+        'data-selected',
+        'true',
+    )
+    await page.getByTestId('spend-window-30').click()
+    await expect(page).toHaveURL(/\/spend\?.*tool_kind=workers/u)
+    await expect(tools.first().getByRole('rowheader')).toHaveText('bash')
 })
 
-test('what each kind spent on each model, the runs no session named a model for last', async ({ page }) => {
+test("what the runs spent on each model, every kind's summed, or one kind's from the header", async ({ page }) => {
     await page.goto('spend')
     await settled(page)
     // Four models, each counted once whatever kinds it served.
     await expect(page.getByTestId('spend-model-count')).toHaveText('4')
     const models = page.getByTestId('spend-model-table').getByTestId('spend-model')
-    await expect(models).toHaveCount(8)
-    await expect(models.nth(2).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
-    await expect(models.nth(2).getByRole('cell')).toHaveText(['workers', '1', '23', '$1.65'])
-    await expect(models.nth(3).getByRole('rowheader')).toHaveText('none: no session named one')
-    await expect(models.nth(3).getByRole('cell')).toHaveText(['workers', '5', '–', '$2.53'])
+    await expect(models).toHaveCount(5)
+    // Sonnet served the overseer and the workers both: one row, the dearest.
+    await expect(models.first().getByRole('rowheader')).toHaveText('anthropic/claude-sonnet-4-5')
+    // The runs no session named a model for sit last, every kind's together.
+    await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
+
+    await page.getByTestId('spend-model_kind').getByRole('link', { name: 'workers' }).click()
+    await expect(page).toHaveURL(/\/spend\?model_kind=workers$/u)
+    await expect(models).toHaveCount(3)
+    await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
+    await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '23', '$1.65'])
+    await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
+    await expect(models.last().getByRole('cell')).toHaveText(['5', '–', '$2.53'])
 })
 
 test.describe('on a wide monitor', () => {

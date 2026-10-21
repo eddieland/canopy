@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 
 import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdownRange } from '@/api/queries'
-import type { SpendBreakdown, SpendDay, SpendModel, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
+import { SPEND_KINDS } from '@/api/types'
+import type { SpendBreakdown, SpendDay, SpendKind, SpendPullRequest, SpendTicket } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -30,15 +32,19 @@ import {
     doneText,
     GROUP_HINT,
     GROUP_LABEL,
+    kindsOffered,
+    modelRows,
     SERIES,
     seriesCost,
     shareText,
     SPEND_WINDOWS,
     spendLine,
     spendWindow,
+    toolRows,
     windowId,
     windowName,
 } from '@/lib/spend'
+import type { ModelRow, ToolRow } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
@@ -46,7 +52,12 @@ import { NO_TICKET } from '@/lib/words'
 interface SpendSearch {
     days?: number | undefined
     hours?: number | undefined
+    model_kind?: SpendKind | undefined
+    tool_kind?: SpendKind | undefined
 }
+
+// The search keys of the two kind filters, By model's and By tool's.
+type KindKey = 'model_kind' | 'tool_kind'
 
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
@@ -109,18 +120,26 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
  * What agent runs cost per day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
  * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?hours=24`,
  * by the hour, or `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
+ * `?model_kind=` and `?tool_kind=` keep one kind's rows of By model and By tool, which otherwise sum every kind's.
  */
 export const Route = createFileRoute('/spend')({
-    // Typed search params: a window the page does not offer is dropped, which reads as the week.
+    // Typed search params: a window the page does not offer is dropped, which reads as the week, and a kind it does
+    // not count as every kind.
     validateSearch: (search: Record<string, unknown>): SpendSearch => {
         const picked = spendWindow(search)
-        return { days: picked?.days, hours: picked?.hours }
+        return {
+            days: picked?.days,
+            hours: picked?.hours,
+            model_kind: SPEND_KINDS.find((k) => k === search['model_kind']),
+            tool_kind: SPEND_KINDS.find((k) => k === search['tool_kind']),
+        }
     },
     component: SpendPage,
 })
 
 function SpendPage() {
-    const shown = rangeOf(Route.useSearch())
+    const search = Route.useSearch()
+    const shown = rangeOf(search)
     const navigate = Route.useNavigate()
     const query = useQuery(spendBreakdownQuery(shown))
     // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
@@ -142,10 +161,17 @@ function SpendPage() {
                         aria-label="Window"
                         onValueChange={(value) => {
                             const picked = SPEND_WINDOWS.find((w) => windowId(w) === value)
-                            // Pressing the window shown turns it off: keep it. The week, the default, needs no search.
+                            // Pressing the window shown turns it off: keep it. The week, the default, needs no search;
+                            // the kind filters stay as they are.
                             if (picked !== undefined) {
                                 const week = picked === DEFAULT_WINDOW
-                                void navigate({ search: week ? {} : { days: picked.days, hours: picked.hours } })
+                                void navigate({
+                                    search: (prev) => ({
+                                        ...prev,
+                                        days: week ? undefined : picked.days,
+                                        hours: week ? undefined : picked.hours,
+                                    }),
+                                })
                             }
                         }}
                     >
@@ -200,24 +226,44 @@ function SpendPage() {
                     </div>
                     <Panel data-testid="spend-models">
                         <PanelHeader label="By model">
-                            <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
-                                {data === undefined ? '' : modelCount(data.models)}
+                            <span className="flex flex-wrap items-center gap-x-3">
+                                <KindFilter
+                                    name="model_kind"
+                                    kinds={kindsOffered(data?.models ?? [], search.model_kind)}
+                                    chosen={search.model_kind}
+                                />
+                                <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
+                                    {data === undefined ? '' : modelCount(modelRows(data.models, search.model_kind))}
+                                </span>
                             </span>
                         </PanelHeader>
                         {data === undefined ? (
                             <PanelSkeleton rows={4} className="min-h-32" />
                         ) : (
-                            <Models models={data.models} span={span} />
+                            <Models
+                                models={modelRows(data.models, search.model_kind)}
+                                kind={search.model_kind}
+                                span={span}
+                            />
                         )}
                     </Panel>
                     <Panel data-testid="spend-tools">
                         <PanelHeader label="By tool">
-                            <span className="readout text-xs text-muted-foreground">{data?.tools.length ?? ''}</span>
+                            <span className="flex flex-wrap items-center gap-x-3">
+                                <KindFilter
+                                    name="tool_kind"
+                                    kinds={kindsOffered(data?.tools ?? [], search.tool_kind)}
+                                    chosen={search.tool_kind}
+                                />
+                                <span className="readout text-xs text-muted-foreground" data-testid="spend-tool-count">
+                                    {data === undefined ? '' : toolRows(data.tools, search.tool_kind).length}
+                                </span>
+                            </span>
                         </PanelHeader>
                         {data === undefined ? (
                             <PanelSkeleton rows={5} className="min-h-40" />
                         ) : (
-                            <Tools tools={data.tools} span={span} />
+                            <Tools tools={toolRows(data.tools, search.tool_kind)} kind={search.tool_kind} span={span} />
                         )}
                     </Panel>
                     <div className="grid gap-6 xl:grid-cols-2">
@@ -657,18 +703,72 @@ function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]
 }
 
 /**
- * What each kind spent on each model, as its runs' sessions say: the kinds in `canopy spend`'s order, each kind's
- * models the most costly first, and its runs no session named a model for last, muted. Until a tick has read any
- * run's session, says so rather than list only those.
+ * A panel's kind filter, in its header as the runs page's is: `all`, which sums every kind's rows, then each kind the
+ * window has rows of. The choice is kept in the search under `name`, beside the window and the other filter.
  */
-function Models({ models, span }: { models: SpendModel[]; span: string }) {
+function KindFilter({ name, kinds, chosen }: { name: KindKey; kinds: SpendKind[]; chosen: SpendKind | undefined }) {
+    return (
+        <nav aria-label="Filter by kind" className="flex flex-wrap items-center gap-1" data-testid={`spend-${name}`}>
+            <span className="mr-1 font-mono text-xs text-muted-foreground">kind</span>
+            <KindLink name={name} kind={undefined} selected={chosen === undefined}>
+                all
+            </KindLink>
+            {kinds.map((k) => (
+                <KindLink key={k} name={name} kind={k} selected={chosen === k}>
+                    {k}
+                </KindLink>
+            ))}
+        </nav>
+    )
+}
+
+/** A filter chip, the runs page's look: the search with `name` set to `kind`, or taken out for `all`. */
+function KindLink({
+    name,
+    kind,
+    selected,
+    children,
+}: {
+    name: KindKey
+    kind: SpendKind | undefined
+    selected: boolean
+    children: ReactNode
+}) {
+    return (
+        <Link
+            to="/spend"
+            search={(prev) => ({ ...prev, [name]: kind })}
+            resetScroll={false}
+            data-selected={selected}
+            className={cn(
+                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
+                'hover:bg-surface-raised hover:text-foreground',
+                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
+            )}
+        >
+            {children}
+        </Link>
+    )
+}
+
+/**
+ * What the runs spent on each model, as their sessions say: every kind's summed, or one kind's, the most costly first,
+ * and the runs no session named a model for last, muted. Until a tick has read any run's session, says so rather than
+ * list only those.
+ */
+function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | undefined; span: string }) {
+    const runs = kind === undefined ? 'run' : KIND_LABEL[kind].replace(/s$/u, '')
     if (models.length === 0) {
-        return <Empty size="panel">no run started in these {span}</Empty>
+        return (
+            <Empty size="panel">
+                no {runs} started in these {span}
+            </Empty>
+        )
     }
     if (models.every((m) => m.model === null)) {
         return (
             <Empty size="panel">
-                no run&apos;s model read in these {span} yet: a tick reads a few ended runs&apos; sessions
+                no {runs}&apos;s model read in these {span} yet: a tick reads a few ended runs&apos; sessions
             </Empty>
         )
     }
@@ -678,7 +778,6 @@ function Models({ models, span }: { models: SpendModel[]; span: string }) {
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">model</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">kind</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal" title={MODEL_RUNS_HINT}>
                             runs
                         </th>
@@ -688,7 +787,7 @@ function Models({ models, span }: { models: SpendModel[]; span: string }) {
                 </thead>
                 <tbody className="font-mono text-xs">
                     {models.map((m) => (
-                        <tr key={`${m.kind} ${m.model ?? ''}`} className="text-right" data-testid="spend-model">
+                        <tr key={m.model ?? ''} className="text-right" data-testid="spend-model">
                             <th
                                 scope="row"
                                 className="w-full max-w-0 py-0.5 text-left font-normal"
@@ -700,7 +799,6 @@ function Models({ models, span }: { models: SpendModel[]; span: string }) {
                                     <Clipped text={m.model} className="block font-sans font-medium" />
                                 )}
                             </th>
-                            <td className="pl-3 text-left text-muted-foreground">{m.kind}</td>
                             <td className="readout pl-3">{m.runs}</td>
                             <td className={cn('readout pl-3', m.model === null && 'text-muted-foreground')}>
                                 {m.model === null ? '–' : m.replies}
@@ -716,20 +814,24 @@ function Models({ models, span }: { models: SpendModel[]; span: string }) {
     )
 }
 
-/** How many models the window's runs were served by, each counted once whatever kinds it served. */
-function modelCount(models: SpendModel[]): number | string {
-    const named = new Set(models.flatMap((m) => (m.model === null ? [] : [m.model])))
-    return named.size === 0 ? '' : named.size
+/** How many models the rows shown name, the runs no session named one for not among them. */
+function modelCount(models: ModelRow[]): number | string {
+    const named = models.filter((m) => m.model !== null).length
+    return named === 0 ? '' : named
 }
 
 /**
- * What each kind's tool calls returned, by tool, the most first: the calls, the errors, the characters returned, and
- * the tokens that is, estimated. After the fixed prefix, most of a run's context is tool results, which each later
- * model call reads again, so this is what fills it.
+ * What the tool calls returned, by tool, every kind's summed or one kind's, the most first: the calls, the errors, the
+ * characters returned, and the tokens that is, estimated. After the fixed prefix, most of a run's context is tool
+ * results, which each later model call reads again, so this is what fills it.
  */
-function Tools({ tools, span }: { tools: SpendTool[]; span: string }) {
+function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | undefined; span: string }) {
     if (tools.length === 0) {
-        return <Empty size="panel">no tool call recorded in these {span}</Empty>
+        return (
+            <Empty size="panel">
+                no tool call recorded{kind === undefined ? '' : ` in ${KIND_LABEL[kind]}`} in these {span}
+            </Empty>
+        )
     }
     return (
         <PanelScroll label="Spend by tool" className="max-h-96 px-3 pb-3">
@@ -737,7 +839,6 @@ function Tools({ tools, span }: { tools: SpendTool[]; span: string }) {
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">tool</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">kind</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">calls</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">errors</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal" title={RETURNED_HINT}>
@@ -750,12 +851,11 @@ function Tools({ tools, span }: { tools: SpendTool[]; span: string }) {
                 </thead>
                 <tbody className="font-mono text-xs">
                     {tools.map((tool) => (
-                        <tr key={`${tool.kind} ${tool.tool}`} className="text-right" data-testid="spend-tool">
+                        <tr key={tool.tool} className="text-right" data-testid="spend-tool">
                             <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
                                 {/* The row's name, as the ticket table's title reads: medium weight, cut to fit. */}
                                 <Clipped text={tool.tool} className="block font-sans font-medium" />
                             </th>
-                            <td className="pl-3 text-left text-muted-foreground">{tool.kind}</td>
                             <td className="readout pl-3" title={`in ${tool.runs} runs`}>
                                 {tool.calls}
                             </td>

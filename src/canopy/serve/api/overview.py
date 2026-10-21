@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 
 from canopy.core import spend as spending
-from canopy.serve import views
+from canopy.serve import spend_views, views
 from canopy.serve.api.deps import BackendDep, SpaDep
 from canopy.serve.schema import AttentionItem, Meta
 from canopy.serve.spend_schema import Spend, SpendBreakdown
@@ -41,7 +41,7 @@ def attention(backend: BackendDep) -> list[AttentionItem]:
 def spend(backend: BackendDep) -> Spend:
     """What the last 24 hours and the last 30 days each cost, as the agent runtime reported it."""
     with backend.open() as ctx:
-        return views.spend(backend, ctx)
+        return spend_views.spend(backend, ctx)
 
 
 @router.get("/spend/breakdown", operation_id="getSpendBreakdown", summary="Get the spend by day and by what it bought")
@@ -75,5 +75,5 @@ def spend_breakdown(
         raise HTTPException(status_code=422, detail="give days or hours, not both")
     with backend.open() as ctx:
         if hours is not None:
-            return views.spend_breakdown_hours(backend, ctx, hours)
-        return views.spend_breakdown(backend, ctx, spending.DEFAULT_DAYS if days is None else days)
+            return spend_views.spend_breakdown_hours(backend, ctx, hours)
+        return spend_views.spend_breakdown(backend, ctx, spending.DEFAULT_DAYS if days is None else days)

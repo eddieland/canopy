@@ -10,7 +10,7 @@ overseer cost in dollars, tokens, and peak context, and its summary. A `dry run`
 `canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes: after
 `loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
 
-A tick ends:
+A tick reads `running` while it works, and ends:
 
 - `ok`, the usual;
 - `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there. It still did the
@@ -36,9 +36,9 @@ newest tick, the next one's button comes alive when the next tick starts. For th
 readout is the shortcut.
 
 **Decisions** lists what the overseer decided, in the order it decided, each with its subject, its action, and the
-overseer's reasons in its own words. A `refused` action, in red, names the guard that held it back; an `attention`
-action, in amber, is an item it put on your list. When you want to know why a ticket sat still, its refusals are
-usually the answer.
+overseer's reasons in its own words. A `refused` action, in red, names the [guard](how-the-loop-works#guards) that held
+it back; an `attention` action, in amber, is an item it put on your list. When you want to know why a ticket sat still,
+its refusals are usually the answer.
 
 Under them are the overseer's session, as a run's [Transcript](runs#a-runs-page) shows it, its session id in the
 header; the **Prompt** canopy started it with, folded as a run's is; and its raw **Output**, stdout then stderr, under
@@ -63,13 +63,13 @@ Each split has one name everywhere on the page, in the totals, the chart's legen
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went
 on deciding there was nothing to do. Hover a name for what it counts.
 
-**By day** stacks each day's spend by the same split, with a table under it. A day runs midnight to midnight on the
-clock of the machine canopy runs on, so your evening's work lands on today and not on a UTC tomorrow. The dearest day
-has its total printed over its bar, so you can read the scale without hovering; hover any bar for that day's figures. A
-day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, under the
-rest of the overseer's spend in a deeper shade of its color, and at real prices they're a sliver beside a worker's run,
-so read their trend from the table. A window where nothing reported a cost says so in one line rather than draw you an
-empty chart.
+**By day** stacks each day's spend by the same split, with a table under it that also counts the tickets done that day.
+A day runs midnight to midnight on the clock of the machine canopy runs on, so your evening's work lands on today and
+not on a UTC tomorrow. The dearest day has its total printed over its bar, so you can read the scale without hovering;
+hover any bar for that day's figures. A day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit
+at the bottom of each bar, under the rest of the overseer's spend in a deeper shade of its color, and at real prices
+they're a sliver beside a worker's run, so read their trend from the table. A window where nothing reported a cost says
+so in one line rather than draw you an empty chart.
 
 **24 hours** does the same by the hour: 24 clock hours ending with this one, so the newest bar fills in as the hour
 goes. That's the window the rail's **24h** counter opens, for when you want to know what the last hour cost rather than
@@ -77,13 +77,16 @@ what the week did. The hour that started 24 hours ago is just outside it, so the
 rail's. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
-- **By model**: what each kind of run spent on each model, as the runs' own sessions say, the dearest first under each
-  kind. A run that switched models counts under both. Runs whose model canopy hasn't read yet sit last as **none**,
-  with what they reported costing. Each run's session is read as it ends, and the loop reads the stragglers while it
-  waits between ticks, so **none** is mostly runs from before canopy read models, and it shrinks while the loop idles.
-  This is the table to read before and after you canary a model.
-- **By tool**: which tools put the most into the runs' context, by the characters their calls returned. Every later
-  model call of the run reads those again, so a chatty tool costs more than once.
+- **By model**: what the runs spent on each model, as their own sessions say, the dearest first. It opens on **all**,
+  each model summed over every kind of run; the **kind** filter in its header narrows it to the overseer's, the
+  workers', or any other kind the window has runs of. A run that switched models counts under both. Runs whose model
+  canopy hasn't read yet sit last as **none**, with what they reported costing. Each run's session is read as it ends,
+  and the loop reads the stragglers while it waits between ticks, so **none** is mostly runs from before canopy read
+  models, and it shrinks while the loop idles. This is the table to read before and after you canary a model.
+- **By tool**: which tools put the most into the runs' context, by the characters their calls returned, every kind
+  summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
+  costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
+  across a month without picking it again.
 - **Ticks by what they bought** and **Ticks by what woke them**: the ticks counted and costed by whether they were idle,
   and by their cause.
 - **Idle ticks**: the newest of them, to open.

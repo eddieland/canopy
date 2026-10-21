@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 from fastapi.exceptions import RequestValidationError
 
 from canopy.core import search
-from canopy.serve import views
+from canopy.serve import search_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.search_schema import SearchResults
 
@@ -35,7 +35,7 @@ def find(
     """
     with backend.open() as ctx:
         try:
-            return views.found(ctx, q)
+            return search_views.found(ctx, q)
         except search.BadQueryError as e:
             error = {"type": "value_error", "loc": ("query", "q"), "msg": str(e), "input": q}
             raise RequestValidationError([error]) from None

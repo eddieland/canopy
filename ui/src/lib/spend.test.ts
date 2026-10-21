@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { SpendCosts, SpendDay } from '@/api/types'
+import type { SpendCosts, SpendDay, SpendModel, SpendTool } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 
 import {
@@ -10,11 +10,14 @@ import {
     dayName,
     dearestDay,
     doneText,
+    kindsOffered,
+    modelRows,
     seriesCost,
     SERIES,
     shareText,
     spendLine,
     spendWindow,
+    toolRows,
     windowId,
     windowName,
 } from './spend'
@@ -43,6 +46,11 @@ function day(name: string, costs: Partial<SpendCosts>): SpendDay {
 function hourOf(hour: number, costs: Partial<SpendCosts> = {}): SpendDay {
     const start = new Date(2026, 9, 8, hour).toISOString()
     return { day: `2026-10-08T${String(hour).padStart(2, '0')}`, start, costs: { ...NONE, ...costs }, done: 0 }
+}
+
+// A tool's calls in one kind's runs, its tokens estimated as the server does.
+function tool(kind: SpendTool['kind'], name: string, chars: number): SpendTool {
+    return { kind, tool: name, runs: 1, calls: 2, errors: 1, result_chars: chars, est_tokens: Math.floor(chars / 4) }
 }
 
 describe('spend', () => {
@@ -144,5 +152,37 @@ describe('spend', () => {
         const labels = SERIES.map((s) => s.label)
         expect(new Set(labels).size).toBe(labels.length)
         expect(labels).toEqual(['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'dry runs'])
+    })
+
+    it("sums each model's runs over every kind, the costliest first and the unnamed last, or keeps one kind's", () => {
+        const models: SpendModel[] = [
+            { kind: 'overseer', model: 'a/small', runs: 4, replies: 40, cost_usd: 1 },
+            { kind: 'overseer', model: null, runs: 2, replies: 0, cost_usd: null },
+            { kind: 'workers', model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5 },
+            { kind: 'workers', model: 'a/small', runs: 2, replies: 6, cost_usd: 0.75 },
+            { kind: 'workers', model: null, runs: 3, replies: 0, cost_usd: 2 },
+        ]
+        expect(modelRows(models, undefined)).toEqual([
+            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.75 },
+            { model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5 },
+            { model: null, runs: 5, replies: 0, cost_usd: 2 },
+        ])
+        expect(modelRows(models, 'overseer').map((m) => m.model)).toEqual(['a/small', null])
+        expect(modelRows(models, 'plans')).toEqual([])
+    })
+
+    it("sums each tool's calls over every kind, the most returned first, its tokens from the sum", () => {
+        const tools = [tool('overseer', 'read', 600), tool('workers', 'bash', 500), tool('workers', 'read', 3)]
+        expect(toolRows(tools, undefined)).toEqual([
+            { tool: 'read', runs: 2, calls: 4, errors: 2, result_chars: 603, est_tokens: 150 },
+            { tool: 'bash', runs: 1, calls: 2, errors: 1, result_chars: 500, est_tokens: 125 },
+        ])
+        expect(toolRows(tools, 'workers').map((t) => t.tool)).toEqual(['bash', 'read'])
+    })
+
+    it('offers the kinds with rows, in canopy spend order, and the one chosen though it has none', () => {
+        const rows = [{ kind: 'reviews' as const }, { kind: 'overseer' as const }, { kind: 'reviews' as const }]
+        expect(kindsOffered(rows, undefined)).toEqual(['overseer', 'reviews'])
+        expect(kindsOffered(rows, 'plans')).toEqual(['overseer', 'plans', 'reviews'])
     })
 })

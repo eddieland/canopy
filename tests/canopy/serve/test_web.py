@@ -19,7 +19,7 @@ from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
-from canopy.serve import live, secret, views
+from canopy.serve import live, secret, spend_views
 from canopy.serve.event_schema import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
@@ -605,7 +605,7 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
 def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_and_ever_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
     backend = dataclasses.replace(web.backend(ctx, reread.Reload(), tick_now.TickNow()), clock=lambda: now)
-    nothing = views.spend(backend, ctx)
+    nothing = spend_views.spend(backend, ctx)
     assert (nothing.day.cost_usd, nothing.month.cost_usd, nothing.total_usd) == (None, None, None)  # nothing yet
 
     def started(table: str, row_id: int, hours_ago: float, cost: float | None) -> None:
@@ -618,7 +618,7 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_a
     started("runs", running_run(ctx, "PROJ-4"), 30 * 24 + 1, 40.0)  # before both
     started("ticks", db.start_tick(ctx.conn, dry_run=False), 23.5, 0.5)
 
-    spend = views.spend(backend, ctx)
+    spend = spend_views.spend(backend, ctx)
     day, month = spend.day, spend.month
     assert (day.hours, day.since, day.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
     assert (month.hours, month.since, month.cost_usd) == (720, now - timedelta(days=30), pytest.approx(10.75))

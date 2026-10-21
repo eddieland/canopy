@@ -14,7 +14,7 @@ with the overseer's reasons, and the [Ticks](/ticks) page shows them all.
 Between ticks the loop waits `loop.interval_minutes`, 15 by default. When a tick finds nothing new, the next wait is
 longer, doubling up to `loop.idle_max_minutes`, so a quiet afternoon doesn't cost a tick every quarter hour. Anything
 you do that the loop should hear about ends the wait early: a reply, a start or stop, a grant, a notice to workers.
-So does a run ending, a cooldown running out, or a chore coming due. Even then it waits at least
+So does a run ending, a cooldown running out, a chore coming due, or a notice lapsing. Even then it waits at least
 `loop.min_gap_minutes` after the last tick ends, one minute by default. **Tick now** in the header skips even that.
 
 While it waits, the loop also polls: every `connect.every_minutes`, two by default, it runs the connectors that read
@@ -33,6 +33,8 @@ outlive the tick that started them, so a long one spans many ticks. Each run has
   and the run's chip shows them, as in `resume (ci, review)`. One resume takes all of a PR's reasons at once, so a red
   build and a reviewer's comment get one run and one push, not two runs racing for the same branch.
 - `plan`: writes a plan for you to approve before the first implement. See [Plans](plans).
+- `feedback-plan`: with `policy.feedback_plan = "approve"` in your own config, a plan for what came back to a PR,
+  approved before the resume that acts on it. It reads the PR and pushes nothing.
 
 Older runs may say `fix-ci`: that was a kind of its own before a resume took over fixing CI. They still show as they
 ran, and count toward the ticket's resume limit. Older still, a `split` run broke a ticket into child tickets, before
@@ -41,6 +43,9 @@ workers filed follow-ups (below) instead; those show as they ran and count towar
 A run ends `done`; `waiting on you`, when the worker stopped to ask you something; `stopped`, when you ended it; or
 failed, in one of several ways: `failed`, `crashed`, `timeout`, `unpushed` (it said done, with work it never pushed),
 or `unknown` (its last words weren't a result canopy could read). Every failed run reaches the attention list.
+
+Every run has a timeout, and near it, each tool call tells the agent how many minutes it has left, so a worker pushes
+what it has rather than losing it with its slot. That's advice: the timeout is still what ends the run.
 
 Reviews and chores are runs too, of their own kinds, with their own pages: a review reads one PR at one commit and
 reports findings, and a chore is recurring work no ticket asked for. [Runs](/runs) lists them beside the workers;
