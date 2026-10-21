@@ -60,6 +60,15 @@ export const THEMES = ['light', 'dark'] as const
 export const NOW = new Date('2026-10-08T12:30:00Z')
 
 /**
+ * Opens a repository picker by its button, whose name says what it chooses (`Filter by repository: api`), and returns
+ * its list, which opens over the page, outside whatever holds the button.
+ */
+export async function openRepoPicker(button: Locator): Promise<Locator> {
+    await button.click()
+    return button.page().getByRole('listbox', { name: 'Repositories' })
+}
+
+/**
  * An ISO time as the page writes it on hover with the clock at its default (src/lib/time.ts `localTime`): the
  * browser's local date and 24-hour time to the second, `10/8/2026, 12:00:00` in en-US.
  */

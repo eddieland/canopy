@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { plan, select } from './helpers.ts'
+import { openRepoPicker, plan, select } from './helpers.ts'
 
 // Served under /canopy, signing nobody in, with the mock journal changing every 250 ms (playwright.config.ts). The
 // writes happen here, not on the root server, whose screenshots need its journal as seeded.
@@ -572,7 +572,7 @@ test("a proposal is promoted in the operator's words and another rejected from t
     await expect(form.getByTestId('promote-replaces')).toHaveText(
         'No lesson is in force under web-tests: it replaces none.',
     )
-    await expect(form.getByRole('radio', { name: 'web' })).toHaveAttribute('aria-checked', 'true')
+    await expect(form.getByRole('button', { name: 'Served to runs in: web' })).toBeVisible()
     await form.getByLabel('The lesson, in your words').fill("Run web's tests once, with `npm test -- --run`.")
     await form.getByRole('button', { name: 'Promote memory:5' }).click()
     const said = proposals.getByRole('status')
@@ -612,8 +612,10 @@ test("a ticket's note is promoted from its page for one repository, and the less
     const note = panel.getByTestId('memory-4')
     await note.getByRole('button', { name: 'Promote' }).click()
     const form = note.getByRole('form', { name: 'Promote memory:4' })
-    await expect(form.getByRole('radio', { name: 'every repository' })).toHaveAttribute('aria-checked', 'true')
-    await form.getByRole('radio', { name: 'web' }).click()
+    const repos = await openRepoPicker(form.getByRole('button', { name: 'Served to runs in: every repository' }))
+    await expect(repos.getByRole('option', { name: 'every repository' })).toHaveAttribute('aria-checked', 'true')
+    await repos.getByRole('option', { name: 'web' }).click()
+    await expect(form.getByRole('button', { name: 'Served to runs in: web' })).toBeVisible()
     await form.getByRole('button', { name: 'Promote memory:4' }).click()
     const said = panel.getByRole('status')
     await expect(said).toContainText('Note 4 is lesson')
@@ -647,9 +649,9 @@ test('a lesson is edited from the memory page, and its versions keep the old wor
     await lesson.hover()
     await lesson.getByRole('button', { name: 'Edit' }).click()
     const form = lesson.getByRole('form', { name: 'Edit memory:8' })
-    await expect(form.getByRole('radio', { name: 'web' })).toHaveAttribute('aria-checked', 'true')
     await form.getByLabel('The lesson, in your words').fill('Billing goes through src/billing/client.ts, v2 included.')
-    await form.getByRole('radio', { name: 'every repository' }).click()
+    const repos = await openRepoPicker(form.getByRole('button', { name: 'Served to runs in: web' }))
+    await repos.getByRole('option', { name: 'every repository' }).click()
     await form.getByRole('button', { name: 'Edit memory:8' }).click()
     const said = lessons.getByRole('status')
     await expect(said).toContainText('Lesson 8 is edited into lesson')

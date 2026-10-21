@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { NOW, settled, signIn } from './helpers.ts'
+import { NOW, openRepoPicker, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW)
@@ -26,18 +26,29 @@ async function reviews(page: Page): Promise<string[]> {
     return ids.toSorted()
 }
 
-test('the pull requests list filters by repository and by words, in the URL', async ({ page }) => {
+test('the pull requests list filters by repositories and by words, in the URL', async ({ page }) => {
     await page.goto('pull-requests')
     await settled(page)
-    const repos = page.getByRole('navigation', { name: 'Filter by repository' })
-    await expect(repos.getByRole('link', { name: 'every repository' })).toHaveAttribute('data-selected', 'true')
+    const picker = page.getByRole('button', { name: /^Filter by repository: /u })
+    await expect(picker).toHaveAccessibleName('Filter by repository: every repository')
+    const repos = await openRepoPicker(picker)
+    await expect(repos.getByRole('option', { name: 'every repository' })).toHaveAttribute('aria-checked', 'true')
 
-    await repos.getByRole('link', { name: 'api', exact: true }).click()
+    await repos.getByRole('option', { name: 'api', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\?repo=api$/u)
     await expect.poll(() => prs(page)).toEqual(['acme/api#12'])
     await expect(page.getByTestId('pull-requests-count')).toHaveText(/^1 of \d+$/u)
 
-    await repos.getByRole('link', { name: 'web', exact: true }).click()
+    // A second repository adds to the first while the list stays open; taking the first away leaves the second.
+    await repos.getByRole('option', { name: 'web', exact: true }).click()
+    await expect(page).toHaveURL(/[?&]repo=api%2Cweb/u)
+    await expect(picker).toHaveAccessibleName('Filter by repository: api, web')
+    await expect.poll(() => prs(page)).toEqual(['acme/api#12', 'acme/web#88', 'acme/web#91'])
+    await repos.getByRole('option', { name: 'api', exact: true }).click()
+    await expect(page).toHaveURL(/[?&]repo=web(?:&|$)/u)
+    await page.keyboard.press('Escape')
+    await expect(repos).toHaveCount(0)
+
     const field = page.getByRole('searchbox', { name: 'Filter pull requests by PR, ticket, or title' })
     await field.fill('DEBOUNCE')
     await expect(page).toHaveURL(/[?&]q=DEBOUNCE/u)
@@ -47,8 +58,18 @@ test('the pull requests list filters by repository and by words, in the URL', as
     await field.fill('nothing like it')
     await expect(page.getByText('no PRs in web with “nothing like it”')).toBeVisible()
 
-    await repos.getByRole('link', { name: 'every repository' }).click()
+    await (await openRepoPicker(picker)).getByRole('option', { name: 'every repository' }).click()
     await expect(page).toHaveURL(/\/pull-requests\?q=nothing/u)
+})
+
+test('a link to the pull requests list names its repositories in the URL, one or several', async ({ page }) => {
+    await page.goto('pull-requests?repo=web,api')
+    await settled(page)
+    await expect(page.getByRole('button', { name: 'Filter by repository: api, web' })).toBeVisible()
+    await expect.poll(() => prs(page)).toEqual(['acme/api#12', 'acme/web#88', 'acme/web#91'])
+    await page.goto('pull-requests?repo=api,Not-A-Repo')
+    await settled(page)
+    await expect.poll(() => prs(page)).toEqual(['acme/api#12'])
 })
 
 test('the reviews list filters by repository and by words, and a request waits out a repository', async ({ page }) => {
@@ -61,8 +82,9 @@ test('the reviews list filters by repository and by words, and a request waits o
     await field.fill('acme')
     // The PR waiting on its review is listed while no repository is chosen.
     await expect(page.getByTestId('requested-https://github.com/acme/web/pull/95')).toBeVisible()
-    const repos = page.getByRole('navigation', { name: 'Filter by repository' })
-    await repos.getByRole('link', { name: 'api', exact: true }).click()
+    const repos = await openRepoPicker(page.getByRole('button', { name: 'Filter by repository: every repository' }))
+    await repos.getByRole('option', { name: 'api', exact: true }).click()
+    await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/[?&]repo=api/u)
     await expect.poll(() => reviews(page)).toEqual(['review-2'])
     await expect(page.getByTestId('reviews-count')).toHaveText(/^1 of \d+$/u)

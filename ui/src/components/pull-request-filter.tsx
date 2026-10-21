@@ -1,18 +1,18 @@
-import { Link, useNavigate } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 
 import { FilterField } from '@/components/filter-field'
+import { RepoFilter } from '@/components/repo-picker'
 import { PR_QUERY_MAX, prQueryOf } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
-import { cn } from '@/lib/utils'
+import { repoListFrom, reposIn } from '@/lib/repo-filter'
 
 /** The pages a `PullRequestFilterBar` filters, each with `?repo=` and `?q=`. */
 type FilteredPage = '/pull-requests' | '/reviews'
 
 /**
  * A PR list's filter, the pull requests page's and the reviews page's: a field for words, kept in `?q=`
- * (`FilterField`), and a chip for each repository the list's rows are in, kept in `?repo=`, while there is more than
- * one. Each keeps the other's key.
+ * (`FilterField`), and a picker of the repositories the list's rows are in, kept in `?repo=`, while there is more than
+ * one (`RepoFilter`). Each keeps the other's key, and replaces the history entry, so Back leaves the page.
  */
 export function PullRequestFilterBar({
     to,
@@ -25,7 +25,7 @@ export function PullRequestFilterBar({
     to: FilteredPage
     /** The page's validated search. */
     filter: PullRequestFilter
-    /** The repositories to offer a chip for (`reposOf`). */
+    /** The repositories to offer (`reposOf`). */
     repos: string[]
     /** The field's name, for a screen reader. */
     label: string
@@ -45,45 +45,14 @@ export function PullRequestFilterBar({
                 className="min-w-48 flex-1 basis-80"
             />
             {repos.length > 1 && (
-                <nav aria-label="Filter by repository" className="flex flex-wrap items-center gap-1">
-                    <RepoLink to={to} filter={filter} repo={undefined}>
-                        every repository
-                    </RepoLink>
-                    {repos.map((r) => (
-                        <RepoLink key={r} to={to} filter={filter} repo={r}>
-                            {r}
-                        </RepoLink>
-                    ))}
-                </nav>
+                <RepoFilter
+                    repos={repos}
+                    chosen={reposIn(filter.repo)}
+                    onChoose={(chosen) =>
+                        void navigate({ to, search: { ...filter, repo: repoListFrom(chosen) }, replace: true })
+                    }
+                />
             )}
         </search>
-    )
-}
-
-/** A repository's chip, selected when the validated `?repo=` names it, or `every repository` while none does. */
-function RepoLink({
-    to,
-    filter,
-    repo,
-    children,
-}: {
-    to: FilteredPage
-    filter: PullRequestFilter
-    repo: string | undefined
-    children: ReactNode
-}) {
-    return (
-        <Link
-            to={to}
-            search={{ ...filter, repo }}
-            data-selected={filter.repo === repo}
-            className={cn(
-                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
-                'hover:bg-surface-raised hover:text-foreground',
-                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
-            )}
-        >
-            {children}
-        </Link>
     )
 }

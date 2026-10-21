@@ -13,10 +13,10 @@ import { Textarea } from '@/components/input'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { InlineCode } from '@/components/rich-text'
+import { RepoSelect } from '@/components/repo-picker'
 import { RowLine } from '@/components/rows'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { editRepoChoices, lessonChars, MAX_LESSON_CHARS, memoryStand, repoChoices } from '@/lib/memory'
 import { editedText, memoryForgottenText, PRIVATE_WORDS, promotedText, rejectedText, renewedText } from '@/lib/outcomes'
 import { memoryRef } from '@/lib/refs'
@@ -29,10 +29,6 @@ import { cn } from '@/lib/utils'
 // `canopy memory` verb calls, with its guards. A verb's row can leave once it is done (a promoted or rejected
 // proposal, a forgotten lesson), so what it did is said under the list it was done from (`onSaid`), and only its
 // refusal under the row, which stays.
-
-// The repository choice that stands for every one: no repository's name, which the workspace map holds to lowercase
-// letters, digits, and hyphens. Not '': a segmented control takes that for nothing picked.
-const EVERY = '*'
 
 // The refusals that mean the memory is not as the page last read it.
 const STALE: ReadonlySet<string> = new Set(['not_pending', 'forgotten', 'unknown'])
@@ -519,7 +515,7 @@ export function VersionForget({ version, onSaid }: Said & { version: MemoryEntry
 /**
  * A lesson's words and the repositories its runs are served in, as a promote or an edit takes them: the words in a
  * field with their count against the bound, sent on the send key (`onKeyDown`), and, once `choices` are read, the
- * repositories as a segmented control.
+ * repository to serve it in, as a picker (`RepoSelect`), which a workspace of many repositories keeps in reach.
  */
 function LessonFields({
     text,
@@ -564,31 +560,10 @@ function LessonFields({
             />
             {choices !== undefined && (
                 <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-muted-foreground" id={`${id}-repo`}>
+                    <span className="text-xs text-muted-foreground" aria-hidden>
                         Served to runs in
                     </span>
-                    <ToggleGroup
-                        type="single"
-                        value={repo ?? EVERY}
-                        aria-labelledby={`${id}-repo`}
-                        onValueChange={(value) => {
-                            // A radio group keeps one picked: pressing the picked one again leaves it, as ''.
-                            if (value !== '') {
-                                onRepo(value === EVERY ? null : value)
-                            }
-                        }}
-                        className="flex-wrap"
-                    >
-                        {choices.map((name) => (
-                            <ToggleGroupItem
-                                key={name ?? EVERY}
-                                value={name ?? EVERY}
-                                className={cn(name && 'font-mono')}
-                            >
-                                {name ?? 'every repository'}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
+                    <RepoSelect choices={choices} value={repo} onValue={onRepo} label="Served to runs in" />
                 </span>
             )}
         </>
