@@ -311,7 +311,8 @@ class _Reader:
     def _label_times(self, key: str, issue: Mapping[str, object]) -> dict[str, datetime]:
         """When the changelog last added each label the ticket has; a label it never added (set at creation) has none.
 
-        The changelog came with the ticket; one cut short, or missing, is read whole on its own.
+        The changelog came with the ticket; one cut short, missing, or not saying how long it is, is read whole on
+        its own.
 
         Returns:
             Each label's time, by name.
@@ -322,7 +323,7 @@ class _Reader:
         log = at(issue, "changelog")
         histories = items(at(log, "histories"))
         total = at(log, "total")
-        if not isinstance(log, dict) or (isinstance(total, int) and total > len(histories)):
+        if not isinstance(log, dict) or not isinstance(total, int) or total > len(histories):
             histories = list(self._changelog(key))
         added: dict[str, datetime] = {}
         for history in histories:

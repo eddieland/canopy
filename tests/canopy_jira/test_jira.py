@@ -80,6 +80,8 @@ class Jira:
     issues: dict[str, Issue] = field(default_factory=dict[str, Issue])
     query: list[str] = field(default_factory=list[str])
     inline: int | None = None
+    #: Whether a fetch's changelog says how many entries the whole one has.
+    totals: bool = True
     fail: dict[str, int] = field(default_factory=dict[str, int])
     #: Each request: its method, path, query, Authorization header, and body.
     seen: list[tuple[str, str, dict[str, str], str | None, Any]] = field(
@@ -143,12 +145,9 @@ class Jira:
         }
         if changelog:
             shown = issue.history if self.inline is None else issue.history[len(issue.history) - self.inline :]
-            found["changelog"] = {
-                "startAt": 0,
-                "maxResults": len(shown),
-                "total": len(issue.history),
-                "histories": shown,
-            }
+            found["changelog"] = {"startAt": 0, "maxResults": len(shown), "histories": shown}
+            if self.totals:
+                found["changelog"]["total"] = len(issue.history)
         return found
 
     @staticmethod
@@ -412,6 +411,19 @@ def test_a_changelog_cut_short_in_the_fetch_is_read_whole_on_its_own(jira: tuple
 
     assert found.ticket("PROJ-1")["labels"] == [{"name": "agent", "added_at": "2026-10-01T00:00:00+00:00"}]
     assert "GET /rest/api/3/issue/PROJ-1/changelog" in fake.paths()
+
+
+def test_a_changelog_that_does_not_say_its_length_is_read_whole_on_its_own(
+    jira: tuple[Jira, str], credentials: Path
+) -> None:
+    fake, url = jira
+    fake.add(Issue("PROJ-1", labels=["agent"], history=[labelled("2026-10-01T00:00:00.000+0000", ["agent"])]))
+    fake.totals = False
+    fake.inline = 0
+
+    found = read(url, {"tickets": [{"key": "PROJ-1"}]}, credentials)
+
+    assert found.ticket("PROJ-1")["labels"] == [{"name": "agent", "added_at": "2026-10-01T00:00:00+00:00"}]
 
 
 def test_a_ticket_without_labels_reads_no_changelog(jira: tuple[Jira, str], credentials: Path) -> None:
