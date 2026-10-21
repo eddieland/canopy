@@ -397,6 +397,17 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   default). Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash`
   gone if its rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
+- **S58. What canopy keeps** (M47, stage 1's check, closed on real use 2026-10-21). Run `canopy gc --dry-run --json`
+  on the live workspace and record each kind's count and bytes, and what a pass with §26's defaults removes, in
+  `MEASUREMENTS.md`. Expect the run, tick, and review files, `canopy.log`, and the harness's attention rows to hold
+  most of it; set §26's defaults from the numbers, or say why they stay. Run it again before a later stage of M47
+  changes what a pass removes.
+- **S59. A week of passes** (M47, stage 2's check). Let `canopy loop` run a week with the pass on, and each day run
+  `canopy gc --dry-run --json` shortly before the pass is due, a day after the last `gc_passes.started_at`. Expect one
+  `ok` row a day whose `removed` matches, kind by kind, the dry run's `removable` and `removable_size`, but for files
+  that crossed their retention in between, with `failures` 0; `canopy.log` rotated past `log_max_mib`, with no more
+  than `log_keep` rotated files; and every transcript, prompt, output, and diff the operator opens shown, or saying
+  "removed after N days", never failing. Record the rows and the dry runs in `MEASUREMENTS.md`.
 
 ## Retired
 
