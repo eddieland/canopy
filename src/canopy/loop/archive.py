@@ -2,11 +2,10 @@
 
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`
 (`plan_export`), commits what changed there and nothing else, under a message naming each plan it adds or changes, and
-pushes the clone's branch to its upstream. A dry run
-only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a
-push that failed is retried each live tick and the operator sees why until one succeeds. A tick writes at most
-`PER_TICK` files, so a long history goes in over several ticks, each commit and push bounded, and the item stays open
-until it all has.
+pushes the clone's branch to its upstream. A dry run only reads the clone. Either way the tick raises `archive_unpushed`
+while the archive is not all on its upstream, so a push that failed is retried each live tick and the operator sees why
+until one succeeds. A tick writes at most `PER_TICK` files, so a long history goes in over several ticks, each commit
+and push bounded, and the item stays open until it all has.
 
 The path must be a clone's own top level, never a directory inside a repository, which could be one the operator works
 in. git runs as the harness always runs it (D107), and the push never forces. Nothing here raises: an archive that fails
@@ -16,12 +15,10 @@ is an item, never a failed tick.
 from __future__ import annotations
 
 import itertools
-import json
 import operator
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING
 
 from canopy.core import hostgit, plan_export
-from canopy.core.vocab import PlanStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -40,9 +37,7 @@ _MAX_ERROR = 300
 # The most ticket keys a commit's subject names before it counts the rest.
 _SUBJECT_KEYS = 3
 # How each change `git diff --name-status` reports is headed in a commit's body, in the body's order.
-_CHANGES = {"A": "New", "M": "Changed", "D": "Removed"}
-# The front matter `plan_export.document` opens and closes a file with.
-_FRONT_MATTER = "---"
+_CHANGES = {"A": "New", "M": "Changed", "R": "Changed", "D": "Removed"}
 
 
 def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool) -> str | None:
@@ -121,62 +116,51 @@ def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
 
 
 def _message(git: _Git, name: str) -> str:
-    """A commit message for what is staged under `name/`: how many plans of which tickets, then each file and its plan.
+    """A commit message for what is staged under `name/`: how many plans of which tickets, then each file.
+
+    A plan's file is named for its run, status, and title (`plan_export.name`), so the file's name says what each plan
+    is, and a plan whose status changed shows as its rename.
 
     Returns:
         The message; a subject alone when git cannot say what is staged.
     """
-    staged = git.run("diff", "--cached", "--name-status", "--no-renames", "-z", "--", name)
-    fields = staged.stdout.split("\0")
-    changes = [
-        (change, path.removeprefix(f"{name}/"))
-        for change, path in zip(fields[::2], fields[1::2], strict=False)
-        if change in _CHANGES
-    ]
+    # Renames asked for here, whatever the operator's config says, so a plan renamed for its status is one change.
+    staged = git.run("diff", "--cached", "--name-status", "--find-renames", "-z", "--", name)
+    changes = _changes(staged.stdout, name)
     if not staged.ok or not changes:
         return f"Archive the plans of {name}"
-    keys = list(dict.fromkeys(path.partition("/")[0] for _, path in changes))
+    keys = list(dict.fromkeys(path.partition("/")[0] for _, path, _ in changes))
     named = ", ".join(keys[:_SUBJECT_KEYS])
     if len(keys) > _SUBJECT_KEYS:
         named += f" and {len(keys) - _SUBJECT_KEYS} more"
-    files = f"{len(changes)} plan{'s' if len(changes) != 1 else ''}"
-    lines = [f"Archive {files} of {name}: {named}"]
-    by_change = sorted(changes, key=lambda change_path: list(_CHANGES).index(change_path[0]))
-    for change, group in itertools.groupby(by_change, key=operator.itemgetter(0)):
-        lines.extend(["", f"{_CHANGES[change]}:"])
-        for _, path in group:
-            described = None if change == "D" else _described(git.clone / name / path)
-            lines.append(f"- {path} ({described})" if described else f"- {path}")
+    lines = [f"Archive {len(changes)} plan{'s' if len(changes) != 1 else ''} of {name}: {named}"]
+    headings = list(dict.fromkeys(_CHANGES.values()))
+    by_heading = sorted(changes, key=lambda change: headings.index(change[0]))
+    for heading, group in itertools.groupby(by_heading, key=operator.itemgetter(0)):
+        lines.extend(["", f"{heading}:"])
+        for _, path, was in group:
+            lines.append(f"- {path} (was {was.rpartition('/')[2]})" if was else f"- {path}")
     return "\n".join(lines) + "\n"
 
 
-def _described(path: Path) -> str | None:
-    """A plan's kind and status, from the front matter its export opens with.
-
-    Only values canopy writes are taken, so nothing else in the file reaches a commit message.
+def _changes(listed: str, name: str) -> list[tuple[str, str, str | None]]:
+    """The changes `git diff --name-status -z` listed under `name/`, in git's order.
 
     Returns:
-        Its kind and status, as `feedback plan, approved`; None when the file holds no front matter that names both.
+        Each change's heading in `_CHANGES`, its path, and a rename's earlier path, both relative to `name/`; a copy or
+        a change of type is headed as changed.
     """
-    found: dict[str, str] = {}
-    try:
-        with path.open(encoding="utf-8") as f:
-            if f.readline().rstrip("\n") != _FRONT_MATTER:
-                return None
-            for line in f:
-                key, _, value = line.rstrip("\n").partition(": ")
-                if key == _FRONT_MATTER:
-                    break
-                if key in {"kind", "status"}:
-                    decoded: object = json.loads(value)
-                    if isinstance(decoded, str):
-                        found[key] = decoded
-    except (OSError, ValueError):
-        return None
-    kind, status = found.get("kind"), found.get("status")
-    if kind not in get_args(plan_export.Kind.__value__) or status not in set(PlanStatus):
-        return None
-    return f"{kind}, {status}"
+    fields = iter(listed.split("\0"))
+    changes: list[tuple[str, str, str | None]] = []
+    for status in fields:
+        if not status:
+            break
+        # A rename or a copy names its earlier path, then its path; any other change names its path alone.
+        was = next(fields, "") if status[0] in {"R", "C"} else None
+        path = next(fields, "")
+        heading = _CHANGES.get(status[0], _CHANGES["M"])
+        changes.append((heading, path.removeprefix(f"{name}/"), was and was.removeprefix(f"{name}/")))
+    return changes
 
 
 def _unpushed(git: _Git, name: str) -> str | None:

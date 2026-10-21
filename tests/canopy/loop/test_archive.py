@@ -77,11 +77,7 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
 
     scenario.tick(*waits(KEY, "PROJ-2"))
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 2 plans of {name}: {KEY}, PROJ-2\n"
-        "\n"
-        "New:\n"
-        f"- {KEY}/{first}.md (plan, proposed)\n"
-        f"- PROJ-2/{second}.md (plan, proposed)"
+        f"Archive 2 plans of {name}: {KEY}, PROJ-2\n\nNew:\n- {KEY}/{first}-proposed.md\n- PROJ-2/{second}-proposed.md"
     )
 
     plans.approve(
@@ -93,7 +89,7 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
     )
     scenario.tick(*waits(KEY, "PROJ-2"))
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}.md (plan, approved)"
+        f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}-approved.md (was {first}-proposed.md)"
     )
 
 
