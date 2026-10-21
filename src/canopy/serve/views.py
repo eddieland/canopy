@@ -871,9 +871,16 @@ def agent_persona(found: personas.Next) -> AgentPersona:
     """The persona one of a ticket's agents writes in at its next run, as the API sends it.
 
     Returns:
-        The agent, its persona, where that comes from, and why its run would refuse it, if it would.
+        The agent, its persona, where that comes from, the persona of its next run alone, if one is chosen, and why
+        its run would refuse the one it gets, if it would.
     """
-    return AgentPersona(agent=found.agent, persona=found.name, source=found.source, error=found.error)
+    return AgentPersona(
+        agent=found.agent,
+        persona=found.name,
+        source=found.source,
+        error=found.error,
+        once=found.once,
+    )
 
 
 def forget(found: records.Forget) -> TicketForget:

@@ -10,9 +10,9 @@ import { TicketPersonas } from './ticket-personas'
 
 const NAMES = ['canopy', 'explainer', 'minimalist', 'skeptic']
 const PERSONAS: AgentPersona[] = [
-    { agent: 'worker', persona: 'minimalist', source: 'ticket', error: null },
-    { agent: 'planner', persona: 'skeptic', source: 'config', error: null },
-    { agent: 'reviewer', persona: 'canopy', source: 'default', error: null },
+    { agent: 'worker', persona: 'minimalist', source: 'ticket', error: null, once: null },
+    { agent: 'planner', persona: 'skeptic', source: 'config', error: null, once: null },
+    { agent: 'reviewer', persona: 'canopy', source: 'default', error: null, once: null },
 ]
 
 // Every choice the menus send, and what the server stand-in answers each.
@@ -22,7 +22,10 @@ let answer: Response | undefined
 const server: Middleware = {
     async onRequest({ request }) {
         sent.push({ path: new URL(request.url).pathname, body: JSON.parse(await request.text()) as unknown })
-        return answer ?? Response.json({ agent: 'reviewer', persona: 'skeptic', source: 'ticket', error: null })
+        return (
+            answer ??
+            Response.json({ agent: 'reviewer', persona: 'skeptic', source: 'ticket', error: null, once: null })
+        )
     },
 }
 
@@ -57,6 +60,11 @@ describe('TicketPersonas', () => {
         expect(rows).toEqual(["minimalistthis ticket's override", 'skeptic[personas]', "canopycanopy's default"])
     })
 
+    it("names the persona chosen for an agent's next run alone under its row", () => {
+        renderPersonas([{ agent: 'worker', persona: 'canopy', source: 'default', error: null, once: 'skeptic' }])
+        expect(screen.getByRole('definition').textContent).toBe("canopycanopy's defaultIts next run alone: skeptic")
+    })
+
     it('sets the override from the menu, as canopy persona KEY NAME --agent does, and says what it did', async () => {
         renderPersonas()
         const menu = openMenu('reviewer persona: canopy')
@@ -77,7 +85,7 @@ describe('TicketPersonas', () => {
     })
 
     it('clears an override standing, as --clear does', async () => {
-        answer = Response.json({ agent: 'worker', persona: 'canopy', source: 'default', error: null })
+        answer = Response.json({ agent: 'worker', persona: 'canopy', source: 'default', error: null, once: null })
         renderPersonas()
         const menu = openMenu('worker persona: minimalist')
         expect(within(menu).getByRole('menuitemradio', { name: 'minimalist' }).getAttribute('aria-checked')).toBe(
@@ -95,7 +103,9 @@ describe('TicketPersonas', () => {
             { detail: { guard: 'unknown_persona', reason: 'persona gone has no file' } },
             { status: 409 },
         )
-        renderPersonas([{ agent: 'worker', persona: 'gone', source: 'ticket', error: 'persona gone has no file' }])
+        renderPersonas([
+            { agent: 'worker', persona: 'gone', source: 'ticket', error: 'persona gone has no file', once: null },
+        ])
         expect(screen.getByText('Its next run is refused: persona gone has no file')).toBeDefined()
         // The persona chosen stays in the menu, checked, though its file has gone.
         const menu = openMenu('worker persona: gone')

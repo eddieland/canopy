@@ -153,13 +153,14 @@ def test_a_requests_persona_is_refused_when_unknown_without_a_request_or_inside_
     err = scenario.operator("start", PR, "--review", "--persona", "lenient", code=1).err
     assert "start refused (unknown_persona): persona lenient has no file among canopy's own" in err
     assert requests_of(scenario.conn) == []
-    assert "--persona is for a PR's review" in scenario.operator("start", PR, "--persona", "skeptic", code=2).err
+    # Without --review, a PR is M14's, whatever persona it names.
+    assert "start refused (unsupported)" in scenario.operator("start", PR, "--persona", "skeptic", code=1).err
     err = scenario.operator("persona", PR, "skeptic", code=1).err
     assert f"persona refused (not_requested): {PR} has no open review request" in err
     assert f"canopy start {PR} --review --persona skeptic" in err
     assert "has no open review request" in scenario.operator("persona", PR, code=1).err
     scenario.operator("start", PR, "--review")
-    assert "only a reviewer's persona" in scenario.operator("persona", PR, "skeptic", "--agent", "worker", code=2).err
+    assert "only its review's persona" in scenario.operator("persona", PR, "skeptic", "--agent", "worker", code=2).err
     assert "persona refused (unknown_persona)" in scenario.operator("persona", PR, "lenient", code=1).err
     # No agent chooses a persona, a PR's reviewer's least of all (TRUST_MODEL T1).
     assert "persona refused (inside_run)" in scenario.overseer("persona", PR, "skeptic", code=1).err

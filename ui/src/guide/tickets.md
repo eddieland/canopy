@@ -103,6 +103,10 @@ It holds for every run of that agent on this ticket until you pick **Clear the o
 to your config. Set a skeptic on the one ticket whose reviews you want harder, and leave the rest alone. The menu lists
 what `canopy personas` does: canopy's own, and yours in `paths.personas`.
 
+For one run alone, choose from the command line: `canopy persona KEY NAME --next`, or `--persona` on
+`canopy start KEY` or `canopy plan KEY`. The row names it under the persona, as **Its next run alone**, until that run
+starts; the runs after it go back to the row's persona.
+
 A persona changes voice, never a guard. If its file is gone by the time a run starts, that run is refused rather than
 run in some other voice, its row says why in red, and the ticket lands on your attention list. Put the file back, or
 pick another.

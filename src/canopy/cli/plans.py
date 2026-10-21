@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, feedback_plans, plan_export, plans
+from canopy.core import conversation, feedback_plans, personas, plan_export, plans
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -30,8 +30,9 @@ CLI = "cli"
     "waits.",
 )
 @click.option("--skip", is_flag=True, help="Waive its plan: its implement goes ahead without one.")
+@click.option("--persona", metavar="NAME", help="The persona of the planner this asks for, that run alone.")
 @click.pass_context
-def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -> int:
+def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool, persona: str | None) -> int:
     """Ask for a plan for a ticket, approve its plan, or skip it, whatever `policy.plan` says.
 
     Without a flag, the next tick dispatches a planner, which writes down how the work will be done; nothing is
@@ -40,9 +41,14 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
 
     Under `policy.feedback_plan = "approve"`, a ticket's PR feedback is planned before its resume: while its feedback
     plan waits, `--approve` approves that plan, whole, and its next resume goes ahead on it once.
+
+    --persona NAME, one `canopy personas` lists, is the persona of the planner this asks for alone, as
+    `canopy persona KEY NAME --agent planner --next` sets it.
     """
     if approve and skip:
         raise click.UsageError("--approve and --skip are each a decision of their own; pass one")
+    if persona is not None and (approve or skip):
+        raise click.UsageError("--persona is for the planner a plan is asked of; --approve and --skip start none")
     try:
         conversation.check_operator()
         subject = conversation.parse_ref(ref)
@@ -53,6 +59,12 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
     try:
         if approve:
             _approve(ctx, subject.id)
+        elif persona is not None:
+            # Checked first, so a persona no run could use asks for nothing.
+            personas.check(ctx.config, persona)
+            _ask(ctx, subject.id, skip=False)
+            personas.choose_next(ctx.conn, ctx.config, subject.id, "planner", persona, channel=CLI)
+            click.echo(f"Its next planner run alone writes in {persona}.")
         else:
             _ask(ctx, subject.id, skip=skip)
     except conversation.Refused as r:
