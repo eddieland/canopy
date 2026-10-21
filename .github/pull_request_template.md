@@ -22,7 +22,7 @@ test using the fakes. A live check worth running again goes in docs/SCENARIOS.md
 cites, in docs/MEASUREMENTS.md.
 -->
 
-- `make all` passes.
+- Ran: <the checks and test modules this change reaches (AGENTS.md, Toolchain)>.
 
 ## Docs
 
