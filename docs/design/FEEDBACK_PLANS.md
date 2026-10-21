@@ -50,20 +50,22 @@ never reset (D030), and raised only by the operator's grant.
 
 ### Approving
 
-The operator approves the newest plan whole, or ticks the items to address, from the PR's page or `canopy plan`; only
-the operator's channels do, each refused inside any agent run, the web channel's behind its token (T8), or the planner,
-whose word stands for theirs as in §25 unless the plan replaces one no `resume` spent. Approval records the file's
-hash, and a reply newer than a waiting plan asks for changes. It also writes an operator
-message on the ticket naming the plan and the items to address and to leave, by number, never quoting them, as sending
-findings does (§21), with any words of the operator's own after: the plan's text stays data, and the message is the
-instruction (T1). The planner's approval writes none.
+The operator approves the newest plan whole, or names the items to address or to leave, by the numbers `canopy show`
+gives them, from the PR's page or `canopy plan`; only the operator's channels do, each refused inside any agent run,
+the web channel's behind its token (T8), or the planner, whose word stands for theirs as in §25 unless the plan
+replaces one no `resume` spent. Approval records the file's hash, and a reply newer than a waiting plan asks for
+changes. It also writes an operator message on the ticket naming the plan and the items to address and to leave, by
+number and observed id, never quoting them, as sending findings does (§21), with any words of the operator's own
+after: the plan's text stays data, and the message is the instruction (T1). Each approval writes a message of its own,
+the newest the one in force, and answers no question a run asked, which still waits on a reply. The planner's approval
+writes none.
 
 The next tick dispatches the `resume` with the approved plan, which its worker follows as in §25 in place of the
-ticket's plan, the ticked items, and only those, beside the approval's message. Two guards hold it in code:
+ticket's plan, the items named, and only those, beside the approval's message. Two guards hold it in code:
 `unplanned` refuses a `resume` under `approve` that carries no approved feedback plan, unless its only reason is
 `no_pr`, and `plan_changed` refuses one whose plan's file changed since approval. An approval goes ahead once, spent by
 the `resume` that starts; its items stay handled unless that run ends other than `done` or `blocked`, when the next
-plan gets them, as it gets the items left unticked. Later feedback waits for the next plan.
+plan gets them, as it gets the items left out. Later feedback waits for the next plan.
 
 **A plan that changes nothing.** A plan whose items are all `decline`, `ask`, or `leave` changes no code. Under
 `trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` through: that run

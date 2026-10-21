@@ -104,14 +104,17 @@ open to the operator: the PR's author is `observed_prs.author`, and the operator
 feedback; any edit to a covered item makes its plan stale; an approved plan not yet spent is not planned again; a reply
 on the ticket plans nothing again; and snapshots are kept with their plan. A changed check makes a plan stale from the
 `vcs` connector's `check` lines, which canopy's own reader reports since it grew to the connector contract (M36). Built
-2026-10-21, against the fakes, approval by item: `canopy plan KEY --approve --item ID ...` approves only the items
-named, by the id the plan gives each, and `--message` adds the operator's own words; migration 0064 marks each item
-left out and the approval's message. Every operator approval, whole or by item, writes an operator message on the
-ticket naming the plan and the items to address and to leave by number, never quoting them, with their words after;
-the planner's writes none. The `resume`'s `{{PLAN}}` lists only the approved items, names those left out, and points at
-that message; an item left out goes to the next plan as an uncovered item does; and the overseer gives the `resume` the
-message's cursor. Settled for it, open to the operator: an item is named by its observed id, not its number; an
-approved plan not yet spent may be approved again for other items or with a message, which writes a new message; whole
-approval writes a message too; and an item left out is not marked handled, so its next plan offers it whatever
-changed. Left: the PR page's threads view and T8's web approval, drafts starting from the plan, the plan that changes
-nothing, and failed checks and conflicts as items with ids of their own.
+2026-10-21, against the fakes, approval by item: `canopy plan KEY --approve --item N ...` approves only the items
+named, by the number `canopy show KEY` lists each with, `--leave N ...` all but those, and `--message` adds the
+operator's own words; migration 0064 marks each item left out and the approval's message. Every operator approval,
+whole or by item, writes an operator message of its own on the ticket naming the plan and the items to address and to
+leave, as `item 2 (id 502)`, never quoting them, with their words after; the planner's writes none. The `resume`'s
+`{{PLAN}}` lists only the approved items, names those left out, and points at the newest such message; an item left
+out goes to the next plan as an uncovered item does; and the overseer gives the `resume` that message's cursor.
+`canopy show KEY` prints the current feedback plan, its file, and its items. Settled by the operator: an item is
+named by its number on input, and by number and id wherever canopy mentions it; and an approval answers no question a
+run asked, which still waits on a reply. Settled for it, open to the operator: an approved plan not yet spent may be
+approved again for other items or with a message, which writes a new message; whole approval writes a message too; and
+an item left out is not marked handled, so its next plan offers it whatever changed. Left: the PR page's threads view
+and T8's web approval, drafts starting from the plan, the plan that changes nothing, and failed checks and conflicts as
+items with ids of their own.

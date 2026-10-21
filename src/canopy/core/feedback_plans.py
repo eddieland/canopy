@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, feedback_items, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -249,6 +249,20 @@ def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanIt
     )
 
 
+def authors(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, ReviewItem, int], str | None]:
+    """Who wrote each item a feedback plan was given, as what it saw recorded them (`feedback_items.record`).
+
+    Returns:
+        Each author, None where the source named none, by PR, kind, and observed id.
+    """
+    rows = records.fetch_all(
+        conn,
+        records.FeedbackPlanSeen,
+        sql.select("*").from_("feedback_plan_seen").where("plan_id = ? AND answers IS NULL", plan_id),
+    )
+    return {(r.pr_url, r.item, r.item_id): r.author for r in rows}
+
+
 def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ...]:
     """The repositories a feedback plan covers: the units its run leased a slot in.
 
@@ -460,16 +474,18 @@ def approve(
     channel: str,
     dispatch_lock: Path,
     chosen: Collection[int] = (),
+    leave: Collection[int] = (),
     words: str | None = None,
 ) -> records.FeedbackPlan:
     """Approve the ticket's current feedback plan as its file stands now, whole or by item (DESIGN §32, Approving).
 
-    The approval records the file's hash, and `chosen`, when given, names by observed id the items it approves: the
-    plan's other items are left out, so its `resume` does not act on them and the next plan is offered them again. It
-    writes an operator message on the ticket, in the same transaction, naming the plan and its items to address and to
-    leave, by number, never quoting them, with the operator's own `words` after, when they gave some: the plan's text
-    stays data, and the message is the instruction (TRUST_MODEL T1). Approving an approved plan again, unspent, sets
-    its items afresh.
+    The approval records the file's hash. `chosen`, when given, names by number the items it approves, and `leave`
+    those it does not, approving the rest: the items left out its `resume` does not act on, and the next plan is offered
+    them again. It writes an operator message on the ticket, in the same transaction, naming the plan and its items to
+    address and to leave, by number and observed id, never quoting them, with the operator's own `words` after, when
+    they gave some: the plan's text stays data, and the message is the instruction (TRUST_MODEL T1). The message
+    answers no question a run asked, which still waits on a reply. Approving an approved plan again, unspent, sets its
+    items afresh, with a message of its own, the newest, which the `resume` reads.
 
     A waiting plan that is stale is refused once for what changed on its PRs since it was written, which the refusal
     names and records; approving it again, with nothing more changed, approves it, and what changed waits for the next
@@ -482,15 +498,16 @@ def approve(
         Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_body` for `words` empty or over
             `MAX_WORDS`; `bad_plan` while a feedback plan run for the ticket is running, when it has no current feedback
             plan, when a `resume` already went ahead on it, when it is approved as asked and its file has not changed
-            since, or when its file is missing, unreadable, or no plan; `bad_item` for an id in `chosen` the plan does
-            not cover; or `stale` the first time a waiting plan is approved after its PRs changed, naming what changed.
+            since, or when its file is missing, unreadable, or no plan; `bad_item` for both `chosen` and `leave`, a
+            number in either the plan does not cover, or every item left out; or `stale` the first time a waiting
+            plan is approved after its PRs changed, naming what changed.
     """
     conversation.check_operator()
     said_too = _words(words)
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
         plan, sha256 = _approvable(conn, state_dir, key)
         covered = items(conn, plan.id)
-        left = _left_out(plan, covered, chosen)
+        left = _left_out(plan, covered, chosen, leave)
         if (
             plan.status is PlanStatus.APPROVED
             and sha256 == plan.approved_sha256
@@ -512,15 +529,21 @@ def approve(
     raise Refused("stale", f"{why}. Approve it again to approve it as it is; what changed waits for the next plan")
 
 
-def approval_message(plan_id: int, addressed: Sequence[int], left: Sequence[int], words: str | None) -> str:
-    """Return the operator message an approval writes: the plan and its items to address and to leave, by number.
+def approval_message(
+    plan_id: int,
+    addressed: Sequence[tuple[int, int]],
+    left: Sequence[tuple[int, int]],
+    words: str | None,
+) -> str:
+    """Return the operator message an approval writes: the plan and its items to address and to leave.
 
-    It never quotes an item, nor the plan: their text is data, and this message is the instruction (DESIGN §32).
+    Each item is named by its number and observed id (`prompts.item_names`), never quoted, nor is the plan: their text
+    is data, and this message is the instruction (DESIGN §32).
 
     Returns:
         The message, with the operator's own `words` after it when they gave some.
     """
-    named = prompts.item_numbers
+    named = prompts.item_names
     if not addressed and not left:
         body = f"Go ahead on feedback plan {plan_id} as it says: it covers no review item."
     elif not left:
@@ -587,24 +610,30 @@ def _left_out(
     plan: records.FeedbackPlan,
     covered: Sequence[records.FeedbackPlanItem],
     chosen: Collection[int],
+    leave: Collection[int],
 ) -> set[int]:
-    """The numbers of the plan's items an approval of `chosen`, by observed id, leaves out; none when it names none.
+    """The numbers of the plan's items an approval leaves out: all but `chosen`, or `leave`; none when it names none.
 
     Returns:
         The numbers.
 
     Raises:
-        Refused: (`bad_item`) for an id the plan does not cover.
+        Refused: (`bad_item`) for both `chosen` and `leave`, a number the plan does not cover, or every item left out.
     """
-    if not chosen:
-        return set()
-    unknown = sorted(set(chosen) - {i.item_id for i in covered})
+    if chosen and leave:
+        raise Refused("bad_item", "name the items to approve or those to leave out, not both")
+    named = set(chosen or leave)
+    numbers = {i.number for i in covered}
+    unknown = sorted(named - numbers)
     if unknown:
-        named = ", ".join(str(i) for i in unknown)
-        has = ", ".join(str(i.item_id) for i in covered) or "none: approve it whole"
-        why = f"feedback plan {plan.id} of {plan.ticket_key} covers no item {named}"
-        raise Refused("bad_item", f"{why}; the items it covers are {has}")
-    return {i.number for i in covered if i.item_id not in chosen}
+        has = prompts.item_names([(i.number, i.item_id) for i in covered]) if covered else "no item: approve it whole"
+        why = f"feedback plan {plan.id} of {plan.ticket_key} has no item {', '.join(str(n) for n in unknown)}"
+        raise Refused("bad_item", f"{why}; it covers {has}")
+    left = numbers - named if chosen else named
+    if covered and left == numbers:
+        why = f"leaving out every item of feedback plan {plan.id} of {plan.ticket_key} approves none"
+        raise Refused("bad_item", f"{why}: ask for changes with a reply instead")
+    return left
 
 
 def _approved(
@@ -630,13 +659,21 @@ def _approved(
             conn,
             sql.update("feedback_plan_items").set(left_out=True).where("plan_id = ?", plan.id).where_in("number", left),
         )
-    body = approval_message(plan.id, [i.number for i in covered if i.number not in left], sorted(left), words)
+    body = approval_message(
+        plan.id,
+        [(i.number, i.item_id) for i in covered if i.number not in left],
+        [(i.number, i.item_id) for i in covered if i.number in left],
+        words,
+    )
+    # Each approval writes a message of its own, even one worded as an earlier one was, so the newest is the approval
+    # in force; and it answers no question a run asked, which still waits on a reply.
     replied = conversation.write_reply(
         conn,
         conversation.Ref(conversation.TICKET, plan.ticket_key),
         body,
         channel=channel,
-        submission=None,
+        submission=f"feedback-plan/{plan.id}/after/{plan.approved_message_id or 0}",
+        answers=False,
     )
     [approved] = records.fetch_all(
         conn,
@@ -692,12 +729,14 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
 
 
 def _replied(conn: sqlite3.Connection, ticket: records.Ticket) -> str | None:
+    # An approval's own message is an instruction: it answers no question and asks for no change.
     found = sql.execute(
         conn,
         sql.select("max(at)")
         .from_("messages")
         .where("subject_kind = ? AND subject_id = ?", conversation.TICKET, ticket.key)
-        .where("source = 'operator' AND id > ?", ticket.forgotten_message_id or 0),
+        .where("source = 'operator' AND id > ?", ticket.forgotten_message_id or 0)
+        .where("coalesce(submission, '') NOT GLOB ?", f"{conversation.INSTRUCTION}*"),
     ).fetchone()[0]
     return None if found is None else str(found)
 

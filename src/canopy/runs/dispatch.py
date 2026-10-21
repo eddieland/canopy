@@ -1300,7 +1300,7 @@ def _plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collectio
                 copy,
                 plans.outline(text),
                 [(i.number, i.pr_url, i.item_id, str(i.proposal)) for i in covered if not i.left_out],
-                left_out=[i.number for i in covered if i.left_out],
+                left_out=[(i.number, i.item_id) for i in covered if i.left_out],
                 message_id=feedback.approved_message_id,
                 by_planner=feedback.approved_channel == plans.PLANNER,
             )

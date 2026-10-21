@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import db, feedback_items, feedback_plans, plans
+from canopy.core import conversation, db, feedback_items, feedback_plans, plans
 from canopy.core.config import load
 from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
 from tests.canopy.helpers import (
@@ -131,7 +131,7 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
     assert resume.row["feedback_plan_id"] == plan.id
     assert resume.row["plan_id"] is None
     assert "is the feedback plan the operator approved for this round of the PR's feedback" in resume.prompt
-    assert f"1. {PR}, item 501: change\n2. {PR}, item 502: decline" in resume.prompt
+    assert f"1. id 501, on {PR}: change\n2. id 502, on {PR}: decline" in resume.prompt
     assert present(feedback_plans.get(conn, plan.id)).spent_run_id == resume.id
 
     # One approval goes ahead once: the next round waits on a plan of its own, and the items handled leave the next.
@@ -735,25 +735,26 @@ def test_an_approval_by_item_resumes_on_exactly_those_items_and_the_next_plan_ge
     planned(scenario, github_state)
     [plan] = feedback_plans.history(conn, KEY)
 
-    approved = scenario.operator("plan", KEY, "--approve", "--item", "501", "--message", WORDS)
+    approved = scenario.operator("plan", KEY, "--approve", "--item", "1", "--message", WORDS)
     assert f"Feedback plan {plan.id} of {KEY} is approved as" in approved.out
-    assert "for 1 of its 2 items" in approved.out
-    assert "Left out, for the next plan: 2 (id 502)." in approved.out
+    assert "for 1 of its 2 items: item 1 (id 501)." in approved.out
+    assert "Left out, for the next plan: item 2 (id 502)." in approved.out
     plan = present(feedback_plans.get(conn, plan.id))
     assert [(i.item_id, i.left_out) for i in feedback_plans.items(conn, plan.id)] == [(501, False), (502, True)]
-    # The approval is an operator message on the ticket naming the items by number, never quoting them (T1).
+    # The approval is an operator message on the ticket naming the items by number and id, never quoting them (T1).
     message = present(db.get_message(conn, present(plan.approved_message_id)))
     assert (message.source, message.channel) == ("operator", "cli")
     assert message.body == (
-        f"Address item 1 of feedback plan {plan.id}, as it proposes. Leave its item 2 for the next plan: change "
-        f"nothing for it, and draft no reply to it.\n\n{WORDS}"
+        f"Address item 1 (id 501) of feedback plan {plan.id}, as it proposes. Leave its item 2 (id 502) for the next "
+        f"plan: change nothing for it, and draft no reply to it.\n\n{WORDS}"
     )
 
     resume = scenario.run(RESUME, worker=pushes(prs={"repo": PR}))
     assert resume.status == RunStatus.DONE
-    assert f"1. {PR}, item 501: change" in resume.prompt
-    assert "item 502" not in resume.prompt
-    assert "They left out its item 2, whose sections the copy still holds" in resume.prompt
+    assert f"1. id 501, on {PR}: change" in resume.prompt
+    assert f"id 502, on {PR}" not in resume.prompt
+    # The item left out is named by number and by the id its plan's `### Item <id>` heading carries: a journal value.
+    assert "They left out its item 2 (id 502), whose sections the copy still holds" in resume.prompt
     assert f"The operator's message {message.id} above is that approval" in resume.prompt
     assert WORDS in resume.prompt
 
@@ -771,15 +772,22 @@ def test_an_approval_names_only_items_its_plan_covers(scenario: Scenario, github
     conn = scenario.conn
     with_a_pr(scenario)
     planned(scenario, github_state)
-    refused = scenario.operator("plan", KEY, "--approve", "--item", "501", "--item", "999", code=1)
+    refused = scenario.operator("plan", KEY, "--approve", "--item", "1", "--item", "9", code=1)
     assert "plan refused (bad_item)" in refused.err
-    assert "covers no item 999; the items it covers are 501, 502" in refused.err
+    assert "has no item 9; it covers items 1 (id 501) and 2 (id 502)" in refused.err
+    # An item is named by its number, not by its id.
+    by_id = scenario.operator("plan", KEY, "--approve", "--leave", "502", code=1)
+    assert "has no item 502; it covers items 1 (id 501) and 2 (id 502)" in by_id.err
+    every = scenario.operator("plan", KEY, "--approve", "--leave", "1", "--leave", "2", code=1)
+    assert "leaving out every item of feedback plan 1 of PROJ-1 approves none" in every.err
     empty = scenario.operator("plan", KEY, "--approve", "--message", "  ", code=1)
     assert "plan refused (bad_body)" in empty.err
     [plan] = feedback_plans.history(conn, KEY)
     assert (plan.status, plan.approved_message_id) == (PlanStatus.PROPOSED, None)
-    alone = scenario.operator("plan", KEY, "--item", "501", code=2)
-    assert "--item and --message go with --approve" in alone.err
+    alone = scenario.operator("plan", KEY, "--leave", "1", code=2)
+    assert "--item, --leave, and --message go with --approve" in alone.err
+    both = scenario.operator("plan", KEY, "--approve", "--item", "1", "--leave", "2", code=2)
+    assert "--item names the items to approve and --leave those to leave out; pass one" in both.err
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -794,15 +802,130 @@ def test_an_approved_plan_is_approved_again_for_other_items_until_its_resume(
     assert "covering 2 items, is approved whole" in whole.out
     [plan] = feedback_plans.history(conn, KEY)
     first = present(db.get_message(conn, present(plan.approved_message_id)))
-    assert first.body == f"Address items 1 and 2 of feedback plan {plan.id}, every item it covers, as it proposes."
+    assert first.body == (
+        f"Address items 1 (id 501) and 2 (id 502) of feedback plan {plan.id}, every item it covers, as it proposes."
+    )
 
     # The same approval again is refused; another choice of items approves it again, with a message of its own.
     again = scenario.operator("plan", KEY, "--approve", code=1)
     assert "is approved, and its file has not changed since" in again.err
-    scenario.operator("plan", KEY, "--approve", "--item", "502")
+    scenario.operator("plan", KEY, "--approve", "--leave", "1")
     plan = present(feedback_plans.get(conn, plan.id))
     assert [i.left_out for i in feedback_plans.items(conn, plan.id)] == [True, False]
     assert present(plan.approved_message_id) > first.id
     resume = scenario.run(RESUME, worker=pushes())
-    assert f"2. {PR}, item 502: decline" in resume.prompt
-    assert "item 501" not in resume.prompt
+    assert f"2. id 502, on {PR}: decline" in resume.prompt
+    assert f"id 501, on {PR}" not in resume.prompt
+    assert "They left out its item 1 (id 501)" in resume.prompt
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_each_approval_writes_a_message_of_its_own_and_the_overseers_resume_reads_the_newest(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    planned(scenario, github_state)
+    [plan] = feedback_plans.history(conn, KEY)
+
+    # Whole, then all but alice's item, then whole again: the third is worded as the first, and still a new message.
+    choices: list[tuple[str, ...]] = [(), ("--leave", "1"), ()]
+    for flags in choices:
+        scenario.operator("plan", KEY, "--approve", *flags)
+    messages = conversation.operator_messages_after(conn, KEY, 0)
+    whole = f"Address items 1 (id 501) and 2 (id 502) of feedback plan {plan.id}, every item it covers, as it proposes."
+    assert [m.body for m in messages] == [
+        whole,
+        (
+            f"Address item 2 (id 502) of feedback plan {plan.id}, as it proposes. Leave its item 1 (id 501) for the "
+            "next plan: change nothing for it, and draft no reply to it."
+        ),
+        whole,
+    ]
+    newest = messages[-1].id
+    plan = present(feedback_plans.get(conn, plan.id))
+    assert plan.approved_message_id == newest
+    assert [i.left_out for i in feedback_plans.items(conn, plan.id)] == [False, False]
+
+    # The overseer dispatches the resume with its cursor at the newest approval, which the worker reads as in force.
+    reasons = [ResumeReason.REVIEW, ResumeReason.REPLY]
+    dispatch = dispatches(kind=RunKind.RESUME, reasons=reasons, cursors={"message": str(newest)})
+    [resume] = scenario.tick(dispatch, worker=pushes()).runs
+    assert resume.status == RunStatus.DONE
+    assert resume.row["feedback_plan_id"] == plan.id
+    assert f"The operator's message {newest} above is that approval" in resume.prompt
+    assert f"1. id 501, on {PR}: change\n2. id 502, on {PR}: decline" in resume.prompt
+    assert "They left out" not in resume.prompt
+    assert present(db.get_ticket(conn, KEY)).last_message_id == newest
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_an_approval_answers_no_question_a_run_asked(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    planned(scenario, github_state)
+    # The operator asks for changes, and the planner asks a question back instead of planning again.
+    scenario.operator("reply", KEY, "Accept bob's point instead.")
+    blocked = {"status": "blocked", "summary": "it needs a choice", "question": "Drop it everywhere, or here alone?"}
+    assert scenario.run(FEEDBACK_PLAN, worker=planner_does(plan=None, result=blocked)).status == RunStatus.BLOCKED
+    question = present(conversation.latest_question(conn, KEY))
+
+    # Approving the waiting plan as it stands is an instruction for its resume, not the answer: the question waits.
+    scenario.operator("plan", KEY, "--approve")
+    plan = present(feedback_plans.current(conn, KEY))
+    approval = present(db.get_message(conn, present(plan.approved_message_id)))
+    assert approval.answers is None
+    assert present(conversation.latest_question(conn, KEY)).id == question.id
+    read_again(scenario)
+    assert scenario.ticket_state()["feedback_plan"]["blocked"] is True
+
+    # A reply answers it.
+    scenario.operator("reply", KEY, "Here alone.")
+    assert conversation.latest_question(conn, KEY) is None
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_stale_plan_is_approved_by_item_once_its_refusal_was_shown(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    planned(scenario, github_state)
+    github_shows(github_state, ALICE, BOB, comment(601, "PRRT_3", author="carol", body="And this."))
+    read_again(scenario)
+    refused = scenario.operator("plan", KEY, "--approve", "--leave", "2", code=1)
+    assert "plan refused (stale)" in refused.err
+    [plan] = feedback_plans.history(conn, KEY)
+    assert (plan.status, plan.approved_message_id) == (PlanStatus.PROPOSED, None)
+
+    # Approving again, the same choice named the other way, approves it with alice's item alone.
+    approved = scenario.operator("plan", KEY, "--approve", "--item", "1")
+    assert "Left out, for the next plan: item 2 (id 502)." in approved.out
+    resume = scenario.run(RESUME, worker=pushes())
+    assert resume.row["feedback_plan_id"] == plan.id
+    assert "They left out its item 2 (id 502)" in resume.prompt
+    # bob's item, left out, and carol's, new since the plan, are the next plan's.
+    trust = load(scenario.env.root, scenario.env.user_file).trust
+    assert [o.id for o in feedback_items.offered(conn, trust, KEY, [PR])] == [502, 601]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_show_prints_the_current_feedback_plan_and_its_items_by_number(scenario: Scenario, github_state: Path) -> None:
+    with_a_pr(scenario)
+    run_id = planned(scenario, github_state)
+    shown = scenario.operator("show", KEY).out
+    assert "\nFeedback plan: feedback-plan:1  proposed, written " in shown
+    assert f"by run:{run_id}\n  {plan_file(scenario.env, run_id)}\n  1. id 501, alice, change\n" in shown
+    assert "  2. id 502, bob, decline\n" in shown
+    assert f"Approve it with `canopy plan {KEY} --approve`, by item with `--item N`" in shown
+
+    scenario.operator("plan", KEY, "--approve", "--item", "1")
+    plan = present(feedback_plans.current(scenario.conn, KEY))
+    shown = scenario.operator("show", KEY).out
+    assert "\nFeedback plan: feedback-plan:1  approved, written " in shown
+    assert f"via cli, message {plan.approved_message_id}\n" in shown
+    assert "  2. id 502, bob, decline, left out\n" in shown
+
+    resume = scenario.run(RESUME, worker=pushes())
+    shown = scenario.operator("show", KEY).out
+    assert f"\nFeedback plan: feedback-plan:1  spent by run:{resume.id}, written " in shown
+    assert "Approve it with" not in shown

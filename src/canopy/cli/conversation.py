@@ -27,6 +27,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    feedback_plans,
     notice,
     pause,
     plan_threads,
@@ -614,6 +615,7 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
         for unit in db.units(ctx.conn, key):
             click.echo(f"  {unit.repo}  PR {unit.pr_url or 'none recorded'}  phase {unit.phase or 'unknown'}")
         _show_plans(ctx, ticket, every=every_plan)
+        _show_feedback_plan(ctx, key)
     _show_runs(ctx, key)
     _show_conversation(ctx, key, record)
 
@@ -675,6 +677,42 @@ def _show_plan(ctx: Context, plan: records.Plan) -> None:
         click.echo("")
         for line in conversation.printable(reading.text).splitlines():
             click.echo(f"    {line}")
+
+
+def _show_feedback_plan(ctx: Context, key: str) -> None:
+    """Print the ticket's current feedback plan, if it has one: its status, its file, and its items by number (§32).
+
+    The numbers are what `canopy plan KEY --approve --item N` and `--leave N` take; the ids, what its file's
+    `### Item <id>` headings carry.
+    """
+    plan = feedback_plans.current(ctx.conn, key)
+    if plan is None:
+        return
+    status = f"spent by run:{plan.spent_run_id}" if plan.spent_run_id is not None else str(plan.status)
+    written = f"written {attention.age(plan.created_at)} ago by run:{plan.run_id}"
+    click.echo(f"\nFeedback plan: feedback-plan:{plan.id}  {status}, {written}")
+    if plan.approved_at is not None and plan.approved_channel == plans.PLANNER:
+        reason = conversation.printable(plan.approved_reason or "")
+        click.echo(f"  approved {attention.age(plan.approved_at)} ago by the planner: {reason}")
+    elif plan.approved_at is not None:
+        message = f", message {plan.approved_message_id}" if plan.approved_message_id is not None else ""
+        click.echo(f"  approved {attention.age(plan.approved_at)} ago via {plan.approved_channel}{message}")
+    click.echo(f"  {plans.path_for(ctx.state_dir, key, plan.run_id)}")
+    covered = feedback_plans.items(ctx.conn, plan.id)
+    who = feedback_plans.authors(ctx.conn, plan.id)
+    several = len({i.pr_url for i in covered}) > 1
+    for i in covered:
+        author = who.get((i.pr_url, i.item, i.item_id))
+        line = f"  {i.number}. id {i.item_id}, {one_line(author) if author else 'no author recorded'}, {i.proposal}"
+        line += f", on {i.pr_url}" if several else ""
+        click.echo(line + (", left out" if i.left_out else ""))
+    if not covered:
+        click.echo("  it covers no review item")
+    if plan.spent_run_id is None:
+        click.echo(
+            f"\nApprove it with `canopy plan {key} --approve`, by item with `--item N` or all but some with "
+            f"`--leave N`; ask for changes with `canopy reply {key}`.",
+        )
 
 
 def _show_plan_threads(ctx: Context, key: str) -> None:

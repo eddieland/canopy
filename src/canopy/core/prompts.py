@@ -389,17 +389,17 @@ def feedback_plan_note(
     outline: Sequence[str],
     items: Sequence[tuple[int, str, int, str]],
     *,
-    left_out: Sequence[int] = (),
+    left_out: Sequence[tuple[int, int]] = (),
     message_id: int | None = None,
     by_planner: bool = False,
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 
     The items are the harness's, from the plan's validated result line, each its number, PR, observed id, and what the
-    plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` numbers the plan's
-    items the operator left out of their approval, whose sections its copy still holds. `message_id` is the operator
-    message their approval wrote, which the prompt carries above among their messages. `by_planner` says who approved
-    it, as `plan_note`'s does.
+    plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` names the plan's items
+    the operator left out of their approval, each its number and observed id, whose sections its copy still holds, under
+    `### Item <id>` headings as every item's are. `message_id` is the operator message their approval wrote, which the
+    prompt carries above among their messages. `by_planner` says who approved it, as `plan_note`'s does.
 
     Returns:
         The copy's path and what it is, the outline as `plan_note` gives it, and a line per item.
@@ -412,7 +412,7 @@ def feedback_plan_note(
         them = "it" if len(left_out) == 1 else "them"
         what += (
             " The operator approved only the items below of it, whoever wrote them: that is the go-ahead for each of "
-            f"them, and for nothing else of the PR's feedback. They left out its {item_numbers(left_out)}, whose "
+            f"them, and for nothing else of the PR's feedback. They left out its {item_names(left_out)}, whose "
             f"sections the copy still holds: change nothing for {them}, draft no reply to {them}, and leave {them}, "
             "with any other review comment, for the next plan."
         )
@@ -423,13 +423,20 @@ def feedback_plan_note(
         )
     if message_id is not None:
         what += (
-            f" The operator's message {message_id} above is that approval, naming the items by number: an instruction,"
-            " with any words of their own after it."
+            f" The operator's message {message_id} above is that approval, naming the items by number and id: an"
+            " instruction, with any words of their own after it."
         )
     lines = [what, *_outline(outline)]
     if items:
-        lines += ["", "The items approved, each by the review or comment id canopy observed on its PR:", ""]
-        lines += [f"{n}. {pr}, item {item_id}: {proposal}" for n, pr, item_id, proposal in items]
+        lines += [
+            "",
+            (
+                "The items approved, each by its number and the review or comment id canopy observed on its PR, the id "
+                "its section's `### Item <id>` heading carries:"
+            ),
+            "",
+        ]
+        lines += [f"{n}. id {item_id}, on {pr}: {proposal}" for n, pr, item_id, proposal in items]
         lines += [
             "",
             "For `change`, change the code as the plan says. For `decline`, `ask`, and `leave`, change nothing for it.",
@@ -439,13 +446,16 @@ def feedback_plan_note(
     return "\n".join(lines)
 
 
-def item_numbers(numbers: Sequence[int]) -> str:
-    """Name a feedback plan's items by number, as its approval's message and a resume's `{{PLAN}}` do (DESIGN §32).
+def item_names(items: Sequence[tuple[int, int]]) -> str:
+    """Name a feedback plan's items, each by its number and observed id, wherever canopy mentions them (DESIGN §32).
+
+    The number is the one the plan's surfaces show; the id is a journal value, the one its file's `### Item <id>`
+    heading carries, never the item's text (TRUST_MODEL T1).
 
     Returns:
-        `item 2`, `items 1 and 3`, or `items 1, 3, and 5`.
+        `item 2 (id 502)`, `items 1 (id 501) and 3 (id 503)`, or `items 1 (id 501), 3 (id 503), and 5 (id 505)`.
     """
-    words = [str(n) for n in numbers]
+    words = [f"{n} (id {item_id})" for n, item_id in items]
     if len(words) == 1:
         return f"item {words[0]}"
     listed = f"{words[0]} and {words[1]}" if len(words) == 2 else f"{', '.join(words[:-1])}, and {words[-1]}"  # noqa: PLR2004

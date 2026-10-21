@@ -55,7 +55,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | One more run of KIND for a ticket at its attempt limit; `--runs N` for more. |
 | `canopy grant URL review` | One more review for a PR at `max_reviews_per_pr`; `--runs N` for more. |
-| `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands (a feedback plan whole, or `--item ID` by item, with `--message`), `--skip` it. |
+| `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands (a feedback plan whole, or `--item N` or `--leave N` by the item's number in `canopy show`, with `--message`), `--skip` it. |
 | `canopy pause`, `canopy resume` | No tick starts until resumed; running workers keep going. `p` in the loop too. |
 | `canopy memory list`, `proposals`, `lessons`, `search` | Read memory: see Reading memory. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |

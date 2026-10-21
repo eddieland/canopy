@@ -53,6 +53,10 @@ MAX_PR_URL = 300
 LABEL = "label"
 # A submission id a channel's form draws when it is rendered (DESIGN §22).
 SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
+#: Where the recorded submission of an operator message that answers no question starts: one an operator verb writes
+#: as its instruction, such as a feedback plan's approval (DESIGN §32), never a reply. No reply's submission, a
+#: channel's id behind its channel's name or a body's hash, can start so.
+INSTRUCTION = "instruction/"
 # A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).
 MAX_MIRRORED = 2000
 # How many `canopy mirror` calls one tick may make: a ticket's first mirror covers its whole history, and this spreads
@@ -367,21 +371,33 @@ def reply(
         return write_reply(conn, ref, text, channel=channel, submission=submission)
 
 
-def write_reply(conn: sqlite3.Connection, ref: Ref, text: str, *, channel: str, submission: str | None) -> Replied:
+def write_reply(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    text: str,
+    *,
+    channel: str,
+    submission: str | None,
+    answers: bool = True,
+) -> Replied:
     """Record an operator message `reply` checked, or another verb of the operator's writes. Call inside a transaction.
 
     Approving a feedback plan writes its message so, in the transaction that approves it (DESIGN §32): the caller has
-    checked the operator, the subject, and the body's bound.
+    checked the operator, the subject, and the body's bound. Without `answers`, the message is the verb's instruction
+    and answers no question: a question asked before it still waits on a reply (`latest_question`), and `submission`,
+    which the verb makes distinct for each message it means to write, is recorded marked so (`INSTRUCTION`).
 
     Returns:
         What `reply` returns.
     """
-    question = latest_question(conn, ref.id) if ref.kind == TICKET else None
-    answers = question.id if question is not None else None
+    question = latest_question(conn, ref.id) if answers and ref.kind == TICKET else None
+    answered = question.id if question is not None else None
     if submission is None:
-        stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
+        stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answered or ''}\0{text}".encode()).hexdigest()[:32]
     else:
         stored = f"{channel}:{submission}"
+    if not answers:
+        stored = f"{INSTRUCTION}{stored}"
     before = db.latest_message_id(conn)
     message_id = db.insert_message(
         conn,
@@ -391,15 +407,15 @@ def write_reply(conn: sqlite3.Connection, ref: Ref, text: str, *, channel: str, 
         kind="reply",
         channel=channel,
         body=text,
-        answers=answers,
+        answers=answered,
         submission=stored,
     )
     new = message_id > before
     if not new:
         # The same submission again: what it answered then, whatever is waiting now.
         recorded = db.get_message(conn, message_id)
-        answers = recorded.answers if recorded is not None else None
-    return Replied(message_id=message_id, answers=answers, new=new)
+        answered = recorded.answers if recorded is not None else None
+    return Replied(message_id=message_id, answers=answered, new=new)
 
 
 def dismiss(
@@ -770,7 +786,7 @@ def _comment_time(text: str) -> str:
 
 
 def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | None:
-    """Return a ticket's latest question if no operator message came after it, else None.
+    """Return a ticket's latest question if no operator message that answers questions came after it, else None.
 
     A question asked before the operator forgot the ticket's work waits on nothing.
     """
@@ -784,9 +800,18 @@ def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | Non
         .order_by("id DESC")
         .limit(1),
     )
-    if row is None or operator_messages_after(conn, key, row.id):
+    if row is None or any(answers_questions(m) for m in operator_messages_after(conn, key, row.id)):
         return None
     return row
+
+
+def answers_questions(message: records.Message) -> bool:
+    """Whether an operator message answers a question asked before it: a reply does, a verb's instruction does not.
+
+    Returns:
+        False for a message an operator verb wrote as its instruction (`write_reply` without `answers`), else True.
+    """
+    return not (message.submission or "").startswith(INSTRUCTION)
 
 
 @dataclass(frozen=True)

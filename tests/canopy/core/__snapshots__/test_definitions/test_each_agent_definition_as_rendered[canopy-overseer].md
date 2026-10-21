@@ -447,11 +447,12 @@ For each new message:
   `--review-run <that run's id>` and take `--cursor review=` from its `reviewed_at`, whether or not `canopy:review` is
   trusted. A resume carries one review run: when messages name findings of several, dispatch for the oldest such
   message, with `--cursor message=` at it and no later, so the next is still new next tick.
-- Approving a feedback plan (`canopy plan` writes `Address items 1 and 3 of feedback plan 4`, perhaps with words of
-  their own after): it rides the `resume` that plan's row under Plans says, with `--cursor message=<its id>` and
-  context naming it. When two new messages approve the same plan, the newer replaced the older: put the cursor at the
-  newer, so the worker sees the approval it acts on. The harness gives that worker the items approved; leave the rest
-  of the PR's feedback alone.
+- Approving a feedback plan (`canopy plan` writes `Address items 1 (id 501) and 3 (id 503) of feedback plan 4`,
+  perhaps with words of their own after): it rides the `resume` that plan's row under Plans says, with
+  `--cursor message=<its id>` and context naming it. Each approval is a message of its own, and the newest of a plan
+  replaced the others: put the cursor at the newest, so the worker sees the approval it acts on. It answers no
+  question: one still waiting keeps `blocked` and `awaiting_reply`. The harness gives that worker the items approved;
+  leave the rest of the PR's feedback alone.
 - Saying to leave the feedback alone: advance `review` past it and `message` to the message with `canopy ticket set`,
   and decide the ticket from what is left.
 - Answering a question or asking for other work: `human_replied`, as an authorized reply is. Dispatch `resume --reason
