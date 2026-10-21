@@ -1762,10 +1762,10 @@ type SpendGroup = Annotated[
     ),
 ]
 type SpendKind = Annotated[
-    Literal["overseer", "workers", "plans", "chores", "reviews"],
+    Literal["overseer", "workers", "plans", "chores", "reviews", "tasks"],
     Field(
         description="A kind of agent run: each tick's overseer, worker runs, plan runs (`plan`, DESIGN §25, old "
-        "`needs-plan` triage runs among them), chore runs, review runs.",
+        "`needs-plan` triage runs among them), chore runs, review runs, the operator's one-off tasks' runs (§36).",
     ),
 ]
 
@@ -1788,6 +1788,8 @@ class SpendCosts(_Model):
     """Chore runs, the operator's tries included."""
     reviews: float | None = None
     """Review runs."""
+    tasks: float | None = None
+    """The operator's one-off tasks' runs (DESIGN §36)."""
     total: float | None = None
     """Everything, dry runs included, as the 24 hour and 30 day counters count it."""
 

@@ -280,6 +280,7 @@ def _spend_costs(costs: spending.Costs) -> SpendCosts:
         plans=costs.plans,
         chores=costs.chores,
         reviews=costs.reviews,
+        tasks=costs.tasks,
         total=costs.total,
     )
 

@@ -123,6 +123,9 @@ REQUIRED_PR_SKILL = ("OPEN_PR",)
 # The reviewer's prompt (DESIGN §21). An override must still name the PR, the commit, and the checkout it reviews.
 REVIEWER = "reviewer.md"
 REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
+#: A one-off task's prompt (DESIGN §36). An override must still carry the operator's text and the branch it may push.
+TASK = "task.md"
+REQUIRED_TASK = ("TASK", "BRANCH")
 # A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
 # override written before they existed still serves every other resume.
 REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
@@ -212,6 +215,7 @@ _HEARS_NOTICE: dict[str, list[str]] = {
     WORKER[RunKind.PLAN]: [str(RunKind.PLAN)],
     FEEDBACK_PLAN: [str(RunKind.FEEDBACK_PLAN)],
     REVIEWER: ["review"],
+    TASK: ["task"],
 }
 
 
@@ -679,6 +683,31 @@ def render_reviewer(
     followed = REQUIRED_PREVIOUS_REVIEW if previous else ()
     required = (*REQUIRED_REVIEWER, *noticed, *noted, *followed, *_persona_required(persona))
     return render(config, REVIEWER, values, required=required, one_of=standing)
+
+
+def render_task(config: Config, values: Mapping[str, str | None], *, notice: str | None = None) -> str:
+    """Return a one-off task's prompt (DESIGN §36) with every `{{NAME}}` replaced from `values`.
+
+    It must carry `REQUIRED_TASK`, and is held to what a worker's that commits is: `{{OPEN_PR}}` with
+    `runtime.pr_skill` set, `{{NOTICE}}` while a notice is in force, the standing instructions to workers once
+    `paths.worker_instructions` is set, and the commit attribution the config asks for (`render_worker`).
+
+    Returns:
+        The rendered prompt.
+    """
+    values = {
+        **values,
+        **_standing_values(standing_instructions(config), "private"),
+        "NOTICE": notice,
+        "COMMIT_ATTRIBUTION": commit_attribution(config),
+        "COMMIT_TRAILER": commit_trailer(config),
+        "OPEN_PR": open_pr(config.runtime.pr_skill),
+    }
+    pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill else ()
+    noticed = REQUIRED_NOTICE if notice is not None else ()
+    standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
+    required = (*REQUIRED_TASK, *pr_skill, *noticed)
+    return render(config, TASK, values, required=required, one_of=(*standing, _required_attribution(config)))
 
 
 def render(

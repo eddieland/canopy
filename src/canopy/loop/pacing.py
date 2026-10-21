@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, notice
+from canopy.core import chore_view, db, notice, tasks
 from canopy.core.items import subject
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
@@ -134,8 +134,9 @@ def _item_order(item: tuple[str | None, str, str | None]) -> tuple[str, str, str
 def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
     """Whether nothing the journal holds for a tick to act on happened after a tick read it, at `read_at`.
 
-    No run, chore run, or review run started or ended, and the operator recorded no message, started or stopped no
-    ticket, granted nothing, and set or cleared no notice, past `message_id`, the newest message that tick had read.
+    No run of any table started or ended, and the operator recorded no message, started or stopped no ticket, granted
+    nothing, set or cleared no notice, and submitted or stopped no task, past `message_id`, the newest message that
+    tick had read.
 
     Returns:
         True if nothing did.
@@ -146,6 +147,7 @@ def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
         and not db.starts_moved_after(ctx.conn, read_at)
         and not db.granted_after(ctx.conn, read_at)
         and not notice.moved_after(ctx.conn, read_at)
+        and not tasks.moved_after(ctx.conn, read_at)
     )
 
 

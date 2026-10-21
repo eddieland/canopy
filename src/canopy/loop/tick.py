@@ -1,13 +1,14 @@
 """One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish.
 
-A tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
+A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). A
+tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
 """
 
 from __future__ import annotations
 
 import shutil
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
@@ -38,6 +39,7 @@ from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import drafted, policy, reconcile
+from canopy.runs import tasks as task_starts
 from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
@@ -65,9 +67,9 @@ MAX_ERRORS_NAMED = 3
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 # What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
-# grant, a notice set or cleared), a run ending, the operator pressing the loop's tick-now key, or the operator asking
-# from the web UI.
-type Woken = Literal["message", "starts", "grant", "notice", "run", "key", "web"]
+# grant, a task submitted or stopped, a notice set or cleared), a run ending, the operator pressing the loop's tick-now
+# key, or the operator asking from the web UI.
+type Woken = Literal["message", "starts", "grant", "task", "notice", "run", "key", "web"]
 # What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
 # length, one a gate shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
@@ -151,7 +153,7 @@ def _woken_title(woken_by: WokenBy | None) -> str:
             return "by hand"
         case "start":
             return "loop start"
-        case "timer" | "gate" | "message" | "grant" | "notice":
+        case "timer" | "gate" | "message" | "grant" | "task" | "notice":
             return woken_by
         case "starts":
             return "start or stop"
@@ -327,6 +329,13 @@ def _steps(
         return finish(TickStatus.RECONCILE_FAILED, str(e))
     chore_reconcile.run(ctx, log)
     memory_reconcile.run(ctx, log)
+    if not dry_run:
+        # The operator's tasks start in code, before the overseer, which never sees one: it plans around the slots
+        # their runs hold (DESIGN §36). A dry tick starts none (D036).
+        started = task_starts.start_queued(ctx, tick_id, log)
+        if started:
+            running = reconciled.capacity.running + len(started)
+            reconciled = replace(reconciled, capacity=replace(reconciled.capacity, running=running))
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)

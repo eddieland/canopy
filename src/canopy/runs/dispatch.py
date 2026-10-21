@@ -923,13 +923,15 @@ def _guard_feedback_plan(
 
 
 def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str]) -> None:
-    """Refuse when `max_workers` runs and review runs are running: a review holds a slot too (DESIGN §21).
+    """Refuse when `max_workers` runs, review runs, and task runs are running: each holds a slot (DESIGN §21, §36).
 
     Raises:
-        Refusal: `capacity`, when running runs, review runs, and those in `planned` number `max_workers` or more.
+        Refusal: `capacity`, when running runs, review runs, task runs, and those in `planned` number `max_workers` or
+            more.
     """
     max_workers = ctx.config.capacity.max_workers
-    busy = len(running) + len(db.running_runs(ctx.conn, "review_runs")) + len(planned)
+    others = len(db.running_runs(ctx.conn, "review_runs")) + len(db.running_runs(ctx.conn, "task_runs"))
+    busy = len(running) + others + len(planned)
     if busy >= max_workers:
         planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")

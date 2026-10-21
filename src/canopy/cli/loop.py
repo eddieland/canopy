@@ -24,6 +24,7 @@ from canopy.core import (
     notice,
     pause,
     review_requests,
+    tasks,
 )
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
@@ -248,7 +249,7 @@ def _print_review_requests(ctx: Context) -> None:
 def _print_workers(ctx: Context) -> None:
     running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    busy = len(running) + len(db.running_runs(ctx.conn, "review_runs"))
+    busy = db.busy_workers(ctx.conn)
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories.
@@ -264,7 +265,10 @@ def _print_workers(ctx: Context) -> None:
     for r in db.running_runs(ctx.conn, "review_runs"):
         where = f"  {r['slot_path']}" if r["slot_path"] else ""
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}{where}{persona_of(r)}")
-    if not running and not db.running_runs(ctx.conn, "review_runs"):
+    # So does a task's run (DESIGN §36).
+    for t in tasks.running(ctx.conn):
+        click.echo(f"  task:{t.task_id}  run {t.id}  {attention.age(t.started_at)}  {t.slot_path}")
+    if not busy:
         click.echo("  none")
 
 

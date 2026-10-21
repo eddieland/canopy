@@ -5068,6 +5068,11 @@ export type components = {
              */
             reviews: number | null;
             /**
+             * Tasks
+             * @description The operator's one-off tasks' runs (DESIGN §36).
+             */
+            tasks: number | null;
+            /**
              * Total
              * @description Everything, dry runs included, as the 24 hour and 30 day counters count it.
              */
@@ -5109,10 +5114,10 @@ export type components = {
          */
         SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
         /**
-         * @description A kind of agent run: each tick's overseer, worker runs, plan runs (`plan`, DESIGN §25, old `needs-plan` triage runs among them), chore runs, review runs.
+         * @description A kind of agent run: each tick's overseer, worker runs, plan runs (`plan`, DESIGN §25, old `needs-plan` triage runs among them), chore runs, review runs, the operator's one-off tasks' runs (§36).
          * @enum {string}
          */
-        SpendKind: "overseer" | "workers" | "plans" | "chores" | "reviews";
+        SpendKind: "overseer" | "workers" | "plans" | "chores" | "reviews" | "tasks";
         /**
          * SpendModel
          * @description What one kind's runs that started in the window spent on one model, as each run's session says (DESIGN §13).
