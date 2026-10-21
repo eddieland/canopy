@@ -40,10 +40,12 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | Command | Does |
 |---|---|
 | `npm run dev` | Vite on 127.0.0.1:5173, proxying `/api` to `npm run dev:api` (FastAPI over a mock journal on :8765) |
-| `npm run check` | format check, lint, typecheck, generated types current, unit tests, build. Must pass. |
+| `npm run check` | format check, lint, typecheck, generated types current, unit tests, build: what CI runs |
+| `npm run fmt:check`, `lint`, `typecheck`, `check:api` | its pieces, one at a time |
+| `npm test -- <files>` | the Vitest files named |
 | `npm run fmt` | format with oxfmt |
 | `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
-| `npm run test:e2e` | build, then Playwright against the build served by FastAPI |
+| `npm run test:e2e -- <specs>` | build, then Playwright against the build served by FastAPI; every spec when none is named |
 
 With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium.
 
@@ -161,7 +163,9 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
 
 ## Done for a UI pull request
 
-- `make check` passes (it runs `npm run check`), and `make ui-e2e` passes.
+- The checks the change reaches pass, run as the repository's `AGENTS.md` says (Toolchain): `npm run fmt:check`,
+  `lint`, and `typecheck` on any change, `check:api` when a pydantic model behind the API changed, `npm test` for the
+  unit tests of what changed, and `npm run test:e2e` for the Playwright specs that cover it. CI runs the rest.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.
 - `DESIGN.md` here is updated for any new token, pattern, or rule, and the guide for anything a page of it describes.
   Fun is the exception: what the ticker, Sprig, the rave, and the like do is written in their code, and `DESIGN.md`

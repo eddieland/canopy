@@ -82,11 +82,24 @@ If code and the design disagree, the design doc wins until a decision entry says
 - ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
   module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
   Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
-- `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
-- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, as two jobs side by side
-  (`lint test` and `ui-check`), except on a pull request that changes only docs, where every check passes without
-  running, and on one that changes only `ui/` and docs, where the Python tests are skipped; run `make all` before
-  pushing either anyway.
+- `make all` runs fmt, lint (including type checks), and tests; `make check` is the same without fmt, and never
+  rewrites files. CI runs `make check`, as two jobs side by side (`lint test` and `ui-check`), and is the backstop
+  for the whole suite. An agent does not run `make all` or `make check` before pushing unless the operator asks: it
+  runs the tools and test modules its change reaches, on the files it changed.
+  - Format what you touched: `uv run ruff format <files>`, `uv run ruff check --fix <files>` for Python,
+    `uv run rumdl fmt <files>` for Markdown.
+  - Python: `uv run ruff check <files>`, `uv run pyrefly check` (the whole project, in seconds, so callers of what
+    changed are checked too), and `uv run pytest -q <test modules>` for the package you changed, which sits parallel
+    to it under `tests/` (add `-n auto` for a directory). Add the whole-canopy tests your change can trip:
+    `tests/canopy/test_layers.py` for a new import, module, or test helper, `test_frozen.py` for a dataclass,
+    `test_prompt_sizes.py` for a prompt, `core/test_db.py` and `core/test_records.py` for a migration or row type.
+    A change to a shared fixture or helper in `tests/` runs the modules that use it.
+  - Markdown: `uv run rumdl check <files>`. Any other file: `uv run ec <files>`, plus `uv run shellcheck <file>` for
+    a shell script and `uv run actionlint` and `uv run zizmor --offline --quiet .` for a workflow.
+  - `ui/`: the pieces of `npm --prefix ui run check` your change reaches (`ui/AGENTS.md`).
+
+  CI skips every check on a pull request that changes only docs, and the Python tests on one that changes only `ui/`
+  and docs, so there the checks you run are the only ones.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - A pull request's CI is the run GitHub starts for it. Never start CI by hand on a branch with an open pull request
@@ -309,7 +322,7 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 ## Definition of done for a PR
 
-- `make all` passes.
+- The checks and tests the change reaches pass (Toolchain), and CI passes.
 - New behavior has a test using the fakes.
 - Docs updated: the design only where it states a promise this changes, within its bar, `README.md` if the install
   path or daily surface changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where
