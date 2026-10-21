@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import sql
 from canopy.infra import logs
-from canopy.serve import reviews, views
+from canopy.serve import chore_views, reviews, spend_views, tick_views, views
 from canopy.serve.schema import (
     AttentionUpdated,
     ChoresUpdated,
@@ -211,7 +211,7 @@ class _Sent:
             self.tickets = by_key
             found.append(StreamEvent(TicketsUpdated(tickets=tickets)))
             found.extend(StreamEvent(TicketChanged(key=k)) for k in changed)
-        chores = ChoresUpdated(chores=views.chores(backend, ctx))
+        chores = ChoresUpdated(chores=chore_views.chores(backend, ctx))
         if chores != self.chores:
             self.chores = chores
             found.append(StreamEvent(chores))
@@ -224,11 +224,11 @@ class _Sent:
             self.requested = requested
             found.append(StreamEvent(requested))
         # Sent when a cost changes, not a window: the windows move with the clock on every read.
-        spend = views.spend(backend, ctx)
+        spend = spend_views.spend(backend, ctx)
         if self.spend is None or _costs(spend) != _costs(self.spend):
             self.spend = spend
             found.append(StreamEvent(SpendUpdated(spend=spend)))
-        last = views.last_tick(ctx)
+        last = tick_views.last_tick(ctx)
         if last != self.tick:
             self.tick = last
             found.append(StreamEvent(TickUpdated(tick=last.tick, acknowledged=last.acknowledged)))

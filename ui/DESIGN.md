@@ -828,7 +828,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in place of
   the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent nothing,
   and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
-  header, kept in `?days=`.
+  header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
+  runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
+  kinds the window has rows of. A window switch keeps both filters.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.

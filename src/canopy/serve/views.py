@@ -1,4 +1,6 @@
-"""Journal rows as the API's models: attention, runs, tickets and their conversations, chores, ticks, search hits.
+"""Journal rows as the API's models: attention, the loop's state, runs, tickets and their conversations, decisions.
+
+It also holds what the other views share: a run's models, and the text helpers that lay out what an agent wrote.
 
 Reads only. Every text that came from an agent or the tracker stays untrusted: control characters are dropped from
 message bodies as `canopy show` drops them, run summaries are cut but keep their line breaks, and the UI renders all of
@@ -8,21 +10,13 @@ it as text.
 from __future__ import annotations
 
 import json
-import math
-import os
-from datetime import datetime, timedelta
-from itertools import starmap
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
-    chore_result,
-    chore_runs,
-    chore_view,
     contract,
     conversation,
     db,
-    gc_passes,
     items,
     notice,
     pause,
@@ -30,29 +24,17 @@ from canopy.core import (
     plans,
     records,
     run_models,
-    search,
 )
-from canopy.core import spend as spending
 from canopy.core.items import fingerprint
-from canopy.core.vocab import ChoreRunStatus, ModelsRead, RunStatus, TickStatus
-from canopy.runtime import entries, transcript
+from canopy.core.vocab import ModelsRead, RunStatus
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
     AgentPersona,
     AttentionItem,
     Capacity,
-    ChoreDetail,
-    ChoreFinding,
-    ChoreRun,
-    ChoreRunDetail,
-    ChoreRunFinding,
-    ChoreSpend,
-    ChoreSpendWindow,
-    ChoreSummary,
     Comment,
     CostTotal,
     Decision,
-    LastTick,
     Limit,
     LoopState,
     Message,
@@ -68,44 +50,22 @@ from canopy.serve.schema import (
     RunActivity,
     RunsSince,
     RunState,
-    SearchHit,
-    SearchResults,
     ServedModel,
-    Spend,
-    SpendBreakdown,
-    SpendCosts,
-    SpendDay,
-    SpendModel,
-    SpendPullRequest,
-    SpendTicket,
-    SpendTicks,
-    SpendTool,
-    SpendUnpriced,
-    SpendWindow,
-    SpendWoken,
     StartStatus,
-    Tick,
-    TickDetail,
     TicketDetail,
     TicketForget,
     TicketSummary,
     Transcript,
-    TranscriptEntry,
-    TranscriptError,
-    TranscriptPrompt,
-    TranscriptStep,
-    TranscriptText,
-    TranscriptTokens,
-    TranscriptTool,
     Unit,
     WorkerNotice,
 )
+from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Sequence
+    from datetime import datetime
 
-    from canopy.core.config import Chore
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
@@ -114,18 +74,12 @@ if TYPE_CHECKING:
 RECENT_RUNS = 50
 # How many tickets the tickets list carries, by most recent activity.
 TICKETS = 200
-# A ticket's page: its latest runs and messages.
+# A ticket's page: its latest runs, messages, and decisions.
 TICKET_RUNS = 10
 TICKET_MESSAGES = 100
-# A chore's page: its latest runs.
-CHORE_RUNS = 10
-# The ticks list, newest first, and a ticket's page: the latest decisions about it.
-TICKS = 50
 TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
-# The most of a chore's prompt read for its title: its first line, cut here.
-_CHORE_TITLE_READ = 500
-# The windows the spend figures cover: the last day and the last 30.
+# The windows the spend figures and a chore's spend cover: the last day and the last 30.
 SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
@@ -179,125 +133,6 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     return found
 
 
-def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last day and the last 30 days cost, by the backend's clock, and what everything ever cost.
-
-    Returns:
-        The cost the journal recorded in each window, with the window's start, and its total.
-    """
-    now = backend.clock()
-    return Spend(
-        day=_spent(ctx, now, SPEND_DAY_HOURS),
-        month=_spent(ctx, now, SPEND_MONTH_HOURS),
-        total_usd=db.spent_ever(ctx.conn),
-    )
-
-
-def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
-    since = now - timedelta(hours=hours)
-    return SpendWindow(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
-
-
-def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown:
-    """What the last `days` local days cost, by the backend's clock, as `canopy spend --days` prints it.
-
-    Returns:
-        The breakdown, with the newest idle ticks in the window.
-    """
-    return _spend_breakdown(ctx, spending.breakdown(ctx.conn, backend.clock(), days))
-
-
-def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBreakdown:
-    """What the last `hours` clock hours cost, by the backend's clock, by the hour.
-
-    Returns:
-        The breakdown, with the newest idle ticks in the window.
-    """
-    return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, backend.clock(), hours))
-
-
-def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
-    return SpendBreakdown(
-        since=db.parse_time(found.since),
-        days=found.days,
-        hours=found.hours,
-        per_day=[
-            SpendDay(day=d.day, start=db.parse_time(d.start), costs=_spend_costs(d.costs), done=d.done)
-            for d in found.per_day
-        ],
-        totals=_spend_costs(found.totals),
-        ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
-        woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
-        unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
-        idle_share=found.idle_share,
-        idle_ticks=list(starmap(tick_of, spending.idle_ticks(ctx.conn, found.since, found.until))),
-        done=found.done,
-        per_done=found.per_done,
-        tickets=[
-            SpendTicket(
-                key=t.key,
-                title=t.title,
-                runs=t.runs,
-                reviews=t.reviews,
-                cost_usd=t.cost_usd,
-                done=t.done,
-                done_at=db.parse_time(t.done_at) if t.done_at is not None else None,
-            )
-            for t in found.tickets
-        ],
-        pull_requests=[
-            SpendPullRequest(
-                url=p.url,
-                ticket_key=p.ticket,
-                phase=p.phase,
-                runs=p.runs,
-                reviews=p.reviews,
-                cost_usd=p.cost_usd,
-            )
-            for p in found.pull_requests
-        ],
-        tools=[
-            SpendTool(
-                kind=t.kind,
-                tool=t.tool,
-                runs=t.runs,
-                calls=t.calls,
-                errors=t.errors,
-                result_chars=t.result_chars,
-                est_tokens=t.est_tokens,
-            )
-            for t in found.tools
-        ],
-        models=[
-            SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
-            for m in found.models
-        ],
-    )
-
-
-def _spend_costs(costs: spending.Costs) -> SpendCosts:
-    return SpendCosts(
-        overseer=costs.overseer,
-        idle=costs.idle,
-        dry_run=costs.dry_run,
-        workers=costs.workers,
-        plans=costs.plans,
-        chores=costs.chores,
-        reviews=costs.reviews,
-        tasks=costs.tasks,
-        total=costs.total,
-    )
-
-
-def last_tick(ctx: Context) -> LastTick:
-    """The latest tick, and the newest message the latest `ok` tick read.
-
-    Returns:
-        The latest tick, None before the first, and the message's id, None before an `ok` tick recorded one.
-    """
-    return LastTick(tick=tick(ctx), acknowledged=db.acknowledged_message_id(ctx.conn))
-
-
 def loop_state(ctx: Context) -> LoopState:
     """Whether the operator paused the loop, and how, the notice to workers, memory's tiers, and what may run at once.
 
@@ -324,114 +159,6 @@ def loop_state(ctx: Context) -> LoopState:
     return LoopState(capacity=capacity, paused=paused, notice=worker_notice, memory=remembered)
 
 
-def tick(ctx: Context) -> Tick | None:
-    """The latest tick, or None before the first.
-
-    Returns:
-        The tick, with how many decisions it recorded.
-    """
-    row = db.last_tick(ctx.conn)
-    if row is None:
-        return None
-    return tick_of(row, db.decision_count(ctx.conn, row.id))
-
-
-def tick_of(row: records.Tick, decisions: int) -> Tick:
-    """A tick's row, and how many decisions it recorded.
-
-    Returns:
-        The tick as the API sends it, its summary laid out as a page shows it and None when empty.
-    """
-    return Tick(
-        id=row.id,
-        status=row.status,
-        dry_run=row.dry_run,
-        started_at=db.parse_time(row.started_at),
-        ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
-        summary=lines(row.summary or "") or None,
-        session_id=row.session_id or None,
-        cost_usd=row.cost_usd,
-        new_tokens=new_tokens(row),
-        peak_context=row.tokens_peak_context,
-        decisions=decisions,
-        idle=row.idle,
-        woken_by=row.woken_by,
-        canopy_version=row.canopy_version,
-    )
-
-
-def ticks(ctx: Context) -> list[Tick]:
-    """The latest ticks, newest first.
-
-    Returns:
-        At most `TICKS` ticks, each with how many decisions it recorded.
-    """
-    return list(starmap(tick_of, db.recent_ticks(ctx.conn, TICKS)))
-
-
-def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
-    """One tick and its decisions, as `canopy decisions ID` prints them, or None if there is no such tick.
-
-    Returns:
-        The tick, its decisions, its output's path from the workspace root, None when the file is missing, and the
-        ids of the ticks either side of it.
-    """
-    row = db.get_tick(ctx.conn, tick_id)
-    if row is None:
-        return None
-    rows = db.decisions_for_tick(ctx.conn, tick_id)
-    output = tick_output(ctx, tick_id)
-    previous_id, next_id = db.tick_neighbours(ctx.conn, tick_id)
-    return TickDetail(
-        tick=tick_of(row, len(rows)),
-        decisions=[decision(d) for d in rows],
-        output_path=shown_path(str(output), ctx.workspace.root) if output.exists() else None,
-        previous_id=previous_id,
-        next_id=next_id,
-        models=models_served(ctx.conn, "ticks", tick_id, ended=row.ended_at is not None, session_id=row.session_id),
-    )
-
-
-def tick_output(ctx: Context, tick_id: int) -> Path:
-    """Where a tick's overseer output is (DESIGN §6).
-
-    Returns:
-        The path under the state directory. The file may not exist.
-    """
-    return ctx.state_dir / "ticks" / f"{tick_id}.log"
-
-
-def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
-    """The overseer's session in a tick's output, or None if there is no such tick.
-
-    Returns:
-        The transcript, its status saying whether the tick recorded a session and whether its output could be read.
-    """
-    row = db.get_tick(ctx.conn, tick_id)
-    if row is None:
-        return None
-    output = tick_output(ctx, tick_id)
-    return session_transcript(output, row.session_id, removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)))
-
-
-def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
-    """The end of a tick's output as written, or None if there is no such tick.
-
-    Returns:
-        The tail, without control characters, or a `no_output` status when the file is missing or not a regular file.
-    """
-    row = db.get_tick(ctx.conn, tick_id)
-    if row is None:
-        return None
-    output = tick_output(ctx, tick_id)
-    return raw_output(output, removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)))
-
-
-def _tick_rule(row: records.Tick) -> gc_passes.Rule:
-    # A tick that did not close `ok` keeps its files as long as a run, since the operator debugs those (DESIGN §26).
-    return "tick_files_days" if row.status is TickStatus.OK else "run_files_days"
-
-
 def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     """The end of a run's log as written, its setup commands' output and its worker's stderr included (DESIGN §22).
 
@@ -444,31 +171,6 @@ def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
         return None
     log = Path(str(row["log_path"]))
     return raw_output(log, removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
-
-
-def raw_output(path: Path, removed_after_days: int | None = None) -> RawOutput:
-    """The end of a log or output file as written (DESIGN §22).
-
-    `removed_after_days` is how long retention kept the file, when it removed it (`removed_after`).
-
-    Returns:
-        The tail, without control characters, or a `no_output` status when the file is missing or not a regular file.
-    """
-    found = transcript.tail(path)
-    if found is None:
-        return RawOutput(status="no_output", removed_after_days=removed_after_days)
-    return RawOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
-
-
-def removed_after(conn: sqlite3.Connection, path: Path, ended_at: str | None, rule: gc_passes.Rule) -> int | None:
-    """How many days retention kept the file at `path`, of a row that ended at `ended_at`, if a pass removed it.
-
-    Returns:
-        The days `rule` kept it, or None when the file is there, or no pass has reached the row's end (DESIGN §26).
-    """
-    if os.path.lexists(path):
-        return None
-    return gc_passes.removed_after(conn, ended_at, rule)
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:
@@ -514,73 +216,6 @@ def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
         return None
     log = Path(str(row["log_path"]))
     return session_transcript(log, row["session_id"], removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
-
-
-def session_transcript(path: Path, session: object, removed_after_days: int | None = None) -> Transcript:
-    """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22).
-
-    `removed_after_days` is how long retention kept the file and its prompt, when it removed them (`removed_after`).
-
-    Returns:
-        The entries read, with status `no_session` when the journal recorded no session, or `no_log` when the file is
-        missing or not a regular file; and the prompt kept beside the file, whatever the status.
-    """
-    kept = transcript.prompt(transcript.prompt_path(path))
-    prompt = TranscriptPrompt(text=kept.text, truncated=kept.truncated) if kept is not None else None
-    if not isinstance(session, str) or not session:
-        return Transcript(status="no_session", prompt=prompt, removed_after_days=removed_after_days)
-    found = transcript.read(path, session)
-    if found is None:
-        return Transcript(status="no_log", session_id=session, prompt=prompt, removed_after_days=removed_after_days)
-    return Transcript(
-        status="read",
-        session_id=session,
-        entries=[transcript_entry(e) for e in found.entries],
-        truncated=found.truncated,
-        unreadable=found.unreadable,
-        prompt=prompt,
-    )
-
-
-def transcript_entry(entry: entries.Entry) -> TranscriptEntry:
-    """One entry of a transcript as the API sends it.
-
-    Returns:
-        The model for the entry's kind: text, a tool call, a step, or an error.
-    """
-    match entry:
-        case entries.Text():
-            return TranscriptText(
-                at=entry.at,
-                text=entry.text,
-                reasoning=entry.reasoning,
-                cut=entry.cut,
-                call=entry.call,
-            )
-        case entries.ToolCall():
-            return TranscriptTool(
-                at=entry.at,
-                tool=entry.tool,
-                status=entry.status,
-                title=entry.title,
-                input=entry.input,
-                output=entry.output,
-                duration_ms=entry.duration_ms,
-                cut=entry.cut,
-                call=entry.call,
-            )
-        case entries.Step():
-            t = entry.tokens
-            return TranscriptStep(
-                at=entry.at,
-                reason=entry.reason,
-                cost_usd=entry.cost_usd,
-                tokens=t.total if t is not None else None,
-                split=TranscriptTokens(**vars(t)) if t is not None else None,
-                call=entry.call,
-            )
-        case entries.Error():
-            return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)
 
 
 def decision(row: records.Decision) -> Decision:
@@ -997,235 +632,4 @@ def message(row: records.Message) -> Message:
         answers=row.answers,
         body=conversation.printable(row.body),
         comment=comment,
-    )
-
-
-def chores(backend: Backend, ctx: Context) -> list[ChoreSummary]:
-    """Each configured chore, as `canopy status` lists it: none when `capacity.max_chores` is 0 (DESIGN §19).
-
-    Returns:
-        Each chore's summary, by name, as of the backend's clock.
-    """
-    now = backend.clock()
-    root = ctx.workspace.root
-    return [
-        chore_summary(ctx.conn, s, now, root)
-        for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
-    ]
-
-
-def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
-    """One chore, as `canopy show chore:NAME` prints it, or None if it is not defined for this workspace.
-
-    A chore defined while `capacity.max_chores` is 0 has a page, as `canopy reply chore:NAME` takes a note to it.
-
-    Returns:
-        The chore's summary, its latest runs, and its notes.
-    """
-    defined = chore_view.defined(ctx.config, ctx.workspace)
-    if name not in defined:
-        return None
-    state = chore_view.state_of(ctx.conn, name, defined[name], starts=ctx.finding_starts)
-    return ChoreDetail(
-        chore=chore_summary(ctx.conn, state, backend.clock(), ctx.workspace.root),
-        runs=[chore_run(r, ctx.workspace.root) for r in state.runs[:CHORE_RUNS]],
-        notes=[message(m) for m in db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)],
-    )
-
-
-def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: datetime, root: Path) -> ChoreSummary:
-    """A chore's state as its line in `canopy status` and the head of `canopy show chore:NAME` say it.
-
-    Returns:
-        The chore's schedule, its running and latest ended runs, when it is next due, its open findings, and what its
-        runs cost in the last day and the last 30 days.
-    """
-    defined = state.chore
-    running = state.running
-    latest = state.latest_ended
-    return ChoreSummary(
-        name=state.name,
-        title=_chore_title(defined),
-        every_minutes=defined.every_minutes,
-        days=list(defined.days),
-        hours=defined.hours,
-        timezone=defined.timezone,
-        when=defined.when or None,
-        running=chore_run(running, root) if running is not None else None,
-        latest=chore_run(latest, root) if latest is not None else None,
-        due_at=state.due_at(now),
-        findings=[
-            ChoreFinding(
-                id=f.finding.id,
-                title=conversation.printable(f.finding.title),
-                detail=conversation.printable(f.finding.detail),
-                link=f.finding.link,
-                since=db.parse_time(f.since),
-                dismissed=f.dismissed,
-            )
-            for f in state.findings()
-        ],
-        max_findings=defined.max_findings,
-        more_findings=state.more_findings(),
-        latest_note_id=db.latest_message_of(conn, conversation.CHORE, state.name),
-        spend=ChoreSpend(
-            day=_chore_spent(conn, state.name, now, SPEND_DAY_HOURS),
-            month=_chore_spent(conn, state.name, now, SPEND_MONTH_HOURS),
-        ),
-    )
-
-
-def _chore_title(chore: Chore) -> str | None:
-    """The heading a chore's prompt opens with, `# Dependency advisories`, as the chore's title.
-
-    Returns:
-        The heading's text on one line, or None when the prompt's first line is no `# ` heading or cannot be read.
-    """
-    try:
-        with chore.prompt.open(encoding="utf-8") as f:
-            first = f.readline(_CHORE_TITLE_READ)
-    except (OSError, UnicodeDecodeError):
-        return None
-    return ticket_title(first.removeprefix("# ")) if first.startswith("# ") else None
-
-
-def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int) -> ChoreSpendWindow:
-    since = db.format_time(now - timedelta(hours=hours))
-    runs, costs = chore_runs.chore_costs_since(conn, name, since)
-    if not costs:
-        return ChoreSpendWindow(hours=hours, runs=runs, priced=0)
-    total = sum(costs)
-    # Nearest rank: the smallest cost at least 99% of the runs did not exceed.
-    p99 = costs[math.ceil(0.99 * len(costs)) - 1]
-    return ChoreSpendWindow(
-        hours=hours,
-        runs=runs,
-        priced=len(costs),
-        cost_usd=total,
-        mean_usd=total / len(costs),
-        p99_usd=p99,
-        max_usd=costs[-1],
-    )
-
-
-def chore_run(row: records.ChoreRun, root: Path) -> ChoreRun:
-    """One chore run's row, its log's path from the workspace `root`.
-
-    Returns:
-        The run as the API sends it, `done` only when it ended `ok`, with its findings counted then.
-    """
-    parsed = chore_result.stored(row.result_json) if row.status is ChoreRunStatus.OK else None
-    return ChoreRun(
-        id=row.id,
-        status=row.status,
-        state=_chore_state(row.status),
-        started_at=db.parse_time(row.started_at),
-        ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
-        summary=said(row),
-        findings=len(parsed.findings) if parsed is not None else 0,
-        more_findings=parsed.more_findings if parsed is not None else 0,
-        session_id=row.session_id or None,
-        cost_usd=row.cost_usd,
-        new_tokens=new_tokens(row),
-        peak_context=row.tokens_peak_context,
-        log_path=shown_path(row.log_path, root),
-    )
-
-
-def _chore_state(status: ChoreRunStatus) -> RunState:
-    """What the web UI colors a chore run that has `status` as.
-
-    Returns:
-        The run's state: a chore run that checked is done, and every other ending, which raises `chore_failed`
-        (DESIGN §19), is failed.
-    """
-    match status:
-        case ChoreRunStatus.RUNNING:
-            return "running"
-        case ChoreRunStatus.OK:
-            return "done"
-        case ChoreRunStatus.FAILED | ChoreRunStatus.UNKNOWN | ChoreRunStatus.TIMEOUT | ChoreRunStatus.CRASHED:
-            return "failed"
-        case _:
-            assert_never(status)
-
-
-def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | None:
-    """One run of chore `name`, or None if it has no such run. A chore deleted from the config keeps its runs.
-
-    Returns:
-        The run, its summary, the harness's note, and its findings, the findings only when it ended `ok`.
-    """
-    row = _chore_run_of(ctx.conn, name, run_id)
-    if row is None:
-        return None
-    stored = contract.stored_object(row.result_json)
-    parsed = chore_result.stored(row.result_json) if row.status is ChoreRunStatus.OK else None
-    defined = chore_view.defined(ctx.config, ctx.workspace).get(name)
-    return ChoreRunDetail(
-        chore=name,
-        title=_chore_title(defined) if defined is not None else None,
-        run=chore_run(row, ctx.workspace.root),
-        summary=lines(str(stored.get("summary") or "")) or None,
-        note=lines(str(stored.get("harness") or "")) or None,
-        findings=[
-            ChoreRunFinding(
-                id=f.id,
-                title=conversation.printable(f.title),
-                detail=conversation.printable(f.detail),
-                link=f.link,
-            )
-            for f in (parsed.findings if parsed is not None else [])
-        ],
-        models=models_served(
-            ctx.conn,
-            "chore_runs",
-            run_id,
-            ended=row.ended_at is not None,
-            session_id=row.session_id or None,
-        ),
-    )
-
-
-def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | None:
-    """A chore run's session in its log, or None if chore `name` has no such run.
-
-    Returns:
-        The transcript, its status saying whether the run recorded a session and whether its log could be read.
-    """
-    row = _chore_run_of(ctx.conn, name, run_id)
-    if row is None:
-        return None
-    log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
-
-
-def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:
-    row = chore_runs.get_chore_run(conn, run_id)
-    return row if row is not None and row.chore == name else None
-
-
-def found(ctx: Context, query: str) -> SearchResults:
-    """The journal's rows holding every word of `query` (DESIGN §22, Search). Raises search.BadQueryError.
-
-    Returns:
-        The words searched for, the hits, and the sources that had more hits than were read.
-    """
-    result = search.search(ctx.conn, query)
-    return SearchResults(
-        words=list(result.words),
-        hits=[
-            SearchHit(
-                source=h.source,
-                at=db.parse_time(h.at),
-                snippet=h.snippet,
-                ticket_key=h.ticket_key,
-                chore=h.chore,
-                run_id=h.run_id,
-                tick_id=h.tick_id,
-                label=h.label,
-            )
-            for h in result.hits
-        ],
-        more=list(result.more),
     )

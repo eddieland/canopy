@@ -15,7 +15,7 @@ import pytest
 from canopy.core import chore_result, db, pr_list
 from canopy.core.context import Context
 from canopy.loop import attention, web
-from canopy.serve import live, pull_requests, reviews, views
+from canopy.serve import chore_views, live, pull_requests, reviews, spend_views, tick_views, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.conftest import Journals
@@ -36,12 +36,12 @@ READS: dict[str, Callable[[Backend, Context], object]] = {
     "attention": views.attention,
     "runs": lambda _b, ctx: views.runs(ctx),
     "tickets": lambda _b, ctx: views.tickets(ctx),
-    "chores": views.chores,
-    "spend in the last 30 days": lambda b, ctx: views._spent(ctx, b.clock(), views.SPEND_MONTH_HOURS),  # noqa: SLF001
-    "latest tick": lambda _b, ctx: views.last_tick(ctx),
-    "ticks": lambda _b, ctx: views.ticks(ctx),
+    "chores": chore_views.chores,
+    "spend in the last 30 days": lambda b, ctx: spend_views._spent(ctx, b.clock(), views.SPEND_MONTH_HOURS),  # noqa: SLF001
+    "latest tick": lambda _b, ctx: tick_views.last_tick(ctx),
+    "ticks": lambda _b, ctx: tick_views.ticks(ctx),
     "a ticket": lambda b, ctx: views.ticket(b, ctx, "ABC-102"),
-    "a chore": lambda b, ctx: views.chore(b, ctx, serve_mock.CHORE),
+    "a chore": lambda b, ctx: chore_views.chore(b, ctx, serve_mock.CHORE),
     "reviews": lambda _b, ctx: reviews.reviews(ctx),
     "pull requests": lambda _b, ctx: pull_requests.pull_requests(ctx),
     "a pull request": lambda b, ctx: pull_requests.pull_request(b, ctx, PR),
@@ -202,12 +202,12 @@ def test_a_findings_start_is_read_back_once(backend: Backend) -> None:
 
 ADVISORY = {"id": "lodash-advisory", "title": "lodash 4.17.20 has a prototype pollution advisory"}
 # The results a chore's page reads with nothing to walk: its latest `ok` run's, its summary's, and each run it lists.
-PAGE = 2 + views.CHORE_RUNS
+PAGE = 2 + chore_views.CHORE_RUNS
 
 
 def advisory_since(backend: Backend) -> str:
     with backend.open() as ctx:
-        found = views.chore(backend, ctx, serve_mock.CHORE)
+        found = chore_views.chore(backend, ctx, serve_mock.CHORE)
     assert found is not None
     [finding] = found.chore.findings
     assert finding.id == ADVISORY["id"]
