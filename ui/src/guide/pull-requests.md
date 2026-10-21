@@ -147,6 +147,13 @@ asked you to look at, the part of the change that worries you, or why the PR exi
 the review: it still reads the whole change. The PR's page shows the notes with the request. Asking again for a PR
 that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it started with.
 
+**Persona** picks the voice the review is written in, as `--persona` does. Left alone, it reads `(default)` beside
+`[personas] reviewer`'s, which is usually `canopy`. Check one persona, say `skeptic`, and the review is written in it;
+check several and canopy reviews the PR once in each, side by side, which is the cheapest way to learn which reviewer
+you actually like. A persona canopy would refuse to run, such as a file past its size limit, is greyed out, and
+hovering it says why. Asking again for a PR that's waiting, with personas checked, replaces its personas; with none
+checked, it keeps them. The PR's page names the personas with the request.
+
 The review stays in canopy, like every other. Whether you pass any of it on to your coworker, and in what tone, is
 between you and them.
 
