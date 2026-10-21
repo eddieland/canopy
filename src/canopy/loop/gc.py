@@ -2,12 +2,12 @@
 
 `measure` reports each kind of §26's table that M47 changes: how many there are, their bytes, and what a pass with
 the configured `[retention]` would remove of them. It removes nothing, and runs nothing but `git count-objects`.
+`file_kinds` finds the files a pass removes, for the pass (`gc_pass.py`) and the dry run alike, so the two agree.
 """
 
 from __future__ import annotations
 
 import os
-import re
 import sqlite3
 import stat
 from dataclasses import dataclass, field
@@ -37,7 +37,6 @@ TICKS_DIR = "ticks"
 UNRECORDED_AGE = timedelta(hours=1)
 KIB = 1024
 MIB = KIB * KIB
-_ROTATED_RE = re.compile(rf"{re.escape(logs.LOG_FILE_NAME)}\.(\d+)")
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 # The bytes of an attention row's text: what it holds, not the pages it fills.
 _ROW_BYTES = sql.frag(
@@ -64,6 +63,35 @@ class Kind:
 
 
 @dataclass(frozen=True)
+class Found:
+    """A file of one kind: where it is, its bytes, and whether a pass removes it."""
+
+    path: Path
+    size: int
+    removable: bool
+
+
+@dataclass(frozen=True)
+class FileKind:
+    """A kind of file a pass removes, as the dry run names it, with the rule that removes it and each file found."""
+
+    name: str
+    rule: str
+    files: Sequence[Found]
+
+    def kind(self) -> Kind:
+        """Tally the files as the dry run reports them.
+
+        Returns:
+            The kind, its count the files found.
+        """
+        tally = _Tally()
+        for found in self.files:
+            tally.add(found.size, removable=found.removable)
+        return tally.kind(self.name, "files", self.rule)
+
+
+@dataclass(frozen=True)
 class Report:
     """What `canopy gc --dry-run` reports: each kind, the journal's size in bytes, and what could not be read."""
 
@@ -81,20 +109,9 @@ def measure(ctx: Context, now: datetime) -> Report:
     """
     retention = ctx.config.retention
     journal = db_path(ctx.ws)
-    files = _Files(ctx.state_dir.absolute())
-    runs = _cutoff(now, retention.run_files_days)
-    by_runs = f"run_files_days = {retention.run_files_days}"
     notes: list[str] = []
     kinds = [
-        files.kind("run files", _run_files(ctx.conn, runs), by_runs),
-        files.kind(
-            "tick files",
-            _tick_files(ctx.conn, files.root, _cutoff(now, retention.tick_files_days), runs),
-            f"tick_files_days = {retention.tick_files_days}, not ok: run_files_days",
-        ),
-        files.kind("chore run files", _logged(ctx.conn, "chore_runs", runs, ".prompt"), by_runs),
-        files.kind("review files", _logged(ctx.conn, "review_runs", runs, ".prompt", ".diff"), by_runs),
-        files.unrecorded(now),
+        *(k.kind() for k in file_kinds(ctx, now)),
         _log_files(ctx.state_dir, retention),
         *_attention(ctx.conn, now, retention),
         _connector_runs(ctx.conn, now, retention),
@@ -107,7 +124,34 @@ def measure(ctx: Context, now: datetime) -> Report:
     return Report(at=db.format_time(now), kinds=kinds, journal_size=_regular_size(journal) or 0, notes=notes)
 
 
-def _cutoff(now: datetime, days: int) -> str:
+def file_kinds(ctx: Context, now: datetime) -> list[FileKind]:
+    """The files of runs, ticks, chore runs, and reviews, then the unrecorded, each removable as a pass at `now` would.
+
+    A file is removable only when it is a regular file inside the state directory, through no link, and its row ended
+    before its retention while its run, if it has one, holds no lifelock; a file no row names, once an hour old.
+
+    Returns:
+        The kinds, in the order of §26's table.
+    """
+    retention = ctx.config.retention
+    files = _Files(ctx.state_dir.absolute())
+    runs = retention_cutoff(now, retention.run_files_days)
+    by_runs = f"run_files_days = {retention.run_files_days}"
+    return [
+        files.kind("run files", _run_files(ctx.conn, runs), by_runs),
+        files.kind(
+            "tick files",
+            _tick_files(ctx.conn, files.root, retention_cutoff(now, retention.tick_files_days), runs),
+            f"tick_files_days = {retention.tick_files_days}, not ok: run_files_days",
+        ),
+        files.kind("chore run files", _logged(ctx.conn, "chore_runs", runs, ".prompt"), by_runs),
+        files.kind("review files", _logged(ctx.conn, "review_runs", runs, ".prompt", ".diff"), by_runs),
+        # Last: a file is unrecorded only once every row's files have been read.
+        files.unrecorded(now),
+    ]
+
+
+def retention_cutoff(now: datetime, days: int) -> str:
     """The journal time before which a kind kept `days` is past its retention.
 
     Returns:
@@ -161,31 +205,30 @@ class _Files:
     root: Path
     recorded: set[Path] = field(default_factory=set[Path])
 
-    def kind(self, name: str, owned: Iterable[_Owned], rule: str) -> Kind:
-        """Tally the files `owned` names, each removable once its row is past its retention.
+    def kind(self, name: str, owned: Iterable[_Owned], rule: str) -> FileKind:
+        """Find the files `owned` names, each removable once its row is past its retention.
 
         Returns:
-            The kind, its count the files that are there.
+            The kind, holding the files that are there.
         """
-        tally = _Tally()
+        files: list[Found] = []
         for row in owned:
-            sizes = [_regular_size(p) if self._inside(p) else None for p in row.paths]
+            sizes = [(p, _regular_size(p) if self._inside(p) else None) for p in row.paths]
             self.recorded.update(p.with_suffix("").absolute() for p in row.paths)
-            present = [s for s in sizes if s is not None]
+            present = [(p, size) for p, size in sizes if size is not None]
             expired = bool(present) and row.expired
-            for size in present:
-                tally.add(size, removable=expired)
-        return tally.kind(name, "files", rule)
+            files.extend(Found(p, size, removable=expired) for p, size in present)
+        return FileKind(name, rule, files)
 
-    def unrecorded(self, now: datetime) -> Kind:
-        """Tally the files under the run directories that no row read so far names: removable once an hour old.
+    def unrecorded(self, now: datetime) -> FileKind:
+        """Find the files under the run directories that no row read so far names: removable once an hour old.
 
         Lifelocks are left out: reconcile removes them (DESIGN §26's table, unchanged).
 
         Returns:
             The kind.
         """
-        tally = _Tally()
+        files: list[Found] = []
         before = (now - UNRECORDED_AGE).timestamp()
         for directory in self._run_dirs():
             for path in sorted(directory.iterdir()):
@@ -193,8 +236,8 @@ class _Files:
                     continue
                 found = _regular_stat(path)
                 if found is not None:
-                    tally.add(found.st_size, removable=found.st_mtime < before)
-        return tally.kind("unrecorded files", "files", "an hour old")
+                    files.append(Found(path, found.st_size, removable=found.st_mtime < before))
+        return FileKind("unrecorded files", "an hour old", files)
 
     def _run_dirs(self) -> list[Path]:
         dirs = [self.root / d for d in (dispatch.RUNS_DIR, TICKS_DIR, review_start.REVIEWS_DIR)]
@@ -279,7 +322,7 @@ def _log_files(state_dir: Path, retention: Retention) -> Kind:
     tally = _Tally()
     if size is not None:
         tally.add(size, removable=False)
-    rotated = [(int(m[1]), p) for p in _listing(state_dir) if (m := _ROTATED_RE.fullmatch(p.name)) is not None]
+    rotated = [(int(m[1]), p) for p in _listing(state_dir) if (m := logs.ROTATED_RE.fullmatch(p.name)) is not None]
     for index, path in sorted(rotated):
         found = _regular_size(path)
         if found is not None:
@@ -300,7 +343,7 @@ def _attention(conn: sqlite3.Connection, now: datetime, retention: Retention) ->
         The harness's kind, then the overseer's.
     """
     window = _window(conn)
-    cutoff = _cutoff(now, retention.journal_days)
+    cutoff = retention_cutoff(now, retention.journal_days)
     harness = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
     attended = (
         sql.select("action, tick_id, created_at, {} AS bytes", _ROW_BYTES)
@@ -380,7 +423,7 @@ def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retentio
     Returns:
         The kind.
     """
-    cutoff = _cutoff(now, retention.journal_days)
+    cutoff = retention_cutoff(now, retention.journal_days)
     window = _window(conn)
     newest = sql.union(
         sql.select("max(id)").from_("connector_runs").group_by("source"),
@@ -422,7 +465,7 @@ def _derivations(conn: sqlite3.Connection, now: datetime, retention: Retention) 
     Returns:
         The kind.
     """
-    cutoff = _cutoff(now, retention.journal_days)
+    cutoff = retention_cutoff(now, retention.journal_days)
     window = _window(conn)
     rows = (
         sql.select("{} AS bytes, d.tick_id < ? AND t.started_at < ? AS removable", _DERIVED_BYTES, window, cutoff)
@@ -536,7 +579,7 @@ def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) 
     Returns:
         The kind, counting rows that still hold text.
     """
-    cutoff = _cutoff(now, retention.memory_days)
+    cutoff = retention_cutoff(now, retention.memory_days)
     superseded = sql.select("min(n.created_at)").from_("memories n").where("n.supersedes = m.id")
     gone = (
         sql.select("m.body, coalesce(m.invalidated_at, ({})) AS gone", superseded)

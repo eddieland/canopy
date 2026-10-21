@@ -476,3 +476,12 @@ class SeenKind(StrEnum):
     """What kind of subject the operator saw, `seen.kind` (DESIGN §22): the kind its reference names."""
 
     REVIEW = "review"
+
+
+class GcPassStatus(StrEnum):
+    """How a pass of garbage collection ended, `gc_passes.status` (DESIGN §26)."""
+
+    #: It ran to its end; a file it could not remove is counted, not a failure.
+    OK = "ok"
+    #: It raised before its end, and the tick went on; what it removed before is counted.
+    FAILED = "failed"

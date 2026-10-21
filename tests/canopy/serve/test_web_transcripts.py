@@ -3,8 +3,10 @@ session read back from the events its log holds. Reads only; every text in them 
 
 import dataclasses
 import json
+from datetime import UTC, datetime
 from unittest import mock
 
+from canopy.core import gc_passes
 from canopy.runtime import transcript
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import client
@@ -100,7 +102,14 @@ def test_a_run_with_no_session_or_no_log_says_so(backend: Backend) -> None:
     found = c.get("/api/runs/39/transcript").json()
     # The prompt is canopy's own, kept whether or not the runtime reported a session.
     assert found.pop("prompt")["text"].startswith("# canopy worker: implement\n")
-    assert found == {"status": "no_session", "session_id": None, "entries": [], "truncated": False, "unreadable": 0}
+    assert found == {
+        "status": "no_session",
+        "session_id": None,
+        "entries": [],
+        "truncated": False,
+        "unreadable": 0,
+        "removed_after_days": None,
+    }
     assert c.get("/api/runs/40/transcript").json()["status"] == "no_log"
     # A link in a log's place is not followed: a worker cannot point it at a file of the operator's.
     log.symlink_to(log.parent / "41.log")
@@ -169,12 +178,24 @@ def test_a_ticks_output_is_the_end_of_its_file_as_written_stderr_included(backen
     found = c.get("/api/ticks/2/output").json()
     with backend.open() as ctx:
         written = (ctx.state_dir / "ticks" / "2.log").read_text()
-    assert found == {"status": "read", "text": written, "size": len(written.encode()), "truncated": False}
+    assert found == {
+        "status": "read",
+        "text": written,
+        "size": len(written.encode()),
+        "truncated": False,
+        "removed_after_days": None,
+    }
     # What the transcript leaves out: the runtime's own lines on stderr.
     assert "--- stderr ---\nINFO  " in found["text"]
     assert "WARN  " not in json.dumps(c.get("/api/ticks/2/transcript").json())
     # Tick 1 kept no output; no such tick is a 404.
-    assert c.get("/api/ticks/1/output").json() == {"status": "no_output", "text": "", "size": 0, "truncated": False}
+    assert c.get("/api/ticks/1/output").json() == {
+        "status": "no_output",
+        "text": "",
+        "size": 0,
+        "truncated": False,
+        "removed_after_days": None,
+    }
     missing = c.get("/api/ticks/99/output")
     assert (missing.status_code, missing.json()["detail"]) == (404, "no tick 99")
     assert c.get("/api/ticks/0/output").status_code == 422
@@ -185,7 +206,13 @@ def test_a_runs_output_is_the_end_of_its_log_as_written_setup_and_stderr_include
     found = c.get("/api/runs/40/output").json()
     with backend.open() as ctx:
         written = (ctx.state_dir / "runs" / "40.log").read_text()
-    assert found == {"status": "read", "text": written, "size": len(written.encode()), "truncated": False}
+    assert found == {
+        "status": "read",
+        "text": written,
+        "size": len(written.encode()),
+        "truncated": False,
+        "removed_after_days": None,
+    }
     # What the transcript leaves out: its setup command's output, and the runtime's own lines on stderr.
     assert found["text"].startswith("--- setup web stdout ---\n")
     assert "--- worker stderr ---\nERROR " in found["text"]
@@ -255,3 +282,37 @@ def test_a_chore_deleted_from_the_config_keeps_its_runs_pages(backend: Backend) 
     assert c.get("/api/chores/deps").status_code == 404
     assert c.get("/api/chores/deps/runs/2").json()["run"]["id"] == 2
     assert c.get("/api/chores/deps/runs/2/transcript").json()["session_id"] == "ses_chore2"
+
+
+def test_a_file_retention_removed_says_after_how_many_days(backend: Backend) -> None:
+    c = client(None, backend)
+    with backend.open() as ctx:
+        state = ctx.state_dir
+        # A pass whose cutoffs are past every run's and tick's end in the mock, and one before them, which removed none.
+        for days, cut in ((40, "2026-09-01T00:00:00.000Z"), (30, "2026-10-20T00:00:00.000Z")):
+            gc_passes.record(
+                ctx.conn,
+                tick_id=None,
+                started_at=datetime(2026, 11, 1, tzinfo=UTC),
+                run_files_days=days,
+                tick_files_days=days // 4,
+                run_cutoff=cut,
+                tick_cutoff=cut,
+                removed={},
+                failures=0,
+                error=None,
+            )
+    for path in (state / "runs" / "39.log", state / "runs" / "39.prompt", state / "ticks" / "2.log"):
+        path.unlink()
+
+    found = c.get("/api/runs/39/transcript").json()
+    assert (found["status"], found["prompt"], found["removed_after_days"]) == ("no_log", None, 30)
+    assert c.get("/api/runs/39/output").json()["removed_after_days"] == 30
+    # An `ok` tick's files go by `tick_files_days`.
+    assert c.get("/api/ticks/2/transcript").json()["removed_after_days"] == 7
+    assert c.get("/api/ticks/2/output").json()["removed_after_days"] == 7
+    # A file that is there, or gone while no pass reached its row's end, was not removed by retention.
+    assert c.get("/api/runs/41/transcript").json()["removed_after_days"] is None
+    with backend.open() as ctx:
+        ctx.conn.execute("DELETE FROM gc_passes")
+    assert c.get("/api/runs/39/transcript").json()["removed_after_days"] is None

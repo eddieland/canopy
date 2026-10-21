@@ -716,7 +716,8 @@ class Retention(Section):
     """The `[retention]` table: how long canopy keeps its own history (DESIGN §26). `0` keeps that kind forever.
 
     Private: only the operator's own config shortens retention, since an agent that could remove history early could
-    remove the transcript that shows what it did. Read by nothing but `canopy gc --dry-run` yet (ROADMAP M47).
+    remove the transcript that shows what it did. Read by `canopy gc --dry-run`, and by the pass a live tick runs, which
+    removes files and rotates `canopy.log` alone yet (ROADMAP M47).
     """
 
     # A run's, chore run's, or review's log, prompt, and diff, once it ended this long ago.

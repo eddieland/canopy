@@ -6,10 +6,11 @@ seen, as `canopy review show ID` does.
 """
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.core import db, review_diff
+from canopy.core import db, gc_passes, review_diff
 from canopy.core.vocab import ReviewRunStatus
 from canopy.serve import mock_reviews
 from canopy.serve.api import reviews as reviews_api
@@ -306,3 +307,24 @@ def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backe
     with backend.open() as ctx:
         row = ctx.conn.execute("SELECT channel FROM seen WHERE kind = 'review' AND subject = '2'").fetchone()
         assert row["channel"] == "web"
+
+
+def test_a_diff_retention_removed_says_after_how_many_days(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.get("/api/reviews/4").json()["diff_removed_after_days"] is None
+    with backend.open() as ctx:
+        gc_passes.record(
+            ctx.conn,
+            tick_id=None,
+            started_at=datetime(2026, 11, 1, tzinfo=UTC),
+            run_files_days=30,
+            tick_files_days=7,
+            run_cutoff="2026-10-20T00:00:00.000Z",
+            tick_cutoff="2026-10-20T00:00:00.000Z",
+            removed={},
+            failures=0,
+            error=None,
+        )
+        review_diff.path_for(present(db.get_review_run(ctx.conn, 4)).log_path).unlink()
+    found = c.get("/api/reviews/4").json()
+    assert (found["diff"], found["diff_removed_after_days"]) == (None, 30)

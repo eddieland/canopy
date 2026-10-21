@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from datetime import datetime, timedelta
 from itertools import starmap
 from pathlib import Path
@@ -20,6 +21,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    gc_passes,
     items,
     notice,
     pause,
@@ -31,7 +33,7 @@ from canopy.core import (
 )
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
-from canopy.core.vocab import ChoreRunStatus, ModelsRead, RunStatus
+from canopy.core.vocab import ChoreRunStatus, ModelsRead, RunStatus, TickStatus
 from canopy.runtime import entries, transcript
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
@@ -407,7 +409,8 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     row = db.get_tick(ctx.conn, tick_id)
     if row is None:
         return None
-    return session_transcript(tick_output(ctx, tick_id), row.session_id)
+    output = tick_output(ctx, tick_id)
+    return session_transcript(output, row.session_id, removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)))
 
 
 def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
@@ -416,9 +419,16 @@ def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
     Returns:
         The tail, without control characters, or a `no_output` status when the file is missing or not a regular file.
     """
-    if db.get_tick(ctx.conn, tick_id) is None:
+    row = db.get_tick(ctx.conn, tick_id)
+    if row is None:
         return None
-    return raw_output(tick_output(ctx, tick_id))
+    output = tick_output(ctx, tick_id)
+    return raw_output(output, removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)))
+
+
+def _tick_rule(row: records.Tick) -> gc_passes.Rule:
+    # A tick that did not close `ok` keeps its files as long as a run, since the operator debugs those (DESIGN §26).
+    return "tick_files_days" if row.status is TickStatus.OK else "run_files_days"
 
 
 def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
@@ -431,19 +441,33 @@ def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
-    return raw_output(Path(str(row["log_path"])))
+    log = Path(str(row["log_path"]))
+    return raw_output(log, removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
 
 
-def raw_output(path: Path) -> RawOutput:
+def raw_output(path: Path, removed_after_days: int | None = None) -> RawOutput:
     """The end of a log or output file as written (DESIGN §22).
+
+    `removed_after_days` is how long retention kept the file, when it removed it (`removed_after`).
 
     Returns:
         The tail, without control characters, or a `no_output` status when the file is missing or not a regular file.
     """
     found = transcript.tail(path)
     if found is None:
-        return RawOutput(status="no_output")
+        return RawOutput(status="no_output", removed_after_days=removed_after_days)
     return RawOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
+
+
+def removed_after(conn: sqlite3.Connection, path: Path, ended_at: str | None, rule: gc_passes.Rule) -> int | None:
+    """How many days retention kept the file at `path`, of a row that ended at `ended_at`, if a pass removed it.
+
+    Returns:
+        The days `rule` kept it, or None when the file is there, or no pass has reached the row's end (DESIGN §26).
+    """
+    if os.path.lexists(path):
+        return None
+    return gc_passes.removed_after(conn, ended_at, rule)
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:
@@ -487,11 +511,14 @@ def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
-    return session_transcript(Path(str(row["log_path"])), row["session_id"])
+    log = Path(str(row["log_path"]))
+    return session_transcript(log, row["session_id"], removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
 
 
-def session_transcript(path: Path, session: object) -> Transcript:
+def session_transcript(path: Path, session: object, removed_after_days: int | None = None) -> Transcript:
     """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22).
+
+    `removed_after_days` is how long retention kept the file and its prompt, when it removed them (`removed_after`).
 
     Returns:
         The entries read, with status `no_session` when the journal recorded no session, or `no_log` when the file is
@@ -500,10 +527,10 @@ def session_transcript(path: Path, session: object) -> Transcript:
     kept = transcript.prompt(transcript.prompt_path(path))
     prompt = TranscriptPrompt(text=kept.text, truncated=kept.truncated) if kept is not None else None
     if not isinstance(session, str) or not session:
-        return Transcript(status="no_session", prompt=prompt)
+        return Transcript(status="no_session", prompt=prompt, removed_after_days=removed_after_days)
     found = transcript.read(path, session)
     if found is None:
-        return Transcript(status="no_log", session_id=session, prompt=prompt)
+        return Transcript(status="no_log", session_id=session, prompt=prompt, removed_after_days=removed_after_days)
     return Transcript(
         status="read",
         session_id=session,
@@ -1168,7 +1195,8 @@ def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | N
     row = _chore_run_of(ctx.conn, name, run_id)
     if row is None:
         return None
-    return session_transcript(Path(row.log_path), row.session_id)
+    log = Path(row.log_path)
+    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
 
 
 def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:

@@ -14,6 +14,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
 import { jsonLines } from '@/lib/json-lines'
 import { setPrettyOutput, usePrettyOutput } from '@/lib/pretty-output'
+import { goneText } from '@/lib/retention'
 import { byteSize } from '@/lib/ticks'
 
 /**
@@ -159,7 +160,7 @@ function Body({
     testId: string
 }) {
     if (output.status === 'no_output') {
-        return <Empty>its output is gone, or is not a file canopy reads</Empty>
+        return <Empty>{goneText(output.removed_after_days, 'its output is gone, or is not a file canopy reads')}</Empty>
     }
     if (output.text === '') {
         return <Empty>empty: {whose} wrote nothing</Empty>
