@@ -192,7 +192,9 @@ test('a long list of idle ticks scrolls in its panel', async ({ page }) => {
     const list = page.getByTestId('spend-idle-tick-list')
     await expect(list.getByTestId(/^tick-\d+$/u)).toHaveCount(40)
     const region = page.getByRole('region', { name: 'Idle ticks' })
-    expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+    // It scrolls itself, rather than spilling its rows past a capped height.
+    await region.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+    await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
 })
 
 test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
