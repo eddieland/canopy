@@ -141,7 +141,7 @@ from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, records
+from canopy.core import db, records, review_runs
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention
@@ -374,7 +374,7 @@ class Reviewing:
     @property
     def row(self) -> records.ReviewRun:
         """The review run's row as it stands."""
-        return present(db.get_review_run(self.scenario.conn, self.id))
+        return present(review_runs.get_review_run(self.scenario.conn, self.id))
 
     def finishes(self) -> Reviewed:
         """Let the reviewer go on to what its script says, and wait for the review run to end.
@@ -616,7 +616,7 @@ class Scenario:
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
                 exited, printed = _printing(lambda: main(["_review", str(run_id)], runner=runner or InlineRunner()))
-        row = present(db.get_review_run(self.conn, run_id))
+        row = present(review_runs.get_review_run(self.conn, run_id))
         reviewed = Reviewed(row, self.env.state_dir / "reviews" / f"{run_id}.prompt", printed)
         self.story.append(str(reviewed) if exited == 0 else f"{reviewed}, and `canopy _review` exits {exited}")
         assert exited == 0, reviewed
@@ -645,7 +645,7 @@ class Scenario:
             for run_id in ids:
                 argv = ["_review", str(run_id)]
                 exited, printed = _printing(lambda argv=argv: main(argv, runner=InlineRunner()))
-                row = present(db.get_review_run(self.conn, run_id))
+                row = present(review_runs.get_review_run(self.conn, run_id))
                 reviewed = Reviewed(row, self.env.state_dir / "reviews" / f"{run_id}.prompt", printed)
                 self.story.append(str(reviewed) if exited == 0 else f"{reviewed}, and `canopy _review` exits {exited}")
                 assert exited == 0, reviewed
@@ -845,7 +845,7 @@ class Scenario:
                     if pid is not None:
                         procs.kill_group(int(pid))
         for run_id in self.held_reviews:
-            review = present(db.get_review_run(self.conn, run_id))
+            review = present(review_runs.get_review_run(self.conn, run_id))
             if review.status == ReviewRunStatus.RUNNING:
                 for pid in (review.pid, review.agent_pid):
                     if pid is not None:
@@ -894,7 +894,7 @@ class Scenario:
         working = self.gates / f"review-{run_id}.working"
         deadline = time.monotonic() + HOLD_TIMEOUT
         while True:
-            review = present(db.get_review_run(self.conn, run_id))
+            review = present(review_runs.get_review_run(self.conn, run_id))
             # The reviewer's pid too, which `_review` records as it starts the reviewer, so `close` knows what to stop.
             if working.exists() and review.agent_pid is not None:
                 break

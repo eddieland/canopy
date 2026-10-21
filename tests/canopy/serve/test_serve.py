@@ -24,7 +24,7 @@ import uvicorn
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, review_runs
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
 from canopy.serve import live, mock_reviews, secret, server, views
@@ -625,7 +625,7 @@ def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_pat
     with backend.open() as ctx:
         sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
         sent.changes(backend, ctx)
-        run_id = db.insert_review_run(
+        run_id = review_runs.insert_review_run(
             ctx.conn,
             tick_id=1,
             pr_url="https://github.com/acme/web/pull/91",
@@ -647,7 +647,7 @@ def test_a_review_of_a_requested_pr_starting_takes_it_off_the_requests_waiting(
     with backend.open() as ctx:
         sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
         sent.changes(backend, ctx)
-        db.insert_review_run(
+        review_runs.insert_review_run(
             ctx.conn,
             tick_id=1,
             pr_url=mock_reviews.PR_95,

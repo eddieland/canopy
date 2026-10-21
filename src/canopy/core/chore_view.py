@@ -15,8 +15,8 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_result as result
+from canopy.core import chore_runs, contract, db, records
 from canopy.core import chore_window as window
-from canopy.core import contract, db, records
 from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
@@ -263,10 +263,10 @@ def state_of(conn: sqlite3.Connection, name: str, chore: Chore, *, starts: Findi
     """Return chore `name`'s state as the journal sees it, remembering its findings' starts in `starts` if given."""
 
     def older(before: int) -> list[records.ChoreRun]:
-        return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
+        return chore_runs.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
-    runs = db.chore_runs(conn, name, _HISTORY_RUNS)
-    return ChoreState(name, chore, runs, older, db.dismissals(conn, name), starts)
+    runs = chore_runs.chore_runs(conn, name, _HISTORY_RUNS)
+    return ChoreState(name, chore, runs, older, chore_runs.dismissals(conn, name), starts)
 
 
 def open_findings(

@@ -27,6 +27,7 @@ from canopy.core import (
     pools,
     review_diff,
     review_drafts,
+    review_runs,
     run_models,
     run_offers,
 )
@@ -81,7 +82,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     Raises:
         ReviewError: the run does not exist or is not waiting to start, for example because another `_review` has it.
     """
-    run = db.get_review_run(ctx.conn, run_id)
+    run = review_runs.get_review_run(ctx.conn, run_id)
     if run is None:
         raise ReviewError(f"no review run {run_id}")
     if not db.claim_run(ctx.conn, "review_runs", run_id, os.getpid()):

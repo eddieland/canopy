@@ -24,7 +24,7 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, records, review_diff, review_result, sql
+from canopy.core import db, records, review_diff, review_result, review_runs, sql
 from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.replies import MAX_DRAFT_CHARS, MAX_DRAFTS
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus, ReviewRunStatus
@@ -254,7 +254,7 @@ def dismissed(
         # A review from before drafts were kept: its first version is made with the dismissals already in it.
         _make(conn, run_id)
         return None
-    run = db.get_review_run(conn, run_id)
+    run = review_runs.get_review_run(conn, run_id)
     stored = review_result.stored(run.result_json) if run is not None else None
     if run is None or stored is None or draft.status is not ReviewDraftStatus.WAITING:
         return None
@@ -305,7 +305,7 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     found = of_review(conn, run_id)
     if found is not None:
         return found
-    run = db.get_review_run(conn, run_id)
+    run = review_runs.get_review_run(conn, run_id)
     if run is None or run.status is not ReviewRunStatus.DONE or not draftable(conn, run):
         return None
     stored = review_result.stored(run.result_json)
@@ -323,7 +323,7 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
         ),
     )
     draft_id = int(cursor.lastrowid or 0)
-    body, comments, refused = _first(stored, db.review_dismissals(conn, run.id), diff_of(run))
+    body, comments, refused = _first(stored, review_runs.review_dismissals(conn, run.id), diff_of(run))
     change = f"made from review run {run.id}'s summary and findings"
     _insert_version(
         conn,

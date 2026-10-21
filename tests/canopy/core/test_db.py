@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db, records, sql
+from canopy.core import chore_runs, db, pr_list, records, review_runs, sql
 from canopy.core.vocab import Phase, SeenKind, TickStatus
 from canopy.infra import resources
 from canopy.runtime.report import ToolUse, Usage
@@ -327,7 +327,7 @@ def test_a_ticket_is_active_when_it_changes_not_when_a_tick_sets_what_it_already
 
     def active() -> tuple[str, str, str]:
         [ticket] = db.recent_tickets(conn, 5)
-        [pr] = db.pull_requests(conn, 5)
+        [pr] = pr_list.pull_requests(conn, 5)
         return ticket["last_seen_at"], ticket["active_at"], pr["active_at"]
 
     with mock.patch.object(db, "now", autospec=True, return_value=at(0)):
@@ -429,9 +429,9 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
         "VALUES (1, 'https://github.com/acme/api/pull/7', 'abc', 'x', 'done', 'l')",
     )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(1)
-    review_run = present(db.get_review_run(conn, 1))
+    review_run = present(review_runs.get_review_run(conn, 1))
     assert (review_run.session_id, review_run.cost_usd, review_run.tokens_input) == (None, None, None)
-    chore_run = present(db.get_chore_run(conn, 1))
+    chore_run = present(chore_runs.get_chore_run(conn, 1))
     assert (chore_run.session_id, chore_run.cost_usd, chore_run.tokens_input) == (None, None, None)
     run = present(db.get_run(conn, 1))
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)

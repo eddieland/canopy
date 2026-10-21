@@ -36,6 +36,7 @@ from canopy.core import (
     plans,
     prompts,
     review_requests,
+    review_runs,
 )
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.infra import logs
@@ -619,7 +620,7 @@ def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
 
 def _show_pr(ctx: Context, url: str) -> None:
     request = review_requests.latest_request(ctx.conn, url)
-    runs = db.review_runs_of(ctx.conn, url)
+    runs = review_runs.review_runs_of(ctx.conn, url)
     if request is None and not runs:
         raise CliError(f"canopy has no review request or review of {url}")
     click.echo(url)

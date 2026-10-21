@@ -24,6 +24,7 @@ from canopy.core import (
     notice,
     pause,
     review_requests,
+    review_runs,
     tasks,
 )
 from canopy.core.vocab import ReplyMode
@@ -241,7 +242,7 @@ def _print_review_requests(ctx: Context) -> None:
         return
     click.echo(f"\nReview requests ({len(requests)}):")
     for r in requests:
-        runs = db.review_runs_of(ctx.conn, r.pr_url)
+        runs = review_runs.review_runs_of(ctx.conn, r.pr_url)
         latest = f"latest review:{runs[0].id} {runs[0].status}" if runs else "not reviewed yet"
         click.echo(f"  {r.pr_url}  {attention.age(r.created_at)} ago  {latest}")
 

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.core import db, gc_passes, review_diff
+from canopy.core import db, gc_passes, review_diff, review_runs
 from canopy.core.vocab import ReviewRunStatus
 from canopy.serve import mock_reviews
 from canopy.serve.api import reviews as reviews_api
@@ -56,7 +56,7 @@ def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_a
     # Asked for from the web UI, and no review of it has run yet: the reviews page shows it waiting on a tick.
     assert [(r["pr_url"], r["channel"]) for r in c.get("/api/review-requests").json()] == [(mock_reviews.PR_95, "web")]
     with backend.open() as ctx:
-        run_id = db.insert_review_run(
+        run_id = review_runs.insert_review_run(
             ctx.conn,
             tick_id=1,
             pr_url=mock_reviews.PR_95,
@@ -187,7 +187,7 @@ def test_a_review_that_ended_badly_shows_the_call_it_ended_on(backend: Backend) 
 def test_a_running_review_has_no_session_yet(backend: Backend, tmp_path: Path) -> None:
     # The reviewer's output reaches the log when it ends, and its session with it.
     with backend.open() as ctx:
-        run_id = db.insert_review_run(
+        run_id = review_runs.insert_review_run(
             ctx.conn,
             tick_id=1,
             pr_url=mock_reviews.PR_95,
@@ -204,7 +204,7 @@ def test_a_running_review_has_no_session_yet(backend: Backend, tmp_path: Path) -
 
 def test_a_diff_that_is_a_link_is_not_followed(backend: Backend, tmp_path: Path) -> None:
     with backend.open() as ctx:
-        row = db.get_review_run(ctx.conn, 2)
+        row = review_runs.get_review_run(ctx.conn, 2)
     assert row is not None
     path = review_diff.path_for(row.log_path)
     elsewhere = tmp_path / "elsewhere.diff"
@@ -286,7 +286,7 @@ def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backe
     assert c.post("/api/seen", json={"refs": ["review:2"]}, headers={"origin": headers["origin"]}).status_code == 403
     assert c.post("/api/seen", json={"refs": []}, headers=headers).status_code == 422
     with backend.open() as ctx:
-        running = db.insert_review_run(
+        running = review_runs.insert_review_run(
             ctx.conn,
             tick_id=1,
             pr_url=mock_reviews.PR_95,
@@ -325,6 +325,6 @@ def test_a_diff_retention_removed_says_after_how_many_days(backend: Backend) -> 
             failures=0,
             error=None,
         )
-        review_diff.path_for(present(db.get_review_run(ctx.conn, 4)).log_path).unlink()
+        review_diff.path_for(present(review_runs.get_review_run(ctx.conn, 4)).log_path).unlink()
     found = c.get("/api/reviews/4").json()
     assert (found["diff"], found["diff_removed_after_days"]) == (None, 30)

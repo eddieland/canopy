@@ -270,10 +270,18 @@ def record_event(conn: sqlite3.Connection, event: Event) -> int:
         conn,
         sql.insert("notify_events", grp=event.group, kind=event.kind, at=now(), fields=json.dumps(dict(event.fields))),
     )
-    return _rowid(cur)
+    return rowid(cur)
 
 
-def _rowid(cur: sqlite3.Cursor) -> int:
+def rowid(cur: sqlite3.Cursor) -> int:
+    """Return the id of the row the INSERT run through `cur` made.
+
+    Returns:
+        The new row's id.
+
+    Raises:
+        sqlite3.DatabaseError: The INSERT made no row.
+    """
     if cur.lastrowid is None:
         raise sqlite3.DatabaseError("INSERT returned no row id")
     return cur.lastrowid
@@ -289,7 +297,7 @@ def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
         The new tick's id.
     """
     cur = sql.execute(conn, sql.insert("ticks", started_at=now(), dry_run=int(dry_run), canopy_version=CANOPY_VERSION))
-    return _rowid(cur)
+    return rowid(cur)
 
 
 def finish_tick(conn: sqlite3.Connection, tick_id: int, status: TickStatus, summary: str) -> None:
@@ -812,7 +820,7 @@ def insert_run(
             persona=persona,
             persona_digest=persona_digest,
         )
-        run_id = _rowid(sql.execute(conn, run))
+        run_id = rowid(sql.execute(conn, run))
         record_persona_text(conn, persona_digest, persona_text)
         sql.execute(conn, sql.update("runs").set(log_path=str(runs_dir / f"{run_id}.log")).where("id = ?", run_id))
         sql.execute_many(
@@ -1183,140 +1191,7 @@ def record_decision(
         chore=chore,
         pr=pr,
     )
-    return _rowid(sql.execute(conn, decision))
-
-
-# Chore runs (DESIGN §19)
-
-
-def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: str, logs_dir: Path) -> int:
-    """Insert a `running` chore run with no pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
-
-    `tick_id` is the tick whose overseer started the run, or None for one the operator started with `canopy chore try`.
-
-    Returns:
-        The new chore run's id.
-    """
-    with transaction(conn):
-        run = sql.insert("chore_runs", tick_id=tick_id, chore=chore, started_at=now(), log_path="")
-        run_id = _rowid(sql.execute(conn, run))
-        log_path = str(logs_dir / f"{run_id}.log")
-        sql.execute(conn, sql.update("chore_runs").set(log_path=log_path).where("id = ?", run_id))
-    return run_id
-
-
-def get_chore_run(conn: sqlite3.Connection, run_id: int) -> records.ChoreRun | None:
-    """Return the chore run with `run_id`, or None."""
-    return records.fetch_one(conn, records.ChoreRun, sql.select("*").from_("chore_runs").where("id = ?", run_id))
-
-
-def chore_runs(
-    conn: sqlite3.Connection,
-    chore: str,
-    limit: int = 1000,
-    *,
-    before: int | None = None,
-) -> list[records.ChoreRun]:
-    """Return `chore`'s runs, newest first: at most `limit`, and only those before run id `before` if it is given."""
-    return records.fetch_all(
-        conn,
-        records.ChoreRun,
-        sql.select("*")
-        .from_("chore_runs")
-        .where("chore = ? AND id < ?", chore, before if before is not None else 2**63 - 1)
-        .order_by("id DESC")
-        .limit(limit),
-    )
-
-
-def chore_costs_since(conn: sqlite3.Connection, chore: str, since: str) -> tuple[int, list[float]]:
-    """How many of `chore`'s runs started at or after `since`, and what each of those that reported a cost cost (§13).
-
-    Returns:
-        The runs, a running one included, and the costs reported, in US dollars, cheapest first.
-    """
-    query = sql.select("cost_usd").from_("chore_runs").where("chore = ? AND started_at >= ?", chore, since)
-    rows = sql.execute(conn, query).fetchall()
-    return len(rows), sorted(float(r[0]) for r in rows if r[0] is not None)
-
-
-def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
-    """Return when the operator dismissed each of `chore`'s findings it dismissed, by finding id (DESIGN §19)."""
-    query = sql.select("finding_id, dismissed_at").from_("finding_dismissals").where("chore = ?", chore)
-    return {str(r["finding_id"]): str(r["dismissed_at"]) for r in sql.execute(conn, query)}
-
-
-def set_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str, *, channel: str) -> None:
-    """Record that the operator dismissed `chore`'s finding `finding_id` now, replacing an earlier dismissal of it."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "finding_dismissals",
-            chore=chore,
-            finding_id=finding_id,
-            dismissed_at=now(),
-            channel=channel,
-        ).on_conflict(
-            "(chore, finding_id) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel",
-        ),
-    )
-
-
-def delete_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str) -> bool:
-    """Take back the operator's dismissal of `chore`'s finding `finding_id`.
-
-    Returns:
-        Whether there was one to take back.
-    """
-    taken = sql.delete("finding_dismissals").where("chore = ? AND finding_id = ?", chore, finding_id)
-    return sql.execute(conn, taken).rowcount > 0
-
-
-# Review runs (DESIGN §21)
-
-
-def insert_review_run(
-    conn: sqlite3.Connection,
-    *,
-    tick_id: int,
-    pr_url: str,
-    sha: str,
-    ticket: str | None,
-    repo: str | None,
-    purpose: str,
-    logs_dir: Path,
-    persona: str | None = None,
-    persona_digest: str | None = None,
-    persona_text: str | None = None,
-) -> int:
-    """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
-
-    `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `request` for a PR the operator
-    asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
-    persona its prompt carries (DESIGN §31), and `persona_text` that text, kept once per digest (`record_persona_text`).
-
-    Returns:
-        The new review run's id.
-    """
-    with transaction(conn):
-        run = sql.insert(
-            "review_runs",
-            tick_id=tick_id,
-            pr_url=pr_url,
-            sha=sha,
-            ticket_key=ticket,
-            repo=repo,
-            purpose=purpose,
-            started_at=now(),
-            log_path="",
-            persona=persona,
-            persona_digest=persona_digest,
-        )
-        run_id = _rowid(sql.execute(conn, run))
-        record_persona_text(conn, persona_digest, persona_text)
-        log_path = str(logs_dir / f"{run_id}.log")
-        sql.execute(conn, sql.update("review_runs").set(log_path=log_path).where("id = ?", run_id))
-    return run_id
+    return rowid(sql.execute(conn, decision))
 
 
 def record_persona_text(conn: sqlite3.Connection, digest: str | None, text: str | None) -> None:
@@ -1338,281 +1213,6 @@ def persona_text(conn: sqlite3.Connection, digest: str) -> str | None:
         sql.select("*").from_("persona_texts").where("digest = ?", digest),
     )
     return found.text if found is not None else None
-
-
-def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
-    """Forget a review run that never started: no slot, or no prompt. It counts toward no limit."""
-    sql.execute(conn, sql.delete("review_runs").where("id = ? AND pid IS NULL", run_id))
-
-
-def review_dismissals(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
-    """Return the numbers, from 1, of review run `run_id`'s findings the operator dismissed (DESIGN §21)."""
-    query = sql.select("finding").from_("review_dismissals").where("review_run_id = ?", run_id)
-    return frozenset(int(r[0]) for r in sql.execute(conn, query))
-
-
-def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *, channel: str) -> None:
-    """Record that the operator dismissed review run `run_id`'s finding number `finding` now."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_dismissals",
-            review_run_id=run_id,
-            finding=finding,
-            dismissed_at=now(),
-            channel=channel,
-        ).on_conflict(
-            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel",
-        ),
-    )
-
-
-def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int) -> bool:
-    """Take back the operator's dismissal of review run `run_id`'s finding number `finding`.
-
-    Returns:
-        Whether there was one to take back.
-    """
-    taken = sql.delete("review_dismissals").where("review_run_id = ? AND finding = ?", run_id, finding)
-    return sql.execute(conn, taken).rowcount > 0
-
-
-def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], *, channel: str) -> list[str]:
-    """Record that the operator saw each of `subjects` of `kind` now, through `channel` (DESIGN §22).
-
-    One seen before keeps the time and channel it was first seen at.
-
-    Returns:
-        The subjects not seen before, in the order given.
-    """
-    at = now()
-    new: list[str] = []
-    for subject in subjects:
-        mark = sql.insert("seen", kind=kind, subject=subject, at=at, channel=channel)
-        if sql.execute(conn, mark.on_conflict("(kind, subject) DO NOTHING")).rowcount > 0:
-            new.append(subject)
-    return new
-
-
-def seen_among(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str]) -> frozenset[str]:
-    """Return which of `subjects` of `kind` the operator has seen: a read by key, however many they have seen."""
-    query = sql.select("subject").from_("seen").where("kind = ?", kind).where_in("subject", list(subjects))
-    return frozenset(str(r[0]) for r in sql.execute(conn, query))
-
-
-def set_review_slot(
-    conn: sqlite3.Connection,
-    run_id: int,
-    *,
-    slot: Path,
-    lease_id: str,
-    lease_holder: str,
-    base_branch: str,
-    pool: PoolKind,
-) -> None:
-    """Record the slot a review run leased, the base branch it was leased on, and the pool that made the lease."""
-    lease = sql.update("review_runs").set(
-        slot_path=str(slot),
-        lease_id=lease_id,
-        lease_holder=lease_holder,
-        base_branch=base_branch,
-        pool=pool,
-    )
-    sql.execute(conn, lease.where("id = ?", run_id))
-
-
-def get_review_run(conn: sqlite3.Connection, run_id: int) -> records.ReviewRun | None:
-    """Return the review run with `run_id`, or None."""
-    return records.fetch_one(conn, records.ReviewRun, sql.select("*").from_("review_runs").where("id = ?", run_id))
-
-
-def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[records.ReviewRun]:
-    """Return a PR's review runs, newest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRun,
-        sql.select("*").from_("review_runs").where("pr_url = ?", pr_url).order_by("id DESC"),
-    )
-
-
-def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[records.ReviewRun]:
-    """Return the latest `limit` review runs, newest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRun,
-        sql.select("*").from_("review_runs").order_by("id DESC").limit(limit),
-    )
-
-
-def review_runs_since(conn: sqlite3.Connection, since: str) -> list[records.ReviewRun]:
-    """Return the review runs started at or after `since`, newest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRun,
-        sql.select("*").from_("review_runs").where("started_at >= ?", since).order_by("id DESC"),
-    )
-
-
-def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
-    """Return whether `pr_url` is the PR of one of ticket `key`'s units, or its unit in `repo`: one the loop opened."""
-    query = sql.select("1").from_("ticket_units").where("ticket_key = ? AND pr_url = ?", key, pr_url)
-    if repo is not None:
-        query = query.where("repo = ?", repo)
-    return sql.execute(conn, query).fetchone() is not None
-
-
-def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[records.ReviewRun]]:
-    """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
-    found: dict[str, list[records.ReviewRun]] = {}
-    # SQLite takes an empty list, `IN ()`, as matching nothing.
-    query = sql.select("*").from_("review_runs").where_in("pr_url", pr_urls).order_by("id DESC")
-    for run in records.fetch_all(conn, records.ReviewRun, query):
-        found.setdefault(run.pr_url, []).append(run)
-    return found
-
-
-def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
-    """Return the `limit` PRs with the most recent activity, most recently active first; with `url`, only it (§22).
-
-    A PR is known by a ticket's unit, whose activity is the ticket's last change, by a review run, whose activity
-    is its start or end, or by the operator's review request, whose activity is when it was made or ended. Each row
-    has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`, and the ticket's `title`, all
-    NULL for a PR no unit records, and the PR's own `pr_title`, NULL until a worker reports one. Decisions are not a
-    source: they are many. Only the candidates `_candidates` finds are weighed, so the read costs what `limit` does.
-    """
-    if limit < 1:
-        return []
-    with read_snapshot(conn):
-        urls = json.dumps([url] if url is not None else _candidates(conn, _PR_ACTIVITY, limit))
-        return _weighed_pull_requests(conn, urls, limit)
-
-
-def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> list[sqlite3.Row]:
-    among: LiteralString = "pr_url IN (SELECT value FROM json_each(?))"
-    activity = sql.union(
-        sql.select("u.pr_url AS url, t.changed_at AS at")
-        .from_("ticket_units u")
-        .join("tickets t ON t.key = u.ticket_key")
-        .where("u.pr_url IN (SELECT value FROM json_each(?))", urls),
-        sql.select("pr_url, coalesce(ended_at, started_at)").from_("review_runs").where(among, urls),
-        sql.select("pr_url, coalesce(ended_at, created_at)").from_("review_requests").where(among, urls),
-        every=True,
-    )
-    query = (
-        sql.select(
-            "k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title, p.title AS pr_title",
-        )
-        .from_("({}) k", activity)
-        .left_join("ticket_units u ON u.pr_url = k.url")
-        .left_join("tickets t ON t.key = u.ticket_key")
-        .left_join("pr_titles p ON p.pr_url = k.url")
-        .group_by("k.url")
-        .order_by("active_at DESC, k.url")
-        .limit(limit)
-    )
-    return sql.execute(conn, query).fetchall()
-
-
-# Each source of a PR's activity as `pull_requests` weighs it, for `_candidates`: its units by when their ticket last
-# changed, its review runs by when each ended, or started while it runs (`finish_run` sets the end), and its
-# review requests by when each ended, or was made while it is open.
-# CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
-_PR_ACTIVITY = (
-    sql.select("u.pr_url, t.changed_at")
-    .from_("tickets t CROSS JOIN ticket_units u ON u.ticket_key = t.key")
-    .where("u.pr_url IS NOT NULL")
-    .order_by("t.changed_at DESC"),
-    sql.select("pr_url, ended_at").from_("review_runs").where("ended_at IS NOT NULL").order_by("ended_at DESC"),
-    sql.select("pr_url, started_at").from_("review_runs").where("status = 'running'").order_by("started_at DESC"),
-    sql.select("pr_url, coalesce(ended_at, created_at) AS at").from_("review_requests").order_by("at DESC"),
-)
-
-
-def _candidates(conn: sqlite3.Connection, sources: Iterable[sql.Select], limit: int) -> list[str]:
-    """The keys that may be among the `limit` with the most recent activity: each source's newest `limit`.
-
-    Each source is a query of a key and a time, newest first, read in order from an index. A key's activity is its
-    newest time in any source. Every key newer than it in that source is newer overall too, so a key among the
-    `limit` newest overall is among the `limit` newest of that source. Keys tied with the last of a source's are read
-    as well, so a tie never decides which one is left out.
-
-    Returns:
-        The candidates' keys, each once.
-    """
-    found: dict[str, None] = {}
-    for source in sources:
-        found.update(dict.fromkeys(_newest(conn, source, limit)))
-    return list(found)
-
-
-@contextmanager
-def read_snapshot(conn: sqlite3.Connection) -> Generator[None]:
-    """Every read in the block sees one snapshot of the journal: a deferred transaction, which writes nothing.
-
-    The journal's connections are autocommit, so without it each query reads its own snapshot, and a commit between two
-    reads could leave a row in one and out of the other: here, a key its new activity had just moved among the newest
-    candidates. Inside a transaction already, as the event stream's reads are, the block reads in that one.
-    """
-    if conn.in_transaction:
-        yield
-        return
-    sql.execute(conn, sql.frag("BEGIN"))
-    try:
-        yield
-    finally:
-        sql.execute(conn, sql.frag("COMMIT"))
-
-
-def _newest(conn: sqlite3.Connection, source: sql.Select, limit: int) -> list[str]:
-    seen: dict[str, None] = {}
-    cutoff: str | None = None
-    # Closed when the walk stops early, so the statement does not hold its read open in autocommit.
-    with closing(sql.execute(conn, source)) as rows:
-        for key, at in rows:
-            if cutoff is not None and at < cutoff:
-                break
-            if key not in seen:
-                seen[str(key)] = None
-                if len(seen) == limit:
-                    cutoff = at
-    return list(seen)
-
-
-# Follow-up tickets (DESIGN §18)
-
-
-def known_ticket(conn: sqlite3.Connection, key: str) -> bool:
-    """Whether the journal knows `key` as a ticket: a `tickets` row, a run, a follow-up record, or an old split's child.
-
-    Returns:
-        True if any of them names `key`.
-    """
-    names = sql.union(
-        sql.select("1").from_("tickets").where("key = ?", key),
-        sql.select("1").from_("runs").where("ticket_key = ?", key),
-        sql.select("1").from_("follow_ups").where("key = ?", key),
-        sql.select("1").from_("split_children").where("child_key = ?", key),
-        every=True,
-    )
-    # The LIMIT is the compound's, so it is written whole.
-    return sql.execute(conn, sql.frag("{} LIMIT 1", names)).fetchone() is not None
-
-
-def record_follow_up(conn: sqlite3.Connection, key: str, parent: str, run_id: int, repo: str | None) -> bool:
-    """Record `key` as a follow-up of `parent` that run `run_id` reported, inside the caller's transaction.
-
-    Returns:
-        True if it was recorded; False when the journal already knows `key`, which nothing then changes.
-    """
-    if known_ticket(conn, key):
-        return False
-    sql.execute(conn, sql.insert("follow_ups", key=key, parent_key=parent, run_id=run_id, repo=repo, at=now()))
-    return True
-
-
-def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None:
-    """Return `key`'s follow-up record, or None if no run reported it."""
-    return records.fetch_one(conn, records.FollowUp, sql.select("*").from_("follow_ups").where("key = ?", key))
 
 
 def has_runs(conn: sqlite3.Connection, key: str) -> bool:
@@ -1774,7 +1374,7 @@ def insert_message(
         commented_at=comment.at if comment else None,
         truncated=int(comment.truncated) if comment else 0,
     )
-    return _rowid(sql.execute(conn, message))
+    return rowid(sql.execute(conn, message))
 
 
 def mirrored_comment(
@@ -1942,13 +1542,13 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
     tick that only sees it. Every one of those times is the journal's own format, so the newest is the greatest
     string. With `key`, only that ticket.
 
-    Only the candidates `_candidates` finds are weighed, so the read costs what `limit` does, not what the
+    Only the candidates `candidates` finds are weighed, so the read costs what `limit` does, not what the
     journal's history does: the web UI's event stream reads the list on every commit (DESIGN §22).
     """
     if limit < 1:
         return []
     with read_snapshot(conn):
-        keys = [key] if key is not None else _candidates(conn, _TICKET_ACTIVITY, limit)
+        keys = [key] if key is not None else candidates(conn, _TICKET_ACTIVITY, limit)
         return _weighed_tickets(conn, json.dumps(keys), limit)
 
 
@@ -1994,6 +1594,56 @@ _TICKET_ACTIVITY = (
 )
 
 
+def candidates(conn: sqlite3.Connection, sources: Iterable[sql.Select], limit: int) -> list[str]:
+    """The keys that may be among the `limit` with the most recent activity: each source's newest `limit`.
+
+    Each source is a query of a key and a time, newest first, read in order from an index. A key's activity is its
+    newest time in any source. Every key newer than it in that source is newer overall too, so a key among the
+    `limit` newest overall is among the `limit` newest of that source. Keys tied with the last of a source's are read
+    as well, so a tie never decides which one is left out.
+
+    Returns:
+        The candidates' keys, each once.
+    """
+    found: dict[str, None] = {}
+    for source in sources:
+        found.update(dict.fromkeys(_newest(conn, source, limit)))
+    return list(found)
+
+
+@contextmanager
+def read_snapshot(conn: sqlite3.Connection) -> Generator[None]:
+    """Every read in the block sees one snapshot of the journal: a deferred transaction, which writes nothing.
+
+    The journal's connections are autocommit, so without it each query reads its own snapshot, and a commit between two
+    reads could leave a row in one and out of the other: here, a key its new activity had just moved among the newest
+    candidates. Inside a transaction already, as the event stream's reads are, the block reads in that one.
+    """
+    if conn.in_transaction:
+        yield
+        return
+    sql.execute(conn, sql.frag("BEGIN"))
+    try:
+        yield
+    finally:
+        sql.execute(conn, sql.frag("COMMIT"))
+
+
+def _newest(conn: sqlite3.Connection, source: sql.Select, limit: int) -> list[str]:
+    seen: dict[str, None] = {}
+    cutoff: str | None = None
+    # Closed when the walk stops early, so the statement does not hold its read open in autocommit.
+    with closing(sql.execute(conn, source)) as rows:
+        for key, at in rows:
+            if cutoff is not None and at < cutoff:
+                break
+            if key not in seen:
+                seen[str(key)] = None
+                if len(seen) == limit:
+                    cutoff = at
+    return list(seen)
+
+
 def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> int | None:
     """Return the id of a subject's newest message, or None if it has none."""
     query = (
@@ -2001,6 +1651,29 @@ def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: s
     )
     row = sql.execute(conn, query).fetchone()
     return None if row[0] is None else int(row[0])
+
+
+def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], *, channel: str) -> list[str]:
+    """Record that the operator saw each of `subjects` of `kind` now, through `channel` (DESIGN §22).
+
+    One seen before keeps the time and channel it was first seen at.
+
+    Returns:
+        The subjects not seen before, in the order given.
+    """
+    at = now()
+    new: list[str] = []
+    for subject in subjects:
+        mark = sql.insert("seen", kind=kind, subject=subject, at=at, channel=channel)
+        if sql.execute(conn, mark.on_conflict("(kind, subject) DO NOTHING")).rowcount > 0:
+            new.append(subject)
+    return new
+
+
+def seen_among(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str]) -> frozenset[str]:
+    """Return which of `subjects` of `kind` the operator has seen: a read by key, however many they have seen."""
+    query = sql.select("subject").from_("seen").where("kind = ?", kind).where_in("subject", list(subjects))
+    return frozenset(str(r[0]) for r in sql.execute(conn, query))
 
 
 def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: str | None, prs: Iterable[str]) -> None:

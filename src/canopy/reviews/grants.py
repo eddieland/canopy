@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, sql
+from canopy.core import conversation, db, review_runs, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -63,7 +63,7 @@ def grant(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, ru
     conversation.check_operator()
     if not ref.id.startswith("https://"):
         raise conversation.Refused("bad_ref", f"name the PR by its URL, as `canopy review show` does, not {ref}")
-    reviewed = len(db.review_runs_of(conn, ref.id))
+    reviewed = len(review_runs.review_runs_of(conn, ref.id))
     if reviewed == 0:
         raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant past")
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.

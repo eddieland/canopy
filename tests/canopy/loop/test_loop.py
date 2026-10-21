@@ -22,7 +22,7 @@ import pytest
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, pause
+from canopy.core import conversation, db, pause, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs, resources
@@ -316,7 +316,7 @@ def test_the_footer_counts_running_reviews_as_workers(
     conn = canopy_env.journal()
     tick_id = db.start_tick(conn, dry_run=True)
     db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-    run_id = db.insert_review_run(
+    run_id = review_runs.insert_review_run(
         conn,
         tick_id=tick_id,
         pr_url="https://example.test/pr/1",

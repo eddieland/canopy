@@ -14,7 +14,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, records, review_diff, review_drafts, review_drafts_manage
+from canopy.core import db, records, review_diff, review_drafts, review_drafts_manage, review_runs
 from canopy.core.context import Context
 from canopy.core.review_drafts import Comment
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
@@ -171,7 +171,7 @@ def test_publishing_posts_the_version_verbatim_as_one_comment_review_on_the_revi
     reviewed: int,
     github_state: Path,
 ) -> None:
-    sha = present(db.get_review_run(scenario.conn, reviewed)).sha
+    sha = present(review_runs.get_review_run(scenario.conn, reviewed)).sha
     scenario.operator("review", "edit", str(reviewed), "--add", "retry.py:2", "--text", "Call what?")
     version = newest(scenario, reviewed)
     out = scenario.operator("review", "publish", str(reviewed), version.hash, "--submit").out
@@ -218,7 +218,7 @@ def test_a_stale_version_an_agent_and_a_draft_whose_diff_is_gone_publish_nothing
         assert main(["review", "publish", str(reviewed), current]) == 1
         assert main(["review", "edit", str(reviewed), "--body", "--text", "Mine now."]) == 1
     assert newest(scenario, reviewed).hash == current
-    review_diff.path_for(present(db.get_review_run(scenario.conn, reviewed)).log_path).unlink()
+    review_diff.path_for(present(review_runs.get_review_run(scenario.conn, reviewed)).log_path).unlink()
     gone = scenario.operator("review", "publish", str(reviewed), current, code=1)
     assert "publish refused (no_diff)" in gone.err
     assert posted(github_state) == []

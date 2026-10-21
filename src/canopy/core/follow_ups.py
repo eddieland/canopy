@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict
 
-from canopy.core import contract, conversation, db, sql
+from canopy.core import contract, conversation, db, records, sql
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -157,7 +157,7 @@ def record(conn: sqlite3.Connection, checked: Checked, *, parent: str, run_id: i
     late: list[str] = []
     done: list[str] = []
     for key, repo in checked.recorded.items():
-        (done if db.record_follow_up(conn, key, parent, run_id, repo) else late).append(key)
+        (done if record_follow_up(conn, key, parent, run_id, repo) else late).append(key)
     if late:
         _note_late(conn, run_id, late)
     return done
@@ -211,9 +211,43 @@ def unrecorded(conn: sqlite3.Connection) -> list[Item]:
     ]
 
 
+def known_ticket(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether the journal knows `key` as a ticket: a `tickets` row, a run, a follow-up record, or an old split's child.
+
+    Returns:
+        True if any of them names `key`.
+    """
+    names = sql.union(
+        sql.select("1").from_("tickets").where("key = ?", key),
+        sql.select("1").from_("runs").where("ticket_key = ?", key),
+        sql.select("1").from_("follow_ups").where("key = ?", key),
+        sql.select("1").from_("split_children").where("child_key = ?", key),
+        every=True,
+    )
+    # The LIMIT is the compound's, so it is written whole.
+    return sql.execute(conn, sql.frag("{} LIMIT 1", names)).fetchone() is not None
+
+
+def record_follow_up(conn: sqlite3.Connection, key: str, parent: str, run_id: int, repo: str | None) -> bool:
+    """Record `key` as a follow-up of `parent` that run `run_id` reported, inside the caller's transaction.
+
+    Returns:
+        True if it was recorded; False when the journal already knows `key`, which nothing then changes.
+    """
+    if known_ticket(conn, key):
+        return False
+    sql.execute(conn, sql.insert("follow_ups", key=key, parent_key=parent, run_id=run_id, repo=repo, at=db.now()))
+    return True
+
+
+def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None:
+    """Return `key`'s follow-up record, or None if no run reported it."""
+    return records.fetch_one(conn, records.FollowUp, sql.select("*").from_("follow_ups").where("key = ?", key))
+
+
 def _run_wide(conn: sqlite3.Connection, parent: str, *, limit: int) -> str:
     # Why a run records no follow-up at all, or "" when it may record some.
-    if db.get_follow_up(conn, parent) is not None:
+    if get_follow_up(conn, parent) is not None:
         return f"{parent} is itself a follow-up, and a follow-up's runs file none"
     if limit == 0:
         return "policy.max_follow_ups is 0"
@@ -228,7 +262,7 @@ def _check_entry(conn: sqlite3.Connection, key: str, repo: object, *, parent: st
         return f"not in {parent}'s project"
     if repo is not None and (not isinstance(repo, str) or repo not in repos):
         return "its repository is not one in this workspace"
-    if db.known_ticket(conn, key):
+    if known_ticket(conn, key):
         return "not a new ticket: the journal already knows it"
     return ""
 

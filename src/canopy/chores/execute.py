@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import history, start
 from canopy.core import chore_result as result
+from canopy.core import chore_runs, db, definitions, outbox, progress, run_models, run_offers
 from canopy.core import chore_view as view
-from canopy.core import db, definitions, outbox, progress, run_models, run_offers
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
@@ -75,7 +75,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     Raises:
         ChoreError: the run does not exist or is not waiting to start, for example because another `_chore` has it.
     """
-    run = db.get_chore_run(ctx.conn, run_id)
+    run = chore_runs.get_chore_run(ctx.conn, run_id)
     if run is None:
         raise ChoreError(f"no chore run {run_id}")
     if not db.claim_run(ctx.conn, "chore_runs", run_id, os.getpid()):
