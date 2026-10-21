@@ -194,3 +194,96 @@ def test_an_override_whose_persona_file_was_removed_refuses_the_tickets_next_run
             "`canopy personas` lists"
         ),
     ]
+
+
+def test_a_persona_chosen_for_the_next_run_reaches_that_run_alone(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.operator("persona", KEY, "explainer")
+    said = scenario.operator("persona", KEY, "skeptic", "--next").out
+    assert said == (
+        f"{KEY}'s next worker run alone writes in skeptic; the runs after it, in explainer: this ticket's override.\n"
+    )
+    assert "  worker    explainer  (this ticket's override)\n    its next run alone: skeptic\n" in (
+        scenario.operator("persona", KEY).out
+    )
+    # A dry run checks it and spends nothing.
+    scenario.tick(dispatches(), dry_run=True)
+    assert personas.next_run(scenario.conn, KEY, "worker") == "skeptic"
+    first = scenario.run(worker=pushes())
+    assert first.row["persona"] == "skeptic"
+    assert personas.next_run(scenario.conn, KEY, "worker") is None
+    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "explainer"
+
+
+def test_canopy_start_and_plan_choose_the_persona_of_the_run_they_ask_for(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    out = scenario.operator("start", KEY, "--persona", "minimalist").out
+    assert out.splitlines()[1] == "Its next worker run alone writes in minimalist."
+    assert scenario.run(worker=pushes()).row["persona"] == "minimalist"
+    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "canopy"
+
+    other = "PROJ-2"
+    scenario.operator("start", other, "--plan", "--persona", "skeptic")
+    assert personas.next_run(scenario.conn, other, "planner") == "skeptic"
+    assert personas.next_run(scenario.conn, other, "worker") is None
+    plan = scenario.run(dispatches(other, kind=RunKind.PLAN), worker=planner_does(plan=TEXT))
+    assert plan.row["persona"] == "skeptic"
+    # Asked again, the plan's planner writes in the one chosen for it, and the next in [personas]' again.
+    said = scenario.operator("plan", other, "--persona", "explainer").out
+    assert said.endswith("Its next planner run alone writes in explainer.\n")
+    again = scenario.run(dispatches(other, kind=RunKind.PLAN), worker=planner_does(plan=TEXT))
+    assert again.row["persona"] == "explainer"
+
+
+def test_a_next_runs_persona_is_refused_unknown_or_inside_a_run_and_starts_nothing(scenario: Scenario) -> None:
+    err = scenario.operator("start", KEY, "--persona", "lenient", code=1).err
+    assert "start refused (unknown_persona): persona lenient has no file among canopy's own" in err
+    assert scenario.conn.execute("SELECT count(*) FROM starts").fetchone()[0] == 0
+    err = scenario.operator("plan", KEY, "--persona", "lenient", code=1).err
+    assert "plan refused (unknown_persona)" in err
+    assert scenario.conn.execute("SELECT count(*) FROM plans").fetchone()[0] == 0
+    assert (
+        "--persona is for the planner" in scenario.operator("plan", KEY, "--skip", "--persona", "skeptic", code=2).err
+    )
+    usage = scenario.operator("persona", KEY, "skeptic", "--next", "--agent", "reviewer", code=2).err
+    assert "--next is for a ticket's workers or planner" in usage
+    assert "--next takes NAME, or --clear" in scenario.operator("persona", KEY, "--next", code=2).err
+    err = scenario.overseer("persona", KEY, "skeptic", "--next", code=1).err
+    assert "persona refused (inside_run)" in err
+    assert scenario.conn.execute("SELECT count(*) FROM next_run_personas").fetchone()[0] == 0
+
+
+def test_a_next_runs_persona_whose_file_was_removed_refuses_until_cleared(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    yours = personas_dir(scenario.env)
+    (yours / "terse.md").write_text("Be terse.\n")
+    scenario.operator("persona", KEY, "terse", "--next")
+    (yours / "terse.md").unlink()
+    reason = (
+        f"{KEY}'s next worker run: persona terse has no file in {yours} or among canopy's own: add it, or name one "
+        f"`canopy personas` lists; or clear it: canopy persona {KEY} --next --clear"
+    )
+    # Never the ticket's or [personas]' instead: the operator chose this one for that run.
+    assert scenario.refuses(dispatches()) == [
+        ("refused:persona_missing", reason),
+        ("attention:persona_missing", reason),
+    ]
+    assert scenario.operator("persona", KEY, "--next", "--clear").out == (
+        f"{KEY}'s next worker run writes in canopy: canopy's default.\n"
+    )
+    assert scenario.run(worker=pushes()).row["persona"] == "canopy"
+
+
+def test_the_web_api_names_the_persona_of_an_agents_next_run_alone(scenario: Scenario) -> None:
+    scenario.run()
+    scenario.operator("persona", KEY, "minimalist", "--agent", "planner", "--next")
+    ctx = context(scenario.env)
+    try:
+        c, _ = signed_in_client(ctx)
+        [planner] = [p for p in c.get(f"/api/tickets/{KEY}").json()["personas"] if p["agent"] == "planner"]
+        assert (planner["persona"], planner["once"]) == ("canopy", "minimalist")
+    finally:
+        ctx.conn.close()

@@ -343,6 +343,7 @@ def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona
         "persona": "skeptic",
         "source": "ticket",
         "error": None,
+        "once": None,
     }
     ended_run(ctx, KEY, "implement")
     got = c.get(f"/api/tickets/{KEY}").json()

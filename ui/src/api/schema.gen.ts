@@ -1627,6 +1627,11 @@ export type components = {
              */
             error: string | null;
             /**
+             * Once
+             * @description The persona the operator chose for its next run alone, in place of `persona`; None when they chose none.
+             */
+            once: string | null;
+            /**
              * Persona
              * @description The persona's name.
              */

@@ -1,10 +1,11 @@
 """Personas (DESIGN §31): the voice a planner, a reviewer, or a worker writes in, chosen by the operator alone.
 
 A persona is a file, `<name>.md`, in the operator's `paths.personas` directory, which shadows one canopy ships of the
-same name, or among those canopy ships. A run's persona is its ticket's override for its agent, which only the operator
-sets (`choose`), else its agent's in `[personas]`, `canopy` unless the operator chose another, fixed when the run
-starts. It is never fallen back from: a name with no file refuses the run (`persona_missing`), and a file canopy would
-not put in a prompt refuses it too (`bad_persona`), since a run in a voice nobody chose would read as the chosen one's.
+same name, or among those canopy ships. A run's persona is the one the operator chose for its next run alone
+(`choose_next`), else its ticket's override for its agent (`choose`), else its agent's in `[personas]`, `canopy` unless
+the operator chose another, fixed when the run starts; only the operator chooses any of them. It is never fallen back
+from: a name with no file refuses the run (`persona_missing`), and a file canopy would not put in a prompt refuses it
+too (`bad_persona`), since a run in a voice nobody chose would read as the chosen one's.
 A persona is instructions in every run it reaches, so its file is bounded as the standing instructions are, and holds
 none of the characters a lesson may not (DESIGN §28, Bounds).
 """
@@ -37,6 +38,10 @@ MAX_BYTES = 4096
 Agent = Literal["worker", "planner", "reviewer"]
 #: Every agent a persona reaches, in the order `[personas]` lists them.
 AGENTS: tuple[Agent, ...] = ("worker", "planner", "reviewer")
+#: An agent whose next run alone may take a persona of its own: the runs `canopy start` and `canopy plan` ask for.
+NextAgent = Literal["worker", "planner"]
+#: Every agent whose next run alone may take a persona of its own.
+NEXT_AGENTS: tuple[NextAgent, ...] = ("worker", "planner")
 #: The guard and attention reason of a run whose persona has no file.
 MISSING = "persona_missing"
 #: The guard and attention reason of a run whose persona's file canopy would not put in a prompt.
@@ -90,10 +95,13 @@ class Next:
     """The persona one of a ticket's agents writes in at its next run, and where that choice comes from (DESIGN §31)."""
 
     agent: Agent
+    #: The persona its runs write in: the ticket's override, `[personas]`'s, or canopy's.
     name: str
     source: Source
-    #: Why that run would refuse it, or None when it would render.
+    #: Why that run would refuse its persona, or None when it would render.
     error: str | None = None
+    #: The persona the operator chose for its next run alone, in place of `name`, or None when they chose none.
+    once: str | None = None
 
 
 def agent_of(kind: str) -> Agent | None:
@@ -127,9 +135,10 @@ def chosen(config: Config, agent: Agent) -> Persona:
 
 
 def for_run(conn: sqlite3.Connection, config: Config, agent: Agent, ticket: str | None) -> Persona:
-    """Return the persona a run of `agent` for `ticket` gets now: the ticket's override, else `[personas]`'s.
+    """Return the persona a run of `agent` for `ticket` gets now: its own, the ticket's override, or `[personas]`'s.
 
-    A run for no ticket, such as a review of a coworker's PR, gets `[personas]`'s.
+    A run for no ticket, such as a review of a coworker's PR, gets `[personas]`'s. The persona chosen for the next run
+    alone is spent by the dispatch that records it (`spend_next`).
 
     Returns:
         The persona, read from its file.
@@ -137,6 +146,13 @@ def for_run(conn: sqlite3.Connection, config: Config, agent: Agent, ticket: str 
     Raises:
         PersonaError: (`MISSING`) the name has no file, or (`BAD`) its file is one canopy would not put in a prompt.
     """
+    once = next_run(conn, ticket, agent) if ticket is not None else None
+    if once is not None:
+        try:
+            return load(config, once)
+        except PersonaError as e:
+            clear = f"; or clear it: canopy persona {ticket}{_flag(agent)} --next --clear"
+            raise PersonaError(e.guard, f"{ticket}'s next {agent} run: {e.reason}{clear}") from e
     name = override(conn, ticket, agent) if ticket is not None else None
     if name is None:
         return chosen(config, agent)
@@ -159,12 +175,22 @@ def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     return found.value if found is not None else None
 
 
+def next_run(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
+    """Return the persona chosen for the next run alone of `ticket`'s `agent`, or None when none is."""
+    found = records.fetch_one(
+        conn,
+        records.NextRunPersona,
+        sql.select("*").from_("next_run_personas").where("ticket_key = ? AND agent = ?", ticket, agent),
+    )
+    return found.persona if found is not None else None
+
+
 def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next]:
     """Return the persona each of `ticket`'s agents writes in at its next run, in `AGENTS`' order.
 
     Returns:
         A `Next` per agent: its persona's name, whether the ticket's override, `[personas]`, or canopy's default chose
-        it, and why its run would refuse it, if it would.
+        it, the persona chosen for its next run alone, if one is, and why that run would refuse the one it gets.
     """
     found: list[Next] = []
     for agent in AGENTS:
@@ -172,12 +198,13 @@ def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next
         configured: str = getattr(config.personas, agent)
         name = mine if mine is not None else configured
         source: Source = "ticket" if mine is not None else "config" if configured != DEFAULT else "default"
+        once = next_run(conn, ticket, agent)
         try:
-            load(config, name)
+            load(config, once or name)
             error = None
         except PersonaError as e:
             error = e.reason
-        found.append(Next(agent, name, source, error))
+        found.append(Next(agent, name, source, error, once))
     return found
 
 
@@ -221,6 +248,56 @@ def choose(
                 ),
             )
     return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
+
+
+def choose_next(
+    conn: sqlite3.Connection,
+    config: Config,
+    ticket: str,
+    agent: NextAgent,
+    name: str | None,
+    *,
+    channel: str,
+) -> Next:
+    """Set the persona of the next run alone of `ticket`'s `agent` to `name`, or clear it with None. Operator only.
+
+    It takes the place of the ticket's override and `[personas]` for that run, whatever kind it is, and is spent when
+    the run is recorded; a run already running keeps the persona it started with (DESIGN §31).
+
+    Returns:
+        The persona the agent's next run for the ticket writes in now, and where it comes from.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `unknown_persona` for a name with no file, or
+            `bad_persona` for a file canopy would not put in a prompt.
+    """
+    conversation.check_operator()
+    if name is not None:
+        check(config, name)
+    with db.transaction(conn):
+        sql.execute(conn, sql.delete("next_run_personas").where("ticket_key = ? AND agent = ?", ticket, agent))
+        if name is not None:
+            sql.execute(
+                conn,
+                sql.insert(
+                    "next_run_personas",
+                    ticket_key=ticket,
+                    agent=agent,
+                    persona=name,
+                    channel=channel,
+                    set_at=db.now(),
+                ),
+            )
+    return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
+
+
+def spend_next(conn: sqlite3.Connection, ticket: str, agent: Agent, persona: str) -> None:
+    """Spend the persona chosen for the next run alone of `ticket`'s `agent`, inside the transaction recording it.
+
+    Only `persona`, the one the run was rendered in: one the operator chose since stays for the run after.
+    """
+    where = "ticket_key = ? AND agent = ? AND persona = ?"
+    sql.execute(conn, sql.delete("next_run_personas").where(where, ticket, agent, persona))
 
 
 def check(config: Config, name: str) -> None:

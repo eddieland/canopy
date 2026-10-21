@@ -29,6 +29,7 @@ from canopy.core import (
     db,
     notice,
     pause,
+    personas,
     plan_threads,
     plans,
     prompts,
@@ -166,7 +167,7 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 @click.option(
     "--persona",
     metavar="NAME",
-    help="With --review: the persona its review is written in, in place of [personas] reviewer.",
+    help="The persona of the run this starts, alone: its first worker's, its planner's with --plan, or its review's.",
 )
 @click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
@@ -188,6 +189,10 @@ def cmd_start(
     With --plan, a planner writes down how the work will be done first, and nothing is implemented until you approve
     it with `canopy plan KEY --approve`, whatever `policy.plan` says.
 
+    --persona NAME, one `canopy personas` lists, is the persona of the ticket's next worker run alone, or its planner's
+    with --plan, as `canopy persona KEY NAME --next` sets it; the runs after it take the ticket's override or
+    [personas] again.
+
     With --review, REF is a PR the loop does not own, by its URL. canopy reviews it once, at its head, in whichever of
     the workspace's repositories it is in; the review goes in the journal and nothing is posted on the PR. --notes
     hands its reviewer what you want it to know, such as what the author asked for or the part that worries you; on a
@@ -198,19 +203,26 @@ def cmd_start(
     subject = _ref(ref, "start")
     if notes is not None and not review:
         raise click.UsageError("--notes is for a PR's review, with --review")
-    if persona is not None and not review:
-        raise click.UsageError("--persona is for a PR's review, with --review")
     if review:
         if plan:
             raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
         return _start_review(click_ctx, subject, notes, persona)
     ctx = open_context(click_ctx)
+    agent: personas.NextAgent = "planner" if plan else "worker"
     try:
+        if persona is not None:
+            # Checked first, so a persona no run could use starts nothing.
+            personas.check(ctx.config, persona)
         plan_lock = ctx.dispatch_lock_path if plan else None
         started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI, plan_lock=plan_lock)
+        if persona is not None:
+            personas.choose_next(ctx.conn, ctx.config, subject.id, agent, persona, channel=CLI)
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info("ticket started", extra={"ticket": subject.id, "already": started.already})
+    logs.for_tick(None).info(
+        "ticket started",
+        extra={"ticket": subject.id, "already": started.already, "persona": persona},
+    )
     state = "was already started" if started.already else "is started"
     click.echo(f"{subject} {state}, privately: workers read it and write nothing to it; their reports stay in canopy.")
     if plan:
@@ -218,6 +230,8 @@ def cmd_start(
             "It is planned first: nothing is implemented until you approve its plan with "
             f"`canopy plan {subject} --approve`.",
         )
+    if persona is not None:
+        click.echo(f"Its next {agent} run alone writes in {persona}.")
     if started.running is not None:
         run = started.running
         kind = "private" if run.private else "public, dispatched before this start, so it may write to the ticket"
