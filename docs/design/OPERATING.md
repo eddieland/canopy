@@ -214,9 +214,9 @@ worker's is a `crashed` run whose slot is returned. A private run (§22) is also
 tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off, but for the overseer whose body holds the tracker's skill. A repository can also define its own
-agents under other names, MCP servers, and permissions (TRUST_MODEL T7). `runtime.pr_skill` names a skill workers
-open PRs with (§8); prefer that to a prompt override.
+turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A
+repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
+`runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
 canopy ships no plugin yet. The one designed, a clock that tells a running agent the minutes left, and what OpenCode
 does with a plugin, are §33.
@@ -254,8 +254,9 @@ model asked for, which leaves every run on the default unattributed and splits n
 ### The operator's skill
 
 `canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the
-journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing. Shell completion
-leaves out ticket keys, which would open the journal on every Tab, and the commands only the overseer runs.
+journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing, and every agent
+canopy ships denies it by name, wherever it is installed. Shell completion leaves out ticket keys, which would open
+the journal on every Tab, and the commands only the overseer runs.
 
 ## 14. Attention list
 

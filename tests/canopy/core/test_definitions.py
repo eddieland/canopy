@@ -20,7 +20,7 @@ from canopy.runtime.opencode import definitions as opencode_definitions
 from tests.conftest import CanopyEnv
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
-SKILL_MARKER = "  # canopy: skill rule\n"
+SKILL_MARKER = "    # canopy: skill rule\n"
 
 
 def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
@@ -59,6 +59,18 @@ def test_the_operator_skill_is_not_in_the_snapshot(tmp_path: Path) -> None:
     names = [p.name for p in (snapshot / "skills").iterdir()]
     assert "canopy" not in names
     assert names
+
+
+@pytest.mark.parametrize("agent", runtime_definitions.agent_names())
+def test_no_agent_is_offered_the_operator_skill(canopy_env: CanopyEnv, agent: str) -> None:
+    # The operator may install it where OpenCode finds skills for every agent, canopy's too (DESIGN §13).
+    frontmatter = resources.operator_skill().read_text().split("---")[1]
+    name = next(line.removeprefix("name:").strip() for line in frontmatter.splitlines() if line.startswith("name:"))
+    ruleset = _ruleset(canopy_env, agent)
+    assert _opencode_action(ruleset, "skill", name) == "deny"
+    assert _opencode_action(ruleset, "skill", "tracker-jira") == ("deny" if agent == agents.OVERSEER else "allow")
+    # The overseer's body holds the tracker's skill, so its skill tool is denied whole and not sent.
+    assert _opencode_disabled(ruleset, "skill") == (agent == agents.OVERSEER)
 
 
 def test_an_existing_snapshot_is_reused_as_is(tmp_path: Path) -> None:
@@ -559,8 +571,8 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     head = opencode_definitions.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
     head = opencode_definitions.render_overseer_reads(head, config.DEFAULT_TRACKER_TOOLS["jira"], "jira")
-    # With the skill in its body, it has nothing to load (`skill: deny`, below).
-    head = head.replace(SKILL_MARKER, f"{SKILL_MARKER}  skill: deny\n", 1)
+    # With the skill in its body, it has nothing to load (`"*": deny` among its skill rules, below).
+    head = head.replace(SKILL_MARKER, f'{SKILL_MARKER}    "*": deny\n', 1)
     assert text.startswith(head)
     body = text.removeprefix(head)
     prompt = prompts.render_overseer(config.load(canopy_env.root)).strip("\n")

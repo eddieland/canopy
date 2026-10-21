@@ -23,6 +23,9 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
+  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
+  skill:
+    "canopy": deny
   # The reviewer reads the ticket and writes nothing to it (TRUST_MODEL T6). At the marked line canopy renders, off a
   # GitHub tracker, GitHub's issue reads denied, then the tracker's server denied by a wildcard and each of its read
   # tools allowed by name, so a write tool no pattern names fails closed (D021). On a GitHub tracker, whose server the

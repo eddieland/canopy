@@ -27,9 +27,12 @@ permission:
     "treehouse status*": allow
   # Nothing to plan across calls: a tick's work is its decisions, each recorded as it is made.
   todowrite: deny
-  # With the tracker's skill in its body, canopy renders `skill: deny` at the marked line: the overseer has nothing to
-  # load. Otherwise the prompt has it load the skill by name, if there is one, and the skill tool stays.
-  # canopy: skill rule
+  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. With the
+  # tracker's skill in its body, canopy renders `"*": deny` at the marked line, last, so the tool is denied whole: the
+  # overseer has nothing to load. Otherwise the prompt has it load the skill by name, if there is one.
+  skill:
+    "canopy": deny
+    # canopy: skill rule
   # The overseer only reads the tracker (TRUST_MODEL T6). At the marked line canopy renders the tracker's server denied
   # by a wildcard, then each of its read tools allowed by name: for GitHub, whose server it shares, the reads kept
   # below. Off a GitHub tracker, GitHub's issue reads are denied first, and an allow after them reopens a read of the

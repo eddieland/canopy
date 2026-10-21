@@ -14,6 +14,9 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.
   task: deny
+  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
+  skill:
+    "canopy": deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077). Bash can still reach the network, for package installs and builds; this removes the tools
   # a model reaches for on its own, not the capability.

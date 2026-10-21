@@ -10,7 +10,7 @@ from canopy.runtime import agents
 from canopy.runtime.opencode import definitions
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
-SKILL_MARKER = "  # canopy: skill rule\n"
+SKILL_MARKER = "    # canopy: skill rule\n"
 READS_MARKER = "  # canopy: tracker reads\n"
 TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER]
 
@@ -82,7 +82,7 @@ def test_the_overseer_gets_the_trackers_skill_when_canopy_ships_one_and_no_skill
     }
     overseer = definitions.render(files, replace(PLAIN, tracker_provider="jira"))["agents/canopy-overseer.md"].decode()
     skill = "The skill `tracker-jira` follows, given here so that you need not load it.\n\nUse JQL.\n"
-    assert overseer == f"---\npermission:\n{SKILL_MARKER}  skill: deny\n{READS_MARKER}---\nDecide.\n\n{skill}"
+    assert overseer == f'---\npermission:\n{SKILL_MARKER}    "*": deny\n{READS_MARKER}---\nDecide.\n\n{skill}'
 
 
 @pytest.mark.parametrize("agent", TEMPERATURE_AGENTS)

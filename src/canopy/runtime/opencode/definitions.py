@@ -17,6 +17,9 @@ files mark for it:
   (DESIGN §6). With the skill there, the overseer's skill tool is denied, so that OpenCode sends neither it nor the
   list of skills.
 
+Every shipped agent denies the operator's own skill, `canopy` (DESIGN §13), by name, whatever directory it is installed
+in: it is for the operator's sessions, and an agent canopy runs has its own prompt to follow.
+
 OpenCode applies the last matching permission rule (D021), so every catch-all `"*"` comes before its exceptions, a
 rendered rule that allows goes after the deny it narrows, and a rendered deny goes after every allow it must beat: the
 private worker's reply tools are marked below its tracker tools, which allow GitHub's reply tool by name.
@@ -106,9 +109,10 @@ _TEMPERATURE_MARKER = "# canopy: temperature\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
 _PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 # The line of the shipped overseer definition the denial of its skill tool is rendered at, when its body holds the
-# tracker's skill: nothing is left for it to load, and a tool denied whole is not sent.
-_SKILL_MARKER = "  # canopy: skill rule\n"
-_SKILL_RULE = "  skill: deny\n"
+# tracker's skill: nothing is left for it to load, and a tool whose last rule denies `*` is not sent. The line ends its
+# `skill` rules, after the denial of the operator's skill.
+_SKILL_MARKER = "    # canopy: skill rule\n"
+_SKILL_RULE = '    "*": deny\n'
 
 
 def agent_names() -> list[str]:
