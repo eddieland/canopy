@@ -10,6 +10,9 @@ The repositories this plan covers, as the overseer chose them:
 
 {{REPOSITORIES}}
 
+Your git tools, `canopy_git_log`, `canopy_git_show`, `canopy_git_diff`, and `canopy_git_merge-base`, read each one's
+history: how the code you plan around came to be, and a file as it was. Name the repository with `repo`, as above.
+
 {{#MAP}}
 
 The workspace map, `MAP.md`, on what each repository owns and how they depend on each other:

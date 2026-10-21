@@ -20,6 +20,7 @@ from tests.canopy.helpers import (
     QUESTION,
     InlineRunner,
     agent_runs,
+    calls,
     commands_run,
     decisions,
     in_tick,
@@ -78,6 +79,33 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert plan.size == len(TEXT.encode())
     # Its report is the planner's summary, as any run's.
     assert [(m.kind, m.body) for m in db.run_messages(conn, run.id)] == [("report", "planned it")]
+
+
+def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """#1130: the planner has no shell; canopy's read-only git tools, over its own worktrees alone, read their history,
+    each named for its repository."""
+    reads = [
+        calls("canopy_git_log", range="HEAD", repo="repo"),
+        calls("canopy_git_merge-base", base="origin/main", head="HEAD"),
+        calls("canopy_git_log", range="HEAD", repo="web"),
+    ]
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, tools=reads))
+    assert run.status == RunStatus.DONE, run.printed.out
+
+    [planner] = agent_runs(scenario.agent_log)
+    entry = json.loads(planner["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_git"]
+    assert entry["command"][-3:-1] == ["_mcp", "--git"]
+    assert entry["command"][-1] in {f"repo={s}" for s in git_pool.slots}
+    log, fork, other = planner["tools"]
+    assert not log["error"], log["text"]
+    assert log["text"].endswith("\n\n    initial")
+    assert not fork["error"], fork["text"]
+    assert fork["text"] == git_pool.remote_head("main")
+    assert (other["error"], other["text"]) == (True, "no repository named 'web' here: this run reads repo")
+    assert "Your git tools, `canopy_git_log`" in run.prompt
 
 
 def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(

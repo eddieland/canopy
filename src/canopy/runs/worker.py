@@ -38,6 +38,7 @@ from canopy.core import (
     drafts,
     feedback_plans,
     follow_ups,
+    git_tools,
     hostgit,
     memory,
     observe,
@@ -460,8 +461,11 @@ def _run_agent(
     out.write("--- worker stdout ---\n")
     out.flush()
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
-    # directory; an unsandboxed worker ignores it (DESIGN §8).
+    # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
+    # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
+        env |= git_tools.run_env({s.repo: s.path for s in slots}, cwd=ctx.workspace.root.absolute())
     with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         result = ctx.runner.run(
             argv,

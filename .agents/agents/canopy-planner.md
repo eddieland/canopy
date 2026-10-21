@@ -77,6 +77,12 @@ permission:
   # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools are allowed by name: the
   # last matching rule wins (D021), so a write tool missing from both lists fails closed.
   # canopy: tracker tools
+  # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
+  # pattern, so none above, such as `*merge*`, closes one.
+  "canopy_git_merge-base": allow
+  "canopy_git_diff": allow
+  "canopy_git_log": allow
+  "canopy_git_show": allow
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
   "canopy_chore_history": deny
 ---
