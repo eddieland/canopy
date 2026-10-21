@@ -147,7 +147,7 @@ prompt_overrides = "~/.config/canopy/prompts"
 # [personas]
 # worker = "canopy"                             # every implement and resume; or "minimalist", "explainer"
 # planner = "canopy"                            # every plan; or "skeptic"
-# reviewer = "eddie"                            # every review; or "canopy", "skeptic"
+# reviewer = "canopy"                           # every review; or "skeptic", "eddie"
 
 [notify]
 # Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.

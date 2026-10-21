@@ -130,7 +130,8 @@ def test_canopy_persona_chooses_or_clears_an_open_requests_persona(
 ) -> None:
     scenario.operator("start", PR, "--review")
     assert (
-        scenario.operator("persona", PR).out == f"{PR}'s review is written in eddie, from its next: canopy's default.\n"
+        scenario.operator("persona", PR).out
+        == f"{PR}'s review is written in canopy, from its next: canopy's default.\n"
     )
     said = scenario.operator("persona", PR, "minimalist", "--agent", "reviewer").out
     assert said == f"{PR}'s review is written in minimalist, from its next: this request's.\n"

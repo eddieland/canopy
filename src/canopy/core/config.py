@@ -98,11 +98,8 @@ MIN_CHORE_EVERY_MINUTES = 15
 #: A persona's name, and its file's, `<name>.md` (DESIGN §31): lowercase words joined by single hyphens, at most 40
 #: characters, so it is a plain file name and reaches the journal and the command line as it is.
 PERSONA_NAME_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
-#: The persona workers and planners write in unless the operator chooses another: canopy's own voice, which it ships.
+#: The persona every agent writes in unless the operator chooses another: canopy's own voice, which it ships.
 DEFAULT_PERSONA = "canopy"
-#: The persona reviews are written in unless the operator chooses another, which canopy ships: Conventional Comments
-#: with the minimalist's judgment.
-DEFAULT_REVIEWER_PERSONA = "eddie"
 
 
 class ConfigError(Exception):
@@ -884,7 +881,7 @@ class Personas(Section):
     #: Every plan.
     planner: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
     #: Every review.
-    reviewer: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_REVIEWER_PERSONA
+    reviewer: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
     #: The personas each of the loop's own PRs is reviewed in at a commit, one review each, in place of `reviewer`'s
     #: one; none leaves it to `reviewer`. Each review counts against `policy.max_reviews_per_pr`.
     reviewers: Annotated[tuple[PersonaName, ...], Scope.PRIVATE, AfterValidator(_distinct_personas)] = ()

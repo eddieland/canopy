@@ -153,7 +153,7 @@ def test_an_override_takes_the_place_of_the_agents_persona_in_config(scenario: S
         f"{KEY}'s personas, from each agent's next run:\n"
         "  worker    canopy  (canopy's default)\n"
         "  planner   explainer  (this ticket's override)\n"
-        "  reviewer  eddie  (canopy's default)\n"
+        "  reviewer  canopy  (canopy's default)\n"
     )
     assert scenario.run(PLAN, worker=planner_does(plan=TEXT)).row["persona"] == "explainer"
     said = scenario.operator("persona", KEY, "--agent", "planner", "--clear").out

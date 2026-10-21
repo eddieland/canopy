@@ -2,10 +2,10 @@
 
 A persona is a file, `<name>.md`, in the operator's `paths.personas` directory, which shadows one canopy ships of the
 same name, or among those canopy ships. A run's persona is the one the operator chose for its next run alone
-(`choose_next`), else its ticket's override for its agent (`choose`), else its agent's in `[personas]`, `DEFAULTS`'
-unless the operator chose another, fixed when the run starts; only the operator chooses any of them. It is never
-fallen back from: a name with no file refuses the run (`persona_missing`), and a file canopy would not put in a prompt
-refuses it too (`bad_persona`), since a run in a voice nobody chose would read as the chosen one's.
+(`choose_next`), else its ticket's override for its agent (`choose`), else its agent's in `[personas]`, `canopy` unless
+the operator chose another, fixed when the run starts; only the operator chooses any of them. It is never fallen back
+from: a name with no file refuses the run (`persona_missing`), and a file canopy would not put in a prompt refuses it
+too (`bad_persona`), since a run in a voice nobody chose would read as the chosen one's.
 A persona is instructions in every run it reaches, so its file is bounded as the standing instructions are, and holds
 none of the characters a lesson may not (DESIGN §28, Bounds).
 """
@@ -18,17 +18,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import conversation, db, memory_text, records, sql
-from canopy.core.config import DEFAULT_PERSONA, DEFAULT_REVIEWER_PERSONA, PERSONA_NAME_RE
+from canopy.core.config import DEFAULT_PERSONA, PERSONA_NAME_RE
 from canopy.core.vocab import OverrideKind, RunKind
 from canopy.infra import resources
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from canopy.core.config import Config
 
-#: The persona workers and planners write in unless the operator chooses another: canopy's own voice.
+#: The persona every agent writes in unless the operator chooses another: canopy's own voice.
 DEFAULT = DEFAULT_PERSONA
 #: A persona's file is its name with this suffix.
 SUFFIX = ".md"
@@ -38,8 +38,6 @@ MAX_BYTES = 4096
 Agent = Literal["worker", "planner", "reviewer"]
 #: Every agent a persona reaches, in the order `[personas]` lists them.
 AGENTS: tuple[Agent, ...] = ("worker", "planner", "reviewer")
-#: The persona each agent writes in unless the operator chooses another, as `[personas]` defaults it.
-DEFAULTS: Mapping[Agent, str] = {"worker": DEFAULT, "planner": DEFAULT, "reviewer": DEFAULT_REVIEWER_PERSONA}
 #: An agent whose next run alone may take a persona of its own: the runs `canopy start` and `canopy plan` ask for.
 NextAgent = Literal["worker", "planner"]
 #: Every agent whose next run alone may take a persona of its own.
@@ -214,7 +212,7 @@ def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next
         mine = override(conn, ticket, agent)
         configured: str = getattr(config.personas, agent)
         name = mine if mine is not None else configured
-        source: Source = "ticket" if mine is not None else "config" if configured != DEFAULTS[agent] else "default"
+        source: Source = "ticket" if mine is not None else "config" if configured != DEFAULT else "default"
         once = next_run(conn, ticket, agent)
         several: list[str] = reviewers_of(conn, config, ticket) if agent == "reviewer" else []
         error = None

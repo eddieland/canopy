@@ -30,11 +30,9 @@ the ticket allows, without copying a prompt to get it (§12, Prompt overrides).
 
 canopy's voice today is spread through its prompts, such as the reviewer reading a change as an adversary, or a worker
 leaving alone the PR text it was not asked to change. That voice moves into a shipped persona, `canopy`, which every
-worker and planner gets unless another is chosen, and the prompts keep only the task, its obligations, and its
-contracts. A chosen persona then replaces canopy's voice rather than arguing with it. Reviews get `eddie` instead, the
-operator's own way of reviewing: the minimalist's questions, and every finding labelled in Conventional Comments, its
-`(non-blocking)` the finding's `minor` severity. What a guard or a contract leans on stays in the prompt, the
-reviewer's rules for a finding among it.
+run gets unless another is chosen, and the prompts keep only the task, its obligations, and its contracts. A chosen
+persona then replaces canopy's voice rather than arguing with it. What a guard or a contract leans on stays in the
+prompt, the reviewer's rules for a finding among it.
 
 Rejected: an empty default over today's prompts, where a chosen persona and the built-in voice pull against each other
 and the result turns on which the model weighs more.
@@ -49,12 +47,12 @@ workspace file can neither supply one nor choose one.
 ### Who chooses
 
 - **The operator alone.** A run's persona is the one chosen for its agent's next run alone, else its ticket's
-  override for its agent, else that agent's in `[personas]`, else canopy's default for that agent, fixed when the run
-  starts; the dispatch that records the run spends a next run's choice. A review of a PR the operator requested
-  (§21) has no ticket: its persona is the request's, else `[personas] reviewer`'s, and a request may name several, for
-  one review in each (§21); `[personas] reviewers` does the same for the loop's own PRs, unless a ticket's override
-  chooses one. Each is set only by the operator, from `canopy persona`, `canopy start`, `canopy plan`, or the
-  ticket's page, and refused inside an agent run (T1). The overseer, a dispatch, ticket text, and labels choose none.
+  override for its agent, else that agent's default in `[personas]`, else `canopy`, fixed when the run starts; the
+  dispatch that records the run spends a next run's choice. A review of a PR the operator requested (§21) has no ticket:
+  its persona is the request's, else `[personas] reviewer`'s, and a request may name several, for one review in each
+  (§21); `[personas] reviewers` does the same for the loop's own PRs, unless a ticket's override chooses one. Each is
+  set only by the operator, from `canopy persona`, `canopy start`, `canopy plan`, or the ticket's page, and refused
+  inside an agent run (T1). The overseer, a dispatch, ticket text, and labels choose none.
 - **No silent fallback.** Setting a persona that names no file is refused, and a run whose persona's file is gone, or
   past its bounds, by the time it starts is refused with an attention item, spending no attempt and leasing no slot.
   It never falls back to `canopy`, since a run in a voice nobody chose would read as the chosen one's.
