@@ -66,7 +66,8 @@ that ends tells the sinks (§20), with its summary, and never its report.
 The PR that builds it proposes them: T1 (a task's text and replies are the operator's, written only through the
 operator's channels; its reports are data), T3 (`capacity.max_tasks`, one run per task, one run per operator word),
 and T6 (a task's worker is the private worker, which may also open a PR for its own branch and file unlabeled tickets
-where its text says; the PR's draft state is the prompt's rule, not a guard).
+where its text says; the PR's draft state is the prompt's rule, not a guard, and, as on a private ticket, only its
+create tool writes to the tracker, which on GitHub also edits issues).
 
 ### Open
 
