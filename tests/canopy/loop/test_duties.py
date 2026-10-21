@@ -52,6 +52,7 @@ def test_a_ticket_the_query_found_is_owed_a_decision_and_kept_for_the_next_tick(
 def test_stopped_and_recently_done_tickets_are_owed_nothing(scenario: Scenario, canopy_env: CanopyEnv) -> None:
     conn = scenario.conn
     with in_tick(conn) as tick_id:
+        db.record_decision(conn, tick_id, None, duties.QUERIED_ACTION, duties.queried_rationale(["PROJ-2"]))
         db.set_ticket(conn, "PROJ-2", str(canopy_env.root), done=True)
         db.record_decision(conn, tick_id, "PROJ-2", "done", "merged")
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
@@ -59,6 +60,19 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(scenario: Scenario, 
     scenario.operator("stop", "PROJ-1")
     # The query still finds both open in the tracker, and the overseer names them as it found them.
     assert scenario.tick(queried=["PROJ-1", "PROJ-2"]).tick.status == "ok"
+
+
+def test_a_done_ticket_the_last_query_left_out_is_owed_a_decision_once_found(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+) -> None:
+    # Reopened, or labeled again, after the query stopped finding it: the overseer reads it again (DESIGN §7).
+    with in_tick(scenario.conn) as tick_id:
+        db.set_ticket(scenario.conn, "PROJ-2", str(canopy_env.root), done=True)
+        db.record_decision(scenario.conn, tick_id, "PROJ-2", "done", "merged")
+        db.finish_tick(scenario.conn, tick_id, TickStatus.OK, "")
+    failed = scenario.tick(queried=["PROJ-2"], code=1)
+    assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-2"
 
 
 def test_a_due_chore_left_undecided_fails_the_tick(scenario: Scenario, canopy_env: CanopyEnv) -> None:
