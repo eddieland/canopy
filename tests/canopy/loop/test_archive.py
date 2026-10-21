@@ -50,8 +50,8 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}.md"]
-    assert git("show", f"main:{name}/{KEY}/{run_id}.md", cwd=upstream).endswith(PLAN.strip())
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-proposed.md"]
+    assert git("show", f"main:{name}/{KEY}/{run_id}-proposed.md", cwd=upstream).endswith(PLAN.strip())
     assert unpushed(scenario) is None
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "1", "nothing changed, so nothing is committed"
@@ -65,7 +65,9 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
     )
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "2"
-    assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}.md", cwd=upstream)
+    # The plan moved to its approved name: the archive holds it there alone.
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-approved.md"]
+    assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}-approved.md", cwd=upstream)
 
 
 def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Path, upstream: Path) -> None:
@@ -75,12 +77,12 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
 
     with mock.patch.object(archive, "PER_TICK", 1):
         scenario.tick(*waits(KEY, "PROJ-2"))
-        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}.md"]
+        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-proposed.md"]
         assert unpushed(scenario) == "1 plan waits for the next tick's archive: a tick archives at most 1 files"
 
         scenario.tick(*waits(KEY, "PROJ-2"))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}.md", f"{name}/PROJ-2/{second}.md"]
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-proposed.md", f"{name}/PROJ-2/{second}-proposed.md"]
     assert unpushed(scenario) is None
 
 
