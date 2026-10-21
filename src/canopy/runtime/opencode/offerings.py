@@ -12,6 +12,10 @@ An MCP server's tools are not listed without connecting to it, so a server is ju
 `<server>_` and a NUL: a rule that matches that name matches every tool of the server. A later rule that could match
 only some of them, one naming the server's prefix or starting with a wildcard, makes its reach `some`.
 
+A plugin OpenCode loads may print to stdout around a debug command's output (`printed`). OpenCode prints each as JSON
+indented two spaces, so only a line that opens a value and holds nothing else is read as its start: a plugin's own log
+lines, JSON or not, are passed over.
+
 What one run is offered is asked with the words its own command starts OpenCode with, `opencode run` and what follows
 it swapped for each debug command: a debug command loads the plugins of the config where it starts, so it runs inside
 whatever wraps the agent, a sandbox among them, and with the config directory the command points OpenCode at.
@@ -24,10 +28,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, TypeAdapter
 
 from canopy.infra import procs
 from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer
+from canopy.runtime.opencode import printed
 from canopy.runtime.opencode.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
@@ -46,6 +51,8 @@ _UNSENT = frozenset({"invalid"})
 _AGENT_RE = re.compile(r"[a-z][a-z0-9-]*")
 # What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
 _UNSAFE_RE = re.compile(r"[^a-zA-Z0-9_-]")
+# Where OpenCode's own output starts: a line that opens an object or an array alone, or an empty array.
+_PRINTED_RE = re.compile(r"^(\{|\[\]?)$", re.MULTILINE)
 # The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
 _SPECIAL_RE = re.compile(r"[.+^${}()|\[\]\\]")
 
@@ -200,17 +207,15 @@ class _Ask:
 
 
 def _read[T](stdout: str, validate: Callable[[str], T], command: str) -> T:
-    try:
-        return validate(stdout)
-    except ValidationError:
-        # Not the error itself: it quotes what was printed, which for the config may hold a secret.
-        raise _FailedError(f"`opencode {command}` printed what canopy cannot read") from None
+    read = printed.among(stdout, _PRINTED_RE, validate)
+    if read is None:
+        raise _FailedError(f"`opencode {command}` printed what canopy cannot read")
+    return read
 
 
 def _offer(ask: _Ask, agent: str, *, servers: Sequence[str], skills: Sequence[str]) -> AgentOffer:
     try:
-        printed = ask.run("debug", "agent", agent)
-        read = _read(printed, _Agent.model_validate_json, "debug agent")
+        read = _read(ask.run("debug", "agent", agent), _Agent.model_validate_json, "debug agent")
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
     rules = read.permission
