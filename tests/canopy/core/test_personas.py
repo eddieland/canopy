@@ -38,6 +38,7 @@ REVIEWER_VALUES = {
     "PR_URL": "https://example.test/pr/1",
     "SHA": "b" * 40,
     "CHECKOUT": "/state/reviews/1/checkout",
+    "BASE": "main",
     "RUN_ID": "1",
     "TICKET": "PROJ-1",
     "TRACKER_PROVIDER": "github",

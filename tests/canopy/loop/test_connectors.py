@@ -172,6 +172,20 @@ def test_a_pr_last_seen_open_is_read_after_its_ticket_is_done_until_a_read_sees_
     assert asked(watched)[-1]["request"]["prs"] == []
 
 
+def test_a_pr_with_an_open_review_request_is_read_so_its_review_knows_its_base(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    requested = "https://github.com/acme/api/pull/8"
+    scenario.operator("start", requested, "--review")
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"]["prs"] == [PR, requested]
+
+    scenario.operator("stop", requested)
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"]["prs"] == [PR]
+
+
 def test_a_line_out_of_bounds_is_refused_its_subject_kept_and_the_rest_recorded(
     scenario: Scenario,
     watched: Path,

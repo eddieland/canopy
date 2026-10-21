@@ -263,17 +263,18 @@ def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
 def _save_diff(runner: procs.Runner, slot: Path, run: records.ReviewRun, log: logs.TickAdapter) -> None:
     """Write the commit's diff against where it leaves its base branch beside the run's log, for the web UI.
 
+    The base is the branch the PR merges into, fetched to `origin/<base>`, where the reviewer's git tools read it too.
     Best effort: the review does not need it, so a failure is logged and the page shows no diff. Diff drivers and
-    textconv filters are off, since the commit's `.gitattributes` can name them; for a PR stacked on another branch,
-    the diff holds that branch's commits too.
+    textconv filters are off, since the commit's `.gitattributes` can name them.
     """
     base = run.base_branch
     if not base:
         return
     fields: dict[str, object] = {"review_run_id": run.id, "base": base}
     sha = run.sha
-    fetched = _git_or_none(runner, slot, log, fields, "fetch", "--quiet", "origin", f"refs/heads/{base}")
-    fork = None if fetched is None else _git_or_none(runner, slot, log, fields, "merge-base", "FETCH_HEAD", sha)
+    tracking = f"refs/remotes/origin/{base}"
+    fetched = _git_or_none(runner, slot, log, fields, "fetch", "--quiet", "origin", f"+refs/heads/{base}:{tracking}")
+    fork = None if fetched is None else _git_or_none(runner, slot, log, fields, "merge-base", tracking, sha)
     if fork is None:
         return
     diff = _git_or_none(runner, slot, log, fields, *review_diff.diff_args(fork.strip(), sha))
