@@ -605,6 +605,32 @@ class RunOfferedSkill(Row):
 
 
 @dataclass(frozen=True)
+class RunOfferedTool(Row):
+    """One of the runtime's built-in tools it offered an agent run (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_offered_tools"
+
+    run_table: str
+    run_id: int
+    tool: str
+
+
+@dataclass(frozen=True)
+class RunOfferedServerRule(Row):
+    """One rule that leaves an agent run only some of an MCP server's tools (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_offered_server_rules"
+
+    run_table: str
+    run_id: int
+    server: str
+    #: Where it applies among the server's rules, from 0: a later one wins where both match a tool.
+    position: int
+    #: `offer` or `deny`, then the tool names it matches, as the runtime's patterns write them.
+    rule: str
+
+
+@dataclass(frozen=True)
 class ObservedPr(Row):
     """A PR as canopy's GitHub reader last read it whole (DESIGN §29)."""
 
