@@ -6,20 +6,12 @@ import { DIGEST_WIDTH } from '@/components/persona-field'
 import { RichText } from '@/components/rich-text'
 
 /**
- * The persona a run wrote in (DESIGN §31), and its instructions: its name and the start of its digest as the readout,
- * as `PersonaField` shows them, and `Show instructions` opening its text. The journal keeps the digest, not the text,
- * so the text is its file's now: when that differs from what the run read, it says so first, and a file that has gone
- * says why in its place. Laid out as the Markdown it is, its wrapped lines joined, and rendered as React text.
+ * The persona a run wrote in (DESIGN §31), and the instructions it read: its name and the start of its digest as the
+ * readout, as `PersonaField` shows them, and `Show instructions` opening the text the journal kept for that digest.
+ * When canopy cannot tell what the run read, it says why in the text's place. Laid out as the Markdown it is, its
+ * wrapped lines joined, and rendered as React text.
  */
-export function PersonaPanel({
-    persona,
-    runId,
-    className,
-}: {
-    persona: RunPersona
-    runId: number
-    className?: string
-}) {
+export function PersonaPanel({ persona, className }: { persona: RunPersona; className?: string }) {
     const { text } = persona
     return (
         <FoldPanel
@@ -35,25 +27,17 @@ export function PersonaPanel({
                             {' '}
                             {persona.digest.slice(0, DIGEST_WIDTH)}
                         </span>
-                        {persona.changed && <span className="text-muted-foreground">, edited since</span>}
                     </span>
                     {text !== null && <CopyButton text={text} label="persona" />}
                 </span>
             }
         >
             {text === null ? (
-                <Empty>its file cannot be read: {persona.problem ?? 'unreadable'}</Empty>
+                <Empty>no text: {persona.problem ?? 'canopy kept none'}</Empty>
             ) : (
-                <>
-                    {persona.changed && (
-                        <p className="border-b px-3 py-1.5 font-mono text-xs text-muted-foreground">
-                            edited since run {runId} read it: this is its text now, not the one that run read
-                        </p>
-                    )}
-                    <PanelScroll label="the persona's instructions">
-                        <RichText text={text} prose className="p-3" />
-                    </PanelScroll>
-                </>
+                <PanelScroll label="the persona's instructions">
+                    <RichText text={text} prose className="p-3" />
+                </PanelScroll>
             )}
         </FoldPanel>
     )

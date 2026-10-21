@@ -490,19 +490,16 @@ class PlanSummary(_Model):
 
 
 class RunPersona(_Model):
-    """The persona a run wrote in (DESIGN §31), and its instructions, read from its file now."""
+    """The persona a run wrote in (DESIGN §31), and the instructions it read."""
 
     name: str
     """The persona's name."""
     digest: str
     """The sha256 of its text as the run's prompt carried it, in hex."""
     text: str | None = None
-    """Its instructions as its file stands now, as a prompt would carry them; none when the file cannot be read:
-    `problem` says why."""
+    """Its instructions as the run read them; none when canopy cannot tell what they were: `problem` says why."""
     problem: str | None = None
-    """Why its file cannot be read: it has gone, or it is one canopy would not put in a prompt."""
-    changed: bool = False
-    """Whether `text` differs from what the run read, its file edited since: it is then the text now, not the run's."""
+    """Why there is no text: the run is from before canopy kept texts, and its file is gone or edited since."""
 
 
 class PlanFile(_Model):

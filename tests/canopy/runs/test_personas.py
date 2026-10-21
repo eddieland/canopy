@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import personas
+from canopy.core import db, personas
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.serve import views
@@ -54,6 +54,12 @@ def test_a_persona_edited_between_runs_splits_them_by_digest(scenario: Scenario,
     assert (first.row["persona"], second.row["persona"]) == ("terse", "terse")
     assert first.row["persona_digest"] != second.row["persona_digest"]
     assert "Be terser." in second.prompt
+    # Each text is kept once, under its digest, so the first run's instructions outlive the edit.
+    assert db.persona_text(scenario.conn, str(first.row["persona_digest"])) == "Be terse."
+    assert db.persona_text(scenario.conn, str(second.row["persona_digest"])) == "Be terser."
+    third = scenario.run(RESUME, worker=pushes())
+    assert third.row["persona_digest"] == second.row["persona_digest"]
+    assert scenario.conn.execute("SELECT count(*) FROM persona_texts").fetchone()[0] == 2
 
 
 def test_a_run_whose_persona_has_no_file_is_refused_with_an_attention_item(

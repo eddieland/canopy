@@ -4706,15 +4706,9 @@ export type components = {
         };
         /**
          * RunPersona
-         * @description The persona a run wrote in (DESIGN §31), and its instructions, read from its file now.
+         * @description The persona a run wrote in (DESIGN §31), and the instructions it read.
          */
         RunPersona: {
-            /**
-             * Changed
-             * @description Whether `text` differs from what the run read, its file edited since: it is then the text now, not the run's.
-             * @default false
-             */
-            changed: boolean;
             /**
              * Digest
              * @description The sha256 of its text as the run's prompt carried it, in hex.
@@ -4727,13 +4721,12 @@ export type components = {
             name: string;
             /**
              * Problem
-             * @description Why its file cannot be read: it has gone, or it is one canopy would not put in a prompt.
+             * @description Why there is no text: the run is from before canopy kept texts, and its file is gone or edited since.
              */
             problem: string | null;
             /**
              * Text
-             * @description Its instructions as its file stands now, as a prompt would carry them; none when the file cannot be read:
-             *     `problem` says why.
+             * @description Its instructions as the run read them; none when canopy cannot tell what they were: `problem` says why.
              */
             text: string | null;
         };

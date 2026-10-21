@@ -65,10 +65,11 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
 
 
 def run_persona(ctx: Context, run_id: int) -> RunPersona | None:
-    """The persona run `run_id` wrote in, with its instructions as its file stands now (DESIGN §31).
+    """The persona run `run_id` wrote in, with the instructions it read (DESIGN §31).
 
-    The journal keeps the persona's name and the digest of its text, not the text: it is read from the file a run
-    would read now, and said to have changed when its digest is not the run's.
+    The journal keeps a persona's text once per digest, from the run that first carried it. A run from before canopy
+    kept texts has its persona's file read instead, but only while the file's digest is still the run's: a text the run
+    never read is not shown as its.
 
     Returns:
         The persona, or None for a run from before canopy recorded one.
@@ -76,16 +77,20 @@ def run_persona(ctx: Context, run_id: int) -> RunPersona | None:
     run = records.fetch_one(ctx.conn, records.Run, sql.select("*").from_("runs").where("id = ?", run_id))
     if run is None or run.persona is None or run.persona_digest is None:
         return None
+    kept = db.persona_text(ctx.conn, run.persona_digest)
+    if kept is not None:
+        return RunPersona(name=run.persona, digest=run.persona_digest, text=kept)
     try:
         now = personas.load(ctx.config, run.persona)
     except personas.PersonaError as e:
-        return RunPersona(name=run.persona, digest=run.persona_digest, problem=e.reason)
-    return RunPersona(
-        name=run.persona,
-        digest=run.persona_digest,
-        text=now.text,
-        changed=now.digest != run.persona_digest,
-    )
+        return RunPersona(name=run.persona, digest=run.persona_digest, problem=f"canopy kept no text, and {e.reason}")
+    if now.digest != run.persona_digest:
+        return RunPersona(
+            name=run.persona,
+            digest=run.persona_digest,
+            problem="canopy kept no text, and its file has been edited since the run read it",
+        )
+    return RunPersona(name=run.persona, digest=run.persona_digest, text=now.text)
 
 
 def plan_summary(plan: records.Plan) -> PlanSummary:

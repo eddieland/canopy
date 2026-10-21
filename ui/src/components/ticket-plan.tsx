@@ -99,7 +99,7 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
             )}
             {newest !== null && newest.persona !== null && (
                 // As wide as the plan above it, as the earlier plans are.
-                <PersonaPanel persona={newest.persona} runId={newest.plan.run_id} className="max-w-[51rem]" />
+                <PersonaPanel persona={newest.persona} className="max-w-[51rem]" />
             )}
             {earlier.length > 0 && <EarlierPlans ticketKey={ticketKey} plans={earlier} />}
             <ConfirmLeave
@@ -571,7 +571,7 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
                     {found !== undefined && found.text !== null && (
                         <div className="flex flex-col gap-3 p-3">
                             <PlanEditor markdown={found.text} threads={[]} onThreadsChange={ignore} editable={false} />
-                            {found.persona !== null && <PersonaPanel persona={found.persona} runId={plan.run_id} />}
+                            {found.persona !== null && <PersonaPanel persona={found.persona} />}
                         </div>
                     )}
                 </CollapsibleContent>

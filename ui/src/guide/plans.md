@@ -45,9 +45,8 @@ happens: comments, edits, asking for changes, skipping.
 There, the plan opens in an editor. The page's title names the plan and its ticket, and the line under it says which
 run wrote it, when you approved it and how, whether its file was edited since, and its effort. The **Plan** panel's
 header says where it stands and how old it is. Under the plan, **Persona** names the persona its planner wrote in,
-with the start of its text's digest, and **Show instructions** opens what that persona told it. canopy keeps the
-digest, not the text, so the text is read from the persona's file now; if the file was edited since the run, the
-panel says so, rather than let you blame today's wording for yesterday's plan. See
+with the start of its text's digest, and **Show instructions** opens exactly what that persona told it: canopy keeps
+each persona's text once per digest, so editing the file later doesn't rewrite history. See
 [Choosing a persona](tickets#choosing-a-persona). Older plans are folded under **Earlier plans**, read only, each
 with its own Persona panel. The trail at the top leads back to the ticket.
 
