@@ -31,7 +31,8 @@ Output is for a person at a terminal, drawn with rich (D043). The spinner and th
 terminal. With output sent to a file, as the daemon's is, the loop writes a log instead: a logfmt line for each event,
 each with its time and `msg`, and no rules, tables, or hints about keys. A tick writes a line for itself, with what its
 overseer cost when the runtime reported it, then one for each decision that changes something and for each change to
-the attention list.
+the attention list. Between ticks it writes one for each poll of the connectors, for what ended a wait early, and for
+the loop paused or resumed, through whichever channel.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ import os
 import signal
 import time
 from collections import Counter
-from collections.abc import Callable, Collection, Generator, Sequence
+from collections.abc import Callable, Collection, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -62,6 +63,7 @@ if TYPE_CHECKING:
 
     from rich.console import Console
 
+    from canopy.core import observe
     from canopy.core.config import Config
     from canopy.core.context import Context
     from canopy.loop import web
@@ -378,7 +380,26 @@ class _Polls:
         if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
             return
         self.last = self.clock()
-        poll.run(ctx, self.log)
+        polled = poll.run(ctx, self.log)
+        if not self.settings.console.is_terminal:
+            _record_poll(self.settings.console, polled)
+
+
+def _record_poll(console: Console, polled: Mapping[str, observe.Observed] | None) -> None:
+    """Write a poll's line: how each source's run ended, what they recorded and refused, and what they missed."""
+    if polled is None:
+        _record(console, "poll skipped", reason="a tick holds the lock")
+        return
+    if not polled:  # no source is configured
+        return
+    _record(
+        console,
+        "polled",
+        sources=", ".join(f"{name} {observed.status}" for name, observed in polled.items()),
+        recorded=sum(n for observed in polled.values() for n in observed.recorded.values()),
+        refused=sum(n for observed in polled.values() for n in observed.refused.values()),
+        missed="; ".join(f"{name}: {o.missed}" for name, o in polled.items() if o.missed is not None) or None,
+    )
 
 
 def _record(console: Console, msg: str, **fields: object) -> None:
@@ -437,7 +458,7 @@ def _ticks(
             log=log,
             each_step=settings.apply,
         )
-        _log_woken(log, woken, seen=0, since=None, read_at=None)
+        _log_woken(console, log, woken, seen=0, since=None, read_at=None)
         woken_by = woken or "start"
     idle_count = 0
     polls = _Polls(settings, clock, log)
@@ -511,7 +532,7 @@ def _ticks(
             log=log,
             each_step=polls.step,
         )
-        _log_woken(log, woken, seen=seen, since=since, read_at=read_at)
+        _log_woken(console, log, woken, seen=seen, since=since, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
 
 
@@ -615,11 +636,12 @@ def _defer(
         note="first tick in ",
         each_step=settings.apply,
     )
-    _log_woken(log, woken, seen=seen, since=since, read_at=None)
+    _log_woken(console, log, woken, seen=seen, since=since, read_at=None)
     return woken
 
 
 def _log_woken(
+    console: Console,
     log: logs.TickAdapter,
     woken: Woken | None,
     *,
@@ -627,6 +649,8 @@ def _log_woken(
     since: str | None,
     read_at: str | None,
 ) -> None:
+    if woken is not None and not console.is_terminal:
+        _record(console, "wait ended", by=woken)
     if woken == "message":
         log.info("an operator message ended the wait", extra={"after_message": seen})
     elif woken == "starts":
@@ -785,6 +809,8 @@ def _wait(
         What ended the wait early, if anything did.
     """
     woken: Woken | None = None
+    # The line before the wait, a tick's or the loop's first, says whether it began paused; a log notes each change.
+    was = pause.paused(ctx.conn)
     with Live(console=console, transient=True, auto_refresh=False) as live:
         while not stop.requested:
             each_step()
@@ -796,6 +822,9 @@ def _wait(
             if asked():
                 return "web"
             held = pause.paused(ctx.conn)
+            if (held is None) != (was is None) and not console.is_terminal:
+                _record_pause(console, held)
+            was = held
             remaining = deadline - clock()
             if remaining <= 0 and held is None:
                 break
@@ -822,6 +851,14 @@ def _toggle_pause(ctx: Context, pressed: str, log: logs.TickAdapter) -> None:
     else:
         pause.resume(ctx.conn)
         log.info("loop resumed", extra={"channel": pause.LOOP})
+
+
+def _record_pause(console: Console, held: pause.Paused | None) -> None:
+    """Write the line for the loop paused, with since when and through which channel, or for the loop resumed."""
+    if held is None:
+        _record(console, "loop resumed")
+    else:
+        _record(console, "loop paused", since=held.since, channel=held.channel)
 
 
 def _countdown(note: str, woken: Woken | None, remaining: float, *, keys: bool) -> Text:

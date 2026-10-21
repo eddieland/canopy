@@ -26,7 +26,7 @@ from canopy.core import conversation, db, pause
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs, resources
-from canopy.loop import repeat, reread
+from canopy.loop import repeat, reread, tick_now
 from tests.canopy.helpers import (
     FakeKeys,
     FakeTime,
@@ -1125,7 +1125,7 @@ def test_a_poll_due_while_a_tick_holds_the_lock_is_skipped(
                 held.close()
 
         time.on_sleep = by_hand
-        term, _ = console()
+        term, out = log_file()
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,
@@ -1142,6 +1142,50 @@ def test_a_poll_due_while_a_tick_holds_the_lock_is_skipped(
     # Skipped at three minutes, not waited for: the next polls are at six and nine.
     assert connector_ticks(canopy_env) == [first, None, None, second]
     assert "poll skipped: a tick holds the lock" in [line["msg"] for line in log_messages(canopy_env)]
+    assert 'msg="poll skipped" reason="a tick holds the lock"' in out.getvalue()
+
+
+@pytest.mark.usefixtures("connector_state")
+def test_output_to_a_file_has_a_line_for_each_poll_pause_and_early_wake_between_ticks(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+) -> None:
+    polled(canopy_env, interval=10, every=3)
+    with overseer_does():
+        asked = tick_now.TickNow()
+        time = FakeTime()
+
+        def operator() -> None:
+            if len(time.slept) == 1:
+                assert main(["pause"]) == 0
+            elif len(time.slept) == 10:
+                assert main(["resume"]) == 0
+            elif len(time.slept) == 400:  # 200 seconds in, past the poll at three minutes
+                asked.request()
+
+        time.on_sleep = operator
+        term, out = log_file()
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            asked=asked,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 2}
+    lines = [re.sub(r"^time=\S+ ", "", line) for line in out.getvalue().splitlines()]
+    between = lines[lines.index(next(x for x in lines if x.startswith('msg="tick ended" tick=1 '))) + 1 :]
+    assert re.fullmatch(r'msg="loop paused" since=\S+ channel=cli', between[0])
+    assert between[1] == 'msg="loop resumed"'
+    assert re.fullmatch(r'msg=polled sources="github ok" recorded=\d+ refused=0', between[2])
+    assert between[3] == 'msg="wait ended" by=web'
+    assert between[4].startswith('msg="tick ended" tick=2 ')
 
 
 @dataclass
