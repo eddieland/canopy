@@ -39,8 +39,10 @@ BINDING = PACKAGE / RUNTIME / "implementation.py"
 NEUTRAL = frozenset({"canopy.runtime.report", "canopy.runtime.entries", "canopy.runtime.agents"})
 # Modules outside it allowed to name the runtime, with why: none knows how it behaves.
 NAMES_RUNTIME = {
-    # The web UI's demo: its made-up runs print what the runtime prints, which the runtime package reads.
+    # The web UI's demo: its made-up pools' slots run the runtime's process, and its made-up runs' transcripts print
+    # what the runtime prints, which the runtime package reads.
     "serve/mock.py",
+    "serve/mock_transcripts.py",
 }
 
 
