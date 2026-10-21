@@ -1,8 +1,8 @@
 # Settings
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, reloading your
-config, and the fun. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, and the fun
-are kept in this browser; everything else canopy reads from its config files, as it always did.
+config, and the fun. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, your review
+personas, and the fun are kept in this browser; everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
@@ -29,6 +29,16 @@ Which key sends what you write: **Enter**, **Ctrl+Enter** (⌘+Enter on a Mac), 
 sent half a sentence to a worker and would rather not again. It holds in every box you write in to send: a reply, a
 note, a comment on a plan, the notes on a review request, a draft or a lesson in your words, and the notice to workers.
 Shift+Enter always makes a new line. The key you pick shows on each send button.
+
+## Reviews
+
+The personas a review you request on the [reviews page](pull-requests#asking-for-a-review) is written in. Check one,
+say `skeptic`, and that form starts with it checked; check several and each request gets a review in each. You can
+still pick others for one request, and **Use the default** leaves it to `[personas] reviewer` in your config.
+
+This is yours, not the loop's: it lives in this browser, your config doesn't set it, and the reviews canopy runs on
+its own PRs never read it. A persona you prefer that canopy would refuse to run, or one whose file you've since
+deleted, is named here and left out of each request rather than refused.
 
 ## Notice to workers
 

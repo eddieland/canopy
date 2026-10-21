@@ -6,7 +6,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
-import { keys, sessionQuery, spendQuery } from '@/api/queries'
+import { keys, personasQuery, sessionQuery, spendQuery } from '@/api/queries'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
 import { HatPreview } from '@/components/hat'
@@ -14,6 +14,7 @@ import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { NoticeForm } from '@/components/notice-form'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
+import { PersonasMenu } from '@/components/personas-menu'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
@@ -30,6 +31,7 @@ import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
+import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { stamp, useNow } from '@/lib/time'
@@ -42,7 +44,8 @@ import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
- * What this browser keeps (the theme, the clock, the send key, the fun, the session), and reloading the loop's config.
+ * What this browser keeps (the theme, the clock, the send key, the review personas, the fun, the session), and
+ * reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -97,12 +100,13 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the clock, the send key, and the fun are kept in this browser. Everything else canopy reads
-                from its config files.
+                The theme, the clock, the send key, your review personas, and the fun are kept in this browser.
+                Everything else canopy reads from its config files.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
             <SendKeyPanel />
+            <ReviewsPanel />
             <NoticePanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
@@ -511,6 +515,46 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/**
+ * The personas the operator prefers for a review they request on the reviews page, which its form starts from: their
+ * own, apart from `[personas] reviewer` in the config, which none leaves the request to. A preferred persona since
+ * removed, or one canopy would refuse to run, is named, since the form leaves it out.
+ */
+function ReviewsPanel() {
+    const preferred = useReviewPersonas()
+    const { data: personas } = useQuery(personasQuery)
+    const usable = usablePersonas(preferred, personas)
+    const left = preferred.filter((name) => !usable.includes(name))
+    const pronoun = left.length === 1 ? 'it' : 'them'
+    return (
+        <Panel>
+            <PanelHeader label="Reviews" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <div className="flex flex-col gap-1">
+                    <p className="max-w-3xl text-sm text-muted-foreground">
+                        The personas a review you request on the Reviews page is written in, one review in each. Its
+                        form starts from them; you can still pick others for one request. The default leaves it to your
+                        config&apos;s <code className="font-mono text-xs">[personas] reviewer</code>. This choice is
+                        yours alone: the loop&apos;s own reviews never read it.
+                    </p>
+                    {left.length > 0 && (
+                        <p className="max-w-3xl text-sm text-status-blocked" data-testid="review-personas-left">
+                            Left out of each request, as canopy would refuse {pronoun} now: {left.join(', ')}.
+                        </p>
+                    )}
+                </div>
+                <PersonasMenu
+                    personas={personas}
+                    chosen={preferred}
+                    disabled={false}
+                    onChange={setReviewPersonas}
+                    testId="review-personas"
+                />
             </div>
         </Panel>
     )

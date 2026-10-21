@@ -1,32 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ScanSearch, Square } from 'lucide-react'
+import { ScanSearch, Square } from 'lucide-react'
 import { useId, useState } from 'react'
 
 import { refreshReviewRequests, requestReview, stopReview } from '@/api/mutations'
 import { personasQuery } from '@/api/queries'
-import type { PersonaList, ReviewRequest } from '@/api/types'
+import type { ReviewRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
+import { PersonasMenu } from '@/components/personas-menu'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import {
-    DropdownMenu,
-    DropdownMenuCheckboxItem,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { reviewPersonasText, reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
 import { pullRequestUrl } from '@/lib/pull-request-label'
+import { usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_NOTES = 4000
-// The most personas one request names, as the server bounds them: a review in each is a run in each.
-const MAX_PERSONAS = 10
 
 // What an open request does: one review, or one in each of its personas.
 const ONCE = 'canopy reviews its head once, in the repository it is in, and the request ends with that review.'
@@ -36,8 +28,9 @@ const SEVERAL =
 /**
  * `canopy start URL --review --notes TEXT --persona NAME` from the reviews page (DESIGN §21, §22, §31): a PR the loop
  * does not own, by its URL, with what its reviewer should know, and the personas to review it in, one review each,
- * or none for `[personas] reviewer`'s. canopy reviews it once, at its head, in whichever of the workspace's
- * repositories it is in. Nothing is posted on the PR, and nothing is reviewed now: the next tick does it.
+ * or none for `[personas] reviewer`'s. The personas start as those the operator prefers in Settings, and each request
+ * goes back to them. canopy reviews it once, at its head, in whichever of the workspace's repositories it is in.
+ * Nothing is posted on the PR, and nothing is reviewed now: the next tick does it.
  */
 export function ReviewRequestForm({ className }: { className?: string }) {
     const client = useQueryClient()
@@ -45,9 +38,12 @@ export function ReviewRequestForm({ className }: { className?: string }) {
     const sendKeys = useSendKeys()
     const [url, setUrl] = useState('')
     const [notes, setNotes] = useState('')
-    const [chosen, setChosen] = useState<readonly string[]>([])
+    // The personas picked for this request alone, or null for the operator's preferred ones, as Settings has them now.
+    const [picked, setPicked] = useState<readonly string[] | null>(null)
     const [said, setSaid] = useState<string | null>(null)
     const { data: personas } = useQuery(personasQuery)
+    const preferred = useReviewPersonas()
+    const chosen = picked ?? usablePersonas(preferred, personas)
     // A link into a GitHub PR, such as one of its threads, names the PR: the server takes only its own address.
     const target = pullRequestUrl(url.trim()) ?? url.trim()
     const request = useMutation({
@@ -56,7 +52,7 @@ export function ReviewRequestForm({ className }: { className?: string }) {
             setSaid(reviewRequestedText(target, requested, notes.trim() !== '', chosen.length > 0))
             setUrl('')
             setNotes('')
-            setChosen([])
+            setPicked(null)
             void refreshReviewRequests(client)
         },
     })
@@ -101,7 +97,17 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                 <span className="panel-label" aria-hidden>
                     Persona
                 </span>
-                <PersonasMenu personas={personas} chosen={chosen} disabled={request.isPending} onChange={setChosen} />
+                <PersonasMenu
+                    personas={personas}
+                    chosen={chosen}
+                    disabled={request.isPending}
+                    onChange={setPicked}
+                    title="canopy start URL --review --persona NAME"
+                    testId="review-request-personas"
+                />
+                {picked === null && chosen.length > 0 && (
+                    <span className="text-xs text-muted-foreground">as Settings prefers</span>
+                )}
                 {chosen.length > 1 && (
                     <span className="text-xs text-muted-foreground">one review in each, side by side</span>
                 )}
@@ -123,65 +129,6 @@ export function ReviewRequestForm({ className }: { className?: string }) {
             </div>
             <Notice error={request.error}>{said}</Notice>
         </form>
-    )
-}
-
-/**
- * The personas a review request names, as `--persona NAME` given once for each: a menu of every persona a run could
- * get, any number checked, or none for `[personas] reviewer`'s, which the trigger names. A persona canopy would refuse
- * to run is shown, disabled, with why.
- */
-function PersonasMenu({
-    personas,
-    chosen,
-    disabled,
-    onChange,
-}: {
-    personas: PersonaList | undefined
-    chosen: readonly string[]
-    disabled: boolean
-    onChange: (chosen: readonly string[]) => void
-}) {
-    const shown = chosen.length > 0 ? chosen.join(', ') : `${personas?.reviewer ?? 'canopy'} (default)`
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="xs"
-                    className="font-mono"
-                    disabled={disabled || personas === undefined}
-                    aria-label={`Persona: ${shown}`}
-                    title="canopy start URL --review --persona NAME"
-                    data-testid="review-request-personas"
-                >
-                    {shown}
-                    <ChevronDown aria-hidden />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-                {personas?.personas.map((p) => (
-                    <DropdownMenuCheckboxItem
-                        key={p.name}
-                        className="font-mono text-xs"
-                        checked={chosen.includes(p.name)}
-                        disabled={p.error !== null || (chosen.length >= MAX_PERSONAS && !chosen.includes(p.name))}
-                        title={p.error ?? undefined}
-                        // Kept open, so several can be checked for a review in each.
-                        onSelect={(event) => event.preventDefault()}
-                        onCheckedChange={(checked) =>
-                            onChange(checked ? [...chosen, p.name] : chosen.filter((name) => name !== p.name))
-                        }
-                    >
-                        {p.name}
-                    </DropdownMenuCheckboxItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={chosen.length === 0} onSelect={() => onChange([])}>
-                    Use the default
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
     )
 }
 
