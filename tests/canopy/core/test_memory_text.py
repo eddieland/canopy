@@ -16,12 +16,13 @@ from canopy.core.memory_text import (
     hidden_char,
     looks_secret,
     normalized,
+    quoted,
     visible,
 )
 
-# Characters a note may not hold, from each category: control, format (zero-width, bidi, tag), surrogate, private use,
-# unassigned, and the line and paragraph separators.
-HIDDEN = ["\x00", "\n", "\x1b", "\u200b", "\u200d", "\u202e", "\u2066", "\ufeff", "\U000e0041", "\ue000", "\u2028"]
+# Characters a note may not hold, from each category: control but the line feed and tab, format (zero-width, bidi,
+# tag), surrogate, private use, unassigned, and the line and paragraph separators.
+HIDDEN = ["\x00", "\r", "\x1b", "\u200b", "\u200d", "\u202e", "\u2066", "\ufeff", "\U000e0041", "\ue000", "\u2028"]
 
 
 @pytest.mark.parametrize("char", HIDDEN)
@@ -68,6 +69,11 @@ def test_ordinary_notes_pass(text: str) -> None:
     assert check_text(text, 400) == text
 
 
+def test_a_text_keeps_its_line_breaks_and_tabs() -> None:
+    text = "Run the tests twice.\nEvidence: the first run\tfails on a cold cache."
+    assert check_text(text, 400) == text
+
+
 def test_a_text_is_trimmed_and_bounded() -> None:
     assert check_text("  Run it twice.  ", 400) == "Run it twice."
     with pytest.raises(TextRefused, match="blank"):
@@ -89,6 +95,16 @@ def test_visible_text_holds_no_hidden_character_and_names_each(text: str) -> Non
     assert not any(hidden_char(c) for c in shown)
     # Each name reads back as the character it stands for, so nothing is lost or changed.
     assert re.sub(r"<U\+([0-9A-F]{4,6})>", lambda m: chr(int(m.group(1), 16)), shown) == text
+
+
+@given(st.text())
+def test_quoted_text_puts_the_prefix_before_each_line_and_names_the_rest(text: str) -> None:
+    assume("<U+" not in text)
+    shown = quoted(text, "> ")
+    assert all(line.startswith("> ") for line in shown.split("\n"))
+    assert not any(hidden_char(c) and c != "\n" for c in shown)
+    lines = [line.removeprefix("> ") for line in shown.split("\n")]
+    assert re.sub(r"<U\+([0-9A-F]{4,6})>", lambda m: chr(int(m.group(1), 16)), "\n".join(lines)) == text
 
 
 @given(st.text(), st.sampled_from(HIDDEN), st.text())

@@ -123,7 +123,7 @@ A follow-up is a request, not work you start: canopy asks the operator about eac
 
 Your last line of stdout must be exactly one JSON object, with nothing after it:
 
-{"status":"done|blocked|failed","branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"},"pr_titles":{"repo":"<its title or null>"},"summary":"<what you addressed>","question":"<only when blocked>"}
+{"status":"done|blocked|failed","branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"},"pr_titles":{"repo":"<its title or null>"},"summary":"<what you addressed, line breaks sparingly>","question":"<only when blocked>"}
 
 That JSON object also carries `"drafts"`: each comment you would otherwise have posted, which canopy keeps for the operator. They read each one where it goes, may edit or drop it, and send it as their own words, so post none of them yourself and mark none. At most 30, each one of these:
 

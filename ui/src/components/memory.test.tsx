@@ -103,6 +103,13 @@ describe('MemoryRows', () => {
         expect(within(row).queryByRole('link', { name: 'ABC-102' })).toBeNull()
     })
 
+    it('breaks a memory’s text where its writer broke it, never naming the line feed', async () => {
+        await renderRows(<MemoryRows entries={[{ ...NOTE, text: 'Run the tests twice.\nEvidence: test_retry.' }]} />)
+        const text = within(screen.getByRole('listitem')).getByText(/^Run the tests twice\./u)
+        expect(text.textContent).toBe('Run the tests twice.\nEvidence: test_retry.')
+        expect(screen.queryByTitle('A character that hides text, which a model still reads')).toBeNull()
+    })
+
     it('names the runs that relied on a memory, and counts those it cannot name', async () => {
         await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 4, used_by: [43, 42] }]} />)
         expect(screen.getByText(/^used in/u).textContent).toBe('used in run:43, run:42 and 2 more')

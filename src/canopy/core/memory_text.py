@@ -1,12 +1,13 @@
 """What a memory's text may hold, and how it is shown (DESIGN §28, Bounds); a draft's is held to the same (§29).
 
 A note or a proposal is worker text that may reach later prompts, so it is checked in code when it is written, never
-cut or cleaned: a refused entry is stored nowhere, and why is recorded with its run. A key is a slug. A text is one
-line of plain text, without the characters that hide text from a person who reads it (control, format, and separator
-characters, zero-width, bidi, and tag characters among them), and without anything that looks like a secret.
+cut or cleaned: a refused entry is stored nowhere, and why is recorded with its run. A key is a slug. A text is plain
+text, its lines broken by line feeds, without the characters that hide text from a person who reads it (control, format,
+and separator characters, zero-width, bidi, and tag characters among them), and without anything that looks like a
+secret.
 
 What the journal holds may still have been written past these checks, by hand, so every surface shows a memory's text
-through `visible`, with each such character named.
+through `visible` or `quoted`, with each such character named.
 """
 
 from __future__ import annotations
@@ -70,11 +71,11 @@ def check_key(value: object) -> str:
     return value
 
 
-def check_text(value: object, limit: int, *, lines: bool = False) -> str:
+def check_text(value: object, limit: int) -> str:
     """Return a memory's text, trimmed, refusing what canopy never stores (DESIGN §28, Bounds).
 
-    With `lines`, as for a draft's text (DESIGN §29), line feeds and tabs are allowed: a reply may hold paragraphs and
-    code. Every other character `hidden_char` names is still refused.
+    Line feeds and tabs are allowed: a memory may break its lines, and a draft's reply (DESIGN §29) may hold paragraphs
+    and code. Every other character `hidden_char` names is refused.
 
     Returns:
         The text without surrounding spaces.
@@ -90,7 +91,7 @@ def check_text(value: object, limit: int, *, lines: bool = False) -> str:
         raise TextRefused("its text is blank")
     if len(text) > limit:
         raise TextRefused(f"its text is {len(text)} characters, over {limit}")
-    hidden = next((c for c in text if hidden_char(c) and not (lines and c in "\n\t")), None)
+    hidden = next((c for c in text if hidden_char(c) and c not in "\n\t"), None)
     if hidden is not None:
         raise TextRefused(f"its text holds {_name(hidden)}, a character that hides text")
     if looks_secret(text):
@@ -134,6 +135,15 @@ def visible(text: str) -> str:
         `text`, each character of `HIDDEN_CATEGORIES` replaced by its code point in angle brackets.
     """
     return "".join(f"<U+{ord(c):04X}>" if hidden_char(c) else c for c in text)
+
+
+def quoted(text: str, prefix: str) -> str:
+    """Return `text` with `prefix` before each of its lines, every other hidden character named as `visible` names it.
+
+    Returns:
+        Each line of `text`, split at its line feeds alone, after `prefix` and through `visible`, joined by line feeds.
+    """
+    return "\n".join(prefix + visible(line) for line in text.split("\n"))
 
 
 def _random(word: str) -> bool:

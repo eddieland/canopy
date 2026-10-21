@@ -219,7 +219,7 @@ def checked(text: object) -> str:
     Raises:
         TextRefused: canopy would not keep it as a draft's text, for the reason it says.
     """
-    return check_text(text, MAX_DRAFT_CHARS, lines=True)
+    return check_text(text, MAX_DRAFT_CHARS)
 
 
 def dismissed(
