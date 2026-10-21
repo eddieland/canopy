@@ -252,7 +252,8 @@ reviews).
 Only a tick starts a review (D020). The PR's URL is an opaque string the harness never parses, and only a review that
 names its ticket (an `own` review) can send findings to a worker. The harness refuses, and records the refusal, a review
 while reviews are off, of a PR in no known repository, naming a ticket that did not open the PR, of a PR whose review or
-ticket's worker is running, of a commit with a `done` review, or past the per-PR limit (runs however they ended, plus
+ticket's worker is running, of a commit with a `done` review (in the same persona, when the operator chose several for
+the PR, §31), or past the per-PR limit (runs however they ended, plus
 any the operator grants, §22), the daily limit, review capacity, or `max_workers`, which counts reviews. A dry run
 checks the same guards and starts nothing (D036).
 
@@ -301,9 +302,11 @@ findings are not.
 The operator asks for one review of a coworker's PR at its head; asking again after a push reviews the new head. A
 request is a journal fact, at most one open per PR, ended by a `done` review, by the overseer finding the PR merged,
 closed, or in no cloned repository, or by the operator. A request may carry the operator's notes, which its reviewer's
-prompt carries; a prompt override that drops them fails to render. A requested review is the overseer's first start of
-a tick, ahead of every worker and every other review, since the operator asked for it by hand. Starting work on a
-coworker's PR is refused, so a review never turns into work on someone else's branch. Requests are refused inside a
+prompt carries; a prompt override that drops them fails to render. A request may name several personas (§31): one
+`canopy review run` starts a review in each still owed one, side by side, each counting against the per-PR limit and
+keeping its own draft, and the request ends once each has a `done` review. A requested review is the overseer's first
+start of a tick, ahead of every worker and every other review, since the operator asked for it by hand. Starting work on
+a coworker's PR is refused, so a review never turns into work on someone else's branch. Requests are refused inside a
 run: a request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise aim the
 operator's spend at any PR (T1).
 

@@ -166,8 +166,11 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 @click.option("--notes", metavar="TEXT", help="With --review: what the reviewer should know or look at closely.")
 @click.option(
     "--persona",
+    "chosen",
     metavar="NAME",
-    help="The persona of the run this starts, alone: its first worker's, its planner's with --plan, or its review's.",
+    multiple=True,
+    help="The persona of the run this starts, alone: its first worker's, its planner's with --plan, or its review's. "
+    "With --review, give it again for a review in each, side by side.",
 )
 @click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
@@ -177,7 +180,7 @@ def cmd_start(
     *,
     review: bool,
     notes: str | None,
-    persona: str | None,
+    chosen: tuple[str, ...],
     plan: bool,
 ) -> int:
     """Work a ticket privately, or with --review have canopy review someone else's PR.
@@ -197,7 +200,8 @@ def cmd_start(
     the workspace's repositories it is in; the review goes in the journal and nothing is posted on the PR. --notes
     hands its reviewer what you want it to know, such as what the author asked for or the part that worries you; on a
     PR already requested, they replace the request's notes. --persona NAME, one `canopy personas` lists, is the voice
-    its review is written in; on a PR already requested, it replaces the request's, as `canopy persona URL` does.
+    its review is written in; given more than once, canopy reviews the PR once in each, side by side, and each review
+    keeps its own draft. On a PR already requested, they replace the request's personas.
     """
     _operator("start")
     subject = _ref(ref, "start")
@@ -206,7 +210,13 @@ def cmd_start(
     if review:
         if plan:
             raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
-        return _start_review(click_ctx, subject, notes, persona)
+        return _start_review(click_ctx, subject, notes, chosen)
+    if len(chosen) > 1:
+        raise click.UsageError("a ticket's run takes one --persona; several are for a PR's reviews, with --review")
+    return _start_ticket(click_ctx, subject, chosen[0] if chosen else None, plan=plan)
+
+
+def _start_ticket(click_ctx: click.Context, subject: Ref, persona: str | None, *, plan: bool) -> int:
     ctx = open_context(click_ctx)
     agent: personas.NextAgent = "planner" if plan else "worker"
     try:
@@ -241,25 +251,31 @@ def cmd_start(
     return 0
 
 
-def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, persona: str | None) -> int:
+def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, chosen: tuple[str, ...]) -> int:
     ctx = open_context(click_ctx)
     try:
-        requested = review_requests.request(ctx.conn, ctx.config, subject, channel=CLI, notes=notes, persona=persona)
+        requested = review_requests.request(ctx.conn, ctx.config, subject, channel=CLI, notes=notes, chosen=chosen)
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     noted = requested.request.notes is not None
     logs.for_tick(None).info(
         "review requested",
-        extra={"pr": subject.id, "already": requested.already, "notes": noted, "persona": persona, "channel": CLI},
+        extra={"pr": subject.id, "already": requested.already, "notes": noted, "personas": chosen, "channel": CLI},
+    )
+    names = review_requests.personas_of(ctx.conn, requested.request.id)
+    written = (
+        f"Its review is written in {names[0]}."
+        if len(names) == 1
+        else f"It is reviewed once in each of {', '.join(names)}, side by side."
     )
     if requested.already:
         replaced = " Its notes are replaced." if (notes or "").strip() else ""
-        replaced += f" Its review is written in {persona}." if persona is not None else ""
+        replaced += f" {written}" if chosen else ""
         click.echo(f"{subject} was already requested for review.{replaced}")
         return 0
     click.echo(f"{subject} is requested for review. The next tick reviews its head, once. Nothing is posted on the PR.")
-    if persona is not None:
-        click.echo(f"Its review is written in {persona}.")
+    if chosen:
+        click.echo(written)
     return 0
 
 
@@ -608,9 +624,9 @@ def _show_pr(ctx: Context, url: str) -> None:
             click.echo(f"  review request: {made}, open")
         else:
             click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
-        persona = review_requests.persona_of(ctx.conn, request.id)
-        if persona is not None:
-            click.echo(f"  persona: {persona}")
+        chosen = review_requests.personas_of(ctx.conn, request.id)
+        if chosen:
+            click.echo(f"  {'persona' if len(chosen) == 1 else 'personas'}: {', '.join(chosen)}")
         if request.notes is not None:
             click.echo("  notes:")
             for line in conversation.printable(request.notes).splitlines():
@@ -620,7 +636,7 @@ def _show_pr(ctx: Context, url: str) -> None:
         when = f"started {attention.age(r.started_at)} ago"
         if r.ended_at:
             when = f"ended {attention.age(r.ended_at)} ago"
-        click.echo(f"  review:{r.id}  {r.sha[:12]}  {r.status}  {when}")
+        click.echo(f"  review:{r.id}  {r.sha[:12]}  {r.status}  {when}{f'  in {r.persona}' if r.persona else ''}")
     if not runs:
         click.echo("  none yet")
     else:

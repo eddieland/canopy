@@ -1,14 +1,15 @@
 """Review requests (DESIGN §21, ROADMAP M42): the operator asks canopy to review a PR the loop does not own.
 
-A request is a journal fact, like a start record (§22): the PR's URL, and when and through which channel it was made
-and ended. It authorizes one review of its PR at its head, as `review.query` would, so only the operator makes or stops
-one: every channel (`canopy start URL --review`, `canopy stop URL`, and the web UI) calls the functions here, and each
-refuses inside canopy's own ticks and runs. The overseer names the PR's repository when it runs the review, as it does
-for `review.query`'s matches. The harness ends a request when a review of its PR ends `done` (`db.finish_run`),
-or when `canopy review run` refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed
-first, or is in none of the workspace's repositories (`end`). At most one request per PR is open. A request may carry
-the operator's notes, which the reviewer's prompt carries (`reviews.start`), and the persona its review is written in,
-in place of `[personas] reviewer` (DESIGN §31), which only the operator chooses (`request`, `choose_persona`).
+A request is a journal fact, like a start record (§22): the PR's URL, and when and through which channel it was made and
+ended. It authorizes one review of its PR at its head, as `review.query` would, or one in each persona the operator
+chose for it, so only the operator makes or stops one: every channel (`canopy start URL --review`, `canopy stop URL`,
+and the web UI) calls the functions here, and each refuses inside canopy's own ticks and runs. The overseer names the
+PR's repository when it runs the review, as it does for `review.query`'s matches. The harness ends a request when a
+review of its PR ends `done`, in each of its personas if it has any (`db.finish_run`), or when `canopy review run`
+refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed first, or is in none of the
+workspace's repositories (`end`). At most one request per PR is open. A request may carry the operator's notes, which
+the reviewer's prompt carries (`reviews.start`), and the personas it is reviewed in, in place of `[personas] reviewer`'s
+(DESIGN §31), which only the operator chooses (`request`, `choose_persona`).
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from canopy.core import contract, conversation, db, personas, records, sql
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Iterable, Sequence
 
     from canopy.core.config import Config
     from canopy.core.review_result import ReviewResult
@@ -92,31 +94,26 @@ def latest_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewReque
     )
 
 
-def persona_of(conn: sqlite3.Connection, request_id: int) -> str | None:
-    """Return the persona the operator chose for request `request_id`'s review, or None when they chose none."""
-    found = records.fetch_one(
+def personas_of(conn: sqlite3.Connection, request_id: int) -> list[str]:
+    """Return the personas the operator chose for request `request_id`'s reviews, in the order chosen; none for none."""
+    found = records.fetch_all(
         conn,
         records.ReviewRequestPersona,
-        sql.select("*").from_("review_request_personas").where("request_id = ?", request_id),
+        sql.select("*").from_("review_request_personas").where("request_id = ?", request_id).order_by("rowid"),
     )
-    return found.persona if found is not None else None
+    return [p.persona for p in found]
 
 
-def persona_for(conn: sqlite3.Connection, config: Config, pr_url: str) -> personas.Persona | None:
-    """Return the persona the operator chose for the review the PR's open request asks for, read now (DESIGN §31).
+def load_persona(config: Config, pr_url: str, name: str) -> personas.Persona:
+    """Return persona `name`, one the operator chose for the review the PR's open request asks for, read now (§31).
 
     Returns:
-        The persona, read from its file, or None when the PR has no open request or its request chose none, and its
-        review gets `[personas] reviewer`.
+        The persona, read from its file.
 
     Raises:
         PersonaError: (`MISSING`) the name has no file, or (`BAD`) its file is one canopy would not put in a prompt;
             never fallen back from.
     """
-    found = open_request(conn, pr_url)
-    name = persona_of(conn, found.id) if found is not None else None
-    if name is None:
-        return None
     try:
         return personas.load(config, name)
     except personas.PersonaError as e:
@@ -139,13 +136,14 @@ def request(
     *,
     channel: str,
     notes: str | None = None,
-    persona: str | None = None,
+    chosen: Sequence[str] = (),
 ) -> Requested:
     """Ask for the PR `ref` names to be reviewed at its head, through `channel`, with `notes`. Operator only.
 
-    `notes` is what the operator wants the reviewer to know, stripped; blank is none. `persona` is the persona its
-    review is written in, in place of `[personas] reviewer`. On a request already open, notes or a persona replace its
-    own, and none leaves them as they were. A review already running keeps the prompt it started with.
+    `notes` is what the operator wants the reviewer to know, stripped; blank is none. `chosen` are the personas it is
+    reviewed in, one review each, in place of `[personas] reviewer`'s one (DESIGN §31). On a request already open,
+    notes or personas replace its own, and none leaves them as they were. A review already running keeps the prompt
+    it started with.
 
     Returns:
         The PR's open request, and whether one was already open.
@@ -163,8 +161,9 @@ def request(
     said = (notes or "").strip() or None
     if said is not None and len(said) > MAX_NOTES:
         raise conversation.Refused("bad_notes", f"the notes are {len(said)} characters; the most is {MAX_NOTES}")
-    if persona is not None:
-        personas.check(config, persona)
+    names = list(dict.fromkeys(chosen))
+    for name in names:
+        personas.check(config, name)
     url = _pr_url(ref)
     if sql.execute(conn, sql.select("1").from_("ticket_units").where("pr_url = ?", url)).fetchone() is not None:
         raise conversation.Refused(
@@ -177,13 +176,13 @@ def request(
             sql.execute(conn, sql.update("review_requests").set(notes=said).where("id = ?", found.id))
             found = open_request(conn, url)
         if found is not None:
-            if persona is not None:
-                _set_persona(conn, found.id, persona)
+            if names:
+                _set_personas(conn, found.id, names)
             return Requested(request=found, already=True)
         sql.execute(conn, sql.insert("review_requests", pr_url=url, created_at=db.now(), channel=channel, notes=said))
         made = open_request(conn, url)
-        if made is not None and persona is not None:
-            _set_persona(conn, made.id, persona)
+        if made is not None and names:
+            _set_personas(conn, made.id, names)
     if made is None:
         raise RuntimeError(f"the request for {url} vanished")
     return Requested(request=made, already=False)
@@ -219,10 +218,7 @@ def choose_persona(
                 f"{url} has no open review request; ask for one with its persona: canopy start {url} --review "
                 f"--persona {name or 'NAME'}",
             )
-        if name is None:
-            sql.execute(conn, sql.delete("review_request_personas").where("request_id = ?", found.id))
-        else:
-            _set_persona(conn, found.id, name)
+        _set_personas(conn, found.id, [name] if name is not None else [])
     return found
 
 
@@ -325,10 +321,11 @@ def has_news(run: records.ReviewRun, found: ReviewResult | None) -> bool:
     return found.verdict == "findings" or run.purpose == PURPOSE
 
 
-def _set_persona(conn: sqlite3.Connection, request_id: int, name: str) -> None:
-    # In place of the request's own, inside the caller's transaction.
+def _set_personas(conn: sqlite3.Connection, request_id: int, names: Iterable[str]) -> None:
+    # In place of the request's own, in the order given, inside the caller's transaction.
     sql.execute(conn, sql.delete("review_request_personas").where("request_id = ?", request_id))
-    sql.execute(conn, sql.insert("review_request_personas", request_id=request_id, persona=name))
+    for name in names:
+        sql.execute(conn, sql.insert("review_request_personas", request_id=request_id, persona=name))
 
 
 def _end(conn: sqlite3.Connection, request_id: int, reason: str) -> None:
