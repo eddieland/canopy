@@ -30,6 +30,7 @@ import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-op
 import type { TranscriptPage } from '@/lib/context-chart-open'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
+import { removedAfter } from '@/lib/retention'
 import { rowLineFrom } from '@/lib/rows'
 import { marked, markedTokens } from '@/lib/search'
 import { useClock } from '@/lib/clock'
@@ -322,6 +323,10 @@ function empty(transcript: Transcript, running: boolean, page: TranscriptPage): 
             }
         }
         case 'no_log': {
+            if (transcript.removed_after_days !== null) {
+                const removed = removedAfter(transcript.removed_after_days)
+                return { short: removed, reason: `${removed}: your [retention] keeps a log that long once it ends` }
+            }
             return { short: 'log gone', reason: 'its log is gone, or is not a file canopy reads' }
         }
         case 'read': {

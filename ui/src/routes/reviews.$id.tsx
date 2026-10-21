@@ -29,6 +29,7 @@ import { reviewDescription } from '@/lib/descriptions'
 import { reviewSentText } from '@/lib/outcomes'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef } from '@/lib/refs'
+import { goneText } from '@/lib/retention'
 import { findingAnchor, placeFindings, SEVERITY_TONE, shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { useSeesReview } from '@/lib/seen-reviews'
 import { tickId } from '@/lib/ticks'
@@ -38,6 +39,9 @@ import { cn } from '@/lib/utils'
 const HELP =
     "canopy's adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on the diff, at " +
     'the lines they name.'
+
+/** Why a review has no diff, when retention did not remove it. */
+const NO_DIFF = 'no diff kept for this review: it is older than kept diffs, or its base could not be read'
 
 /** One review run: its fields, its findings, and the diff with each finding on the line it names. */
 export const Route = createFileRoute('/reviews/$id')({
@@ -91,9 +95,7 @@ function Loaded({ id }: { id: number }) {
                 {data.diff === null ? (
                     <Panel>
                         <PanelHeader label="Diff" />
-                        <Empty>
-                            no diff kept for this review: it is older than kept diffs, or its base could not be read
-                        </Empty>
+                        <Empty>{goneText(data.diff_removed_after_days, NO_DIFF)}</Empty>
                     </Panel>
                 ) : (
                     <>

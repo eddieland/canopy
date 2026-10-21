@@ -199,9 +199,10 @@ findings, each linking to where it sits, and the diff, a panel per file, with ea
 names. A finding about a file the diff doesn't touch waits in a panel of its own after the files. A long diff shows the
 lines around each finding at first, with folds that open the rest.
 
-An old review may have no diff kept. Its findings list is then the cards themselves, each with its location, its
-detail, and **dismiss**, so each finding is on the page once, which is about as often as you want to read a blocking
-one.
+An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
+the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each
+with its location, its detail, and **dismiss**, so each finding is on the page once, which is about as often as you want
+to read a blocking one.
 
 **Hide diff**, on a file's header, folds that file away to one line saying how much it hid; **Show diff** brings it
 back. To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's

@@ -220,7 +220,8 @@ cmd = ""
 # low_impact = "Only docs, comments, or tests change."
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
-# what each kind holds and what a pass would remove; nothing removes anything yet (ROADMAP M47).
+# what each kind holds and what a pass would remove. A live tick removes the files once a day, and rotates canopy.log;
+# the journal's rows are not removed yet (ROADMAP M47).
 # [retention]
 # run_files_days = 30    # a run's, chore run's, or review's log, prompt, and diff, once it ended this long ago
 # tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for run_files_days

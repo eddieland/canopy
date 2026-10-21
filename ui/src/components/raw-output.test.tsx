@@ -16,7 +16,7 @@ const TEXT = '{"type":"result","ok":true}\n--- stderr ---\nrate limited once'
 // for the workspace root, which is not the file.
 let read: string[] = []
 const outputs = () => read.filter((path) => path.endsWith('/output'))
-let answer: RawOutput = { status: 'read', text: TEXT, size: 2048, truncated: false }
+let answer: RawOutput = { status: 'read', text: TEXT, size: 2048, truncated: false, removed_after_days: null }
 
 const server: Middleware = {
     onRequest({ request }) {
@@ -27,7 +27,7 @@ const server: Middleware = {
 
 beforeEach(() => {
     read = []
-    answer = { status: 'read', text: TEXT, size: 2048, truncated: false }
+    answer = { status: 'read', text: TEXT, size: 2048, truncated: false, removed_after_days: null }
     api.use(server)
 })
 
@@ -78,8 +78,21 @@ describe('TickOutputPanel', () => {
     })
 
     it.each([
-        ['a file it cannot read', { status: 'no_output', text: '', size: 0, truncated: false }, /^its output is gone/u],
-        ['an empty file', { status: 'read', text: '', size: 0, truncated: false }, 'empty: the overseer wrote nothing'],
+        [
+            'a file it cannot read',
+            { status: 'no_output', text: '', size: 0, truncated: false, removed_after_days: null },
+            /^its output is gone/u,
+        ],
+        [
+            'an empty file',
+            { status: 'read', text: '', size: 0, truncated: false, removed_after_days: null },
+            'empty: the overseer wrote nothing',
+        ],
+        [
+            'a file retention removed',
+            { status: 'no_output', text: '', size: 0, truncated: false, removed_after_days: 7 },
+            'removed after 7 days, as your [retention] keeps it',
+        ],
     ] as const)('says so for %s, with nothing to lay out', async (_, file, says) => {
         answer = file
         renderPanel(PATH)
@@ -90,7 +103,7 @@ describe('TickOutputPanel', () => {
     })
 
     it('says when it shows only the end of a file that holds more', async () => {
-        answer = { status: 'read', text: 'the last line', size: 900_000, truncated: true }
+        answer = { status: 'read', text: 'the last line', size: 900_000, truncated: true, removed_after_days: null }
         renderPanel(PATH)
         await show()
         expect(
@@ -128,7 +141,7 @@ describe('RunOutputPanel', () => {
     const LOG = '--- setup web stdout ---\nDone in 6.2s\n--- worker stdout ---\n{"type":"text"}\n--- worker exit 1 ---'
 
     it('names its log while hidden, and reads the run’s output only once shown, setup lines and all', async () => {
-        answer = { status: 'read', text: LOG, size: LOG.length, truncated: false }
+        answer = { status: 'read', text: LOG, size: LOG.length, truncated: false, removed_after_days: null }
         renderRun()
         expect(screen.getByText(/as written: its setup commands’ output/u).textContent).toBe(
             'the run’s log as written: its setup commands’ output, then the worker’s stdout and stderr',
@@ -141,7 +154,7 @@ describe('RunOutputPanel', () => {
     })
 
     it('keeps Pretty for the page alone, never in the ticks’ store', async () => {
-        answer = { status: 'read', text: LOG, size: LOG.length, truncated: false }
+        answer = { status: 'read', text: LOG, size: LOG.length, truncated: false, removed_after_days: null }
         renderRun()
         await show()
         await screen.findByRole('region', { name: "the run's output" })
@@ -152,7 +165,7 @@ describe('RunOutputPanel', () => {
     })
 
     it('says so when the run wrote nothing', async () => {
-        answer = { status: 'read', text: '', size: 0, truncated: false }
+        answer = { status: 'read', text: '', size: 0, truncated: false, removed_after_days: null }
         renderRun()
         await show()
         expect(await screen.findByText('empty: the run wrote nothing')).toBeDefined()

@@ -30,7 +30,8 @@ def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool) -> int:
     """Report what canopy keeps of its own history, and what a pass with your `[retention]` would remove.
 
     For each kind: how many there are and their size, then how many a pass would remove and theirs, and the rule that
-    removes them. Only the dry run is built yet: nothing is removed (ROADMAP M47).
+    removes them. A live tick runs the pass once a day, removing the files the report counts, and rotates canopy.log;
+    by hand, only the dry run is built yet, and it removes nothing (ROADMAP M47).
 
     Raises:
         UsageError: `--dry-run` is not given.
@@ -41,7 +42,9 @@ def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool) -> int:
     except conversation.Refused as r:
         raise CliError(f"gc refused ({r.guard}): {r.reason}") from None
     if not dry_run:
-        raise click.UsageError("only `canopy gc --dry-run` is built yet; it removes nothing")
+        raise click.UsageError(
+            "only `canopy gc --dry-run` is built yet; the loop's live ticks run the pass once a day",
+        )
     ctx = open_context(click_ctx)
     report = gc.measure(ctx, datetime.now(UTC))
     if as_json:

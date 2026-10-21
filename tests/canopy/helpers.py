@@ -1017,3 +1017,38 @@ def shipped_through(dest: Path, version: int) -> Path:
 def versions_after(version: int) -> list[int]:
     """The shipped migrations after `version`: what upgrading a journal at `version` applies."""
     return [m.version for m in db.discover(resources.migrations_dir()) if m.version > version]
+
+
+def ended_tick(conn: sqlite3.Connection, ended: str | None, status: str = "ok") -> int:
+    """A tick that ended at `ended` with `status`, or one still running, for what garbage collection keeps of it."""
+    cursor = conn.execute(
+        "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, ?)",
+        (ended or db.now(), ended, status),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def run_with_files(conn: sqlite3.Connection, env: CanopyEnv, tick_id: int, ended: str | None) -> Path:
+    """A worker run of `tick_id` that ended at `ended`, or is running, with its log and prompt written: 110 bytes."""
+    db.touch_ticket(conn, KEY, str(env.root))
+    cursor = conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, status, log_path) "
+        "VALUES (?, ?, 'implement', 'agent/x', ?, ?, ?, '')",
+        (tick_id, KEY, ended or db.now(), ended, "done" if ended else "running"),
+    )
+    log = env.state_dir / "runs" / f"{cursor.lastrowid}.log"
+    conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(log), cursor.lastrowid))
+    write_file(log, 100)
+    write_file(log.with_suffix(".prompt"), 10)
+    return log
+
+
+def write_file(path: Path, size: int, *, hours_old: float = 0) -> Path:
+    """Write `size` bytes to `path`, its parents made, its modification time `hours_old` hours ago."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"x" * size)
+    if hours_old:
+        moment = time.time() - hours_old * 3600
+        os.utime(path, (moment, moment))
+    return path

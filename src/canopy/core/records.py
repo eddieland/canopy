@@ -33,6 +33,7 @@ from canopy.core.vocab import (
     DraftKind,
     DraftStance,
     DraftStatus,
+    GcPassStatus,
     MemoryAuthor,
     MemoryCited,
     MemoryMode,
@@ -912,6 +913,31 @@ class Derivation(Row):
     stale: str | None
     #: The phase the journal held for the subject when the tick closed: the overseer's.
     overseer_phase: Phase | None
+
+
+@dataclass(frozen=True)
+class GcPass(Row):
+    """One pass of garbage collection (DESIGN §26): the retention it ran with, and what it removed."""
+
+    TABLE: ClassVar[str] = "gc_passes"
+
+    id: int
+    #: The tick it ran in; None for a pass run by hand.
+    tick_id: int | None
+    started_at: str
+    ended_at: str
+    status: GcPassStatus
+    run_files_days: int
+    tick_files_days: int
+    #: The end before which a run's files went, and an `ok` tick's; None when that kind is kept forever.
+    run_cutoff: str | None
+    tick_cutoff: str | None
+    #: The files it removed and their bytes, by the kind `canopy gc --dry-run` names, as a JSON object.
+    removed: str
+    #: The files it found past retention but could not remove.
+    failures: int
+    #: What it raised; None for an `ok` pass.
+    error: str | None
 
 
 @dataclass(frozen=True)

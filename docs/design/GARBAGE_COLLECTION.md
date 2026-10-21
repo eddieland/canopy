@@ -6,19 +6,20 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 
 ## 26. Garbage collection
 
-Only `canopy gc --dry-run` and `[retention]` are built. Until the pass lands, canopy removes only what the table's
-third column says, and §6, §11, §12, §18, and §22 describe canopy as it is; this section says what changes.
+Built: `canopy gc --dry-run`, `[retention]`, and the loop's pass over files, with `canopy.log`'s rotation. Until the
+rest lands, canopy removes only what the table's third column says, and §6, §11, §12, §18, and §22 describe canopy as
+it is; this section says what changes.
 
 ### What grows
 
 | What | Grows by | Removed today | Removed by M47 |
 | --- | --- | --- | --- |
-| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | never | after `run_files_days`; a plan run's prompt never |
-| `ticks/<id>.log`, `.prompt` | one pair per tick | never | after `tick_files_days` (a tick not `ok`: `run_files_days`) |
-| `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | never | after `run_files_days` |
-| `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | never | after `run_files_days` |
-| Any of those with no journal row | a review run that never started | never | after an hour |
-| `canopy.log` | every log line of every canopy process | never; no rotation | rotated past `log_max_mib` |
+| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | after `run_files_days`; a plan run's prompt never | unchanged |
+| `ticks/<id>.log`, `.prompt` | one pair per tick | after `tick_files_days` (a tick not `ok`: `run_files_days`) | unchanged |
+| `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | after `run_files_days` | unchanged |
+| `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | after `run_files_days` | unchanged |
+| Any of those with no journal row | a review run that never started | after an hour | unchanged |
+| `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` | unchanged |
 | Attention items the harness raised | each open item, every tick | never | outside the window (below) |
 | Connector runs and derivations (§30) | each tick, and each of M39's polls | never | outside the window (below) |
 | Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | never | checkpointed each pass; `canopy gc --vacuum` |
@@ -51,9 +52,10 @@ flag shortens retention; only the operator's config does. An agent that could re
 transcript that shows what it did.
 
 Files go only by the paths the journal records, or as orphans an hour old, and only regular files inside the state
-directory, never a symlink. A tick not `ok` keeps its files as long as a run, since the operator debugs those.
-Reconcile alone rotates `canopy.log`: rotating in whichever process crosses the size races the others. Rejected: gzip
-before deleting, which gives the transcript reader two formats for history rarely opened after a month.
+directory, never a symlink. A tick not `ok` keeps its files as long as a run, since the operator debugs those. Reconcile
+alone rotates `canopy.log`, on every live tick: rotating in whichever process crosses the size races the others, which
+follow the log to its new file. Rejected: gzip before deleting, which gives the transcript reader two formats for
+history rarely opened after a month.
 
 ### The journal
 

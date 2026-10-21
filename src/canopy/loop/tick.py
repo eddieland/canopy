@@ -33,7 +33,7 @@ from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, archive, attention, connectors, duties, phases, state
+from canopy.loop import acknowledge, archive, attention, connectors, duties, gc_pass, phases, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -320,6 +320,9 @@ def _steps(
     Returns:
         How the tick ended.
     """
+    if not dry_run:
+        # First, so a tick whose reconcile fails, as one on a full disk may, still frees what retention lets go.
+        gc_pass.run(ctx, tick_id, log)
     try:
         # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
         review_reconcile.run(ctx, log)

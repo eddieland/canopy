@@ -35,6 +35,7 @@ from canopy.serve.views import (
     models_served,
     new_tokens,
     raw_output,
+    removed_after,
     session_transcript,
     shown_path,
     ticket_title,
@@ -86,7 +87,8 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     stored = result.stored(row.result_json)
     dismissed = db.review_dismissals(ctx.conn, run_id)
     note = contract.stored_object(row.result_json).get("harness")
-    found = review_diff.read(review_diff.path_for(row.log_path))
+    kept = review_diff.path_for(row.log_path)
+    found = review_diff.read(kept)
     diff = diff_view(found) if found is not None else None
     ticket = db.get_ticket(ctx.conn, row.ticket_key) if row.ticket_key else None
     return ReviewDetail(
@@ -99,6 +101,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         if stored is not None
         else [],
         diff=diff,
+        diff_removed_after_days=removed_after(ctx.conn, kept, row.ended_at, "run_files_days"),
         runs=summaries(ctx.conn, db.review_runs_of(ctx.conn, row.pr_url)),
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
         new_tokens=new_tokens(row),
@@ -127,7 +130,8 @@ def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     row = db.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
-    return session_transcript(Path(row.log_path), row.session_id)
+    log = Path(row.log_path)
+    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
 
 
 def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
@@ -140,7 +144,8 @@ def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
     row = db.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
-    return raw_output(Path(row.log_path))
+    log = Path(row.log_path)
+    return raw_output(log, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
 
 
 def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> list[ReviewSummary]:

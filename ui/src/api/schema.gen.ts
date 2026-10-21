@@ -4025,6 +4025,11 @@ export type components = {
          */
         RawOutput: {
             /**
+             * Removed After Days
+             * @description Retention removed the file, this many days after it ended (DESIGN §26); None when it did not.
+             */
+            removed_after_days: number | null;
+            /**
              * Size
              * @description The whole file's size, in bytes.
              * @default 0
@@ -4148,8 +4153,16 @@ export type components = {
              * @description The branch the PR merges into.
              */
             base_branch: string | null;
-            /** @description None when there is no diff: a review from before diffs were kept, or one whose base could not be read. */
+            /**
+             * @description None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
+             *     retention removed.
+             */
             diff: components["schemas"]["ReviewDiff"] | null;
+            /**
+             * Diff Removed After Days
+             * @description Retention removed the diff, this many days after the review ended (DESIGN §26); None when it did not.
+             */
+            diff_removed_after_days: number | null;
             /**
              * Findings
              * @description Its findings, each anchored on the diff where it can be.
@@ -6067,6 +6080,11 @@ export type components = {
             entries: components["schemas"]["TranscriptEntry"][];
             /** @description The session's prompt, kept beside the log, if canopy kept one and it could be read. */
             prompt: components["schemas"]["TranscriptPrompt"] | null;
+            /**
+             * Removed After Days
+             * @description Retention removed its log and prompt, this many days after it ended (DESIGN §26); None when it did not.
+             */
+            removed_after_days: number | null;
             /**
              * Session Id
              * @description The runtime's session, if it reported one.

@@ -1284,6 +1284,8 @@ class Transcript(_Model):
     """How many events did not validate."""
     prompt: TranscriptPrompt | None = None
     """The session's prompt, kept beside the log, if canopy kept one and it could be read."""
+    removed_after_days: int | None = None
+    """Retention removed its log and prompt, this many days after it ended (DESIGN §26); None when it did not."""
 
 
 class RawOutput(_Model):
@@ -1304,6 +1306,8 @@ class RawOutput(_Model):
     """The whole file's size, in bytes."""
     truncated: bool = False
     """The file holds more than `text`."""
+    removed_after_days: int | None = None
+    """Retention removed the file, this many days after it ended (DESIGN §26); None when it did not."""
 
 
 class LastTick(_Model):
@@ -2170,7 +2174,10 @@ class ReviewDetail(_Model):
     findings: list[ReviewFinding]
     """Its findings, each anchored on the diff where it can be."""
     diff: ReviewDiff | None = None
-    """None when there is no diff: a review from before diffs were kept, or one whose base could not be read."""
+    """None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
+    retention removed."""
+    diff_removed_after_days: int | None = None
+    """Retention removed the diff, this many days after the review ended (DESIGN §26); None when it did not."""
     sendable: bool = False
     """Whether its findings can be sent to a worker: a `done` review of one of the loop's own PRs (DESIGN §21)."""
     runs: list[ReviewSummary]

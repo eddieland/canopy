@@ -54,5 +54,8 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 - Open: whether the pass runs `--git` on its own, weekly, after that check.
 
 Status: in progress. Stage 1 is built (2026-10-18): `canopy gc --dry-run [--json]` and `[retention]`, validated in
-full and read by nothing else. Its check, the operator's live run recorded in `MEASUREMENTS.md` and §26's defaults set
-from it, is the operator's; stage 2 waits on it.
+full. The operator closed its check on real use (2026-10-21: the dry run works well on their workspace) with no
+`MEASUREMENTS.md` section, so §26's defaults stay as proposed, and the unrun live measurement moved to `SCENARIOS.md`
+(S59). Stage 2 is built against the fakes (2026-10-21): the daily pass over files in reconcile, recorded in
+`gc_passes`; `canopy.log` rotated by each live tick; and the web UI's "removed after N days". Its check, a week of the
+operator's loop with the pass on (S60), is the operator's; stage 3 waits on it.

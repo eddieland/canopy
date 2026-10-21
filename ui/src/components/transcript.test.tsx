@@ -125,6 +125,7 @@ function transcript(fields: Partial<Transcript> = {}): Transcript {
         prompt: { text: 'Implement ABC-1: sign in with SSO.', truncated: false },
         truncated: false,
         unreadable: 0,
+        removed_after_days: null,
         ...fields,
     }
 }
@@ -218,6 +219,20 @@ describe('TranscriptPanel', () => {
         expect(screen.queryByRole('searchbox')).toBeNull()
         expect(screen.queryByRole('list')).toBeNull()
         expect(screen.queryByText(reason)).toBeNull()
+    })
+
+    it('says after how many days retention removed an ended session’s log', () => {
+        render(
+            <TranscriptPanel
+                transcript={transcript({ status: 'no_log', entries: [], removed_after_days: 30 })}
+                running={false}
+                page="run"
+            />,
+        )
+        expect(screen.getByText('removed after 30 days').title).toBe(
+            'removed after 30 days: your [retention] keeps a log that long once it ends',
+        )
+        expect(screen.queryByText('log gone')).toBeNull()
     })
 
     it('counts tool calls, failed and refused ones, model calls, and runtime errors, and says what is missing', () => {
