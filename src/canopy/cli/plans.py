@@ -1,16 +1,18 @@
 """`canopy plan`: the operator asks for a ticket's plan, approves it or its feedback plan, or skips it (§25, §32).
 
 Each writes through `canopy.core.plans`, which every channel shares, and refuses inside canopy's own ticks and runs.
+`canopy archive` exports every plan into a directory of the operator's, and refuses there too.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, feedback_plans, plans
+from canopy.core import conversation, feedback_plans, plan_export, plans
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -55,6 +57,44 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
             _ask(ctx, subject.id, skip=skip)
     except conversation.Refused as r:
         raise CliError(f"plan refused ({r.guard}): {r.reason}") from None
+    return 0
+
+
+@click.command("archive")
+@click.argument("dest", metavar="DIR", type=click.Path(file_okay=False, path_type=Path))
+@click.pass_context
+def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
+    """Export every plan into DIR, superseded and feedback plans included, each with what the journal records of it.
+
+    Each plan goes to DIR/KEY/RUN.md, as its file stands now under a front matter of its status, hashes, and approval.
+    A file is rewritten only when its plan changed, and nothing in DIR is removed, so DIR can be a clone of a
+    repository of yours that you commit and push. Plans hold what the planners read of your tickets: keep that
+    repository private.
+
+    Raises:
+        CliError: it runs inside one of canopy's ticks or runs, or DIR cannot be written.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"archive refused ({r.guard}): {r.reason}") from None
+    ctx = open_context(click_ctx)
+    try:
+        exported = plan_export.export(ctx.conn, ctx.state_dir, dest)
+    except plan_export.ExportError as e:
+        raise CliError(f"archive failed: {e}") from None
+    logs.for_tick(None).info(
+        "plans exported",
+        extra={"dest": str(dest), "written": len(exported.written), "skipped": len(exported.skipped)},
+    )
+    for name in exported.written:
+        click.echo(f"wrote {name}")
+    for s in exported.skipped:
+        click.echo(f"skipped {s.ticket_key}'s {s.kind} of run {s.run_id}: its file is {s.problem}")
+    click.echo(
+        f"Exported {len(exported.written)} plan{'s' if len(exported.written) != 1 else ''} to {dest}; "
+        f"{exported.unchanged} unchanged, {len(exported.skipped)} skipped.",
+    )
     return 0
 
 

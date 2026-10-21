@@ -12,29 +12,13 @@ from canopy.core import db, plans
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus
-from tests.canopy.helpers import KEY, present
+from tests.canopy.helpers import KEY, PLAN, plan_run, present, proposed
 from tests.conftest import CanopyEnv
-
-PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
 
 
 @pytest.fixture
 def state_dir(canopy_env: CanopyEnv) -> Path:
     return canopy_env.state_dir
-
-
-def plan_run(conn: sqlite3.Connection, state_dir: Path, key: str = KEY) -> int:
-    """A finished run of `key` for a plan to belong to. Its kind is a placeholder until plan runs land."""
-    db.touch_ticket(conn, key, "/ws")
-    tick_id = db.start_tick(conn, dry_run=False)
-    return db.insert_run(conn, tick_id=tick_id, key=key, kind="implement", branch="", slots=[], runs_dir=state_dir)
-
-
-def proposed(conn: sqlite3.Connection, state_dir: Path, text: str = PLAN, key: str = KEY) -> int:
-    """Write and record a plan for `key`, as `_run` will once a plan run ends `done`. Returns its run's id."""
-    run_id = plan_run(conn, state_dir, key)
-    plans.record(conn, key, run_id, plans.write(state_dir, key, run_id, text))
-    return run_id
 
 
 def test_a_plan_is_written_operator_only_and_recorded_with_its_hash(conn: sqlite3.Connection, state_dir: Path) -> None:

@@ -80,6 +80,10 @@ and approval, never its text. canopy never overwrites or deletes a plan file, ne
 record or through a link, and shows a missing file as missing, never as an empty plan. Workers see only their copy
 (§24); a plan's event to sinks (§20) carries none of its text.
 
+`canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
+of theirs, each under a front matter of its row, since status and approval live only in the journal. It rewrites a
+file only when its plan or row changed and removes nothing, so the directory can be a repository the operator pushes.
+
 ### Commenting on a plan
 
 The web UI lets the operator comment on passages and edit a plan in place (D120). A plan is model text (T1): its HTML is
