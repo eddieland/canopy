@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: work the operator hands canopy in their own words, about no
 ticket. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [The overseer
-reads the journal](READING_THE_JOURNAL.md).
+reads the journal](READING_THE_JOURNAL.md). Next: [The harness decides](HARNESS_DECIDES.md).
 
 ## 36. One-off tasks
 
