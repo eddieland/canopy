@@ -22,7 +22,7 @@ from canopy.core import db, notice
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, StartStatus, TickStatus
 from canopy.infra import resources
-from canopy.loop import pacing, repeat, tick, tick_now
+from canopy.loop import loop_view, pacing, repeat, tick, tick_now
 from tests.canopy.helpers import (
     KEY,
     FakeKeys,
@@ -877,7 +877,7 @@ def test_the_tick_now_key_is_not_held_by_the_gap(canopy_env: CanopyEnv, treehous
     canopy_env.append_user("\n[loop]\nmin_gap_minutes = 5\n")
     ctx = context(canopy_env)
     keys = FakeKeys()
-    time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY))
+    time = FakeTime(on_sleep=lambda: keys.type(loop_view.TICK_NOW_KEY))
     term, _ = console()
     with overseer_does():
         repeat.run(
@@ -944,7 +944,7 @@ def test_the_tick_now_key_takes_a_web_request_with_it(
     ctx = context(canopy_env)
     asked, stop = tick_now.TickNow(), repeat.Stop()
     asked.request()  # kept through the first tick
-    typed = iter(["", repeat.TICK_NOW_KEY])  # dropped after the tick, then pressed at the wait's first step
+    typed = iter(["", loop_view.TICK_NOW_KEY])  # dropped after the tick, then pressed at the wait's first step
     time = FakeTime(on_sleep=lambda: setattr(stop, "requested", True))
     term, _ = console()
     with overseer_does():
