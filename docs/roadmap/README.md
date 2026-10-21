@@ -97,6 +97,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): in progress.
 - [M60. Personas](M60-personas.md): in progress.
+- [M61. One-off tasks](M61-one-off-tasks.md): not started.
 
 ## Deferred, with the trigger that would unblock each
 

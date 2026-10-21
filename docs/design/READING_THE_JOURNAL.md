@@ -3,7 +3,7 @@
 Part of the canopy design, normative like all of it: the overseer deciding from what the connectors observed instead of
 reading the tracker and GitHub itself, and the harness checking in code what was the overseer's word. Sections are
 numbered across the whole design; the [README](README.md) has the map. Previous: [Published
-reviews](PUBLISHED_REVIEWS.md).
+reviews](PUBLISHED_REVIEWS.md). Next: [One-off tasks](TASKS.md).
 
 ## 35. The overseer reads the journal
 

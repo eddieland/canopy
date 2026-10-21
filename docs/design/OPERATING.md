@@ -282,13 +282,13 @@ reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or
 cause is gone when a newer run starts or the ticket is done. The overseer does not dispatch such a ticket again until
 an authorized replier comments, or the operator sends a message, after the run ended (§22, D093): that is how a human
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
-raises `awaiting_reply` for a started ticket's or a planner's unanswered question (§22, §25), `repo_missing` for a
-mapped repository with no clone (§18), `connector_failed` about the workspace, one item naming every source whose run
-that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick whose `canopy --version`
-or free-disk check failed (§6 step 5). Follow-ups a run filed are an event, not an item: the sinks hear of them once,
-as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has decided on one. It raises
-`follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not record, until the ticket is done
-or forgotten (§18).
+raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswered question (§22, §25, §36),
+`repo_missing` for a mapped repository with no clone (§18), `connector_failed` about the workspace, one item naming
+every source whose run that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick
+whose `canopy --version` or free-disk check failed (§6 step 5). Follow-ups a run filed are an event, not an item: the
+sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has decided
+on one. It raises `follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not record, until
+the ticket is done or forgotten (§18).
 
 **Recorded by the overseer.** The overseer records an item with `canopy attention <KEY> <reason> --detail ...`, every
 tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention

@@ -312,6 +312,13 @@ it. A persona changes how an agent writes and what it weighs, never a guard, a c
 and the operator adds or shadows them in private config. Each run records which persona it had, so personas can be
 compared.
 
+### R25. One-off private tasks, about no ticket
+
+Planned (M61, §36). Written down 2026-10-21. The operator wants to hand canopy one-off work in their own words that
+belongs to no ticket: exploring a question in the code, or planning the tickets that should follow. A task runs once in
+a worktree and may push a branch, open a draft PR, and file tickets with no queue label. What it leaves is throwaway
+quality until the operator gives it a pass of their own. Like a started ticket, its conversation stays in canopy.
+
 ## Nice to have
 
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
