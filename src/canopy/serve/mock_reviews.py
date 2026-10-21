@@ -1,11 +1,12 @@
 """The mock journal's review runs and the diffs beside their logs (DESIGN §21), for `python -m canopy.serve --mock`.
 
 PR 88 (ABC-099) was reviewed twice: its first commit had a blocking finding, its second has two smaller ones, anchored
-on its diff. The operator's own API PR, which `review.query` matched, was reviewed clean; PR 91's review never
-reported a result. A coworker's PR 95 waits on its review, at the operator's request.
+on its diff. The operator's own API PR, which no ticket opened, was reviewed clean at their request; PR 91's review
+never reported a result. A coworker's PR 95 waits on its review, at the operator's request.
 
-The operator has seen every review but the clean one, review 2, which is new to them (DESIGN §22). Opening a review's
-page marks it seen, a write, so no test against the journal that never changes opens review 2's.
+The operator has seen every review but the clean one, review 2, which is new to them since they asked for it (DESIGN
+§22). Opening a review's page marks it seen, a write, so no test against the journal that never changes opens review
+2's.
 """
 
 from __future__ import annotations
@@ -142,13 +143,13 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
     reviews = state_dir / "reviews"
     reviews.mkdir(mode=0o700, exist_ok=True)
     rows = (
-        # id, PR, commit, ticket, repo, started, ended, status, result, cost, diff
-        (1, PR_88, SHA_88_FIRST, "ABC-099", "web", -100, -97, "done", _STALE.model_dump_json(), 0.21, None),
-        (2, PR_12, SHA_12, None, "api", -80, -79, "done", _CLEAN.model_dump_json(), 0.06, DIFF_12),
-        (3, PR_91, SHA_91, "ABC-103", "web", -70, -69, "unknown", json.dumps({"harness": _UNKNOWN}), 0.02, None),
-        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", LATEST.model_dump_json(), 0.24, DIFF_88),
+        # id, PR, commit, ticket, repo, purpose, started, ended, status, result, cost, diff
+        (1, PR_88, SHA_88_FIRST, "ABC-099", "web", "own", -100, -97, "done", _STALE.model_dump_json(), 0.21, None),
+        (2, PR_12, SHA_12, None, "api", "request", -80, -79, "done", _CLEAN.model_dump_json(), 0.06, DIFF_12),
+        (3, PR_91, SHA_91, "ABC-103", "web", "own", -70, -69, "unknown", json.dumps({"harness": _UNKNOWN}), 0.02, None),
+        (4, PR_88, SHA_88, "ABC-099", "web", "own", -58, -56, "done", LATEST.model_dump_json(), 0.24, DIFF_88),
     )
-    for run_id, pr, sha, ticket, repo, started, ended, status, result, cost, diff in rows:
+    for run_id, pr, sha, ticket, repo, purpose, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"
         sql.execute(
             conn,
@@ -160,7 +161,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
                 sha=sha,
                 ticket_key=ticket,
                 repo=repo,
-                purpose="query" if ticket is None else "own",
+                purpose=purpose,
                 started_at=at(started),
                 ended_at=at(ended),
                 status=status,
@@ -177,6 +178,18 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         conn,
         sql.insert_rows("seen", ["kind", "subject", "at", "channel"]),
         [("review", "1", at(-96), "web"), ("review", "3", at(-68), "web"), ("review", "4", at(-50), "web")],
+    )
+    # The request review 2 answered, which ended with it (DESIGN §21).
+    sql.execute(
+        conn,
+        sql.insert(
+            "review_requests",
+            pr_url=PR_12,
+            created_at=at(-85),
+            channel="cli",
+            ended_at=at(-79),
+            end_reason="reviewed",
+        ),
     )
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
     sql.execute(

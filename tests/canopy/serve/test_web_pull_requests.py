@@ -34,7 +34,7 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
     # A PR the operator asked to have reviewed is listed before its first review, with its request and repository.
     requested = by_url[mock_reviews.PR_95]
     assert (requested["reviews"], requested["review_request"]["end_reason"]) == (0, None)
-    assert theirs["review_request"] is None
+    assert theirs["review_request"]["end_reason"] == "reviewed"  # the request its clean review answered
     assert theirs["title"] == "Bump the retry budget for flaky upstreams"  # its review reported it
 
 

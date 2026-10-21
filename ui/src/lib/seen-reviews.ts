@@ -6,20 +6,17 @@ import type { FindingSeverity, ReviewSummary } from '@/api/types'
 import { counted } from '@/lib/descriptions'
 
 /**
- * Which reviews' results are new to the operator (DESIGN §22): a review that ended with a verdict is new until they
- * see it, on its page or with `canopy review show ID`, or mark it seen from the reviews list.
+ * Which reviews' results are new to the operator (DESIGN §22): a review with a result to read is new until they see
+ * it, on its page or with `canopy review show ID`, or mark it seen from the reviews list. The server says which have
+ * one (`news`): those that found something, and every one the operator asked for; a clean review the loop started on
+ * its own has none, so it never pings.
  * The journal keeps what they have seen, so every browser and the CLI agree on it, and the reviews list carries it on
  * each review (`seen`).
  */
 
-/** Whether a review has a result to see: it ended, and reported a verdict. A run that reported none has nothing. */
-export function hasResult(review: Pick<ReviewSummary, 'ended_at' | 'verdict'>): boolean {
-    return review.ended_at !== null && review.verdict !== null
-}
-
-/** Whether a review's result is new to the operator: it has one, and they have not seen it. */
-export function isNew(review: Pick<ReviewSummary, 'ended_at' | 'verdict' | 'seen'>): boolean {
-    return hasResult(review) && !review.seen
+/** Whether a review's result is new to the operator: it has one to read, and they have not seen it. */
+export function isNew(review: Pick<ReviewSummary, 'news' | 'seen'>): boolean {
+    return review.news && !review.seen
 }
 
 /** The reviews whose results are new to the operator, in the list's order; none while the list has not arrived. */
@@ -58,7 +55,7 @@ export function useMarkSeen() {
  * Marks a review seen once a page shows its result, so one the operator watches end is seen as it ends. Once only: a
  * review already seen, or still running, sends nothing.
  */
-export function useSeesReview(review: Pick<ReviewSummary, 'id' | 'ended_at' | 'verdict' | 'seen'> | undefined): void {
+export function useSeesReview(review: Pick<ReviewSummary, 'id' | 'news' | 'seen'> | undefined): void {
     const { mark } = useMarkSeen()
     const id = review?.id
     const fresh = review !== undefined && isNew(review)

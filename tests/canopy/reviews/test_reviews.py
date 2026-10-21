@@ -940,10 +940,17 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
 def test_a_review_is_new_to_the_operator_until_they_see_it(
     reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
-    """`canopy review show ID` marks a review's result seen, as its page does; only for the operator (DESIGN §22)."""
+    """`canopy review show ID` marks a review's result seen, as its page does; only for the operator (DESIGN §22).
+
+    A review is new once it found something, or ended at all when the operator asked for it: a clean review the loop
+    started on its own is never new.
+    """
     sha = head(git_pool)
+    asked = "https://github.com/acme/api/pull/11"
     first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
-    second = scenario.review(reviews(sha, "https://github.com/acme/api/pull/9"), reviewer=reviewer_reports(CLEAN)).id
+    scenario.review(reviews(sha, "https://github.com/acme/api/pull/9"), reviewer=reviewer_reports(CLEAN))
+    scenario.operator("start", asked, "--review")
+    second = scenario.review(reviews(sha, asked), reviewer=reviewer_reports(CLEAN)).id
     running = scenario.starts_review(reviews(sha, "https://github.com/acme/api/pull/10"))
 
     def new() -> list[int]:
