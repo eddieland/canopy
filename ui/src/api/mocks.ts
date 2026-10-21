@@ -42,6 +42,7 @@ export const mockRuns: Run[] = [
         activity: { tool: 'bash', did: 'npm test -- login', at: '2026-10-08T12:27:00Z' },
         persona: 'canopy',
         persona_digest: '6c1f0a3e9b2d4c5a7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
+        models: { status: 'running', models: [], error: null },
     },
     {
         id: 42,
@@ -67,6 +68,11 @@ export const mockRuns: Run[] = [
         activity: null,
         persona: null,
         persona_digest: null,
+        models: {
+            status: 'found',
+            models: [{ model: 'anthropic/claude-sonnet-4-5', replies: 52, cost_usd: 1.07 }],
+            error: null,
+        },
     },
 ]
 

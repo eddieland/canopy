@@ -15,6 +15,10 @@ export type Run = Schemas['Run']
 export type RunsSince = Schemas['RunsSince']
 /** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */
 export type RunActivity = Schemas['RunActivity']
+/** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
+export type ModelsServed = Schemas['ModelsServed']
+/** One model that wrote an agent run's replies, with how many and what they cost. */
+export type ServedModel = Schemas['ServedModel']
 /** A run's status in the five groups the UI colors (DESIGN §22): `failed` is every ending a human must look at. */
 export type RunState = Schemas['RunState']
 /** A ticket as the tickets list shows it. */

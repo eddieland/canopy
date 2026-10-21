@@ -805,6 +805,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     _chore_fixtures(conn, root)
     _decisions(conn)
     _tools(conn)
+    _models(conn)
 
 
 # ABC-105's plans (DESIGN §25): the first, superseded after the operator asked for changes, and the second, waiting on
@@ -1296,6 +1297,55 @@ def _tools(conn: sqlite3.Connection) -> None:
         conn,
         sql.insert_rows("run_tools", ("run_table", "run_id", "tool", "calls", "errors", "result_chars")),
         calls,
+    )
+
+
+def _models(conn: sqlite3.Connection) -> None:
+    """Which models served the agent runs that ended, as a tick read their sessions after (DESIGN §13).
+
+    Run 39 switched models partway, so its page splits its cost; the reviewer runs on a model of its own. Run 40's read
+    failed and waits to be tried again, chore run 2's session is no longer kept, and run 42 is not read yet.
+    """
+    reads = (
+        # table, run, status, error
+        ("ticks", 1, "found", None),
+        ("ticks", 2, "found", None),
+        ("runs", 37, "found", None),
+        ("runs", 38, "found", None),
+        ("runs", 39, "found", None),
+        ("runs", 40, "failed", "the runtime timed out after 30s"),
+        ("chore_runs", 1, "found", None),
+        ("chore_runs", 2, "missing", None),
+        ("chore_runs", 3, "found", None),
+        ("review_runs", 1, "found", None),
+        ("review_runs", 2, "found", None),
+        ("review_runs", 3, "found", None),
+        ("review_runs", 4, "found", None),
+    )
+    sql.execute_many(
+        conn,
+        sql.insert_rows("run_model_reads", ("run_table", "run_id", "status", "error", "attempts", "read_at")),
+        [(table, run, status, error, 1, at(-58)) for table, run, status, error in reads],
+    )
+    served = (
+        # table, run, model, replies, cost: each run's costs add up to what its row says it cost
+        ("ticks", 1, "anthropic/claude-sonnet-4-5", 12, 0.28),
+        ("ticks", 2, "anthropic/claude-sonnet-4-5", 13, 0.31),
+        ("runs", 37, "anthropic/claude-sonnet-4-5", 64, 1.32),
+        ("runs", 38, "anthropic/claude-sonnet-4-5", 81, 1.84),
+        ("runs", 39, "anthropic/claude-opus-4-1", 23, 1.65),
+        ("runs", 39, "anthropic/claude-sonnet-4-5", 41, 0.66),
+        ("chore_runs", 1, "anthropic/claude-haiku-4-5", 9, 0.21),
+        ("chore_runs", 3, "anthropic/claude-haiku-4-5", 11, 0.33),
+        ("review_runs", 1, "openai/gpt-5", 10, 0.21),
+        ("review_runs", 2, "openai/gpt-5", 4, 0.06),
+        ("review_runs", 3, "openai/gpt-5", 1, 0.02),
+        ("review_runs", 4, "openai/gpt-5", 11, 0.24),
+    )
+    sql.execute_many(
+        conn,
+        sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
+        served,
     )
 
 
