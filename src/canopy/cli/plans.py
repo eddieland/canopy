@@ -78,9 +78,9 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool, p
 def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
     """Export every plan into DIR, superseded and feedback plans included, each with what the journal records of it.
 
-    Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-Approved-export-reports-as-csv.md, as its
+    Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-APPROVED-export-reports-as-csv.md, as its
     file stands now under a front matter of its status, hashes, and approval, and beside it the prompt its planner was
-    given, as RUN-prompt.md. A file is rewritten only when its plan changed, and removed only when its plan moved to a
+    given, as RUN-PROMPT.md. A file is rewritten only when its plan changed, and removed only when it moved to a
     new name, so DIR can be a clone of a repository of yours that you commit and push. Plans hold what the planners
     read of your tickets, and prompts your messages and standing instructions: keep that repository private.
 
@@ -103,7 +103,7 @@ def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
     for name in exported.written:
         click.echo(f"wrote {name}")
     for name in exported.removed:
-        click.echo(f"removed {name}, its plan now under another name")
+        click.echo(f"removed {name}, now under another name")
     for s in exported.skipped:
         click.echo(f"skipped {s.ticket_key}'s {s.kind} of run {s.run_id}: its file is {s.problem}")
     prompts = sum(plan_export.is_prompt(Path(name).name) for name in exported.written)

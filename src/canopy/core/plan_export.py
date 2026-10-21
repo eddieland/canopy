@@ -3,8 +3,8 @@
 `export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/`: a front
 matter of its row, then its file as it stands now. The row is what a copy of `plans/` alone would lose: whether the plan
 was approved, by whom, and as which hash. The file's name says which plan it is and where it stands, so a listing reads
-without opening one: its run, its status capitalized so it stands out, then its title as a slug (`name`), as
-`412-Approved-export-reports-as-csv.md`.
+without opening one: its run, its status in capitals so it stands out, then its title as a slug (`name`), as
+`412-APPROVED-export-reports-as-csv.md`.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
 and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
@@ -13,9 +13,10 @@ git sees a rename. A plan whose file is missing or no plan is left as it was exp
 written under a temporary name, then renamed into place, so no reader sees half of one and a link at its name is
 replaced, never followed.
 
-Beside each plan goes the prompt its planner was given, unless `prompts` is off: `<run>-prompt.md`, its bytes as canopy
-wrote them beside the run's log. It never changes, so its name never does. A plan whose run has no prompt there, as one
-from before prompts were kept, has none exported, and one exported before is left.
+Beside each plan goes the prompt its planner was given, unless `prompts` is off: `<run>-PROMPT.md`, its bytes as canopy
+wrote them beside the run's log. It never changes, so its name changes only where an earlier export wrote it as
+`<run>-prompt.md`. A plan whose run has no prompt there, as one from before prompts were kept, has none exported, and
+one exported before is left.
 
 A history of thousands of plans is exported each tick, so an export reads only what may have changed: for each plan it
 found exported as it stands, it keeps a fingerprint of its row and of every file's stat in the state directory, and
@@ -45,7 +46,7 @@ from canopy.core.vocab import PlanStatus
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 #: Which of a ticket's plans a file is: the plan before its implement (§25), or one before a resume (§32).
 type Kind = Literal["plan", "feedback plan"]
@@ -56,11 +57,12 @@ _DIR_MODE = 0o700
 _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, so every plan exported before is read and compared again.
-_FORMAT = 3
+_FORMAT = 4
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
-# A prompt's name in an export, `<run>-prompt.md`: never a plan's, which always has a status after its run.
-_PROMPT_NAME_RE = re.compile(r"\d+-prompt\.md")
+# A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
+# which always has a status after its run.
+_PROMPT_NAME_RE = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
 _HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
@@ -90,7 +92,8 @@ class Exported:
     skipped: Sequence[Skipped]
     #: How many plans it left unchecked, having written its `limit` of files first.
     left: int = 0
-    #: The files it removed, relative to `dest`: each a plan's earlier name, the plan now under a new one.
+    #: The files it removed, relative to `dest`: each a plan's or prompt's earlier name, the file now under a new one.
+    #: On a filesystem that ignores case, a name that differs in case alone names the new file, so is gone, not removed.
     removed: Sequence[str] = dataclasses.field(default_factory=list[str])
 
 
@@ -155,16 +158,16 @@ def export(
 
 
 def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str:
-    """A plan's file name in an export: its run, its status capitalized, `feedback` for a feedback plan, and a slug.
+    """A plan's file name in an export: its run, its status in capitals, `feedback` for a feedback plan, and a slug.
 
     The title is the plan's first `# ` heading, less the `Plan: KEY` the planner opens it with. A plan is model text
     (TRUST_MODEL T1), so its slug holds only lowercase letters, digits, and single hyphens, and is cut short; a plan
     with no title past that prefix has none in its name.
 
     Returns:
-        The name, as `412-Approved-export-reports-as-csv.md`.
+        The name, as `412-APPROVED-export-reports-as-csv.md`.
     """
-    parts = [str(row.run_id), row.status.value.capitalize()]
+    parts = [str(row.run_id), row.status.value.upper()]
     if kind == "feedback plan":
         parts.append("feedback")
     slug = _slug(_title(text, row.ticket_key))
@@ -177,16 +180,16 @@ def prompt_name(run_id: int) -> str:
     """The name of the prompt of run `run_id` in an export.
 
     Returns:
-        The name, as `412-prompt.md`.
+        The name, as `412-PROMPT.md`.
     """
-    return f"{run_id}-prompt.md"
+    return f"{run_id}-PROMPT.md"
 
 
 def is_prompt(file_name: str) -> bool:
     """Whether `file_name` in an export is a plan's prompt rather than a plan.
 
     Returns:
-        True for a name `prompt_name` gives.
+        True for a name `prompt_name` gives, or an earlier export gave.
     """
     return _PROMPT_NAME_RE.fullmatch(file_name) is not None
 
@@ -269,7 +272,8 @@ def _export_plan(
     # Each stat before its file is read, so a change after the read shows on the next export.
     source_stat = None if dirs.source_fd is None else _stat(source_name, dirs.source_fd)
     prompt_stats = None if prompt is None else _prompt_stats(prompt, row.run_id, dirs.dest_fd)
-    if len(names) == 1:
+    # A prompt still under the name earlier exports gave it is renamed, so read as if no fingerprint were kept.
+    if len(names) == 1 and (prompt is None or _earlier_prompt_name(row.run_id) not in dirs.listing):
         exported = _stat(names[0], dirs.dest_fd)
         if seen.matches(
             plan,
@@ -298,11 +302,7 @@ def _export_plan(
     else:
         tally.unchanged += 1
     # Only once the plan is in place under its name, so a failed write leaves it under the earlier one.
-    for earlier in names:
-        # A filesystem that ignores case finds the plan's new file under an earlier name that differs in case alone.
-        if earlier != exported_name and not _same_file(dirs.dest_fd, earlier, exported_name):
-            _remove(dirs.dest_fd, dirs.dest / earlier)
-            tally.removed.append(f"{dirs.key}/{earlier}")
+    _remove_earlier(names, exported_name, dirs, tally)
     prompt_held = None if prompt is None else _export_prompt(prompt, row.run_id, dirs, tally)
     # Kept only when the plan, and its prompt if it has one, were found as they stand.
     if held is not None and (prompt is None or prompt_held is not None):
@@ -371,8 +371,40 @@ def _export_prompt(prompt: _Prompt, run_id: int, dirs: _Dirs, tally: _Tally) -> 
     if held is None:
         _write(dirs.dest_fd, dirs.dest / exported_name, data)
         tally.written.append(f"{dirs.key}/{exported_name}")
-        return None
-    return source, held
+    earlier = _earlier_prompt_name(run_id)
+    _remove_earlier([earlier] if earlier in dirs.listing else [], exported_name, dirs, tally)
+    return None if held is None else (source, held)
+
+
+def _remove_earlier(names: Iterable[str], exported_name: str, dirs: _Dirs, tally: _Tally) -> None:
+    """Remove each of `names`, a file's earlier names, now that it is in place as `exported_name`.
+
+    Raises:
+        ExportError: one could not be removed.
+    """
+    for earlier in names:
+        if earlier == exported_name:
+            continue
+        first, second = _stat(earlier, dirs.dest_fd), _stat(exported_name, dirs.dest_fd)
+        # Never removed on a guess that the two differ: a name that cannot be statted is left for the next export.
+        if first is None or second is None:
+            continue
+        # A filesystem that ignores case finds the new file under an earlier name that differs in case alone. That
+        # name is gone all the same, and said to be, so a git index that ignores case can be told.
+        if not os.path.samestat(first, second):
+            _remove(dirs.dest_fd, dirs.dest / earlier)
+        elif earlier.casefold() != exported_name.casefold():
+            continue
+        tally.removed.append(f"{dirs.key}/{earlier}")
+
+
+def _earlier_prompt_name(run_id: int) -> str:
+    """The name earlier exports gave the prompt of run `run_id`, in lowercase.
+
+    Returns:
+        The name, as `412-prompt.md`.
+    """
+    return f"{run_id}-prompt.md"
 
 
 def _title(text: str, key: str) -> str:
@@ -405,10 +437,10 @@ def _is_name_of(run_id: int, file_name: str) -> bool:
     """Whether `file_name` is one an export could have given the plan of run `run_id`, now or in an earlier format.
 
     Returns:
-        True for `<run>.md`, and for `<run>-<status>.md`, the status lowercase or capitalized, with anything `name`
-        adds after it.
+        True for `<run>.md`, and for `<run>-<status>.md`, the status lowercase, capitalized, or in capitals, with
+        anything `name` adds after it.
     """
-    statuses = "|".join(f"{s.value}|{s.value.capitalize()}" for s in PlanStatus)
+    statuses = "|".join(f"{s.value}|{s.value.capitalize()}|{s.value.upper()}" for s in PlanStatus)
     return re.fullmatch(rf"{run_id}(?:-(?:{statuses})(?:-[a-z0-9]+)*)?\.md", file_name) is not None
 
 
@@ -694,16 +726,6 @@ def _read_regular(path: Path) -> tuple[os.stat_result, bytes] | None:
             return found, f.read()
         except OSError:
             return None
-
-
-def _same_file(dir_fd: int, name: str, other: str) -> bool:
-    """Whether `name` and `other` in the directory `dir_fd` are one file, as on a filesystem that ignores case.
-
-    Returns:
-        True when both stat, without following a link, as the same file.
-    """
-    first, second = _stat(name, dir_fd), _stat(other, dir_fd)
-    return first is not None and second is not None and os.path.samestat(first, second)
 
 
 def _write(dir_fd: int, path: Path, data: bytes) -> None:
