@@ -25,9 +25,10 @@ Everything below is for an agent helping the operator in their own session.
 - `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`, and `mirror` are the overseer's tools and refuse
   outside a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or
   `canopy start` (see Getting a ticket worked).
-- The commands that act (`start`, `stop`, `reply`, `forget`, `grant`, `plan`, `pause`, `resume`, `notice`, `dismiss`,
-  `send`, `draft`, and `memory`'s changes) are the operator's own: they authorize work, answer workers, hold the loop,
-  and tell later runs about an outage. Suggest them; run one only when the operator asks, with the words they gave.
+- Every command that acts is the operator's own, among them `start`, `stop`, `reply`, `forget`, `grant`, `plan`,
+  `pause`, `resume`, `notice`, `dismiss`, `send`, and `draft`'s and `memory`'s changes: they authorize work, answer
+  workers, hold the loop, and tell later runs about an outage. Suggest them; run one only when the operator asks, with
+  the words they gave. Commands that only read are yours to run.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did; the tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -134,7 +135,8 @@ Work through these in order and stop at the first that explains it.
      alone waits `policy.ci_cooldown_minutes` after the last run on CI). Attempt limits and the cooldown count per
      repository of the ticket. `bad_prompt`: the worker prompt did not render, often an override lacking `{{LABELS}}`
      (or, for a run over several repositories, `{{REPOSITORIES}}` and `{{PRS}}`); while an override of the retired
-     fix-ci prompt exists, every `resume` is refused, with a `fix_ci_override` attention item.
+     fix-ci prompt exists, every `resume` is refused, with a `fix_ci_override` attention item. `spawn_failed`: the agent
+     runtime did not start; fix the install or the `runtime` config.
    - A run that ends `failed` with a summary starting `not authorized:` found the ticket closed or unlabeled: it
      changed nothing, but spent one of the kind's attempts.
 4. If it was dispatched, look at its runs:
