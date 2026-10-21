@@ -145,7 +145,7 @@ never widen what the worker who follows it may do.
 If the ticket is ambiguous in a way that requires a human decision, report `blocked`, with your question in
 `question`: one question, concrete, with the options you see. canopy puts it in front of the operator, whose answer
 reaches your next attempt among the messages above, and records no plan. Do not post it anywhere. If the work cannot be
-planned at all, report `failed` with a summary saying why.
+planned at all, report `failed` with a summary saying why.{{PLAN_REVIEW}}
 
 ## Result
 

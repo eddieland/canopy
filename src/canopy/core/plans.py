@@ -63,6 +63,10 @@ _HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
 _FENCE_RE = re.compile(r"(`{3,}|~{3,})")
 _MAX_INDENT = 3
 
+#: The channel a plan's approval names when the harness approved it on its planner's word that it needs no review,
+#: under `policy.planner_may_approve`: the planner's approval, never the operator's (DESIGN §25).
+PLANNER = "planner"
+
 # Why a file is not a plan, as `canopy show` and the refusals say it.
 type Problem = Literal["missing", "not a regular file", "unreadable", "not UTF-8", "empty", "over the bound"]
 
@@ -446,17 +450,25 @@ def record(
     run_id: int,
     written: Written,
     *,
-    event: Callable[[int], db.Event | None] | None = None,
+    event: Callable[[int, str | None], db.Event | None] | None = None,
+    no_review: str | None = None,
 ) -> records.Plan:
     """Record the plan the run `run_id` wrote for `key`, after its file, as `proposed`. It supersedes the current one.
 
-    `event` builds the `plan.proposed` event from the plan's id, recorded in the same transaction (DESIGN §20).
+    `no_review` is its planner's reason for saying the plan needs no review, under `policy.planner_may_approve`: the
+    plan is then recorded `approved` as the planner wrote it, the planner's approval (`PLANNER`), not the operator's
+    (DESIGN §25). Unless the operator has had a word on the ticket's plan: it replaces a current plan, which they were
+    asked to approve or approved, or the ticket's own setting asks for a plan. Then it waits on them, as any plan does.
+    `event` builds the plan's event from its id and that reason when it held, recorded in the same transaction (§20).
 
     Returns:
         The plan's row.
     """
     with db.transaction(conn):
+        reason = no_review if planner_may_approve(conn, key) else None
         supersede(conn, key)
+        approved = reason is not None
+        now = db.now()
         [plan] = records.fetch_all(
             conn,
             records.Plan,
@@ -464,16 +476,31 @@ def record(
                 "plans",
                 ticket_key=key,
                 run_id=run_id,
-                created_at=db.now(),
-                status=PlanStatus.PROPOSED,
+                created_at=now,
+                status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
                 sha256=written.sha256,
                 size=written.size,
+                approved_sha256=written.sha256 if approved else None,
+                approved_at=now if approved else None,
+                approved_channel=PLANNER if approved else None,
+                approved_reason=reason,
             ).returning("*"),
         )
-        built = event(plan.id) if event is not None else None
+        built = event(plan.id, reason) if event is not None else None
         if built is not None:
             db.record_event(conn, built)
     return plan
+
+
+def planner_may_approve(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether `key`'s next plan may be approved on its planner's word: the operator has had none on its plan yet.
+
+    Returns:
+        False when the ticket has a current plan, which they were asked to approve or approved, or its own setting
+        asks for a plan (`ask`).
+    """
+    ticket = db.get_ticket(conn, key)
+    return current(conn, key) is None and (ticket is None or ticket.plan_setting is not PlanSetting.PLAN)
 
 
 def current(conn: sqlite3.Connection, key: str) -> records.Plan | None:
@@ -535,6 +562,7 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
                 approved_sha256=reading.sha256,
                 approved_at=db.now(),
                 approved_channel=channel,
+                approved_reason=None,
             )
             .where("id = ?", plan.id)
             .returning("*"),

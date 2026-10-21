@@ -109,6 +109,14 @@ Controls:
   approved items by id from the journal, never the plan's text, and spends the approval: one approval, one run.
   Trust labels then inform the operator rather than gate a run. Residual: the plan's text, model-written from anyone's
   comments, reaches the worker as its copy, data as an approved plan's is; and approval is of the plan whole for now.
+- With `policy.planner_may_approve` (DESIGN §25, private, off by default), a plan or feedback plan whose planner says
+  it needs no review, with a reason, is approved by the harness as the planner's approval, recorded so and never as
+  the operator's, and its `implement` or `resume` goes ahead without them. That lifts the plan gate on an agent's
+  judgment, which ticket text or any reviewer's comment can steer: the operator accepts that, as they did for M55's
+  triage (D126). It fails closed in code: only a `done` result saying so with a reason counts, and a plan that
+  replaces one the operator was asked to approve, or a ticket they asked a plan of by name, waits on them. The plan
+  and its reason stay on file, the sinks are told, and an edit to the file needs the operator's approval. The
+  backstop is the PR's review; for a feedback plan, an untrusted reviewer's items can now start a `resume` unseen.
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
@@ -526,7 +534,8 @@ Controls, in code:
   config error and the tick does not run.
 - `policy.*` values from the workspace file apply only when stricter than the built-in defaults. `policy.feedback_plan`
   is private instead (DESIGN §32): it holds a trusted reviewer's feedback for the operator and lets anyone else's
-  start a plan run, so a shared file chooses neither.
+  start a plan run, so a shared file chooses neither. So is `policy.planner_may_approve` (§25), which lets a planner's
+  word stand for the operator's approval.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not

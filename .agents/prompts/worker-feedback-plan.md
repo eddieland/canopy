@@ -124,7 +124,7 @@ follows it may do.
 If the feedback needs a human decision before it can be planned at all, report `blocked`, with your question in
 `question`: one question, concrete, with the options you see. canopy puts it in front of the operator and records no
 plan. A question about one item is that item's `ask` instead. If the feedback cannot be planned at all, report
-`failed` with a summary saying why.
+`failed` with a summary saying why.{{PLAN_REVIEW}}
 
 ## Result
 
