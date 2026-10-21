@@ -107,6 +107,8 @@ export type SpendPullRequest = Schemas['SpendPullRequest']
 export type SpendTool = Schemas['SpendTool']
 /** What one kind's runs in a spend window spent on one model, as their sessions say; a null model for the unnamed. */
 export type SpendModel = Schemas['SpendModel']
+/** A kind of agent run, as the spend breakdown counts it: the overseer, workers, plans, chores, reviews, or tasks. */
+export type SpendKind = Schemas['SpendKind']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
@@ -214,6 +216,16 @@ export type DraftsSent = Schemas['DraftsSent']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]
+
+/** Every kind of run the spend breakdown counts, in `canopy spend`'s order. */
+export const SPEND_KINDS = [
+    'overseer',
+    'workers',
+    'plans',
+    'chores',
+    'reviews',
+    'tasks',
+] as const satisfies readonly SpendKind[]
 
 /** Every worktree state, in display order. */
 export const WORKTREE_STATES = [

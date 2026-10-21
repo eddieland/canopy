@@ -73,13 +73,16 @@ what the week did. The hour that started 24 hours ago is just outside it, so the
 rail's. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
-- **By model**: what each kind of run spent on each model, as the runs' own sessions say, the dearest first under each
-  kind. A run that switched models counts under both. Runs whose model canopy hasn't read yet sit last as **none**,
-  with what they reported costing. Each run's session is read as it ends, and the loop reads the stragglers while it
-  waits between ticks, so **none** is mostly runs from before canopy read models, and it shrinks while the loop idles.
-  This is the table to read before and after you canary a model.
-- **By tool**: which tools put the most into the runs' context, by the characters their calls returned. Every later
-  model call of the run reads those again, so a chatty tool costs more than once.
+- **By model**: what the runs spent on each model, as their own sessions say, the dearest first. It opens on **all**,
+  each model summed over every kind of run; the **kind** filter in its header narrows it to the overseer's, the
+  workers', or any other kind the window has runs of. A run that switched models counts under both. Runs whose model
+  canopy hasn't read yet sit last as **none**, with what they reported costing. Each run's session is read as it ends,
+  and the loop reads the stragglers while it waits between ticks, so **none** is mostly runs from before canopy read
+  models, and it shrinks while the loop idles. This is the table to read before and after you canary a model.
+- **By tool**: which tools put the most into the runs' context, by the characters their calls returned, every kind
+  summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
+  costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
+  across a month without picking it again.
 - **Ticks by what they bought** and **Ticks by what woke them**: the ticks counted and costed by whether they were idle,
   and by their cause.
 - **Idle ticks**: the newest of them, to open.
