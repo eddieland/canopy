@@ -65,7 +65,9 @@ def cmd_loop(
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
     stop = repeat.Stop()
     reload = reread.Reload()
-    console = Console(highlight=False)
+    # Drawn only to a terminal, whatever FORCE_COLOR or TTY_COMPATIBLE say: the daemon's output is a file, read as a
+    # log, where a spinner's redraws would be noise. Unset, rich decides as it always does.
+    console = Console(highlight=False, force_terminal=None if sys.stdout.isatty() else False)
     # Keys only when the countdown is drawn: with output to a file, there is no one at the terminal to tell about them.
     with (
         hangup.watch() as hung_up,

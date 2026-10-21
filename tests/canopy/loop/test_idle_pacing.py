@@ -551,7 +551,7 @@ def test_the_cli_paces_from_every_with_the_configured_cap(
 ) -> None:
     with overseer_does():
         assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
-        assert "wait 3 minutes after each tick ends, up to 120 minutes when idle" in capsys.readouterr().out
+        assert " every_minutes=3 idle_max_minutes=120 " in capsys.readouterr().out
 
 
 def finishes_review(db_path: Path) -> list[str]:

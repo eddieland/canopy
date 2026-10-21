@@ -8,6 +8,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import signal
 import sys
 from collections import Counter
@@ -32,6 +33,7 @@ from tests.canopy.helpers import (
     canopy,
     console,
     context,
+    log_file,
     overseer_does,
     present,
     running_run,
@@ -202,8 +204,7 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
             canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
         time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
-        out = io.StringIO()
-        term = Console(file=out, width=80, highlight=False)
+        term, out = console(width=80)
 
         repeat.run(
             context(canopy_env),
@@ -216,7 +217,8 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
             clock=time.clock,
         )
 
-        text = out.getvalue()
+        # Without the codes that draw and clear the spinner and the countdown, which take no columns.
+        text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", out.getvalue())
         assert all(len(line) <= 80 for line in text.splitlines())
         tick1, tick2 = text.split("tick 1  ok")[1].split("tick 2  ok")
         assert "    PROJ-2  dispatch:implement  dry run: not dispatched; would work on" in tick1
@@ -224,6 +226,31 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
         assert "…" in tick1
         assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3/" in tick1
         assert "-   PROJ-3  needs_reviewer  resolved" in tick2
+
+
+def test_output_to_a_file_is_a_logfmt_line_for_each_event(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    detail = "https://example.test/pr/3/" + "x" * 300
+    with overseer_does(
+        canopy("dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"),
+        canopy("attention", "PROJ-3", "needs_reviewer", "--detail", detail),
+    ):
+        term, out = log_file()
+        repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
+
+    lines = out.getvalue().splitlines()
+    stamp = r"time=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} "
+    assert all(re.match(stamp, line) for line in lines)
+    started, ended, decision, added, stopped = [re.sub(stamp, "", line, count=1) for line in lines]
+    assert started.startswith(f'msg="loop started" pid={os.getpid()} repository={canopy_env.root} dry_run=true')
+    assert " every_minutes=1 idle_max_minutes=120 max_workers=2 max_ticks=1 log=" in started
+    assert re.fullmatch(r'msg="tick ended" tick=1 status=ok elapsed_seconds=\d+ summary="dry run; .*" .*', ended)
+    assert ended.endswith(" workers=0 max_workers=2 attention=1")  # the last tick: no wait after it
+    assert decision.startswith("msg=decision tick=1 subject=PROJ-2 action=dispatch:implement rationale=")
+    assert added == f'msg="attention added" tick=1 subject=PROJ-3 reason=needs_reviewer detail={detail}'  # whole
+    assert stopped == 'msg="loop stopped" ticks=1 statuses="ok=1"'
+    assert "Ctrl-C" not in out.getvalue()  # no hints for a person at the terminal
 
 
 class SlowOutput(io.StringIO):
@@ -236,7 +263,7 @@ class SlowOutput(io.StringIO):
 
     @override
     def write(self, s: str, /) -> int:
-        if "tick 1  " in s:
+        if 'msg="tick ended" tick=1 ' in s:
             self.written_at.setdefault("tick 1", self.time.now)
         self.time.now += 1
         return super().write(s)
@@ -313,10 +340,22 @@ def test_loop_holds_its_own_lock_and_a_second_loop_is_refused(
     with overseer_does():  # records nothing, ends with "CANOPY_TICK_DONE"
         assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
         out = capsys.readouterr().out
-        assert "wait 3 minutes after each tick ends" in out
-        assert "tick 1  ok" in out
-        assert "stopped after 1 tick: ok=1" in out
+        assert " every_minutes=3 " in out
+        assert 'msg="tick ended" tick=1 status=ok ' in out
+        assert 'msg="loop stopped" ticks=1 statuses="ok=1"' in out
         assert tick_statuses(canopy_env) == ["ok"]
+
+
+def test_loop_output_to_a_file_is_never_drawn_as_on_a_terminal(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # As in the daemon, whose output is its log: FORCE_COLOR in the operator's environment would otherwise have rich
+    # draw the spinner and the countdown into it.
+    with overseer_does(), mock.patch.dict(os.environ, {"FORCE_COLOR": "1", "TTY_COMPATIBLE": "1"}):
+        assert main(["loop", "--dry-run", "--ticks", "1", "--no-serve"]) == 0
+    out = capsys.readouterr().out
+    assert 'msg="tick ended" tick=1 status=ok ' in out
+    assert "\x1b" not in out
 
 
 def test_ctrl_c_during_the_wait_stops_the_loop_without_another_tick(
