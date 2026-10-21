@@ -463,7 +463,7 @@ def canopy(*args: str) -> list[str]:
 class Called(NamedTuple):
     """A call an agent makes of one of canopy's tools (DESIGN §27), through the server its inline config names."""
 
-    #: The tool, as the runtime names it: `canopy_chore_history`.
+    #: The tool, as the runtime names it: `canopy_chore_history`, `canopy_git_diff`.
     name: str
     #: Its arguments, the fields of its request.
     arguments: Mapping[str, object]
@@ -694,24 +694,30 @@ def chore_reports(
 ) -> Iterator[None]:
     """Until the block ends, the fake chore prints `report`, verbatim if it is a string, after making the calls `tools`
     names and running `commands`, if given."""
-    settings = reported(report, commands)
-    if tools:
-        settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    with scripted("CHORE", settings, behavior):
+    with scripted("CHORE", reported(report, commands, tools), behavior):
         yield
 
 
-def reported(report: object, commands: Sequence[list[str]]) -> dict[str, str]:
-    """A `*_reports` helper's settings: `report` as the result line, verbatim if a string, and `commands` if any."""
+def reported(report: object, commands: Sequence[list[str]], tools: Sequence[Called] = ()) -> dict[str, str]:
+    """A `*_reports` helper's settings: `report` as the result line, verbatim if a string, and `commands` and the calls
+    `tools` names, if any."""
     settings = {"RESULT": report if isinstance(report, str) else json.dumps(report)}
     if commands:
         settings["COMMANDS"] = json.dumps(commands)
+    if tools:
+        settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
     return settings
 
 
 @contextmanager
-def planner_does(*commands: list[str], plan: str | None, result: Mapping[str, object] | None = None) -> Iterator[None]:
-    """Until the block ends, the fake planner writes `plan` to its desk's plan file, runs `commands`, and reports.
+def planner_does(
+    *commands: list[str],
+    plan: str | None,
+    result: Mapping[str, object] | None = None,
+    tools: Sequence[Called] = (),
+) -> Iterator[None]:
+    """Until the block ends, the fake planner makes the calls `tools` names, writes `plan` to its desk's plan file, runs
+    `commands`, and reports.
 
     It writes as the planner's edit tool would, before `commands`; with `plan` None it writes no file. `result`, its
     result line, defaults to a `done` one (DESIGN §25).
@@ -719,7 +725,7 @@ def planner_does(*commands: list[str], plan: str | None, result: Mapping[str, ob
     script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
     write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
     line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
-    with scripted("PLANNER", {"COMMANDS": json.dumps([*write, *commands]), "RESULT": line}):
+    with scripted("PLANNER", reported(line, [*write, *commands], tools)):
         yield
 
 
@@ -862,16 +868,22 @@ class Served:
         return [t["name"] for t in self.responses[request_id]["result"]["tools"]]
 
 
-def mcp_session(*requests: Mapping[str, object], raw: Sequence[str] = (), chore: bool = False) -> Served:
-    """Talk to `canopy _mcp` as the runtime does for the overseer, or with `chore` for a chore's run, here, in this
-    environment: open the session, send each of `requests` numbered from 1, then each line of `raw` as it is, and close
-    the server's stdin.
+def mcp_session(
+    *requests: Mapping[str, object],
+    raw: Sequence[str] = (),
+    chore: bool = False,
+    git: Sequence[str] = (),
+) -> Served:
+    """Talk to `canopy _mcp` as the runtime does for the overseer, with `chore` for a chore's run, or with `git`, each
+    `NAME=PATH`, for a review's or a plan's, here, in this environment: open the session, send each of `requests`
+    numbered from 1, then each line of `raw` as it is, and close the server's stdin.
 
     The server answers one message at a time, and the session waits for it to exit, which it must on its own.
     """
     numbered = [{"jsonrpc": "2.0", "id": n, **request} for n, request in enumerate(requests, 1)]
     lines = [*(json.dumps(m) for m in (*MCP_OPENING, *numbered)), *raw]
-    server = (*MCP_SERVER, "--chore") if chore else MCP_SERVER
+    checkouts = [arg for checkout in git for arg in ("--git", checkout)]
+    server = (*MCP_SERVER, *(["--chore"] if chore else []), *checkouts)
     result = procs.SubprocessRunner().run(server, stdin="".join(f"{line}\n" for line in lines), timeout=60)
     assert not result.timed_out, f"canopy _mcp did not exit when its stdin closed: {result.stderr}"
     answers = [json.loads(line) for line in result.stdout.splitlines()]

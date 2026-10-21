@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from canopy.chores import install
 from canopy.cli.common import CliError, open_context
-from canopy.core import config, workspace
+from canopy.core import config, git_tools, workspace
 from canopy.loop import tools
 from canopy.loop.tools import (
     CURSOR_VALUE_RE,
@@ -151,6 +151,19 @@ class CursorType(click.ParamType[tuple[str, str], object]):
         cursor_name, sep, cursor_id = str(value).partition("=")
         try:
             return tools.cursor(cursor_name if sep else "", cursor_id)
+        except ValueError as e:
+            self.fail(str(e), param, ctx)
+
+
+class CheckoutType(click.ParamType[tuple[str, Path], object]):
+    """A `--git NAME=PATH` checkout the read-only git tools may read: a repository's name and an absolute path."""
+
+    name = "NAME=PATH"
+
+    @override
+    def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> tuple[str, Path]:
+        try:
+            return git_tools.parse_checkout(str(value))
         except ValueError as e:
             self.fail(str(e), param, ctx)
 

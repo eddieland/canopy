@@ -21,6 +21,7 @@ from canopy.reviews import grants
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
+    calls,
     canopy,
     decisions,
     granted_meanwhile,
@@ -817,6 +818,43 @@ def test_a_review_without_its_base_branch_still_runs(
     reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(FINDINGS))
     assert reviewed.status == "done", reviewed.printed.out
     assert not review_diff.path_for(reviewed.row.log_path).exists()
+
+
+def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """#1130: the reviewer has no shell; canopy's read-only git tools, over its own checkout alone, read its history."""
+    sha = feature_commit(git_pool, tmp_path)
+    reads = [
+        calls("canopy_git_merge-base", base="origin/main", head="HEAD"),
+        calls("canopy_git_diff", base="origin/main", head=sha, paths=["retry.py"]),
+        calls("canopy_git_log", range=f"origin/main..{sha}", limit=5),
+        calls("canopy_git_show", rev="origin/main", path="."),
+        calls("canopy_git_show", rev=sha, path="../../../../etc/passwd"),
+        calls("canopy_git_diff", base="--output=/tmp/x", head=sha),
+    ]
+    reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN, tools=reads))
+    assert reviewed.status == "done", reviewed.printed.out
+
+    [reviewer] = agent_runs(scenario.agent_log)
+    slot = Path(present(reviewed.row.slot_path))
+    entry = json.loads(reviewer["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_git"]
+    assert entry["command"][-3:] == ["_mcp", "--git", f"checkout={slot}"]
+    assert reviewer["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
+    fork, diff, log, root, escape, option = reviewer["tools"]
+    assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
+    assert fork["text"] == head(git_pool)
+    assert "+while True:\n+    call()" in diff["text"]
+    assert f"commit {sha}\n" in log["text"]
+    assert "A\tretry.py" in log["text"]
+    assert root["text"] == "Nothing at . in origin/main."
+    assert (escape["error"], option["error"]) == (True, True)
+    assert "no `..`" in escape["text"]
+    assert "base: not a revision" in option["text"]
+    assert "Your git tools, `canopy_git_merge-base`" in reviewed.prompt
 
 
 TWO_FINDINGS = {

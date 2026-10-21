@@ -101,6 +101,9 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
+  # above reopens one.
+  "canopy_git_*": deny
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
   "canopy_chore_history": deny
 ---

@@ -12,6 +12,10 @@ The repositories this plan covers, each at its PR's head on branch `{{BRANCH}}`:
 
 Their pull requests: {{PULL_REQUESTS}}.
 
+Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`, and `canopy_git_show`, read each one's
+history: where its branch leaves its base, the diff and commits since, and a file as it was. Name the repository with
+`repo`, as above.
+
 {{#MAP}}
 
 The workspace map, `MAP.md`, on what each repository owns and how they depend on each other:

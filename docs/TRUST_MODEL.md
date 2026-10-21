@@ -374,6 +374,15 @@ Controls now:
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
   that link; a canary like the desk's checks the reads (DESIGN §21).
+- The reviewer and the planner read git history through canopy's read-only git tools (DESIGN §27), never a shell.
+  Their server reads only the checkouts the harness names on its command line for the run, its review's or its desk's
+  worktrees. Every argument is checked as a revision or a path inside the repository before git sees it, never an
+  option, and git reads commits, never the working tree, so no clean filter runs; it runs with no hook, filesystem
+  monitor, external diff, textconv, pager, signature check, replace ref, or transport, whatever the repository's
+  config or attributes name, with no `GIT_*` variable it inherited and no system config. What it returns is bounded,
+  every hidden character named. Residual: they read any commit the checkout's git directory holds, which a pool's
+  slots share, so a branch another run left there unpushed too; the GitHub tools already read what is pushed. Every
+  other definition denies the tools.
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
@@ -459,7 +468,8 @@ Controls:
   whole. A ticket's body is text the worker wrote, so a steered worker can publish what it read in one, as it can in a
   comment.
 - The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
-  path but that file's name, and it has no shell, web, or subagent tools. Its definition is rendered
+  path but that file's name, and it has no shell, web, or subagent tools; it reads git through canopy's read-only
+  tools, as the reviewer does (T4). Its definition is rendered
   as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are
   allowed, never the private worker's create or PR tools even where that list names them, and other servers' write
   tools are denied by name. A plan is refused (`no_read_tools`) when no read tools
