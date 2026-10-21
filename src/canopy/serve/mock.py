@@ -1332,7 +1332,7 @@ def _tools(conn: sqlite3.Connection) -> None:
 
 
 def _models(conn: sqlite3.Connection) -> None:
-    """Which models served the agent runs that ended, as a tick read their sessions after (DESIGN §13).
+    """Which models served the agent runs that ended, as their sessions were read once they had (DESIGN §13).
 
     Run 39 switched models partway, so its page splits its cost; the reviewer runs on a model of its own. Run 40's read
     failed and waits to be tried again, chore run 2's session is no longer kept, and run 42 is not read yet.

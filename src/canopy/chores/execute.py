@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, TextIO
 from canopy.chores import history, start
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import db, definitions, outbox, progress, run_offers
+from canopy.core import db, definitions, outbox, progress, run_models, run_offers
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
@@ -103,6 +103,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 log.warning("chore run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("chore run finished", extra={**fields, "status": outcome.status})
+            run_models.read_ended(ctx, "chore_runs", run_id, log)
     return outcome
 
 

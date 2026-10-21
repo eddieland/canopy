@@ -25,13 +25,14 @@ from canopy.core import (
     plans,
     pools,
     progress,
+    run_models,
     run_offers,
 )
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, archive, attention, connectors, duties, models, phases, state
+from canopy.loop import acknowledge, archive, attention, connectors, duties, phases, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -100,9 +101,10 @@ def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str
     except lock.LockBusyError:
         logs.for_tick(None).info("tick skipped: another tick holds the lock", extra={"lock": str(ctx.lock_path)})
         return Outcome(None, "lock_busy", "another tick holds the lock")
-    # Out of the lock, so the reads do not hold up the next tick; a dry run spends no time beyond its overseer.
-    if not dry_run:
-        _attribute_models(ctx, logs.for_tick(outcome.tick_id))
+    # Which models served its overseer (DESIGN §13), out of the lock, so the read does not hold up the next tick; a dry
+    # run spends no time beyond its overseer.
+    if not dry_run and outcome.tick_id is not None:
+        run_models.read_ended(ctx, "ticks", outcome.tick_id, logs.for_tick(outcome.tick_id))
     return outcome
 
 
@@ -269,15 +271,6 @@ def _feedback_plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str
         if section is not None:
             found[t.key] = section
     return found
-
-
-# Which models served the runs due to be read (DESIGN §13). What it raises is logged, never the tick's outcome: the
-# tick has closed, and the runs are read again on the next.
-def _attribute_models(ctx: Context, log: logs.TickAdapter) -> None:
-    try:
-        models.attribute(ctx, log)
-    except Exception as e:
-        log.exception("reading which models served runs raised", extra={"error": str(e)})
 
 
 def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome:

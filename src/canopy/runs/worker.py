@@ -46,6 +46,7 @@ from canopy.core import (
     pools,
     replies,
     review_diff,
+    run_models,
     run_offers,
 )
 from canopy.core.config import render_command, setup_words
@@ -257,6 +258,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("run finished", extra={**fields, "status": outcome.status})
             _check_drafts(ctx, run_id, stop, log)
+            run_models.read_ended(ctx, "runs", run_id, log)
     return outcome
 
 

@@ -18,7 +18,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions
+from canopy.core import config, db, definitions, run_models
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -450,7 +450,12 @@ def report_events(canopy_env: CanopyEnv) -> Iterator[None]:
         yield
 
 
-def test_a_worker_records_the_session_and_cost_it_reported(scenario: Scenario, git_pool: GitPool) -> None:
+def test_a_worker_records_the_session_and_cost_it_reported(
+    scenario: Scenario,
+    git_pool: GitPool,
+    opencode_state: Path,
+) -> None:
+    opencode_state.write_text(json.dumps({"sessions": {"ses_w1": [["anthropic", "claude-x", 0.25]]}}))
     with report_events(scenario.env):
         run = scenario.run(worker=pushes())
 
@@ -469,6 +474,10 @@ def test_a_worker_records_the_session_and_cost_it_reported(scenario: Scenario, g
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()  # the one it loaded
     # Each command the fake ran is a `bash` call that returned its stdout.
     assert tools_of(scenario.conn, "runs", run.id) == tools_printed(scenario.agent_log, "canopy-worker") != []
+    # Which models served it, read from its session as it ended (DESIGN §13).
+    assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "runs", run.id)] == [
+        ("anthropic/claude-x", 1),
+    ]
 
     out = scenario.operator("status").out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
