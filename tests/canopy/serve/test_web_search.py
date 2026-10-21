@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from canopy.core import conversation, db, search
+from canopy.core import chore_runs, conversation, db, search
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, RunStatus, TickStatus
 from canopy.serve.backend import Backend
@@ -60,7 +60,7 @@ def test_a_runs_report_and_question_are_found_as_its_tickets_messages(ctx: Conte
 
 def test_a_chore_runs_summary_and_findings_and_its_notes_are_found(ctx: Context) -> None:
     tick = db.start_tick(ctx.conn, dry_run=False)
-    run = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
+    run = chore_runs.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
     finding = {"id": "npm/lodash", "title": "lodash has an advisory", "detail": "Prototype pollution in merge."}
     db.finish_run(
         ctx.conn,
@@ -70,9 +70,9 @@ def test_a_chore_runs_summary_and_findings_and_its_notes_are_found(ctx: Context)
         json.dumps({"status": "ok", "summary": "Checked 3", "findings": [finding]}),
     )
     # A result that is not JSON, or whose findings are not objects, is passed over rather than failing the search.
-    bad = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
+    bad = chore_runs.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
     db.finish_run(ctx.conn, "chore_runs", bad, ChoreRunStatus.FAILED, "not json")
-    odd = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
+    odd = chore_runs.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
     db.finish_run(
         ctx.conn,
         "chore_runs",

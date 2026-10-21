@@ -16,7 +16,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import db, git_tools
+from canopy.core import chore_runs, db, git_tools
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import procs
@@ -658,18 +658,18 @@ def test_the_server_answers_in_the_version_asked_or_its_newest_writes_no_stderr_
 # A chore's run: `canopy _mcp --chore` serves it its own history alone (DESIGN §19, §27).
 
 
-def chore_runs(env: CanopyEnv) -> sqlite3.Connection:
+def two_chore_runs(env: CanopyEnv) -> sqlite3.Connection:
     """The journal, holding two ended runs of build-health, 1 and 2, the second a finding's."""
     conn = env.journal()
     for summary in ("all green", "one flaky test"):
-        run_id = db.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=env.state_dir)
+        run_id = chore_runs.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=env.state_dir)
         report: dict[str, object] = {"status": "ok", "summary": summary, "findings": []}
         db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, json.dumps(report))
     return conn
 
 
 def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
-    conn = chore_runs(overseen)
+    conn = two_chore_runs(overseen)
     for run in ("chore-2", "chore-try:build-health"):
         with in_run(run):
             served = mcp_session(
@@ -690,7 +690,7 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
 
 @pytest.mark.parametrize("run", [None, "7", "review-1", "chore-99", "chore-x"])
 def test_nothing_is_served_where_no_chores_run_is(overseen: CanopyEnv, run: str | None) -> None:
-    conn = chore_runs(overseen)
+    conn = two_chore_runs(overseen)
     read = tool_call("history", name="build-health")
     with in_tick(conn), in_run(run) if run is not None else contextlib.nullcontext():
         served = mcp_session(LIST_TOOLS, read, chore=True)
@@ -706,7 +706,7 @@ def test_a_chores_history_tool_says_what_its_command_prints(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    chore_runs(overseen)
+    two_chore_runs(overseen)
     reads = [
         {"name": "build-health"},
         {"name": "build-health", "limit": 1},
@@ -737,7 +737,7 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
     overseen: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    chore_runs(overseen)
+    two_chore_runs(overseen)
     refused = [
         ({"name": "queue-age"}, "chore history refused (other_chore): this is a run of chore build-health"),
         ({"name": "build-health", "run": 9}, "chore history refused (unknown): chore build-health has no run 9"),
@@ -922,10 +922,10 @@ def opened(env: CanopyEnv, runner: procs.Runner) -> Iterator[Context]:
 def stopped(conn: sqlite3.Connection) -> Iterator[int]:
     """Chore run 1 while it runs, its agent started, and then its process and its agent stopped. Yields its pid."""
     deadline = time.monotonic() + 30
-    run = present(db.get_chore_run(conn, 1))
+    run = present(chore_runs.get_chore_run(conn, 1))
     while run.agent_pid is None and time.monotonic() < deadline:
         time.sleep(0.05)
-        run = present(db.get_chore_run(conn, 1))
+        run = present(chore_runs.get_chore_run(conn, 1))
     pid, agent = present(run.pid), present(run.agent_pid)
     try:
         assert procs.running(Path(run.log_path), pid)

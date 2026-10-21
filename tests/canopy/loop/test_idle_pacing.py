@@ -18,7 +18,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, notice
+from canopy.core import chore_runs, db, notice, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, StartStatus, TickStatus
 from canopy.infra import resources
@@ -80,7 +80,7 @@ def recorded(env: CanopyEnv) -> list[tuple[object, object]]:
 
 def review_run(conn: sqlite3.Connection, tick_id: int) -> int:
     """A review run whose `_review` is this process, so reconcile leaves it running."""
-    run_id = db.insert_review_run(
+    run_id = review_runs.insert_review_run(
         conn,
         tick_id=tick_id,
         pr_url=PR,
@@ -205,7 +205,7 @@ def review_ends(conn: sqlite3.Connection, _tick_id: int) -> None:
 
 
 def chore_starts(conn: sqlite3.Connection, tick_id: int) -> None:
-    db.insert_chore_run(conn, tick_id=tick_id, chore="nightly", logs_dir=LOGS)
+    chore_runs.insert_chore_run(conn, tick_id=tick_id, chore="nightly", logs_dir=LOGS)
 
 
 def operator_reply(conn: sqlite3.Connection, _tick_id: int) -> None:
@@ -404,7 +404,7 @@ def fix_ci_ended(conn: sqlite3.Connection, ended: datetime) -> None:
 
 def chore_started(conn: sqlite3.Connection, started: datetime) -> None:
     tick_id = db.start_tick(conn, dry_run=False)
-    run_id = db.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=LOGS)
+    run_id = chore_runs.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=LOGS)
     assert db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, None)
     conn.execute("UPDATE chore_runs SET started_at = ? WHERE id = ?", (stamp(started), run_id))
 

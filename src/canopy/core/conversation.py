@@ -25,7 +25,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, memory, outbox, records, review_drafts, review_result, sql
+from canopy.core import (
+    chore_runs,
+    chore_view,
+    contract,
+    db,
+    memory,
+    outbox,
+    records,
+    review_drafts,
+    review_result,
+    review_runs,
+    sql,
+)
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
@@ -434,7 +446,7 @@ def dismiss(
     with db.transaction(conn):
         if undo:
             for finding in ids:
-                if not db.delete_dismissal(conn, ref.id, finding):
+                if not chore_runs.delete_dismissal(conn, ref.id, finding):
                     raise Refused("unknown", f"{ref} has no dismissed finding {finding!r}")
             return
         state = chore_view.state_of(conn, ref.id, chores[ref.id])
@@ -442,7 +454,7 @@ def dismiss(
         for finding in ids:
             if finding not in open_ids:
                 raise Refused("unknown", f"{ref} has no open finding {finding!r}")
-            db.set_dismissal(conn, ref.id, finding, channel=channel)
+            chore_runs.set_dismissal(conn, ref.id, finding, channel=channel)
 
 
 def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str], *, channel: str, undo: bool) -> None:
@@ -452,10 +464,10 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
     with db.transaction(conn):
         if undo:
             for number in numbers:
-                if not db.delete_review_dismissal(conn, run_id, number):
+                if not review_runs.delete_review_dismissal(conn, run_id, number):
                     raise Refused("unknown", f"{ref} has no dismissed finding {number}")
         else:
-            run = db.get_review_run(conn, run_id)
+            run = review_runs.get_review_run(conn, run_id)
             if run is None:
                 raise Refused("unknown", f"there is no review run {run_id}")
             stored = review_result.stored(run.result_json)
@@ -463,7 +475,7 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
             if numbers[-1] > found:
                 raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
             for number in numbers:
-                db.set_review_dismissal(conn, run_id, number, channel=channel)
+                review_runs.set_review_dismissal(conn, run_id, number, channel=channel)
         # A review of a PR the loop does not own drafts a review on it: a dismissal drops what the finding made of the
         # draft, and taking it back restores it (DESIGN §34).
         review_drafts.dismissed(conn, run_id, numbers, undo=undo, channel=channel)
@@ -487,7 +499,7 @@ def see(conn: sqlite3.Connection, refs: Sequence[Ref], *, channel: str) -> list[
     unique = list(dict.fromkeys(refs))
     with db.transaction(conn):
         for ref in unique:
-            run = db.get_review_run(conn, int(ref.id))
+            run = review_runs.get_review_run(conn, int(ref.id))
             if run is None:
                 raise Refused("unknown", f"there is no review run {ref.id}")
             if run.ended_at is None:
@@ -534,14 +546,14 @@ def send(
     if not numbers or any(not 0 < n <= review_result.MAX_FINDINGS for n in numbers):
         raise Refused("bad_finding", f"name one or more findings by number, from 1 to {review_result.MAX_FINDINGS}")
     run_id = int(ref.id)
-    run = db.get_review_run(conn, run_id)
+    run = review_runs.get_review_run(conn, run_id)
     if run is None:
         raise Refused("unknown", f"there is no review run {run_id}")
     stored = review_result.stored(run.result_json)
     found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
     if numbers[-1] > found:
         raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
-    dismissed = db.review_dismissals(conn, run_id)
+    dismissed = review_runs.review_dismissals(conn, run_id)
     if held := [n for n in numbers if n in dismissed]:
         raise Refused("dismissed", f"{ref} {_numbered(held)} dismissed; undo the dismissal to send it")
     key = run.ticket_key
@@ -567,7 +579,7 @@ def own_pr(conn: sqlite3.Connection, run: records.ReviewRun) -> bool:
     return (
         run.purpose == "own"
         and run.ticket_key is not None
-        and db.is_unit_pr(conn, run.ticket_key, run.pr_url, repo=run.repo)
+        and review_runs.is_unit_pr(conn, run.ticket_key, run.pr_url, repo=run.repo)
     )
 
 

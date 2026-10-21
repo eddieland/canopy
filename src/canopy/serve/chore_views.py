@@ -11,7 +11,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import chore_result, chore_view, contract, conversation, db
+from canopy.core import chore_result, chore_runs, chore_view, contract, conversation, db
 from canopy.core.vocab import ChoreRunStatus
 from canopy.serve.chore_schema import (
     ChoreDetail,
@@ -144,7 +144,7 @@ def _chore_title(chore: Chore) -> str | None:
 
 def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int) -> ChoreSpendWindow:
     since = db.format_time(now - timedelta(hours=hours))
-    runs, costs = db.chore_costs_since(conn, name, since)
+    runs, costs = chore_runs.chore_costs_since(conn, name, since)
     if not costs:
         return ChoreSpendWindow(hours=hours, runs=runs, priced=0)
     total = sum(costs)
@@ -254,5 +254,5 @@ def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | N
 
 
 def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:
-    row = db.get_chore_run(conn, run_id)
+    row = chore_runs.get_chore_run(conn, run_id)
     return row if row is not None and row.chore == name else None

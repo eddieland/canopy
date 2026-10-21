@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation, db, observe, personas, plans, records, sql
+from canopy.core import conversation, db, observe, personas, plans, records, review_runs, sql
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -607,7 +607,7 @@ class _World:
 
     def _runs_of(self, url: str) -> list[records.ReviewRun]:
         if url not in self._review_runs:
-            self._review_runs[url] = db.review_runs_of(self.ctx.conn, url)
+            self._review_runs[url] = review_runs.review_runs_of(self.ctx.conn, url)
         return self._review_runs[url]
 
     # Whether canopy's reviewer reviewed the PR's head commit: a run on it that ended `done` (DESIGN §21), in each
@@ -630,7 +630,7 @@ class _World:
         stored = result.stored(run.result_json)
         if stored is None:
             return False
-        dismissed = db.review_dismissals(self.ctx.conn, run.id)
+        dismissed = review_runs.review_dismissals(self.ctx.conn, run.id)
         return any(i not in dismissed for i in range(1, len(stored.findings) + 1))
 
 

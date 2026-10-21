@@ -18,8 +18,8 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.chores import execute, history, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
+from canopy.core import chore_runs, db, definitions, prompts, run_models, workspace
 from canopy.core import chore_view as view
-from canopy.core import db, definitions, prompts, run_models, workspace
 from canopy.core.config import Chore, load
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
@@ -131,10 +131,10 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         before = time.time()
         assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
         deadline = time.monotonic() + 30
-        row = db.get_chore_run(conn, 1)
+        row = chore_runs.get_chore_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
             time.sleep(0.05)
-            row = db.get_chore_run(conn, 1)
+            row = chore_runs.get_chore_run(conn, 1)
         after = time.time()
         assert row is not None
         assert row.status == "ok", Path(row.log_path).read_text()
@@ -338,7 +338,7 @@ def test_an_invalid_result_is_unknown_and_records_no_findings(
 ) -> None:
     conn = canopy_env.journal()
     run_id = run_inline(conn, report)
-    row = present(db.get_chore_run(conn, run_id))
+    row = present(chore_runs.get_chore_run(conn, run_id))
     assert row.status == "unknown"
     assert result.stored(row.result_json) is None
 
@@ -384,7 +384,7 @@ def test_a_chore_lists_at_most_its_max_findings_and_counts_the_rest(
     listed = [{**FINDING, "id": f"f{i}", "title": f"finding {i}"} for i in range(3)]
     conn = canopy_env.journal()
     run_id = run_inline(conn, {"status": "ok", "summary": "busy", "findings": listed, "more_findings": 4})
-    parsed = present(result.stored(present(db.get_chore_run(conn, run_id)).result_json))
+    parsed = present(result.stored(present(chore_runs.get_chore_run(conn, run_id)).result_json))
     assert [f.id for f in parsed.findings] == ["f0", "f1"]
     assert parsed.more_findings == 5
     [agent] = agent_runs(agent_log)
@@ -491,8 +491,8 @@ def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
     run_inline(conn, {"status": "failed"})
     backdate(conn, 120)
     run_inline(conn, {"status": "ok", "findings": [FINDING, {**FINDING, "id": "stuck/pr-7"}]})
-    first = db.get_chore_run(conn, 1)
-    third = db.get_chore_run(conn, 3)
+    first = chore_runs.get_chore_run(conn, 1)
+    third = chore_runs.get_chore_run(conn, 3)
     assert first is not None
     assert third is not None
     cfg = load(canopy_env.root, canopy_env.user_file)
@@ -513,7 +513,7 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
     canopy_env.append_user(cwd)
     conn = canopy_env.journal()
     run_id = run_inline(conn, OK)
-    run = present(db.get_chore_run(conn, run_id))
+    run = present(chore_runs.get_chore_run(conn, run_id))
     assert run.status == "crashed"
     assert "canopy-chore.md" in json.loads(run.result_json)["harness"]
     assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
@@ -555,7 +555,7 @@ def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
     with in_tick(conn):
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
         assert main(["_chore", "1"], runner=InlineRunner(timeout_agent=True)) == 0
-        row = present(db.get_chore_run(conn, 1))
+        row = present(chore_runs.get_chore_run(conn, 1))
         assert row.status == "timeout"
         assert json.loads(row.result_json) == {"harness": "the chore timed out after 1 minutes"}
 
@@ -570,10 +570,10 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     with in_tick(conn, ends_ok=True), chore_reports(OK, sleep=60):
         assert main(["chore", "run", "build-health"]) == 0
     deadline = time.monotonic() + 30
-    row = db.get_chore_run(conn, 1)
+    row = chore_runs.get_chore_run(conn, 1)
     while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
         time.sleep(0.05)
-        row = db.get_chore_run(conn, 1)
+        row = chore_runs.get_chore_run(conn, 1)
     assert row is not None
     pid, agent_pid = row.pid, row.agent_pid
     assert agent_pid is not None, "`_chore` never started the agent"
@@ -583,7 +583,7 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
         time.sleep(0.05)
 
     tick()
-    crashed = present(db.get_chore_run(conn, 1))
+    crashed = present(chore_runs.get_chore_run(conn, 1))
     assert crashed.status == "crashed"
     assert not procs.lifelock(Path(crashed.log_path)).exists()
     while procs.alive(agent_pid) and time.monotonic() < deadline:
@@ -628,7 +628,7 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     held: list[bool] = []
 
     def holding(ctx: Context, run_id: int, *, out: TextIO) -> execute.Outcome:
-        run = present(db.get_chore_run(ctx.conn, run_id))
+        run = present(chore_runs.get_chore_run(ctx.conn, run_id))
         held.append(lock.held(procs.lifelock(Path(run.log_path))))
         return run_chore(ctx, run_id, out=out)
 
@@ -645,7 +645,7 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     assert out.out.rstrip().endswith("chore try build-health: ok; run 2, see `canopy show chore:build-health`")
 
     # A run like the overseer's, with no tick and no decision: its result is the chore's latest.
-    row = present(db.get_chore_run(conn, 2))
+    row = present(chore_runs.get_chore_run(conn, 2))
     assert (row.tick_id, row.status, row.pid) == (None, "ok", os.getpid())
     assert "--- chore stdout ---" in Path(row.log_path).read_text()
     assert [d["action"] for d in conn.execute("SELECT action FROM decisions")] == ["dispatch:chore"]
@@ -706,7 +706,7 @@ def test_try_works_with_chores_off_and_reports_a_bad_result(
 
         assert main(["chore", "try", "build-health"]) == 1
         assert "chore try build-health: unknown (" in capsys.readouterr().out
-        row = present(db.get_chore_run(conn, 1))
+        row = present(chore_runs.get_chore_run(conn, 1))
         assert row.status == "unknown"
 
 
@@ -717,7 +717,7 @@ def test_try_refuses_while_the_chore_runs_unless_it_records_nothing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
-    running = db.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=canopy_env.state_dir)
+    running = chore_runs.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=canopy_env.state_dir)
     with chore_reports(OK):
         assert main(["chore", "try", "build-health"]) == 1
         err = capsys.readouterr().err
@@ -755,7 +755,7 @@ def test_a_try_from_the_web_is_recorded_and_done_by_a_chore_process_of_its_own(
         # A request cannot wait out the chore's timeout, so a `_chore` of its own does the run, as the overseer's.
         [call] = spawn.call_args_list
         assert call.args[1][-2:] == ["_chore", "1"]
-        row = db.get_chore_run(conn, 1)
+        row = chore_runs.get_chore_run(conn, 1)
         assert row is not None
         assert (row.tick_id, row.status, row.pid) == (None, "running", os.getpid())
 
@@ -767,7 +767,7 @@ def test_a_try_from_the_web_is_recorded_and_done_by_a_chore_process_of_its_own(
 
     with chore_reports(OK):
         assert main(["_chore", "1"], runner=InlineRunner()) == 0
-    row = db.get_chore_run(conn, 1)
+    row = chore_runs.get_chore_run(conn, 1)
     assert row is not None
     assert row.status == "ok"
     # Its findings are the chore's, listed once `max_chores` is above 0.
@@ -789,7 +789,7 @@ def test_a_try_from_the_web_that_cannot_start_is_refused_and_its_run_closed(
         assert refused(c.post("/api/chores/build-health/tries", headers=headers)) == (
             "not_started: could not start the try: cannot start python: no such file"
         )
-    row = db.get_chore_run(conn, 1)
+    row = chore_runs.get_chore_run(conn, 1)
     assert row is not None
     assert row.status == "crashed"
 
@@ -863,7 +863,7 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
     # Several are dismissed together or not at all.
     assert main(["dismiss", "chore:build-health", FINDING["id"], "stuck/pr-7"]) == 1
     assert "dismiss refused (unknown)" in capsys.readouterr().err
-    assert db.dismissals(conn, "build-health") == {}
+    assert chore_runs.dismissals(conn, "build-health") == {}
 
     assert main(["dismiss", "chore:build-health", FINDING["id"], FINDING["id"]]) == 0
     assert f"{FINDING['id']} is dismissed: it is off the attention list" in capsys.readouterr().out
@@ -917,7 +917,7 @@ def test_a_chore_run_records_what_it_cost(
     with chore_reports(OK, ["echo", "read it"], session="ses_chore"):
         conn = canopy_env.journal()
         run_id = run_inline(conn, OK)
-        row = present(db.get_chore_run(conn, run_id))
+        row = present(chore_runs.get_chore_run(conn, run_id))
         assert row.status == "ok"  # the result line is read from the text events
         assert row.session_id == "ses_chore"
         usage = present(db.usage_of(row))
@@ -1023,7 +1023,7 @@ def test_the_operator_pages_a_chores_history(
     db.finish_run(
         conn,
         "chore_runs",
-        db.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=canopy_env.state_dir),
+        chore_runs.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=canopy_env.state_dir),
         ChoreRunStatus.CRASHED,
         json.dumps({"harness": "the chore process is gone"}),
     )

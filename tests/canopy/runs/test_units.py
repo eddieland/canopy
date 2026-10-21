@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, pr_list
 from canopy.core.vocab import Phase, ResumeReason, RunKind
 from canopy.infra import lock, procs
 from canopy.loop import attention
@@ -95,7 +95,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     # Each PR's own title is recorded by its URL, on one line; docs's is not.
     titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
     assert json.loads(run.row["result_json"])["pr_titles"] == titles
-    assert {r["url"]: r["pr_title"] for r in db.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
+    assert {r["url"]: r["pr_title"] for r in pr_list.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
     [(action, rationale)] = decisions(conn, int(run.row["tick_id"]))
     assert action == "dispatch:implement"
     assert rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"

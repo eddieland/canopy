@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import db, dead_runs, outbox
+from canopy.core import dead_runs, outbox, review_runs
 from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import execute
 
@@ -25,7 +25,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
     closed: list[int] = []
     for row in dead_runs.find(ctx.conn, "review_runs"):
         # Read again as a typed row, for what returns its slot and builds its event.
-        run = db.get_review_run(ctx.conn, int(row["id"]))
+        run = review_runs.get_review_run(ctx.conn, int(row["id"]))
         if run is None:
             continue
         fields = {"review_run_id": run.id, "pr": run.pr_url, "pid": run.pid}

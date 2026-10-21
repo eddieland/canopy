@@ -24,7 +24,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, pools, sql, workspace
+from canopy.core import chore_runs, chore_view, config, conversation, db, pools, review_runs, sql, workspace
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
@@ -347,7 +347,7 @@ def _counted_as(kind: str) -> str:
 
 
 def _review_limit(ctx: Context, url: str) -> Limit | None:
-    runs = len(db.review_runs_of(ctx.conn, url))
+    runs = len(review_runs.review_runs_of(ctx.conn, url))
     if runs == 0:
         return None
     row = sql.execute(
@@ -412,7 +412,12 @@ def _try_chore(ctx: Context, name: str) -> int:
     running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
     if running is not None:
         raise conversation.Refused("running", f"chore run {running['id']} of {name} is running")
-    run_id = db.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=ctx.state_dir / "chore-runs" / name)
+    run_id = chore_runs.insert_chore_run(
+        ctx.conn,
+        tick_id=None,
+        chore=name,
+        logs_dir=ctx.state_dir / "chore-runs" / name,
+    )
     sql.execute(ctx.conn, sql.update("chore_runs").set(started_at=db.format_time(T0)).where("id = ?", run_id))
     return run_id
 

@@ -20,7 +20,7 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, review_runs
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, present, slot_of, worker_does
@@ -622,7 +622,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
         run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
 
-    row = present(db.get_review_run(conn, run_id))
+    row = present(review_runs.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()
     call = sandbox.only_call()
     assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))

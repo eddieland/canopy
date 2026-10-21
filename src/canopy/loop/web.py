@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.chores import trial
-from canopy.core import conversation, db
+from canopy.core import conversation, review_runs
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
@@ -135,7 +135,7 @@ def review_limit(ctx: Context, url: str) -> Limit | None:
     Returns:
         Its review runs, the runs granted it, and its limit, with no repository: the PR's own page names that.
     """
-    runs = len(db.review_runs_of(ctx.conn, url))
+    runs = len(review_runs.review_runs_of(ctx.conn, url))
     if runs == 0:
         return None
     return Limit(grants.KIND, None, url, runs, grants.granted(ctx.conn, url), grants.limit(ctx.conn, ctx.config, url))

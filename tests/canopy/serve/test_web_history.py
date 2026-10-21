@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_result, db
+from canopy.core import chore_result, db, pr_list
 from canopy.core.context import Context
 from canopy.loop import attention, web
 from canopy.serve import chore_views, live, pull_requests, reviews, spend_views, tick_views, views
@@ -62,8 +62,8 @@ def backend(tmp_path: Path) -> Backend:
 def test_no_read_grows_with_the_history_behind_it(backend: Backend) -> None:
     """Five times the history, every row older than any the pages show, and each read does the same work.
 
-    Before migration 0022 and the candidates `db.recent_tickets` and `db.pull_requests` weigh, the tickets list, the
-    runs list, the PRs, a PR's decisions, and a chore's runs each read every row ever recorded, on every commit.
+    Before migration 0022 and the candidates `db.recent_tickets` and `pr_list.pull_requests` weigh, the tickets list,
+    the runs list, the PRs, a PR's decisions, and a chore's runs each read every row ever recorded, on every commit.
     """
     with backend.open() as ctx:
         add_history(ctx.conn, 0, 1_200)
@@ -163,10 +163,10 @@ def test_the_pull_requests_are_what_weighing_every_one_finds(journals: Journals,
                 (rnd.choice(urls), start, ended, "running" if ended is None else "done"),
             )
     for limit in range(1, len(urls) + 2):
-        found = [tuple(r) for r in db.pull_requests(conn, limit)]
+        found = [tuple(r) for r in pr_list.pull_requests(conn, limit)]
         assert found == every_pull_request(conn, limit), limit
     for url in urls:
-        assert [tuple(r) for r in db.pull_requests(conn, 1, url=url)] == every_pull_request(conn, 1, url=url)
+        assert [tuple(r) for r in pr_list.pull_requests(conn, 1, url=url)] == every_pull_request(conn, 1, url=url)
 
 
 def test_a_findings_start_is_read_back_once(backend: Backend) -> None:

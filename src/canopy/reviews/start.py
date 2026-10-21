@@ -19,7 +19,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, personas, pools, prompts, records, review_requests, sql
+from canopy.core import (
+    contract,
+    db,
+    notice,
+    outbox,
+    personas,
+    pools,
+    prompts,
+    records,
+    review_requests,
+    review_runs,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
@@ -140,7 +152,7 @@ def due(ctx: Context, request: Request) -> list[Request]:
         since = found.created_at if found is not None else None
     if not chosen:
         return [request]
-    runs = db.review_runs_of(ctx.conn, request.pr)
+    runs = review_runs.review_runs_of(ctx.conn, request.pr)
     owed = owed_by(runs, request.sha, chosen, since=since)
     if not owed:
         since_request = " or has since the request" if since is not None else ""
@@ -204,8 +216,8 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
         repo = _guard(ctx, request)
         # Fixed before the run is recorded, so a persona that cannot be used costs the PR none of its reviews.
         persona = _persona(ctx, request)
-        attempt = len(db.review_runs_of(ctx.conn, request.pr)) + 1
-        run_id = db.insert_review_run(
+        attempt = len(review_runs.review_runs_of(ctx.conn, request.pr)) + 1
+        run_id = review_runs.insert_review_run(
             ctx.conn,
             tick_id=tick_id,
             pr_url=request.pr,
@@ -222,9 +234,9 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
         try:
             lease = pool.lease(f"{HOLDER_KEY}{run_id}")
         except pools.PoolError as e:
-            db.delete_review_run(ctx.conn, run_id)
+            review_runs.delete_review_run(ctx.conn, run_id)
             raise Refusal("no_slot", str(e)) from e
-        db.set_review_slot(
+        review_runs.set_review_slot(
             ctx.conn,
             run_id,
             slot=lease.path,
@@ -311,7 +323,7 @@ def _spawn(
     persona: personas.Persona,
 ) -> Started:
     cfg = ctx.config
-    run = db.get_review_run(ctx.conn, run_id)
+    run = review_runs.get_review_run(ctx.conn, run_id)
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
     values = {
@@ -340,7 +352,7 @@ def _spawn(
         )
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
-        db.delete_review_run(ctx.conn, run_id)
+        review_runs.delete_review_run(ctx.conn, run_id)
         raise Refusal("bad_prompt", str(e)) from e
     try:
         logs.write_private(prompt_file(ctx, run_id), prompt)
@@ -410,7 +422,7 @@ def _check_ours(ctx: Context, request: Request, repo: str) -> None:
     Raises:
         Refusal: (`not_ours`) `--ticket` names a ticket whose unit in `repo` has not opened the PR.
     """
-    if request.ticket is not None and not db.is_unit_pr(ctx.conn, request.ticket, request.pr, repo=repo):
+    if request.ticket is not None and not review_runs.is_unit_pr(ctx.conn, request.ticket, request.pr, repo=repo):
         raise Refusal(
             "not_ours",
             f"{request.ticket}'s unit in {repo} did not open {request.pr}; --ticket is only for the loop's own PR",
@@ -462,7 +474,7 @@ def _check_limits(
             the review runs or the workers and reviews together fill their capacity.
     """
     cfg = ctx.config
-    runs = db.review_runs_of(ctx.conn, request.pr)
+    runs = review_runs.review_runs_of(ctx.conn, request.pr)
     done = next(
         (
             r
@@ -486,7 +498,7 @@ def _check_limits(
     if len(runs) >= limit:
         raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")
     since = db.format_time(datetime.now(UTC) - _DAY)
-    today = len(db.review_runs_since(ctx.conn, since)) + len(planned_reviews)
+    today = len(review_runs.review_runs_since(ctx.conn, since)) + len(planned_reviews)
     if today >= cfg.capacity.max_reviews_per_day:
         per_day = cfg.capacity.max_reviews_per_day
         raise Refusal("daily_limit", f"{today} review runs started in the last 24 hours; the limit is {per_day}")

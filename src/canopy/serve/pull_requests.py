@@ -12,7 +12,7 @@ import math
 from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, review_requests
+from canopy.core import contract, conversation, db, pr_list, review_requests, review_runs
 from canopy.serve import threads
 from canopy.serve.review_schema import PullRequest, PullRequestDetail, ReviewRequest
 from canopy.serve.reviews import summaries
@@ -38,8 +38,8 @@ def pull_requests(ctx: Context) -> list[PullRequest]:
     Returns:
         At most `PULL_REQUESTS`: the loop's own, by their units, reviewed or not, and every one canopy reviewed.
     """
-    rows = db.pull_requests(ctx.conn, PULL_REQUESTS)
-    reviews = db.review_runs_of_prs(ctx.conn, [str(r["url"]) for r in rows])
+    rows = pr_list.pull_requests(ctx.conn, PULL_REQUESTS)
+    reviews = review_runs.review_runs_of_prs(ctx.conn, [str(r["url"]) for r in rows])
     return [_pull_request(ctx.conn, r, reviews.get(str(r["url"]), [])) for r in rows]
 
 
@@ -50,9 +50,9 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
         The PR's page, or None when no unit, review run, or decision names it. One that only decisions name, such as
         a `review.query` match no review has run on yet, has a page with its decisions alone.
     """
-    rows = db.pull_requests(ctx.conn, 1, url=url)
+    rows = pr_list.pull_requests(ctx.conn, 1, url=url)
     decisions = db.decisions_about_pr(ctx.conn, url, PR_DECISIONS)
-    reviews = db.review_runs_of(ctx.conn, url)
+    reviews = review_runs.review_runs_of(ctx.conn, url)
     if rows:
         found = _pull_request(ctx.conn, rows[0], reviews)
     elif decisions:
