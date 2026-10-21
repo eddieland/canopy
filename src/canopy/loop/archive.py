@@ -23,6 +23,7 @@ from canopy.core import hostgit, plan_export
 from canopy.infra import procs
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from canopy.core.context import Context
@@ -85,7 +86,7 @@ def _archive(ctx: Context, git: _Git, name: str, log: logs.TickAdapter) -> str |
             "clone": str(git.clone),
         }
         log.info("plans archived", extra=extra)
-    failure = _commit_and_push(git, name, log)
+    failure = _commit_and_push(git, name, log, exported.removed)
     if failure is None and exported.left:
         return (
             f"{exported.left} {'plans wait' if exported.left != 1 else 'plan waits'} for the next tick's archive: "
@@ -94,32 +95,63 @@ def _archive(ctx: Context, git: _Git, name: str, log: logs.TickAdapter) -> str |
     return failure
 
 
-def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
-    """Commit what changed in `name/`, and push when the branch is ahead.
+def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter, removed: Sequence[str]) -> str | None:
+    """Commit what changed in `name/`, the files `removed` from it among it, and push when the branch is ahead.
 
     Returns:
         Why the archive is not pushed, or None when every step it needed succeeded.
     """
-    # git refuses a path that matches nothing, as `name/` does before the workspace has a plan.
-    if any((git.clone / name).iterdir()):
-        added = git.run("add", "--all", "--", name)
-        if not added.ok:
-            return git.failed("add", added)
-    # Exit 1 is staged changes under `name/`, which a commit that failed on an earlier tick may have left too.
-    staged = git.run("diff", "--cached", "--quiet", "--", name)
-    if staged.returncode not in {0, 1}:
-        return git.failed("diff", staged)
-    if staged.returncode == 1:
-        # Only `name/`: anything else the operator staged in the clone stays staged.
-        committed = git.run("commit", "--quiet", "-m", _message(git, name), "--", name)
-        if not committed.ok:
-            return git.failed("commit", committed)
+    failure = _stage(git, name, removed) or _commit(git, name)
+    if failure is not None:
+        return failure
     if git.has_commits() and git.ahead() != 0:
         pushed = git.run("push", "--quiet")
         if not pushed.ok:
             log.warning("plan archive not pushed", extra={"error": pushed.stderr.strip()[:_MAX_ERROR]})
             return git.failed("push", pushed)
     return None
+
+
+def _stage(git: _Git, name: str, removed: Sequence[str]) -> str | None:
+    """Stage what changed in `name/`, the files `removed` from it among it.
+
+    Returns:
+        Why it could not be staged, or None when it was.
+    """
+    if removed:
+        # Out of the index first: one that ignores case, as on macOS, takes a file renamed in case alone for the file
+        # it holds, and `add` would keep the old name, or drop it and miss the new one.
+        unstaged = git.run("rm", "--cached", "--quiet", "--ignore-unmatch", "--", *(f"{name}/{r}" for r in removed))
+        if not unstaged.ok:
+            return git.failed("rm", unstaged)
+    # git refuses a path that matches nothing, as `name/` does before the workspace has a plan.
+    if any((git.clone / name).iterdir()):
+        added = git.run("add", "--all", "--", name)
+        if not added.ok:
+            return git.failed("add", added)
+    return None
+
+
+def _commit(git: _Git, name: str) -> str | None:
+    """Commit what is staged in `name/`, and nothing else the operator staged in the clone.
+
+    Returns:
+        Why it could not be committed, or None when it was, or nothing was staged.
+    """
+    # Exit 1 is staged changes under `name/`, which a commit that failed on an earlier tick may have left too.
+    staged = git.run("diff", "--cached", "--quiet", "--", name)
+    if staged.returncode not in {0, 1}:
+        return git.failed("diff", staged)
+    if staged.returncode == 0:
+        return None
+    # With nothing else staged, the index is committed as it stands, since a commit naming paths stages them again,
+    # which an index that ignores case refuses for a file renamed in case alone.
+    others = git.run("diff", "--cached", "--quiet", "--", ".", f":(exclude){name}")
+    if others.returncode not in {0, 1}:
+        return git.failed("diff", others)
+    paths = ("--", name) if others.returncode == 1 else ()
+    committed = git.run("commit", "--quiet", "-m", _message(git, name), *paths)
+    return None if committed.ok else git.failed("commit", committed)
 
 
 def _message(git: _Git, name: str) -> str:
