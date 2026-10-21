@@ -10,7 +10,15 @@ from unittest import mock
 import pytest
 
 from canopy.core import connector_runs, db, observe, records, sql
-from canopy.core.vocab import CheckConclusion, CheckStatus, ConnectorRunStatus, MergeState, SourceKind, TicketState
+from canopy.core.vocab import (
+    CheckConclusion,
+    CheckStatus,
+    ConnectorRunStatus,
+    MergeState,
+    PrState,
+    SourceKind,
+    TicketState,
+)
 from canopy.loop import connectors
 from tests.canopy.helpers import reads, waits
 
@@ -144,6 +152,24 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     # The next run asks only for comments newer than the newest the journal holds.
     scenario.tick(*waits(*KEYS))
     assert asked(watched)[2]["request"]["tickets"][0] == {"key": "PROJ-1", "comments_since": "2026-10-18T10:00:00.000Z"}
+
+
+def test_a_pr_last_seen_open_is_read_after_its_ticket_is_done_until_a_read_sees_it_merged(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    plays(watched, github={"lines": [pr(state="open")]})
+    scenario.tick(*waits(*KEYS))
+    db.set_ticket(scenario.conn, "PROJ-1", str(scenario.env.root), done=True)
+
+    plays(watched, github={"lines": [pr(state="merged")]})
+    scenario.tick(*waits("PROJ-2"))
+    assert asked(watched)[-1]["request"]["prs"] == [PR]
+    [observed] = records.fetch_all(scenario.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert observed.state is PrState.MERGED
+
+    scenario.tick(*waits("PROJ-2"))
+    assert asked(watched)[-1]["request"]["prs"] == []
 
 
 def test_a_line_out_of_bounds_is_refused_its_subject_kept_and_the_rest_recorded(

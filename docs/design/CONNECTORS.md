@@ -31,11 +31,11 @@ whatever its pace for ticks (§6, Ticks and polls).
 ### The contract
 
 On stdin, one JSON object naming what to observe, and a connector reads only what it is given: a `tracker` source the
-tracker query and every ticket the state block lists (§6 step 4); a `vcs` source every PR of a ticket not marked done
-or with a draft waiting (§29), the repositories, the branch prefix, and the review query. On stdout, one JSON line per
-observation, naming its kind (tickets and comments; PRs, branches, checks, and reviews), and last an `end` line naming
-what the run read whole; the exit code is not read. A connector of the operator's own speaks this contract and nothing
-else: it is all the harness knows of any of them.
+tracker query and every ticket the state block lists (§6 step 4); a `vcs` source every PR of a ticket not marked done,
+with a draft waiting (§29), or last observed open, so no observation stays open unread, the repositories, the branch
+prefix, and the review query. On stdout, one JSON line per observation, naming its kind (tickets and comments; PRs,
+branches, checks, and reviews), and last an `end` line naming what the run read whole; the exit code is not read. A
+connector of the operator's own speaks this contract and nothing else: it is all the harness knows of any of them.
 
 - Ids, states, times, and bounded text; never logs, diffs, PR descriptions, or a credential.
 - A connector pages everything before `end` names it: the tracker query to its last page (REQUIREMENTS R1), a PR's

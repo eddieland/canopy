@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe, review_drafts_manage, sql
-from canopy.core.vocab import ConnectorRunStatus, SourceKind
+from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -75,9 +75,10 @@ def tracker_request(ctx: Context) -> observe.Request:
 def vcs_request(ctx: Context) -> observe.Request:
     """What a `vcs` source is asked: the PRs the journal watches, the map's repositories, and the review query.
 
-    A PR is watched while its unit's ticket is not marked done, merged and closed ones included, and while a draft
-    waits on a read of it (§29), a review's draft among them (§34). A unit's PR that is not a PR's URL cannot be read,
-    so it is not asked about.
+    A PR is watched while its unit's ticket is not marked done, merged and closed ones included, while a draft waits
+    on a read of it (§29), a review's draft among them (§34), and while the reader last saw it open, so no PR's
+    observation stays open unread once its ticket is done or forgotten. A unit's PR that is not a PR's URL cannot be
+    read, so it is not asked about.
 
     Returns:
         The request.
@@ -92,10 +93,12 @@ def vcs_request(ctx: Context) -> observe.Request:
     }
     # A publish whose process was killed waits on this read like any post of unknown outcome (§34).
     review_drafts_manage.expire_claims(ctx.conn, ctx.config)
+    seen_open = sql.select("url").from_("observed_prs").where("state = ?", PrState.OPEN)
     prs.update(
         drafts.unchecked_prs(ctx.conn),
         drafts_manage.unsettled_prs(ctx.conn),
         review_drafts_manage.unsettled_prs(ctx.conn),
+        (str(r[0]) for r in sql.execute(ctx.conn, seen_open)),
     )
     query = ctx.config.review.query.strip()
     return observe.Request(
