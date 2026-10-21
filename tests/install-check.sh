@@ -133,7 +133,7 @@ secret=$(canopy secret 2>/dev/null)
 [ "${#secret}" -ge 32 ] || fail "canopy secret printed no secret"
 printf '\n[serve]\nport = 18765\n' >>"$private"
 loop=$(canopy loop --dry-run --ticks 1)
-echo "$loop" | grep -q 'web UI .*http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
+echo "$loop" | grep -q 'web_ui="http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
 if command -v npm >/dev/null; then
     if echo "$loop" | grep -q 'not built'; then fail "the web UI is not built into this install"; fi
 fi
