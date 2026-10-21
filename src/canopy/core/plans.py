@@ -29,7 +29,7 @@ from typing import IO, TYPE_CHECKING, Literal, TypedDict
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
-from canopy.core.vocab import PlanSetting, PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlanSetting, PlanStatus, RunKind, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -463,6 +463,7 @@ def record(
     *,
     event: Callable[[int, str | None], db.Event | None] | None = None,
     no_review: str | None = None,
+    effort: PlanEffort | None = None,
 ) -> records.Plan:
     """Record the plan the run `run_id` wrote for `key`, after its file, as `proposed`. It supersedes the current one.
 
@@ -471,6 +472,7 @@ def record(
     (DESIGN §25). Unless the operator has had a word on the ticket's plan: it replaces a current plan, which they were
     asked to approve or approved, or the ticket's own setting asks for a plan. Then it waits on them, as any plan does.
     `event` builds the plan's event from its id and that reason when it held, recorded in the same transaction (§20).
+    `effort` is its planner's estimate of how much work the plan is, kept to show beside it.
 
     Returns:
         The plan's row.
@@ -495,6 +497,7 @@ def record(
                 approved_at=now if approved else None,
                 approved_channel=PLANNER if approved else None,
                 approved_reason=reason,
+                effort=effort,
             ).returning("*"),
         )
         built = event(plan.id, reason) if event is not None else None

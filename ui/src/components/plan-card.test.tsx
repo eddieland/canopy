@@ -16,6 +16,7 @@ const PLAN: PlanSummary = {
     approved_at: null,
     approved_channel: null,
     approved_reason: null,
+    effort: null,
 }
 
 const PLANS: TicketPlans = {
@@ -147,6 +148,16 @@ describe('PlanCard', () => {
 
         await renderCard()
         expect((await screen.findByTestId('plan-card')).textContent).not.toContain('approved by')
+    })
+
+    it('says how much work its planner judged the plan, and nothing when it gave no estimate', async () => {
+        const newest = PLANS.newest === null ? null : { ...PLANS.newest, plan: { ...PLAN, effort: 'large' as const } }
+        await renderCard({ newest })
+        expect((await screen.findByTestId('plan-card')).textContent).toContain('effortlarge')
+        cleanup()
+
+        await renderCard()
+        expect((await screen.findByTestId('plan-card')).textContent).not.toContain('effort')
     })
 
     it('says changes are asked of a proposed plan, which waits on the planner now, not on you', async () => {

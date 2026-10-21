@@ -9,7 +9,7 @@ from syrupy.assertion import SnapshotAssertion
 
 from canopy.core import db, feedback_plans, plans
 from canopy.core.config import load
-from canopy.core.vocab import PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
@@ -333,6 +333,14 @@ def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_pla
     assert resume.status == RunStatus.DONE
     assert present(feedback_plans.get(conn, plan.id)).spent_run_id == resume.id
     assert "is the feedback plan its planner approved, saying it needs no review, where the operator" in resume.prompt
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_feedback_plans_effort_is_recorded_as_its_planner_judged(scenario: Scenario, github_state: Path) -> None:
+    with_a_pr(scenario)
+    planned(scenario, github_state, {**PLANNED, "effort": "medium"})
+    [plan] = feedback_plans.history(scenario.conn, KEY)
+    assert (plan.status, plan.effort) == (PlanStatus.PROPOSED, PlanEffort.MEDIUM)
 
 
 @pytest.mark.usefixtures("git_pool")
