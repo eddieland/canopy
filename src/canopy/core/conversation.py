@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, memory, outbox, records, review_result, sql
+from canopy.core import chore_view, contract, db, memory, outbox, records, review_drafts, review_result, sql
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
@@ -398,9 +398,10 @@ def dismiss(
     A chore's open finding is kept off the attention list until it clears: the chore's runs still report it and its
     page still shows it, marked dismissed, and once an `ok` run leaves it out the dismissal is spent, so the finding is
     listed again if it comes back. A review's finding stays on the review's page, marked, and is left out of what a
-    `resume` hands a worker and of the overseer's state block. Dismissing one again records the time anew; `undo`
-    takes a dismissal back. The findings are dismissed together or not at all: one refused leaves every other as it
-    was.
+    `resume` hands a worker and of the overseer's state block; on a review of a PR the loop does not own, what it made
+    of the review's draft is dropped, and taking the dismissal back restores it (DESIGN §34). Dismissing one again
+    records the time anew; `undo` takes a dismissal back. The findings are dismissed together or not at all: one
+    refused leaves every other as it was.
 
     Raises:
         Refused: `unsupported` for a subject that is not a chore or a review, `unknown` for a chore not in `chores`, a
@@ -441,16 +442,19 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
             for number in numbers:
                 if not db.delete_review_dismissal(conn, run_id, number):
                     raise Refused("unknown", f"{ref} has no dismissed finding {number}")
-            return
-        run = db.get_review_run(conn, run_id)
-        if run is None:
-            raise Refused("unknown", f"there is no review run {run_id}")
-        stored = review_result.stored(run.result_json)
-        found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
-        if numbers[-1] > found:
-            raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
-        for number in numbers:
-            db.set_review_dismissal(conn, run_id, number, channel=channel)
+        else:
+            run = db.get_review_run(conn, run_id)
+            if run is None:
+                raise Refused("unknown", f"there is no review run {run_id}")
+            stored = review_result.stored(run.result_json)
+            found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
+            if numbers[-1] > found:
+                raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
+            for number in numbers:
+                db.set_review_dismissal(conn, run_id, number, channel=channel)
+        # A review of a PR the loop does not own drafts a review on it: a dismissal drops what the finding made of the
+        # draft, and taking it back restores it (DESIGN §34).
+        review_drafts.dismissed(conn, run_id, numbers, undo=undo, channel=channel)
 
 
 def see(conn: sqlite3.Connection, refs: Sequence[Ref], *, channel: str) -> list[Ref]:

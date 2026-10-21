@@ -27,11 +27,14 @@ State keys, each optional:
     reactions   [{"pr": URL, "comment": ID, "reaction": NAME, "by": LOGIN}]: the reactions the poster added, appended
                 as it adds them, once each, as GitHub keeps them.
     react       `refused`: GitHub refuses the first reaction, so the post adds none and opens no review.
+    refuse_lines  ["PATH:LINE"]: lines GitHub's diff of the PR does not show, so a comment on one posts nothing of its
+                review: the pending review is deleted, the error names the comment, and the post ends unsubmitted.
 
-A post adds its reactions first, then, unless its replies are all reactions alone and it has no body, adds each reply's
-text to the state as a `comment` review line by the poster, on the thread of the comment it answers, and the review as
-a `review` line, so the next read sees them. A post with `"submit": false` stages its review instead: the review line
-is `pending`, as GitHub shows it to its author, until a test submits or deletes it in the state.
+A post adds its reactions first, then, unless its replies are all reactions alone and it has no body or comments,
+adds each reply's text to the state as a `comment` review line by the poster, on the thread of the comment it answers,
+each of a review's `comments` as one on a thread of its own at its path and line, and the review as a `review` line,
+with the `commit` it names, so the next read sees them. A post with `"submit": false` stages its review instead: the
+review line is `pending`, as GitHub shows it to its author, until a test submits or deletes it in the state.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -146,20 +149,68 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
         emit({"kind": "end", "submitted": False})
         return 1
     replies = [r for r in request.get("replies", []) if "text" in r]
-    if not replies and request.get("body") is None:
+    comments = request.get("comments", [])
+    if not replies and not comments and request.get("body") is None:
         emit({"kind": "end", "submitted": True})
         return 0
     pending_id = next_id(state)
     pending = f"PRR_fake_{pending_id}"
     emit({"kind": "pending", "review": pending, "id": pending_id})
-    if outcome == "pending_left":
-        emit({"kind": "end", "submitted": False, "pending": pending})
+    left = outcome == "pending_left"
+    if refuses_a_comment(state, comments) or left:
+        emit({"kind": "end", "submitted": False, **({"pending": pending} if left else {})})
         return 1
     if outcome == "unknown" and not state.get("posted"):
         return 1
     reviews = state.setdefault("prs", {}).setdefault(url, {}).setdefault("reviews", [])
     review_id = pending_id
+    lines = add_comments(state, url, login, review_id, replies, comments)
+    review_url = f"{url}#pullrequestreview-{review_id}"
+    staged = request.get("submit") is False
+    reviews.append(
+        {
+            "item": "review",
+            "id": review_id,
+            "author": login,
+            "bot": False,
+            "state": "pending" if staged else "commented",
+            "time": "2026-10-18T12:00:00Z",
+            "body": request.get("body") or "",
+            "url": review_url,
+            **({"commit": request["commit"]} if "commit" in request else {}),
+        }
+    )
+    if outcome == "unknown":
+        return 1
+    for line in lines:
+        emit(line)
+    if not staged:
+        emit({"kind": "review", "id": review_id, "url": review_url})
+    emit({"kind": "end", "submitted": False, "staged": True} if staged else {"kind": "end", "submitted": True})
+    return 0
+
+
+def refuses_a_comment(state: dict[str, Any], comments: list[dict[str, Any]]) -> bool:
+    """Whether GitHub refuses one of a review's comments, a line its diff does not show, saying which."""
+    for index, c in enumerate(comments, 1):
+        where = f"{c['path']}:{c['line']}"
+        if where in state.get("refuse_lines", []):
+            print(f"canopy-post-github: GitHub refused comment {index}, on {where}: not in the diff", file=sys.stderr)
+            return True
+    return False
+
+
+def add_comments(
+    state: dict[str, Any],
+    url: str,
+    login: str,
+    review_id: int,
+    replies: list[dict[str, Any]],
+    comments: list[dict[str, Any]],
+) -> list[dict[str, object]]:
+    """Add each reply to its thread and each comment on a thread of its own, returning the lines to print."""
     lines = []
+    reviews = state["prs"][url]["reviews"]
     for reply in replies:
         answered = next(r for r in reviews if r.get("item") == "comment" and r["id"] == reply["comment"])
         comment_id = next_id(state)
@@ -178,28 +229,25 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
         )
         discussion = f"{url}#discussion_r{comment_id}"
         lines.append({"kind": "comment", "comment": reply["comment"], "id": comment_id, "url": discussion})
-    review_url = f"{url}#pullrequestreview-{review_id}"
-    staged = request.get("submit") is False
-    reviews.append(
-        {
-            "item": "review",
-            "id": review_id,
-            "author": login,
-            "bot": False,
-            "state": "pending" if staged else "commented",
-            "time": "2026-10-18T12:00:00Z",
-            "body": request.get("body") or "",
-            "url": review_url,
-        }
-    )
-    if outcome == "unknown":
-        return 1
-    for line in lines:
-        emit(line)
-    if not staged:
-        emit({"kind": "review", "id": review_id, "url": review_url})
-    emit({"kind": "end", "submitted": False, "staged": True} if staged else {"kind": "end", "submitted": True})
-    return 0
+    for index, new in enumerate(comments, 1):
+        comment_id = next_id(state)
+        discussion = f"{url}#discussion_r{comment_id}"
+        where = {"id": f"PRRT_new_{comment_id}", "path": new["path"], "line": new["line"], "side": "right"}
+        reviews.append(
+            {
+                "item": "comment",
+                "id": comment_id,
+                "author": login,
+                "bot": False,
+                "time": "2026-10-18T12:00:00Z",
+                "body": new["text"],
+                "url": discussion,
+                "review": review_id,
+                "thread": where,
+            }
+        )
+        lines.append({"kind": "comment", "index": index, "id": comment_id, "url": discussion})
+    return lines
 
 
 def react(state: dict[str, Any], request: dict[str, Any], login: str) -> bool:

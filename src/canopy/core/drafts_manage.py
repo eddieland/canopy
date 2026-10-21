@@ -28,7 +28,15 @@ from typing import TYPE_CHECKING, assert_never
 from canopy.core import conversation, db, drafts, observe, records, sql
 from canopy.core.config import notify_words
 from canopy.core.memory_text import TextRefused
-from canopy.core.vocab import DraftAuthor, DraftKind, DraftStatus, Reaction, ReviewItem, ReviewState
+from canopy.core.vocab import (
+    DraftAuthor,
+    DraftKind,
+    DraftStatus,
+    Reaction,
+    ReviewDraftStatus,
+    ReviewItem,
+    ReviewState,
+)
 from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
@@ -339,7 +347,14 @@ def _check_none_staged(conn: sqlite3.Connection, prs: Iterable[str]) -> None:
         Refused: (`staged`), naming the PR.
     """
     for pr in prs:
-        staged = sql.select("1").from_("drafts").where("pr_url = ?", pr).where("status = ?", DraftStatus.STAGED)
+        # A review's draft staged on the PR holds GitHub's pending review as well (DESIGN §34).
+        staged = sql.union(
+            sql.select("1").from_("drafts").where("pr_url = ?", pr).where("status = ?", DraftStatus.STAGED),
+            sql.select("1")
+            .from_("review_drafts")
+            .where("pr_url = ?", pr)
+            .where("status = ?", ReviewDraftStatus.STAGED),
+        )
         if sql.execute(conn, staged).fetchone():
             raise conversation.Refused("staged", f"{pr} holds a review you staged: {_FINISH}")
 

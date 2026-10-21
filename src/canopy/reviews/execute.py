@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff
+from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff, review_drafts
 from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
@@ -98,9 +98,18 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
             if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
-            elif outcome.result is not None and outcome.result.pr_title:
-                # The PR's title as the reviewer read it, for display: the newest report wins, a worker's or a review's.
-                db.set_pr_title(ctx.conn, run.pr_url, outcome.result.pr_title)
+            else:
+                if outcome.result is not None and outcome.result.pr_title:
+                    # The PR's title as the reviewer read it, for display: the newest report wins, a worker's or a
+                    # review's.
+                    db.set_pr_title(ctx.conn, run.pr_url, outcome.result.pr_title)
+                # A `done` review of a PR the loop does not own is the first version of a review on it (DESIGN §34).
+                # Its draft is made from what the run recorded, so a failure here leaves the run as it ended, and the
+                # operator's first verb on the draft makes it.
+                try:
+                    review_drafts.make(ctx.conn, run_id)
+                except Exception:
+                    log.exception("review draft not made", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("review run finished", extra={**fields, "status": outcome.status})
     return outcome

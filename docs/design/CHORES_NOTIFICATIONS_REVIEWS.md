@@ -221,8 +221,9 @@ Replies read in Slack would need each ticket's thread, Slack ids among authorize
 
 A review is an adversarial read of one PR at one commit by a fresh agent run, with no transcript of the author's run,
 told to assume the change is wrong until the code shows otherwise. It reports a verdict and its findings to canopy's
-journal, and posts nothing: no comment on the PR or the ticket, no GitHub review (D114). It never approves, requests
-changes, pushes, or merges. Human review stays the gate (§3). Three kinds of PR get reviews, none needing a ticket: the
+journal, and posts nothing: no comment on the PR or the ticket, no GitHub review (D114), but what the operator
+publishes of one on a PR the loop does not own, word for word (§34). It never approves, requests changes, pushes, or
+merges. Human review stays the gate (§3). Three kinds of PR get reviews, none needing a ticket: the
 loop's own, with `review.agent_prs` on, once checks pass and before a human is asked, findings going back to a worker
 through `resume`; PRs matching `review.query`, reviewed and nothing else, never pushed to, fixed, or ticketed; and PRs
 the operator asks for one at a time (Review requests), reviewed as a query match is.

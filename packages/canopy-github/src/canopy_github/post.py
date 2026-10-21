@@ -1,21 +1,25 @@
-"""`canopy-post-github`: posts what the operator approved in canopy, word for word (DESIGN §29).
+"""`canopy-post-github`: posts what the operator approved in canopy, word for word (DESIGN §29, §34).
 
 On stdin, one JSON object: one PR's drafts, `{"pr": URL, "delete_pending": ID | null, "body": TEXT | null,
 "replies": [{"comment": ID, "text": TEXT | null, "reaction": REACTION | null}, ...]}`, posted as one review: a pending
 review, each reply's text added to the thread of the review comment it names, the body as the review's, submitted as
 `COMMENT`; or one ticket's, `{"issue": URL, "ticket": KEY, "body": TEXT}`, posted as one comment on that issue, which
-must be numbered as the key is. A PR's drafts with `"submit": false` are staged instead: the pending review is opened
-with the body as its own and each reply added, and left for the operator to submit on GitHub. `delete_pending` names
-a pending review an earlier post left, which is deleted first, and only if it is still pending, on that PR, and the
-poster's own. A reply's `reaction`, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is
-added to the comment it names before the review is opened, staged or not, since GitHub has no pending reaction; a reply
-with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no review.
+must be numbered as the key is. A review of a PR canopy reviewed (§34) names the commit it read, `"commit": SHA`, and
+its comments, `"comments": [{"path": PATH, "line": N, "text": TEXT}, ...]`: the pending review is opened on that
+commit, and each comment starts a thread of its own on line N of PATH, on the commit's side, before the submit. A
+PR's drafts with `"submit": false` are staged instead: the pending review is opened with the body as its own and each
+reply and comment added, and left for the operator to submit on GitHub. `delete_pending` names a pending review an
+earlier post left, which is deleted first, and only if it is still pending, on that PR, and the poster's own. A reply's
+`reaction`, one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the comment it
+names before the review is opened, staged or not, since GitHub has no pending reaction; a reply with a reaction and no
+text adds the reaction alone, and a PR's drafts that are all such open no review.
 
 On stdout, one JSON line each: `as`, the login it posts as; for a PR, `reaction` for each reaction added (the comment,
 the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once it
-is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL) and `review` (its id and
-URL); once a staged review holds every reply, its `comment` lines; for an issue, `comment`; last, `end`, saying whether
-it submitted: `"submitted": true` once the review or the issue comment is submitted, or once every reaction is added
+is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL), and for each of
+`comments` (its `index` there, from 1, and the new comment's id and URL), and `review` (its id and URL); once a staged
+review holds every reply and comment, their `comment` lines; for an issue, `comment`; last, `end`, saying whether it
+submitted: `"submitted": true` once the review or the issue comment is submitted, or once every reaction is added
 when there is nothing else to post; `"submitted": false, "staged": true` once a staged review holds every reply.
 Otherwise `"submitted": false` is printed only when nothing but the reactions its `reaction` lines name was posted,
 with `pending` naming a pending review it could not delete; a pending review GitHub may have opened without saying so
@@ -27,7 +31,8 @@ It never approves, requests changes, resolves a thread, or deletes a review but 
 opened and could not fill.
 
 Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin is not usable, `gh`
-holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was posted.
+holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was posted. A comment
+GitHub refuses, as on a line its diff of the PR does not show, posts nothing of the review, and the error names it.
 """
 
 from __future__ import annotations
@@ -74,6 +79,10 @@ REACTIONS = {
     "eyes": "EYES",
 }
 MAX_REPLIES = 100
+# As many comments as replies: canopy sends at most 30 (DESIGN §34).
+MAX_COMMENTS = 100
+# A commit's full object id, SHA-1 or SHA-256, as GitHub's `GitObjectID` takes it.
+_COMMIT = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 # A key a GitHub Issues tracker gives a ticket: letters, a hyphen, the issue's number (DESIGN §17).
 _KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]{0,9})")
 
@@ -101,8 +110,10 @@ query Review($id: ID!) {
 }
 """
 _ADD_REVIEW = """
-mutation AddReview($pr: ID!, $body: String) {
-  addPullRequestReview(input: {pullRequestId: $pr, body: $body}) { pullRequestReview { id fullDatabaseId } }
+mutation AddReview($pr: ID!, $body: String, $commit: GitObjectID) {
+  addPullRequestReview(input: {pullRequestId: $pr, body: $body, commitOID: $commit}) {
+    pullRequestReview { id fullDatabaseId }
+  }
 }
 """
 _REPLY = """
@@ -111,6 +122,15 @@ mutation Reply($review: ID!, $thread: ID!, $body: String!) {
     input: {pullRequestReviewId: $review, pullRequestReviewThreadId: $thread, body: $body}
   ) {
     comment { fullDatabaseId url }
+  }
+}
+"""
+_THREAD = """
+mutation Thread($review: ID!, $path: String!, $line: Int!, $body: String!) {
+  addPullRequestReviewThread(
+    input: {pullRequestReviewId: $review, path: $path, line: $line, side: RIGHT, body: $body}
+  ) {
+    thread { comments(first: 1) { nodes { fullDatabaseId url } } }
   }
 }
 """
@@ -149,14 +169,28 @@ class Reply:
 
 
 @dataclass(frozen=True)
+class NewComment:
+    """A comment that starts a thread of its own: the file, the line on the commit's side, and its text."""
+
+    path: str
+    line: int
+    text: str
+
+
+@dataclass(frozen=True)
 class Review:
-    """One PR's drafts, to post as one comment review, or with `submit` false to stage as a pending one."""
+    """One PR's drafts, to post as one comment review, or with `submit` false to stage as a pending one.
+
+    A review of a commit canopy reviewed names it, `commit`, and carries its `comments`, each a thread of its own.
+    """
 
     pr: Ref
     delete_pending: str | None
     body: str | None
     replies: tuple[Reply, ...]
     submit: bool = True
+    commit: str | None = None
+    comments: tuple[NewComment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -260,9 +294,10 @@ def parse_request(request: Mapping[str, object]) -> Review | IssueComment:
     if not isinstance(raw, list) or len(raw) > MAX_REPLIES:
         raise InputError(f"replies must be a list of at most {MAX_REPLIES}")
     replies = tuple(_reply(r) for r in raw)
+    commit, comments = _comments(request)
     body = request.get("body")
-    if body is None and not replies:
-        raise InputError("there is nothing to post: no body and no replies")
+    if body is None and not replies and not comments:
+        raise InputError("there is nothing to post: no body, no replies, and no comments")
     submit = request.get("submit", True)
     if not isinstance(submit, bool):
         raise InputError("submit must be true or false")
@@ -272,7 +307,38 @@ def parse_request(request: Mapping[str, object]) -> Review | IssueComment:
         body=None if body is None else _text(body, "body"),
         replies=replies,
         submit=submit,
+        commit=commit,
+        comments=comments,
     )
+
+
+def _comments(request: Mapping[str, object]) -> tuple[str | None, tuple[NewComment, ...]]:
+    """The commit a review is opened on and the comments that start threads on it, if the request names them.
+
+    Returns:
+        The commit, or None, and the comments.
+
+    Raises:
+        InputError: The commit is not a full commit id, or a comment is not a file, a line, and a text; or comments
+            come without a commit.
+    """
+    commit = request.get("commit")
+    if commit is not None and not (isinstance(commit, str) and _COMMIT.fullmatch(commit)):
+        raise InputError("commit must be a commit's full id")
+    raw = request.get("comments", [])
+    if not isinstance(raw, list) or len(raw) > MAX_COMMENTS:
+        raise InputError(f"comments must be a list of at most {MAX_COMMENTS}")
+    if raw and commit is None:
+        raise InputError("comments need the commit they are on")
+    comments: list[NewComment] = []
+    for found in raw:
+        entry = items([found])
+        path = text(entry[0].get("path")) if entry else None
+        line = number(entry[0].get("line")) if entry else None
+        if not path or line is None or isinstance(entry[0].get("line"), str):
+            raise InputError("each comment needs its file's path, a line, and its text")
+        comments.append(NewComment(path=path, line=line, text=_text(entry[0].get("text"), "comment")))
+    return commit, tuple(comments)
 
 
 def _reply(raw: object) -> Reply:
@@ -318,7 +384,7 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
         if reply.reaction is not None:
             _react(client, reply.comment, found[reply.comment][1], reply.reaction, out)
     replies = [(r.comment, found[r.comment][0], r.text) for r in review.replies if r.text is not None]
-    if review.body is None and not replies:
+    if review.body is None and not replies and not review.comments:
         out.line({"kind": "end", "submitted": True})
         return
     _submit(client, pr, pr_id, review, replies, login, out)
@@ -335,14 +401,15 @@ def _submit(  # noqa: PLR0917  (what one review is posted from)
 ) -> None:
     """Post `review`'s body and `replies`, each a comment answered, its thread's node id, and the text, as one review.
 
-    The review is submitted as a comment, or, for `review.submit` false, left pending with the body as its own.
+    The review is opened on `review.commit`, if it names one, and its comments added after the replies. It is
+    submitted as a comment, or, for `review.submit` false, left pending with the body as its own.
 
     Raises:
         UnknownOutcomeError: The submit may have reached GitHub.
         GitHubError: GitHub refused before anything of it could be seen; the pending review is deleted, or named.
     """
     # A staged review keeps its body from the start, since the operator submits it on GitHub, not canopy.
-    opening = {"pr": pr_id, "body": None if review.submit else review.body}
+    opening = {"pr": pr_id, "body": None if review.submit else review.body, "commit": review.commit}
     try:
         added = obj(client.query(_ADD_REVIEW, opening).get("addPullRequestReview"), "addPullRequestReview")
         opened = obj(added.get("pullRequestReview"), "pullRequestReview")
@@ -353,13 +420,8 @@ def _submit(  # noqa: PLR0917  (what one review is posted from)
             _abandon_unseen(client, pr, login, out)
         raise
     out.line({"kind": "pending", "review": pending, "id": number(opened.get("fullDatabaseId"))})
-    posted: list[Mapping[str, object]] = []
     try:
-        for answered, thread, words in replies:
-            variables = {"review": pending, "thread": thread, "body": words}
-            data = obj(client.query(_REPLY, variables).get("addPullRequestReviewThreadReply"), "reply")
-            comment = obj(data.get("comment"), "comment")
-            posted.append({"comment": answered, "id": number(comment.get("fullDatabaseId")), "url": comment.get("url")})
+        posted = _fill(client, pending, replies, review.comments)
     except GitHubError:
         # Nobody else sees a pending review or its replies, so a reply that failed posted nothing.
         _abandon(client, pending, out)
@@ -381,6 +443,47 @@ def _submit(  # noqa: PLR0917  (what one review is posted from)
         out.line({"kind": "comment", **line})
     out.line({"kind": "review", "id": number(submitted.get("fullDatabaseId")), "url": submitted.get("url")})
     out.line({"kind": "end", "submitted": True})
+
+
+def _fill(
+    client: Client, pending: str, replies: Sequence[tuple[int, str, str]], comments: Sequence[NewComment]
+) -> list[Mapping[str, object]]:
+    """Add each reply and each comment to pending review `pending`, in order.
+
+    Returns:
+        A line for each, as `comment` prints it.
+
+    Raises:
+        GitHubError: GitHub refused one, or may have.
+    """
+    posted: list[Mapping[str, object]] = []
+    for answered, thread, words in replies:
+        variables = {"review": pending, "thread": thread, "body": words}
+        data = obj(client.query(_REPLY, variables).get("addPullRequestReviewThreadReply"), "reply")
+        comment = obj(data.get("comment"), "comment")
+        posted.append({"comment": answered, "id": number(comment.get("fullDatabaseId")), "url": comment.get("url")})
+    posted.extend({"index": index, **_thread(client, pending, index, new)} for index, new in enumerate(comments, 1))
+    return posted
+
+
+def _thread(client: Client, pending: str, index: int, comment: NewComment) -> dict[str, object]:
+    """Add `comment` to pending review `pending` as a thread of its own on its line.
+
+    Returns:
+        The new comment's id and URL.
+
+    Raises:
+        GitHubError: GitHub refused it, as for a line its diff of the PR does not show, naming the comment.
+    """
+    variables = {"review": pending, "path": comment.path, "line": comment.line, "body": comment.text}
+    try:
+        data = obj(client.query(_THREAD, variables).get("addPullRequestReviewThread"), "thread")
+    except GitHubError as e:
+        where = f"comment {index}, on {comment.path}:{comment.line}"
+        raise GitHubError(f"GitHub refused {where}: {e}", certain=e.certain, types=e.types) from e
+    nodes = items(obj(obj(data.get("thread"), "thread").get("comments"), "comments").get("nodes"))
+    first: Mapping[str, object] = nodes[0] if nodes else {}
+    return {"id": number(first.get("fullDatabaseId")), "url": first.get("url")}
 
 
 def _react(client: Client, comment: int, line: Mapping[str, object], reaction: str, out: Out) -> None:
