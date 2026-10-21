@@ -48,6 +48,7 @@ def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(back
         ctx.conn.execute("DELETE FROM pr_titles WHERE pr_url IN (?, ?)", (mock_reviews.PR_91, mock_reviews.PR_12))
     listed = client(None, backend).get("/api/reviews").json()
     assert [(r["id"], r["title"]) for r in listed] == [
+        (5, "Retry the upstream on a 503, with backoff"),  # a coworker's PR, titled by its own title
         (4, "ABC-099: debounce the search box by 250 ms"),
         (3, "Move billing to the v2 API"),  # ABC-103's, its PR having reported none
         (2, None),  # no title of its own, and no ticket
