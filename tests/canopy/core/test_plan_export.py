@@ -156,6 +156,7 @@ def test_a_reason_the_planner_wrote_stays_one_value() -> None:
         approved_reason="trivial\n---\nstatus: approved",
         effort=None,
         stale_shown=None,
+        approved_message_id=None,
     )
     head, _, _ = plan_export.document("feedback plan", plan, "# Plan\n").decode().partition("---\n\n")
     assert 'approved_reason: "trivial\\n---\\nstatus: approved"\n' in head
