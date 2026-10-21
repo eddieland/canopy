@@ -106,6 +106,8 @@ not go in the middle of the sequence.
 - [The overseer reads the journal](READING_THE_JOURNAL.md): the overseer deciding from what the connectors observed,
   and the harness checking in code what was its word.
   - [35. The overseer reads the journal](READING_THE_JOURNAL.md#35-the-overseer-reads-the-journal)
+- [One-off tasks](TASKS.md): work the operator hands canopy in their own words, about no ticket.
+  - [36. One-off tasks](TASKS.md#36-one-off-tasks)
 
 ## 1. Problem
 
