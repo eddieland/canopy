@@ -509,6 +509,18 @@ def with_rebase(env: CanopyEnv) -> None:
     env.append_user("\n[trust]\nrebase = true\n")
 
 
+def personas_dir(env: CanopyEnv) -> Path:
+    """The operator's personas directory (DESIGN §31), made, and set as `paths.personas` in the user file.
+
+    Returns:
+        The directory, where a test writes the operator's persona files.
+    """
+    path = env.user_file.parent / "personas"
+    path.mkdir(parents=True, exist_ok=True)
+    env.configure(env.user_file, {"paths": {"personas": str(path)}})
+    return path
+
+
 def approve_policy(env: CanopyEnv) -> None:
     """Have the workspace's policy ask for a plan the operator approves before any `implement` (DESIGN §25)."""
     env.append_shared('\n[policy]\nplan = "approve"\n')

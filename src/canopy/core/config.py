@@ -95,6 +95,11 @@ REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
 CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MIN_CHORE_EVERY_MINUTES = 15
+#: A persona's name, and its file's, `<name>.md` (DESIGN §31): lowercase words joined by single hyphens, at most 40
+#: characters, so it is a plain file name and reaches the journal and the command line as it is.
+PERSONA_NAME_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
+#: The persona every agent writes in unless the operator chooses another: canopy's own voice, which it ships.
+DEFAULT_PERSONA = "canopy"
 
 
 class ConfigError(Exception):
@@ -321,6 +326,12 @@ def _user_path(value: Path) -> Path:
     return expanded
 
 
+def _persona_name(value: str) -> str:
+    if not PERSONA_NAME_RE.fullmatch(value):
+        raise ValueError(f"persona name {value!r} must be lowercase words joined by hyphens, at most 40 characters")
+    return value
+
+
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
@@ -333,6 +344,7 @@ NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
 SetupCommand = Annotated[StrictStr, AfterValidator(_setup_command)]
 Wrapper = Annotated[StrictStr, AfterValidator(_wrapper)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
+PersonaName = Annotated[StrictStr, AfterValidator(_persona_name)]
 
 
 class Section(BaseModel):
@@ -827,6 +839,24 @@ class Paths(Section):
     reviewer_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
     #: The operator's standing instructions to every chore run, after the chore's own prompt (DESIGN §12).
     chore_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: The operator's personas, each `<name>.md`: one shadows a shipped persona of its name, any other adds to them
+    #: (DESIGN §31).
+    personas: Annotated[UserPath | None, Scope.PRIVATE] = None
+
+
+class Personas(Section):
+    """The `[personas]` table: the persona each agent writes in (DESIGN §31), by name.
+
+    Private: a persona is instructions in every run it reaches, so a shared workspace file chooses none (TRUST_MODEL
+    T7). A name is checked for its shape here, not for a file: a run whose persona has none is refused when it starts.
+    """
+
+    #: Every `implement` and `resume`, public and private.
+    worker: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
+    #: Every plan.
+    planner: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
+    #: Every review.
+    reviewer: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
@@ -1087,6 +1117,7 @@ class Config(Section):
     memory: Memory
     retention: Retention
     connect: Connect
+    personas: Personas
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -1111,6 +1142,7 @@ SECTIONS: dict[str, type[Section]] = {
     "memory": Memory,
     "retention": Retention,
     "connect": Connect,
+    "personas": Personas,
 }
 
 

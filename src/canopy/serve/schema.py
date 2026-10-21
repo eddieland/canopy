@@ -214,6 +214,12 @@ class Run(_Model):
     activity: RunActivity | None = None
     """While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
     once it ends."""
+    persona: str | None = None
+    """The persona it ran in (DESIGN §31); None for a kind no persona reaches, or a run from before canopy recorded
+    it."""
+    persona_digest: str | None = None
+    """The sha256 of the persona's text as its prompt carried it, in hex: two runs with different digests had
+    different texts under one name."""
 
 
 class TicketSummary(_Model):
@@ -2028,6 +2034,10 @@ class ReviewDetail(_Model):
     or recorded it before canopy kept it."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
+    persona: str | None = None
+    """The persona it ran in (DESIGN §31); None for a review from before canopy recorded it."""
+    persona_digest: str | None = None
+    """The sha256 of the persona's text as its prompt carried it, in hex."""
 
 
 class ReviewRequest(_Model):
