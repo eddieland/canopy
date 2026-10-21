@@ -23,9 +23,10 @@ from canopy.cli.params import (
     TextType,
     valid_key,
 )
-from canopy.core import config
+from canopy.core import bash_allows, config
 from canopy.infra.procs import SubprocessRunner
 from canopy.runs import dispatch
+from canopy.runtime.definitions import BASH_ALLOW_RE
 from canopy.setup import init
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
@@ -201,6 +202,8 @@ def test_every_config_key_declares_a_scope() -> None:
         "runtime.chore_cmd",
         "capacity.max_chores",
         "chores",
+        # It widens what an agent's shell reaches (TRUST_MODEL T1).
+        "runtime.allow_bash",
     }
 
 
@@ -241,3 +244,61 @@ def test_accepted_slugs_are_short_and_plain(value: str) -> None:
     if dispatch.valid_slug(value):
         assert 1 <= len(value) <= 40
         assert set(value) <= set(string.ascii_lowercase + string.digits + "-")
+
+
+#: Characters that mean something to a shell or to YAML: none may reach a rendered bash rule.
+SHELL_SIGNIFICANT = set("\"'`$;&|<>\\(){}[]#~!^\n\r\t")
+
+
+@given(st.text() | near(BASH_ALLOW_RE))
+def test_an_accepted_bash_allow_is_one_plain_command_line_of_a_command_that_runs_no_other(value: str) -> None:
+    try:
+        bash_allows.check_pattern(value)
+    except ValueError:
+        return
+    command = value.split(" ", 1)[0].lower()
+    assert 0 < len(value) <= bash_allows.MAX_PATTERN
+    assert value.isascii()
+    assert value.isprintable()
+    assert value == value.strip()
+    assert "  " not in value
+    assert not set(value) & SHELL_SIGNIFICANT
+    # A literal command: no wildcard, path, assignment, or option where its name goes.
+    assert not set(command) & set("*?/=")
+    assert not command.startswith("-")
+    assert command not in bash_allows.RUNS_COMMANDS | bash_allows.WEB_COMMANDS | bash_allows.VCS_COMMANDS
+    for own in ("canopy", "treehouse", "git", "opencode"):
+        assert command != own
+        assert not command.startswith(f"{own}-")
+
+
+REFUSED_COMMANDS = sorted(
+    {*bash_allows.RUNS_COMMANDS, *bash_allows.WEB_COMMANDS, *bash_allows.VCS_COMMANDS}
+    | {
+        "canopy",
+        "canopy-post-github",
+        "treehouse",
+        "opencode",
+        "git",
+        "git-upload-pack",
+        "python3.12",
+        "pip3",
+        "node22",
+    },
+)
+
+
+@given(
+    st.sampled_from(REFUSED_COMMANDS),
+    st.lists(st.booleans(), min_size=30, max_size=30),
+    st.sampled_from(["", " *", " -c *", " decide *", " issue list *"]),
+)
+def test_a_command_that_runs_others_or_is_the_loops_own_is_refused_however_spelled(
+    command: str,
+    upper: list[bool],
+    rest: str,
+) -> None:
+    # A file system that ignores case runs `Bash` as `bash`.
+    spelled = "".join(c.upper() if up else c for c, up in zip(command, upper, strict=False))
+    with pytest.raises(ValueError, match=f"allows '{re.escape(command)}'"):
+        bash_allows.check_pattern(spelled + rest)

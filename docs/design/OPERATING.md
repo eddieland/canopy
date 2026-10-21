@@ -160,10 +160,13 @@ implementation bound in its place. No interface: one runtime at a time.
 
 Agent definitions ship in `agents/`:
 
-- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
-  workspace, one command per bash call. Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021)
-  and loses every decision not yet recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and
-  branches, and of issues only when they are the tickets.
+- `canopy-overseer`: read-only tools plus bash restricted to `canopy *`, `treehouse status*`, and the commands the
+  operator names in `runtime.allow_bash` (private, T7), nothing outside the workspace, one command per bash call.
+  canopy renders those last of its bash rules, since the last match wins and its definition is merged after the
+  operator's runtime config, and refuses one that runs a command it is given or is the loop's own (TRUST_MODEL T1).
+  Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and loses every decision not yet
+  recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and branches, and of issues only when
+  they are the tickets.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels, follow-ups), GitHub (open and
   update a PR, read reviews and checks); merge, review submission, closing, transition, delete, fork, API file and
   branch writes, and other agents or workflow runs denied by name (D084).

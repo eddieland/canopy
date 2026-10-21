@@ -205,7 +205,17 @@ Controls:
   through a quoted heredoc, never in an argument, so the shell expands nothing in it, and the heredoc's delimiter is
   random and fresh each tick, so no comment can be written to end it early and run what follows (D081).
 - The overseer has no edit or write tools and can act only through the
-  `canopy` CLI, whose guards are code.
+  `canopy` CLI, whose guards are code, and the commands the operator names for it in `runtime.allow_bash`, such as a
+  tracker's CLI while its MCP server is down. That key is private (T7): only the operator widens the overseer's shell,
+  and canopy renders each pattern last of its bash rules, so it wins, and lists them in `canopy agents`. In code,
+  canopy refuses an allow for any other agent (a worker's shell already runs all but what it denies, so an allow could
+  only undo a deny; the others have none), a pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`,
+  redirect, backslash, brace, or newline), a command named by a wildcard or a path, and one that runs a command it is
+  given (a shell, an interpreter, a wrapper such as `env`, `xargs`, or `timeout`, a package or build runner, `find`,
+  a pager, a database shell), fetches pages (D077), is git or a forge's CLI, or is the loop's own (`canopy`,
+  `treehouse`, the runtime). Residual, the operator's: an allowed command runs as they do with arguments the overseer
+  picks, so one that writes, such as `jira issue create`, writes, and one that reads text anyone can write puts that
+  text in front of it; and an option that runs a program, in a command canopy's list does not name, runs it.
 - The loop may create tickets, but they authorize nothing: a human's queue label on a ticket, or the operator's start
   of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
   may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
@@ -541,9 +551,10 @@ branch, cannot change what the harness does. Its shared config is the workspace 
 workspace's private file, `.canopy/config.toml` under its root. A workspace may itself be a repository the operator
 shares with a team, so anyone who can push there can change that file, and a checkout of an unreviewed branch of it
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
-worktree and before any agent starts. If it could set the runtime commands, `notify.cmd`, chores, the review query,
-prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, or the agents' personas, one commit
-would be enough to run commands on operators' machines, raise their spend, or pick who steers their workers.
+worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
+`notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, authorized repliers, agent memory's
+tiers, or the agents' personas, one commit would be enough to run commands on operators' machines, raise their spend,
+or pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
@@ -741,9 +752,9 @@ loop's terminal would.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
-- Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, authorized
-  repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only
-  lower it.)
+- Take runtime or notify commands, an agent's bash allows, chores, review settings, prompt paths, capacity, queue
+  labels, authorized repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` is policy: the
+  repository may only lower it.)
 - Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once, but for a
   try the operator starts from the shell or the web UI (DESIGN §19).
 - Listen on a wildcard or public address, or serve journal data or take the operator's input without the operator's
