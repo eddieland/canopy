@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 # Agent-written text is cut to this many characters to fit one terminal line.
 SUMMARY_WIDTH = 160
+#: How much of a persona's digest a line shows: enough to tell two versions of it apart.
+DIGEST_WIDTH = 12
 
 
 def run_kind(row: sqlite3.Row) -> str:
@@ -89,6 +91,17 @@ def spent(row: sqlite3.Row | records.Row) -> str:
     """
     usage = db.usage_of(row)
     return f"  {usage.describe()}" if usage is not None else ""
+
+
+def persona_of(row: sqlite3.Row) -> str:
+    """The persona a run or a review ran in (DESIGN §31), as `  persona skeptic 1a2b3c4d5e6f`, its digest cut short.
+
+    Returns:
+        The name and digest with two leading spaces, to append to a line, or "" for a run that recorded none.
+    """
+    if row["persona"] is None:
+        return ""
+    return f"  persona {row['persona']} {str(row['persona_digest'])[:DIGEST_WIDTH]}"
 
 
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:

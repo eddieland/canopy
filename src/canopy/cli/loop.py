@@ -12,7 +12,7 @@ from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, run_kind, spent
+from canopy.cli.render import chore_line, named, one_line, persona_of, phase_of, prs_of, result_of, run_kind, spent
 from canopy.core import chore_view, connector_runs, contract, conversation, db, memory, notice, pause, review_requests
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
@@ -236,13 +236,15 @@ def _print_workers(ctx: Context) -> None:
         where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
+            f"{persona_of(r)}"
         )
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
             click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_runs(ctx.conn, "review_runs"):
-        click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
+        where = f"  {r['slot_path']}" if r["slot_path"] else ""
+        click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}{where}{persona_of(r)}")
     if not running and not db.running_runs(ctx.conn, "review_runs"):
         click.echo("  none")
 
@@ -272,7 +274,7 @@ def _print_recent_runs(ctx: Context) -> None:
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        click.echo(f"    {session}{spent(r)}  log {r['log_path']}")
+        click.echo(f"    {session}{spent(r)}{persona_of(r)}  log {r['log_path']}")
     if not runs:
         click.echo("  none")
 
