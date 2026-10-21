@@ -111,11 +111,21 @@ export async function grantLimit(ticketKey: string | null, limit: Limit): Promis
 }
 
 /**
- * `canopy start URL --review --notes TEXT`: canopy reviews a PR it does not own, once, at its head, its reviewer given
- * the notes. Nothing is posted on the PR; the next tick reviews it.
+ * `canopy start URL --review --notes TEXT --persona NAME`: canopy reviews a PR it does not own, once, at its head, its
+ * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing is posted on
+ * the PR; the next tick reviews it.
  */
-export async function requestReview(url: string, notes = ''): Promise<ReviewRequested> {
-    return unwrap(await api.POST('/api/pull-request/start', { params: { query: { url } }, body: { notes } }))
+export async function requestReview(
+    url: string,
+    notes = '',
+    personas: readonly string[] = [],
+): Promise<ReviewRequested> {
+    return unwrap(
+        await api.POST('/api/pull-request/start', {
+            params: { query: { url } },
+            body: { notes, personas: [...personas] },
+        }),
+    )
 }
 
 /** `canopy stop URL`: the PR's review request ends, and a review of it already running finishes. */

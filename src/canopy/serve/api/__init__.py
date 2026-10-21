@@ -24,6 +24,7 @@ from canopy.serve.api import (
     loop,
     memory,
     overview,
+    personas,
     plans,
     pull_requests,
     refs,
@@ -56,6 +57,7 @@ _RESOURCES = (
     reviews,
     seen,
     pull_requests,
+    personas,
     drafts,
     memory,
 )

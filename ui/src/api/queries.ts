@@ -67,6 +67,7 @@ export const keys = {
     memory: ['memory'] as const,
     ticketMemory: (key: string) => ['ticket', key, 'memory'] as const,
     runMemory: (id: number) => ['run-memory', id] as const,
+    personas: ['personas'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -354,6 +355,15 @@ export const reviewsQuery = queryOptions({
 export const reviewRequestsQuery = queryOptions({
     queryKey: keys.reviewRequests,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/review-requests', { signal })),
+})
+
+/**
+ * Every persona a run could get, as `canopy personas` lists them: what a review request may choose from. Not on the
+ * stream, since it is files in the operator's directories; read again when a page that shows it mounts.
+ */
+export const personasQuery = queryOptions({
+    queryKey: keys.personas,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/personas', { signal })),
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */

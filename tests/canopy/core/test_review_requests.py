@@ -427,8 +427,18 @@ def test_the_web_channel_requests_and_stops_a_review_as_the_cli_does(ctx: Contex
         "bad_notes",
     )
     assert [p["url"] for p in c.get("/api/pull-requests").json()] == [PR]
+    assert page["pull_request"]["review_request"]["personas"] == []
+
+    # Personas, one review each, as `--persona` given again chooses them; none leaves them as they were.
+    def choose(names: list[str]) -> httpx2.Response:
+        return c.post("/api/pull-request/start", params={"url": PR}, json={"personas": names}, headers=headers)
+
+    assert refused(choose(["lenient"])).startswith("unknown_persona")
+    assert choose(["skeptic", "canopy"]).json()["request"]["personas"] == ["skeptic", "canopy"]
+    assert choose([]).json()["request"]["personas"] == ["skeptic", "canopy"]
 
     stopped = stop(PR).json()
+    assert stopped["request"]["personas"] == ["skeptic", "canopy"]
     assert stopped["running_review"] is None
     request = c.get("/api/pull-request", params={"url": PR}).json()["pull_request"]["review_request"]
     assert (request["end_reason"], request["ended_at"] is not None) == ("stopped", True)

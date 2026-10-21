@@ -468,6 +468,28 @@ class PersonaRequest(_Model):
     """The persona's name, one `persona_names` holds; None clears the override, as `--clear` does."""
 
 
+class PersonaChoice(_Model):
+    """A persona a run could get, as `canopy personas` lists it (DESIGN §31): what the operator may choose from."""
+
+    name: str
+    """Its name, which a choice of it names."""
+    yours: bool
+    """Whether its file is the operator's, from `paths.personas`; False for one canopy ships."""
+    defaults: list[PersonaAgent] = []
+    """The agents whose `[personas]` names it, `reviewer` among them when `[personas] reviewers` does."""
+    error: str | None = None
+    """Why a run would refuse it, or None when it would render."""
+
+
+class PersonaList(_Model):
+    """Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31)."""
+
+    personas: list[PersonaChoice] = []
+    """Each persona once, by name, the operator's in place of canopy's of the same name."""
+    reviewer: str
+    """`[personas] reviewer`'s: the persona of a review request's review when the request chooses none."""
+
+
 class PlanSummary(_Model):
     """One of a ticket's plans (DESIGN §25): its status and approval, never its text."""
 
@@ -2179,14 +2201,19 @@ class ReviewRequest(_Model):
     repositories (the overseer's reading); or the operator stopped it. None while it is open."""
     notes: str | None = None
     """The operator's notes for the reviewer, which its prompt carries; None when the request has none."""
+    personas: list[str] = []
+    """The personas it is reviewed in, one review each, in the order chosen; none for `[personas] reviewer`'s."""
 
 
-class ReviewRequestNotes(_Model):
-    """A review request's notes, as `canopy start URL --review --notes TEXT` gives them."""
+class ReviewRequestBody(_Model):
+    """A review request's notes and personas, as `canopy start URL --review --notes TEXT --persona NAME` gives them."""
 
     notes: Annotated[str, Field(max_length=20_000)] = ""
     """What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
     blank is none, and leaves an open request's notes as they were."""
+    personas: Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=10)] = []
+    """The personas to review it in, one review each, side by side, each one `GET /personas` lists; none is
+    `[personas] reviewer`'s, and leaves an open request's personas as they were."""
 
 
 class ReviewRequested(_Model):

@@ -506,9 +506,14 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
 
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
+    // Its review is written in skeptic, as `--persona skeptic` asks.
+    await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
+    await page.keyboard.press('Escape')
+    await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
     await form.getByTestId('review-request-submit').click()
     await expect(form.getByRole('status')).toHaveText(
-        `${pr} is requested for review. The next tick reviews its head, once.`,
+        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
     )
     // It is in the reviews list at once, waiting on a tick to start its review.
     await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
@@ -522,6 +527,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
     const request = page.getByTestId('review-request')
     await expect(request).toContainText('canopy reviews its head once')
+    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
     await request.getByTestId('review-request-stop').click()
     await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
     await expect(request).toContainText('Your review request ended')

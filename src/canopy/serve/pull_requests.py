@@ -71,11 +71,11 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     )
 
 
-def review_request(row: records.ReviewRequest) -> ReviewRequest:
+def review_request(conn: sqlite3.Connection, row: records.ReviewRequest) -> ReviewRequest:
     """A review request as the API shows it.
 
     Returns:
-        The request: when and where it was made, its notes, and when and why it ended, if it has.
+        The request: when and where it was made, its notes and personas, and when and why it ended, if it has.
     """
     return ReviewRequest.model_validate(
         {
@@ -84,6 +84,7 @@ def review_request(row: records.ReviewRequest) -> ReviewRequest:
             "ended_at": db.parse_time(row.ended_at) if row.ended_at else None,
             "end_reason": row.end_reason,
             "notes": row.notes,
+            "personas": review_requests.personas_of(conn, row.id),
         },
     )
 
@@ -106,7 +107,7 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
         running_run=running.id if running is not None else None,
         reviews=len(reviews),
         latest_review=summaries(conn, reviews[:1])[0] if reviews else None,
-        review_request=review_request(request) if request is not None else None,
+        review_request=review_request(conn, request) if request is not None else None,
     )
 
 
