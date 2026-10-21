@@ -88,7 +88,9 @@ export function NoticeBanner() {
                 )}
             </div>
             {editing ? null : (
-                <div className="flex shrink-0 items-center gap-1">
+                // Pulled up and out by a ghost button's own padding, so their words sit on the first line, as the
+                // megaphone does, and Clear's ends as far in from the border as the megaphone starts.
+                <div className="-my-1.5 -mr-2.5 flex shrink-0 items-center gap-1">
                     <Button
                         variant="ghost"
                         size="sm"
