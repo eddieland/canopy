@@ -130,11 +130,11 @@ Work through these in order and stop at the first that explains it.
    - `refused:<guard>`: the harness refused the dispatch; the rationale is its reason. Most often `unauthorized` (no
      label from `tracker.labels` named), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is on
      it), `no_slot` (no free worktree, or the pool is at its declared size), `attempt_limit` (the kind's
-     `policy.max_<kind>_attempts`, plus any `canopy grant`, used up; no count resets), or `cooldown` (a `resume` for CI alone waits `policy.ci_cooldown_minutes`
-     after the last run on CI). Attempt limits and the cooldown count per repository of the ticket. `bad_prompt`: the
-     worker prompt did not render, often an override lacking `{{LABELS}}` (or, for a run over several repositories,
-     `{{REPOSITORIES}}` and `{{PRS}}`); while an override of the retired fix-ci prompt exists, every `resume` is
-     refused, with a `fix_ci_override` attention item.
+     `policy.max_<kind>_attempts`, plus any `canopy grant`, used up; no count resets), or `cooldown` (a `resume` for CI
+     alone waits `policy.ci_cooldown_minutes` after the last run on CI). Attempt limits and the cooldown count per
+     repository of the ticket. `bad_prompt`: the worker prompt did not render, often an override lacking `{{LABELS}}`
+     (or, for a run over several repositories, `{{REPOSITORIES}}` and `{{PRS}}`); while an override of the retired
+     fix-ci prompt exists, every `resume` is refused, with a `fix_ci_override` attention item.
    - A run that ends `failed` with a summary starting `not authorized:` found the ticket closed or unlabeled: it
      changed nothing, but spent one of the kind's attempts.
 4. If it was dispatched, look at its runs:
