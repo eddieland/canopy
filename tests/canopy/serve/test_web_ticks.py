@@ -9,7 +9,7 @@ from canopy.core import db
 from canopy.core import spend as spending
 from canopy.core.context import Context
 from canopy.loop import attention
-from canopy.serve import views
+from canopy.serve import tick_views
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client
@@ -66,7 +66,7 @@ def test_a_tick_page_names_the_ticks_either_side_dry_runs_included_and_steps_ove
     ctx.conn.execute("DELETE FROM ticks WHERE id = ?", (gone,))
 
     def neighbours(tick_id: int) -> tuple[int | None, int | None]:
-        detail = present(views.tick_detail(ctx, tick_id))
+        detail = present(tick_views.tick_detail(ctx, tick_id))
         return detail.previous_id, detail.next_id
 
     assert neighbours(first) == (None, dry)

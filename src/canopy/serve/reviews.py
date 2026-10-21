@@ -30,16 +30,8 @@ from canopy.serve.schema import (
     RunState,
     Transcript,
 )
-from canopy.serve.views import (
-    lines,
-    models_served,
-    new_tokens,
-    raw_output,
-    removed_after,
-    session_transcript,
-    shown_path,
-    ticket_title,
-)
+from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
+from canopy.serve.views import lines, models_served, new_tokens, shown_path, ticket_title
 
 if TYPE_CHECKING:
     import sqlite3

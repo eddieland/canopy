@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.serve import views
+from canopy.serve import tick_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import TickId, not_found
 from canopy.serve.schema import LastTick, RawOutput, Tick, TickDetail, Transcript
@@ -20,21 +20,21 @@ router = APIRouter(tags=[TAG])
 def last_tick(backend: BackendDep) -> LastTick:
     """The latest tick, as `canopy status`'s first line shows it, or none; and the newest message acknowledged."""
     with backend.open() as ctx:
-        return views.last_tick(ctx)
+        return tick_views.last_tick(ctx)
 
 
 @router.get("/ticks", operation_id="listTicks", summary="List the ticks")
 def ticks(backend: BackendDep) -> list[Tick]:
     """The latest 50 ticks, newest first."""
     with backend.open() as ctx:
-        return views.ticks(ctx)
+        return tick_views.ticks(ctx)
 
 
 @router.get("/ticks/{tick_id}", operation_id="getTick", summary="Get a tick", responses=not_found("tick"))
 def tick(tick_id: TickId, backend: BackendDep) -> TickDetail:
     """One tick: what `canopy decisions ID` prints."""
     with backend.open() as ctx:
-        found = views.tick_detail(ctx, tick_id)
+        found = tick_views.tick_detail(ctx, tick_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
     return found
@@ -50,7 +50,7 @@ def tick(tick_id: TickId, backend: BackendDep) -> TickDetail:
 def tick_transcript(tick_id: TickId, backend: BackendDep) -> Transcript:
     """The overseer's session, read back from the tick's output: agent output, untrusted and bounded."""
     with backend.open() as ctx:
-        found = views.tick_transcript(ctx, tick_id)
+        found = tick_views.tick_transcript(ctx, tick_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
     return found
@@ -66,7 +66,7 @@ def tick_transcript(tick_id: TickId, backend: BackendDep) -> Transcript:
 def tick_output(tick_id: TickId, backend: BackendDep) -> RawOutput:
     """The end of the overseer's output as written, stderr included: agent output, untrusted and bounded."""
     with backend.open() as ctx:
-        found = views.tick_raw_output(ctx, tick_id)
+        found = tick_views.tick_raw_output(ctx, tick_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
     return found
