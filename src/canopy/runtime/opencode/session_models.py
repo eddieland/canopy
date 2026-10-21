@@ -4,10 +4,16 @@
 output, and paths redacted. Each assistant message names the provider and model that wrote it, and what it cost; only
 those are read. OpenCode looks a session up by its id alone, in the one database that holds every project's sessions,
 so any directory finds it. One it does not have it names on stderr, `Session not found: ID`, and exits 1.
+
+A plugin OpenCode loads may print to stdout too, before the export or after it, and the operator may not be free to
+remove it. The export starts a line, so each line that starts with `{` is read as the start of one JSON value, and the
+first that holds an export is the export.
 """
 
 from __future__ import annotations
 
+import json
+import re
 from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
@@ -24,6 +30,8 @@ TIMEOUT_SECONDS = 60
 COMMAND = "opencode export --sanitize"
 #: What OpenCode prints on stderr for a session it does not have.
 NOT_FOUND = "Session not found"
+# Where a JSON object starts a line.
+_OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
 
 
 class _Info(BaseModel):
@@ -61,10 +69,8 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
         return SessionModels("failed", error=str(e))
     if printed is None:
         return SessionModels("missing")
-    try:
-        exported = _Export.model_validate_json(printed)
-    except ValidationError:
-        # Not the error itself: it quotes what was printed.
+    exported = _parse(printed)
+    if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
     return SessionModels("found", _models(exported.messages))
 
@@ -91,6 +97,23 @@ def _export(runner: procs.Runner, cwd: Path, session_id: str) -> str | None:
     if NOT_FOUND in result.stderr:
         return None
     raise _FailedError(f"`{COMMAND}` exited {result.returncode}")
+
+
+# The export among what else OpenCode's plugins printed, or None when none of it is one. Not the errors: they quote
+# what was printed.
+def _parse(printed: str) -> _Export | None:
+    try:
+        return _Export.model_validate_json(printed)
+    except ValidationError:
+        pass
+    decoder = json.JSONDecoder()
+    for start in _OBJECT_RE.finditer(printed):
+        try:
+            _, end = decoder.raw_decode(printed, start.start())
+            return _Export.model_validate_json(printed[start.start() : end])
+        except (json.JSONDecodeError, ValidationError):
+            continue
+    return None
 
 
 def _models(messages: tuple[_Message, ...]) -> tuple[ModelUse, ...]:

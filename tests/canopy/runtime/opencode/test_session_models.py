@@ -122,6 +122,30 @@ def test_a_read_that_cannot_be_trusted_fails_in_canopy_s_words(export: Export, e
     assert read(export) == SessionModels("failed", error=error)
 
 
+#: The export as OpenCode prints it, indented, of a session one model served.
+PRETTY = json.dumps(json.loads(exported(assistant("anthropic", "claude-haiku", 0.5))), indent=2)
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        f"[corp-plugin] loaded v2.1\nhooks ready {{\n{PRETTY}\n",
+        f"{PRETTY}\n[corp-plugin] flushed 3 events\n{{ unclosed\n",
+        f'{{"level": "info", "msg": "corp-plugin up"}}\n{PRETTY}\n{{"messages": "not these"}}\n',
+    ],
+    ids=["before", "after", "json-lines-around"],
+)
+def test_the_export_is_read_from_among_what_a_plugin_prints(stdout: str) -> None:
+    assert read(printing(stdout)) == SessionModels("found", (ModelUse("anthropic/claude-haiku", 1, 0.5),))
+
+
+def test_a_plugin_s_output_alone_is_not_an_export() -> None:
+    stdout = '[corp-plugin] loaded\n{"level": "info"}\n{"messages": [{"info": {}}]}\n'
+    assert read(printing(stdout)) == SessionModels(
+        "failed", error="`opencode export --sanitize` printed what canopy cannot read"
+    )
+
+
 def test_opencode_missing_from_path_fails() -> None:
     def missing(args: Sequence[str]) -> procs.Result:
         raise procs.CommandNotFoundError(args[0])
