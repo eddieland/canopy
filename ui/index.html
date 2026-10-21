@@ -4,6 +4,8 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="light dark" />
+        <!-- The UI has its own dark theme: tells Dark Reader not to restyle the page over it. -->
+        <meta name="darkreader-lock" />
         <!--
         Blocking on purpose: sets the theme class, color-scheme, and each theme's palette before the first paint, so a
         reload never flashes the other theme. Keep it in sync with src/theme/store.ts and src/theme/palette.ts (their
