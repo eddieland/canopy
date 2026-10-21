@@ -334,13 +334,23 @@ export function reloadedText(reload: ConfigReload): string {
 
 /**
  * What a review request did, as `canopy start URL --review` says it: new, or already open, its notes replaced when
- * `noted`, the request having given some.
+ * `noted`, the request having given some, and the personas it is reviewed in when `chose`, the request having named
+ * some.
  */
-export function reviewRequestedText(url: string, requested: ReviewRequested, noted = false): string {
+export function reviewRequestedText(url: string, requested: ReviewRequested, noted = false, chose = false): string {
+    const written = chose ? ` ${reviewPersonasText(requested.request.personas)}` : ''
     if (requested.already) {
-        return `${url} was already requested for review.${noted ? ' Its notes are replaced.' : ''}`
+        return `${url} was already requested for review.${noted ? ' Its notes are replaced.' : ''}${written}`
     }
-    return `${url} is requested for review. The next tick reviews its head, once.`
+    return `${url} is requested for review. The next tick reviews its head, once.${written}`
+}
+
+/** The personas a review request is reviewed in, as `canopy start URL --review --persona NAME` says it. */
+export function reviewPersonasText(names: readonly string[]): string {
+    if (names.length === 1) {
+        return `Its review is written in ${names[0]}.`
+    }
+    return `It is reviewed once in each of ${names.join(', ')}, side by side.`
 }
 
 /** What stopping a review request did, as `canopy stop URL` says it, and a review of the PR still running. */

@@ -59,6 +59,7 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
+    PersonaChoice,
     RawOutput,
     Run,
     RunActivity,
@@ -882,6 +883,15 @@ def agent_persona(found: personas.Next) -> AgentPersona:
         once=found.once,
         several=list(found.several),
     )
+
+
+def persona_choice(found: personas.Listed) -> PersonaChoice:
+    """A persona a run could get, as the API sends it: never its file's path, which is the operator's machine's.
+
+    Returns:
+        Its name, whether it is the operator's, the agents it is the default for, and why a run would refuse it.
+    """
+    return PersonaChoice(name=found.name, yours=found.yours, defaults=list(found.defaults), error=found.error)
 
 
 def forget(found: records.Forget) -> TicketForget:
