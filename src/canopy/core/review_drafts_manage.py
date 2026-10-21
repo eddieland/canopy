@@ -9,8 +9,11 @@ reaches GitHub is that version verbatim, unmarked, as one comment review on the 
 `vcs` source's `post_cmd`: it opens a pending review, adds every comment, and only then submits, so a comment GitHub
 refuses posts nothing. A draft publishes one version, at most once: a publish claims the draft before it posts, and one
 whose post ends without saying whether it submitted is `unconfirmed`, never posted again by canopy until a whole read
-of its PR settles it. Staging is publishing without the submit: the version waits in a pending review for the operator
-to submit on GitHub, and is `staged` until a whole read finds that review submitted, or gone.
+of its PR settles it. So is one whose publish stopped before the post said how it ended: at once when it raised, and
+once its claim outlives the post command's timeout when the process holding it was killed (`expire_claims`).
+
+Staging is publishing without the submit: the version waits in a pending review for the operator to submit on GitHub,
+and is `staged` until a whole read finds that review submitted, or gone.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import conversation, db, records, review_drafts, sql
@@ -35,6 +39,10 @@ if TYPE_CHECKING:
 _MAX_STDERR = 300
 #: What the operator does with a review they staged, which a refusal for it says.
 _FINISH = "submit or delete it on GitHub, and the next read of the PR settles it"
+
+#: How long past its post command's timeout a publish may hold its draft before canopy takes the post as one that
+#: ended without saying, as when the process posting it was killed.
+CLAIM_MARGIN_MINUTES = 5
 
 #: What an edit makes of the draft's newest version: its body and its comments.
 type _Making = Callable[[Version], tuple[str, Sequence[Comment]]]
@@ -239,6 +247,7 @@ def publish(
             the operator staged; (`no_post`) no command posts there.
     """
     conversation.check_operator()
+    expire_claims(conn, config)
     draft = find(conn, run_id)
     run = db.get_review_run(conn, run_id)
     if run is None or not review_drafts.draftable(conn, run):
@@ -378,11 +387,18 @@ def _post(
         request["submit"] = False
     try:
         result = runner.run(
-            notify_words(source.post_cmd), stdin=json.dumps(request), timeout=source.timeout_minutes * 60
+            notify_words(source.post_cmd),
+            stdin=json.dumps(request),
+            timeout=source.timeout_minutes * 60,
+            on_line=lambda line: _pending_seen(conn, draft.id, line),
         )
     except procs.ProcError as e:
         # It never started, so it posted nothing.
         return _back(conn, draft, version, f"the post command did not start: {e}", None)
+    except BaseException:
+        # Whatever stopped it, the post may have reached GitHub: the draft waits on a whole read, never posted again.
+        _lost(conn, draft.id)
+        raise
     lines, comments = _lines(result.stdout)
     said = result.stderr.strip()[-_MAX_STDERR:]
     end, pending = lines.get("end"), lines.get("pending")
@@ -400,6 +416,35 @@ def _post(
         return _back(conn, draft, version, why, end)
     log.warning("review of unknown outcome", extra=fields)
     return _unconfirmed(conn, draft, version, pending)
+
+
+def _pending_seen(conn: sqlite3.Connection, draft_id: int, line: str) -> None:
+    """Record the pending review the post command names as it prints it, so a read can settle a publish cut short."""
+    try:
+        raw: object = json.loads(line)
+    except json.JSONDecodeError:
+        return
+    if not isinstance(raw, dict) or raw.get("kind") != "pending":
+        return
+    with db.transaction(conn):
+        sql.execute(
+            conn,
+            sql.update("review_drafts")
+            .set(pending_review=_str(raw.get("review")), pending_review_id=_int(raw.get("id")))
+            .where("id = ?", draft_id),
+        )
+
+
+def _lost(conn: sqlite3.Connection, draft_id: int) -> None:
+    """A publish that stopped before its post said how it ended: unconfirmed, with the pending review it saw, if any."""
+    with db.transaction(conn):
+        sql.execute(
+            conn,
+            sql.update("review_drafts")
+            .set(status=ReviewDraftStatus.UNCONFIRMED, why="the publish stopped before the post said how it ended")
+            .where("id = ?", draft_id)
+            .where("status = ?", ReviewDraftStatus.PUBLISHING),
+        )
 
 
 def _lines(stdout: str) -> tuple[dict[str, dict[str, object]], list[dict[str, object]]]:
@@ -541,12 +586,36 @@ def _present(conn: sqlite3.Connection, draft: records.ReviewDraft) -> records.Re
     return review_drafts.get(conn, draft.id) or draft
 
 
+def expire_claims(conn: sqlite3.Connection, config: Config) -> list[int]:
+    """Take each publish that has held its draft past its post command's timeout, and a margin, as of unknown outcome.
+
+    The process posting it was killed, or it would have ended by now: its draft is unconfirmed, so the next whole read
+    of its PR settles it, by the pending review the post printed, or as nothing posted if it printed none.
+
+    Returns:
+        The drafts' ids.
+    """
+    minutes = config.connect.vcs().timeout_minutes + CLAIM_MARGIN_MINUTES
+    before = db.format_time(datetime.now(UTC) - timedelta(minutes=minutes))
+    with db.transaction(conn):
+        rows = sql.execute(
+            conn,
+            sql.update("review_drafts")
+            .set(status=ReviewDraftStatus.UNCONFIRMED, why="the publish stopped before the post said how it ended")
+            .where("status = ?", ReviewDraftStatus.PUBLISHING)
+            .where("publish_started_at < ?", before)
+            .returning("id"),
+        ).fetchall()
+    return [int(r["id"]) for r in rows]
+
+
 def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[records.ReviewDraft]:
     """Settle the unconfirmed and staged drafts of the PRs just read whole, by their pending review's id, never by text.
 
     Submitted, that review is the draft's, published. For an unconfirmed post, still pending or gone means nothing was
     posted, and the draft waits again, a pending one to be deleted by the next post. A staged review is the operator's
     to submit on GitHub, so one still pending stays staged, and one gone means they deleted it: the draft waits again.
+    An unconfirmed draft whose post printed no pending review opened none, so it waits again too.
 
     Returns:
         The drafts settled, as they now stand.
@@ -558,8 +627,7 @@ def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[recor
             sql.select("*")
             .from_("review_drafts")
             .where_in("pr_url", sorted(set(whole)))
-            .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED))
-            .where("pending_review_id IS NOT NULL"),
+            .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED)),
         )
         settled = [draft.id for draft in waiting if _settle_one(conn, draft)]
     return [d for d in (review_drafts.get(conn, i) for i in settled) if d is not None]
@@ -630,7 +698,6 @@ def unsettled_prs(conn: sqlite3.Connection) -> list[str]:
         .unique()
         .from_("review_drafts")
         .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED))
-        .where("pending_review_id IS NOT NULL")
         .order_by("pr_url"),
     )
     return [str(r["pr_url"]) for r in rows]

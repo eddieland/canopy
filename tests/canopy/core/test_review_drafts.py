@@ -6,17 +6,19 @@ a new version, and publishes one version, word for word, as one comment review o
 
 import json
 import os
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, records, review_diff, review_drafts
+from canopy.core import db, records, review_diff, review_drafts, review_drafts_manage
 from canopy.core.context import Context
 from canopy.core.review_drafts import Comment
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
+from canopy.infra import logs, procs
 from tests.canopy.helpers import present, reads, tick_reads
 from tests.canopy.review_helpers import FINDINGS, feature_commit, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
@@ -289,3 +291,83 @@ def test_a_post_of_unknown_outcome_posts_nothing_more_until_a_read_settles_it(
     assert len(posted(github_state)) == 1
     tick_reads(ctx)
     assert draft_of(scenario, reviewed).status is after
+
+
+class Stops(procs.SubprocessRunner):
+    """A runner whose post stops with `error`, once the poster has posted when `posts`, before it starts otherwise."""
+
+    def __init__(self, error: BaseException, *, posts: bool) -> None:
+        """Stop with `error`, after posting if `posts`."""
+        super().__init__()
+        self.error = error
+        self.posts = posts
+
+    @override
+    def run(
+        self,
+        args: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        stdin: str | None = None,
+        timeout: float | None = None,
+        on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
+    ) -> procs.Result:
+        if self.posts:
+            super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line)
+        raise self.error
+
+
+def publish_stopped(scenario: Scenario, ctx: Context, run_id: int, runner: procs.Runner) -> None:
+    """Publish run `run_id`'s newest version with `--submit` through `runner`, which stops it before it ends."""
+    seen = newest(scenario, run_id).hash
+    with pytest.raises((KeyboardInterrupt, RuntimeError)):
+        review_drafts_manage.publish(
+            scenario.conn, ctx.config, runner, run_id, seen, submit=True, channel="cli", log=logs.for_tick(None)
+        )
+
+
+@pytest.mark.parametrize("posts", [False, True], ids=["nothing posted", "posted"])
+def test_a_publish_that_raises_waits_on_a_read_and_never_posts_twice(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+    ctx: Context,
+    posts: bool,  # noqa: FBT001  (a parameter of the test)
+) -> None:
+    error = RuntimeError("lost") if posts else KeyboardInterrupt()
+    publish_stopped(scenario, ctx, reviewed, Stops(error, posts=posts))
+    draft = draft_of(scenario, reviewed)
+    assert draft.status is ReviewDraftStatus.UNCONFIRMED
+    # The pending review the poster printed is known even though the publish never read its outcome.
+    assert (draft.pending_review_id is not None) is posts
+    again = scenario.operator("review", "publish", str(reviewed), newest(scenario, reviewed).hash, "--submit", code=1)
+    assert "publish refused (unconfirmed)" in again.err
+    assert len(posted(github_state)) == int(posts)
+    tick_reads(ctx)
+    assert draft_of(scenario, reviewed).status is (ReviewDraftStatus.PUBLISHED if posts else ReviewDraftStatus.WAITING)
+
+
+@pytest.mark.parametrize("posts", [False, True], ids=["nothing posted", "posted"])
+def test_a_publish_whose_process_died_is_settled_by_a_read_once_its_claim_outlives_the_post(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+    ctx: Context,
+    posts: bool,  # noqa: FBT001  (a parameter of the test)
+) -> None:
+    # Killed, the publish runs no handler of its own: its claim is all it leaves.
+    with mock.patch.object(review_drafts_manage, "_lost", autospec=True):
+        publish_stopped(scenario, ctx, reviewed, Stops(RuntimeError("killed"), posts=posts))
+    assert draft_of(scenario, reviewed).status is ReviewDraftStatus.PUBLISHING
+    version = newest(scenario, reviewed).hash
+    held = scenario.operator("review", "publish", str(reviewed), version, "--submit", code=1)
+    assert "publish refused (publishing)" in held.err
+    # Past the post's timeout and the margin, the claim is one of unknown outcome: still refused, never posted again.
+    scenario.time_passes(minutes=ctx.config.connect.vcs().timeout_minutes + review_drafts_manage.CLAIM_MARGIN_MINUTES)
+    later = scenario.operator("review", "publish", str(reviewed), version, "--submit", code=1)
+    assert "publish refused (unconfirmed)" in later.err
+    assert len(posted(github_state)) == int(posts)
+    tick_reads(ctx)
+    assert draft_of(scenario, reviewed).status is (ReviewDraftStatus.PUBLISHED if posts else ReviewDraftStatus.WAITING)

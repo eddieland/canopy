@@ -109,6 +109,8 @@ def vcs_request(ctx: Context) -> observe.Request:
         for unit in units
         if unit.pr_url is not None and observe.is_pr_url(unit.pr_url)
     }
+    # A publish whose process was killed waits on this read like any post of unknown outcome (§34).
+    review_drafts_manage.expire_claims(ctx.conn, ctx.config)
     prs.update(
         drafts.unchecked_prs(ctx.conn),
         drafts_manage.unsettled_prs(ctx.conn),
