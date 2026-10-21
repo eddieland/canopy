@@ -2,6 +2,7 @@
 raised while the archive is not on its upstream."""
 
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -65,6 +66,22 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "2"
     assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}.md", cwd=upstream)
+
+
+def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    first = proposed(scenario.conn, scenario.env.state_dir)
+    second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
+    name = workspace.find(scenario.env.root).name
+
+    with mock.patch.object(archive, "PER_TICK", 1):
+        scenario.tick(*waits(KEY, "PROJ-2"))
+        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}.md"]
+        assert unpushed(scenario) == "1 plan waits for the next tick's archive: a tick archives at most 1 files"
+
+        scenario.tick(*waits(KEY, "PROJ-2"))
+
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}.md", f"{name}/PROJ-2/{second}.md"]
+    assert unpushed(scenario) is None
 
 
 def test_a_failed_push_stays_an_item_until_a_tick_pushes(scenario: Scenario, clone: Path, upstream: Path) -> None:

@@ -3,6 +3,7 @@
 import json
 import os
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
@@ -92,6 +93,82 @@ def test_an_export_rewrites_only_what_changed(conn: sqlite3.Connection, state_di
     meta, text = front_matter(dest / KEY / f"{first}.md")
     assert (meta["status"], meta["approved_channel"], text) == ("approved", "web", "# Edited\n")
     assert front_matter(dest / "PROJ-2" / f"{second}.md")[0]["status"] == "proposed"
+
+
+@pytest.fixture
+def settled() -> Iterator[None]:
+    """Take a file as settled as soon as it is written, so an export keeps fingerprints of what it just checked."""
+    with mock.patch.object(plan_export, "_SETTLED_NS", 0):
+        yield
+
+
+def reads(conn: sqlite3.Connection, state_dir: Path, dest: Path) -> tuple[plan_export.Exported, int]:
+    """Export into `dest`, and count the plans the export read."""
+    with mock.patch.object(plans, "read", autospec=True, side_effect=plans.read) as read:
+        exported = plan_export.export(conn, state_dir, dest)
+    return exported, read.call_count
+
+
+@pytest.mark.usefixtures("settled")
+def test_a_plan_found_as_it_stands_is_not_read_again(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    first = proposed(conn, state_dir)
+    second = proposed(conn, state_dir, key="PROJ-2")
+    dest = tmp_path / "archive"
+    plan_export.export(conn, state_dir, dest)
+    plan_export.export(conn, state_dir, dest)
+
+    assert reads(conn, state_dir, dest) == (plan_export.Exported(written=[], unchanged=2, skipped=[]), 0)
+
+    # A plan's file, its row, or the file exported from it changing is each read again, and only that plan.
+    plans.path_for(state_dir, KEY, first).write_text("# Edited\n")
+    exported, read = reads(conn, state_dir, dest)
+    assert (exported.written, read) == ([f"{KEY}/{first}.md"], 1)
+    plan_export.export(conn, state_dir, dest)
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    exported, read = reads(conn, state_dir, dest)
+    assert (exported.written, read) == ([f"{KEY}/{first}.md"], 1)
+    plan_export.export(conn, state_dir, dest)
+    (dest / "PROJ-2" / f"{second}.md").write_text("The operator's edit.\n")
+    exported, read = reads(conn, state_dir, dest)
+    assert (exported.written, read) == ([f"PROJ-2/{second}.md"], 1)
+    assert front_matter(dest / "PROJ-2" / f"{second}.md")[1] == PLAN
+
+    # Fingerprints that cannot be read are none: every plan is read again.
+    [kept] = (state_dir / plan_export.SEEN_DIR).iterdir()
+    kept.write_text("{")
+    assert reads(conn, state_dir, dest) == (plan_export.Exported(written=[], unchanged=2, skipped=[]), 2)
+
+
+def test_a_file_changed_just_now_is_read_again(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    # It could change again within the same tick of the filesystem's clock, leaving its stat as it was. An hour stands
+    # for "just now", so a slow machine cannot settle the files between the exports.
+    proposed(conn, state_dir)
+    dest = tmp_path / "archive"
+    with mock.patch.object(plan_export, "_SETTLED_NS", 3600 * 10**9):
+        plan_export.export(conn, state_dir, dest)
+        plan_export.export(conn, state_dir, dest)
+
+        assert reads(conn, state_dir, dest)[1] == 1
+    assert not (state_dir / plan_export.SEEN_DIR).exists()
+
+
+def test_a_limit_leaves_the_rest_for_the_next_export(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    first = proposed(conn, state_dir)
+    second = proposed(conn, state_dir, "# Second\n")
+    other = proposed(conn, state_dir, key="PROJ-2")
+    dest = tmp_path / "archive"
+
+    assert plan_export.export(conn, state_dir, dest, limit=2) == plan_export.Exported(
+        written=[f"{KEY}/{first}.md", f"{KEY}/{second}.md"],
+        unchanged=0,
+        skipped=[],
+        left=1,
+    )
+    assert plan_export.export(conn, state_dir, dest, limit=2) == plan_export.Exported(
+        written=[f"PROJ-2/{other}.md"],
+        unchanged=2,
+        skipped=[],
+    )
 
 
 def test_a_plan_whose_file_is_gone_is_skipped_and_nothing_exported_is_removed(
