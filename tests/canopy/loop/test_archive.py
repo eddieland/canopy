@@ -50,8 +50,8 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-Proposed.md"]
-    assert git("show", f"main:{name}/{KEY}/{run_id}-Proposed.md", cwd=upstream).endswith(PLAN.strip())
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert git("show", f"main:{name}/{KEY}/{run_id}-PROPOSED.md", cwd=upstream).endswith(PLAN.strip())
     assert unpushed(scenario) is None
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "1", "nothing changed, so nothing is committed"
@@ -66,8 +66,8 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "2"
     # The plan moved to its approved name: the archive holds it there alone.
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-Approved.md"]
-    assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}-Approved.md", cwd=upstream)
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-APPROVED.md"]
+    assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}-APPROVED.md", cwd=upstream)
 
 
 def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, upstream: Path) -> None:
@@ -77,7 +77,7 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
 
     scenario.tick(*waits(KEY, "PROJ-2"))
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 2 plans of {name}: {KEY}, PROJ-2\n\nNew:\n- {KEY}/{first}-Proposed.md\n- PROJ-2/{second}-Proposed.md"
+        f"Archive 2 plans of {name}: {KEY}, PROJ-2\n\nNew:\n- {KEY}/{first}-PROPOSED.md\n- PROJ-2/{second}-PROPOSED.md"
     )
 
     plans.approve(
@@ -89,7 +89,7 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
     )
     scenario.tick(*waits(KEY, "PROJ-2"))
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}-Approved.md (was {first}-Proposed.md)"
+        f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}-APPROVED.md (was {first}-PROPOSED.md)"
     )
 
 
@@ -99,11 +99,11 @@ def test_each_plans_prompt_goes_beside_it(scenario: Scenario, clone: Path, upstr
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-Proposed.md", f"{name}/{KEY}/{run_id}-prompt.md"]
-    assert git("show", f"main:{name}/{KEY}/{run_id}-prompt.md", cwd=upstream) == PLAN_PROMPT.strip()
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROMPT.md", f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert git("show", f"main:{name}/{KEY}/{run_id}-PROMPT.md", cwd=upstream) == PLAN_PROMPT.strip()
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
         f"Archive 1 plan and 1 prompt of {name}: {KEY}\n\n"
-        f"New:\n- {KEY}/{run_id}-Proposed.md\n- {KEY}/{run_id}-prompt.md"
+        f"New:\n- {KEY}/{run_id}-PROMPT.md\n- {KEY}/{run_id}-PROPOSED.md"
     )
 
 
@@ -114,7 +114,7 @@ def test_prompts_off_archives_plans_alone(scenario: Scenario, clone: Path, upstr
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-Proposed.md"]
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
 
 
 def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Path, upstream: Path) -> None:
@@ -124,12 +124,12 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
 
     with mock.patch.object(archive, "PER_TICK", 1):
         scenario.tick(*waits(KEY, "PROJ-2"))
-        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-Proposed.md"]
+        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md"]
         assert unpushed(scenario) == "1 plan waits for the next tick's archive: a tick archives at most 1 files"
 
         scenario.tick(*waits(KEY, "PROJ-2"))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-Proposed.md", f"{name}/PROJ-2/{second}-Proposed.md"]
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md", f"{name}/PROJ-2/{second}-PROPOSED.md"]
     assert unpushed(scenario) is None
 
 
