@@ -304,6 +304,7 @@ def test_a_slack_digest_is_fields() -> None:
         "blocked": [{"ticket": "P-2", "run": 2}],
         "attention": {"open": 3, "by_reason": {"needs_reviewer": 3}, "oldest": "3h"},
         "running": 2,
+        "spend": {"total": 1.5, "overseer": 0.25, "idle": 0.25, "dry_run": 0.5, "workers": 0.75, "plans": None},
         "lines": ["not used"],
     }
     assert _texts(slack.blocks({"repo": "/r/api", "digest": digest}))[1:] == [
@@ -313,8 +314,21 @@ def test_a_slack_digest_is_fields() -> None:
         "*Runs started*\nimplement 2",
         "*Runs ended*\nnone",
         "*Needs you*\n3 open (needs_reviewer 3), oldest 3h",
+        "*Spent*\n$1.50 (overseer $0.25, workers $0.75, dry runs $0.50)",
         ":white_check_mark: *P-1* Fix the build <https://x.test/pr/1>\n:raising_hand: *P-2*",
     ]
+
+
+@pytest.mark.parametrize(
+    ("digest", "spent"),
+    [
+        ({"spend": {"total": None, "workers": None}}, ["*Spent*\nnone reported"]),
+        ({}, []),  # a canopy from before digests carried spend
+    ],
+)
+def test_a_slack_digest_says_what_was_spent_when_canopy_sends_it(digest: dict[str, Any], spent: list[str]) -> None:
+    texts = _texts(slack.blocks({"repo": "/r/api", "digest": digest}))
+    assert [t for t in texts if t.startswith("*Spent*")] == spent
 
 
 def test_slack_blocks_stay_within_slacks_limit() -> None:

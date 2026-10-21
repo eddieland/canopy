@@ -162,9 +162,11 @@ delivery starts no window.
 
 ### Digest
 
-A sink with `digest_every_minutes` gets a summary every interval: ticks, runs, the open attention list, and the workers
-running. It is sent even when nothing happened: a missing digest shows ticks stopped, which canopy cannot report
-itself. No model writes it; a report needing judgment is a chore (§19).
+A sink with `digest_every_minutes` gets a summary every interval: ticks, runs, what the runs that started in it cost by
+kind (§11), the open attention list, and the workers running. It is sent even when nothing happened: a missing digest
+shows ticks stopped, which canopy cannot report itself. No model writes it; a report needing judgment is a chore (§19).
+With `digest_min_usd`, a due digest waits until the runs since the last one cost at least that much: the sink hears of
+spend, at most once an interval, and gives up the heartbeat.
 
 ### Formats
 
