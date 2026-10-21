@@ -14,6 +14,10 @@ The repositories this plan covers, each at its PR's head on branch `agent/PROJ-1
 
 Their pull requests: `https://github.com/acme/api/pull/7`.
 
+Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`, and `canopy_git_show`, read each one's
+history: where its branch leaves its base, the diff and commits since, and a file as it was. Name the repository with
+`repo`, as above.
+
 ## Authorization
 
 Before any other work, read PROJ-1 through the tracker. If it is closed, or carries none of the labels `agent-ready-tester`, the overseer should not have dispatched you: write no plan, and report `failed` with a summary that starts `not authorized:` and says which it was.
