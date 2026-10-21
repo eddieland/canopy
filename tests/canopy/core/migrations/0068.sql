@@ -1,4 +1,4 @@
--- sha256 of 0068_reread_run_models.sql: ea5fb92796249947c7fcbdd0c75bb4a152601bdb5ea5ef71d10a176adf9df150
+-- sha256 of 0068_reread_run_models.sql: 9ff2264de5b2711e4f3ce7559f165ebfbb4d29469f5f7413a6f0aa6660123159
 
 -- Creates no table. It deletes the read 0054 seeds, so a read is seeded again for the migrations after it.
 INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at)

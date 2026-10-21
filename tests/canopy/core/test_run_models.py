@@ -135,10 +135,13 @@ def test_a_read_replaces_the_models_of_one_before(conn: sqlite3.Connection) -> N
     assert (status, error, attempts) == ("found", None, 2)
 
 
-def test_a_run_read_again_keeps_its_models_when_its_session_is_gone(conn: sqlite3.Connection) -> None:
+def test_a_run_read_again_keeps_its_models_till_a_read_finds_its_session(conn: sqlite3.Connection) -> None:
     w = worker(conn, tick(conn, at(5), None), at(4), "ses_w")
     run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)])
     # As 0068 leaves it: read again, for the variant its models served at.
+    conn.execute("DELETE FROM run_model_reads")
+    run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.FAILED, error="exited 1")
+    assert [m.model for m in run_models.of_run(conn, "runs", w)] == ["a/x"]
     conn.execute("DELETE FROM run_model_reads")
     run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.MISSING)
     assert [m.model for m in run_models.of_run(conn, "runs", w)] == ["a/x"]

@@ -691,14 +691,17 @@ def _served(
     """
     if read is None and not ended:
         return ModelsServed(status="running")
+    if models:
+        # Shown whatever the last read: a read again keeps them while it is due, fails, or finds the session gone.
+        return ModelsServed(
+            status="found",
+            models=[ServedModel(model=m.model, replies=m.replies, cost_usd=m.cost_usd) for m in models],
+        )
     if read is None:
         return ModelsServed(status="unread" if session_id else "no_session")
     match read.status:
         case ModelsRead.FOUND:
-            return ModelsServed(
-                status="found",
-                models=[ServedModel(model=m.model, replies=m.replies, cost_usd=m.cost_usd) for m in models],
-            )
+            return ModelsServed(status="found")
         case ModelsRead.MISSING:
             return ModelsServed(status="missing")
         case ModelsRead.FAILED:
