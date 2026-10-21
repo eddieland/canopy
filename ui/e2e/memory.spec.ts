@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { openRepoPicker, settled, signIn } from './helpers.ts'
 
 // The mock journal has ticket notes in use and lessons recording (canopy/serve/mock.py, `_memory`).
 
@@ -141,7 +141,7 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await expect(page.getByTestId('run-memory')).toHaveCount(0)
 })
 
-test('the memory page narrows every panel by words, a repository, and a lesson’s standing, kept in the URL', async ({
+test('the memory page narrows every panel by words, repositories, and a lesson’s standing, kept in the URL', async ({
     page,
 }) => {
     await page.goto('memory')
@@ -160,16 +160,21 @@ test('the memory page narrows every panel by words, a repository, and a lesson�
         notes.getByText('no note says “billing”, and no ticket with notes has it in its key or title'),
     ).toBeVisible()
 
-    await page.getByRole('navigation', { name: 'Filter by repository' }).getByRole('link', { name: 'api' }).click()
+    const picker = page.getByRole('button', { name: /^Filter by repository: /u })
+    const repos = await openRepoPicker(picker)
+    await repos.getByRole('option', { name: 'api', exact: true }).click()
     await expect(page).toHaveURL(/[?&]repo=api/u)
     await expect(notes.getByTestId('memory-notes-every-repo')).toBeVisible()
     await expect(lessons.getByText('no lessons with “billing” for api')).toBeVisible()
+    // A second repository widens it: lesson 8 is web's.
+    await repos.getByRole('option', { name: 'web', exact: true }).click()
+    await expect(page).toHaveURL(/[?&]repo=api%2Cweb/u)
+    await expect(lessons.getByTestId('memory-8')).toBeVisible()
 
-    // Back to everything: the chips and the field undo it.
-    await page
-        .getByRole('navigation', { name: 'Filter by repository' })
-        .getByRole('link', { name: 'every repository' })
-        .click()
+    // Back to everything: the picker and the field undo it.
+    await repos.getByRole('option', { name: 'every repository' }).click()
+    await page.keyboard.press('Escape')
+    await expect(picker).toHaveAccessibleName('Filter by repository: every repository')
     await page.getByRole('button', { name: 'Clear the filter' }).click()
     await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('2')
 

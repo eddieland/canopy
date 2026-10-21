@@ -114,6 +114,23 @@ async function promoteAsWritten() {
     fireEvent.click(button)
 }
 
+/**
+ * Opens the form's repository picker, its button saying `chosen`, once the workspace's repositories are read, and
+ * returns its list, which opens over the page rather than in the form.
+ */
+async function servedTo(form: HTMLElement | undefined, chosen: string): Promise<HTMLElement> {
+    const scope = form === undefined ? screen : within(form)
+    fireEvent.click(await scope.findByRole('button', { name: `Served to runs in: ${chosen}` }))
+    return screen.getByRole('listbox', { name: 'Repositories' })
+}
+
+/** The names a picker's list offers, in order. */
+function optionNames(list: HTMLElement): (string | null)[] {
+    return within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+}
+
 describe('ProposalActions', () => {
     it("opens the promote form on the proposal's words, saying it replaces no lesson, and where", async () => {
         renderIn(<ProposalActions proposal={ENTRY} onSaid={vi.fn<(said: string) => void>()} />)
@@ -128,9 +145,9 @@ describe('ProposalActions', () => {
             )
         })
         // A proposal for one repository keeps it unless another is named: no `every repository` to pick.
-        const repos = within(form).getAllByRole('radio')
-        expect(repos.map((r) => r.textContent)).toEqual(['web', 'api', 'mobile'])
-        expect(repos[0]?.getAttribute('aria-checked')).toBe('true')
+        const repos = await servedTo(form, 'web')
+        expect(optionNames(repos)).toEqual(['web', 'api', 'mobile'])
+        expect(within(repos).getByRole('option', { name: 'web' }).getAttribute('aria-checked')).toBe('true')
         expect(within(form).queryByTestId('promote-private')).toBeNull()
     })
 
@@ -166,7 +183,7 @@ describe('ProposalActions', () => {
         fireEvent.change(field, { target: { value: '   ' } })
         expect(save.disabled).toBe(true)
         fireEvent.change(field, { target: { value: 'Run the tests once.' } })
-        fireEvent.click(await screen.findByRole('radio', { name: 'mobile' }))
+        fireEvent.click(within(await servedTo(undefined, 'web')).getByRole('option', { name: 'mobile' }))
         fireEvent.click(save)
         await vi.waitFor(() => {
             expect(sent).toEqual([
@@ -383,13 +400,15 @@ describe('NoteActions', () => {
         answer = Response.json(promoted({ source: NOTE, superseded: null }))
         renderIn(<NoteActions note={NOTE} onSaid={vi.fn<(said: string) => void>()} />)
         fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
-        const repos = await screen.findAllByRole('radio')
-        expect(repos.map((r) => r.textContent)).toEqual(['every repository', 'api', 'mobile', 'web'])
-        expect(repos[0]?.getAttribute('aria-checked')).toBe('true')
+        const repos = await servedTo(undefined, 'every repository')
+        expect(optionNames(repos)).toEqual(['every repository', 'api', 'mobile', 'web'])
+        expect(within(repos).getByRole('option', { name: 'every repository' }).getAttribute('aria-checked')).toBe(
+            'true',
+        )
         expect(screen.getByTestId('promote-replaces').textContent).toBe(
             'No lesson is in force under flaky-checkout: it replaces none.',
         )
-        fireEvent.click(screen.getByRole('radio', { name: 'api' }))
+        fireEvent.click(within(repos).getByRole('option', { name: 'api' }))
         fireEvent.click(screen.getByRole('button', { name: 'Promote memory:2' }))
         await vi.waitFor(() => {
             expect(sent).toEqual([{ path: '/api/memory/2/promote', body: { text: null, repo: 'api' } }])
@@ -414,14 +433,10 @@ describe('LessonActions', () => {
         const field = within(form).getByRole<HTMLTextAreaElement>('textbox', { name: 'The lesson, in your words' })
         expect(field.value).toBe(LESSON.text)
         // Every repository first, as --every-repo, then the lesson's own, then the workspace's others.
-        await vi.waitFor(() => {
-            expect(
-                within(form)
-                    .getAllByRole('radio')
-                    .map((r) => r.textContent),
-            ).toEqual(['every repository', 'web', 'api', 'mobile'])
-        })
-        expect(within(form).getByRole('radio', { name: 'web' }).getAttribute('aria-checked')).toBe('true')
+        const repos = await servedTo(form, 'web')
+        expect(optionNames(repos)).toEqual(['every repository', 'web', 'api', 'mobile'])
+        expect(within(repos).getByRole('option', { name: 'web' }).getAttribute('aria-checked')).toBe('true')
+        fireEvent.keyDown(repos, { key: 'Escape' })
         expect(within(form).getByTestId('edit-keeps').textContent).toContain(
             "It replaces memory:8, which stays in the lesson's versions with its words.",
         )
@@ -488,7 +503,7 @@ describe('LessonActions', () => {
         renderIn(<LessonActions lesson={LESSON} onSaid={vi.fn<(said: string) => void>()} />)
         fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
         const form = screen.getByRole('form', { name: 'Edit memory:8' })
-        fireEvent.click(await within(form).findByRole('radio', { name: 'every repository' }))
+        fireEvent.click(within(await servedTo(form, 'web')).getByRole('option', { name: 'every repository' }))
         fireEvent.click(within(form).getByRole('button', { name: 'Edit memory:8' }))
         await vi.waitFor(() => {
             expect(sent).toEqual([{ path: '/api/memory/8/edit', body: { text: null, repo: null, every_repo: true } }])
