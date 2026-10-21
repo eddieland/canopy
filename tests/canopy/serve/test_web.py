@@ -670,7 +670,7 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
     # The reply, from the server's thread, woke the wait as `canopy reply` does: a minute in, not fifteen.
     assert sum(time_.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
     text = out.getvalue()
-    assert f"web UI      {base}/" in text
+    assert f"  web UI  {base}/" in text
     # Stopping the loop stopped the server.
     with pytest.raises(httpx2.TransportError):
         httpx2.get(f"{base}/api/session", timeout=1)
