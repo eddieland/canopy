@@ -105,6 +105,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
+    from canopy.serve.schema import SpendKind
 
 # How many runs that ended the runs list carries, after the running ones.
 RECENT_RUNS = 50
@@ -224,7 +225,11 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
         totals=_spend_costs(found.totals),
         ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
-        unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
+        unpriced=[
+            SpendUnpriced(kind=kind, runs=u.runs, unpriced=u.unpriced)
+            for u in found.unpriced
+            if (kind := _web_kind(u.kind)) is not None
+        ],
         idle_share=found.idle_share,
         idle_ticks=list(starmap(tick_of, spending.idle_ticks(ctx.conn, found.since, found.until))),
         done=found.done,
@@ -254,7 +259,7 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
         ],
         tools=[
             SpendTool(
-                kind=t.kind,
+                kind=kind,
                 tool=t.tool,
                 runs=t.runs,
                 calls=t.calls,
@@ -263,12 +268,31 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
                 est_tokens=t.est_tokens,
             )
             for t in found.tools
+            if (kind := _web_kind(t.kind)) is not None
         ],
         models=[
-            SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
+            SpendModel(kind=kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
             for m in found.models
+            if (kind := _web_kind(m.kind)) is not None
         ],
     )
+
+
+def _web_kind(kind: spending.Kind) -> SpendKind | None:
+    """A kind of run as the web UI's spend names it; None for task runs, which the web UI does not show apart yet.
+
+    Their cost is in every total all the same (DESIGN §36: tasks in the web UI come later).
+
+    Returns:
+        The kind, or None for `tasks`.
+    """
+    match kind:
+        case "tasks":
+            return None
+        case "overseer" | "workers" | "plans" | "chores" | "reviews":
+            return kind
+        case _:
+            assert_never(kind)
 
 
 def _spend_costs(costs: spending.Costs) -> SpendCosts:

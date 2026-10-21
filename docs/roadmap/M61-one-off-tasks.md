@@ -56,4 +56,9 @@ Accept: on the operator's workspace, an exploring task that pushes a branch and 
 submitted with `--project`, that files two unlabeled tickets there and leaves a report; each shown by
 `canopy show task:N`, and neither touching any existing ticket.
 
-Status: not started. Designed 2026-10-21 (DESIGN §36).
+Status: in progress. Designed 2026-10-21 (DESIGN §36). Stage 1 built 2026-10-21: `canopy task submit`, `task list`,
+`show task:N`, and `stop task:N [--now]`; the `tasks` and `task_runs` tables; the tick starting queued tasks in code
+under `capacity.max_tasks`; `canopy _task` running the private worker on `<branch_prefix>task/N`, never forced; task
+runs reconciled, counted by capacity, spend, and health; TRUST_MODEL T1, T3, and T6. The tick leases a task's slot under
+the dispatch lock, as a review's is, so a pool with no free slot leaves the task queued rather than failing its one
+run. Its live check, an exploring task that pushes a branch and opens a draft PR, waits on the operator.

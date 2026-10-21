@@ -639,11 +639,25 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
         assert "next tick in 15m at" in out.getvalue()
 
 
+#: The operator's acts that are commands, for `test_the_operators_acts_end_the_wait`: what runs before the loop, if
+#: anything, and what runs at its first wait. A dry tick starts no task, so one submitted before the loop is queued.
+OPERATOR_COMMANDS: dict[str, tuple[list[str] | None, list[str]]] = {
+    "start": (None, ["start", KEY]),
+    "stop": (["start", KEY], ["stop", KEY]),
+    "submit a task": (None, ["task", "submit", "Explore the cache."]),
+    "stop a task": (["task", "submit", "Explore the cache."], ["stop", "task:1"]),
+    "set a notice": (None, ["notice", "CI is down."]),
+    "clear a notice": (["notice", "CI is down."], ["notice", "--clear"]),
+}
+
+
 @pytest.mark.parametrize(
     ("act", "woken", "message"),
     [
-        ("start", "starts", "a ticket started or stopped ended the wait"),
-        ("stop", "starts", "a ticket started or stopped ended the wait"),
+        ("start", "starts", "a ticket or task started or stopped ended the wait"),
+        ("stop", "starts", "a ticket or task started or stopped ended the wait"),
+        ("submit a task", "starts", "a ticket or task started or stopped ended the wait"),
+        ("stop a task", "starts", "a ticket or task started or stopped ended the wait"),
         ("grant attempts", "grant", "a grant ended the wait"),
         ("grant reviews", "grant", "a grant ended the wait"),
         ("set a notice", "notice", "a notice to workers set or cleared ended the wait"),
@@ -662,23 +676,18 @@ def test_the_operators_acts_end_the_wait(
 ) -> None:
     loop_config(canopy_env, interval=15, cap=120 if pacing_on else 15)
     ctx = context(canopy_env)
-    if act == "stop":
-        assert main(["start", KEY]) == 0  # before the loop: its first tick sees it
-    elif act == "clear a notice":
-        assert main(["notice", "CI is down."]) == 0
+    before, during = OPERATOR_COMMANDS.get(act, (None, None))
+    if before is not None:
+        assert main(before) == 0  # before the loop: its first tick sees it
     time = FakeTime()
 
     def at_first_wait() -> None:
         if len(time.slept) != 1:
             return
-        if act in {"start", "stop"}:
-            assert main([act, KEY]) == 0
+        if during is not None:
+            assert main(during) == 0
         elif act == "grant attempts":
             attempts_granted(ctx.conn, 0)
-        elif act == "set a notice":
-            assert main(["notice", "CI is down."]) == 0
-        elif act == "clear a notice":
-            assert main(["notice", "--clear"]) == 0
         else:
             reviews_granted(ctx.conn, 0)
 

@@ -96,7 +96,9 @@ own and does it in this process, its reviewer reporting what the test gives it:
         reviewed = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
         assert (reviewed.status, reviewed.row.ticket_key) == ("done", "PROJ-1")
 
-A review is held at work as a run is, with `starts_review`. The overseer's own commands are moves too: `overseer` runs
+A review is held at work as a run is, with `starts_review`. A task the operator submitted (DESIGN §36) runs as the
+tick that starts it goes on: `tick(task=...)` scripts its worker, and the tick gives its task runs back, ended, as
+`tasks`, or with `hold=True` held at work, as `tasking`. The overseer's own commands are moves too: `overseer` runs
 one in a tick of its own, or in the one `ticking` holds open, so what several raise is the attention list:
 
     def test_two_items_raised_in_one_tick(scenario: Scenario) -> None:
@@ -141,8 +143,8 @@ from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, records
-from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
+from canopy.core import db, records, tasks
+from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TaskRunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -167,6 +169,7 @@ from tests.canopy.helpers import (
     seen,
     state_block,
     wait_for_run,
+    wait_for_task_run,
     worker_does,
 )
 from tests.canopy.review_helpers import PR
@@ -188,11 +191,12 @@ TOLD_LINES = 2
 HOLD_TIMEOUT = 60
 
 #: The roles a held run's agent may play, each scripted by its own `FAKE_<ROLE>_*` variables: a worker, a private
-#: ticket's, a planner, and a reviewer. The overseer is never held.
+#: ticket's or a task's, a planner, and a reviewer. The overseer is never held.
 HELD_ROLES = ("WORKER", "WORKER_PRIVATE", "PLANNER", "REVIEWER")
 
 #: The command a held agent runs first, with the gates' directory: it says it is at work, in `<run id>.working`, its run
-#: id as CANOPY_RUN_ID names it (`7`, or `review-7` for a review), then waits for `<run id>.open` before it goes on to
+#: id as CANOPY_RUN_ID names it (`7`, `review-7` for a review, or `task-7` for a task run), then waits for
+#: `<run id>.open` before it goes on to
 #: what its script says. It gives up after HOLD_TIMEOUT, failing, so an agent no test lets go of does not outlast its
 #: test by much. An agent with no run id is not one a test holds, and goes on at once.
 GATE = f"""
@@ -407,6 +411,44 @@ class Reviewing:
         return f"{_reviewed(self.row)}: at work"
 
 
+@dataclass(frozen=True)
+class Tasking:
+    """A task run held at work (DESIGN §36): its worker started and waits until the test says what becomes of it."""
+
+    #: The scenario the task run is part of.
+    scenario: "Scenario"
+    #: The task run's id.
+    id: int
+
+    @property
+    def row(self) -> records.TaskRun:
+        """The task run's row as it stands."""
+        return present(tasks.get_run(self.scenario.conn, self.id))
+
+    def finishes(self) -> records.TaskRun:
+        """Let the worker go on to what its script says, and wait for the task run to end.
+
+        Returns:
+            The task run, closed.
+        """
+        (self.scenario.gates / f"task-{self.id}.open").touch()
+        run = wait_for_task_run(self.scenario.conn, self.id, timeout=HOLD_TIMEOUT)
+        self.scenario.story.append(_tasked(run))
+        return run
+
+    def dies(self) -> None:
+        """Kill the task run's own process, `canopy _task`, at once, as a crash or a machine's shutdown would.
+
+        Its row stays `running`, and the worker it started stays at work, for the next tick's reconcile to find.
+        """
+        _killed(present(self.row.pid), f"task run {self.id}'s `canopy _task`")
+        self.scenario.story.append(f"{_tasked(self.row)}: its `canopy _task` dies, its worker still at work")
+
+    def __str__(self) -> str:
+        """The task run in a line, for a failed step's message: its task, and that it is at work."""
+        return f"{_tasked(self.row)}: at work"
+
+
 class Refused(UserList[tuple[str, str]]):
     """What canopy refused: the decisions of the tick it refused in, as (action, rationale), the refusal and the
     attention it raised, if any, and beside them that tick, its decisions whole, and what the refused command printed.
@@ -447,6 +489,10 @@ class Ticked:
     printed: Printed
     #: The runs it started and left at work, with `hold=True`.
     working: Sequence[Working] = ()
+    #: The task runs it started before its overseer (DESIGN §36), each waited for until it ended.
+    tasks: Sequence[records.TaskRun] = ()
+    #: The task runs it started and left at work, with `hold=True`.
+    tasking: Sequence[Tasking] = ()
 
     @property
     def actions(self) -> list[str]:
@@ -458,6 +504,8 @@ class Ticked:
         lines = [f"{self.tick.status}: {self.tick.summary}"]
         lines += map(_decided, self.decisions)
         lines += [f"  {r}" for r in [*self.runs, *self.working]]
+        lines += [f"  {_tasked(r)}" for r in self.tasks]
+        lines += [f"  {t}" for t in self.tasking]
         # What `canopy tick` printed no longer reaches the test's own output, so what went wrong in it is told here.
         lines += [f"  {line}" for line in self.printed.err.splitlines() if line.strip()]
         return "\n".join(lines)
@@ -478,6 +526,8 @@ class Scenario:
     held: list[int] = field(default_factory=list, init=False)
     #: Each review run held so far, likewise.
     held_reviews: list[int] = field(default_factory=list, init=False)
+    #: Each task run held so far, likewise.
+    held_tasks: list[int] = field(default_factory=list, init=False)
     #: The tick `ticking` holds open for the overseer's commands, if one is.
     open_tick: int | None = field(default=None, init=False)
 
@@ -486,6 +536,7 @@ class Scenario:
         *commands: list[str],
         worker: Worker | None = None,
         workers: Mapping[str, Script] | None = None,
+        task: Worker | None = None,
         dry_run: bool = False,
         hold: bool = False,
         code: int = 0,
@@ -497,10 +548,12 @@ class Scenario:
 
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
-        for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
-        or kill. The overseer records `queried`, the keys its query found, when the query is due, or no query at all if
-        None; it ends on `result`, by default the line that ends a tick, and runs as `overseer` says (`exit_code`,
-        `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
+        for. Each task run the tick starts before its overseer (DESIGN §36) is waited for too, its worker, the private
+        worker, doing `task`. With `hold`, each run and task run is held at work instead, and the tick's runs are left
+        `working`, and its task runs `tasking`, for the test to finish or kill. The overseer records `queried`, the
+        keys its query found, when the query is due, or no query at all if None; it ends on `result`, by default the
+        line that ends a tick, and runs as `overseer` says (`exit_code`, `says`, ...). The tick must exit `code`, and a
+        failure says how it ended instead.
 
         Returns:
             What the tick did.
@@ -511,6 +564,8 @@ class Scenario:
             stack.enter_context(overseer_does(*commands, result=result, queried=recorded, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
+            if task is not None:
+                stack.enter_context(task)
             stack.enter_context(_each_ticket(worker, workers or {}, commands))
             if hold:
                 stack.enter_context(self._held())
@@ -520,9 +575,13 @@ class Scenario:
             # A run is detached from the tick, so the worker's script must last until it ends.
             ids = [int(r["id"]) for r in started]
             runs = [] if hold else [self.ran(wait_for_run(self.conn, run_id)) for run_id in ids]
+            tasked = self.conn.execute("SELECT id FROM task_runs WHERE tick_id = ? ORDER BY id", (tick.id,))
+            task_ids = [int(r["id"]) for r in tasked.fetchall()]
+            task_runs = [] if hold else [wait_for_task_run(self.conn, run_id) for run_id in task_ids]
         working = [self._at_work(run_id) for run_id in ids] if hold else []
+        tasking = [self._tasking(run_id) for run_id in task_ids] if hold else []
         made = db.decisions_for_tick(self.conn, tick.id)
-        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), made, runs, printed, working)
+        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), made, runs, printed, working, task_runs, tasking)
         self.story.append(f"tick {tick.id}, exits {exited}: {ticked}")
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
@@ -836,20 +895,21 @@ class Scenario:
         return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
 
     def close(self) -> None:
-        """Stop what is left of every run held at work, its `canopy _run` and its worker both, and of every review run,
-        its `canopy _review` and its reviewer, as the test ends."""
+        """Stop what is left of every run held at work, its `canopy _run` and its worker both, of every review run,
+        its `canopy _review` and its reviewer, and of every task run, its `canopy _task` and its worker, as the test
+        ends."""
         for run_id in self.held:
             row = present(db.get_run(self.conn, run_id))
             if row["status"] == RunStatus.RUNNING:
-                for pid in (row["pid"], row["worker_pid"]):
-                    if pid is not None:
-                        procs.kill_group(int(pid))
+                _stop_groups(row["pid"], row["worker_pid"])
         for run_id in self.held_reviews:
             review = present(db.get_review_run(self.conn, run_id))
             if review.status == ReviewRunStatus.RUNNING:
-                for pid in (review.pid, review.agent_pid):
-                    if pid is not None:
-                        procs.kill_group(pid)
+                _stop_groups(review.pid, review.agent_pid)
+        for run_id in self.held_tasks:
+            run = present(tasks.get_run(self.conn, run_id))
+            if run.status is TaskRunStatus.RUNNING:
+                _stop_groups(run.pid, run.agent_pid)
 
     def _tell(self, step: str, tick_id: int) -> None:
         self.story.append("\n".join([step, *map(_decided, db.decisions_for_tick(self.conn, tick_id))]))
@@ -902,6 +962,20 @@ class Scenario:
             assert time.monotonic() < deadline, f"review run {run_id}'s reviewer was not at work after {HOLD_TIMEOUT}s"
             time.sleep(0.02)
         return Reviewing(self, run_id)
+
+    def _tasking(self, run_id: int) -> Tasking:
+        self.held_tasks.append(run_id)
+        working = self.gates / f"task-{run_id}.working"
+        deadline = time.monotonic() + HOLD_TIMEOUT
+        while True:
+            run = present(tasks.get_run(self.conn, run_id))
+            # The worker's pid too, which `_task` records as it starts the worker, so `close` knows what to stop.
+            if working.exists() and run.agent_pid is not None:
+                break
+            assert run.status is TaskRunStatus.RUNNING, f"{_tasked(run)}, before its worker was at work"
+            assert time.monotonic() < deadline, f"task run {run_id}'s worker was not at work after {HOLD_TIMEOUT}s"
+            time.sleep(0.02)
+        return Tasking(self, run_id)
 
 
 # What the overseer does in a tick: each is the command it runs, for `Scenario.tick`.
@@ -1064,6 +1138,19 @@ def _named(row: sqlite3.Row, reasons: Sequence[ResumeReason]) -> str:
 def _reviewed(row: records.ReviewRun) -> str:
     ticket = f" for {row.ticket_key}" if row.ticket_key else ""
     return f"review run {row.id} of {row.pr_url} at {row.sha[:7]}{ticket}"
+
+
+def _tasked(run: records.TaskRun) -> str:
+    result: dict[str, Any] = json.loads(run.result_json or "{}")
+    said = [str(result[k]) for k in ("summary", "question", "harness") if result.get(k)]
+    return ": ".join([f"task run {run.id} of task:{run.task_id}", run.status, *said])
+
+
+def _stop_groups(*pids: int | None) -> None:
+    # Each of a held run's processes that has a pid leads its own group: kill what is left of it.
+    for pid in pids:
+        if pid is not None:
+            procs.kill_group(int(pid))
 
 
 def _killed(pid: int, what: str) -> None:

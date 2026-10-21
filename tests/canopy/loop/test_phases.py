@@ -543,3 +543,17 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
     }
     # In shadow: the tick's decisions are the overseer's alone.
     assert [d.action for d in db.decisions_for_tick(scenario.conn, tick_id)] == ["queried", "wait", "wait"]
+
+
+def test_a_tasks_branch_is_no_tickets_work(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    # DESIGN §36: `<branch_prefix>task/N` is a shape no ticket's branch takes, even a ticket keyed `task`'s.
+    canopy_env.configure(canopy_env.user_file, {"connect": TRACKER})
+    seen(conn, canopy_env, "task")
+    observe_ticket(conn, "task")
+    branches_read(conn)
+    conn.commit()
+    without = derived(canopy_env)
+    branches_read(conn, "agent/task/1")
+    conn.commit()
+    assert derived(canopy_env) == without
+    assert all(d.repo is None for d in without)

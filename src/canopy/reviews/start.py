@@ -481,7 +481,9 @@ def _check_limits(
     busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews)
     if busy_reviews >= cfg.capacity.max_reviews:
         raise Refusal("review_capacity", f"{busy_reviews} of {cfg.capacity.max_reviews} review runs are running")
-    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + len(planned_runs)
+    # A task's run holds a slot too (DESIGN §36).
+    tasks = len(db.running_runs(ctx.conn, "task_runs"))
+    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + tasks + len(planned_runs)
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers and reviews are running")
 

@@ -1,4 +1,4 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish.
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, start tasks, check `canopy`, run the overseer, publish.
 
 A tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import shutil
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
@@ -38,6 +38,7 @@ from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import drafted, policy, reconcile
+from canopy.runs import tasks as task_runs
 from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
@@ -319,12 +320,15 @@ def _steps(
         How the tick ended.
     """
     try:
-        # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
+        # Reviews and tasks first: a review or task run whose own process is gone returns its slot, and then frees
+        # worker capacity.
         review_reconcile.run(ctx, log)
+        task_runs.reconcile(ctx, log)
         reconciled = reconcile.run(ctx, log)
     except pools.PoolError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish(TickStatus.RECONCILE_FAILED, str(e))
+    reconciled = _start_tasks(ctx, tick_id, log, reconciled, dry_run=dry_run)
     chore_reconcile.run(ctx, log)
     memory_reconcile.run(ctx, log)
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
@@ -377,6 +381,33 @@ def _steps(
         if not dry_run:
             acknowledge.note(ctx.conn, tick_id)
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
+
+
+def _start_tasks(
+    ctx: Context,
+    tick_id: int,
+    log: logs.TickAdapter,
+    reconciled: reconcile.Reconciled,
+    *,
+    dry_run: bool,
+) -> reconcile.Reconciled:
+    """Start the queued tasks the guards let start, in code, before the overseer runs (DESIGN §36).
+
+    The overseer sees nothing of a task but the slots its runs hold: the capacity it plans with counts them as running.
+    A start that raises is logged and leaves the task queued: a task never holds up the tick.
+
+    Returns:
+        `reconciled`, its capacity counting the task runs started.
+    """
+    try:
+        started = task_runs.start_queued(ctx, tick_id, log, dry_run=dry_run)
+    except Exception as e:
+        log.exception("starting tasks raised", extra={"error": str(e)})
+        return reconciled
+    if not started:
+        return reconciled
+    capacity = replace(reconciled.capacity, running=reconciled.capacity.running + len(started))
+    return replace(reconciled, capacity=capacity)
 
 
 def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:

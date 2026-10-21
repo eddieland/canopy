@@ -51,6 +51,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy send review:ID N...` | Sends findings to a worker: a reply on the review's ticket, the operator's go-ahead. |
 | `canopy start URL --review` | Reviews another's PR once, at its head; nothing is posted. `--notes TEXT`: what to look at; `--persona NAME`: its voice, again for one review in each. |
 | `canopy stop URL` | Ends a PR's review request; a running review finishes. `canopy show URL` shows it and its reviews. |
+| `canopy task submit TEXT` | One-off work in your own words, about no ticket (`-` reads stdin; `--repo`, `--project`): the next tick runs it on `<branch_prefix>task/N`. `canopy task list`; `canopy show task:N`; `canopy stop task:N [--now]`. |
 | `canopy review show [ID]` | canopy's PR reviews of the last 14 days; with ID, one in full. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | One more run of KIND for a ticket at its attempt limit; `--runs N` for more. |

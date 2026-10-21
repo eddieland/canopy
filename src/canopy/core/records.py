@@ -61,6 +61,7 @@ from canopy.core.vocab import (
     SeenKind,
     SourceKind,
     StartStatus,
+    TaskRunStatus,
     TicketState,
     TickStatus,
 )
@@ -256,6 +257,68 @@ class ReviewRun(Row):
     #: The persona it ran in, and the sha256 of its text (DESIGN §31); None for a review from before canopy recorded it.
     persona: str | None
     persona_digest: str | None
+
+
+@dataclass(frozen=True)
+class Task(Row):
+    """A one-off task the operator submitted (DESIGN §36): their text, its repository, and whether they stopped it."""
+
+    TABLE: ClassVar[str] = "tasks"
+
+    id: int
+    #: The operator's words: the task's instruction.
+    text: str
+    #: The repository it runs in, by its name in the map.
+    repo: str
+    #: The tracker project its tickets go in; None when the submission named none.
+    project: str | None
+    submitted_at: str
+    #: `cli` or `web`: where the operator submitted it.
+    channel: str
+    #: When the operator stopped it; None while it is not.
+    stopped_at: str | None
+
+
+@dataclass(frozen=True)
+class TaskRun(Row):
+    """A run of a task (DESIGN §36): the slot it leased, its branch, the commit it left pushed, and how it ended."""
+
+    TABLE: ClassVar[str] = "task_runs"
+
+    id: int
+    task_id: int
+    #: The tick that started it.
+    tick_id: int
+    repo: str
+    #: The task's branch, `<branch_prefix>task/<N>`.
+    branch: str
+    #: The commit the branch held on origin once its push was verified; None when nothing was pushed.
+    head: str | None
+    slot_path: str
+    lease_id: str
+    lease_holder: str
+    base_branch: str
+    pool: PoolKind
+    #: What the slot's `.git` file held when `_task` started, for a reconcile that tidies the slot after it.
+    git_link: bytes | None
+    pid: int | None
+    agent_pid: int | None
+    started_at: str
+    ended_at: str | None
+    status: TaskRunStatus
+    result_json: str | None
+    log_path: str
+    session_id: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    tokens_peak_context: int | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    definitions_digest: str | None
 
 
 @dataclass(frozen=True)
@@ -1049,7 +1112,7 @@ class Message(Row):
     TABLE: ClassVar[str] = "messages"
 
     id: int
-    #: `ticket`, and the ticket's key.
+    #: `ticket` and the ticket's key, `chore` and its name, or `task` and its number.
     subject_kind: str
     subject_id: str
     at: str
@@ -1068,6 +1131,8 @@ class Message(Row):
     author: str | None
     commented_at: str | None
     truncated: bool
+    #: A task run's message: the task run that reported it (DESIGN §36).
+    task_run_id: int | None
 
 
 @dataclass(frozen=True)

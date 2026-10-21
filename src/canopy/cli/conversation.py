@@ -1,8 +1,9 @@
 """The operator's verbs (DESIGN §22, D075): on tickets, chores, and runs, pausing and resuming the loop, and notices.
 
 `pause` and `resume` act on the loop (§6), and `notice` tells every later run about a passing condition (§8). The rest
-take a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, `run:ID`, or
-`review:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`, `dismiss`, and `send` write
+take a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, `run:ID`,
+`review:ID`, or `task:N`, whose `show` and `stop` are `cli/tasks.py`'s. A kind refuses a verb it does not take.
+`start`, `stop`, `reply`, `forget`, `dismiss`, and `send` write
 through `canopy.core.conversation`, which every channel shares, or for a PR's review request (`start URL --review`,
 `stop URL`) through `canopy.core.review_requests`, `grant` through `canopy.runs.policy`, or `canopy.reviews.grants`
 for a PR's reviews, `pause` and `resume` through `canopy.core.pause`, and `notice` through `canopy.core.notice`; all
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from canopy.cli import tasks as task_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import chore_line, named, phase_of, prs_of, result_of, spent
@@ -284,19 +286,22 @@ def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, cho
 @click.option("--now", is_flag=True, help="Also end the run working it now, instead of letting it finish.")
 @click.pass_context
 def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
-    """Stop working a started ticket, or stop reviewing a PR you asked canopy to review.
+    """Stop working a started ticket or a task (`task:N`), or stop reviewing a PR you asked canopy to review.
 
-    A ticket is not dispatched again until `canopy start`. A running run finishes, unless --now ends it: its processes
-    are killed, its slots returned, and it ends `stopped`. A PR's review request ends; a review of it already running
-    finishes.
+    A ticket is not dispatched again until `canopy start`, and a task is never started again; one still queued is
+    dropped. A running run finishes, unless --now ends it: its processes are killed, its slots returned, and it ends
+    `stopped`. A PR's review request ends; a review of it already running finishes.
     """
     _operator("stop")
     subject = _ref(ref, "stop")
     if subject.kind == conversation.PR:
         if now:
-            raise click.UsageError("--now is for a ticket's run; a PR's running review finishes")
+            raise click.UsageError("--now is for a ticket's or a task's run; a PR's running review finishes")
         return _stop_review(click_ctx, subject)
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.TASK:
+        task_cli.stop(ctx, int(subject.id), now=now)
+        return 0
     try:
         stopped = conversation.stop(ctx.conn, subject, channel=CLI)
     except conversation.Refused as r:
@@ -589,11 +594,12 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
 )
 @click.pass_context
 def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
-    """Show a ticket's phase, PRs, plan, recent runs, and conversation, a run (`run:ID`), a chore, or a PR.
+    """Show a ticket's phase, PRs, plan, recent runs, and conversation, a run (`run:ID`), a chore, a PR, or a task.
 
     A ticket's newest plan is printed as its file stands, with its status; --plans prints every plan, oldest first, and
     the open comments on the newest. A chore is `chore:NAME`. A PR, by its URL, shows your review request on it, if
-    you made one, and canopy's reviews of it.
+    you made one, and canopy's reviews of it. A task, `task:N`, shows its text, each run's branch and the commit it
+    left pushed, and its conversation.
     """
     subject = _ref(ref, "show")
     if every_plan and subject.kind != conversation.TICKET:
@@ -601,6 +607,8 @@ def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
     ctx = open_context(click_ctx)
     if subject.kind == conversation.RUN:
         _show_run(ctx, int(subject.id))
+    elif subject.kind == conversation.TASK:
+        task_cli.show(ctx, int(subject.id))
     elif subject.kind == conversation.CHORE:
         _show_chore(ctx, subject.id)
     elif subject.kind == conversation.PR:

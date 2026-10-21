@@ -21,9 +21,9 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, prompts, records, replies, sql, workspace
+from canopy.core import config, db, plans, prompts, records, replies, sql, tasks, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import TaskRunStatus, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors
 from canopy.runs import drafted
@@ -305,6 +305,17 @@ def wait_for_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> 
             return row
         time.sleep(0.05)
     raise AssertionError(f"run {run_id} still running after {timeout}s")
+
+
+def wait_for_task_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> records.TaskRun:
+    """Wait for a detached task run to close its row (DESIGN §36)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        run = present(tasks.get_run(conn, run_id))
+        if run.status is not TaskRunStatus.RUNNING:
+            return run
+        time.sleep(0.05)
+    raise AssertionError(f"task run {run_id} still running after {timeout}s")
 
 
 def lifelock_left(row: sqlite3.Row | records.Row, timeout: float = 30) -> bool:
