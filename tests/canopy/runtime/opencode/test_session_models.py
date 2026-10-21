@@ -17,20 +17,23 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
 
-def assistant(provider: str, model: str, cost: float) -> dict[str, object]:
-    """An assistant message as `opencode export --sanitize` prints it, its parts redacted."""
-    return {
-        "info": {
-            "id": "msg_2",
-            "role": "assistant",
-            "providerID": provider,
-            "modelID": model,
-            "cost": cost,
-            "tokens": {"input": 10, "output": 5, "reasoning": 0, "cache": {"read": 0, "write": 0}},
-            "path": {"cwd": "[redacted:cwd:msg_2]", "root": "[redacted:root:msg_2]"},
-        },
-        "parts": [{"type": "text", "text": "[redacted:text:prt_1]"}],
+def assistant(provider: str, model: str, cost: float, *, variant: str | None = None) -> dict[str, object]:
+    """An assistant message as `opencode export --sanitize` prints it, its parts redacted.
+
+    OpenCode leaves `variant` out for the model's default.
+    """
+    info: dict[str, object] = {
+        "id": "msg_2",
+        "role": "assistant",
+        "providerID": provider,
+        "modelID": model,
+        "cost": cost,
+        "tokens": {"input": 10, "output": 5, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+        "path": {"cwd": "[redacted:cwd:msg_2]", "root": "[redacted:root:msg_2]"},
     }
+    if variant is not None:
+        info["variant"] = variant
+    return {"info": info, "parts": [{"type": "text", "text": "[redacted:text:prt_1]"}]}
 
 
 #: The user's message, which names the model it asked for rather than one that served.
@@ -102,6 +105,29 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first() -> Non
     assert export.ran == [
         (("opencode", "export", "ses_1", "--sanitize"), Path("/ws"), session_models.TIMEOUT_SECONDS, True),
     ]
+
+
+def test_each_variant_of_a_model_is_counted_on_its_own() -> None:
+    user: dict[str, object] = {
+        "info": {
+            "id": "msg_1",
+            "role": "user",
+            "model": {"providerID": "anthropic", "modelID": "claude-opus", "variant": "asked"},
+        },
+        "parts": [],
+    }
+    export = printing(
+        exported(
+            user,
+            assistant("anthropic", "claude-opus", 0.5, variant="high"),
+            assistant("anthropic", "claude-opus", 0.25),
+            assistant("anthropic", "claude-opus", 0.5, variant="high"),
+        ),
+    )
+    assert read(export) == SessionModels(
+        "found",
+        (ModelUse("anthropic/claude-opus@high", 2, 1.0), ModelUse("anthropic/claude-opus", 1, 0.25)),
+    )
 
 
 def test_a_session_that_made_no_model_call_has_no_models() -> None:
