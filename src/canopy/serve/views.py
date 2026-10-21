@@ -69,6 +69,7 @@ from canopy.serve.schema import (
     SpendBreakdown,
     SpendCosts,
     SpendDay,
+    SpendModel,
     SpendPullRequest,
     SpendTicket,
     SpendTicks,
@@ -257,6 +258,10 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
                 est_tokens=t.est_tokens,
             )
             for t in found.tools
+        ],
+        models=[
+            SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
+            for m in found.models
         ],
     )
 

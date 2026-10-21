@@ -72,6 +72,10 @@ what the week did. The hour that started 24 hours ago is just outside it, so the
 rail's. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
+- **By model**: what each kind of run spent on each model, as the runs' own sessions say, the dearest first under each
+  kind. A run that switched models counts under both. Runs whose model canopy hasn't read yet sit last as **none**,
+  with what they reported costing; a tick reads a few ended runs' sessions, so a fresh day fills in over a few ticks.
+  This is the table to read before and after you canary a model.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned. Every later
   model call of the run reads those again, so a chatty tool costs more than once.
 - **Ticks by what they bought** and **Ticks by what woke them**: the ticks counted and costed by whether they were idle,
