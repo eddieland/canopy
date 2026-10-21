@@ -13,7 +13,8 @@ overseer cost in dollars, tokens, and peak context, and its summary. A `dry run`
 A tick ends:
 
 - `ok`, the usual;
-- `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there;
+- `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there. It still did the
+  chores and whatever else needed nothing from the missing server, then left the attention list alone;
 - `overseer failed`, when the overseer didn't finish its job, such as deciding about every ticket;
 - `canopy unavailable`, when the overseer couldn't run canopy at all, so nothing was decided;
 - `disk low`, when the disk had less free than `loop.min_free_disk_mib`, 2 GiB by default, so the overseer didn't run

@@ -5,8 +5,8 @@ from canopy.core import db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention, duties
 from tests.canopy.helpers import canopy, chore_toml, in_tick, seen, waits
-from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
-from tests.conftest import CanopyEnv
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises, skips_tick
+from tests.conftest import CanopyEnv, GitPool
 
 
 def test_a_tick_that_does_every_duty_closes_ok(scenario: Scenario) -> None:
@@ -89,6 +89,22 @@ def test_a_tick_wide_skip_is_not_held_to_the_duties(scenario: Scenario) -> None:
     scenario.seen("PROJ-1")
     skipped = scenario.tick(skips_tick("mcp_unavailable: tracker"), queried=None, code=1)
     assert skipped.tick.status == "skipped"
+
+
+def test_a_tick_wide_skip_keeps_what_the_overseer_started_before_it(scenario: Scenario, git_pool: GitPool) -> None:
+    # An outage of one server does not hold work that needs nothing from it (DESIGN §15): the run stands.
+    scenario.seen("PROJ-1", "PROJ-2")
+    skipped = scenario.tick(
+        dispatches("PROJ-1"),
+        skips_tick("mcp_unavailable: tracker"),
+        worker=pushes(),
+        queried=None,
+        code=1,
+    )
+    assert skipped.tick.status == "skipped"
+    assert skipped.actions == ["dispatch:implement", "skip"]
+    assert [r.row["status"] for r in skipped.runs] == ["done"]
+    assert git_pool.remote_head("agent/PROJ-1-work") is not None
 
 
 def test_decisions_before_the_overseer_ran_are_the_harnesss(canopy_env: CanopyEnv) -> None:
