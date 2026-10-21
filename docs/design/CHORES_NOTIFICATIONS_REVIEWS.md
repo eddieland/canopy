@@ -295,7 +295,9 @@ D089). A clean review, or a PR at its limit, moves on to `green_unreviewed`; a r
 `changes_requested`. A `resume` carries only undismissed findings of its ticket's own `done` review, and a prompt
 override that drops them fails to render. For other PRs, the overseer reviews each whose head has no `done` review or
 records why it waits, and decides nothing else about them. `review_failed` and `review_limit` are attention items;
-findings are not.
+findings are not. Under `[personas] reviewers` (§31) a head is reviewed once each persona has a `done` review of it:
+until then the state block names the personas it is owed, and after, it shows the head's reviews as one, and a
+`resume` for one of them carries the undismissed findings of each.
 
 ### Review requests
 

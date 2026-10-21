@@ -602,8 +602,9 @@ place a review is: nothing on a PR is canopy's review, whatever it claims, and n
 
 The loop's own PRs, when `reviews.agent_prs` is true:
 
-- A unit whose PR has passing checks and no human approval, and whose head commit has no `done` review, is
-  `review_pending`: `canopy review run --pr <URL> --sha <head> --ticket <KEY> --repo <the unit>`. At the per-PR limit
+- A unit whose PR has passing checks and no human approval, and whose head commit has no `done` review, or one whose
+  `owed` still names a persona, is `review_pending`: `canopy review run --pr <URL> --sha <head> --ticket <KEY> --repo
+  <the unit>`, which starts the review in each persona owed one. At the per-PR limit
   (`reviews.limits.max_reviews_per_pr` runs, plus the PR's `granted` in `reviews.prs`), it is `green_unreviewed`
   instead, and you record `canopy attention <KEY> review_limit --pr <URL> --detail '<the latest review>'`.
 - The operator may dismiss findings: `latest.findings` lists only those they kept, and `dismissed_findings` counts the

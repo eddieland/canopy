@@ -31,8 +31,9 @@ interface Choice {
  * The persona each of a ticket's agents writes in at its next run (DESIGN §31), and where that comes from: a row for
  * its workers, its planner, and its reviewer, each a menu that sets the ticket's override to one of `names`, or clears
  * it, as `canopy persona KEY NAME --agent AGENT` and `--clear` do. A persona the operator chose for the agent's next
- * run alone, with `--next`, is named under it. A run whose persona's file has gone is refused, not run in another
- * voice: its row says why, in the failure color.
+ * run alone, with `--next`, is named under it, and so are the reviewer's personas when `[personas] reviewers` has a
+ * review in each. A run whose persona's file has gone is refused, not run in another voice: its row says why, in the
+ * failure color.
  */
 export function TicketPersonas({
     ticketKey,
@@ -71,6 +72,11 @@ export function TicketPersonas({
                             />
                             <span className="text-xs text-muted-foreground">{PERSONA_SOURCES[p.source]}</span>
                         </span>
+                        {p.several.length > 0 && (
+                            <span className="block text-xs text-muted-foreground">
+                                One review each in: <span className="font-mono">{p.several.join(', ')}</span>
+                            </span>
+                        )}
                         {p.once !== null && (
                             <span className="block text-xs text-muted-foreground">
                                 Its next run alone: <span className="font-mono">{p.once}</span>

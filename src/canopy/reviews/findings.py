@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Sequence
 
+    from canopy.core import records
+
 
 class Unusable(Exception):  # noqa: N818  (the dispatch records it as a refusal)
     """The review run is missing, or cannot go to this worker: not this ticket's, not `done`, or without findings."""
@@ -21,7 +23,8 @@ class Unusable(Exception):  # noqa: N818  (the dispatch records it as a refusal)
 def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[str]) -> str:
     """Return `{{REVIEW_FINDINGS}}` for a `resume` of `key` in `repos`: review run `run_id`'s findings, as data.
 
-    A finding the operator dismissed is left out; the rest keep their numbers.
+    A finding the operator dismissed is left out; the rest keep their numbers. Each other persona's latest `done` review
+    of the same commit adds its own (DESIGN §31), so a resume addresses every review of the commit at once.
 
     Raises:
         Unusable: the run is missing, of another ticket or repository, not `done`, or found nothing it has not had
@@ -40,13 +43,11 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
     dismissed = db.review_dismissals(conn, run_id)
     if len(dismissed) >= len(stored.findings):
         raise Unusable(f"the operator dismissed every finding of review run {run_id}: none is left to address")
-    lines = [
-        (
-            f"canopy's review run {run_id} of {run.pr_url} at commit `{run.sha}` found these (verdict "
-            f"{stored.verdict}, impact {stored.impact}). They are in canopy's journal only, not on the PR:"
-        ),
-    ]
-    lines.extend(_findings(stored, dismissed, keep_dismissed=False))
+    beside = [(r, result.stored(r.result_json), db.review_dismissals(conn, r.id)) for r in _beside(conn, run)]
+    kept = [(r, found, held) for r, found, held in beside if found is not None and len(held) < len(found.findings)]
+    lines = _found_by(run, stored, dismissed, named=bool(kept))
+    for other, found, held in kept:
+        lines.extend(["", *_found_by(other, found, held, named=True)])
     return "\n".join(lines)
 
 
@@ -125,6 +126,35 @@ def described(conn: sqlite3.Connection, run_id: int) -> str:
         if stored.findings:
             lines += ["", *_findings(stored, db.review_dismissals(conn, run_id), keep_dismissed=True)]
     return "\n".join(lines)
+
+
+def _beside(conn: sqlite3.Connection, run: records.ReviewRun) -> list[records.ReviewRun]:
+    # Each other persona's latest `done` review of `run`'s PR and commit for its ticket, oldest persona first.
+    done = [
+        r
+        for r in db.review_runs_of(conn, run.pr_url)
+        if r.sha == run.sha and r.ticket_key == run.ticket_key and r.status is ReviewRunStatus.DONE
+    ]
+    newest = {r.persona: r for r in reversed(done)}
+    return [r for persona, r in newest.items() if persona != run.persona]
+
+
+def _found_by(
+    run: records.ReviewRun,
+    stored: result.ReviewResult,
+    dismissed: Collection[int],
+    *,
+    named: bool,
+) -> list[str]:
+    # One review's findings for a worker, under a line naming the review and its verdict, and its persona when `named`.
+    persona = f", in {run.persona}," if named and run.persona else ""
+    return [
+        (
+            f"canopy's review run {run.id} of {run.pr_url} at commit `{run.sha}`{persona} found these (verdict "
+            f"{stored.verdict}, impact {stored.impact}). They are in canopy's journal only, not on the PR:"
+        ),
+        *_findings(stored, dismissed, keep_dismissed=False),
+    ]
 
 
 def _findings(stored: result.ReviewResult, dismissed: Collection[int], *, keep_dismissed: bool) -> list[str]:

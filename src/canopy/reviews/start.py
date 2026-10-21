@@ -120,8 +120,10 @@ def holder(run_id: int) -> str:
 def due(ctx: Context, request: Request) -> list[Request]:
     """Return the reviews `request` starts now: one in each persona the operator chose for the PR still owed one.
 
-    A PR with no persona chosen for it gets one review, in its reviewer's persona (`_persona`). A persona is owed a
-    review until it has a `done` one of this commit, or one since the operator's request was made (DESIGN §31).
+    The operator chooses several for one of the loop's own PRs in `[personas] reviewers`, and for another PR on its
+    review request (DESIGN §31); any other PR gets one review, in its reviewer's persona (`_persona`). A persona is owed
+    a review until it has a `done` one of this commit, or, on a request, one since the request was made. A persona
+    whose review is running comes last, so the reviews it does not block start first.
 
     Returns:
         The reviews, each naming its persona and every persona chosen for the PR, in the order the operator chose them;
@@ -130,23 +132,47 @@ def due(ctx: Context, request: Request) -> list[Request]:
     Raises:
         Refusal: (`reviewed`) personas were chosen, and each has had its review.
     """
-    found = review_requests.open_request(ctx.conn, request.pr) if request.ticket is None else None
-    chosen: list[str] = review_requests.personas_of(ctx.conn, found.id) if found is not None else []
-    if found is None or not chosen:
+    since: str | None = None
+    if request.ticket is not None:
+        chosen = personas.reviewers_of(ctx.conn, ctx.config, request.ticket)
+    else:
+        found = review_requests.open_request(ctx.conn, request.pr)
+        chosen: list[str] = review_requests.personas_of(ctx.conn, found.id) if found is not None else []
+        since = found.created_at if found is not None else None
+    if not chosen:
         return [request]
-    done = [r for r in db.review_runs_of(ctx.conn, request.pr) if r.status is ReviewRunStatus.DONE]
-    owed = [
-        name
-        for name in chosen
-        if not any(r.persona == name and (r.sha == request.sha or r.started_at >= found.created_at) for r in done)
-    ]
+    runs = db.review_runs_of(ctx.conn, request.pr)
+    owed = owed_by(runs, request.sha, chosen, since=since)
     if not owed:
+        since_request = " or has since the request" if since is not None else ""
         raise Refusal(
             "reviewed",
-            f"each persona chosen for this PR ({', '.join(chosen)}) has reviewed {request.sha[:12]} or has since the "
-            "request; one review per commit per persona",
+            f"each persona chosen for this PR ({', '.join(chosen)}) has reviewed {request.sha[:12]}{since_request}; "
+            "one review per commit per persona",
         )
+    running = {r.persona for r in runs if r.status is ReviewRunStatus.RUNNING}
+    owed.sort(key=lambda name: name in running)
     return [replace(request, persona=name, among=frozenset(chosen)) for name in owed]
+
+
+def owed_by(
+    runs: Iterable[records.ReviewRun],
+    sha: str,
+    chosen: Iterable[str],
+    *,
+    since: str | None = None,
+) -> list[str]:
+    """Return the personas of `chosen` still owed a review of commit `sha`, given the PR's review runs `runs`.
+
+    Returns:
+        Each persona, in `chosen`'s order, with no `done` review of `sha` among `runs`, nor one started since `since`.
+    """
+    done = [r for r in runs if r.status is ReviewRunStatus.DONE]
+    return [
+        name
+        for name in chosen
+        if not any(r.persona == name and (r.sha == sha or (since is not None and r.started_at >= since)) for r in done)
+    ]
 
 
 def check(ctx: Context, *, tick_id: int, request: Request) -> str:
@@ -227,11 +253,28 @@ def _persona(ctx: Context, request: Request) -> personas.Persona:
         Refusal: `persona_missing` or `bad_persona`, with its attention item, as a worker's dispatch refuses.
     """
     try:
-        if request.persona is not None:
+        if request.persona is not None and request.ticket is None:
             return review_requests.load_persona(ctx.config, request.pr, request.persona)
+        if request.persona is not None:
+            return _reviewers_persona(ctx, request.persona)
         return personas.for_run(ctx.conn, ctx.config, "reviewer", request.ticket)
     except personas.PersonaError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
+
+
+def _reviewers_persona(ctx: Context, name: str) -> personas.Persona:
+    """Return persona `name`, one of `[personas] reviewers`, read now.
+
+    Returns:
+        The persona.
+
+    Raises:
+        PersonaError: (`MISSING`) the name has no file, or (`BAD`) its file is one canopy would not put in a prompt.
+    """
+    try:
+        return personas.load(ctx.config, name)
+    except personas.PersonaError as e:
+        raise personas.PersonaError(e.guard, f"[personas] reviewers: {e.reason}") from e
 
 
 def _purpose(conn: sqlite3.Connection, request: Request) -> str:

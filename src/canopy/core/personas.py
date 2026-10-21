@@ -102,6 +102,9 @@ class Next:
     error: str | None = None
     #: The persona the operator chose for its next run alone, in place of `name`, or None when they chose none.
     once: str | None = None
+    #: For the reviewer, every persona the ticket's PRs are reviewed in, one review each, from `[personas] reviewers`;
+    #: none when it is unset or the ticket's override chooses one.
+    several: Sequence[str] = ()
 
 
 def agent_of(kind: str) -> Agent | None:
@@ -175,6 +178,18 @@ def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     return found.value if found is not None else None
 
 
+def reviewers_of(conn: sqlite3.Connection, config: Config, ticket: str) -> list[str]:
+    """Return the personas each commit of `ticket`'s PRs is reviewed in, one review each (DESIGN §31).
+
+    Returns:
+        `[personas] reviewers`, in its order; none when it is unset, or the ticket's reviewer override chooses one,
+        whose single review takes `for_run`'s persona.
+    """
+    if override(conn, ticket, "reviewer") is not None:
+        return []
+    return list(config.personas.reviewers)
+
+
 def next_run(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     """Return the persona chosen for the next run alone of `ticket`'s `agent`, or None when none is."""
     found = records.fetch_one(
@@ -199,12 +214,14 @@ def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next
         name = mine if mine is not None else configured
         source: Source = "ticket" if mine is not None else "config" if configured != DEFAULT else "default"
         once = next_run(conn, ticket, agent)
-        try:
-            load(config, once or name)
-            error = None
-        except PersonaError as e:
-            error = e.reason
-        found.append(Next(agent, name, source, error, once))
+        several: list[str] = reviewers_of(conn, config, ticket) if agent == "reviewer" else []
+        error = None
+        for used in several or [once or name]:
+            try:
+                load(config, used)
+            except PersonaError as e:
+                error = error or e.reason
+        found.append(Next(agent, name, source, error, once, several))
     return found
 
 
@@ -362,7 +379,11 @@ def listed(config: Config) -> list[Listed]:
             error = None
         except PersonaError as e:
             error = e.reason
-        defaults = tuple(a for a in AGENTS if getattr(config.personas, a) == name)
+        defaults: tuple[Agent, ...] = tuple(
+            a
+            for a in AGENTS
+            if getattr(config.personas, a) == name or (a == "reviewer" and name in config.personas.reviewers)
+        )
         found.append(Listed(name, path, name in yours, name in yours and name in shipped, defaults, error))
     return found
 
