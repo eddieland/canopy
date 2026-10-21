@@ -1,7 +1,9 @@
 # Config files
 
-Every key canopy reads, in the two example files that ship with it: each key at its default, with a comment saying
-what it does. Copy what you need and leave out the rest; a key you don't set keeps its default.
+The two example files that ship with canopy, with the keys you're most likely to set, each at its default and with a
+comment saying what it does. Copy what you need and leave out the rest; a key you don't set keeps its default. A few
+tables, `[policy]`, `[pools]`, and `[memory]` among them, aren't in them yet; the other pages of this guide name the
+keys they use.
 
 ## Where they live
 
@@ -16,7 +18,9 @@ canopy reads three files, each overriding the one before it, key by key:
 
 Some keys are yours alone, such as your queue label and who may resume your work: canopy refuses to run if the
 workspace file sets one, and the error names the key and where it belongs. Anyone who can commit to a shared file
-shouldn't get to choose who your loop takes orders from.
+shouldn't get to choose who your loop takes orders from. The workspace file can also only tighten policy: a
+`policy.*` value there counts only when it's stricter than the default, so a commit can lower an attempt limit for
+everyone but never raise one. Your own files may set any value.
 
 ## Changing them
 

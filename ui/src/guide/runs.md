@@ -14,14 +14,14 @@ Each row has the run's state, its id, what it works for, its kind, what it cost,
 it ended:
 
 - A **worker run** (`run:39`) names its ticket and kind, with a resume's reasons beside it (`resume (ci, review)`),
-  and the ticket's title. Under it are its summary, its PRs, the worktrees it holds, and, while it runs, its latest
-  tool call.
+  and the ticket's title, marked `private` when the ticket is. Under it are its summary, its PRs, the worktrees it
+  holds, its session id with a button that copies it, and, while it runs, its latest tool call.
 - A **review** (`review:4`) names its ticket, if its PR has one, and the PR's title: its own, or its ticket's until
-  a worker reports one. Under it are the PR, the commit it read, and what it found. The findings themselves are on its
-  page.
+  a worker reports one. Under it are the PR, the commit it read, and what it found. The findings themselves are on
+  [its page](pull-requests#a-reviews-page).
 - A **chore run** (`#2`, beside its chore, so it reads `chore:deps #2`) has its chore's title, the `# heading` its
-  prompt opens with, and its summary under it. Its chore's page has every run; here you get the latest, and the one
-  before it while one runs.
+  prompt opens with, and its summary under it. [Its chore's page](chores#a-chores-page) has every run; here you get the
+  latest, and the one before it while one runs.
 
 A subject with no title says `untitled`, which for a chore is a hint its prompt could use a first line.
 
@@ -45,16 +45,17 @@ is. When a ticket sits in the queue looking neglected, this line usually explain
 The line under the title says how the run ended, its kind, and its ticket, whose key opens the ticket's page. Each
 of those is said there and nowhere else on the page, so the panels under it can get on with the rest.
 
-The **Run** panel leads with its summary, the run's own account of what it did, then its PRs, then **when**: when it
-started and ended and how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m` while it runs. **spent** gives its
-cost, the tokens it used, and its peak context, the most one model call was sent. **persona** is the voice it wrote
-in, with the start of its text's digest: two runs in one persona with different digests had it edited between them.
-**model** names the model that wrote its replies, as the runtime's own record of the session says, so it is right even
-when a template's option or the runtime's default picked it rather than you. A run that switched models partway lists
-each with its share of the cost. The runtime prints no model while a run works, so canopy asks it after each tick, a
-few ended runs at a time, the newest first; until then, or once the runtime has forgotten the session, the field says
-why it names none. The runs list carries the same, so a run's page fills it in without a reload. Last come the places:
-the branch, its worktrees, and the path of its log, which only you can read.
+The **Run** panel leads with its summary, the run's own account of what it did, then, while it runs, its **last call**,
+then its PRs, then **when**: when it started and ended and how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
+while it runs. **spent** gives its cost, the tokens it used, and its peak context, the most one model call was sent.
+**persona** is the voice it wrote in, with the start of its text's digest: two runs in one persona with different
+digests had it edited between them. **model** names the model that wrote its replies, as the runtime's own record of the
+session says, so it is right even when a template's option or the runtime's default picked it rather than you. A run
+that switched models partway lists each with its share of the cost. The runtime prints no model while a run works, so
+canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
+runtime has forgotten the session, the field says why it names none. The runs list carries the same, so a run's page
+fills it in without a reload. Last come the places: the branch, its worktrees, and the path of its log, which only you
+can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
@@ -73,8 +74,15 @@ The **Transcript** is the run's session, from its log, oldest first:
   first call was sent canopy's prompt, and every later one what the tools returned since;
 - any runtime error, tinted red.
 
-The tally above it counts the tool calls, how many failed or were refused, and the model calls. **Find lines**
-searches the transcript and opens the calls that match. **By call** groups the events by model call instead, each call
+Near the run's timeout, its tool calls' output ends with a line from canopy saying how many minutes are left, and the
+first such line tells the agent to push or record its work and print its result. It shows up in the last fifth of the
+run's time, and never more than its last 10 minutes. It's advice, not an extension: the timeout still ends the run on
+the minute, whatever the agent makes of the warning.
+
+The tally above it counts the tool calls, how many failed or were refused, the model calls, and any runtime errors. It
+also says when the log holds more than the page shows, `cut`, and how many events couldn't be read, so a short
+transcript never passes for a short session. **Find lines** searches the transcript and opens the calls that match;
+Escape clears it. **By call** groups the events by model call instead, each call
 one row that opens to the same input and output; a session of one call has nothing to group, so it has no By call.
 **All open** opens every call at once, for when you'd rather scroll than click.
 
@@ -99,11 +107,13 @@ definition and the runtime's own system prompt come first and aren't in it, sinc
 Under the prompt, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
 stderr, and how it exited. The transcript shows only the session's events, so a run that died in `pnpm install`, or
 crashed before its first event, has an empty transcript and its whole story here. **Show output** opens it at its end,
-where the errors live.
+where the errors live. **Pretty** lays each event out on its own lines, and an output too long to show whole is marked
+`cut`, with its end shown.
 
-Under that, while agent memory is on, **Memory** counts what the run wrote and read (`wrote 2 · read none`), each
-tier's mode on hover. **Show memory** opens the memories themselves, sorted by kind;
-[Memory](memory#on-a-ticket-and-a-run) says what they mean.
+Under that, while agent memory is on, **Memory** counts what the run wrote and read (`wrote 2 · read none`), and what it
+tried to write and canopy refused, each tier's mode on hover. The refused ones are listed under **Refused** with why.
+**Show memory** opens the memories themselves, sorted by kind; [Memory](memory#on-a-ticket-and-a-run) says what they
+mean.
 
 ## Context
 
@@ -135,6 +145,12 @@ checked out, and what processes run in it. The line under the title says how man
 long ago they were read. In a narrow window, what holds a slot goes before its branch is cut: the branch names the
 ticket anyway. The counters add them up: slots working, held (and by what), needing a look, and free.
 Needing a look counts dirty slots, broken ones, and any pool that couldn't be read at all.
+
+Each pool's header has a strip of squares, a slot each in its state's color, so a pool that's full or sick shows at a
+glance; hover a square for its slot and state. Beside it is the directory the slots live under. A run of idle slots
+folds into one line, **Show 6 slots, #3 to #8**, so the slots with work in them stay in reach. With the repository's
+`branch_url` set, a slot's branch links out to its page on the host, and a branch git couldn't read says
+`branch unreadable:` with git's reason, in red.
 
 A slot is:
 

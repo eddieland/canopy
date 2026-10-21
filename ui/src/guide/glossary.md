@@ -24,8 +24,8 @@ attention list, with its reasons in its own words. A decision a guard stopped is
 
 ### Dry run
 
-A tick from `canopy tick --dry-run`: the overseer decides as usual, and nothing is dispatched. Its decisions carry a
-`dry run` chip. The cheapest way to find out what the loop would do.
+A tick from `canopy tick --dry-run`: the overseer decides as usual, and nothing is dispatched. The tick carries a
+`dry run` chip, in its row and on its page. The cheapest way to find out what the loop would do.
 
 ### Guard
 
@@ -81,10 +81,17 @@ are data: canopy reads them and acts on none of them.
 Every message on a ticket: the workers' reports and questions, your replies, and, on a public ticket, the tracker's
 comments, copied in. See [Attention](attention#replying).
 
+### Feedback plan
+
+A plan for what came back to a PR, written before the resume that acts on it, with `policy.feedback_plan = "approve"`
+in your own config: you read whose each item is and approve what gets addressed. A run of its own kind,
+`feedback-plan`. See [Plans](plans).
+
 ### Follow-up
 
 A ticket a worker filed for work it found outside its own, linked to its ticket as the parent. It authorizes nothing:
-canopy asks you about it on the attention list, and works it only once you label it or start it. See
+your sinks hear of it once, it never sits on the attention list, and canopy works it only once you label it or start
+it. See
 [How the loop works](how-the-loop-works#public-and-private-tickets).
 
 ### Phase
@@ -92,6 +99,12 @@ canopy asks you about it on the attention list, and works it only once you label
 Where a ticket or a PR stands, as the overseer worked it out from live state this tick. A ticket is `ready`,
 `running`, `needs human`, and so on; a PR is `ci red`, `review findings`, `approved`, and the like. See
 [How the loop works](how-the-loop-works#phases).
+
+### Persona
+
+The voice a run writes in: how a worker words its PR, how a planner lays out its plan, how hard a reviewer presses. It
+changes voice, never a guard. Chosen in `[personas]`, per ticket on its page, or for one run. See
+[Choosing a persona](tickets#choosing-a-persona).
 
 ### Plan
 
@@ -152,10 +165,10 @@ next tick decides whether to use it.
 
 ### Kind
 
-What a run is for: `implement`, `resume`, or `plan`. Older runs may say `fix-ci`, from before a resume fixed CI,
-`split`, from before workers filed follow-ups, or `needs-plan`, a triage from before every planned ticket got its plan.
-Reviews and chores are kinds of their own. Each kind has its own attempt limit. See
-[How the loop works](how-the-loop-works#runs).
+What a run is for: `implement`, `resume`, `plan`, or `feedback-plan`. Older runs may say `fix-ci`, from before a resume
+fixed CI, `split`, from before workers filed follow-ups, or `needs-plan`, a triage from before every planned ticket got
+its plan. Reviews and chores are kinds of their own. Each worker kind has its own attempt limit, a review counts toward
+its PR's review limit, and a chore has none. See [How the loop works](how-the-loop-works#runs).
 
 ### Pool
 
@@ -203,6 +216,12 @@ agent works in it; between runs, the pushed branch is the checkpoint. See
 
 ## Pull requests and reviews
 
+### Draft
+
+A reply a run wrote for you to send, on a PR's review thread or on its ticket, kept until you **Send**, **Edit**, or
+**Drop** it. With `trust.review_replies = "approve"`, the default, nothing a worker writes to a coworker goes out any
+other way. See [Pull requests and reviews](pull-requests#replying-to-your-coworkers-reviews).
+
 ### Finding
 
 One thing a review or a chore found. A review's finding is `blocking`, `major`, or `minor`, pinned to the line it
@@ -211,7 +230,8 @@ names; you can dismiss it or send it to a worker. A chore's reaches the attentio
 
 ### Review
 
-A fresh agent's adversarial read of one PR at one commit. canopy keeps it to itself and never posts it on the PR. See
+A fresh agent's adversarial read of one PR at one commit, in one persona. canopy keeps it to itself: nothing reaches
+the PR unless you publish its draft, word for word, with `canopy review publish`. See
 [Pull requests and reviews](pull-requests#when-canopy-reviews).
 
 ### Review limit

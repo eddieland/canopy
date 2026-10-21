@@ -45,8 +45,10 @@ workspace, then says what's left to set up. The copies stay put when canopy is u
 running it again puts the shipped version back over your edits. Steer an installed
 chore with notes instead (below), which it leaves alone.
 
-[Chores](/chores) lists each chore: whether it's running, when it last ran ok, when it's due, its open findings, its
-schedule, and what its runs cost over the last day and month. To run one now instead of waiting for the overseer, use
+[Chores](/chores) lists each chore: whether it's running, how its latest run ended and when, when it's due, its open
+findings and how many you dismissed, its schedule, and what its runs cost over the last day and month. While
+`capacity.max_chores` is 0, the loop runs no chores and the list is empty, whatever you defined: a chore's page still
+opens at `/chores/NAME`, and **Try now** still works there. To run one now instead of waiting for the overseer, use
 **Try now** on its page, below.
 
 ## A chore's page
@@ -58,18 +60,23 @@ the last one ended, since the running one hasn't said anything yet.
 - **Schedule**: how often it may run, then, if you set them, the hours it may start in and its `when`, the words you
   gave the overseer for when it's worth running. A chore that may start any time, whenever it's due, shows just the
   first.
-- **Open findings**: what its latest ok run found. Each finding also reaches the attention list.
-- **Runs**: every run, with its status, how many findings it had, its cost, and its summary. A run's page is laid
-  out as a worker's is: its summary first, when it ran and for how long, what it spent and on which model, and its
-  log, then its findings and its transcript, filling in while the run works, and the prompt it started from. Its chore
-  is the link in the trail above the title.
+- **Open findings**: what its latest ok run found, each with how long it's been open. Each finding also reaches the
+  [attention list](attention#chore-items); one you dismissed stays here, marked `dismissed`, and the count beside the
+  label names those apart from the open ones.
+- **Runs**: every run, with its status, how many findings it had, its cost, its summary, and its session id and log
+  path, each with a button that copies it. A run's page is laid out as [a worker's](runs#a-runs-page) is: its summary
+  first, when it ran and for how long, what it spent and on which model, and its log, then its findings and its
+  transcript, filling in while the run works, and the prompt it started from. Its chore is the link in the trail above
+  the title.
 - **Notes**: what you've told its runs. More on these below.
-- **Spend**: its runs' cost over the last 24 hours and 30 days, average and worst included.
+- **Spend**: its runs' cost over the last 24 hours and 30 days: how many runs, the total, the average, the 99th
+  percentile, and the worst. Runs that reported no cost are counted as `unpriced`, so a cheap-looking month says how
+  much of it nobody priced.
 
 On a wide screen, the open findings and runs take the wide column, since that's where you act, and the schedule, notes,
 and spend sit beside them.
 
-A chore run that doesn't end ok reaches the attention list as `chore failed`.
+A chore run that doesn't end ok reaches the [attention list](attention) as `chore failed`.
 
 ## Trying a chore
 
