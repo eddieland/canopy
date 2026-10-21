@@ -6,8 +6,8 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 
 ## 32. Plans before feedback runs
 
-Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole, the guards, and planning
-again.
+Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole or by item from the CLI and
+its message, the guards, and planning again.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from
@@ -55,13 +55,15 @@ the operator's channels do, each refused inside any agent run, the web channel's
 whose word stands for theirs as in §25 unless the plan replaces one no `resume` spent. Approval records the file's
 hash, and a reply newer than a waiting plan asks for changes. It also writes an operator
 message on the ticket naming the plan and the items to address and to leave, by number, never quoting them, as sending
-findings does (§21): the plan's text stays data, and the message is the instruction (T1).
+findings does (§21), with any words of the operator's own after: the plan's text stays data, and the message is the
+instruction (T1). The planner's approval writes none.
 
 The next tick dispatches the `resume` with the approved plan, which its worker follows as in §25 in place of the
-ticket's plan, and the ticked items. Two guards hold it in code: `unplanned` refuses a `resume` under `approve` that
-carries no approved feedback plan, unless its only reason is `no_pr`, and `plan_changed` refuses one whose plan's file
-changed since approval. An approval goes ahead once, spent by the `resume` that starts; its items stay handled unless
-that run ends other than `done` or `blocked`, when the next plan gets them. Later feedback waits for the next plan.
+ticket's plan, the ticked items, and only those, beside the approval's message. Two guards hold it in code:
+`unplanned` refuses a `resume` under `approve` that carries no approved feedback plan, unless its only reason is
+`no_pr`, and `plan_changed` refuses one whose plan's file changed since approval. An approval goes ahead once, spent by
+the `resume` that starts; its items stay handled unless that run ends other than `done` or `blocked`, when the next
+plan gets them, as it gets the items left unticked. Later feedback waits for the next plan.
 
 **A plan that changes nothing.** A plan whose items are all `decline`, `ask`, or `leave` changes no code. Under
 `trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` through: that run

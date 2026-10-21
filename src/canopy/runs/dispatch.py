@@ -1295,11 +1295,15 @@ def _plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collectio
         feedback = feedback_plans.follows(ctx.conn, ctx.config.policy, key, reasons)
         text = feedback_plans.approved_text(ctx.state_dir, feedback) if feedback is not None else None
         if feedback is not None and text is not None:
-            covered = [
-                (i.number, i.pr_url, i.item_id, str(i.proposal)) for i in feedback_plans.items(ctx.conn, feedback.id)
-            ]
-            by_planner = feedback.approved_channel == plans.PLANNER
-            note = prompts.feedback_plan_note(copy, plans.outline(text), covered, by_planner=by_planner)
+            covered = feedback_plans.items(ctx.conn, feedback.id)
+            note = prompts.feedback_plan_note(
+                copy,
+                plans.outline(text),
+                [(i.number, i.pr_url, i.item_id, str(i.proposal)) for i in covered if not i.left_out],
+                left_out=[i.number for i in covered if i.left_out],
+                message_id=feedback.approved_message_id,
+                by_planner=feedback.approved_channel == plans.PLANNER,
+            )
             return _Followed(note=note, feedback_plan_id=feedback.id)
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None

@@ -16,6 +16,8 @@ from canopy.core import conversation, feedback_plans, plan_export, plans
 from canopy.infra import logs
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from canopy.core.context import Context
 
 CLI = "cli"
@@ -26,12 +28,37 @@ CLI = "cli"
 @click.option(
     "--approve",
     is_flag=True,
-    help="Approve its newest plan as its file stands now, your edits included: its feedback plan, whole, when one "
-    "waits.",
+    help="Approve its newest plan as its file stands now, your edits included: its feedback plan, when one waits, "
+    "whole or by --item.",
+)
+@click.option(
+    "--item",
+    "chosen",
+    type=click.IntRange(min=1),
+    multiple=True,
+    metavar="ID",
+    help="With --approve, on a feedback plan: approve this item, by the id its plan gives it (`### Item <id>`); "
+    "repeat for each. Its other items are left out: its resume does not act on them, and the next plan gets them.",
+)
+@click.option(
+    "--message",
+    "-m",
+    "words",
+    metavar="TEXT",
+    help="With --approve, on a feedback plan: your own words, after the message the approval writes on the ticket, "
+    "which its resume reads beside the items.",
 )
 @click.option("--skip", is_flag=True, help="Waive its plan: its implement goes ahead without one.")
 @click.pass_context
-def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -> int:
+def cmd_plan(
+    click_ctx: click.Context,
+    ref: str,
+    *,
+    approve: bool,
+    chosen: tuple[int, ...],
+    words: str | None,
+    skip: bool,
+) -> int:
     """Ask for a plan for a ticket, approve its plan, or skip it, whatever `policy.plan` says.
 
     Without a flag, the next tick dispatches a planner, which writes down how the work will be done; nothing is
@@ -39,10 +66,14 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
     `canopy show KEY`, edit its file if you like, then approve it, or ask for changes with `canopy reply KEY`.
 
     Under `policy.feedback_plan = "approve"`, a ticket's PR feedback is planned before its resume: while its feedback
-    plan waits, `--approve` approves that plan, whole, and its next resume goes ahead on it once.
+    plan waits, `--approve` approves that plan, whole, or only the items you name with `--item`, and its next resume
+    goes ahead on it once. The approval writes a message on the ticket naming the items to address and to leave, with
+    your `--message` after it.
     """
     if approve and skip:
         raise click.UsageError("--approve and --skip are each a decision of their own; pass one")
+    if (chosen or words is not None) and not approve:
+        raise click.UsageError("--item and --message go with --approve")
     try:
         conversation.check_operator()
         subject = conversation.parse_ref(ref)
@@ -52,7 +83,7 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool) -
     ctx = open_context(click_ctx)
     try:
         if approve:
-            _approve(ctx, subject.id)
+            _approve(ctx, subject.id, chosen=chosen, words=words)
         else:
             _ask(ctx, subject.id, skip=skip)
     except conversation.Refused as r:
@@ -98,10 +129,15 @@ def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
     return 0
 
 
-def _approve(ctx: Context, key: str) -> None:
+def _approve(ctx: Context, key: str, *, chosen: Collection[int], words: str | None) -> None:
     if feedback_plans.waiting(ctx.conn, key):
-        _approve_feedback(ctx, key)
+        _approve_feedback(ctx, key, chosen=chosen, words=words)
         return
+    if chosen or words is not None:
+        raise conversation.Refused(
+            "bad_plan",
+            f"--item and --message approve a feedback plan, and none of {key}'s waits; reply to say more",
+        )
     plan = plans.approve(ctx.conn, ctx.state_dir, key, channel=CLI, dispatch_lock=ctx.dispatch_lock_path)
     logs.for_tick(None).info("plan approved", extra={"ticket": key, "plan": plan.id, "channel": CLI})
     path = plans.path_for(ctx.state_dir, key, plan.run_id)
@@ -109,7 +145,7 @@ def _approve(ctx: Context, key: str) -> None:
     click.echo("Its implement refuses (plan_changed) if the file changes before then; approve it again if it does.")
 
 
-def _approve_feedback(ctx: Context, key: str) -> None:
+def _approve_feedback(ctx: Context, key: str, *, chosen: Collection[int], words: str | None) -> None:
     plan = feedback_plans.approve(
         ctx.conn,
         ctx.state_dir,
@@ -117,14 +153,29 @@ def _approve_feedback(ctx: Context, key: str) -> None:
         trust=ctx.config.trust,
         channel=CLI,
         dispatch_lock=ctx.dispatch_lock_path,
+        chosen=chosen,
+        words=words,
     )
-    logs.for_tick(None).info("feedback plan approved", extra={"ticket": key, "feedback_plan": plan.id, "channel": CLI})
+    covered = feedback_plans.items(ctx.conn, plan.id)
+    left = [i for i in covered if i.left_out]
+    logs.for_tick(None).info(
+        "feedback plan approved",
+        extra={"ticket": key, "feedback_plan": plan.id, "left_out": [i.item_id for i in left], "channel": CLI},
+    )
     path = plans.path_for(ctx.state_dir, key, plan.run_id)
-    covered = len(feedback_plans.items(ctx.conn, plan.id))
-    click.echo(
-        f"Feedback plan {plan.id} of {key}, covering {covered} item{'s' if covered != 1 else ''}, is approved whole as "
-        f"{path} stands now. The next tick can resume {key} on it, once.",
-    )
+    if left:
+        kept = len(covered) - len(left)
+        click.echo(
+            f"Feedback plan {plan.id} of {key} is approved as {path} stands now, for {kept} of its {len(covered)} "
+            f"items. The next tick can resume {key} on it, once.",
+        )
+        click.echo(f"Left out, for the next plan: {', '.join(f'{i.number} (id {i.item_id})' for i in left)}.")
+    else:
+        click.echo(
+            f"Feedback plan {plan.id} of {key}, covering {len(covered)} item{'s' if len(covered) != 1 else ''}, is "
+            f"approved whole as {path} stands now. The next tick can resume {key} on it, once.",
+        )
+    click.echo(f"Message {plan.approved_message_id} on {key} names the items for its resume: `canopy show {key}`.")
     click.echo("Its resume refuses (plan_changed) if the file changes before then; approve it again if it does.")
 
 

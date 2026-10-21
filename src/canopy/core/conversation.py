@@ -364,24 +364,36 @@ def reply(
                 "unknown",
                 f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
             )
-        question = latest_question(conn, ref.id) if ref.kind == TICKET else None
-        answers = question.id if question is not None else None
-        if submission is None:
-            stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
-        else:
-            stored = f"{channel}:{submission}"
-        before = db.latest_message_id(conn)
-        message_id = db.insert_message(
-            conn,
-            ref.kind,
-            ref.id,
-            source="operator",
-            kind="reply",
-            channel=channel,
-            body=text,
-            answers=answers,
-            submission=stored,
-        )
+        return write_reply(conn, ref, text, channel=channel, submission=submission)
+
+
+def write_reply(conn: sqlite3.Connection, ref: Ref, text: str, *, channel: str, submission: str | None) -> Replied:
+    """Record an operator message `reply` checked, or another verb of the operator's writes. Call inside a transaction.
+
+    Approving a feedback plan writes its message so, in the transaction that approves it (DESIGN §32): the caller has
+    checked the operator, the subject, and the body's bound.
+
+    Returns:
+        What `reply` returns.
+    """
+    question = latest_question(conn, ref.id) if ref.kind == TICKET else None
+    answers = question.id if question is not None else None
+    if submission is None:
+        stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
+    else:
+        stored = f"{channel}:{submission}"
+    before = db.latest_message_id(conn)
+    message_id = db.insert_message(
+        conn,
+        ref.kind,
+        ref.id,
+        source="operator",
+        kind="reply",
+        channel=channel,
+        body=text,
+        answers=answers,
+        submission=stored,
+    )
     new = message_id > before
     if not new:
         # The same submission again: what it answered then, whatever is waiting now.

@@ -10,10 +10,10 @@ When a feedback plan is recorded, what its run's read saw is recorded with it (`
 check's conclusion at that head, and each item and reply the planner was given, by id with a SHA-256 of its body, never
 its text. An item a `resume` went ahead on stays handled while its body and its thread's replies are as that plan saw
 them; once either changed, it is offered again. So the next round is what is new since the last plan, with the items a
-failed `resume` handed back and those no plan covered. A plan is stale when what the connectors observe now differs
-from what it saw (`changes`), each difference with its reason, computed here in code; the quiet period before a stale
-plan is planned again runs from the newest item or reply on its PRs, or from when the harness first saw the head or
-check conclusion they moved to, the newer (`newest`, `moved_at`).
+failed `resume` handed back, those an approval left out, and those no plan covered. A plan is stale when what the
+connectors observe now differs from what it saw (`changes`), each difference with its reason, computed here in code;
+the quiet period before a stale plan is planned again runs from the newest item or reply on its PRs, or from when the
+harness first saw the head or check conclusion they moved to, the newer (`newest`, `moved_at`).
 """
 
 from __future__ import annotations
@@ -495,7 +495,8 @@ class _Handled:
 
     The approval is spent when the `resume` is recorded, before its worker does anything, so an item counts as handled
     only while that run works or once it ended `done` or `blocked`. A resume that failed, crashed, timed out, was
-    stopped, or never started hands its items back to the next plan, rather than dropping them unseen.
+    stopped, or never started hands its items back to the next plan, rather than dropping them unseen. An item the
+    operator's approval left out was never the `resume`'s to handle, so the next plan gets it too.
     """
 
     def __init__(self, conn: sqlite3.Connection, key: str) -> None:
@@ -506,7 +507,7 @@ class _Handled:
             .from_("feedback_plan_items i")
             .join("feedback_plans p ON p.id = i.plan_id")
             .join("runs r ON r.id = p.spent_run_id")
-            .where("p.ticket_key = ?", key)
+            .where("p.ticket_key = ? AND NOT i.left_out", key)
             .where_in("r.status", (RunStatus.RUNNING, RunStatus.DONE, RunStatus.BLOCKED))
             .group_by("i.pr_url, i.item, i.item_id"),
         )

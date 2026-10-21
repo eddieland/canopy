@@ -106,9 +106,11 @@ Controls:
   run reads only: canopy's planner, which writes one file and nothing else, with the PR's items as canopy's reader
   observed them, data in its desk, each with its author and whether they are trusted. An item id the reader did not
   return is refused with a note, so a plan cannot name feedback canopy never saw. The `resume` that follows names the
-  approved items by id from the journal, never the plan's text, and spends the approval: one approval, one run.
-  Trust labels then inform the operator rather than gate a run. Residual: the plan's text, model-written from anyone's
-  comments, reaches the worker as its copy, data as an approved plan's is; and approval is of the plan whole for now.
+  approved items by id from the journal, never the plan's text, only those the operator ticked when they approved by
+  item, and spends the approval: one approval, one run. The approval's operator message names the items by number and
+  never quotes them. Trust labels then inform the operator rather than gate a run. Residual: the plan's text,
+  model-written from anyone's comments, reaches the worker as its copy, data as an approved plan's is, the sections of
+  items left out included, which only its prompt and the operator's message tell it to leave.
 - With `policy.planner_may_approve` (DESIGN §25, private, off by default), a plan or feedback plan whose planner says
   it needs no review, with a reason, is approved by the harness as the planner's approval, recorded so and never as
   the operator's, and its `implement` or `resume` goes ahead without them. That lifts the plan gate on an agent's

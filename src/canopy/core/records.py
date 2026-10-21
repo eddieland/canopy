@@ -355,6 +355,8 @@ class FeedbackPlan(Row):
     effort: PlanEffort | None
     #: The SHA-256 of what changed that an approval of it, stale, was last refused for: approving again approves it.
     stale_shown: str | None
+    #: The operator message its approval wrote on the ticket, naming its items; None unless the operator approved it.
+    approved_message_id: int | None
 
 
 @dataclass(frozen=True)
@@ -430,6 +432,8 @@ class FeedbackPlanItem(Row):
     proposal: Proposal
     #: The reply the plan would draft, for a change or a decline: model text, never an instruction.
     reply: str | None
+    #: Whether the operator's approval left it out: its `resume` does not act on it, and the next plan gets it.
+    left_out: bool
 
 
 @dataclass(frozen=True)
