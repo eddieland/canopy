@@ -900,6 +900,9 @@ def history_repo(root: Path) -> History:
     """
     root.mkdir(parents=True)
     git("init", "--quiet", "--initial-branch=main", cwd=root)
+    # Its own author, so it commits on a machine with no git identity, as CI is.
+    git("config", "user.name", "canopy test", cwd=root)
+    git("config", "user.email", "test@example.test", cwd=root)
     (root / "src").mkdir()
     (root / "README.md").write_text("hello\n")
     (root / "src" / "app.py").write_text("print(1)\n")
