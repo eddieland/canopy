@@ -47,10 +47,12 @@ code are data to it (T1).
 Result contract, the last line of its text (§13), validated (D026):
 
 ```json
-{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>","review":"needed|not_needed","review_reason":"..."}
+{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>","effort":"small|medium|large","review":"needed|not_needed","review_reason":"..."}
 ```
 
-`done` records the file as the ticket's newest plan, `proposed`; without a valid plan file the run is `unknown`.
+`done` records the file as the ticket's newest plan, `proposed`; without a valid plan file the run is `unknown`. Its
+`effort`, how much work the plan is for its worker as the planner judged, is kept with it for the operator to read;
+one outside the three drops alone, never the plan. Nothing decides on it.
 `blocked`'s question is recorded as a worker message (§22), on a public ticket too, since the planner cannot comment.
 
 ### Phases and the overseer's part

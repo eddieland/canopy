@@ -424,6 +424,8 @@ class PlanSummary(_Model):
     """How they approved it: `cli` or `web`; or `planner`, when the harness approved it on its planner's word."""
     approved_reason: str | None = None
     """Why the planner said the plan needs no review, when the harness approved it so; none otherwise."""
+    effort: Literal["small", "medium", "large"] | None = None
+    """How much work the plan is for its worker, as its planner judged; none when it gave no estimate."""
 
 
 class PlanFile(_Model):

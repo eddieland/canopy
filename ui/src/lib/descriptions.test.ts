@@ -152,6 +152,7 @@ describe('ticketDescription', () => {
             approved_at: null,
             approved_channel: null,
             approved_reason: null,
+            effort: null,
         } as const
         const file = {
             plan,

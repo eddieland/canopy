@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import (
     contract,
@@ -48,7 +48,7 @@ from canopy.core import (
     review_diff,
 )
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import PoolKind, Proposal, ReplyMode, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, drafted, policy, tidy
@@ -83,6 +83,15 @@ PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(contract.MAX_
 Reply = Annotated[StrictStr, contract.bounded(feedback_plans.MAX_REPLY)]
 #: A planner's one-line reason for saying its plan needs no review: shown with the plan, and sent to the sinks cut.
 ReviewReason = Annotated[StrictStr, contract.one_line, contract.bounded(MAX_REVIEW_REASON)]
+
+
+def _known_effort(value: object) -> object:
+    """Return `value` if it is one of `PlanEffort`'s, else None: a misspelled estimate drops, never the plan with it."""
+    return value if value in PlanEffort else None
+
+
+#: A planner's estimate of how much work its plan is (DESIGN §25).
+Effort = Annotated[PlanEffort | None, BeforeValidator(_known_effort)]
 
 
 class WorkerResult(BaseModel):
@@ -131,6 +140,9 @@ class PlanResult(BaseModel):
     #: the harness approve it, and only under `policy.planner_may_approve` (DESIGN §25); a result without it needs one.
     review: Literal["needed", "not_needed"] = "needed"
     review_reason: ReviewReason | None = None
+    #: How much work the plan is for the worker that follows it, as the planner judged: recorded with the plan, for
+    #: the operator to read beside it (DESIGN §25). Nothing reads it to decide.
+    effort: Effort = None
 
     def no_review(self) -> str | None:
         """Return the planner's reason for saying its plan needs no review, or None when it did not say so with one."""
@@ -561,6 +573,7 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
         written,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id),
         no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
+        effort=parsed.effort,
     )
     log.info(
         "plan recorded",
@@ -654,6 +667,7 @@ def _record_feedback_plan(
         matched.kept,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id, feedback=True),
         no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
+        effort=parsed.effort,
     )
     log.info(
         "feedback plan recorded",

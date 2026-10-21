@@ -3508,6 +3508,11 @@ export type components = {
              */
             created_at: string;
             /**
+             * Effort
+             * @description How much work the plan is for its worker, as its planner judged; none when it gave no estimate.
+             */
+            effort: ("small" | "medium" | "large") | null;
+            /**
              * Id
              * @description The plan's id, as `canopy show --plans` names it `plan:ID`.
              */
