@@ -74,6 +74,25 @@ def test_canopy_agents_says_what_each_agent_is_offered(
     assert by_agent["canopy-worker"]["tools"] == ["bash", "read"]
 
 
+@pytest.mark.usefixtures("opencode")
+def test_canopy_agents_shows_the_commands_config_allows_an_agent(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["agents", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["allow_bash"] == {}
+    allows = ["jira issue list *", "jira issue view *"]
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"overseer": allows}}})
+    assert main(["agents"]) == 0
+    out = capsys.readouterr().out
+    # The overseer's block ends with them, after what the runtime offers it; no other agent's names any.
+    overseer = out.split("\ncanopy-overseer\n", 1)[1].split("\n\n", 1)[0]
+    assert overseer.endswith("\n  bash allowed by runtime.allow_bash: jira issue list *; jira issue view *")
+    assert out.count("bash allowed") == 1
+    assert main(["agents", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["allow_bash"] == {"canopy-overseer": allows}
+
+
 def test_canopy_agents_fails_when_opencode_cannot_say(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],

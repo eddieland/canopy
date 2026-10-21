@@ -34,6 +34,7 @@ PLAIN = agents.Rules(
     temperatures={},
     overseer_prompt="Decide.\n",
     tracker_provider="no-such-tracker",
+    bash_allows={},
 )
 
 
@@ -175,3 +176,45 @@ def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:
             approve=False,
             ticket_comments=True,
         )
+
+
+BASH_ALLOWS_MARKER = "    # canopy: bash allows\n"
+
+
+def test_bash_allows_are_the_last_of_the_overseers_bash_rules() -> None:
+    # The last matching rule wins (D021): each allow beats `"*": deny`, and no rule of canopy's comes after to beat it.
+    allows = ("jira issue list *", "jira issue view *")
+    rendered = definitions.render(definitions.bundled(), replace(PLAIN, bash_allows={agents.OVERSEER: allows}))
+    text = rendered[f"agents/{agents.OVERSEER}.md"].decode()
+    bash = text.split("\n  bash:\n", 1)[1].split("\n  todowrite:", 1)[0]
+    rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    assert rules == [
+        '    "*": deny',
+        '    "canopy *": allow',
+        '    "treehouse status*": allow',
+        '    "jira issue list *": allow',
+        '    "jira issue view *": allow',
+    ]
+    assert f'{BASH_ALLOWS_MARKER}    "jira issue list *": allow\n    "jira issue view *": allow\n  #' in text
+
+
+def test_no_bash_allows_render_the_overseer_as_none_did() -> None:
+    files = definitions.bundled()
+    none = definitions.render(files, PLAIN)
+    assert definitions.render(files, replace(PLAIN, bash_allows={agents.OVERSEER: ()})) == none
+    assert f"{BASH_ALLOWS_MARKER}  #" in none[f"agents/{agents.OVERSEER}.md"].decode()
+
+
+@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER, agents.REVIEWER, agents.CHORE])
+def test_no_other_shipped_agent_takes_bash_allows(agent: str) -> None:
+    # A worker's shell runs every command but those it denies, which an allow could only undo; the rest have none.
+    rules = replace(PLAIN, bash_allows={agent: ("jira issue list *",)})
+    with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line '# canopy: bash allows'"):
+        definitions.render(definitions.bundled(), rules)
+
+
+@pytest.mark.parametrize("allow", ['jira": allow\n    "*', "sh -c 'x'", "*", "jira issue list ", ""])
+def test_a_bash_allow_canopy_would_not_render_is_refused(allow: str) -> None:
+    rules = replace(PLAIN, bash_allows={agents.OVERSEER: (allow,)})
+    with pytest.raises(agents.DefinitionsError, match="is not a bash rule canopy renders"):
+        definitions.render(definitions.bundled(), rules)

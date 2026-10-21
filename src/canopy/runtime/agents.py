@@ -67,6 +67,9 @@ class Rules:
     #: The overseer's prompt, and the tracker's provider, whose shipped skill, if any, follows it.
     overseer_prompt: str
     tracker_provider: str
+    #: The commands config allows each agent beyond its own bash rules, by agent name: each a rule the runtime matches
+    #: a command line against (`canopy.runtime.definitions.BASH_ALLOW_RE`). An agent not named gets none.
+    bash_allows: Mapping[str, Sequence[str]]
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

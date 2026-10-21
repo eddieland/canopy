@@ -26,6 +26,11 @@ TOOL_PART_RE = definitions.TOOL_PART_RE
 #: The runtime's rule for a skill's name, and the longest one it takes.
 SKILL_NAME_RE = definitions.SKILL_NAME_RE
 MAX_SKILL_NAME = definitions.MAX_SKILL_NAME
+#: A bash rule canopy renders from config, `runtime.allow_bash`: a command's name, a literal word, then arguments of
+#: plain characters and the runtime's wildcards. Its first word is the command it allows.
+BASH_ALLOW_RE = definitions.BASH_ALLOW_RE
+#: The runtime's own commands, which run an agent with rules of their own.
+RUNTIME_COMMANDS = definitions.RUNTIME_COMMANDS
 
 
 def agent_names() -> list[str]:

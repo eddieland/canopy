@@ -47,7 +47,7 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import chore_result, contract, hostgit
+from canopy.core import bash_allows, chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
 from canopy.infra import procs
 from canopy.runtime import agents, invocation
@@ -353,6 +353,12 @@ SetupCommand = Annotated[StrictStr, AfterValidator(_setup_command)]
 Wrapper = Annotated[StrictStr, AfterValidator(_wrapper)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 PersonaName = Annotated[StrictStr, AfterValidator(_persona_name)]
+#: One of canopy's agents `runtime.allow_bash` names, and the commands it allows that agent (`canopy.core.bash_allows`).
+BashRole = Annotated[str, AfterValidator(bash_allows.check_role)]
+BashAllows = Annotated[
+    tuple[Annotated[StrictStr, AfterValidator(bash_allows.check_pattern)], ...],
+    AfterValidator(bash_allows.check_patterns),
+]
 
 
 class Section(BaseModel):
@@ -657,6 +663,9 @@ class Runtime(Section):
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.PRIVATE] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
+    #: Commands an agent may run beyond its own bash rules, by its role: only the overseer's take any (DESIGN §13).
+    #: Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
+    allow_bash: Annotated[dict[BashRole, BashAllows], Scope.PRIVATE] = {}
 
     def worker_template(self, template: str) -> str:
         """Return `template`, one of a worker run's commands, between `worker_cmd_prefix` and `worker_cmd_suffix`.
