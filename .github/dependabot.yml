@@ -44,6 +44,27 @@ updates:
       - dependency-name: oxc-transform-react
         update-types: [version-update:semver-minor]
 
+  # The dev-only packages that type-check the plugin canopy ships for its agents (tests/plugins). Its runtime types
+  # follow the OpenCode canopy pins, so they move with that pin by hand, never on their own.
+  - package-ecosystem: npm
+    directory: /tests/plugins
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      plugin-checks:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "@opencode-ai/plugin"
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+
   # The srt that `canopy sandbox setup` installs. Never grouped: each bump is its own PR, so the sandbox canary in CI
   # judges it alone, and a reviewer checks the claims about srt in docs/design/SANDBOXING.md against the new version.
   - package-ecosystem: npm
