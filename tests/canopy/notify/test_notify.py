@@ -56,6 +56,8 @@ def needing_reviewers(*keys: str) -> list[list[str]]:
         ("[notify.sinks.slack]\ncmd = ''\n", "must not be empty"),
         ("[notify.sinks.slack]\ncmd = 'x'\nevents = ['everything']\n", "events"),
         ("[notify.sinks.slack]\ncmd = 'x'\ndigest_every_minutes = 30\n", "greater than or equal to 60"),
+        ("[notify.sinks.slack]\ncmd = 'x'\ndigest_min_usd = 5\n", "digest_min_usd needs digest_every_minutes"),
+        ("[notify.sinks.slack]\ncmd = 'x'\ndigest_every_minutes = 60\ndigest_min_usd = 0\n", "greater than 0"),
         ("[notify.sinks.slack]\ncmd = 'x'\nbatch_minutes = 0\n", "greater than or equal to 1"),
         ("[notify.sinks.slack]\ncmd = 'x'\nbatch_minutes = 1441\n", "less than or equal to 1440"),
         ("[notify.sinks.Slack]\ncmd = 'x'\n", "sink name 'Slack'"),
@@ -380,7 +382,10 @@ def test_a_json_digest_names_each_ticket_by_its_title(
 
 
 def test_a_digest_says_what_its_runs_cost_by_kind(
-    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
@@ -392,6 +397,30 @@ def test_a_digest_says_what_its_runs_cost_by_kind(
     spent = message["digest"]["spend"]
     assert (spent["total"], spent["workers"], spent["overseer"], spent["chores"]) == (0.25, 0.25, None, None)
     assert "  spent: $0.25 (workers $0.25)\n" in message["text"]
+
+
+def test_a_digest_under_a_spend_floor_waits_until_the_runs_since_the_last_cost_that_much(
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "digest.txt"
+    add_sink(scenario, sink_script, "spend", out, events=[], digest_every_minutes=60, digest_min_usd=0.5)
+    with_events(scenario.env, "canopy-worker")
+    scenario.tick()
+    assert messages(out) == []  # nothing spent: no heartbeat either
+    scenario.run(worker=worker_does())  # $0.25
+    scenario.tick(*waits("PROJ-1"))
+    assert messages(out) == []
+    scenario.run(dispatches("PROJ-2"), worker=worker_does())  # $0.25 more: the floor, added up across ticks
+    scenario.tick(*waits("PROJ-1", "PROJ-2"))
+
+    [message] = json_messages(out)
+    assert message["digest"]["spend"]["workers"] == 0.5
+    scenario.time_passes(minutes=61)
+    scenario.tick(*waits("PROJ-1", "PROJ-2"))
+    assert len(messages(out)) == 1  # due again, but nothing spent since
 
 
 def test_bounds_count_what_they_leave_out(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:

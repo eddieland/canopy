@@ -152,6 +152,7 @@ cmd = ""
 # cmd = "canopy-notify-slack --channel C0123ABCD"  # or a bot token, from ~/.config/canopy/slack-token, mode 600
 # events = ["attention", "loop", "runs"]
 # digest_every_minutes = 240                    # a summary every 4 hours, what its runs cost by kind among it
+# digest_min_usd = 5                            # sent only once the runs since the last one cost $5 or more
 # batch_minutes = 15                            # at most one message per 15 minutes, unless something needs you
 
 # Optional: the web UI `canopy loop` serves (DESIGN §22). While it serves one, a json sink's messages link to its pages.
