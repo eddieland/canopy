@@ -7,8 +7,9 @@ This is review {{ATTEMPT}} of at most {{MAX_ATTEMPTS}} of this PR.
 - Commit: `{{SHA}}`. Review this commit, not whatever the PR's head is by the time you read it.
 - Checkout: `{{CHECKOUT}}` is the repository at that commit. Read what you need; change nothing (you have no tools
   to, and anything left there is discarded). Your git tools, `canopy_git_merge-base`, `canopy_git_diff`,
-  `canopy_git_log`, and `canopy_git_show`, read its history: where the PR leaves its base, the diff from there, and a
-  file as it was before.
+  `canopy_git_log`, `canopy_git_show`, and `canopy_git_blame`, read its history: where the PR leaves its base, the
+  diff from there, a file as it was before, and which commit wrote a line, so a problem the PR did not write is not
+  charged to it.
 - Base: the PR merges into `{{BASE}}`, which is `origin/{{BASE}}` in the checkout. Its merge base with the commit is
   where the PR leaves it: review the change from there, not from the repository's default branch.
 - Ticket: {{TICKET}}. For a ticket, the tracker is {{TRACKER_PROVIDER}}; if a skill named

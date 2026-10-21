@@ -48,11 +48,12 @@ exact name and denies bash; every other definition denies it. Each run canopy st
 server, so none passes below the run it was given to.
 
 The reviewer and the planner, which have no shell, read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git`
-in a review's or a plan's inline config, serves `merge-base`, `diff`, `log`, and `show` over the checkouts the harness
-names on its command line for that run, never the agent. An argument is a revision or a path inside the repository,
-never an option; git reads commits only, inherits no `GIT_*` variable, and runs no hook, filesystem monitor, external
-diff, textconv, pager, signature check, or transport; output is bounded. Their definitions keep `bash: deny` and allow
-the four by exact name; every other definition denies `canopy_git_*`. Workers keep their shell, for git's writes.
+in a review's or a plan's inline config, serves `merge-base`, `diff`, `log`, `show`, and `blame` over the checkouts
+the harness names on its command line for that run, never the agent. An argument is a revision, a path inside the
+repository, or text to search for joined to its option, never an option itself; git reads commits only, inherits no
+`GIT_*` variable, and runs no hook, filesystem monitor, external diff, textconv, pager, signature check, or transport;
+output is bounded. Their definitions keep `bash: deny` and allow
+each by exact name; every other definition denies `canopy_git_*`. Workers keep their shell, for git's writes.
 
 ### The tools
 

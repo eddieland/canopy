@@ -14,8 +14,9 @@ The repositories this plan covers, each at its PR's head on branch `agent/PROJ-1
 
 Their pull requests: `https://github.com/acme/api/pull/7`.
 
-Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`, and `canopy_git_show`, read each one's
-history: where its branch leaves its base, the diff and commits since, and a file as it was. Name the repository with
+Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`, `canopy_git_show`, and
+`canopy_git_blame`, read each one's history: where its branch leaves its base, the diff and commits since, a file as it
+was, and which commit wrote a line. Name the repository with
 `repo`, as above.
 
 ## Authorization
