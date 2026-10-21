@@ -90,6 +90,8 @@ permission:
   "atlassian_listJiraProjects": allow
   "atlassian_lookupJiraAccountId": allow
   "atlassian_searchJiraIssuesUsingJql": allow
+  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
+  "canopy_chore_history": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker: plan" prompt, print

@@ -148,6 +148,8 @@ permission:
   "*reply_to_pull_request_comment*": deny
   "*add_comment_to_pending_review*": deny
   "*add_issue_comment*": deny
+  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
+  "canopy_chore_history": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy private worker" prompt,
