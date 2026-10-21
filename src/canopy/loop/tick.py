@@ -25,6 +25,7 @@ from canopy.core import (
     plans,
     pools,
     progress,
+    run_offers,
 )
 from canopy.core.config import render_command
 from canopy.core.items import one_line
@@ -587,14 +588,10 @@ def _run_overseer(
     out_path = out_dir / f"{tick_id}.log"
     with logs.open_private(out_path) as out:
         watch = progress.Progress(ctx.conn, "ticks", tick_id, out, log, agent="overseer", fields={})
+        env = {TICK_ID_ENV: str(tick_id)}
         try:
-            result = ctx.runner.run(
-                argv,
-                cwd=ctx.repo_root,
-                env={TICK_ID_ENV: str(tick_id)},
-                timeout=timeout_minutes * 60,
-                on_line=watch,
-            )
+            with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env):
+                result = ctx.runner.run(argv, cwd=ctx.repo_root, env=env, timeout=timeout_minutes * 60, on_line=watch)
         except procs.ProcError as e:
             # It printed nothing, so it keeps no output, as a tick whose overseer never ran keeps none.
             out_path.unlink(missing_ok=True)

@@ -65,7 +65,9 @@ class Debug:
         failed = self.fail(args)
         if failed is not None:
             return failed
-        match list(args):
+        # Whatever starts OpenCode, the words after it are its own.
+        start = max(i for i, word in enumerate(args) if Path(word).name == "opencode")
+        match ["opencode", *args[start + 1 :]]:
             case ["opencode", "debug", "config"]:
                 printed: object = self.config
             case ["opencode", "debug", "skill"]:
@@ -179,3 +181,57 @@ def test_opencode_missing_or_slow_is_the_error() -> None:
     assert offered(Debug({}, fail=slow)).error == (
         f"`opencode debug config` took over {offerings.TIMEOUT_SECONDS} seconds"
     )
+
+
+def test_a_run_is_asked_about_as_its_own_command_starts_opencode() -> None:
+    debug = Debug(
+        {"canopy-chore": [rule("github_*"), rule("github_issue_read", "allow"), rule("skill", pattern="tr*")]},
+    )
+    argv = ("canopy-sandbox", "chore", "env", "OPENCODE_CONFIG_DIR=/defs", "/usr/bin/opencode", "run")
+    found = offerings.offered(
+        debug,
+        (*argv, "--agent=canopy-chore", "--format", "json", "Say ok."),
+        cwd=Path("/run"),
+        env={"CANOPY_RUN_ID": "7"},
+    )
+    # The server its config turns off is offered to no run, so it is not among them.
+    assert found == AgentOffer(
+        "canopy-chore",
+        servers=(ServerOffer("github", "some", ("offer github_issue_read",)),),
+        skills=("customize-opencode",),
+        denied_skills=("tracker-github", "tracker-jira"),
+    )
+    # `opencode run` and what follows it swapped for each debug command, inside what wraps it, where the run starts.
+    assert debug.ran == [
+        ((*argv[:-1], "debug", *command), Path("/run"), {"CANOPY_RUN_ID": "7"})
+        for command in (("config",), ("skill",), ("agent", "canopy-chore"))
+    ]
+
+
+@pytest.mark.parametrize(
+    ("argv", "error"),
+    [
+        (("agent", "run", "--agent", "canopy-worker", "x"), "its command runs no `opencode run`"),
+        (("opencode", "serve"), "its command runs no `opencode run`"),
+        (("opencode", "run", "--agent", "Not A Name", "x"), "its command names no agent"),
+        # The prompt is one word, whatever its text says.
+        (("opencode", "run", "Run with --agent canopy-worker please"), "its command names no agent"),
+    ],
+)
+def test_a_run_whose_command_canopy_cannot_read_is_not_asked_about(argv: Sequence[str], error: str) -> None:
+    debug = Debug({})
+    assert offerings.offered(debug, argv, cwd=Path("/run"), env={}) == AgentOffer("", error=error)
+    assert debug.ran == []
+
+
+def test_a_run_the_runtime_cannot_say_about_has_only_its_error() -> None:
+    def fail(args: Sequence[str]) -> procs.Result | None:
+        return procs.Result(tuple(args), 1, "", "") if args[-1] == "skill" else None
+
+    found = offerings.offered(
+        Debug({}, fail=fail),
+        ("opencode", "run", "--agent", "canopy-worker"),
+        cwd=Path("/run"),
+        env={},
+    )
+    assert found == AgentOffer("canopy-worker", error="`opencode debug skill` exited 1; run it to see why")

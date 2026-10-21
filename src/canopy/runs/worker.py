@@ -46,6 +46,7 @@ from canopy.core import (
     pools,
     replies,
     review_diff,
+    run_offers,
 )
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
@@ -456,16 +457,18 @@ def _run_agent(
     run_id = int(run["id"])
     out.write("--- worker stdout ---\n")
     out.flush()
-    result = ctx.runner.run(
-        argv,
-        cwd=cwd,
-        # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the
-        # object directory; an unsandboxed worker ignores it (DESIGN §8).
-        env={conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))},
-        timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
-        on_line=_Progress(ctx, run_id, out, log),
-    )
+    # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
+    # directory; an unsandboxed worker ignores it (DESIGN §8).
+    env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env):
+        result = ctx.runner.run(
+            argv,
+            cwd=cwd,
+            env=env,
+            timeout=timeout_minutes * 60,
+            on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
+            on_line=_Progress(ctx, run_id, out, log),
+        )
     out.write(f"\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()

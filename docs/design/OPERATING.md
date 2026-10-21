@@ -189,6 +189,11 @@ tool calls by tool, a skill's by the skill it loaded, and records them on the ti
 definitions it loaded, so a prompt or definition change splits runs into before and after. Figures that do not
 validate make the run report no cost rather than too little, and a template that asks for no events records no cost.
 
+What the run was offered, MCP servers and skills, is recorded beside them: the runtime is asked as `canopy agents`
+asks it, while the agent starts, by the run's own command with its agent's run swapped for the runtime's debug
+commands, so it is asked where the agent starts and inside any sandbox that wraps it. A run whose command canopy
+cannot read so, or that the runtime could not answer for, records why instead, and the run goes on either way.
+
 The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
 what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.
 

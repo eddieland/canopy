@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff, review_drafts
+from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff, review_drafts, run_offers
 from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
@@ -174,14 +174,16 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         extra={"review_run_id": run.id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
     run_id = run.id
-    done = ctx.runner.run(
-        argv,
-        cwd=cwd,
-        # The operator's commands refuse inside canopy's own runs (DESIGN §22).
-        env={conversation.RUN_ID_ENV: f"review-{run_id}"},
-        timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
-    )
+    # The operator's commands refuse inside canopy's own runs (DESIGN §22).
+    env = {conversation.RUN_ID_ENV: f"review-{run_id}"}
+    with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env):
+        done = ctx.runner.run(
+            argv,
+            cwd=cwd,
+            env=env,
+            timeout=timeout_minutes * 60,
+            on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
+        )
     out.write(f"--- reviewer stdout ---\n{done.stdout}\n--- reviewer stderr ---\n{done.stderr}\n")
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
