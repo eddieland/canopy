@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Fake `opencode` for tests: plays `opencode export ID --sanitize` from a state file, and nothing else.
+"""Fake `opencode` for tests: plays `opencode export ID --sanitize` and `opencode debug` from a state file, and hands
+`opencode run` to the fake agent beside it.
 
 On PATH ahead of any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the
 environment:
@@ -10,10 +11,15 @@ environment:
 
 Keys of the state besides `sessions`, each optional:
 
-    exit    the exit code of every export, with `stderr`, for an OpenCode that fails. Default none.
+    exit    the exit code of every export and debug command, with `stderr`, for an OpenCode that fails. Default none.
     stderr  text printed on stderr with `exit`.
+    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`.
+    skills  the names `debug skill` lists. Default none.
+    agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `debug agent NAME` prints
+            after an allow of everything. Default none.
 
-It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. Any other command exits 2.
+It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
+arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
@@ -33,9 +39,39 @@ def main() -> int:
     match sys.argv[1:]:
         case ["export", session_id, "--sanitize"]:
             return export(session_id)
+        case ["debug", *command]:
+            return debug(command)
+        case ["run", *_]:
+            agent = Path(__file__).with_name("agent")
+            os.execv(agent, [str(agent), *sys.argv[1:]])  # noqa: S606  (stands in for OpenCode running an agent)
+            return 1  # not reached: `execv` returns only by raising
         case _:
-            sys.stderr.write(f"fake opencode plays only `export ID --sanitize`, not {sys.argv[1:]}\n")
+            sys.stderr.write(
+                f"fake opencode plays only `export ID --sanitize`, `debug`, and `run`, not {sys.argv[1:]}\n",
+            )
             return 2
+
+
+def debug(command: list[str]) -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    match command:
+        case ["config"]:
+            printed: Any = state.get("config", {"mcp": {}})
+        case ["skill"]:
+            printed = [
+                {"name": name, "description": "d", "location": "x", "content": "x"} for name in state.get("skills", [])
+            ]
+        case ["agent", name]:
+            rules = [["*", "*", "allow"], *state.get("agents", {}).get(name, [])]
+            printed = {"name": name, "permission": [{"permission": p, "pattern": t, "action": a} for p, t, a in rules]}
+        case _:
+            sys.stderr.write(f"fake opencode does not play `debug {' '.join(command)}`\n")
+            return 2
+    print(json.dumps(printed, indent=2))
+    return 0
 
 
 def export(session_id: str) -> int:

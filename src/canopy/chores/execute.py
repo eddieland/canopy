@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, TextIO
 from canopy.chores import history, start
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import db, definitions, outbox, progress
+from canopy.core import db, definitions, outbox, progress, run_offers
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
@@ -160,25 +160,28 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     )
     out.write("--- chore stdout ---\n")
     out.flush()
-    done = ctx.runner.run(
-        argv,
-        cwd=cwd,
-        # The operator's commands refuse inside canopy's own runs (DESIGN §22); its history tool reads this chore's
-        # runs from this workspace's journal, wherever `cwd` is.
-        env=history.run_env(ctx, f"{history.RUN_PREFIX}{run_id}"),
-        timeout=chore.timeout_minutes * 60,
-        on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
-        # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so far.
-        on_line=progress.Progress(
-            ctx.conn,
-            "chore_runs",
-            run_id,
-            out,
-            log,
-            agent="chore",
-            fields={"chore_run_id": run_id},
-        ),
-    )
+    # The operator's commands refuse inside canopy's own runs (DESIGN §22); its history tool reads this chore's runs
+    # from this workspace's journal, wherever `cwd` is.
+    env = history.run_env(ctx, f"{history.RUN_PREFIX}{run_id}")
+    with run_offers.probing(ctx.conn, "chore_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
+        done = ctx.runner.run(
+            argv,
+            cwd=cwd,
+            env=env,
+            timeout=chore.timeout_minutes * 60,
+            on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
+            # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so
+            # far.
+            on_line=progress.Progress(
+                ctx.conn,
+                "chore_runs",
+                run_id,
+                out,
+                log,
+                agent="chore",
+                fields={"chore_run_id": run_id},
+            ),
+        )
     out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
