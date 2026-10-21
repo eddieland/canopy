@@ -499,7 +499,8 @@ def _run_overseer(
     again when the overseer ends, failed or not.
 
     Returns:
-        Why it failed, None on success, and what it cost if the runtime reported it.
+        Why it failed, with the last error the runtime reported unless it timed out, None on success, and what it cost
+        if the runtime reported it.
     """
     # The runtime reads the repository's config too: it must not define an agent of canopy's (D044).
     failure = project_config.refusal([ctx.repo_root])
@@ -547,6 +548,9 @@ def _run_overseer(
         failure = f"overseer's final message has no {DONE_LINE} line"
     else:
         return None, output.usage
+    # What the runtime said is why it ended; after a timeout, canopy ended it.
+    if output.error is not None and not result.timed_out:
+        failure = f"{failure}; the runtime reported {output.error}"
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure, output.usage
 

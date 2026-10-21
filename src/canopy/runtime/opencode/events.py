@@ -1,7 +1,7 @@
 """OpenCode's JSON events (DESIGN §13), read into what a run reports (`canopy.runtime.report`).
 
 A command template either prints the agent's text on stdout, or, with OpenCode's `--format json`, prints one JSON event
-per line. canopy reads three kinds of event and one field of every event, each validated (D026):
+per line. canopy reads four kinds of event and one field of every event, each validated (D026):
 
 - `text`: a finished piece of the agent's text, in `part.text`. Joined one per line they are what stdout holds without
   `--format json`, so every result contract reads the same either way. The last one is the agent's final message.
@@ -12,6 +12,8 @@ per line. canopy reads three kinds of event and one field of every event, each v
   and the characters of what they returned are what each tool put into the run's context. A call of the `skill` tool
   is counted under the skill it loaded, `skill:<name>`, so spend says which skills an agent uses, not only that it
   used one.
+- `error`: the session failed, its `error` a name and a message. The last one is why a failed run ended, as far as the
+  runtime says; OpenCode's own log has the detail of one it did not expect, under its `ref`.
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
@@ -28,7 +30,7 @@ from typing import Annotated, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
-from canopy.runtime import report
+from canopy.runtime import entries, report
 from canopy.runtime.opencode.definitions import MAX_SKILL_NAME, SKILL_NAME_RE
 from canopy.runtime.report import MAX_COST_USD, SKILL_PREFIX, AgentOutput, Call, Count, ToolUse, Usage
 
@@ -36,6 +38,8 @@ from canopy.runtime.report import MAX_COST_USD, SKILL_PREFIX, AgentOutput, Call,
 STEP_START = "step_start"
 STEP_FINISH = "step_finish"
 TOOL_USE = "tool_use"
+#: The event that says the session failed.
+ERROR = "error"
 #: OpenCode's tool that loads a skill.
 SKILL_TOOL = "skill"
 
@@ -94,13 +98,42 @@ class _ToolPart(BaseModel):
     state: _ToolState
 
 
+class ErrorData(BaseModel):
+    """What an `error` event says of the error besides its name."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    message: StrictStr | None = None
+    #: Where OpenCode's own log has the detail, for an error it did not expect.
+    ref: StrictStr | None = None
+
+
+class SessionError(BaseModel):
+    """An `error` event's `error`: why the session failed, as the runtime names it."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    name: StrictStr | None = None
+    data: ErrorData | None = None
+
+    def describe(self) -> str:
+        """The error on one line, as a failure names it.
+
+        Returns:
+            `Name: message (ref)`, each part only when given, and `error` when none is.
+        """
+        data = self.data or ErrorData()
+        said = ": ".join(part for part in (self.name, data.message) if part) or ERROR
+        return entries.line(f"{said} ({data.ref})" if data.ref else said)
+
+
 def read(stdout: str) -> AgentOutput:
     """Read an agent's stdout: plain text, or OpenCode's JSON events.
 
     Returns:
         `stdout` as it is, as both the text and the final message, when it holds no event. Otherwise the events' text
         parts joined by newlines, the last of them, the first valid session id, the steps' total usage, or None for
-        usage when a step could not be read, and the tool calls rolled up by tool.
+        usage when a step could not be read, the tool calls rolled up by tool, and the last error the runtime reported.
     """
     texts: list[str] = []
     tally = Tally()
@@ -118,30 +151,39 @@ def read(stdout: str) -> AgentOutput:
     if not events:
         return AgentOutput(stdout, stdout)
     last = texts[-1] if texts else ""
-    return AgentOutput("\n".join(texts), last, tally.session_id, tally.usage, tally.tools)
+    return AgentOutput("\n".join(texts), last, tally.session_id, tally.usage, tally.tools, tally.error)
 
 
 class Tally:
-    """The session, usage, and tools of an agent's events, added one at a time as it prints them, as `read` reports.
+    """The session, usage, tools, and error of an agent's events, added one at a time as it prints them, as `read` does.
 
     So a running agent's session and what it has spent so far are what `read` would say of what it printed so far.
     """
 
     def __init__(self) -> None:
-        """Start with no event: no session, nothing spent, and no tool called."""
+        """Start with no event: no session, nothing spent, no tool called, and no error."""
         self.session_id: str | None = None
+        #: The last error the runtime reported, on one line (`SessionError.describe`).
+        self.error: str | None = None
         self._calls: list[Call] = []
         self._complete = True
         self._tools = report.Tools()
 
     def add(self, event: Mapping[str, object]) -> None:
-        """Count `event`: its session, and its model call's cost or its tool call, if it is either.
+        """Count `event`: its session, and its model call's cost, its tool call, or its error, if it is one of them.
 
         The session is the first valid one an event names.
         """
         self.session_id = self.session_id or report.session_id(event["sessionID"])
         if event["type"] == TOOL_USE:
             self._add_tool(event)
+            return
+        if event["type"] == ERROR:
+            try:
+                self.error = SessionError.model_validate(event.get("error")).describe()
+            except ValidationError:
+                # One canopy cannot read still says the session failed.
+                self.error = ERROR
             return
         if event["type"] != STEP_FINISH:
             return

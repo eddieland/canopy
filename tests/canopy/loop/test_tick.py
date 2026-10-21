@@ -285,6 +285,28 @@ def test_the_done_token_in_an_earlier_message_fails_the_tick(scenario: Scenario)
     )
 
 
+@pytest.mark.parametrize(
+    ("exit_code", "failure"), [(1, "overseer exited 1"), (0, "overseer's final message has no CANOPY_TICK_DONE line")]
+)
+def test_an_overseer_failure_names_the_error_the_runtime_reported(
+    scenario: Scenario, exit_code: int, failure: str
+) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    server = {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}}
+    failed = scenario.tick(result="", exit_code=exit_code, error=json.dumps(server), dry_run=True, code=1)
+    assert (failed.tick.status, failed.tick.summary) == (
+        "overseer_failed",
+        f"{failure}; the runtime reported UnknownError: Unexpected server error. (err_ccf1)",
+    )
+
+
+def test_an_overseer_that_ends_its_tick_after_an_error_is_ok(scenario: Scenario) -> None:
+    """The runtime's error is named only for a tick that failed: a session that recovered from it did its work."""
+    with_events(scenario.env, "canopy-overseer")
+    ticked = scenario.tick(error=json.dumps({"name": "APIError"}), dry_run=True)
+    assert ticked.tick.status == "ok"
+
+
 @pytest.mark.parametrize(("last_line", "status"), [("CANOPY_TICK_DONE", "ok"), ("I got distracted", "overseer_failed")])
 def test_an_overseer_printing_json_events_is_read_by_their_text(
     scenario: Scenario, last_line: str, status: str
