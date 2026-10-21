@@ -2,40 +2,44 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { mockCapacity } from '@/api/mocks'
 import type { Middleware } from 'openapi-fetch'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
-import type { LoopState } from '@/api/types'
+import type { LoopState, WorkerNotice } from '@/api/types'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
 import { NoticeBanner } from './worker-notice'
 
 const QUIET: LoopState = { capacity: mockCapacity, memory: null, notice: null, paused: null }
-const TOLD: LoopState = {
-    ...QUIET,
-    notice: {
-        channel: 'cli',
-        text: 'Freeze on main until the release: see https://example.com/freeze',
-        since: '2026-10-08T11:00:00Z',
-        lapses_at: '2026-10-08T15:00:00Z',
-    },
+const FREEZE: WorkerNotice = {
+    channel: 'cli',
+    text: 'Freeze on main until the release: see https://example.com/freeze',
+    since: '2026-10-08T11:00:00Z',
+    lapses_at: '2026-10-08T15:00:00Z',
 }
+const TOLD: LoopState = { ...QUIET, notice: FREEZE }
 
-// Every request the banner sends, and what the server stand-in answers each.
+// Every request the banner sends, the body of each that has one, and what the server stand-in answers each.
 let sent: string[] = []
+let bodies: unknown[] = []
 let answer: Response | undefined
 
 const server: Middleware = {
-    onRequest({ request }) {
+    async onRequest({ request }) {
         sent.push(`${request.method} ${new URL(request.url).pathname}`)
+        const body = await request.clone().text()
+        if (body !== '') {
+            bodies.push(JSON.parse(body))
+        }
         return answer
     },
 }
 
 beforeEach(() => {
     sent = []
+    bodies = []
     answer = undefined
     api.use(server)
 })
@@ -88,6 +92,81 @@ describe('NoticeBanner', () => {
             expect(screen.queryByRole('region', { name: 'Notice to workers' })).toBeNull()
         })
         expect(sent).toEqual(['POST /api/loop/notice/clear'])
+    })
+
+    it('renews the notice with its words, for as long as it was set for, as `canopy notice --for` does', async () => {
+        const renewed = { ...FREEZE, since: '2026-10-08T12:00:00Z', lapses_at: '2026-10-08T16:00:00Z' }
+        answer = Response.json({ already: false, loop: { ...TOLD, notice: renewed } })
+        renderBanner(TOLD)
+
+        const button = screen.getByRole('button', { name: 'Renew' })
+        expect(button.title).toBe('Renew the notice for 4h, as long as it was set for, from now.')
+        fireEvent.click(button)
+        await screen.findByText(
+            `Every run dispatched until ${localTime('2026-10-08T16:00:00Z', DEFAULT_CLOCK)} hears it.`,
+        )
+        expect(sent).toEqual(['POST /api/loop/notice'])
+        expect(bodies).toEqual([{ text: FREEZE.text, minutes: 240 }])
+    })
+
+    it('edits the words in place, keeping the time it lapses, and shows the notice it set', async () => {
+        vi.useFakeTimers({ now: Date.parse('2026-10-08T12:00:00Z'), toFake: ['Date'] })
+        try {
+            const edited = { ...FREEZE, text: 'Freeze lifted at noon.', since: '2026-10-08T12:00:00Z' }
+            answer = Response.json({ already: false, loop: { ...TOLD, notice: edited } })
+            renderBanner(TOLD)
+
+            fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+            const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: "The notice's words" })
+            expect(field.value).toBe(FREEZE.text)
+            const save = screen.getByRole<HTMLButtonElement>('button', { name: /^Save notice/u })
+            // Saving the same words for the same time would change nothing.
+            expect(save.disabled).toBe(true)
+            fireEvent.change(field, { target: { value: 'Freeze lifted at noon.' } })
+            fireEvent.click(save)
+
+            await screen.findByText('Freeze lifted at noon.')
+            expect(screen.queryByRole('textbox')).toBeNull()
+            // Three hours left of the four it was set for.
+            expect(bodies).toEqual([{ text: 'Freeze lifted at noon.', minutes: 180 }])
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it('sets the edited notice for the time picked in place of the one it had', async () => {
+        answer = Response.json({ already: false, loop: TOLD })
+        renderBanner(TOLD)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        fireEvent.click(screen.getByRole('radio', { name: '1 day' }))
+        fireEvent.click(screen.getByRole('button', { name: /^Save notice/u }))
+        await waitFor(() => {
+            expect(screen.queryByRole('textbox')).toBeNull()
+        })
+        expect(bodies).toEqual([{ text: FREEZE.text, minutes: 1440 }])
+    })
+
+    it('drops an edit on Cancel and sends nothing', () => {
+        renderBanner(TOLD)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'never mind' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+        expect(screen.queryByRole('textbox')).toBeNull()
+        expect(screen.getByRole('region', { name: 'Notice to workers' }).textContent).toContain('Freeze on main')
+        expect(sent).toEqual([])
+    })
+
+    it('keeps the edit open and names the guard when the server refuses it', async () => {
+        answer = Response.json({ detail: { guard: 'too_long', reason: 'the notice is 1100 bytes' } }, { status: 409 })
+        renderBanner(TOLD)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'x'.repeat(1100) } })
+        fireEvent.click(screen.getByRole('button', { name: /^Save notice/u }))
+        expect((await screen.findByRole('alert')).textContent).toBe('refused (too_long): the notice is 1100 bytes')
+        expect(screen.getByRole('textbox')).toBeDefined()
     })
 
     it('keeps the notice and names the guard when the server refuses to clear it', async () => {

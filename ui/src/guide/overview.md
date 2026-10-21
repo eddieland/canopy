@@ -88,8 +88,11 @@ The bar across the top of every page. From the left:
   Before the first one, it says `no tick yet`.
   `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page.
 
-While a notice to workers is in force, a banner above every page shows it until it lapses, with **Clear** to end it
-sooner. You set one on [Settings](settings#notice-to-workers).
+While a notice to workers is in force, a banner above every page shows it until it lapses. **Edit** opens its words
+in place, keeping the time it lapses unless you pick another. **Renew** sets it again from now, for as long as it was
+set for, for the outage that outlived its estimate, as outages do. **Clear** ends it sooner. Each replaces the notice
+as `canopy notice` would, so a run already going keeps the words it started with. You set one on
+[Settings](settings#notice-to-workers).
 
 ## The rail
 

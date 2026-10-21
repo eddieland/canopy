@@ -237,7 +237,10 @@ Rules:
   pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
-  the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.
+  the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and ghost Edit,
+  Renew, and Clear. Edit opens the Settings form (`NoticeForm`) in place of the words, starting from them, its toggle
+  group led by `Until` the time it lapses, picked, and `Save notice` with a ghost `Cancel`, disabled until the words or
+  the time change. Renew sets the same words again for as long as they were set for, its duration on hover.
   It is not in the header, which has no room for a sentence, and it leaves with the stream's word when it lapses.
   Settings sets one, in its own panel, with how long it lasts as a toggle group; any other duration is the CLI's.
 - **A chore over its finding limit** (`ChoreLimitBanner`, docs/design §19) heads its page, under the title, only
