@@ -111,6 +111,8 @@ not go in the middle of the sequence.
 - [The harness decides](HARNESS_DECIDES.md): the decisions the harness records in code before the overseer runs, and
   what it leaves to judgment.
   - [37. The harness decides what needs no judgment](HARNESS_DECIDES.md#37-the-harness-decides-what-needs-no-judgment)
+- [Artifacts](ARTIFACTS.md): pages workers publish, the comments people leave on them, and how those come back.
+  - [38. Artifacts and Louvre](ARTIFACTS.md#38-artifacts-and-louvre)
 
 ## 1. Problem
 
