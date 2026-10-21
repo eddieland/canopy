@@ -3,6 +3,7 @@
 import fnmatch
 import os
 import shutil
+import stat
 import time
 from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
@@ -24,7 +25,7 @@ PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 SKILL_MARKER = "    # canopy: skill rule\n"
 
 
-def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
+def test_the_snapshot_holds_the_bundled_agents_skills_and_plugins(tmp_path: Path) -> None:
     snapshot = definitions.ensure(tmp_path)
     assert snapshot == tmp_path / "runtime" / definitions.digest()
     for name in runtime_definitions.agent_names():
@@ -32,8 +33,34 @@ def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> Non
         assert (snapshot / "agents" / f"{name}.md").read_text() == bundled.read_text()
     for skill in resources.skills_dir().iterdir():
         assert (snapshot / "skills" / skill.name / "SKILL.md").read_text() == (skill / "SKILL.md").read_text()
+    # The clock, which every run that loads the snapshot loads (DESIGN §33).
+    clock = resources.plugins_dir() / "canopy-clock.js"
+    assert (snapshot / "plugins" / "canopy-clock.js").read_text() == clock.read_text()
     assert "canopy-worker" in runtime_definitions.agent_names()
     assert "canopy-overseer" in runtime_definitions.agent_names()
+
+
+def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path) -> None:
+    # So the runtime installs nothing into it, and no run waits on the registry for that (DESIGN §33).
+    snapshot = definitions.ensure(tmp_path)
+    found = [snapshot, *snapshot.rglob("*")]
+    assert {p.relative_to(snapshot).as_posix() for p in found} >= {".", "plugins", "plugins/canopy-clock.js"}
+    assert [p for p in found if p.lstat().st_mode & 0o222] == []
+    assert all(p.lstat().st_mode & stat.S_IRUSR for p in found)
+    # Still the operator's alone, as canopy checks before loading one.
+    assert definitions.ensure(tmp_path) == snapshot
+
+
+def test_the_snapshots_digest_changes_with_its_plugins(tmp_path: Path) -> None:
+    before = definitions.digest()
+    plugins = tmp_path / "plugins"
+    shutil.copytree(resources.plugins_dir(), plugins)
+    with (plugins / "canopy-clock.js").open("a") as f:
+        f.write("// changed\n")
+    with mock.patch.object(resources, "plugins_dir", autospec=True, return_value=plugins):
+        changed = definitions.ensure(tmp_path / "state")
+    assert changed.name != before
+    assert (changed / "plugins" / "canopy-clock.js").read_text().endswith("// changed\n")
 
 
 @pytest.mark.parametrize("name", runtime_definitions.agent_names())
@@ -76,7 +103,9 @@ def test_no_agent_is_offered_the_operator_skill(canopy_env: CanopyEnv, agent: st
 
 def test_an_existing_snapshot_is_reused_as_is(tmp_path: Path) -> None:
     snapshot = definitions.ensure(tmp_path)
-    # OpenCode writes into the directory it loads; that must not make canopy copy again.
+    # OpenCode writes into a directory it loads that it can write, as into a snapshot made before canopy took the write
+    # permission away; that must not make canopy copy again.
+    snapshot.chmod(0o700)
     (snapshot / "node_modules").mkdir()
     assert definitions.ensure(tmp_path) == snapshot
     assert (snapshot / "node_modules").is_dir()
@@ -89,7 +118,9 @@ def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path) -
 
     def another_process_wins(src: Path, dst: Path) -> None:
         shutil.copytree(src, final)
+        final.chmod(0o700)
         (final / "winner").touch()
+        final.chmod(0o500)
         real_rename(src, dst)  # refused: dst is a directory that is not empty
 
     with mock.patch.object(os, "rename", autospec=True, side_effect=another_process_wins):
@@ -105,8 +136,13 @@ def test_prune_keeps_the_current_snapshot_and_fresh_temporary_directories(tmp_pa
     old.mkdir()
     fresh_tmp = runtime / ".tmp-fresh"
     fresh_tmp.mkdir()
+    (old / "agents").mkdir()
+    (old / "agents" / "canopy-worker.md").touch()
     stale_tmp = runtime / ".tmp-stale"
     stale_tmp.mkdir()
+    # Unwritable, as canopy leaves a snapshot and the copy a process died with after taking its write permission away.
+    for unwritable in (old / "agents" / "canopy-worker.md", old / "agents", old, stale_tmp):
+        unwritable.chmod(0o500)
     hours_ago = time.time() - 2 * 3600
     os.utime(stale_tmp, (hours_ago, hours_ago))
 

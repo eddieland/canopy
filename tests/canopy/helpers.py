@@ -771,6 +771,13 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
+def has_deadline(run: Mapping[str, Any], minutes: int, *, before: float, after: float) -> bool:
+    """Whether agent run `run`, as the fake agent logged it, had a deadline `minutes` after a start between `before` and
+    `after`: the moment the clock canopy kills it by fires, in `CANOPY_DEADLINE` (DESIGN §33)."""
+    deadline = int(run["env"][procs.DEADLINE_ENV])
+    return int(before) + minutes * 60 <= deadline <= after + minutes * 60
+
+
 def titled_overseer(env: CanopyEnv) -> None:
     """Have the test config's overseer template pass `--title={title}`, as the default templates do."""
     template = "agent run --agent canopy-overseer {prompt}"

@@ -64,19 +64,18 @@ Accept: Stage 0 recorded and the operator's go-ahead. Live, once built: a worker
 ticket shows canopy's line in its transcript in its last minute and pushes before the kill; over the next week of
 real use, `MEASUREMENTS.md` records how many `timeout` runs had pushed after a warning, against Stage 0's count.
 
-Status: in progress. Designed 2026-10-20 (DESIGN §33, A clock for running agents, beside §13's agent runtime), after
-Stage 0's source read (2026-10-19, OpenCode 1.19.3 and `srt` 0.0.79). Plugins load from `OPENCODE_CONFIG_DIR` as
-assumed, `tool.execute.after` runs after every call that succeeds, MCP tools' included, and `CANOPY_DEADLINE` reaches a
-sandboxed agent with no change to the wrapper. The read changed the plan in three places: an MCP tool's hook gets the
-MCP result, whose text OpenCode truncates after the hook keeping the head, so the line goes first in its `content`; any
-plugin makes every run wait for the `@opencode-ai/plugin` install OpenCode starts in each config directory it can
-write, so the snapshot is made unwritable; and a hook that throws fails the call, so the plugin catches everything. The
-design settles the rest: `CANOPY_DEADLINE` is taken when canopy starts the clock it kills by, and a process started
-without a timeout gets none, not even its parent's; the plugin counts its last fifth from its own load, so it reads one
-variable; canopy gives the snapshot its write permission back only to remove it; a forged line fails safe, as the
-comment marks do, since it can only hurry an agent or leave it as it is without the clock; and the overseer's body and a
-chore's run section, which state no time limit, gain the line the workers' prompts get. Open for the operator: what a
-worker that winds down reports, `failed` or a status of its own; whether the overseer, warned in the last 3 of its 15
-minutes, has time to record what it owes; and how long a run waits on a repository's `.opencode/` install when the
-registry is refused. The measure pass over the operator's journal and run logs, and the operator's go-ahead to build,
-remain.
+Status: in progress. Built against the fakes on 2026-10-21, at the operator's word that day, ahead of Stage 0's
+measure pass and the go-ahead the Accept asks for: `procs` gives `CANOPY_DEADLINE` to every process it starts with a
+timeout and takes it from every other, the clock ships in the snapshot as `plugins/canopy-clock.js` (tested under
+Node's test runner from `make test`), the snapshot is unwritable once written, and every prompt, the overseer's body,
+and a chore's run section say what a `[canopy]` line asks. The open questions took the conservative answer: a worker
+or planner that winds down reports `failed`, its summary naming what remains, with no status of its own; the overseer
+is warned as every agent is; and the wait on a repository's `.opencode/` install is left to the live check, now
+SCENARIOS S61. Designed 2026-10-20 (DESIGN §33, beside §13's agent runtime), after Stage 0's source read (2026-10-19,
+OpenCode 1.19.3 and `srt` 0.0.79): plugins load from `OPENCODE_CONFIG_DIR` as assumed, `tool.execute.after` runs after
+every call that succeeds, MCP tools' included, and `CANOPY_DEADLINE` reaches a sandboxed agent with no change to the
+wrapper. The read changed the plan in three places: an MCP tool's hook gets the MCP result, whose text OpenCode
+truncates after the hook keeping the head, so the line goes first in its `content`; any plugin makes every run wait for
+the `@opencode-ai/plugin` install OpenCode starts in each config directory it can write, so the snapshot is made
+unwritable; and a hook that throws fails the call, so the plugin catches everything. The measure pass over the
+operator's journal and run logs, the live check (S61), and the week of real use the Accept measures remain.

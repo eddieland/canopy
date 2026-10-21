@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     agent_runs,
     commit_and_push,
     context,
+    has_deadline,
     in_run,
     in_tick,
     json_block,
@@ -235,10 +236,14 @@ def test_a_task_stopped_before_its_tick_never_starts(capsys: pytest.CaptureFixtu
 def test_the_worker_is_the_private_one_and_its_prompt_carries_the_text(inline: Context, agent_log: Path) -> None:
     submit()
     [started] = start(inline)
+    before = time.time()
     with private_worker_does(result=DONE):
         run_task(inline, started.run_id)
+    after = time.time()
     [worker] = agent_runs(agent_log)
     assert worker["argv"][:3] == ["run", "--agent", "canopy-worker-private"]
+    # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
+    assert has_deadline(worker, inline.config.runtime.worker_timeout_minutes, before=before, after=after)
     prompt = worker["argv"][-1]
     assert TEXT in prompt
     assert f"Push only to `{BRANCH}`" in prompt

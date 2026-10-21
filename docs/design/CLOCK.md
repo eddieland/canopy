@@ -6,7 +6,7 @@ plans](FEEDBACK_PLANS.md). Next: [Published reviews](PUBLISHED_REVIEWS.md).
 
 ## 33. A clock for running agents
 
-Designed, not built (ROADMAP M57).
+Built, and checked against the fakes; its live check is ROADMAP M57's.
 
 Every agent run ends at its timeout, its process group killed (§15), and what a worker has not pushed goes with its
 slot. An agent is told its time limit once, in its prompt, and has no clock after that. This section gives it one: near
@@ -17,9 +17,9 @@ an agent does with it extends a run.
 ### The deadline
 
 Every agent run canopy starts with a timeout (the overseer, every kind of worker run, triages, reviews, and chores)
-gets `CANOPY_DEADLINE`, the moment its timeout fires, in Unix seconds. It is taken when canopy starts the clock it
-kills by, so the two agree. A process canopy starts without a timeout gets none, not even one its parent had. The
-variable reaches a sandboxed agent unchanged (§24).
+gets `CANOPY_DEADLINE`, the moment its timeout fires, in Unix seconds, as does any other process canopy starts with a
+timeout. It is taken when canopy starts the clock it kills by, so the two agree. A process canopy starts without a
+timeout gets none, not even one its parent had. The variable reaches a sandboxed agent unchanged (§24).
 
 ### The plugin
 
@@ -79,15 +79,19 @@ bytes change once and not per call, and the provider's cache holds (§6).
   kill already ends the run.
 - A file the agent is told to check: it spends a call to learn nothing, and a model under way forgets to.
 
-The PR that builds it proposes T3 and T4 to match: canopy's own code runs inside the agent process, from a snapshot a
-sandboxed run cannot write, reading one variable; the timeout in code stays the limit.
+TRUST_MODEL T3 and T4 hold it: canopy's own code runs inside the agent process, from a snapshot no run can write
+through its permissions or its sandbox, reading one variable; the timeout in code stays the limit.
+
+### What a run that winds down reports
+
+A worker or planner the clock stops short reports `failed`, its summary naming what remains, which raises
+`worker_failed` (§14) and waits for a human's reply as any failure does; a review reports `failed` as one it could not
+finish. No status of its own: one that let a `resume` continue a pushed branch without a reply waits for real use to
+ask for it. The overseer is warned as every agent is, in its last 3 minutes by default, to record what it owes first
+(§6 step 5).
 
 ### Open
 
-- What a worker that winds down reports. `failed`, with its summary naming what remains, raises `worker_failed` (§14),
-  which waits for a human's reply as today. A status of its own would let a `resume` continue its pushed branch without
-  one; each such run still spends an attempt (D030).
-- Whether the overseer, whose timeout is 15 minutes by default and so is warned in its last 3, has time to record what
-  it owes (§6 step 5).
+- Whether the overseer's last 3 minutes are enough to record what it owes.
 - How long a run waits on a repository's `.opencode/` install when the registry is refused, as under the sandbox: the
   source does not say, and the live check times one.

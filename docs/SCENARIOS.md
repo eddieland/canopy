@@ -46,6 +46,12 @@ any OpenCode upgrade, and before relying on a permission they check.
   the call ending, its cost moving at each model call, and its transcript growing as it goes, matching
   `opencode export <id>` for what it has done so far; and `canopy status` naming the same call. A row that shows
   nothing until the run ends means OpenCode is buffering its events, not printing them as they happen.
+- **S61. The clock** (M57). Give a worker a 5-minute `runtime.worker_timeout_minutes` and a toy ticket it cannot finish
+  in that time, once unsandboxed and once under `canopy-sandbox`. Expect canopy's `[canopy]` line in its transcript in
+  its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
+  before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
+  `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
+  times in `MEASUREMENTS.md`.
 
 ## Before a release
 

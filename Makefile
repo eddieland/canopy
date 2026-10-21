@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
+.PHONY: test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
@@ -40,8 +40,13 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, ec, shel
 # COVERAGE=1 also measures coverage and writes coverage.xml, which is how CI's `make check` feeds Codecov.
 PYTEST := uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
 
-test: ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml)
+test: test-plugin ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml)
 	$(PYTEST) $(if $(COVERAGE),--cov --cov-report=xml)
+
+# The clock canopy ships in its agents' snapshot is plain JavaScript (DESIGN §33), tested with Node's own runner: no
+# dependency to install. The rest of the JavaScript, ui/, is ui-check's.
+test-plugin: ## Run the tests of the agent runtime plugin canopy ships (needs Node 22.12+)
+	node --test 'tests/plugins/*.test.mjs'
 
 # Coverage settings live in pyproject.toml ([tool.coverage]). Open htmlcov/index.html for the lines a test never ran.
 coverage: ## Run all tests measuring coverage: a summary, htmlcov/, and coverage.xml
