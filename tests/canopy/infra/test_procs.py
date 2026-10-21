@@ -223,6 +223,35 @@ def test_an_on_line_that_raises_kills_the_child_and_closes_its_pipes() -> None:
     assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
 
 
+#: A child that writes as a runtime built on Bun does: one write that does not wait for a full pipe to drain, then exit.
+WRITES_ONCE = """
+import contextlib, os, sys
+os.set_blocking(1, False)
+with contextlib.suppress(BlockingIOError):
+    os.write(1, b"x" * 200_000)
+sys.stderr.write("done\\n")
+"""
+
+
+def test_stdout_to_file_keeps_what_a_full_pipe_would_lose() -> None:
+    piped = SubprocessRunner().run([sys.executable, "-c", WRITES_ONCE])
+    assert len(piped.stdout) < 200_000
+    result = SubprocessRunner().run([sys.executable, "-c", WRITES_ONCE], stdout_to_file=True)
+    assert result.ok
+    assert (result.stdout, result.stderr) == ("x" * 200_000, "done\n")
+
+
+def test_stdout_to_file_keeps_what_was_written_before_a_timeout() -> None:
+    result = SubprocessRunner().run(["sh", "-c", "echo partial; exec sleep 30"], timeout=0.5, stdout_to_file=True)
+    assert result.timed_out
+    assert result.stdout == "partial\n"
+
+
+def test_stdout_to_file_is_not_streamed_line_by_line() -> None:
+    with pytest.raises(ValueError, match="on_line"):
+        SubprocessRunner().run(["true"], on_line=print, stdout_to_file=True)
+
+
 def test_spawn_detaches_and_logs(agent_log: Path, tmp_path: Path) -> None:
     log = tmp_path / "run.log"
     with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "spawned result"}):

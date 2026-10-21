@@ -49,7 +49,7 @@ class Export:
     """Plays `opencode export`, answering with `result`, and records what it was run with."""
 
     result: Callable[[Sequence[str]], procs.Result]
-    ran: list[tuple[tuple[str, ...], Path | None, float | None]] = field(default_factory=list)
+    ran: list[tuple[tuple[str, ...], Path | None, float | None, bool]] = field(default_factory=list)
 
     def run(
         self,
@@ -61,8 +61,9 @@ class Export:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,  # noqa: ARG002
         on_line: Callable[[str], None] | None = None,  # noqa: ARG002
+        stdout_to_file: bool = False,
     ) -> procs.Result:
-        self.ran.append((tuple(args), cwd, timeout))
+        self.ran.append((tuple(args), cwd, timeout, stdout_to_file))
         return self.result(args)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002
@@ -96,8 +97,11 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first() -> Non
             ModelUse("local/free", 1, 0.0),
         ),
     )
-    # Sanitized, so canopy reads no transcript text; started where the caller says, and bounded in time.
-    assert export.ran == [(("opencode", "export", "ses_1", "--sanitize"), Path("/ws"), session_models.TIMEOUT_SECONDS)]
+    # Sanitized, so canopy reads no transcript text; started where the caller says, bounded in time, and its stdout
+    # read from a file, as OpenCode cuts what it prints to a pipe short.
+    assert export.ran == [
+        (("opencode", "export", "ses_1", "--sanitize"), Path("/ws"), session_models.TIMEOUT_SECONDS, True)
+    ]
 
 
 def test_a_session_that_made_no_model_call_has_no_models() -> None:

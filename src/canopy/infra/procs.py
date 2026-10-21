@@ -14,11 +14,12 @@ import queue
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Protocol, cast
 
@@ -66,6 +67,7 @@ class Runner(Protocol):
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
     ) -> Result:
         """Run `args` to completion and capture its output.
 
@@ -80,6 +82,8 @@ class Runner(Protocol):
             on_line: Called with each line of the child's stdout, its newline kept, as the child prints it, on the
                 calling thread. `stdout` in the result holds the same lines. An exception it raises kills the child
                 and propagates.
+            stdout_to_file: Capture stdout through a temporary file rather than a pipe, read once the child exits, for
+                a child that loses what it has not yet written to a full pipe when it exits. Not with `on_line`.
 
         Returns:
             The exit code and captured output. `timed_out` is set when `timeout` expired.
@@ -87,6 +91,7 @@ class Runner(Protocol):
         Raises:
             CommandNotFoundError: The executable is missing or not executable.
             ProcError: The process could not be started, for example because `cwd` does not exist.
+            ValueError: Both `on_line` and `stdout_to_file` were given.
         """
         ...
 
@@ -156,6 +161,7 @@ class SubprocessRunner:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
     ) -> Result:
         """Run `args` to completion and capture its output. See `Runner.run`.
 
@@ -166,8 +172,42 @@ class SubprocessRunner:
             CommandNotFoundError: The executable is missing or not executable.
             ProcError: `cwd` cannot be used as the working directory.
             OSError: The process could not be started for any other reason.
+            ValueError: Both `on_line` and `stdout_to_file` were given.
         """
-        argv = tuple(args)
+        if on_line is not None and stdout_to_file:
+            raise ValueError("on_line reads stdout from a pipe, which stdout_to_file replaces")
+        # Text, in the encoding and with the newlines `text=True` decodes a pipe with.
+        with tempfile.TemporaryFile("w+") if stdout_to_file else contextlib.nullcontext() as out:
+            result = self._run(
+                tuple(args), cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line, out=out
+            )
+            if out is None:
+                return result
+            out.seek(0)
+            return replace(result, stdout=out.read())
+
+    def _run(
+        self,
+        argv: tuple[str, ...],
+        *,
+        cwd: Path | None,
+        env: Mapping[str, str] | None,
+        stdin: str | None,
+        timeout: float | None,
+        on_start: Callable[[int], None] | None,
+        on_line: Callable[[str], None] | None,
+        out: IO[str] | None,
+    ) -> Result:
+        """Run `argv` as `run` does, its stdout to `out` when given, where the result's `stdout` is then empty.
+
+        Returns:
+            The exit code and captured output.
+
+        Raises:
+            CommandNotFoundError: The executable is missing or not executable.
+            ProcError: `cwd` cannot be used as the working directory.
+            OSError: The process could not be started for any other reason.
+        """
         full_env = _child_env(cwd, env, self.unset)
         try:
             proc = subprocess.Popen(
@@ -175,7 +215,7 @@ class SubprocessRunner:
                 cwd=cwd,
                 env=full_env,
                 stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
+                stdout=subprocess.PIPE if out is None else out,
                 stderr=subprocess.PIPE,
                 text=True,
                 start_new_session=True,
@@ -204,12 +244,12 @@ class SubprocessRunner:
             except subprocess.TimeoutExpired:
                 _kill_group(proc.pid)
                 stdout, stderr = proc.communicate()
-                return Result(argv, proc.returncode, stdout, stderr, timed_out=True)
+                return Result(argv, proc.returncode, stdout or "", stderr, timed_out=True)
             except BaseException:
                 _kill_group(proc.pid)
                 proc.wait()
                 raise
-        return Result(argv, proc.returncode, stdout, stderr)
+        return Result(argv, proc.returncode, stdout or "", stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         """Start `args` detached and return its pid. See `Runner.spawn`.
