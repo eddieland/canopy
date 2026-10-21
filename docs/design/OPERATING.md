@@ -246,9 +246,10 @@ promises:
 - **What is recorded is what served.** No event names the model a call went to, so canopy reads each run's session
   from the runtime's own record once the run ends: the process that ran it reads it as it closes the run, and the wait
   after a live tick reads the rest, one at a time, never-read runs the newest first, past ones among them. A read
-  records each model that wrote a run's replies, and what they cost. `canopy spend` breaks each kind's cost down by
-  model, and the web UI names each run's models on its page. A read never fails a run or a tick; a session the runtime
-  no longer keeps leaves its run unattributed, and a failed read is tried again later, a few times at most.
+  records each model that wrote a run's replies, a variant other than its default named with it, and what they cost.
+  `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page. A read
+  never fails a run or a tick; a session the runtime no longer keeps leaves its run unattributed, and a failed read is
+  tried again later, a few times at most.
 - **canopy's choice is the one made.** canopy writes the model into the agent's rendered definition, so each set of
   models gets its own snapshot (D040). A template's model option would override it unseen, so any `runtime` template,
   prefix, or suffix that passes one is a config error.

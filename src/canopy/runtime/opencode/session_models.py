@@ -1,9 +1,11 @@
 """Which models served an OpenCode session (DESIGN §13), read from `opencode export` as OpenCode 1.19.3 prints it.
 
 `opencode export ID --sanitize` prints the session and its messages as one JSON object, their text, reasoning, tool
-output, and paths redacted. Each assistant message names the provider and model that wrote it, and what it cost; only
-those are read. OpenCode looks a session up by its id alone, in the one database that holds every project's sessions,
-so any directory finds it. One it does not have it names on stderr, `Session not found: ID`, and exits 1.
+output, and paths redacted. Each assistant message names the provider and model that wrote it, the variant it ran at
+when not the model's default, and what it cost; only those are read. A model run at a variant is named with it,
+`anthropic/claude-opus@high`, so each variant counts on its own. OpenCode looks a session up by its id alone, in the
+one database that holds every project's sessions, so any directory finds it. One it does not have it names on stderr,
+`Session not found: ID`, and exits 1.
 
 Its stdout is captured through a file, not a pipe. With stderr a pipe too, OpenCode exits having written only what a
 pipe's buffer holds, 64 KiB, and most sessions' exports are longer.
@@ -44,6 +46,8 @@ class _Info(BaseModel):
     # A user message names the model it asked for; only an assistant's names the one that wrote it.
     provider: StrictStr | None = Field(default=None, alias="providerID")
     model: StrictStr | None = Field(default=None, alias="modelID")
+    # Left out for the model's default.
+    variant: StrictStr | None = None
     cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)] = 0
 
 
@@ -126,7 +130,8 @@ def _models(messages: tuple[_Message, ...]) -> tuple[ModelUse, ...]:
         info = message.info
         if info.role != "assistant" or info.provider is None or info.model is None:
             continue
-        name = _name(f"{info.provider}/{info.model}")
+        variant = f"@{info.variant}" if info.variant else ""
+        name = _name(f"{info.provider}/{info.model}{variant}")
         if name not in found and len(found) >= MAX_MODELS:
             name = OTHER_MODELS
         was = found.get(name, ModelUse(name, 0, 0.0))
