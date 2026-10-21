@@ -121,7 +121,7 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenar
                 {"key": "bidi", "text": "safe \u202eevil"},
                 {"key": "zero-width", "text": "a\u200bb"},
                 {"key": "secret", "text": "use token=ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
-            ]
+            ],
         ),
     )
     second = scenario.run(
@@ -134,7 +134,7 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenar
                 {"key": "fourth", "text": "Four."},
                 {"key": "fifth", "text": "Five."},
                 {"key": "sixth", "text": "Past the cap."},
-            ]
+            ],
         ),
     )
     lint = memories(conn)[0]
@@ -180,10 +180,15 @@ def test_notes_that_are_not_a_list_are_refused(scenario: Scenario, git_pool: Git
 
 
 @pytest.mark.parametrize(
-    ("kind", "private"), [(k, False) for k in prompts.WORKER] + [(k, True) for k in prompts.WORKER_PRIVATE]
+    ("kind", "private"),
+    [(k, False) for k in prompts.WORKER] + [(k, True) for k in prompts.WORKER_PRIVATE],
 )
 def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, kind: str, *, private: bool
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    kind: str,
+    *,
+    private: bool,
 ) -> None:
     values = {
         **PROMPT_VALUES,
@@ -243,7 +248,13 @@ def hand_written(conn: sqlite3.Connection, body: str, *, key: str = "hand") -> i
     with in_tick(conn) as tick_id:
         db.touch_ticket(conn, KEY, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/runs")
+            conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/runs"),
         )
         cur = conn.execute(
             "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, created_at) "
@@ -259,7 +270,7 @@ def test_memory_list_says_the_mode_first_and_shows_what_a_worker_wrote_plainly(s
     out = scenario.operator("memory", "list").out
     assert out.startswith(
         "ticket notes: Recording only. Workers write these notes; no run reads them.\n"
-        "lessons: Off. Workers propose no lessons, and no run reads them.\n"
+        "lessons: Off. Workers propose no lessons, and no run reads them.\n",
     )
     assert "See [the fix](https://evil.test) <U+202E>eht<U+202C> and<U+200B>this<U+001B>[2J." in out
     assert "read by no run" in out
@@ -309,7 +320,7 @@ def test_ticket_notes_counts_each_tickets_notes_in_force_the_newest_first(conn: 
     # Another ticket's, written after: its row comes first.
     conn.execute(
         "INSERT INTO tickets (key, repo, title, first_seen_at, last_seen_at) "
-        "VALUES ('PROJ-2', 'repo', 'Later', 'x', 'x')"
+        "VALUES ('PROJ-2', 'repo', 'Later', 'x', 'x')",
     )
     conn.execute(
         "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, created_at) "
@@ -332,7 +343,9 @@ def test_forget_and_purge_refuse_inside_a_run(canopy_env: CanopyEnv, args: list[
 
 @pytest.mark.parametrize("args", [["forget"], ["purge", "--ticket", KEY], ["purge", "--all"]])
 def test_forget_and_purge_leave_no_text_in_the_journal_file(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, args: list[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    args: list[str],
 ) -> None:
     leaked = "the staging password is hunter2-but-longer"
     note_id = hand_written(conn, leaked)

@@ -34,13 +34,22 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
     # A joint run's worker learns its repositories from these, so the shipped prompts have them, and every public
     # worker hears the operator's messages (D093).
     prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_JOINT
+        load(canopy_env.root, canopy_env.user_file),
+        kind,
+        PROMPT_VALUES,
+        required=prompts.REQUIRED_JOINT,
     )
     prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_OPERATOR
+        load(canopy_env.root, canopy_env.user_file),
+        kind,
+        PROMPT_VALUES,
+        required=prompts.REQUIRED_OPERATOR,
     )
     prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=(prompts.STANDING_SECTION,)
+        load(canopy_env.root, canopy_env.user_file),
+        kind,
+        PROMPT_VALUES,
+        required=(prompts.STANDING_SECTION,),
     )
 
 
@@ -63,7 +72,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     assert "within 100,000 characters" in text
     assert text.rstrip().endswith(
         '{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>",'
-        '"question":"<only when blocked>"}'
+        '"question":"<only when blocked>"}',
     )
     if private:
         assert "there is no label to check" in text
@@ -126,7 +135,10 @@ SECTIONS = """Work {{KEY}} with {{LABELS}}.
     ],
 )
 def test_a_section_without_a_value_is_left_out_whole(
-    canopy_env: CanopyEnv, context: str | None, plan: str | None, rendered: str
+    canopy_env: CanopyEnv,
+    context: str | None,
+    plan: str | None,
+    rendered: str,
 ) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
@@ -151,7 +163,7 @@ def test_a_required_placeholder_inside_a_section_left_out_is_missing(canopy_env:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text(
-        "{{KEY}}\n\n{{#CONTEXT}}\n\n{{CONTEXT}} {{LABELS}}\n\n{{/CONTEXT}}\n"
+        "{{KEY}}\n\n{{#CONTEXT}}\n\n{{CONTEXT}} {{LABELS}}\n\n{{/CONTEXT}}\n",
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert "Look. `agent-ready-alice`" in prompts.render_worker(cfg, "implement", {**PROMPT_VALUES, "CONTEXT": "Look."})
@@ -303,7 +315,9 @@ def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
 )
 def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str, before: str) -> None:
     text = prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, {**PROMPT_VALUES, "OPEN_PR": "<how>"}
+        load(canopy_env.root, canopy_env.user_file),
+        kind,
+        {**PROMPT_VALUES, "OPEN_PR": "<how>"},
     )
     assert f"{before} <how>" in text
 
@@ -315,7 +329,7 @@ def test_with_a_pr_skill_an_override_must_say_how_to_open_prs(canopy_env: Canopy
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; open a PR through the GitHub MCP\n")
     assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES).startswith(
-        "Work PROJ-1"
+        "Work PROJ-1",
     )
     with_pr_skill(canopy_env, "acme-pr")
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{OPEN_PR\}\}"):
@@ -326,7 +340,7 @@ def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyE
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-plan.md").write_text(
-        "Plan {{KEY}} in {{REPOSITORIES}}: {{AUTHORIZATION}} {{OPERATOR_MESSAGES}} {{PLAN_OUT}}\n"
+        "Plan {{KEY}} in {{REPOSITORIES}}: {{AUTHORIZATION}} {{OPERATOR_MESSAGES}} {{PLAN_OUT}}\n",
     )
     with_pr_skill(canopy_env, "acme-pr")
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "plan", PLAN_VALUES)
@@ -344,7 +358,10 @@ def without_trailer(env: CanopyEnv) -> None:
 @pytest.mark.parametrize("private", [False, True])
 @pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_shipped_prompts_that_commit_name_the_configured_trailer(
-    canopy_env: CanopyEnv, kind: str, *, private: bool
+    canopy_env: CanopyEnv,
+    kind: str,
+    *,
+    private: bool,
 ) -> None:
     values = {**PROMPT_VALUES, "CONVERSATION": "None."}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
@@ -362,11 +379,12 @@ def test_with_a_custom_trailer_an_override_must_name_it(canopy_env: CanopyEnv, k
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
     assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES).startswith(
-        "Work PROJ-1"
+        "Work PROJ-1",
     )
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
     with pytest.raises(
-        prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_ATTRIBUTION\}\} or \{\{COMMIT_TRAILER\}\}"
+        prompts.PromptError,
+        match=r"missing required placeholder \{\{COMMIT_ATTRIBUTION\}\} or \{\{COMMIT_TRAILER\}\}",
     ):
         prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
 
@@ -404,7 +422,9 @@ def test_with_the_trailer_off_an_override_must_carry_the_attribution(canopy_env:
         prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}. {{COMMIT_ATTRIBUTION}}\n")
     assert "add no co-author trailer" in prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES
+        load(canopy_env.root, canopy_env.user_file),
+        kind,
+        PROMPT_VALUES,
     )
 
 
@@ -421,7 +441,10 @@ def test_a_custom_trailer_does_not_constrain_a_plan(canopy_env: CanopyEnv) -> No
 @pytest.mark.parametrize("private", [False, True])
 @pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_shipped_prompts_that_commit_say_how_to_bring_a_base_in(
-    canopy_env: CanopyEnv, kind: str, *, private: bool
+    canopy_env: CanopyEnv,
+    kind: str,
+    *,
+    private: bool,
 ) -> None:
     values = {**PROMPT_VALUES, "CONVERSATION": "None."}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
@@ -441,7 +464,7 @@ def test_with_rebase_an_override_must_say_how_to_bring_a_base_in(canopy_env: Can
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; merge the base in\n")
     assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES).startswith(
-        "Work PROJ-1"
+        "Work PROJ-1",
     )
     with_rebase(canopy_env)
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{BRANCH_UPDATE\}\}"):

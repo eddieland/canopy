@@ -249,7 +249,11 @@ class FindingStarts:
 
 
 def states(
-    conn: sqlite3.Connection, config: Config, workspace: Workspace, *, starts: FindingStarts | None = None
+    conn: sqlite3.Connection,
+    config: Config,
+    workspace: Workspace,
+    *,
+    starts: FindingStarts | None = None,
 ) -> list[ChoreState]:
     """Return every configured chore's state, by name, remembering its findings' starts in `starts` if given."""
     return [state_of(conn, name, chore, starts=starts) for name, chore in configured(config, workspace).items()]
@@ -266,7 +270,11 @@ def state_of(conn: sqlite3.Connection, name: str, chore: Chore, *, starts: Findi
 
 
 def open_findings(
-    conn: sqlite3.Connection, config: Config, workspace: Workspace, *, starts: FindingStarts | None = None
+    conn: sqlite3.Connection,
+    config: Config,
+    workspace: Workspace,
+    *,
+    starts: FindingStarts | None = None,
 ) -> list[OpenFinding]:
     """Return every configured chore's open findings, by chore and then as the chore listed them, dismissed or not.
 
@@ -363,6 +371,6 @@ def state_section(states_: Iterable[ChoreState], now: datetime) -> list[ChoreSum
                 "findings": [
                     {"id": f.finding.id, "title": f.finding.title, "link": f.finding.link} for f in state.findings()
                 ],
-            }
+            },
         )
     return section

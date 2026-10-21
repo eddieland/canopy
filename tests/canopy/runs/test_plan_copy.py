@@ -42,7 +42,8 @@ def approved(scenario: Scenario) -> int:
 
 
 def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     approved(scenario)
     looks = [["cat", plans.COPY], ["git", "status", "--porcelain"], ["git", "check-ignore", plans.COPY]]
@@ -63,7 +64,7 @@ def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     # Gone before the slot went back, and the exclude line stays, once.
     assert not (slot / plans.COPY).exists()
     common = procs.SubprocessRunner().run(
-        ["git", "-C", str(slot), "rev-parse", "--path-format=absolute", "--git-common-dir"]
+        ["git", "-C", str(slot), "rev-parse", "--path-format=absolute", "--git-common-dir"],
     )
     exclude = Path(common.stdout.strip()) / "info" / "exclude"
     assert exclude.read_text().splitlines().count(f"/{plans.COPY}") == 1
@@ -95,7 +96,9 @@ def dispatched_then(scenario: Scenario, between: Callable[[], object], *commands
 
 @pytest.mark.parametrize("change", ["a new plan", "approved again"])
 def test_a_plan_changed_between_dispatch_and_run_is_not_the_one_the_prompt_names(
-    scenario: Scenario, git_pool: GitPool, change: str
+    scenario: Scenario,
+    git_pool: GitPool,
+    change: str,
 ) -> None:
     conn, state_dir = scenario.conn, scenario.env.state_dir
     plan_run = approved(scenario)
@@ -122,7 +125,8 @@ def test_a_plan_changed_between_dispatch_and_run_is_not_the_one_the_prompt_names
 
 
 def test_a_plan_approved_after_dispatch_is_not_copied_for_a_run_its_prompt_named_none(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     # With plans off, an implement may go ahead while a plan waits; the approval after it is for the next run.
     scenario.run(PLAN, worker=planner_does(plan=TEXT))
@@ -134,7 +138,8 @@ def test_a_plan_approved_after_dispatch_is_not_copied_for_a_run_its_prompt_named
 
 
 def test_an_edit_between_dispatch_and_run_crashes_the_run_before_the_worker(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     plan_run = approved(scenario)
     workers_before = len(agent_runs(scenario.agent_log))
@@ -158,7 +163,8 @@ def test_a_pushed_branch_holding_the_copy_gets_a_harness_note(scenario: Scenario
 
 
 def test_an_override_without_plan_is_refused_once_the_ticket_has_an_approved_plan(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()

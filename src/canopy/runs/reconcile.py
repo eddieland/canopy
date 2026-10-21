@@ -93,7 +93,10 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
 
 
 def shadow(
-    runner: procs.Runner, ws: Workspace, log: logs.TickAdapter, slots: Mapping[str, Sequence[pools.Slot]]
+    runner: procs.Runner,
+    ws: Workspace,
+    log: logs.TickAdapter,
+    slots: Mapping[str, Sequence[pools.Slot]],
 ) -> int:
     """Classify each unleased treehouse slot with canopy's own checks, and log each one where they disagree.
 
@@ -192,7 +195,9 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
             outcomes.append("kept")
             continue
         outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
-            Path(slot.slot_path), lease_id=slot.lease_id, lease_holder=slot.lease_holder
+            Path(slot.slot_path),
+            lease_id=slot.lease_id,
+            lease_holder=slot.lease_holder,
         )
         returned.add(slot.lease_id)
         outcomes.append(outcome.value)

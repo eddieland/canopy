@@ -158,7 +158,7 @@ UNIT_PHASES = frozenset(
         Phase.GREEN_UNREVIEWED,
         Phase.APPROVED,
         Phase.MERGED,
-    }
+    },
 )
 
 

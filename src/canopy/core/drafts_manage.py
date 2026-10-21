@@ -83,7 +83,13 @@ def find(conn: sqlite3.Connection, run_id: int, number: int) -> records.Draft:
 
 
 def edit(
-    conn: sqlite3.Connection, run_id: int, number: int, text: str, reaction: Reaction | None, *, channel: str
+    conn: sqlite3.Connection,
+    run_id: int,
+    number: int,
+    text: str,
+    reaction: Reaction | None,
+    *,
+    channel: str,
 ) -> records.DraftVersion:
     """Make the operator's `text` and `reaction` the draft's, as a new version beside the run's own.
 
@@ -103,7 +109,8 @@ def edit(
     _check_open(draft)
     if reaction is not None and draft.kind is not DraftKind.THREAD:
         raise conversation.Refused(
-            "no_reaction", f"run {run_id}'s draft {number} is not a thread's; only a review comment takes a reaction"
+            "no_reaction",
+            f"run {run_id}'s draft {number} is not a thread's; only a review comment takes a reaction",
         )
     try:
         body = drafts.check_words(text, reaction)
@@ -321,7 +328,8 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
             raise conversation.Refused("unchecked", f"{where} waits on a whole read of {draft.pr_url}")
         case DraftStatus.UNCONFIRMED:
             raise conversation.Refused(
-                "unconfirmed", f"{where} may have been posted already; a read of its PR, or `canopy draft settle`, says"
+                "unconfirmed",
+                f"{where} may have been posted already; a read of its PR, or `canopy draft settle`, says",
             )
         case DraftStatus.STAGED:
             raise conversation.Refused("staged", f"{where} is in the review you staged on {draft.pr_url}: {_FINISH}")
@@ -544,7 +552,9 @@ def _post(
         request = {"issue": key.issue, "ticket": key.ticket, "body": texts[draft.id]}
     try:
         result = runner.run(
-            notify_words(source.post_cmd), stdin=json.dumps(request), timeout=source.timeout_minutes * 60
+            notify_words(source.post_cmd),
+            stdin=json.dumps(request),
+            timeout=source.timeout_minutes * 60,
         )
     except procs.ProcError as e:
         # It never started, so it posted nothing.
@@ -673,7 +683,10 @@ def _str(value: object) -> str | None:
 
 
 def _posted(
-    conn: sqlite3.Connection, group: Sequence[records.Draft], lines: Mapping[str, Mapping[str, object]], outcome: Sent
+    conn: sqlite3.Connection,
+    group: Sequence[records.Draft],
+    lines: Mapping[str, Mapping[str, object]],
+    outcome: Sent,
 ) -> None:
     review = lines.get("review", {})
     issue_comment = lines.get("comment", {})
@@ -709,7 +722,8 @@ def _posted(
         if pr is not None:
             # The pending review an earlier post left was deleted first.
             sql.execute(
-                conn, sql.update("drafts").set(pending_review=None, pending_review_id=None).where("pr_url = ?", pr)
+                conn,
+                sql.update("drafts").set(pending_review=None, pending_review_id=None).where("pr_url = ?", pr),
             )
     outcome.posted.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
 
@@ -784,7 +798,10 @@ def _unclaim(conn: sqlite3.Connection, ids: Sequence[int], *, why: str) -> None:
 
 
 def _unconfirmed(
-    conn: sqlite3.Connection, group: Sequence[records.Draft], pending: Mapping[str, object] | None, outcome: Sent
+    conn: sqlite3.Connection,
+    group: Sequence[records.Draft],
+    pending: Mapping[str, object] | None,
+    outcome: Sent,
 ) -> None:
     """A post that may have posted: its drafts are unconfirmed until a read, or the operator, settles them."""
     node = _str(pending.get("review")) if pending is not None else None
@@ -901,7 +918,8 @@ def _settle_one(conn: sqlite3.Connection, draft: records.Draft) -> None:
         pending = draft.pending_review if review is not None else None
         _unclaim(conn, [draft.id], why="the read found nothing posted")
         sql.execute(
-            conn, sql.update("drafts").set(pending_review=pending, pending_review_id=None).where("id = ?", draft.id)
+            conn,
+            sql.update("drafts").set(pending_review=pending, pending_review_id=None).where("id = ?", draft.id),
         )
         return
     comment = None

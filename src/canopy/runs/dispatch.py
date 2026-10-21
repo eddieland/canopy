@@ -327,7 +327,11 @@ def branch_name(prefix: str, key: str, slug: str) -> str:
 
 
 def repositories_note(
-    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: Mapping[str, str], desk: Path | None
+    ctx: Context,
+    branch: str,
+    slots: Sequence[db.RunSlot],
+    prs: Mapping[str, str],
+    desk: Path | None,
 ) -> str:
     """Return the worker prompt's `{{REPOSITORIES}}` section: each repository the run works in (DESIGN §18)."""
     if desk is None:
@@ -379,7 +383,13 @@ def map_note(ctx: Context) -> str | None:
 
 
 def _planned_repositories(
-    ctx: Context, kind: str, branch: str, slots: Sequence[db.RunSlot], *, prs: Mapping[str, str], desk: Path | None
+    ctx: Context,
+    kind: str,
+    branch: str,
+    slots: Sequence[db.RunSlot],
+    *,
+    prs: Mapping[str, str],
+    desk: Path | None,
 ) -> str:
     """Return a run's `{{REPOSITORIES}}`: a plan's at their bases, a feedback plan's at their PRs' heads, or a worker's.
 
@@ -394,7 +404,11 @@ def _planned_repositories(
 
 
 def feedback_repositories_note(
-    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: Mapping[str, str], desk: Path | None
+    ctx: Context,
+    branch: str,
+    slots: Sequence[db.RunSlot],
+    prs: Mapping[str, str],
+    desk: Path | None,
 ) -> str:
     """Return a feedback plan's `{{REPOSITORIES}}` section: each repository it reads, at its PR's head (DESIGN §32)."""
     lines = [
@@ -500,7 +514,8 @@ def _check_reasons(kind: str, reasons: Collection[str], cursors: AbstractSet[str
             raise Refusal("bad_reason", f"{moved} is handled by a resume for {needed}: add --reason {needed}")
     if ResumeReason.RETARGET in reasons and base is not None:
         raise Refusal(
-            "bad_reason", "--reason retarget is for a PR whose blocker merged, and --base says it is still open"
+            "bad_reason",
+            "--reason retarget is for a PR whose blocker merged, and --base says it is still open",
         )
 
 
@@ -524,7 +539,8 @@ def _check_start(ctx: Context, key: str) -> bool:
         raise Refusal("stopped", f"{key} was stopped with `canopy stop`; nothing dispatches it until `canopy start`")
     if ctx.config.tracker.tools() is None:
         raise Refusal(
-            "no_read_tools", "no tracker tools are known for a private worker; set tracker.mcp_server and read_tools"
+            "no_read_tools",
+            "no tracker tools are known for a private worker; set tracker.mcp_server and read_tools",
         )
     return True
 
@@ -596,7 +612,8 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
             raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
         if not found.cloned:
             raise Refusal(
-                "unknown_repo", f"{repo} has no clone at {found.path}; the operator runs `canopy workspace sync`"
+                "unknown_repo",
+                f"{repo} has no clone at {found.path}; the operator runs `canopy workspace sync`",
             )
         if found.name not in chosen:
             chosen.append(found.name)
@@ -620,7 +637,8 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
         raise Refusal("bad_plan", f"{key} already has work on {ticket.branch}; a started ticket is not planned")
     if ctx.config.tracker.tools() is None:
         raise Refusal(
-            "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"
+            "no_read_tools",
+            "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools",
         )
 
 
@@ -640,7 +658,8 @@ def _check_feedback_plan(ctx: Context, key: str, *, slug: str | None, base: str 
     """
     if base is not None:
         raise Refusal(
-            "bad_base", "a feedback plan reads the PR's head and starts from no other branch; leave out --base"
+            "bad_base",
+            "a feedback plan reads the PR's head and starts from no other branch; leave out --base",
         )
     refused = feedback_plans.dispatch_refusal(ctx.conn, ctx.config.policy, key)
     if refused is not None:
@@ -650,11 +669,13 @@ def _check_feedback_plan(ctx: Context, key: str, *, slug: str | None, base: str 
     for repo in repos:
         if repo not in prs:
             raise Refusal(
-                "bad_plan", f"{key} has no PR recorded in {repo}: a feedback plan plans what came back to a PR"
+                "bad_plan",
+                f"{key} has no PR recorded in {repo}: a feedback plan plans what came back to a PR",
             )
     if ctx.config.tracker.tools() is None:
         raise Refusal(
-            "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"
+            "no_read_tools",
+            "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools",
         )
     return branch
 
@@ -677,7 +698,12 @@ def _check_planned(ctx: Context, key: str, kind: str, repos: Sequence[str] = (),
         return
     if kind == RunKind.RESUME and feedback_plans.needed(ctx.config.policy, reasons):
         refused = feedback_plans.resume_refusal(
-            ctx.conn, ctx.state_dir, ctx.config.policy, key, repos_named=repos, reasons=reasons
+            ctx.conn,
+            ctx.state_dir,
+            ctx.config.policy,
+            key,
+            repos_named=repos,
+            reasons=reasons,
         )
         if refused is not None:
             raise Refusal(*refused)
@@ -690,7 +716,8 @@ def _check_planned(ctx: Context, key: str, kind: str, repos: Sequence[str] = (),
     if kind == RunKind.IMPLEMENT and not approved and plans.needed(ctx.config.policy.plan, setting):
         waiting = "its plan waits on the operator's approval" if plan is not None else "it has no plan approved"
         raise Refusal(
-            "unplanned", f"{key} needs a plan before its implement, and {waiting}; dispatch `plan` or wait for it"
+            "unplanned",
+            f"{key} needs a plan before its implement, and {waiting}; dispatch `plan` or wait for it",
         )
     if plan is not None and approved and plans.approved_text(ctx.state_dir, plan) is None:
         path = plans.path_for(ctx.state_dir, key, plan.run_id)
@@ -857,7 +884,11 @@ def _guard(
 
 
 def _guard_feedback_plan(
-    ctx: Context, key: str, repos: Sequence[str], running: Sequence[object], planned: Sequence[str]
+    ctx: Context,
+    key: str,
+    repos: Sequence[str],
+    running: Sequence[object],
+    planned: Sequence[str],
 ) -> tuple[int, int]:
     """Refuse a feedback plan run for a unit at its limit, or past capacity (DESIGN §32, TRUST_MODEL T3).
 
@@ -930,7 +961,9 @@ def _return_all(ctx: Context, leases: Iterable[tuple[str, Leased]]) -> None:
         lease = leased.lease
         with contextlib.suppress(pools.PoolError):
             ctx.pool_of(leased.pool, repo).return_slot(
-                lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder
+                lease.path,
+                lease_id=lease.lease_id,
+                lease_holder=lease.lease_holder,
             )
 
 
@@ -1040,7 +1073,14 @@ def _spawn(
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)
     prompt, remembered, replied = _render(
-        ctx, key, kind, values, required, repos=plan.repos, private=plan.private, persona=persona
+        ctx,
+        key,
+        kind,
+        values,
+        required,
+        repos=plan.repos,
+        private=plan.private,
+        persona=persona,
     )
 
     run_id = db.insert_run(
@@ -1059,7 +1099,11 @@ def _spawn(
         plan_id=followed.plan_id if followed is not None else None,
         reasons=tuple(r for r in ResumeReason if r in reasons),
         rendered=functools.partial(
-            _record_rendered, ctx, remembered, replied, followed.feedback_plan_id if followed is not None else None
+            _record_rendered,
+            ctx,
+            remembered,
+            replied,
+            followed.feedback_plan_id if followed is not None else None,
         ),
         feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
         persona=persona.name if persona is not None else None,
@@ -1218,7 +1262,8 @@ def _record_rendered(
         replies.record_rendered(ctx.conn, run_id, replied)
     if feedback_plan_id is not None and not feedback_plans.spend(ctx.conn, feedback_plan_id, run_id):
         raise Refusal(
-            "unplanned", f"feedback plan {feedback_plan_id} was replaced or spent while this dispatch was planned"
+            "unplanned",
+            f"feedback plan {feedback_plan_id} was replaced or spent while this dispatch was planned",
         )
 
 

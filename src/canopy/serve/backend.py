@@ -118,7 +118,10 @@ class Backend:
     # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
     # stream reads back only to there rather than through the whole history of a finding open for months.
     _finding_starts: chore_view.FindingStarts = field(
-        default_factory=chore_view.FindingStarts, init=False, repr=False, compare=False
+        default_factory=chore_view.FindingStarts,
+        init=False,
+        repr=False,
+        compare=False,
     )
 
     @contextmanager

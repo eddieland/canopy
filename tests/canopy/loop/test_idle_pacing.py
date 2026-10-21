@@ -81,7 +81,14 @@ def recorded(env: CanopyEnv) -> list[tuple[object, object]]:
 def review_run(conn: sqlite3.Connection, tick_id: int) -> int:
     """A review run whose `_review` is this process, so reconcile leaves it running."""
     run_id = db.insert_review_run(
-        conn, tick_id=tick_id, pr_url=PR, sha="a" * 40, ticket=None, repo=None, purpose="query", logs_dir=LOGS
+        conn,
+        tick_id=tick_id,
+        pr_url=PR,
+        sha="a" * 40,
+        ticket=None,
+        repo=None,
+        purpose="query",
+        logs_dir=LOGS,
     )
     assert db.claim_run(conn, "review_runs", run_id, os.getpid())
     return run_id
@@ -332,7 +339,9 @@ def test_a_gate_that_opened_since_the_previous_tick_is_something_new(canopy_env:
 
 
 def test_the_loop_waits_line_says_what_a_tick_churned(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     ctx = context(canopy_env)
     time = FakeTime()
@@ -389,7 +398,7 @@ def fix_ci_ended(conn: sqlite3.Connection, ended: datetime) -> None:
         (tick_id, KEY, stamp(ended - timedelta(minutes=5)), stamp(ended)),
     )
     conn.execute(
-        "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder) VALUES (1, NULL, '/s', 'l', 'h')"
+        "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder) VALUES (1, NULL, '/s', 'l', 'h')",
     )
 
 
@@ -438,7 +447,9 @@ def test_a_gate_still_ahead_ends_the_wait_and_one_already_open_does_not(
 
 
 def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     loop_config(canopy_env, interval=1, cap=4)
     with (
@@ -492,7 +503,9 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
 
 
 def test_the_cap_stays_the_cap_however_long_nothing_changes(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     loop_config(canopy_env, interval=1, cap=3)
     with overseer_does():
@@ -566,7 +579,10 @@ def finishes_review(db_path: Path) -> list[str]:
 
 @pytest.mark.parametrize("when", ["during the tick", "during the wait", "an operator message", "before the tick"])
 def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, when: str
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    when: str,
 ) -> None:
     titled_overseer(canopy_env)
     ctx = context(canopy_env)
@@ -689,7 +705,9 @@ def test_the_operators_acts_end_the_wait(
 
 
 def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     loop_config(canopy_env, interval=15, cap=15)
     ctx = context(canopy_env)
@@ -718,7 +736,9 @@ def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
 
 
 def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     (canopy_env.home / "chores").mkdir()
     (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
@@ -746,7 +766,11 @@ def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
 
 
 def loop_ticks(
-    ctx: Context, time: FakeTime, *, interval_minutes: int | None = 15, asked: tick_now.TickNow | None = None
+    ctx: Context,
+    time: FakeTime,
+    *,
+    interval_minutes: int | None = 15,
+    asked: tick_now.TickNow | None = None,
 ) -> None:
     """Two ticks of the loop on `time`, against the fakes, with `asked` for the web UI's Tick now."""
     term, _ = console()
@@ -764,7 +788,9 @@ def loop_ticks(
 
 
 def test_a_gate_opening_just_after_a_tick_waits_for_the_gap(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     (canopy_env.home / "chores").mkdir()
     (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
@@ -800,7 +826,9 @@ def test_a_configured_gap_holds_an_early_wake(canopy_env: CanopyEnv, treehouse_s
 
 
 def test_the_gap_runs_from_the_end_of_a_long_tick(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     canopy_env.append_user("\n[loop]\nmin_gap_minutes = 2\n")
     ctx = context(canopy_env)
@@ -808,7 +836,11 @@ def test_the_gap_runs_from_the_end_of_a_long_tick(
     run = tick.run
 
     def runs_ninety_seconds(
-        tick_ctx: Context, *, dry_run: bool, woken_by: tick.WokenBy | None = None, ui: str | None = None
+        tick_ctx: Context,
+        *,
+        dry_run: bool,
+        woken_by: tick.WokenBy | None = None,
+        ui: str | None = None,
     ) -> tick.Outcome:
         time.now += 90
         return run(tick_ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
@@ -828,7 +860,9 @@ def test_the_gap_runs_from_the_end_of_a_long_tick(
 
 
 def test_a_gap_longer_than_the_interval_lengthens_the_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     canopy_env.append_user("\n[loop]\nmin_gap_minutes = 3\n")
     ctx = context(canopy_env)
@@ -862,7 +896,9 @@ def test_the_tick_now_key_is_not_held_by_the_gap(canopy_env: CanopyEnv, treehous
 
 
 def test_a_tick_asked_for_from_the_web_is_not_held_by_the_gap(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     canopy_env.append_user("\n[loop]\nmin_gap_minutes = 5\n")
     ctx = context(canopy_env)
@@ -875,7 +911,9 @@ def test_a_tick_asked_for_from_the_web_is_not_held_by_the_gap(
 
 
 def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     ctx = context(canopy_env)
     asked = tick_now.TickNow()
@@ -883,7 +921,11 @@ def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
     run = tick.run
 
     def asked_during(
-        tick_ctx: Context, *, dry_run: bool, woken_by: tick.WokenBy | None = None, ui: str | None = None
+        tick_ctx: Context,
+        *,
+        dry_run: bool,
+        woken_by: tick.WokenBy | None = None,
+        ui: str | None = None,
     ) -> tick.Outcome:
         asked.request()
         return run(tick_ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
@@ -895,7 +937,9 @@ def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
 
 
 def test_the_tick_now_key_takes_a_web_request_with_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     ctx = context(canopy_env)
     asked, stop = tick_now.TickNow(), repeat.Stop()

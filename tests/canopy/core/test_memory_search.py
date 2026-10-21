@@ -50,7 +50,13 @@ def written(
         if ticket is not None:
             db.touch_ticket(conn, ticket, "repo")
             run_id = db.insert_run(
-                conn, tick_id=tick_id, key=ticket, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/r")
+                conn,
+                tick_id=tick_id,
+                key=ticket,
+                kind=RunKind.IMPLEMENT,
+                branch=BRANCH,
+                slots=(),
+                runs_dir=Path("/r"),
             )
             conn.execute("UPDATE runs SET status = 'done', ended_at = 'x' WHERE id = ?", (run_id,))
         author = "operator" if scope == "lesson" else "worker"
@@ -67,10 +73,17 @@ def live_run(conn: sqlite3.Connection, *, notes: str, lessons: str, key: str = K
     with in_tick(conn) as tick_id:
         db.touch_ticket(conn, key, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=key, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/r")
+            conn,
+            tick_id=tick_id,
+            key=key,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/r"),
         )
         conn.execute(
-            "INSERT INTO run_memory (run_id, ticket_notes, proposals) VALUES (?, ?, ?)", (run_id, notes, lessons)
+            "INSERT INTO run_memory (run_id, ticket_notes, proposals) VALUES (?, ?, ?)",
+            (run_id, notes, lessons),
         )
     return run_id
 
@@ -82,7 +95,8 @@ def searched(run_id: int | str, *words: str) -> int:
 
 
 def test_a_worker_finds_its_tickets_notes_older_ones_included_and_its_lessons_and_nothing_else(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.configures("private", memory={"ticket_notes": "use", "proposals": "use"})
@@ -97,7 +111,8 @@ def test_a_worker_finds_its_tickets_notes_older_ones_included_and_its_lessons_an
     # clones are beside it, so the worker searches from the workspace's root, with the run's own CANOPY_RUN_ID.
     search_cmd = ["sh", "-c", f"cd '{scenario.env.root}' && {' '.join(canopy('memory', 'search', 'cache'))}"]
     scenario.run(
-        dispatches(slug="work"), worker=worker_does(search_cmd, *commit_and_push(BRANCH), result=worker_result())
+        dispatches(slug="work"),
+        worker=worker_does(search_cmd, *commit_and_push(BRANCH), result=worker_result()),
     )
     [worker] = [r for r in agent_runs(scenario.agent_log) if "canopy-worker" in cast("list[str]", r["argv"])]
     [ran, *_] = cast("list[dict[str, object]]", worker["commands"])
@@ -113,7 +128,9 @@ def test_a_worker_finds_its_tickets_notes_older_ones_included_and_its_lessons_an
 
 
 def test_a_run_rendered_while_recording_finds_nothing(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="record", proposals="record")
     written(conn, "Warm the cache first.")
@@ -124,7 +141,9 @@ def test_a_run_rendered_while_recording_finds_nothing(
 
 
 def test_a_run_searches_by_the_modes_it_was_rendered_under_not_the_config_now(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="use", proposals="use")
     note = written(conn, "Warm the cache first.")
@@ -138,7 +157,9 @@ def test_a_run_searches_by_the_modes_it_was_rendered_under_not_the_config_now(
 
 @pytest.mark.parametrize("run_env", ["review-3", "chore-4"])
 def test_no_memory_reaches_a_review_or_a_chore(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], run_env: str
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    run_env: str,
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     assert searched(run_env, "cache") == 0
@@ -146,7 +167,9 @@ def test_no_memory_reaches_a_review_or_a_chore(
 
 
 def test_a_search_naming_an_ended_or_unknown_run_is_refused(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     run_id = live_run(conn, notes="use", lessons="off")
@@ -166,7 +189,9 @@ def test_the_overseer_reads_no_memory(canopy_env: CanopyEnv, capsys: pytest.Capt
 
 
 def test_the_operator_searches_everything_with_a_text_plainly(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="record")
     ours = written(conn, "Warm the \u202ecache\u202c first.")
@@ -226,12 +251,13 @@ def test_a_query_with_no_word_is_a_usage_error(canopy_env: CanopyEnv) -> None:
 
 
 def test_a_purge_leaves_no_word_of_a_text_in_the_index_or_the_file(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="record")
     written(conn, "The staging host is zebracorntastic.")
     assert [m.body for m in search.search(conn, "zebracorntastic", scope=None)] == [
-        "The staging host is zebracorntastic."
+        "The staging host is zebracorntastic.",
     ]
     assert main(["memory", "purge", "--all"]) == 0
     assert search.search(conn, "zebracorntastic", scope=None) == []

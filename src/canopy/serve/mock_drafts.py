@@ -215,14 +215,15 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
             ).returning("id"),
         ).fetchone()
         versions: list[tuple[int, str, str, str | None, str, str | None]] = [
-            (1, text, "worker", None, at(_ENDED), reaction)
+            (1, text, "worker", None, at(_ENDED), reaction),
         ]
         if edit is not None:
             versions.append((2, edit, "operator", "web", at(-10), reaction))
         sql.execute_many(
             conn,
             sql.insert_rows(
-                "draft_versions", ("draft_id", "version", "body", "author", "channel", "created_at", "reaction")
+                "draft_versions",
+                ("draft_id", "version", "body", "author", "channel", "created_at", "reaction"),
             ),
             [(found["id"], *v) for v in versions],
         )
@@ -364,7 +365,7 @@ class GitHub(procs.SubprocessRunner):
                         "draft": bool(pr["draft"]),
                         "mergeable": pr["mergeable"],
                         "author": pr["author"],
-                    }
+                    },
                 )
                 reviews = sql.select("*").from_("observed_reviews").where("pr_url = ?", pr["url"]).order_by("id")
                 for r in sql.execute(conn, reviews):
@@ -392,7 +393,7 @@ class GitHub(procs.SubprocessRunner):
                             "url": r["url"],
                             "review": r["review_id"],
                             "thread": thread,
-                        }
+                        },
                     )
             lines.append({"kind": "end", "prs": [pr["url"] for pr in prs]})
         finally:

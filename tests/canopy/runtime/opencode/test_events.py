@@ -45,7 +45,15 @@ def test_events_give_the_text_the_session_the_cost_the_peak_context_and_the_firs
     peak = 100 + 900 + 50  # the second call's input, cache read, and cache write
     first = 100 + 400 + 50  # the first call's
     assert output.usage == Usage(
-        1.25, 200, 40, 6, cache_read=1300, cache_write=100, peak_context=peak, first_call=first, first_cache_write=50
+        1.25,
+        200,
+        40,
+        6,
+        cache_read=1300,
+        cache_write=100,
+        peak_context=peak,
+        first_call=first,
+        first_cache_write=50,
     )
     assert output.usage is not None
     assert output.usage.new_tokens == 2 * (100 + 50 + 20 + 3)  # every kind but the cache reads

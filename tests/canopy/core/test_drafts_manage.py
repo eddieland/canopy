@@ -100,7 +100,8 @@ def test_a_second_send_posts_nothing(scenario: Scenario, github_state: Path) -> 
 
 @pytest.mark.usefixtures("git_pool")
 def test_an_edit_since_the_operator_read_the_draft_refuses_the_send_stale(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501)])
@@ -118,14 +119,19 @@ def test_an_edit_since_the_operator_read_the_draft_refuses_the_send_stale(
 
 @pytest.mark.usefixtures("git_pool")
 def test_an_edit_while_the_send_reads_the_pr_refuses_it_stale_and_posts_nothing(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     run_id = drafted_run(scenario, github_state, [thread(501)])
     seen = hashed(scenario.conn, run_id, 1)
     read = observe.read
 
     def edited_meanwhile(
-        conn: sqlite3.Connection, config: Config, runner: procs.Runner, prs: Collection[str], log: logs.TickAdapter
+        conn: sqlite3.Connection,
+        config: Config,
+        runner: procs.Runner,
+        prs: Collection[str],
+        log: logs.TickAdapter,
     ) -> observe.Read:
         # The operator edits in another tab while the send reads the PR again, after it checked the hash.
         found = read(conn, config, runner, prs, log)
@@ -196,7 +202,8 @@ def test_a_dropped_draft_is_not_sent_until_the_drop_is_taken_back(scenario: Scen
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_refused_post_leaves_the_drafts_waiting_and_names_its_pending_review_for_the_next(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501)])
@@ -217,7 +224,12 @@ def test_a_refused_post_leaves_the_drafts_waiting_and_names_its_pending_review_f
 @pytest.mark.usefixtures("git_pool")
 @pytest.mark.parametrize(("posted", "status"), [(True, DraftStatus.SENT), (False, DraftStatus.WAITING)])
 def test_an_unconfirmed_send_is_settled_by_a_read_never_by_sending_again(
-    scenario: Scenario, github_state: Path, ctx: Context, *, posted: bool, status: DraftStatus
+    scenario: Scenario,
+    github_state: Path,
+    ctx: Context,
+    *,
+    posted: bool,
+    status: DraftStatus,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501)])
@@ -240,7 +252,8 @@ def test_an_unconfirmed_send_is_settled_by_a_read_never_by_sending_again(
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_tickets_draft_posts_through_the_trackers_command_and_is_settled_by_the_operator(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     ticket = {"on": "ticket", "url": ISSUE, "text": "Which base should this target?"}
@@ -277,7 +290,8 @@ def test_list_and_show_print_each_draft_with_its_thread_and_hash(scenario: Scena
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_reaction_is_added_with_its_draft_and_one_alone_posts_no_comment(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     alone = {"on": "thread", "pr": PR, "comment": 502, "did": "answered", "react": "heart"}
@@ -314,7 +328,8 @@ def test_drafts_that_are_all_reactions_alone_open_no_review(scenario: Scenario, 
 
 @pytest.mark.usefixtures("git_pool")
 def test_the_operator_sets_changes_and_clears_a_reaction_and_each_is_a_new_hash(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501), {"on": "pr", "pr": PR, "text": "Done."}])
@@ -351,7 +366,8 @@ def test_a_refused_reaction_posts_nothing_and_the_draft_waits(scenario: Scenario
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_review_that_fails_after_its_reaction_keeps_the_reaction_and_sending_again_adds_none(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [{**thread(501), "react": "+1"}])
@@ -416,7 +432,9 @@ def on_github(state: Path, review_id: int, *, then: str) -> None:
 
 @pytest.mark.usefixtures("git_pool")
 def test_staged_drafts_wait_in_one_pending_review_until_the_operator_submits_it_on_github(
-    scenario: Scenario, github_state: Path, ctx: Context
+    scenario: Scenario,
+    github_state: Path,
+    ctx: Context,
 ) -> None:
     conn = scenario.conn
     entries = [thread(501), thread(502, "answered", "Because."), {"on": "pr", "pr": PR, "text": "Done."}]
@@ -460,7 +478,9 @@ def test_staged_drafts_wait_in_one_pending_review_until_the_operator_submits_it_
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_staged_review_deleted_on_github_leaves_its_drafts_waiting_to_send_again(
-    scenario: Scenario, github_state: Path, ctx: Context
+    scenario: Scenario,
+    github_state: Path,
+    ctx: Context,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501)])
@@ -481,7 +501,9 @@ def test_a_staged_review_deleted_on_github_leaves_its_drafts_waiting_to_send_aga
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_reply_taken_out_of_the_staged_review_before_it_is_submitted_is_dropped(
-    scenario: Scenario, github_state: Path, ctx: Context
+    scenario: Scenario,
+    github_state: Path,
+    ctx: Context,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501), thread(502)])
@@ -497,7 +519,8 @@ def test_a_reply_taken_out_of_the_staged_review_before_it_is_submitted_is_droppe
 
 @pytest.mark.usefixtures("git_pool")
 def test_nothing_else_is_sent_or_staged_on_a_pr_while_it_holds_a_staged_review(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     run_id = drafted_run(scenario, github_state, [thread(501), thread(502)])
@@ -545,7 +568,9 @@ def test_a_stage_adds_its_reactions_at_once_and_sends_a_reaction_alone(scenario:
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_stage_that_names_no_id_for_a_reply_is_unconfirmed_not_staged(
-    scenario: Scenario, github_state: Path, tmp_path: Path
+    scenario: Scenario,
+    github_state: Path,
+    tmp_path: Path,
 ) -> None:
     conn = scenario.conn
     # A poster that opens the review and says it is staged, but names no comment for the reply.

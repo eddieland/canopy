@@ -72,7 +72,7 @@ def test_notify_gets_new_and_resolved_items_once(scenario: Scenario, canopy_env:
     assert messages(notified) == [
         "canopy attention: 2 new, 0 resolved\n"
         "+ PROJ-3 needs_reviewer: PROJ-3 detail\n"
-        "+ PROJ-4 ready_to_merge: PROJ-4 detail\n" + listing
+        "+ PROJ-4 ready_to_merge: PROJ-4 detail\n" + listing,
     ]
 
     # Still open, even with a reworded detail: nothing new to say.
@@ -102,7 +102,9 @@ def test_failed_notify_is_retried_next_tick(scenario: Scenario, canopy_env: Cano
 
 
 def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
-    scenario: Scenario, canopy_env: CanopyEnv, notified: Path
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    notified: Path,
 ) -> None:
     scenario.tick(*recorded(("PROJ-3", "needs_reviewer")))
     scenario.tick(result="gave up", code=1)
@@ -111,7 +113,9 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
 
 
 def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
-    scenario: Scenario, canopy_env: CanopyEnv, notified: Path
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    notified: Path,
 ) -> None:
     scenario.tick(*recorded(("PROJ-3", "needs_reviewer")), dry_run=True)
     skipped = scenario.tick(skips_tick("mcp_unavailable: github"), dry_run=True, code=1)

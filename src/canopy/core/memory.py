@@ -246,7 +246,7 @@ def memory_contract(modes: Modes) -> str:
             "Each text is plain text, line breaks sparingly, at most "
             f"{MAX_NOTE_CHARS} characters, in your own words, in this shape: `<what holds>. Evidence: <a path and "
             "line, a test, a command and its outcome, or a commit>. Next: <what a later run should do or skip>.` "
-            "Never ticket, PR, or log text copied in, never a secret, token, or password."
+            "Never ticket, PR, or log text copied in, never a secret, token, or password.",
         )
     if modes.proposals is not MemoryMode.OFF:
         fields.append(
@@ -261,18 +261,18 @@ def memory_contract(modes: Modes) -> str:
             "naming the lesson's subject, as in `tests-need-docker`. Each text is plain text, line breaks "
             f"sparingly, at most {MAX_PROPOSAL_CHARS} characters, in your own words, never a secret, in this shape: "
             "`<what to do or not do, as an instruction to any worker>. Why: <what showed it>. When: <the task, path, "
-            "or step it applies to>.`"
+            "or step it applies to>.`",
         )
     if modes.ticket_notes is MemoryMode.USE:
         fields.append(
             '- `"drop_notes":["<key>"]`: the keys of notes shown above that no longer hold, such as one about a '
-            "failure since fixed."
+            "failure since fixed.",
         )
     if MemoryMode.USE in (modes.ticket_notes, modes.proposals):
         fields.append(
             '- `"memory_used":[<id>]` and `"memory_wrong":[<id>]`: the ids of what was shown above that you relied '
             "on, and of what you checked and found wrong. Cite only ids shown above, and leave out what you did not "
-            "use."
+            "use.",
         )
     if not fields:
         return ""
@@ -302,11 +302,16 @@ def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -
     sql.execute(
         conn,
         sql.insert(
-            "run_memory", run_id=run_id, ticket_notes=rendered.modes.ticket_notes, proposals=rendered.modes.proposals
+            "run_memory",
+            run_id=run_id,
+            ticket_notes=rendered.modes.ticket_notes,
+            proposals=rendered.modes.proposals,
         ),
     )
     sql.execute_many(
-        conn, sql.insert_rows("memory_reads", ("run_id", "memory_id")), [(run_id, i) for i in rendered.ids]
+        conn,
+        sql.insert_rows("memory_reads", ("run_id", "memory_id")),
+        [(run_id, i) for i in rendered.ids],
     )
 
 
@@ -440,7 +445,8 @@ def _mark_wrong(conn: sqlite3.Connection, writing: _Writing, wrong: Sequence[rec
         if m.scope is MemoryScope.LESSON:
             # The operator's word: a run's report raises `lesson_wrong`, and only the operator retires it.
             sql.execute(
-                conn, sql.update("memories").set(wrong_at=stamp, wrong_run_id=writing.run_id).where("id = ?", m.id)
+                conn,
+                sql.update("memories").set(wrong_at=stamp, wrong_run_id=writing.run_id).where("id = ?", m.id),
             )
         else:
             sql.execute(
@@ -900,7 +906,8 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
     runs = {
         int(r["id"]): r
         for r in sql.execute(
-            conn, sql.select("id, kind, status").from_("runs").where("ticket_key = ?", key).order_by("id")
+            conn,
+            sql.select("id, kind, status").from_("runs").where("ticket_key = ?", key).order_by("id"),
         )
     }
     later = sorted(runs)
@@ -930,12 +937,12 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
         # Search reaches what the cap left out, and the notes a later note under the key replaced (`memory_search`).
         body.append(
             f"`{SEARCH_COMMAND}` searches this ticket's notes, the ones later notes replaced"
-            f"{' and the ones left out here' if left_out else ''} included."
+            f"{' and the ones left out here' if left_out else ''} included.",
         )
     if kept:
         body.append(
             "In your result, name the ids of notes you relied on in `memory_used` and of notes you found wrong in "
-            "`memory_wrong`, and the keys of notes that no longer hold in `drop_notes`."
+            "`memory_wrong`, and the keys of notes that no longer hold in `drop_notes`.",
         )
     text = "\n\n".join([_NOTES_HEADING, intro, *body])
     return Digest(text=text, ids=tuple(n.id for n in kept), left_out=left_out)
@@ -978,7 +985,7 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
     if cite and kept:
         body.append(
             "In your result, name the ids of lessons you relied on in `memory_used`, and of any you found wrong in "
-            "`memory_wrong`: the operator reads each report."
+            "`memory_wrong`: the operator reads each report.",
         )
     return Digest(text="\n\n".join([_LESSONS_HEADING, intro, *body]), ids=tuple(m.id for m in kept), left_out=left_out)
 

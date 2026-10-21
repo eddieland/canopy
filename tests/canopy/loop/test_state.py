@@ -63,7 +63,12 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         # PROJ-1: its PR is open and its CI failed; a resume for it and a review ran, so it cools down, and the
         # operator wrote to it.
         db.set_ticket(
-            conn, "PROJ-1", root, title="Retry flaky uploads", phase=Phase.CI_RUNNING, cursors={"comment": "10001"}
+            conn,
+            "PROJ-1",
+            root,
+            title="Retry flaky uploads",
+            phase=Phase.CI_RUNNING,
+            cursors={"comment": "10001"},
         )
         implement = db.insert_run(
             conn,
@@ -182,7 +187,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             lease_id="lease-2",
             lease_holder=f"{pools.HOLDER_PREFIX}PROJ-2",
             leased_at=stamp("09:55"),
-        )
+        ),
     ]
     assert (
         rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased) == markdown_snapshot
@@ -192,7 +197,10 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
 def context(env: CanopyEnv) -> Context:
     ws = workspace.load(env.root)
     return Context(
-        config=config.load(env.root, env.user_file), conn=env.journal(), runner=procs.SubprocessRunner(), ws=ws
+        config=config.load(env.root, env.user_file),
+        conn=env.journal(),
+        runner=procs.SubprocessRunner(),
+        ws=ws,
     )
 
 

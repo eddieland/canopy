@@ -40,7 +40,9 @@ def test_a_slot_inside_a_quoted_string_or_name_is_part_of_it() -> None:
     ],
 )
 def test_a_fragment_refuses_args_that_do_not_fit_its_slots(
-    text: str, args: tuple[sql.Arg, ...], error: type[Exception]
+    text: str,
+    args: tuple[sql.Arg, ...],
+    error: type[Exception],
 ) -> None:
     with pytest.raises(error):
         sql.frag(text, *args)  # pyrefly: ignore[bad-argument-type]  # a str, to test the slots alone
@@ -135,7 +137,7 @@ def test_an_insert_binds_its_values_upserts_and_returns(conn: sqlite3.Connection
     assert sql.execute(conn, again).fetchone()[0] == "two"
     assert sql.execute(conn, sql.insert("pr_titles", pr_url="u", title="x", updated_at="t").or_ignore()).rowcount == 0
     assert rendered(sql.insert("pause", id=1, paused_at="t", channel="cli").or_replace())[0].startswith(
-        "INSERT OR REPLACE INTO pause"
+        "INSERT OR REPLACE INTO pause",
     )
 
 

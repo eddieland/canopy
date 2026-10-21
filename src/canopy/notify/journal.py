@@ -42,7 +42,7 @@ def ensure_sink(conn: sqlite3.Connection, name: str) -> records.NotifySink:
     sql.execute(
         conn,
         sql.insert("notify_sinks", name=name, cursor=newest_event_id(conn), created_at=db.now()).on_conflict(
-            "(name) DO NOTHING"
+            "(name) DO NOTHING",
         ),
     )
     row = sink(conn, name)
@@ -69,7 +69,10 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
 
 
 def events_after(
-    conn: sqlite3.Connection, cursor: int, groups: Sequence[str], upto: int | None = None
+    conn: sqlite3.Connection,
+    cursor: int,
+    groups: Sequence[str],
+    upto: int | None = None,
 ) -> list[records.NotifyEvent]:
     """Return the events after `cursor`, and up to `upto` if given, in `groups`, oldest first."""
     if not groups:
@@ -183,7 +186,8 @@ def mark_delivered(conn: sqlite3.Connection, sink_name: str, change: Diff | None
             sql.execute_many(
                 conn,
                 sql.insert_rows(
-                    "notifications", ("sink", "fingerprint", "ticket_key", "reason", "repo", "sent_at")
+                    "notifications",
+                    ("sink", "fingerprint", "ticket_key", "reason", "repo", "sent_at"),
                 ).or_replace(),
                 [(sink_name, item_fingerprint(i), i.ticket_key, i.reason, i.repo, ts) for i in change.added],
             )

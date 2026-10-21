@@ -102,7 +102,9 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(scenario: Sc
 def test_with_nobody_trusted_the_resume_worker_is_told_so(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes())
     resume = dispatches(
-        kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], context="Address review comment 1501 by alice"
+        kind=RunKind.RESUME,
+        reasons=[ResumeReason.REVIEW],
+        context="Address review comment 1501 by alice",
     )
     prompt = scenario.run(resume, worker=pushes()).prompt
     assert "Trusted reviewers: none (every reviewer's feedback needs the operator's go-ahead)." in prompt
@@ -119,13 +121,15 @@ def test_a_reply_on_a_public_ticket_needs_a_ticket_canopy_knows(scenario: Scenar
 
 @pytest.mark.parametrize("kind", [RunKind.IMPLEMENT, RunKind.RESUME])
 def test_every_public_worker_hears_the_operator_with_the_question_a_reply_answers(
-    scenario: Scenario, git_pool: GitPool, kind: RunKind
+    scenario: Scenario,
+    git_pool: GitPool,
+    kind: RunKind,
 ) -> None:
     # Not only a `resume` for the reply: a reply before the branch exists rides the next `implement` too (D093). The
     # question it answers comes with it, labeled as the earlier worker's.
     question = "Keep the v1 endpoint, or drop it?"
     blocked = scenario.run(
-        worker=worker_does(result=json.dumps({"status": "blocked", "summary": "unclear", "question": question}))
+        worker=worker_does(result=json.dumps({"status": "blocked", "summary": "unclear", "question": question})),
     )
     asked = db.latest_message_id(scenario.conn)
     message = reply(scenario, "Keep it until the client migrates.")

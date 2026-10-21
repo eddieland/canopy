@@ -62,7 +62,8 @@ def threads_of(c: TestClient) -> dict[str, Any]:
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     c, _, run_id = drafted(scenario, github_state)
     found = threads_of(c)
@@ -72,7 +73,7 @@ def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
     first, second = found["threads"]
     assert (first["id"], first["path"], first["line"], first["side"]) == ("PRRT_1", "src/app.py", 12, "right")
     assert [(m["id"], m["author"], m["body"], m["operator_sent"]) for m in first["comments"]] == [
-        (501, "alice", "Rename this.", False)
+        (501, "alice", "Rename this.", False),
     ]
     [draft] = first["drafts"]
     assert (draft["run"], draft["number"], draft["kind"], draft["status"], draft["stance"]) == (
@@ -93,7 +94,9 @@ def test_a_prs_threads_carry_the_drafts_that_answer_them_on_the_runs_diff(
 def test_the_page_edits_and_sends_drafts_as_one_review(scenario: Scenario, github_state: Path) -> None:
     c, write, run_id = drafted(scenario, github_state)
     edited = c.post(
-        f"/api/runs/{run_id}/drafts/1/edit", json={"text": "Renamed it to `retries`.", "reaction": None}, headers=write
+        f"/api/runs/{run_id}/drafts/1/edit",
+        json={"text": "Renamed it to `retries`.", "reaction": None},
+        headers=write,
     )
     assert edited.status_code == 200, edited.text
     draft = edited.json()
@@ -140,7 +143,8 @@ def test_the_page_stages_a_reaction_and_sends_it_alone(scenario: Scenario, githu
 
 @pytest.mark.usefixtures("git_pool")
 def test_the_page_stages_drafts_in_a_review_and_sends_nothing_else_while_it_is_pending(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     c, write, run_id = drafted(scenario, github_state)
     reply = threads_of(c)["threads"][0]["drafts"][0]
@@ -152,7 +156,9 @@ def test_the_page_stages_drafts_in_a_review_and_sends_nothing_else_while_it_is_p
     assert threads_of(c)["threads"][0]["drafts"][0]["status"] == "staged"
     body = threads_of(c)["pr_drafts"][0]
     again = c.post(
-        "/api/drafts/send", json={"drafts": [{"run": run_id, "number": 2, "hash": body["hash"]}]}, headers=write
+        "/api/drafts/send",
+        json={"drafts": [{"run": run_id, "number": 2, "hash": body["hash"]}]},
+        headers=write,
     )
     assert refused(again).startswith("staged: ")
     assert len(reads(github_state, "post")) == 1
@@ -163,7 +169,9 @@ def test_a_send_of_text_the_page_no_longer_shows_is_refused_stale(scenario: Scen
     c, write, run_id = drafted(scenario, github_state)
     seen = threads_of(c)["threads"][0]["drafts"][0]["hash"]
     c.post(
-        f"/api/runs/{run_id}/drafts/1/edit", json={"text": "Edited in another tab.", "reaction": None}, headers=write
+        f"/api/runs/{run_id}/drafts/1/edit",
+        json={"text": "Edited in another tab.", "reaction": None},
+        headers=write,
     )
     sent = c.post("/api/drafts/send", json={"drafts": [{"run": run_id, "number": 1, "hash": seen}]}, headers=write)
     assert refused(sent).startswith("stale: ")
@@ -212,6 +220,6 @@ def test_a_tickets_own_draft_is_on_its_page_and_sent_from_there(scenario: Scenar
     sent = c.post("/api/drafts/send", json={"drafts": wanted}, headers=write)
     assert [d["status"] for d in sent.json()["posted"]] == ["sent"]
     assert reads(github_state, "post") == [
-        {"issue": issue, "ticket": "PROJ-1", "body": "Which base should this target?"}
+        {"issue": issue, "ticket": "PROJ-1", "body": "Which base should this target?"},
     ]
     assert c.get("/api/tickets/PROJ-1").json()["drafts"][0]["status"] == "sent"

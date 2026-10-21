@@ -82,7 +82,8 @@ def tracker_request(ctx: Context) -> observe.Request:
     newest = {
         str(r[0]): str(r[1])
         for r in sql.execute(
-            ctx.conn, sql.select("ticket, max(commented_at)").from_("observed_comments").group_by("ticket")
+            ctx.conn,
+            sql.select("ticket, max(commented_at)").from_("observed_comments").group_by("ticket"),
         )
     }
     return observe.Request(

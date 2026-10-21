@@ -11,7 +11,8 @@ from tests.conftest import CanopyEnv
 
 
 def test_each_key_says_its_value_its_default_and_the_file_that_set_it(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.configure(canopy_env.private_file, {"capacity": {"max_workers": 4}})
     canopy_env.configure(canopy_env.root / config.WORKSPACE_FILE_NAME, {"policy": {"max_resume_attempts": 1}})
@@ -48,7 +49,8 @@ def test_each_key_says_its_value_its_default_and_the_file_that_set_it(
 
 
 def test_a_workspace_files_policy_value_that_does_not_tighten_is_not_what_set_it(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     loose = config.Policy().max_resume_attempts + 5
     canopy_env.configure(canopy_env.root / config.WORKSPACE_FILE_NAME, {"policy": {"max_resume_attempts": loose}})
@@ -68,7 +70,7 @@ def test_text_commands_and_paths_are_left_out(canopy_env: CanopyEnv, capsys: pyt
                     "every_minutes": 60,
                     "days": ["mon", "tue"],
                     "when": "Skip it on a quiet day.",
-                }
+                },
             },
         },
     )

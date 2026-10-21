@@ -45,7 +45,8 @@ def pause(conn: sqlite3.Connection, *, channel: str) -> bool:
         Whether it was already paused, which keeps the first pause's time and channel.
     """
     cur = sql.execute(
-        conn, sql.insert("pause", id=sql.frag("1"), paused_at=db.now(), channel=channel).on_conflict("(id) DO NOTHING")
+        conn,
+        sql.insert("pause", id=sql.frag("1"), paused_at=db.now(), channel=channel).on_conflict("(id) DO NOTHING"),
     )
     return cur.rowcount == 0
 

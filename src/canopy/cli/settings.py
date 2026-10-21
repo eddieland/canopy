@@ -55,7 +55,10 @@ def cmd_show(click_ctx: click.Context, *, as_json: bool) -> int:
 
 @config_group.command("commands")
 @click.option(
-    "--json", "as_json", is_flag=True, help="Print the commands as one JSON object instead, each as its argv."
+    "--json",
+    "as_json",
+    is_flag=True,
+    help="Print the commands as one JSON object instead, each as its argv.",
 )
 @click.pass_context
 def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:

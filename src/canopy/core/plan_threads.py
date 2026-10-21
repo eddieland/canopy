@@ -41,7 +41,9 @@ def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
         The threads, in the order they were written.
     """
     found = records.fetch_all(
-        conn, records.PlanThread, sql.select("*").from_("plan_threads").where("ticket_key = ?", key).order_by("id")
+        conn,
+        records.PlanThread,
+        sql.select("*").from_("plan_threads").where("ticket_key = ?", key).order_by("id"),
     )
     replies = records.fetch_all(
         conn,
@@ -143,7 +145,8 @@ def change(
         _thread(conn, key, thread_id)
         if text is not None and reply_id is not None:
             changed = sql.execute(
-                conn, sql.update("plan_replies").set(body=text).where("id = ? AND thread_id = ?", reply_id, thread_id)
+                conn,
+                sql.update("plan_replies").set(body=text).where("id = ? AND thread_id = ?", reply_id, thread_id),
             ).rowcount
             if not changed:
                 raise Refused("unknown", f"thread {thread_id} of {key} has no reply {reply_id}")
@@ -156,7 +159,9 @@ def change(
         if resolved is not None:
             # Resolving it again keeps when it was first resolved.
             resolving = sql.update("plan_threads").set_to(
-                "resolved_at = CASE WHEN ? THEN coalesce(resolved_at, ?) END", resolved, db.now()
+                "resolved_at = CASE WHEN ? THEN coalesce(resolved_at, ?) END",
+                resolved,
+                db.now(),
             )
             sql.execute(conn, resolving.where("id = ?", thread_id))
     [found] = [t for t in threads(conn, key) if t.thread.id == thread_id]

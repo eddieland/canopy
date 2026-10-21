@@ -60,7 +60,7 @@ def test_a_tick_that_dispatches_names_the_run_it_started(scenario: Scenario) -> 
     [ran] = ticked.runs
     notes = [m for m in conversation_of(scenario.conn) if m[0] == "canopy"]
     assert notes == [
-        ("canopy", "note", f"Tick {ticked.tick.id} read message {message}: started run {ran.id} (implement).", message)
+        ("canopy", "note", f"Tick {ticked.tick.id} read message {message}: started run {ran.id} (implement).", message),
     ]
 
 

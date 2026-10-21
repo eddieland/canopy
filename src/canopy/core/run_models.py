@@ -111,7 +111,8 @@ def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> list[recor
 def _due_in(table: RunTable, retry_before: str) -> sql.Select:
     return (
         sql.select(
-            "? AS run_table, r.id AS run_id, r.session_id, r.started_at, coalesce(m.attempts, 0) AS attempts", table
+            "? AS run_table, r.id AS run_id, r.session_id, r.started_at, coalesce(m.attempts, 0) AS attempts",
+            table,
         )
         .from_("{} r", sql.name(table))
         .left_join("run_model_reads m ON m.run_table = ? AND m.run_id = r.id", table)

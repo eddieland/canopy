@@ -135,7 +135,10 @@ def send(body: DraftSendRequest, backend: BackendDep) -> DraftsSent:
 
 
 @router.post(
-    "/drafts/stage", operation_id="stageDrafts", summary="Stage drafts in a review on GitHub", responses=REFUSED
+    "/drafts/stage",
+    operation_id="stageDrafts",
+    summary="Stage drafts in a review on GitHub",
+    responses=REFUSED,
 )
 def stage(body: DraftSendRequest, backend: BackendDep) -> DraftsSent:
     """`canopy draft stage`: the drafts in one pending review a PR, for the operator to finish and submit on GitHub.

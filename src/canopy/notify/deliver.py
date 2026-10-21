@@ -143,7 +143,7 @@ def status(ctx: Context) -> list[SinkStatus]:
                 row.failures,
                 row.last_error,
                 journal.waiting(ctx.conn, row.cursor, groups),
-            )
+            ),
         )
     return found
 
@@ -219,12 +219,22 @@ def _deliver(
         since = row.last_digest_at or first
         digest = message.digest(ctx.conn, items, since=since, now=now)
     msg = message.Message(
-        name, ctx.repo, path, change, len(items), events, digest, now, titles=message.titles(ctx.conn), ui=ui
+        name,
+        ctx.repo,
+        path,
+        change,
+        len(items),
+        events,
+        digest,
+        now,
+        titles=message.titles(ctx.conn),
+        ui=ui,
     )
     if msg.is_empty():
         # Nothing to say; the cursor still moves past events of groups this sink does not take.
         sql.execute(
-            ctx.conn, sql.update("notify_sinks").set_to("cursor = max(cursor, ?)", cursor).where("name = ?", name)
+            ctx.conn,
+            sql.update("notify_sinks").set_to("cursor = max(cursor, ?)", cursor).where("name = ?", name),
         )
         return Delivery(name, "nothing")
     fields = {

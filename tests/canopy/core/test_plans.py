@@ -75,7 +75,10 @@ def test_a_name_already_taken_is_never_overwritten(conn: sqlite3.Connection, sta
 
 @pytest.mark.parametrize("which", ["plans", "ticket"])
 def test_a_symlinked_or_shared_directory_refuses_the_write(
-    conn: sqlite3.Connection, state_dir: Path, tmp_path: Path, which: str
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+    which: str,
 ) -> None:
     run_id = plan_run(conn, state_dir)
     elsewhere = tmp_path / "elsewhere"
@@ -112,7 +115,9 @@ def test_a_path_is_built_only_from_a_ticket_key(state_dir: Path, key: str) -> No
     ],
 )
 def test_a_file_that_is_no_plan_reads_as_why_with_the_whole_files_hash(
-    tmp_path: Path, content: bytes, problem: plans.Problem
+    tmp_path: Path,
+    content: bytes,
+    problem: plans.Problem,
 ) -> None:
     path = tmp_path / "1.md"
     path.write_bytes(content)
@@ -143,7 +148,8 @@ def test_a_missing_linked_or_irregular_file_is_never_read_as_a_plan(tmp_path: Pa
 
 
 def test_a_new_plan_supersedes_the_current_one_and_history_keeps_both(
-    conn: sqlite3.Connection, state_dir: Path
+    conn: sqlite3.Connection,
+    state_dir: Path,
 ) -> None:
     first = proposed(conn, state_dir)
     plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)

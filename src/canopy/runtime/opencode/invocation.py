@@ -26,7 +26,8 @@ def default_template(agent: str, *, definitions_dir: str, title: str, prompt: st
         session's title, and `prompt` as its message.
     """
     return with_config_dir(
-        definitions_dir, f"opencode run --agent {agent} --format json --thinking --title={title} {prompt}"
+        definitions_dir,
+        f"opencode run --agent {agent} --format json --thinking --title={title} {prompt}",
     )
 
 

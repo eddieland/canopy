@@ -196,7 +196,13 @@ def _change(
         if review_drafts.hash_of(body, comments) == current.hash:
             return current
         return review_drafts.add_version(
-            conn, draft, body, comments, author=ReviewDraftAuthor.OPERATOR, channel=channel, change=change
+            conn,
+            draft,
+            body,
+            comments,
+            author=ReviewDraftAuthor.OPERATOR,
+            channel=channel,
+            change=change,
         )
 
 
@@ -252,7 +258,8 @@ def publish(
     run = db.get_review_run(conn, run_id)
     if run is None or not review_drafts.draftable(conn, run):
         raise conversation.Refused(
-            "not_ours", f"{draft.pr_url} is one of the loop's own PRs now: it publishes no review"
+            "not_ours",
+            f"{draft.pr_url} is one of the loop's own PRs now: it publishes no review",
         )
     _check_publishable(draft)
     current = _check_seen(conn, draft, seen)
@@ -260,7 +267,8 @@ def publish(
         raise conversation.Refused("empty", f"version {current.number} of review run {run_id}'s draft posts nothing")
     if review_drafts.diff_of(run) is None:
         raise conversation.Refused(
-            "no_diff", f"the diff review run {run_id} read is gone, so its draft is no longer publishable"
+            "no_diff",
+            f"the diff review run {run_id} read is gone, so its draft is no longer publishable",
         )
     check_none_staged(conn, draft.pr_url)
     source = config.connect.vcs()
@@ -289,7 +297,8 @@ def _check_publishable(draft: records.ReviewDraft) -> None:
             raise conversation.Refused("staged", f"{where} is in the review you staged on {draft.pr_url}: {_FINISH}")
         case ReviewDraftStatus.UNCONFIRMED:
             raise conversation.Refused(
-                "unconfirmed", f"{where} may have been posted already; the next whole read of {draft.pr_url} says"
+                "unconfirmed",
+                f"{where} may have been posted already; the next whole read of {draft.pr_url} says",
             )
         case ReviewDraftStatus.PUBLISHING:
             raise conversation.Refused("publishing", f"{where} is being posted now")
@@ -507,7 +516,10 @@ def _published(
 
 
 def _staged(
-    conn: sqlite3.Connection, draft: records.ReviewDraft, version: Version, pending: Mapping[str, object]
+    conn: sqlite3.Connection,
+    draft: records.ReviewDraft,
+    version: Version,
+    pending: Mapping[str, object],
 ) -> Published:
     with db.transaction(conn):
         sql.execute(
@@ -560,7 +572,10 @@ def _unclaim(conn: sqlite3.Connection, draft_id: int, *, why: str, pending: str 
 
 
 def _unconfirmed(
-    conn: sqlite3.Connection, draft: records.ReviewDraft, version: Version, pending: Mapping[str, object]
+    conn: sqlite3.Connection,
+    draft: records.ReviewDraft,
+    version: Version,
+    pending: Mapping[str, object],
 ) -> Published:
     """A post that may have posted: the draft is unconfirmed until a whole read of its PR settles it.
 

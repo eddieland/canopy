@@ -89,7 +89,12 @@ PROMPT_VALUES = {
 PRIVATE_PROMPT_VALUES = {
     **PROMPT_VALUES,
     "FOLLOW_UPS": prompts.follow_ups(
-        "PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"], private=True
+        "PROJ-1",
+        5,
+        ["repo"],
+        needs_human="needs-human",
+        labels=["agent-ready-alice"],
+        private=True,
     ),
 }
 
@@ -132,7 +137,11 @@ def seen(conn: sqlite3.Connection, env: CanopyEnv, *keys: str) -> None:
 
 @contextmanager
 def granted_meanwhile(
-    conn: sqlite3.Connection, owner: object, reads: str, insert: str, *params: object
+    conn: sqlite3.Connection,
+    owner: object,
+    reads: str,
+    insert: str,
+    *params: object,
 ) -> Iterator[list[str]]:
     """Patch `owner.reads`, a read of a grant's limit on `conn`, to try `insert`, another grant, just before it reads.
 
@@ -320,7 +329,10 @@ class Dispatched(NamedTuple):
 
 
 def dispatch_in_tick(
-    conn: sqlite3.Connection, *args: str, key: str = KEY, runner: procs.Runner | None = None
+    conn: sqlite3.Connection,
+    *args: str,
+    key: str = KEY,
+    runner: procs.Runner | None = None,
 ) -> Dispatched:
     """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
     with in_tick(conn) as tick_id:
@@ -330,7 +342,10 @@ def dispatch_in_tick(
 
 
 def dispatch_and_run(
-    conn: sqlite3.Connection, *args: str, key: str = KEY, runner: procs.Runner | None = None
+    conn: sqlite3.Connection,
+    *args: str,
+    key: str = KEY,
+    runner: procs.Runner | None = None,
 ) -> sqlite3.Row:
     """Dispatch as `dispatch_in_tick` does, then do the run in this process, as the detached one would.
 
@@ -480,7 +495,10 @@ class Script(AbstractContextManager[None]):
 
 @contextmanager
 def overseer_does(
-    *commands: list[str], result: str = TICK_DONE, queried: str | None = None, **behavior: Unpack[Behavior]
+    *commands: list[str],
+    result: str = TICK_DONE,
+    queried: str | None = None,
+    **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
     """Until the block ends, the fake overseer runs `commands` and then prints `result`, by default ending its tick.
 
@@ -906,7 +924,8 @@ def journal_at(journals: Journals, tmp_path: Path, version: int) -> sqlite3.Conn
 def old_ticket(conn: sqlite3.Connection, key: str) -> None:
     """Record ticket `key` in a journal `journal_at` opened, with only the columns its first migration made."""
     conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES (?, '/r', ?, ?)", (key, db.now(), db.now())
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES (?, '/r', ?, ?)",
+        (key, db.now(), db.now()),
     )
 
 

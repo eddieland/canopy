@@ -479,12 +479,18 @@ def check_socket_room(tmp: Path) -> None:
     if sys.platform == "linux" and len(os.fsencode(socket)) > SOCKET_PATH_MAX:
         raise SandboxError(
             f"the temp directory {tempfile.gettempdir()} has too long a path for srt's sockets: set TMPDIR to a "
-            "shorter one, such as /tmp"
+            "shorter one, such as /tmp",
         )
 
 
 def placeholders(
-    cwd: Path, trees: Collection[Worktree], objects: Path | None, tmp: Path, *, cache: Path, reads: list[Path]
+    cwd: Path,
+    trees: Collection[Worktree],
+    objects: Path | None,
+    tmp: Path,
+    *,
+    cache: Path,
+    reads: list[Path],
 ) -> dict[str, list[str]]:
     """Return what each placeholder expands to for this run.
 

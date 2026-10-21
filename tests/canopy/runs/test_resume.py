@@ -203,7 +203,10 @@ def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> Non
     ],
 )
 def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
-    scenario: Scenario, treehouse_state: Path, args: tuple[str, ...], reason: str
+    scenario: Scenario,
+    treehouse_state: Path,
+    args: tuple[str, ...],
+    reason: str,
 ) -> None:
     with_branch(scenario.conn)
     assert scenario.refuses(resumes() + list(args)) == [("refused:bad_reason", reason)]
@@ -212,7 +215,7 @@ def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
 
 def test_a_reason_is_for_resume_only(scenario: Scenario) -> None:
     assert scenario.refuses(dispatches(reasons=[CI])) == [
-        ("refused:bad_reason", "--reason says why a resume runs; it is for resume only")
+        ("refused:bad_reason", "--reason says why a resume runs; it is for resume only"),
     ]
 
 
@@ -233,7 +236,8 @@ def test_a_limit_of_zero_disables_the_kind(scenario: Scenario) -> None:
 
 
 def test_one_limit_counts_every_resume_and_old_fix_ci_run_and_their_grants(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.configures(policy={"max_resume_attempts": 3})
     scenario.run(worker=pushes())
@@ -257,7 +261,8 @@ def test_one_limit_counts_every_resume_and_old_fix_ci_run_and_their_grants(
 
 
 def test_the_cooldown_holds_a_resume_for_ci_alone_after_a_run_that_worked_on_ci(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.run(worker=pushes())
     # An implement did not work on CI: nothing holds the first resume for it.
@@ -280,7 +285,9 @@ def test_an_old_fix_ci_run_starts_the_cooldown_too(scenario: Scenario) -> None:
 
 
 def test_a_fix_ci_prompt_override_refuses_every_resume_and_says_so(
-    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
 ) -> None:
     scenario.run(worker=pushes())
     # The operator's overrides, where canopy looks for them by default.
@@ -306,7 +313,7 @@ def test_cursors_advance_only_when_the_worker_starts(scenario: Scenario, git_poo
     scenario.starts(dispatches(cursors={"comment": "c1"}))
     cursors = {"comment": "c2", "review": "2026-10-07T20:58:50Z"}
     assert scenario.refuses(dispatches("PROJ-2", cursors=cursors)) == [
-        ("refused:capacity", "1 of 1 workers are running")
+        ("refused:capacity", "1 of 1 workers are running"),
     ]
     rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
     assert rows["PROJ-1"]["last_comment_id"] == "c1"

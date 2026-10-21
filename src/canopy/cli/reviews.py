@@ -47,7 +47,13 @@ def review_group() -> None:
 @click.option("--context", type=TextType(), help="What the reviewer should look at first. Never quoted text.")
 @click.pass_context
 def cmd_review_run(
-    click_ctx: click.Context, *, pr: str, sha: str, ticket: str | None, repo: str | None, context: str | None
+    click_ctx: click.Context,
+    *,
+    pr: str,
+    sha: str,
+    ticket: str | None,
+    repo: str | None,
+    context: str | None,
 ) -> int:
     """Start a review of the PR at URL, at commit SHA, if its guards allow one now."""
     return verb(click_ctx, tools.review_run, tools.ReviewRun, pr=pr, sha=sha, ticket=ticket, repo=repo, context=context)
@@ -57,7 +63,10 @@ def cmd_review_run(
 @click.option("--pr", "pr", required=True, type=PR_URL, help="The PR's https:// URL.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
 @click.option(
-    "--rationale", required=True, type=TextType(), help="Why not now, such as checks still running, or a draft."
+    "--rationale",
+    required=True,
+    type=TextType(),
+    help="Why not now, such as checks still running, or a draft.",
 )
 @click.pass_context
 def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, rationale: str) -> int:
@@ -186,7 +195,14 @@ def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str,
         ctx = open_context(click_ctx)
         log = logs.for_tick(None)
         done = review_drafts_manage.publish(
-            ctx.conn, ctx.config, ctx.runner, run_id, version_hash, submit=submit, channel=CLI, log=log
+            ctx.conn,
+            ctx.config,
+            ctx.runner,
+            run_id,
+            version_hash,
+            submit=submit,
+            channel=CLI,
+            log=log,
         )
     except conversation.Refused as r:
         raise CliError(f"publish refused ({r.guard}): {r.reason}") from None
@@ -197,12 +213,12 @@ def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str,
         case ReviewDraftStatus.STAGED:
             click.echo(
                 f"Staged version {number} of review run {run_id}'s draft in a pending review on {draft.pr_url}; "
-                f"submit or delete it at {draft.pr_url}/files"
+                f"submit or delete it at {draft.pr_url}/files",
             )
         case ReviewDraftStatus.UNCONFIRMED:
             click.echo(
                 f"Version {number} of review run {run_id}'s draft may have been posted: the post ended without saying. "
-                "A read of the PR settles it; canopy posts it no other time."
+                "A read of the PR settles it; canopy posts it no other time.",
             )
         case ReviewDraftStatus.WAITING | ReviewDraftStatus.PUBLISHING:
             click.echo(f"Version {number} of review run {run_id}'s draft was not published: {done.failed}")
@@ -233,7 +249,7 @@ def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
     if draft.status is ReviewDraftStatus.WAITING:
         click.echo(
             f"\nTo leave it pending on GitHub for you to submit: canopy review publish {run_id} {current.hash}"
-            "\nTo submit it now, add --submit."
+            "\nTo submit it now, add --submit.",
         )
 
 
@@ -249,7 +265,9 @@ def _print_standing(conn: sqlite3.Connection, draft: records.ReviewDraft) -> Non
             if draft.why:
                 click.echo(f"  {draft.why}")
     pr = records.fetch_one(
-        conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", draft.pr_url)
+        conn,
+        records.ObservedPr,
+        sql.select("*").from_("observed_prs").where("url = ?", draft.pr_url),
     )
     if pr is not None and pr.head_sha and not draft.sha.startswith(pr.head_sha):
         click.echo(f"  The PR is at {pr.head_sha} now: its comments would show as outdated, on the commit it read.")

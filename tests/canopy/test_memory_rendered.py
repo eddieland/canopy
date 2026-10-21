@@ -36,7 +36,8 @@ def test_the_memory_contract(markdown_snapshot: SnapshotAssertion, notes: Memory
 
 
 def test_the_ticket_digest_of_a_ticket_with_notes(
-    conn: sqlite3.Connection, markdown_snapshot: SnapshotAssertion
+    conn: sqlite3.Connection,
+    markdown_snapshot: SnapshotAssertion,
 ) -> None:
     first = run(conn, RunKind.IMPLEMENT, RunStatus.FAILED)
     second = run(conn, RunKind.FIX_CI, RunStatus.DONE)
@@ -66,17 +67,24 @@ def test_the_ticket_digest_of_a_ticket_with_notes(
 
 
 def test_the_ticket_digest_of_a_ticket_without_notes(
-    conn: sqlite3.Connection, markdown_snapshot: SnapshotAssertion
+    conn: sqlite3.Connection,
+    markdown_snapshot: SnapshotAssertion,
 ) -> None:
     run(conn, RunKind.IMPLEMENT, RunStatus.DONE)
     assert memory.ticket_digest(conn, KEY).text == markdown_snapshot
 
 
 @pytest.mark.parametrize(
-    ("repos", "cite"), [(("api",), True), (("web",), False)], ids=["a-run-in-api-that-cites", "a-plan-in-web"]
+    ("repos", "cite"),
+    [(("api",), True), (("web",), False)],
+    ids=["a-run-in-api-that-cites", "a-plan-in-web"],
 )
 def test_the_lessons_digest(
-    conn: sqlite3.Connection, markdown_snapshot: SnapshotAssertion, repos: tuple[str, ...], *, cite: bool
+    conn: sqlite3.Connection,
+    markdown_snapshot: SnapshotAssertion,
+    repos: tuple[str, ...],
+    *,
+    cite: bool,
 ) -> None:
     lesson(conn, "tests-need-docker", "Start Docker before the tests. Why: they fail without it. When: any test run.")
     lesson(conn, "api-schema-first", "Change the schema before the client. Why: CI checks it. When: API work.", "api")
@@ -94,14 +102,26 @@ def run(conn: sqlite3.Connection, kind: RunKind, status: RunStatus) -> int:
     with in_tick(conn) as tick_id:
         db.touch_ticket(conn, KEY, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=KEY, kind=kind, branch="agent/PROJ-1-work", slots=(), runs_dir=Path("/runs")
+            conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=kind,
+            branch="agent/PROJ-1-work",
+            slots=(),
+            runs_dir=Path("/runs"),
         )
         conn.execute("UPDATE runs SET status = ? WHERE id = ?", (status, run_id))
     return run_id
 
 
 def note(
-    conn: sqlite3.Connection, run_id: int, key: str, body: str, *, head: str | None = None, status: str = "active"
+    conn: sqlite3.Connection,
+    run_id: int,
+    key: str,
+    body: str,
+    *,
+    head: str | None = None,
+    status: str = "active",
 ) -> None:
     """A note of `KEY` that run `run_id` wrote."""
     conn.execute(

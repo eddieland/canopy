@@ -30,11 +30,13 @@ def done(branch: str, pr: str) -> str:
 
 
 def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     first_run = scenario.run(
-        dispatches(slug="work"), worker=worker_does(*commit_and_push(OLD), result=done(OLD, OLD_PR))
+        dispatches(slug="work"),
+        worker=worker_does(*commit_and_push(OLD), result=done(OLD, OLD_PR)),
     )
     assert first_run.status == "done"
     assert unit_of(conn, KEY).pr_url == OLD_PR
@@ -90,7 +92,8 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
 
 
 def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", KEY)

@@ -46,7 +46,7 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(scena
         "blocked": False,
     }
     assert [(d.action, d.rationale) for d in ticked.decisions[1:]] == [
-        ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}")
+        ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}"),
     ]
 
 
@@ -111,7 +111,8 @@ def test_a_question_keeps_its_line_breaks_where_the_page_shows_them(scenario: Sc
     scenario.configures("workspace", policy={"plan": "approve"})
     question = "Red or blue?\nRed matches the logo; blue matches the docs."
     scenario.run(
-        PLAN, worker=planner_does(plan=None, result={"status": "blocked", "summary": "-", "question": question})
+        PLAN,
+        worker=planner_does(plan=None, result={"status": "blocked", "summary": "-", "question": question}),
     )
     scenario.tick(*waits(KEY, rationale="the planner asked"))
     [item] = [i for i in attention.current(scenario.conn) if i.reason == "awaiting_reply"]

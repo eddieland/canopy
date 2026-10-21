@@ -219,7 +219,13 @@ class Started:
 
 
 def start(
-    conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, channel: str, plan_lock: Path | None = None
+    conn: sqlite3.Connection,
+    config: Config,
+    ref: Ref,
+    *,
+    repo: str,
+    channel: str,
+    plan_lock: Path | None = None,
 ) -> Started:
     """Start a ticket privately (DESIGN §22): write its start record, or mark a stopped one started again.
 
@@ -663,7 +669,8 @@ def mirror(
         raise Refused("bad_comment", f"{comment_id[:MAX_KEY]!r} is not a comment id: {COMMENT_ID_RE.pattern}")
     if not author or len(author) > MAX_AUTHOR or not author.isprintable() or any(c.isspace() for c in author):
         raise Refused(
-            "bad_author", f"the author is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces"
+            "bad_author",
+            f"the author is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces",
         )
     commented_at = _comment_time(at)
     text = body.strip()
@@ -683,7 +690,14 @@ def mirror(
         db.touch_ticket(conn, ref.id, repo)
         before = db.mirrored_comment(conn, TICKET, ref.id, comment_id)
         message_id = db.insert_message(
-            conn, TICKET, ref.id, source=source, kind="comment", channel="tracker", body=text, comment=comment
+            conn,
+            TICKET,
+            ref.id,
+            source=source,
+            kind="comment",
+            channel="tracker",
+            body=text,
+            comment=comment,
         )
         if not dry_run:
             db.set_mirror_cursor(conn, ref.id, comment_id)

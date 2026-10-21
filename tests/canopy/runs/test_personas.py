@@ -57,7 +57,9 @@ def test_a_persona_edited_between_runs_splits_them_by_digest(scenario: Scenario,
 
 
 def test_a_run_whose_persona_has_no_file_is_refused_with_an_attention_item(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     yours = personas_dir(scenario.env)
     (yours / "terse.md").write_text("Be terse.\n")

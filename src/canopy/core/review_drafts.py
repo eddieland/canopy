@@ -88,7 +88,9 @@ def hash_of(body: str, comments: Iterable[Comment]) -> str:
         The hash, hex.
     """
     words = json.dumps(
-        {"body": body, "comments": [c.posted() for c in comments]}, sort_keys=True, separators=(",", ":")
+        {"body": body, "comments": [c.posted() for c in comments]},
+        sort_keys=True,
+        separators=(",", ":"),
     )
     return hashlib.sha256(words.encode()).hexdigest()[:HASH_CHARS]
 
@@ -184,7 +186,15 @@ def add_version(
     """
     number = newest(conn, draft.id).number + 1
     _insert_version(
-        conn, draft.id, number, body, comments, author=author, channel=channel, change=change, refused=refused
+        conn,
+        draft.id,
+        number,
+        body,
+        comments,
+        author=author,
+        channel=channel,
+        change=change,
+        refused=refused,
     )
     return newest(conn, draft.id)
 
@@ -223,7 +233,12 @@ def checked(text: object) -> str:
 
 
 def dismissed(
-    conn: sqlite3.Connection, run_id: int, numbers: Collection[int], *, undo: bool, channel: str
+    conn: sqlite3.Connection,
+    run_id: int,
+    numbers: Collection[int],
+    *,
+    undo: bool,
+    channel: str,
 ) -> Version | None:
     """Drop what review run `run_id`'s findings `numbers`, just dismissed, made of its draft, or with `undo` restore it.
 
@@ -325,7 +340,9 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
 
 
 def _first(
-    stored: review_result.ReviewResult, dismissed: Collection[int], diff: review_diff.Diff | None
+    stored: review_result.ReviewResult,
+    dismissed: Collection[int],
+    diff: review_diff.Diff | None,
 ) -> tuple[str, list[Comment], list[str]]:
     """The first version of a review's draft: its summary as the body, and a comment for each finding kept.
 

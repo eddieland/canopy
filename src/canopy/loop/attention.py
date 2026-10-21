@@ -94,7 +94,7 @@ HARNESS_REASONS = frozenset(
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
         follow_ups.REASON,
-    }
+    },
 )
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage
 # collection keeps every row of a tick inside it (DESIGN §26).
@@ -151,7 +151,8 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     ticks = [
         int(r[0])
         for r in sql.execute(
-            conn, sql.select("id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS)
+            conn,
+            sql.select("id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS),
         )
     ]
     if not ticks:
@@ -199,7 +200,8 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
         The item, open since the first tick after `last_ok` that raised it, or nothing.
     """
     latest = sql.execute(
-        conn, sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1)
+        conn,
+        sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
     ).fetchone()
     if latest is None or latest[0] not in HALTS:
         return []
@@ -252,7 +254,7 @@ def for_overseer(conn: sqlite3.Connection) -> list[OpenItem]:
                 **({"repo": item.repo} if item.repo is not None else {}),
                 "reason": item.reason,
                 "since": item.since,
-            }
+            },
         )
     return found
 

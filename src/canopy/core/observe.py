@@ -223,7 +223,11 @@ class Read:
 
 
 def read(
-    conn: sqlite3.Connection, config: Config, runner: procs.Runner, prs: Collection[str], log: logs.TickAdapter
+    conn: sqlite3.Connection,
+    config: Config,
+    runner: procs.Runner,
+    prs: Collection[str],
+    log: logs.TickAdapter,
 ) -> Read:
     """Run the `vcs` source for `prs` alone, as §29's reads after a run and before a send do, and record what it read.
 
@@ -269,7 +273,12 @@ def _failed(
     log.warning("connector failed", extra={"reason": why})
     missed = f"{why}: {stderr}" if stderr else why
     return Observed(
-        ConnectorRunStatus.FAILED, started, db.now(), refused=dict(refused or {}), missed=missed, stderr=stderr
+        ConnectorRunStatus.FAILED,
+        started,
+        db.now(),
+        refused=dict(refused or {}),
+        missed=missed,
+        stderr=stderr,
     )
 
 

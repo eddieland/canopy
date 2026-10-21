@@ -39,7 +39,8 @@ from tests.canopy.helpers import InlineRunner, in_tick, pool, present, slot_of, 
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("CANOPY_SANDBOX_CANARY") != "1", reason="the sandbox canary runs with CANOPY_SANDBOX_CANARY=1"
+    os.environ.get("CANOPY_SANDBOX_CANARY") != "1",
+    reason="the sandbox canary runs with CANOPY_SANDBOX_CANARY=1",
 )
 
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
@@ -95,7 +96,12 @@ class Canary:
         return self.common / "worktrees" / self.slot.name
 
     def run(
-        self, script: str, *args: str, role: str = "worker", tmpdir: str | None = None, timeout: float | None = None
+        self,
+        script: str,
+        *args: str,
+        role: str = "worker",
+        tmpdir: str | None = None,
+        timeout: float | None = None,
     ) -> procs.Result:
         """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
 
@@ -285,7 +291,9 @@ def test_a_worker_cannot_change_what_the_slots_share(canary: Canary, script: str
         pytest.param('echo "gitdir: /tmp" > .git', "{slot}/.git", id="git-link"),
         pytest.param('echo "$PWD/planted" > "$2/commondir"', "{own}/commondir", id="commondir"),
         pytest.param(
-            'echo "$PWD/planted" > "$2/c" && mv -f "$2/c" "$2/commondir"', "{own}/commondir", id="commondir-mv"
+            'echo "$PWD/planted" > "$2/c" && mv -f "$2/c" "$2/commondir"',
+            "{own}/commondir",
+            id="commondir-mv",
         ),
         pytest.param('rm -f "$2/commondir"', "{own}/commondir", id="commondir-rm"),
         pytest.param('echo /tmp/.git > "$2/gitdir"', "{own}/gitdir", id="gitdir"),
@@ -294,7 +302,9 @@ def test_a_worker_cannot_change_what_the_slots_share(canary: Canary, script: str
     ],
 )
 def test_a_worker_cannot_write_what_runs_on_the_host_or_in_another_slot(
-    canary: Canary, script: str, target: str
+    canary: Canary,
+    script: str,
+    target: str,
 ) -> None:
     places = {"{common}": canary.common, "{own}": canary.own, "{slot}": canary.slot, "{other}": canary.other}
     for name, place in places.items():

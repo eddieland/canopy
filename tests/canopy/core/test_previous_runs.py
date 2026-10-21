@@ -26,13 +26,25 @@ def result(status: RunStatus, summary: str, **extra: str) -> str:
 
 
 def ended(
-    conn: sqlite3.Connection, tmp_path: Path, kind: RunKind, status: RunStatus, summary: str, **extra: str
+    conn: sqlite3.Connection,
+    tmp_path: Path,
+    kind: RunKind,
+    status: RunStatus,
+    summary: str,
+    **extra: str,
 ) -> int:
     """Record a run of KEY that ended as `status` with `summary`, and the messages it reports, as `_run` does."""
     with in_tick(conn) as tick_id:
         db.touch_ticket(conn, KEY, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=KEY, kind=kind, branch=BRANCH, slots=(), runs_dir=tmp_path, works_units=False
+            conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=kind,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=tmp_path,
+            works_units=False,
         )
     stored = result(status, summary, **extra)
     assert db.finish_ticket_run(conn, run_id, status, stored, messages=conversation.run_messages(status, stored))
@@ -52,7 +64,8 @@ def test_a_resume_worker_reads_what_the_implement_before_it_reported(scenario: S
 
 
 def test_the_latest_runs_are_listed_oldest_first_with_a_blocked_runs_question(
-    conn: sqlite3.Connection, tmp_path: Path
+    conn: sqlite3.Connection,
+    tmp_path: Path,
 ) -> None:
     assert conversation.prompt_previous_runs(conn, KEY) is None
     ended(conn, tmp_path, RunKind.IMPLEMENT, RunStatus.DONE, "the oldest")
@@ -86,7 +99,9 @@ def test_the_latest_runs_are_listed_oldest_first_with_a_blocked_runs_question(
 
 
 def test_runs_from_before_a_forget_are_left_out(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, tmp_path: Path
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    tmp_path: Path,
 ) -> None:
     ended(conn, tmp_path, RunKind.IMPLEMENT, RunStatus.FAILED, "the old approach")
     assert operator("forget", KEY) == 0

@@ -52,7 +52,10 @@ READS: dict[str, Callable[[Backend, Context], object]] = {
 def backend(tmp_path: Path) -> Backend:
     """The mock's journal, served as `canopy loop` serves its own: the loop's attention list and limits."""
     return dataclasses.replace(
-        serve_mock.seed(tmp_path / "mock"), attention=attention.listed, limits=web.limits, review_limit=web.review_limit
+        serve_mock.seed(tmp_path / "mock"),
+        attention=attention.listed,
+        limits=web.limits,
+        review_limit=web.review_limit,
     )
 
 
@@ -122,7 +125,7 @@ def test_the_tickets_list_is_what_weighing_every_ticket_finds(journals: Journals
             )
         conn.execute(
             "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
-            "VALUES ('chore', 'K-1', '99', 'operator', 'reply', 'cli', 'b')"
+            "VALUES ('chore', 'K-1', '99', 'operator', 'reply', 'cli', 'b')",
         )
     for limit in range(1, len(keys) + 2):
         found = [(r["key"], r["active_at"]) for r in db.recent_tickets(conn, limit)]

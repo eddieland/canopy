@@ -36,7 +36,9 @@ TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n\
 
 
 def test_a_plan_is_written_to_its_file_and_recorded_proposed(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     conn, env = scenario.conn, scenario.env
     status = ["git", "-C", "repo", "status", "--porcelain=v2", "--branch"]
@@ -79,7 +81,8 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
 
 
 def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     env = scenario.env
     first = scenario.run(PLAN, worker=planner_does(["cat", ".canopy-plan.md"], plan=TEXT))
@@ -177,7 +180,11 @@ def test_a_name_already_taken_is_never_overwritten(scenario: Scenario, git_pool:
     ],
 )
 def test_a_plan_takes_no_slug_or_base(
-    scenario: Scenario, treehouse_state: Path, args: list[str], guard: str, reason: str
+    scenario: Scenario,
+    treehouse_state: Path,
+    args: list[str],
+    guard: str,
+    reason: str,
 ) -> None:
     assert scenario.refuses([*PLAN, *args]) == [(f"refused:{guard}", reason)]
 
@@ -187,7 +194,7 @@ def test_a_started_ticket_is_not_planned(scenario: Scenario, treehouse_state: Pa
     db.touch_ticket(conn, KEY, str(env.root))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = ?", (KEY,))
     assert scenario.refuses(PLAN) == [
-        ("refused:bad_plan", "PROJ-1 already has work on agent/PROJ-1-work; a started ticket is not planned")
+        ("refused:bad_plan", "PROJ-1 already has work on agent/PROJ-1-work; a started ticket is not planned"),
     ]
 
 
@@ -198,7 +205,7 @@ def test_a_plan_needs_the_trackers_read_tools(scenario: Scenario, treehouse_stat
         (
             "refused:no_read_tools",
             "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools",
-        )
+        ),
     ]
 
 
@@ -217,7 +224,7 @@ def test_a_dry_run_plans_nothing(canopy_env: CanopyEnv, treehouse_state: Path, c
         assert main(PLAN[1:], runner=runner) == 0
         assert runner.spawned == []
         assert decisions(conn, tick_id) == [
-            ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}")
+            ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}"),
         ]
 
 
@@ -254,7 +261,8 @@ NO_REVIEW = {
 
 
 def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and_implemented(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.configures("workspace", policy={"plan": "approve"})
@@ -315,7 +323,11 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     ],
 )
 def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_why_it_needs_no_review(
-    scenario: Scenario, git_pool: GitPool, *, on: bool, result: dict[str, object]
+    scenario: Scenario,
+    git_pool: GitPool,
+    *,
+    on: bool,
+    result: dict[str, object],
 ) -> None:
     scenario.configures("private", policy={"planner_may_approve": on})
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
@@ -326,7 +338,8 @@ def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_
 
 
 def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_says(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.configures("private", policy={"planner_may_approve": True})
     # One that replaces a plan the operator was asked to approve, and asked changes of.
@@ -349,7 +362,9 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
 
 
 def test_the_planners_prompt_when_it_may_approve_its_plan(
-    scenario: Scenario, git_pool: GitPool, markdown_snapshot: SnapshotAssertion
+    scenario: Scenario,
+    git_pool: GitPool,
+    markdown_snapshot: SnapshotAssertion,
 ) -> None:
     """The planner's prompt under `policy.planner_may_approve`, whole: how it says a plan needs no review (§25)."""
     scenario.configures("private", policy={"planner_may_approve": True})

@@ -21,7 +21,12 @@ def slot(name: str, status: str, **more: object) -> dict[str, object]:
 
 def leased(name: str, holder: str, lease_id: str, **more: object) -> dict[str, object]:
     return slot(
-        name, "leased", lease_id=lease_id, lease_holder=holder, leased_at="2026-10-08T12:00:00.123456789-07:00", **more
+        name,
+        "leased",
+        lease_id=lease_id,
+        lease_holder=holder,
+        leased_at="2026-10-08T12:00:00.123456789-07:00",
+        **more,
     )
 
 

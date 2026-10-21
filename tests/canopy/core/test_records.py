@@ -58,7 +58,8 @@ def test_every_row_type_names_a_table_of_its_own(conn: sqlite3.Connection) -> No
 
 @pytest.mark.parametrize("row_type", row_types(), ids=lambda t: t.TABLE)
 def test_a_row_type_has_its_tables_columns_in_order_with_their_types(
-    conn: sqlite3.Connection, row_type: type[records.Row]
+    conn: sqlite3.Connection,
+    row_type: type[records.Row],
 ) -> None:
     columns = conn.execute(f"PRAGMA table_info({row_type.TABLE})").fetchall()
     hints = typing.get_type_hints(row_type)
@@ -115,7 +116,9 @@ def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connecti
     ],
 )
 def test_a_query_whose_columns_do_not_fit_is_refused_before_any_row(
-    conn: sqlite3.Connection, query: str, error: str
+    conn: sqlite3.Connection,
+    query: str,
+    error: str,
 ) -> None:
     # Refused on the query's shape alone: an empty table still fails, so the mistake shows on its first run.
     with pytest.raises(records.RowError, match=f"^query does not fit Decision: {re.escape(error)}$"):
@@ -151,7 +154,9 @@ def test_a_flag_reads_as_a_bool_and_a_whole_real_as_a_float(conn: sqlite3.Connec
     conn.execute("INSERT INTO flagged VALUES (1, 1, NULL), (2, 0, 3)")
     # SQLite gives back an integer for a value a query computes, whatever the column's type.
     found = records.fetch_all(
-        conn, Flagged, sql.frag("SELECT id, done, CAST(cost AS INTEGER) AS cost FROM flagged ORDER BY id")
+        conn,
+        Flagged,
+        sql.frag("SELECT id, done, CAST(cost AS INTEGER) AS cost FROM flagged ORDER BY id"),
     )
     assert found == [Flagged(1, done=True, cost=None), Flagged(2, done=False, cost=3.0)]
     assert isinstance(found[1].cost, float)
@@ -188,7 +193,14 @@ def test_columns_reads_a_typed_row_and_a_sqlite_row_alike(conn: sqlite3.Connecti
 def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.Connection, tmp_path: Path) -> None:
     with in_tick(conn) as tick_id:
         run_id = db.insert_review_run(
-            conn, tick_id=tick_id, pr_url=PR, sha="abc", ticket=None, repo=None, purpose="request", logs_dir=tmp_path
+            conn,
+            tick_id=tick_id,
+            pr_url=PR,
+            sha="abc",
+            ticket=None,
+            repo=None,
+            purpose="request",
+            logs_dir=tmp_path,
         )
     [run] = db.review_runs_of(conn, PR)
     assert (run.id, run.status, run.pool) == (run_id, ReviewRunStatus.RUNNING, PoolKind.TREEHOUSE)

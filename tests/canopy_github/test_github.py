@@ -346,7 +346,10 @@ def github() -> Generator[tuple[Fake, str]]:
         reviews=[Review(node="PRR_1", id=101, author="alice", state="COMMENTED", body="A few things.")],
         threads=[
             Thread(
-                id="PRRT_1", path="src/app.py", line=12, comments=[Comment(id=501, body="Rename this.", review=101)]
+                id="PRRT_1",
+                path="src/app.py",
+                line=12,
+                comments=[Comment(id=501, body="Rename this.", review=101)],
             ),
             Thread(
                 id="PRRT_2",
@@ -434,7 +437,7 @@ def test_the_reader_reads_every_page(github: tuple[Fake, str]) -> None:
     pull = fake.pulls["acme", "api", 7]
     pull.reviews += [Review(node=f"PRR_{n}", id=n, author="bob", state="APPROVED") for n in (102, 103)]
     pull.threads.append(
-        Thread(id="PRRT_3", path="a.py", line=1, comments=[Comment(id=n, body="x") for n in (601, 602, 603)])
+        Thread(id="PRRT_3", path="a.py", line=1, comments=[Comment(id=n, body="x") for n in (601, 602, 603)]),
     )
     _, lines, _ = read(url, {"prs": [PR]})
     ids = [line["id"] for line in lines if line["kind"] == "review"]
@@ -708,7 +711,8 @@ def test_reactions_alone_open_no_review(github: tuple[Fake, str]) -> None:
 
 @pytest.mark.parametrize("failure", ["refuse", "500", "lost"])
 def test_a_reaction_that_fails_or_may_have_landed_opens_no_review_and_ends_unsubmitted(
-    github: tuple[Fake, str], failure: str
+    github: tuple[Fake, str],
+    failure: str,
 ) -> None:
     fake, url = github
     fake.fail["React"] = failure

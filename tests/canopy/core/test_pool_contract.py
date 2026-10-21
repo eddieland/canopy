@@ -54,7 +54,8 @@ class Impl(StrEnum):
 
 def _impls() -> list[object]:
     real = pytest.mark.skipif(
-        REAL_TREEHOUSE is None and not REQUIRED, reason="real treehouse is not on PATH; `make pool-contract` runs it"
+        REAL_TREEHOUSE is None and not REQUIRED,
+        reason="real treehouse is not on PATH; `make pool-contract` runs it",
     )
     return [
         pytest.param(Impl.CANOPY, id="canopy"),
@@ -92,7 +93,13 @@ class Contract:
         if self.impl is Impl.CANOPY:
             clone = self.root / "repos" / "gone" if at_root else self.clone
             return canopy_pool.CanopyPool(
-                self.runner, self.conn, REPO, self.root, clone, slots=slots, include_file=include
+                self.runner,
+                self.conn,
+                REPO,
+                self.root,
+                clone,
+                slots=slots,
+                include_file=include,
             )
         where = treehouse.Pool(cwd=self.root if at_root else self.clone, root=self.root, slots=slots)
         return treehouse.TreehousePool(self.runner, dataclasses.replace(where, include_file=include))
@@ -237,7 +244,11 @@ def pool(request: pytest.FixtureRequest, tmp_path: Path, journals: Journals) -> 
 
 
 def _workspace(
-    impl: Impl, tmp_path: Path, state: Path, conn: sqlite3.Connection, patches: contextlib.ExitStack
+    impl: Impl,
+    tmp_path: Path,
+    state: Path,
+    conn: sqlite3.Connection,
+    patches: contextlib.ExitStack,
 ) -> Contract:
     origin = tmp_path / "origin.git"
     origin.mkdir()

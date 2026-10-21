@@ -55,7 +55,7 @@ GUARDED: Responses = {
 }
 # Every route's but the session's own (deps.signed_in).
 SIGNED_IN: Responses = {
-    401: {"model": ErrorResponse, "description": "No valid session: sign in with the listener secret."}
+    401: {"model": ErrorResponse, "description": "No valid session: sign in with the listener secret."},
 }
 # Every route's but the stream's that reads or writes the journal: another connection held its write lock past
 # db.BUSY_SECONDS.
@@ -64,11 +64,11 @@ BUSY: Responses = {
         "model": ErrorResponse,
         "description": "The journal is busy: another writer, such as the loop, held it past the busy timeout. Try "
         "again.",
-    }
+    },
 }
 # A route's whose guards can refuse: a write, or a path naming a ticket or a chore by a reference that is not one.
 REFUSED: Responses = {
-    409: {"model": RefusalResponse, "description": "A guard refused it: `detail` names the guard and its reason."}
+    409: {"model": RefusalResponse, "description": "A guard refused it: `detail` names the guard and its reason."},
 }
 
 

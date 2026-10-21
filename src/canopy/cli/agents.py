@@ -37,7 +37,10 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
     except definitions.DefinitionsError as e:
         raise CliError(f"agents: {e}") from None
     found = offerings.offerings(
-        ctx.runner, cwd=ctx.ws.root, definitions_dir=snapshot, agents=runtime_definitions.agent_names()
+        ctx.runner,
+        cwd=ctx.ws.root,
+        definitions_dir=snapshot,
+        agents=runtime_definitions.agent_names(),
     )
     failed = found.error is not None or any(a.error is not None for a in found.agents)
     if as_json:

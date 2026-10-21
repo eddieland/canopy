@@ -246,7 +246,13 @@ def plan_authorization(key: str, labels: Sequence[str], *, private: bool) -> str
 
 
 def follow_ups(
-    key: str, limit: int, repos: Sequence[str], *, needs_human: str, labels: Sequence[str], private: bool = False
+    key: str,
+    limit: int,
+    repos: Sequence[str],
+    *,
+    needs_human: str,
+    labels: Sequence[str],
+    private: bool = False,
 ) -> str:
     """Return a worker's `{{FOLLOW_UPS}}` when it may file follow-up tickets (DESIGN §18): what one is, and how.
 
@@ -379,7 +385,11 @@ def _outline(outline: Sequence[str]) -> list[str]:
 
 
 def feedback_plan_note(
-    copy: Path, outline: Sequence[str], items: Sequence[tuple[int, str, int, str]], *, by_planner: bool = False
+    copy: Path,
+    outline: Sequence[str],
+    items: Sequence[tuple[int, str, int, str]],
+    *,
+    by_planner: bool = False,
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 

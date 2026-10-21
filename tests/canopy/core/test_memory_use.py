@@ -34,7 +34,8 @@ pytestmark = pytest.mark.usefixtures("git_pool")
 
 
 def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     first = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
@@ -60,7 +61,8 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
 
 
 def test_a_note_recorded_at_record_is_served_once_the_tier_is_in_use(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="record")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
@@ -108,7 +110,8 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
 
 
 def test_a_memory_names_the_latest_runs_that_relied_on_it_newest_first(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
@@ -139,7 +142,7 @@ def test_at_use_an_override_without_the_notes_is_refused(canopy_env: CanopyEnv, 
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text(
-        "Work on {{KEY}}, labels {{LABELS}}.\n{{MEMORY_CONTRACT}}{{DRAFTS}}\n"
+        "Work on {{KEY}}, labels {{LABELS}}.\n{{MEMORY_CONTRACT}}{{DRAFTS}}\n",
     )
     with_memory(canopy_env, ticket_notes="record")
     assert dispatch_in_tick(conn, *WORK).code == 0
@@ -151,7 +154,9 @@ def test_at_use_an_override_without_the_notes_is_refused(canopy_env: CanopyEnv, 
 
 
 def test_memory_list_says_the_digest_is_served_and_what_a_run_read(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])

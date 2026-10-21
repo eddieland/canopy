@@ -45,7 +45,7 @@ _STALE = ReviewResult(
             location="src/search/useSearch.ts:11",
             detail="Nothing cancels the earlier fetch, so typing `ab` then `abc` shows `ab`'s results whenever they "
             "arrive last.",
-        )
+        ),
     ],
 )
 # What review 4 reported, its reviewer's last line in its transcript too.
@@ -78,7 +78,11 @@ LATEST = ReviewResult(
     ],
 )
 _CLEAN = ReviewResult(
-    status="done", verdict="clean", impact="low", summary="A README fix: the port it names.", findings=[]
+    status="done",
+    verdict="clean",
+    impact="low",
+    summary="A README fix: the port it names.",
+    findings=[],
 )
 
 DIFF_88 = """\

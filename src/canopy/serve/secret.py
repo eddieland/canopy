@@ -54,7 +54,7 @@ def read(file: Path) -> str:
         raise SecretError(f"{file} is not yours; remove it and run `canopy secret`")
     if st.st_mode & 0o077:
         raise SecretError(
-            f"{file} can be read or written by others; run `chmod 600 {file}`, or `canopy secret --rotate`"
+            f"{file} can be read or written by others; run `chmod 600 {file}`, or `canopy secret --rotate`",
         )
     fd = os.open(file, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd, encoding="utf-8", errors="replace") as f:
@@ -62,7 +62,7 @@ def read(file: Path) -> str:
     if not MIN_LENGTH <= len(text) <= MAX_LENGTH or not text.isprintable() or any(c.isspace() for c in text):
         raise SecretError(
             f"{file} must hold one line of {MIN_LENGTH} to {MAX_LENGTH} characters without spaces; "
-            "run `canopy secret --rotate` for a new one"
+            "run `canopy secret --rotate` for a new one",
         )
     return text
 

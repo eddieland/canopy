@@ -363,7 +363,8 @@ def _check_limits(
         stored = result.stored(done.result_json)
         found = f" ({stored.verdict}, impact {stored.impact})" if stored is not None else ""
         raise Refusal(
-            "reviewed", f"review run {done.id} already reviewed {request.sha[:12]}{found}; one review per commit"
+            "reviewed",
+            f"review run {done.id} already reviewed {request.sha[:12]}{found}; one review per commit",
         )
     limit = grants.limit(ctx.conn, cfg, request.pr)
     if len(runs) >= limit:

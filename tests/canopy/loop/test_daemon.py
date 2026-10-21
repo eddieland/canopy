@@ -71,7 +71,8 @@ def test_a_daemon_that_ends_on_its_own_says_so(daemon_env: CanopyEnv, capsys: py
 
 
 def test_a_loop_that_exits_at_once_fails_the_start_with_its_output(
-    daemon_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    daemon_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["daemon", "start", "--every", "0"]) == 1
     err = capsys.readouterr().err
@@ -81,7 +82,8 @@ def test_a_loop_that_exits_at_once_fails_the_start_with_its_output(
 
 
 def test_start_refuses_while_another_loop_holds_the_lock(
-    daemon_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    daemon_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with lock.hold(daemon_env.state_dir / repeat.LOCK_FILE_NAME):
         assert main(["daemon", "start"]) == 1
@@ -93,7 +95,9 @@ def test_start_refuses_while_another_loop_holds_the_lock(
 
 @pytest.mark.parametrize("verb", ["start", "stop"])
 def test_start_and_stop_refuse_inside_canopys_runs(
-    daemon_env: CanopyEnv, capsys: pytest.CaptureFixture[str], verb: str
+    daemon_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    verb: str,
 ) -> None:
     with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": "1"}):
         assert main(["daemon", verb]) == 1

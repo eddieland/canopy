@@ -127,7 +127,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
             "detail": "PROJ-9 detail",
             "since": message["attention"]["added"][0]["since"],
             "ui": None,  # a tick run by hand serves no web UI to link to
-        }
+        },
     ]
     assert message["attention"]["open"] == 1
     started, ended = message["events"]
@@ -163,7 +163,9 @@ def test_without_sinks_no_event_is_recorded(scenario: Scenario, git_pool: GitPoo
 
 
 def test_a_failing_sink_does_not_hold_back_another_and_catches_up(
-    scenario: Scenario, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     """M10's acceptance against the fakes: one sink down for several ticks, the other reports it, then it catches up."""
     slack, desk = tmp_path / "slack.txt", tmp_path / "desk.txt"
@@ -231,7 +233,9 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
 
 
 def test_a_digest_arrives_on_its_interval_even_when_quiet(
-    scenario: Scenario, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, format="text", events=[], digest_every_minutes=60)
@@ -249,7 +253,10 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
 
 
 def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
-    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     out = tmp_path / "slack.txt"
     add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
@@ -278,7 +285,11 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
 
 @pytest.mark.parametrize("urgent", ["attention", "blocked"])
 def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held(
-    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path, urgent: str
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
+    urgent: str,
 ) -> None:
     out = tmp_path / "slack.txt"
     add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
@@ -304,7 +315,10 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
 
 
 def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
-    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     out = tmp_path / "desk.txt"
     add_sink(scenario, sink_script, "desk", out, events=["attention", "loop", "runs"], batch_minutes=30)
@@ -319,7 +333,10 @@ def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
 
 
 def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
-    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     down, desk = tmp_path / "alerts.txt", tmp_path / "desk.txt"
     add_sink(scenario, sink_script, "alerts", down)  # before desk in name order, so desk hears it the same tick
@@ -335,7 +352,10 @@ def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
 
 
 def test_a_json_digest_names_each_ticket_by_its_title(
-    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
@@ -361,7 +381,9 @@ def test_bounds_count_what_they_leave_out(scenario: Scenario, sink_script: Path,
 
 
 def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
-    scenario: Scenario, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     conn = scenario.conn
     old = tmp_path / "old.txt"
@@ -383,7 +405,9 @@ def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
 
 
 def test_removed_sinks_are_forgotten_and_passed_events_pruned(
-    scenario: Scenario, sink_script: Path, tmp_path: Path
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     conn = scenario.conn
     add_sink(scenario, sink_script, "s", tmp_path / "s.txt", events=["attention", "runs"])
@@ -402,7 +426,10 @@ def test_removed_sinks_are_forgotten_and_passed_events_pruned(
 
 
 def test_notify_test_sends_now_and_changes_nothing(
-    scenario: Scenario, sink_script: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     a, b = tmp_path / "a.txt", tmp_path / "b.txt"
     add_sink(scenario, sink_script, "a", a)

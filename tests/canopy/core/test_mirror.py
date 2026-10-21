@@ -109,7 +109,8 @@ def test_a_bad_ref_is_refused_before_stdin_is_read(scenario: Scenario) -> None:
 
 
 def test_mirror_refuses_what_it_cannot_record_and_records_each_refusal(
-    scenario: Scenario, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = scenario.conn
     # Outside a tick: only the overseer mirrors (D020).
@@ -253,7 +254,7 @@ def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path:
     conn.execute("UPDATE tickets SET last_comment_id = 'c-9' WHERE key = 'OLD-1'")
     conn.execute(
         "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
-        "VALUES ('ticket', 'OLD-1', 'x', 'operator', 'reply', 'cli', 'Blue.')"
+        "VALUES ('ticket', 'OLD-1', 'x', 'operator', 'reply', 'cli', 'Blue.')",
     )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(3)
     # Its whole comment history is mirrored once, worker comments the comment cursor had passed included.

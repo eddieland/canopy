@@ -28,7 +28,7 @@ MESSAGE: dict[str, Any] = {
                 "reason": "needs_reviewer",
                 "detail": "<!channel> https://x.test/1",
                 "since": "2026-09-24T18:00:00Z",
-            }
+            },
         ],
         "resolved": [{"ticket": "PROJ-4", "title": None, "repo": "web", "reason": "ready_to_merge"}],
         "open": 4,
@@ -48,7 +48,7 @@ MESSAGE: dict[str, Any] = {
             "summary": "<https://evil|click>",
             "question": None,
             "line": "< PROJ-12 run 41 implement ended done: <https://evil|click>",
-        }
+        },
     ],
     "omitted": 0,
     "digest": None,
@@ -125,7 +125,11 @@ def test_slack_refusing_a_post_is_exit_1(hook: str, tmp_path: Path, capsys: pyte
     ],
 )
 def test_the_webhook_file_is_checked(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], url: str, mode: int, message: str
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    url: str,
+    mode: int,
+    message: str,
 ) -> None:
     path = webhook_file(tmp_path, url, mode)
     assert slack.run(["--webhook-file", str(path)], io.StringIO(json.dumps(MESSAGE))) == 2
@@ -133,7 +137,8 @@ def test_the_webhook_file_is_checked(
 
 
 def test_a_webhook_that_only_looks_like_the_prefix_is_refused(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # It starts with the prefix, but its host is evil.test: the part before `@` is a user name.
     path = webhook_file(tmp_path, "http://127.0.0.1:1@evil.test/hook")
@@ -157,7 +162,8 @@ def test_a_long_slack_message_is_45_lines_with_its_header() -> None:
 
 
 def test_the_slack_sink_reads_its_default_file_and_needs_json(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(tmp_path)}):
         assert slack.default_webhook_file() == tmp_path / "canopy" / "slack-webhook"
@@ -176,7 +182,7 @@ def test_a_digest_is_a_short_block() -> None:
             "attention": None,
             "events": [],
             "digest": {"lines": ["Digest since x: 2 ticks", "  nothing ran"]},
-        }
+        },
     )
     assert text.splitlines() == ["*canopy* · api: digest", "", "*Digest*", "Digest since x: 2 ticks", "nothing ran"]
 
@@ -445,7 +451,12 @@ def test_a_web_api_error_is_exit_1(api: str, tmp_path: Path, capsys: pytest.Capt
     ],
 )
 def test_the_token_file_and_channel_are_checked(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], token: str, mode: int, channel: str, message: str
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    token: str,
+    mode: int,
+    channel: str,
+    message: str,
 ) -> None:
     argv = ["--channel", channel, "--token-file", str(token_file(tmp_path, token, mode))]
     assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url="http://127.0.0.1:1/") == 2
@@ -465,7 +476,10 @@ def test_the_token_file_and_channel_are_checked(
     ],
 )
 def test_the_name_and_icon_are_checked(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], flags: list[str], message: str
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    flags: list[str],
+    message: str,
 ) -> None:
     argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path)), *flags]
     assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url="http://127.0.0.1:1/") == 2
@@ -593,7 +607,10 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
     assert state == {
         "version": 1,
         "scopes": {
-            '["C0123ABCD", "/r/api"]': {"threads": {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}}, "posted": []}
+            '["C0123ABCD", "/r/api"]': {
+                "threads": {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}},
+                "posted": [],
+            },
         },
     }
 
@@ -607,7 +624,9 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
     ],
 )
 def test_a_reply_is_shown_in_the_channel_only_for_what_broadcast_names(
-    threaded: _Threaded, flags: list[str], shown: list[bool]
+    threaded: _Threaded,
+    flags: list[str],
+    shown: list[bool],
 ) -> None:
     started = [_run("PROJ-1", 1), _run("PROJ-2", 2), _run("PROJ-3", 3)]
     assert threaded(_delivery("2026-09-24T12:30:00Z", started), *flags) == 0
@@ -619,7 +638,7 @@ def test_a_reply_is_shown_in_the_channel_only_for_what_broadcast_names(
     added = [{"ticket": "PROJ-3", "reason": "ci_red", "detail": "lint"}]
     assert threaded(_delivery("2026-09-24T12:31:00Z", later, added), *flags) == 0
     assert {ts: on for ts, on, _ in _posts()} == dict(
-        zip(["1790.000001", "1790.000003", "1790.000005"], shown, strict=True)
+        zip(["1790.000001", "1790.000003", "1790.000005"], shown, strict=True),
     )
 
 
@@ -671,7 +690,7 @@ def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: _Threaded, t
     assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 0
     assert [ts for ts, _, _ in _posts()] == [None, "1790.000001"]
     assert json.loads(path.read_text())["scopes"][scope]["threads"] == {
-        "PROJ-1": {"day": "2026-09-24", "ts": "1790.000001"}
+        "PROJ-1": {"day": "2026-09-24", "ts": "1790.000001"},
     }
     path.write_text("not json")
     assert threaded(_delivery("2026-09-24T12:31:00Z", [_run("PROJ-1", 2)])) == 0
@@ -679,7 +698,9 @@ def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: _Threaded, t
 
 
 def test_a_threads_file_that_cannot_be_used_refuses_before_posting(
-    threaded: _Threaded, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    threaded: _Threaded,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     path = tmp_path / "state" / "canopy" / "slack-threads.json"
     path.parent.mkdir(parents=True)

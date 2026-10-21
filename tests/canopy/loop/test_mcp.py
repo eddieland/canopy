@@ -285,7 +285,9 @@ RECORDS = [
 
 @pytest.mark.parametrize("verb", RECORDS)
 def test_each_tool_records_what_its_command_records(
-    overseen: CanopyEnv, capsys: pytest.CaptureFixture[str], verb: Verb
+    overseen: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    verb: Verb,
 ) -> None:
     command = by_command(overseen, verb, capsys)
     assert (command.code, command.stderr) == (0, "")
@@ -504,7 +506,11 @@ REFUSALS = [
 
 @pytest.mark.parametrize(("verb", "refusal", "code"), REFUSALS)
 def test_a_tool_refuses_what_its_command_refuses_and_records_the_same(
-    overseen: CanopyEnv, capsys: pytest.CaptureFixture[str], verb: Verb, refusal: str, code: int
+    overseen: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    verb: Verb,
+    refusal: str,
+    code: int,
 ) -> None:
     command = by_command(overseen, verb, capsys)
     assert command.code == code
@@ -534,7 +540,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
     assert served.responses[5]["error"]["code"] == -32601
     assert served.responses[6]["result"] == {}
     assert [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)] == [
-        ("PROJ-1", "wait", "checks still running")
+        ("PROJ-1", "wait", "checks still running"),
     ]
 
 
@@ -622,7 +628,7 @@ def test_a_lone_surrogate_a_client_sends_is_answered_and_the_server_goes_on(over
             json.dumps({"jsonrpc": "2.0", "id": "\ud800", "method": "ping"}),
             json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "\ud800"}}),
             json.dumps({"jsonrpc": "2.0", "id": 2, "method": "ping"}),
-        ]
+        ],
     )
     assert served.responses["\ud800"]["result"] == {}
     assert served.responses[1]["error"]["code"] == -32602
@@ -692,7 +698,7 @@ def test_a_worker_a_tool_dispatches_is_recorded_and_not_the_servers_descendant(o
     [text] = [c["text"] for c in said["result"]["content"]]
     assert text.startswith("dispatched implement for PROJ-1: run 1: ")
     assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
-        ("PROJ-1", "dispatch:implement")
+        ("PROJ-1", "dispatch:implement"),
     ]
     assert present(db.get_ticket(conn, "PROJ-1")).last_comment_id == "7"
     with worked(conn) as pid:

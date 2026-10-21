@@ -56,7 +56,8 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
 
     # Dispatched with no label: the start record authorizes it, and the harness picks the private worker.
     run = scenario.run(
-        dispatches(label=None), worker=private_worker_does(*commit_and_push(BRANCH), result=blocked_result())
+        dispatches(label=None),
+        worker=private_worker_does(*commit_and_push(BRANCH), result=blocked_result()),
     )
     assert run.row["private"] == 1
     [(_, rationale)] = decisions(conn, int(run.row["tick_id"]))
@@ -219,7 +220,9 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(scenario:
 
 
 def test_a_stop_that_commits_before_the_runs_insert_wins(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     scenario.operator("start", KEY)
     real = conversation.prompt_conversation
@@ -275,7 +278,8 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
 
 
 def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_privately(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.configures(tracker={"private": True})
@@ -335,7 +339,9 @@ def test_tracker_private_refuses_without_tracker_tools_for_a_private_worker(scen
 
 
 def test_stop_now_ends_the_running_run_and_returns_its_slot(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", KEY)
@@ -358,7 +364,8 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
 
 
 def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     for slot in git_pool.slots:
         (slot / "opencode.json").write_text('{"permission": {"atlassian_addOrEditJiraIssueComment": "allow"}}')
@@ -439,7 +446,13 @@ def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, con
     tick_id = db.start_tick(conn, dry_run=False)
     db.touch_ticket(conn, KEY, "/r")
     run_id = db.insert_run(
-        conn, tick_id=tick_id, key=KEY, kind="implement", branch=BRANCH, slots=[], runs_dir=canopy_env.state_dir
+        conn,
+        tick_id=tick_id,
+        key=KEY,
+        kind="implement",
+        branch=BRANCH,
+        slots=[],
+        runs_dir=canopy_env.state_dir,
     )
     run = present(db.get_run(conn, run_id))
     result = json.dumps({"summary": "s", "question": "Q?"})
@@ -462,7 +475,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(s
     private = tickets[KEY]["private"]
     assert private["message_cursor"] is None
     assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
-        (question + 1, "B", question)
+        (question + 1, "B", question),
     ]
     assert private["awaiting_reply"] is None
     # A handled message moves the cursor past it.
@@ -542,11 +555,19 @@ def test_show_a_run_and_a_chore(scenario: Scenario, git_pool: GitPool) -> None:
 
 
 def test_show_drops_control_characters(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["start", KEY]) == 0
     db.insert_message(
-        conn, "ticket", KEY, source="worker", kind="question", channel="run", body="red\x1b[2Jor\rblue?\nsecond line"
+        conn,
+        "ticket",
+        KEY,
+        source="worker",
+        kind="question",
+        channel="run",
+        body="red\x1b[2Jor\rblue?\nsecond line",
     )
     capsys.readouterr()
     assert main(["show", KEY]) == 0
@@ -560,7 +581,7 @@ def test_the_snapshot_follows_the_tracker_tools(canopy_env: CanopyEnv) -> None:
     cfg = config.load(canopy_env.root)
     first = definitions.ensure(canopy_env.state_dir, cfg)
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nread_tools = ["getJiraIssue"]\n')
+        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nread_tools = ["getJiraIssue"]\n'),
     )
     second = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     assert first != second
@@ -569,7 +590,7 @@ def test_the_snapshot_follows_the_tracker_tools(canopy_env: CanopyEnv) -> None:
 
 def test_config_refuses_a_tool_name_that_could_reach_the_definition_as_more_than_a_name(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nread_tools = ["a\\": allow"]\n')
+        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nread_tools = ["a\\": allow"]\n'),
     )
     with pytest.raises(config.ConfigError, match="read_tools"):
         config.load(canopy_env.root)
