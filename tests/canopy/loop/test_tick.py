@@ -197,6 +197,9 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
     # PROJ-6, closed; not PROJ-7, whose decision came before it was forgotten; not PROJ-8, which the query left out.
     assert state["recently_done"] == ["PROJ-1", "PROJ-3"]
     assert [t["key"] for t in state["tickets"]] == ["PROJ-5"]
+    # That dry run's query found none, and a dry run changes nothing a later tick reads (D036).
+    scenario.tick(*waits("PROJ-5", rationale="checks pending"))
+    assert scenario.state()["recently_done"] == ["PROJ-1", "PROJ-3"]
 
 
 def test_the_query_runs_every_tick_by_default(scenario: Scenario) -> None:

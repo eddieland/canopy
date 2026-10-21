@@ -101,7 +101,7 @@ def queried_keys(rationale: str) -> list[str]:
 
 
 def last_queried(conn: sqlite3.Connection) -> set[str]:
-    """The open tickets the newest `ok` tick that ran the tracker query found, whatever tick it was.
+    """The open tickets the newest live `ok` tick that ran the tracker query found, whatever tick it was.
 
     Returns:
         Each key its `queried` decisions name; none before any tick has recorded one.

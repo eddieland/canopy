@@ -1570,16 +1570,17 @@ def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.D
 
 
 def last_tick_decisions(conn: sqlite3.Connection, action: str) -> list[records.Decision]:
-    """Return the `action` decisions of the newest `ok` tick that recorded one, in the order they were recorded.
+    """Return the `action` decisions of the newest live `ok` tick that recorded one, in the order they were recorded.
 
-    A tick that did not close `ok` may have stopped partway through recording them.
+    A tick that did not close `ok` may have stopped partway through recording them, and a dry run changes nothing a
+    live tick reads (D036).
     """
     # Newest first, so the scan stops at the first tick that has one, each looked up through `decisions_tick`.
     has_one = sql.select("1").from_("decisions d").where("d.tick_id = k.id AND d.action = ?", action)
     newest = (
         sql.select("k.id")
         .from_("ticks k")
-        .where("k.status = 'ok' AND EXISTS ({})", has_one)
+        .where("k.status = 'ok' AND k.dry_run = 0 AND EXISTS ({})", has_one)
         .order_by("k.id DESC")
         .limit(1)
     )
