@@ -6,7 +6,8 @@ This is review 1 of at most 3 of this PR.
 - PR: https://github.com/acme/api/pull/7
 - Commit: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`. Review this commit, not whatever the PR's head is by the time you read it.
 - Checkout: `/state/reviews/1/checkout` is the repository at that commit. Read what you need; change nothing (you have no tools
-  to, and anything left there is discarded).
+  to, and anything left there is discarded). The one command you can run is `git merge-base`, to find where the
+  commit left its base: `cd /state/reviews/1/checkout && git merge-base origin/<base> HEAD`.
 - Ticket: PROJ-1. For a ticket, the tracker is jira; if a skill named
   `tracker-jira` is available, load it first.
 

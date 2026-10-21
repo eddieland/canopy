@@ -255,9 +255,9 @@ The review starts detached, as a worker does (§8 step 4), checks out the commit
 every tracked symlink that resolves outside the checkout. The reviewer runs in a private directory of canopy's holding a
 link to the checkout, **not in the checkout**, so the runtime loads no configuration from the PR. Afterwards, on a
 signal too, the slot is returned (§8 step 6). It can be sandboxed (§24). canopy ships `canopy-reviewer` in the
-definitions directory (§13), not the repository's (TRUST_MODEL T7): no edits, no subagents, no bash, reads only inside
-the checkout, and MCP read tools only, every tool that writes denied by name. A review that runs the PR's tests uses the
-operator's own copy (§19), so runs the PR's code (§7).
+definitions directory (§13), not the repository's (TRUST_MODEL T7): no edits, no subagents, no bash but
+`git merge-base`, reads only inside the checkout, and MCP read tools only, every tool that writes denied by name. A
+review that runs the PR's tests uses the operator's own copy (§19), so runs the PR's code (§7).
 
 The prompt carries the notice to workers (§8) and asks only for what the diff itself gets wrong, so a `resume` is never
 sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend.

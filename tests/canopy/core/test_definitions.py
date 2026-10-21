@@ -356,6 +356,14 @@ def test_workers_may_edit_their_pr_with_gh(agent: str) -> None:
 
 
 @pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
+def test_workers_may_run_git_merge_base(agent: str) -> None:
+    """The top-level `*merge*` denial names MCP tools; a worker's shell still finds where its branch left its base."""
+    ruleset = _opencode_ruleset((resources.agents_dir() / f"{agent}.md").read_text())
+    for command in ("git merge-base origin/main HEAD", "git merge-base --is-ancestor origin/main HEAD"):
+        assert _opencode_action(ruleset, "bash", command) == "allow", command
+
+
+@pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_search_their_memory_and_run_no_other_canopy_command(agent: str) -> None:
     """The memory digests name `canopy memory search` (DESIGN §28); the loop's other commands stay the overseer's."""
     rules = _rules(agent, "bash")
@@ -490,10 +498,30 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, 
     assert _allowed(_rules_in(rendered), tool) is allowed
 
 
-def test_the_planner_has_no_shell_or_subagent_tools() -> None:
+def test_the_planner_has_no_subagent_tools() -> None:
     frontmatter = (resources.agents_dir() / f"{agents.PLANNER}.md").read_text().split("---")[1]
-    for tool in ("bash", "task", "external_directory"):
+    for tool in ("task", "external_directory"):
         assert f"\n  {tool}: deny\n" in frontmatter
+
+
+@pytest.mark.parametrize("agent", [agents.PLANNER, "canopy-reviewer"])
+def test_the_planner_and_the_reviewer_may_run_git_merge_base_and_nothing_else(agent: str) -> None:
+    """Both read code at a base and change nothing: `git merge-base` prints commit ids and runs no other program."""
+    rules = _rules(agent, "bash")
+    for command in ("git merge-base origin/main HEAD", "git merge-base --is-ancestor origin/main HEAD"):
+        assert _allowed(rules, command), command
+    for refused in (
+        "git merge-base",
+        "git -C api merge-base origin/main HEAD",
+        "git -c core.fsmonitor=x merge-base origin/main HEAD",
+        "git diff origin/main...HEAD",
+        "git log --oneline",
+        "git merge origin/main",
+        "git push origin HEAD:refs/heads/x",
+        "rm -rf .",
+        "canopy memory search x",
+    ):
+        assert not _allowed(rules, refused), refused
 
 
 @pytest.mark.parametrize(
@@ -517,7 +545,7 @@ def test_the_planner_may_edit_only_its_plan_file(canopy_env: CanopyEnv, path: st
     assert _opencode_action(ruleset, "edit", path) == ("allow" if allowed else "deny")
 
 
-def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyEnv) -> None:
+def test_the_planner_keeps_its_edit_tool_and_a_shell_for_merge_base(canopy_env: CanopyEnv) -> None:
     # OpenCode leaves a tool out of the model's toolset when the last rule for its permission denies `*`
     # (`Permission.disabled`): a `*edit*` after the edit rules would take away the only way to write the plan.
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agents.PLANNER}.md"]
@@ -525,8 +553,12 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
     assert not _opencode_disabled(ruleset, "edit")
     # The file `_run` reads the plan from is the one the definition lets the planner write.
     assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "allow"
-    for permission in ("bash", "task", "webfetch"):
+    for permission in ("task", "webfetch"):
         assert _opencode_disabled(ruleset, permission)
+    # Its shell stays, for `git merge-base` alone, and no MCP pattern after its rules takes it away.
+    assert not _opencode_disabled(ruleset, "bash")
+    assert _opencode_action(ruleset, "bash", "git merge-base origin/main HEAD") == "allow"
+    assert _opencode_action(ruleset, "bash", "git log") == "deny"
 
 
 def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:

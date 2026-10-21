@@ -6,7 +6,8 @@ This is review {{ATTEMPT}} of at most {{MAX_ATTEMPTS}} of this PR.
 - PR: {{PR_URL}}
 - Commit: `{{SHA}}`. Review this commit, not whatever the PR's head is by the time you read it.
 - Checkout: `{{CHECKOUT}}` is the repository at that commit. Read what you need; change nothing (you have no tools
-  to, and anything left there is discarded).
+  to, and anything left there is discarded). The one command you can run is `git merge-base`, to find where the
+  commit left its base: `cd {{CHECKOUT}} && git merge-base origin/<base> HEAD`.
 - Ticket: {{TICKET}}. For a ticket, the tracker is {{TRACKER_PROVIDER}}; if a skill named
   `tracker-{{TRACKER_PROVIDER}}` is available, load it first.
 
