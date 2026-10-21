@@ -44,15 +44,15 @@ version under their name, as one comment review at the reviewed commit, its comm
 nothing; publishing it again is refused; on a second PR, a staged review waits on GitHub until the operator submits it
 there, and the next read records it as published.
 
-Status: in progress. Designed 2026-10-20 (DESIGN §34, Publishing a review, beside §21's reviews and §29's drafts). The
-design settles what the sketch left open: a draft is M53's, with a review as its source and no attention item, and a
-review that names a ticket or of a PR the loop holds has none; a version is exactly what posts, a finding off the
-kept diff going in the body as the version is made; a revision is a review run at the same commit, which a tick
-starts on the operator's note, held by review capacity, the daily limit, and a limit per draft; publishing is refused
-`inside_run`, names the version by its hash, and posts one version once, verbatim and unmarked, as one comment review
-on the reviewed commit through `canopy-post-github`, opened pending and submitted last so a refused comment posts
-nothing; an unknown outcome waits for a whole read, and staging is offered as M53's.
-D114 and TRUST_MODEL (§6, T1, T3, T5, T6, T8) change in the PR that builds it. Open for the operator: whether
-publishing submits at all or only stages; bounds on one review's comments and a draft's revisions; whether a published
-review is followed onto the next commit; whether the loop's own PRs ever publish one; and how long a draft stays
-publishable once its diff is collected.
+Status: in progress. Designed 2026-10-20 (DESIGN §34, Publishing a review, beside §21's reviews and §29's drafts).
+Built in part 2026-10-20: a `done` review of a PR the loop does not own makes a draft whose first version is its summary
+and findings, one off the kept diff in the body, and an own review makes none; `canopy review draft`, `edit` (body,
+comment, drop, add on a line of the diff), and dismissals each make a new version; `canopy review publish RUN HASH`
+stages the version as a pending review by default and with `--submit` posts it verbatim as one `COMMENT` review on the
+reviewed commit through `canopy-post-github`, which gains a review on a named commit whose comments start threads;
+refused `inside_run`, stale, a second time, past its kept diff, or on a PR a ticket holds; an unknown outcome and a
+stage wait for a whole read. D114 and TRUST_MODEL §6, T1, T5, and T6 changed with it. The operator's choices taken:
+staging is the default and only `--submit` submits; a version carries at most 30 comments, as one run's drafts, and
+more are refused; a published review is not followed onto the next commit; the loop's own PRs publish none; a draft is
+publishable while its diff is kept. Left: revisions on the operator's note (a review run at the same commit, its limit
+per draft, TRUST_MODEL T3), the review page's editing and publishing with Playwright (T8), and the live Accept.

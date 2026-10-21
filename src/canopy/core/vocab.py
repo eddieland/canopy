@@ -309,6 +309,30 @@ class DraftAuthor(StrEnum):
     OPERATOR = "operator"
 
 
+class ReviewDraftStatus(StrEnum):
+    """Where a review's draft stands, `review_drafts.status` (DESIGN §34)."""
+
+    #: The operator's to edit, publish, or stage.
+    WAITING = "waiting"
+    #: Claimed by a publish or a stage that is posting it now.
+    PUBLISHING = "publishing"
+    #: A post ended without saying whether it submitted; a whole read of the PR settles it.
+    UNCONFIRMED = "unconfirmed"
+    #: In a pending review the operator opened through canopy, theirs to submit on GitHub; a read settles it.
+    STAGED = "staged"
+    PUBLISHED = "published"
+
+
+class ReviewDraftAuthor(StrEnum):
+    """Who wrote a version of a review's draft, `review_draft_versions.author` (DESIGN §34)."""
+
+    #: The review run the draft was made from: its first version.
+    REVIEWER = "reviewer"
+    #: A revision run the operator's note asked for.
+    REVISER = "reviser"
+    OPERATOR = "operator"
+
+
 class Reaction(StrEnum):
     """A reaction a thread's draft stages on the comment it names, `draft_versions.reaction` (DESIGN §29).
 

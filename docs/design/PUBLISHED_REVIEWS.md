@@ -6,7 +6,9 @@ published on the PR as the operator's own comment review. Sections are numbered 
 
 ## 34. Publishing a review
 
-Designed, not built (ROADMAP M43). Building it changes D114 and TRUST_MODEL (Trust model changes).
+Built in part (ROADMAP M43): the draft, its versions, and publishing and staging from the CLI. Revising with an
+agent, and the review page's controls, are designed, not built. Each part changes D114 and TRUST_MODEL as it is built
+(Trust model changes).
 
 §21's reviews post nothing (D114), and §29's drafts answer threads on the loop's own PRs. This section says what
 changes for a review of someone else's PR, a `review.query` match or a review request (§21), where sending findings to
@@ -26,7 +28,9 @@ on the commit's side. canopy makes the first from the review's summary and findi
 `path:line`; a finding, or a reviser's comment, whose location is on no such line goes into the body under its
 location as the version is made. So what the operator reads is what posts, and canopy composes nothing when it
 publishes. Each text is held to §29's bounds for a draft and refused alone, with a note on the review, never cut or
-cleaned; the operator's edits are held to the same.
+cleaned; the operator's edits are held to the same. A version carries at most as many comments as one run's drafts,
+30, which is what one review canopy posts already holds and more than a review reports findings; a comment past it is
+refused.
 
 The operator edits the body or a comment, drops a comment, or adds one on a line of the diff, each a new version.
 Dismissing a finding (§21) drops its comment, one control rather than two, and taking the dismissal back restores it.
@@ -70,11 +74,15 @@ A post that ends without saying whether it submitted is of unknown outcome, and 
 whole read of the PR through the `vcs` source (§30) settles it, as §29's sends are. In place of publishing, after the
 same checks, the operator may stage the version: canopy opens a pending review holding it and never submits it; the
 operator does, on GitHub, or deletes it. A whole read settles a staged draft as §29's: published once its review is
-submitted, publishable again if it is gone.
+submitted, publishable again if it is gone. Staging is the default, so submitting stays the operator's click on GitHub
+unless they ask canopy to submit; the CLI's `--submit` does. A draft is publishable while the diff its review kept is,
+so not after garbage collection deletes it (§26). A published review is not followed onto the next commit, and the
+loop's own PRs publish none.
 
 ### Trust model changes
 
-In the PR that builds it, which the operator approves by merging:
+In the PR that builds each part, which the operator approves by merging: D114, §6, T1, T5, and T6 with the draft and
+publishing, T3 with revisions, and T8 with the review page.
 
 - D114: from "posts nothing" to "posts nothing the operator has not published, word for word"; its revisit is met.
 - §6: the review canopy submits or stages may also be one the operator published or staged word for word, on a PR the
@@ -92,10 +100,7 @@ In the PR that builds it, which the operator approves by merging:
 
 ### Open
 
-- Whether publishing submits at all, or only stages a pending review, so submitting stays the operator's click.
-- Bounds on one review: how many comments it may carry, whether more are refused or left for the operator to cut, and
-  how many revisions a draft gets.
-- Whether a published review is followed onto the next commit, its comments or a coworker's answers on its threads
-  carried into the next draft. It needs a finding's identity across commits first (§21, Open).
-- Whether the loop's own PRs ever publish a review, for a coworker's benefit, beside §21's send.
-- How long a draft stays publishable: the diff its comments sit on is deleted after `run_files_days` (§26).
+- How many revisions a draft gets.
+- Following a published review onto the next commit, its comments or a coworker's answers on its threads carried into
+  the next draft. It needs a finding's identity across commits first (§21, Open).
+- The loop's own PRs publishing a review, for a coworker's benefit, beside §21's send.

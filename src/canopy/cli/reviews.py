@@ -1,4 +1,11 @@
-"""`canopy review run`, `wait`, and `end` for the overseer, `show` for the operator, the detached `_review` (§21)."""
+"""`canopy review`: `run`, `wait`, and `end` for the overseer; `show`, and a review's draft, for the operator.
+
+The detached `_review` does one review run (DESIGN §21). A review of a PR the loop does not own is a draft of a
+review on that PR (§34): `draft` shows it as it would post, `edit` changes it, and `publish` posts one version as the
+operator's own comment review, named by the hash `draft` printed. A draft's text is the reviewer's, written from the
+PR's, until the operator publishes it, so it is printed as plain text with each character that hides text named. The
+commands that write refuse inside canopy's own ticks and runs.
+"""
 
 from __future__ import annotations
 
@@ -6,16 +13,24 @@ import contextlib
 import os
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, open_context
 from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import conversation, db, review_requests
+from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_requests, sql
+from canopy.core.memory_text import visible
+from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
+from canopy.infra import logs
 from canopy.loop import tick, tools
 from canopy.reviews import execute, findings, view
 
-#: The channel `show` marks a review seen through (DESIGN §22).
+if TYPE_CHECKING:
+    import sqlite3
+
+#: The channel `show` marks a review seen through, and a draft's edit or publish is recorded with (DESIGN §22).
 CLI = "cli"
 
 
@@ -83,6 +98,173 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
     lines = findings.listed(ctx.conn, db.format_time(datetime.now(UTC) - view.RECENT))
     click.echo("\n".join(lines) if lines else "no reviews in the last 14 days")
     return 0
+
+
+@review_group.command("draft")
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.pass_context
+def cmd_review_draft(click_ctx: click.Context, run_id: int) -> int:
+    """Show the review of RUN_ID that canopy would publish on the PR in your name, word for word, and its hash.
+
+    Only a `done` review of a PR the loop does not own has one. Its text is the reviewer's until you publish it.
+    """
+    ctx = open_context(click_ctx)
+    try:
+        draft = review_drafts_manage.find(ctx.conn, run_id)
+    except conversation.Refused as r:
+        raise CliError(f"no draft ({r.guard}): {r.reason}") from None
+    _print_draft(ctx.conn, draft)
+    return 0
+
+
+@review_group.command("edit")
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.option("--body", "body", is_flag=True, help="Make the text the review's body; empty posts the comments alone.")
+@click.option("--comment", "comment", type=click.IntRange(min=1), metavar="N", help="Make the text comment N's.")
+@click.option("--drop", "drop", type=click.IntRange(min=1), metavar="N", help="Drop comment N.")
+@click.option("--add", "add", metavar="PATH:LINE", help="Add the text as a comment on a line of the diff it read.")
+@click.option("--text", help="The new text.")
+@click.option("--file", "path", type=click.Path(dir_okay=False, allow_dash=True), help="Read it from a file, - stdin.")
+@click.pass_context
+def cmd_review_edit(
+    click_ctx: click.Context,
+    run_id: int,
+    *,
+    body: bool,
+    comment: int | None,
+    drop: int | None,
+    add: str | None,
+    text: str | None,
+    path: str | None,
+) -> int:
+    """Change the draft of review RUN_ID: its body, a comment, or one comment more or less, as a new version.
+
+    Dismissing a finding (`canopy dismiss review:RUN_ID N`) drops what it made of the draft, and taking it back
+    restores it.
+    """
+    if sum((body, comment is not None, drop is not None, add is not None)) != 1:
+        raise click.UsageError("give one of --body, --comment N, --drop N, or --add PATH:LINE")
+    if text is not None and path is not None:
+        raise click.UsageError("give the text with --text or --file, not both")
+    if text is None and path is not None:
+        text = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+    if drop is None and text is None:
+        raise click.UsageError("give the text with --text or --file")
+    words = text or ""
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        if body:
+            version = review_drafts_manage.edit_body(ctx.conn, run_id, words, channel=CLI)
+        elif comment is not None:
+            version = review_drafts_manage.edit_comment(ctx.conn, run_id, comment, words, channel=CLI)
+        elif drop is not None:
+            version = review_drafts_manage.drop_comment(ctx.conn, run_id, drop, channel=CLI)
+        else:
+            version = review_drafts_manage.add_comment(ctx.conn, run_id, str(add), words, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"edit refused ({r.guard}): {r.reason}") from None
+    click.echo(f"Review run {run_id}'s draft is version {version.number} now, hash {version.hash}: {version.change}.")
+    return 0
+
+
+@review_group.command("publish")
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.argument("version_hash", metavar="HASH")
+@click.option("--submit", is_flag=True, help="Submit it on GitHub now, rather than leave it pending for you to submit.")
+@click.pass_context
+def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str, *, submit: bool) -> int:
+    """Post the draft of review RUN_ID, the version whose HASH `draft` printed, on its PR as your own review.
+
+    It goes word for word, unmarked, as one comment review on the commit the review read, its comments on their lines;
+    it approves nothing and requests no change. By default it waits on GitHub as a pending review, which only you see
+    until you submit it there; with --submit, canopy submits it. A draft publishes once. A post that ends without
+    saying whether it submitted leaves the draft unconfirmed until a read of the PR says.
+    """
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        log = logs.for_tick(None)
+        done = review_drafts_manage.publish(
+            ctx.conn, ctx.config, ctx.runner, run_id, version_hash, submit=submit, channel=CLI, log=log
+        )
+    except conversation.Refused as r:
+        raise CliError(f"publish refused ({r.guard}): {r.reason}") from None
+    draft, number = done.draft, done.version.number
+    match draft.status:
+        case ReviewDraftStatus.PUBLISHED:
+            click.echo(f"Published version {number} of review run {run_id}'s draft: {draft.published_url}")
+        case ReviewDraftStatus.STAGED:
+            click.echo(
+                f"Staged version {number} of review run {run_id}'s draft in a pending review on {draft.pr_url}; "
+                f"submit or delete it at {draft.pr_url}/files"
+            )
+        case ReviewDraftStatus.UNCONFIRMED:
+            click.echo(
+                f"Version {number} of review run {run_id}'s draft may have been posted: the post ended without saying. "
+                "A read of the PR settles it; canopy posts it no other time."
+            )
+        case ReviewDraftStatus.WAITING | ReviewDraftStatus.PUBLISHING:
+            click.echo(f"Version {number} of review run {run_id}'s draft was not published: {done.failed}")
+        case _:
+            assert_never(draft.status)
+    return 0 if done.failed is None and draft.status is not ReviewDraftStatus.UNCONFIRMED else 1
+
+
+def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
+    """Print a review's draft: where it stands, its newest version word for word, and every version's line."""
+    run_id = draft.review_run_id
+    current = review_drafts.newest(conn, draft.id)
+    _print_standing(conn, draft)
+    click.echo(f"\nVersion {current.number}, hash {current.hash}: {current.change}, {_by(current)}.")
+    for why in current.refused:
+        click.echo(f"  Left out: {why}")
+    click.echo("Body:" if current.body else "Body: none.")
+    for line in current.body.split("\n") if current.body else ():
+        click.echo(f"    {visible(line)}")
+    for n, c in enumerate(current.comments, 1):
+        made = f" (finding {c.finding})" if c.finding is not None else ""
+        click.echo(f"Comment {n}, on {visible(c.path)}:{c.line}{made}:")
+        for line in c.text.split("\n"):
+            click.echo(f"    {visible(line)}")
+    click.echo("\nVersions:")
+    for v in review_drafts.versions(conn, draft.id):
+        click.echo(f"  {v.number}  {v.hash}  {_by(v)}: {v.change}")
+    if draft.status is ReviewDraftStatus.WAITING:
+        click.echo(
+            f"\nTo leave it pending on GitHub for you to submit: canopy review publish {run_id} {current.hash}"
+            "\nTo submit it now, add --submit."
+        )
+
+
+def _print_standing(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
+    """Print where a draft stands, and whether the PR has moved on from the commit its review read."""
+    click.echo(f"Review run {draft.review_run_id}'s draft, of {draft.pr_url} at {draft.sha}: {draft.status}.")
+    match draft.status:
+        case ReviewDraftStatus.PUBLISHED:
+            click.echo(f"  Published at {draft.published_at}: {draft.published_url}")
+        case ReviewDraftStatus.STAGED:
+            click.echo(f"  In the review you staged; submit or delete it at {draft.pr_url}/files")
+        case _:
+            if draft.why:
+                click.echo(f"  {draft.why}")
+    pr = records.fetch_one(
+        conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", draft.pr_url)
+    )
+    if pr is not None and pr.head_sha and not draft.sha.startswith(pr.head_sha):
+        click.echo(f"  The PR is at {pr.head_sha} now: its comments would show as outdated, on the commit it read.")
+
+
+def _by(version: review_drafts.Version) -> str:
+    match version.author:
+        case ReviewDraftAuthor.REVIEWER:
+            return "by the reviewer"
+        case ReviewDraftAuthor.REVISER:
+            return "by a revision"
+        case ReviewDraftAuthor.OPERATOR:
+            return f"by you through {version.channel}"
+        case _:
+            assert_never(version.author)
 
 
 @click.command("_review", hidden=True)

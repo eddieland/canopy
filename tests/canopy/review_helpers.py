@@ -1,13 +1,14 @@
-"""Helpers the review tests share: a reviewer's reports, and a review run in this process (DESIGN §21)."""
+"""Helpers the review tests share: a reviewer's reports, a review run in this process, and a commit to review (§21)."""
 
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Unpack
 
 from canopy.cli.main import main
 from canopy.core import db
-from tests.canopy.helpers import Behavior, InlineRunner, in_tick, reported, scripted
+from tests.canopy.helpers import Behavior, InlineRunner, in_tick, present, reported, scripted
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
@@ -65,3 +66,14 @@ def review_decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str |
 def head(git_pool: GitPool) -> str:
     """The commit `main` points to on origin."""
     return git("rev-parse", "main", cwd=git_pool.origin)
+
+
+def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
+    """Push a commit adding `retry.py` on a branch `feature` off origin's `main`, and return it."""
+    seed = tmp_path / "seed"
+    git("checkout", "--quiet", "-b", "feature", cwd=seed)
+    (seed / "retry.py").write_text("while True:\n    call()\n")
+    git("add", "retry.py", cwd=seed)
+    git("commit", "--quiet", "-m", "retry", cwd=seed)
+    git("push", "--quiet", str(git_pool.origin), "feature", cwd=seed)
+    return present(git_pool.remote_head("feature"))

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import drafts, drafts_manage, observe, sql
+from canopy.core import drafts, drafts_manage, observe, review_drafts_manage, sql
 from canopy.core.vocab import DraftStatus, PrState
 
 if TYPE_CHECKING:
@@ -38,8 +38,8 @@ def after_run(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
 def reconcile(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
     """Check or settle the drafts of the PRs the `vcs` run read whole (§6 step 3, DESIGN §30).
 
-    That run's request names every PR a draft waits on, a send left unconfirmed, or one staged, so it is this tick's
-    read of them.
+    That run's request names every PR a draft waits on, a send or a review's publish left unconfirmed, or one staged,
+    so it is this tick's read of them.
     """
     _check(ctx, whole, log)
 
@@ -54,6 +54,10 @@ def _check(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
     settled = drafts_manage.settle_by_read(ctx.conn, whole)
     if settled:
         log.info("drafts settled", extra={"drafts": {d.id: d.status for d in settled}})
+    # A review's draft the operator published or staged on a PR the loop does not own (DESIGN §34).
+    reviews = review_drafts_manage.settle_by_read(ctx.conn, whole)
+    if reviews:
+        log.info("review drafts settled", extra={"review_drafts": {d.id: d.status for d in reviews}})
     checked = drafts.check(ctx.conn, whole)
     if checked:
         counts = {s: sum(d.status is s for d in checked) for s in (DraftStatus.WAITING, DraftStatus.REFUSED)}

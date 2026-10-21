@@ -393,13 +393,14 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: rendering Markdown (labelled links hide their target); a linkify library (a regex and `URL.canParse` do it).
 - Revisit: if journal text should link ticket keys or `repo#N` references to their pages as well.
 
-## D114. canopy's reviews post nothing; they live in the journal
+## D114. canopy's reviews post nothing the operator has not published, word for word
 
-- The reviewer has no write tool and reports only its result line. Its findings reach the operator through
-  `canopy review show` and a worker through `resume --review-run`, never the PR or the ticket. Settled by the operator.
-- Why: a review on the PR speaks in the operator's name before they have seen it; kept local it needs no write grant.
+- The reviewer has no write tool and reports only its result line, kept in the journal. A review of a PR the loop does
+  not own reaches the PR only as a version of its draft the operator publishes, unmarked (DESIGN §34). Settled by the
+  operator; revisited for M43, 2026-10-20.
+- Why: a review on the PR speaks in the operator's name, so only what they read and chose posts; no agent writes it.
 - Rejected: one identified comment per commit with a marker (the M11 design); repository automation on the verdict.
-- Revisit: with a bot identity, or once the operator wants a shadow review published: asked for, ROADMAP M43.
+- Revisit: with a bot identity.
 
 ## D115. The web UI's branch links default to the GitHub page a clone URL implies
 
