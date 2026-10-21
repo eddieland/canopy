@@ -89,6 +89,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   pushing either anyway.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
+- A pull request's CI is the run GitHub starts for it. Never start CI by hand on a branch with an open pull request
+  (`workflow_dispatch`, from the Actions page or the API): the manual run shares the pull request's concurrency group
+  and cancels its run, and a required check left cancelled keeps the pull request from merging though the manual run
+  passed. A run GitHub has not started yet is waited for, not replaced; a job that failed is re-run in its own run.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for every command line, the
   workspace members' too, never argparse (D025),
@@ -140,6 +144,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
   Nothing else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if
   anything else imports it.
+- Every command line is click, never argparse: canopy's CLI and every program it ships, the workspace members' too
+  (D025). Options or setup two programs share, such as reading an operator-only secret file, go in a common workspace
+  member, never copied into each. A program still on argparse is converted when a PR already changes its command line.
 - Modules are small and named for what they own, in the package for their layer (DESIGN §5): `core/db.py`,
   `infra/lock.py`, `runs/dispatch.py`, `loop/attention.py`, `cli/main.py`. Imports go down the layers, never between
   features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
