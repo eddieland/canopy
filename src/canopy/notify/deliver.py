@@ -214,10 +214,16 @@ def _deliver(
     change = journal.diff(ctx.conn, name, items, dismissed) if "attention" in sink.events else None
     digest = None
     if _digest_due(row, sink, now) and sink.digest_every_minutes is not None:
-        # The first digest covers one interval back.
+        # The first digest covers one interval back, or, under a spend floor, back to when the sink was added too, so
+        # what it waits for adds up from there.
         first = db.format_time(now - timedelta(minutes=sink.digest_every_minutes))
+        if sink.digest_min_usd is not None:
+            first = min(first, row.created_at)
         since = row.last_digest_at or first
         digest = message.digest(ctx.conn, items, since=since, now=now)
+        if sink.digest_min_usd is not None and (digest.costs.total or 0.0) < sink.digest_min_usd:
+            # It waits: `since` stays, so the next tick's digest counts this spend and whatever comes after it.
+            digest = None
     msg = message.Message(
         name,
         ctx.repo,

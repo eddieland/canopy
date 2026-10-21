@@ -894,8 +894,17 @@ class Sink(Section):
     format: Literal["json", "text"] = "json"
     events: tuple[EventGroup, ...] = ("attention", "loop")
     digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+    #: In US dollars: a due digest waits until the runs since the last one cost at least this much, so the sink hears
+    #: once per this much spent, at most once per interval. Such a sink's digests are no heartbeat.
+    digest_min_usd: Annotated[StrictFloat | StrictInt, Field(gt=0)] | None = None
     # After a delivery, what does not need the operator now waits this long, then goes out in one message.
     batch_minutes: Annotated[StrictInt, Field(ge=1, le=MAX_BATCH_MINUTES)] | None = None
+
+    @model_validator(mode="after")
+    def _floor_needs_digests(self) -> Sink:
+        if self.digest_min_usd is not None and self.digest_every_minutes is None:
+            raise ValueError("digest_min_usd needs digest_every_minutes: it holds back digests, and none are sent")
+        return self
 
 
 SinkName = Annotated[str, AfterValidator(_sink_name)]

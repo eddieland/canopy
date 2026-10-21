@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import quote
 
-from canopy.core import contract, db, records, sql
+from canopy.core import contract, db, records, spend, sql
 from canopy.core.items import Item, age
 from canopy.core.vocab import RunStatus
 
@@ -219,6 +219,23 @@ class DigestAttention(TypedDict):
     oldest: str | None
 
 
+class DigestSpend(TypedDict):
+    """What the runs that started in a digest's span cost, in US dollars, in total and by kind (DESIGN §11).
+
+    Each is None when none of its runs reported a cost. `idle` is the part of `overseer` that idle ticks spent, and
+    `dry_run` the dry runs' overseers, apart from it.
+    """
+
+    total: float | None
+    overseer: float | None
+    idle: float | None
+    dry_run: float | None
+    workers: float | None
+    plans: float | None
+    chores: float | None
+    reviews: float | None
+
+
 class DigestJson(TypedDict):
     """The digest as the `json` format carries it."""
 
@@ -231,6 +248,7 @@ class DigestJson(TypedDict):
     blocked: list[BlockedRun]
     attention: DigestAttention
     running: int
+    spend: DigestSpend
     lines: list[str]
 
 
@@ -248,13 +266,15 @@ class Digest:
     attention: Mapping[str, int]
     oldest: str | None
     running: int
+    #: What the runs that started since `since` cost, by kind.
+    costs: spend.Costs
 
     def lines(self) -> list[str]:
         """The digest as lines for a person. Sent even when nothing happened: a missing digest means a dead loop.
 
         Returns:
-            A heading line with the tick counts, then an indented line for each of runs, tickets done and blocked,
-            attention, and workers running.
+            A heading line with the tick counts, then an indented line for each of runs, what they cost, tickets done
+            and blocked, attention, and workers running.
         """
         span = f"Digest since {self.since}:"
         ticks = ", ".join(f"{s} {n}" for s, n in sorted(self.ticks.items())) or "none"
@@ -266,6 +286,7 @@ class Digest:
             out.append(f"  runs started: {started}; ended: {ended}")
         else:
             out.append("  nothing ran")
+        out.append(_spend_line(self.costs))
         out += [f"  done {d['ticket']} {d.get('pr') or ''}".rstrip() for d in self.done[:_DONE_LISTED]]
         out += [f"  blocked {b['ticket']}" for b in self.blocked[:_DONE_LISTED]]
         if self.attention:
@@ -296,8 +317,37 @@ class Digest:
                 "oldest": self.oldest,
             },
             "running": self.running,
+            "spend": {
+                "total": self.costs.total,
+                "overseer": self.costs.overseer,
+                "idle": self.costs.idle,
+                "dry_run": self.costs.dry_run,
+                "workers": self.costs.workers,
+                "plans": self.costs.plans,
+                "chores": self.costs.chores,
+                "reviews": self.costs.reviews,
+            },
             "lines": self.lines(),
         }
+
+
+# The digest's line for what its span cost: the total, then each kind that reported a cost, the idle ticks' part of
+# the overseer's beside it, and the dry runs' last, since they are no part of the loop's work.
+def _spend_line(costs: spend.Costs) -> str:
+    total = costs.total
+    if total is None:
+        return "  spent: none reported"
+    overseer = None
+    if costs.overseer is not None:
+        overseer = f"overseer {_usd(costs.overseer)}" + (f" (idle {_usd(costs.idle)})" if costs.idle else "")
+    kinds = [("workers", costs.workers), ("plans", costs.plans), ("chores", costs.chores), ("reviews", costs.reviews)]
+    parts = [overseer] if overseer is not None else []
+    parts += [f"{name} {_usd(usd)}" for name, usd in (*kinds, ("dry runs", costs.dry_run)) if usd is not None]
+    return f"  spent: {_usd(total)} ({', '.join(parts)})"
+
+
+def _usd(usd: float) -> str:
+    return f"${usd:.2f}"
 
 
 def titles(conn: sqlite3.Connection) -> dict[str, str]:
@@ -311,7 +361,7 @@ def titles(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now: datetime) -> Digest:
-    """Build the digest for the time since `since`: ticks, runs, the open attention list, workers running now.
+    """Build the digest for the time since `since`: ticks, runs and what they cost, the open attention list, workers.
 
     Returns:
         The digest, read from the journal and `items` only.
@@ -351,6 +401,7 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
         attention=dict(Counter(i.reason for i in items)),
         oldest=age(oldest, now) if oldest is not None else None,
         running=len(db.running_runs(conn, "runs")),
+        costs=spend.costs(conn, since, db.format_time(now)),
     )
 
 

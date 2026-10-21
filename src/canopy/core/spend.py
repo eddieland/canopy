@@ -1,4 +1,4 @@
-"""What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
+"""What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), for `canopy spend`, the web UI, and digests.
 
 Reads only. Every cost is what the agent runtime reported (§13), summed by the local day a run started on, or by the
 local hour for a window in hours: the overseer of each tick, worker runs (old split runs among them), plan runs (§25,
@@ -315,6 +315,30 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Brea
         starts.setdefault(_local_hour(at), db.format_time(at))
     buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
     return _breakdown(conn, start, end, buckets, hours=hours)
+
+
+def costs(conn: sqlite3.Connection, since: str, until: str) -> Costs:
+    """What each kind of agent run that started in `[since, until)`, each a journal time, cost: a sink's digest (§20).
+
+    Summed as a breakdown's `totals` are, but over any span rather than whole local days or hours.
+
+    Returns:
+        The costs; a kind none of whose runs in the span reported a cost is None.
+    """
+    found: dict[str, float | None] = {}
+    with db.read_snapshot(conn):
+        rows = _tick_rows(conn, since, until, _DAY)
+        for kind, (table, which) in _TABLES.items():
+            summed = (
+                sql.select("SUM(cost_usd)")
+                .from_(table)
+                .where("{}", which)
+                .where("started_at >= ? AND started_at < ?", since, until)
+            )
+            found[kind] = sql.execute(conn, summed).fetchone()[0]
+    for name in _SERIES:
+        found[name] = _sum([r.cost_usd for r in rows if _in_series(r, name)])
+    return _costs(found)
 
 
 @dataclass(frozen=True)

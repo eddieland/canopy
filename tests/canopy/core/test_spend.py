@@ -376,6 +376,24 @@ def test_a_row_after_the_window_is_in_no_figure(tmp_path: Path, journals: Journa
     assert spend.idle_ticks(conn, found.since, found.until) == []
 
 
+def test_costs_sum_each_kind_that_started_in_any_span(tmp_path: Path, journals: Journals) -> None:
+    """A digest's span is from its last one to now, whole days or not: a row on either side of it is in no figure."""
+    conn = journals.open(tmp_path / "canopy.db")
+    since, until = db.format_time(NOW - timedelta(hours=1)), db.format_time(NOW)
+    tick(conn, db.format_time(NOW - timedelta(hours=2)), 8.0)
+    tick(conn, db.format_time(NOW + timedelta(minutes=1)), 8.0)
+    ticket(conn, "A-1")
+    tick_id = tick(conn, earlier(NOW, 0, 0.5), 1.0, idle=False)
+    tick(conn, earlier(NOW, 0, 0.25), 0.25, idle=True)
+    tick(conn, earlier(NOW, 0, 0.1), 0.5, dry_run=True)
+    run(conn, tick_id, "A-1", earlier(NOW, 0, 0.5), 2.0, None)
+    review(conn, tick_id, "https://example.test/pr/1", "A-1", earlier(NOW, 0, 0.5), 0.75)
+    found = spend.costs(conn, since, until)
+    assert found == spend.Costs(overseer=1.25, idle=0.25, dry_run=0.5, workers=2.0, reviews=0.75)
+    assert found.total == 4.5
+    assert spend.costs(conn, until, db.format_time(NOW + timedelta(seconds=1))) == spend.Costs()
+
+
 def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Journals) -> None:
     """A running tick has reported its cost and is in no group yet, so it is in neither part of the share."""
     conn = journals.open(tmp_path / "canopy.db")
