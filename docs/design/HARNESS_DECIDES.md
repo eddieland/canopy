@@ -94,17 +94,15 @@ A dispatch moves each cursor of its reasons, once the worker starts, to the newe
 short of the first it may not cover (§35); the overseer passes a cursor only to stop shorter. The harness moves the
 cursors past what its own decisions handle and what needs no handling: a worker's comment, a reply the operator sent.
 
-The prompt keeps the judgment: repositories, slugs, titles, and contexts; classifying feedback; what a reply asks;
-stacking; a chore's `when`; a notice's hold; stale and unobserved subjects. Its holds, order, candidates, phase table,
-cursors, and attention list go.
+The prompt keeps only that judgment; its holds, order, candidates, phase table, cursors, and attention list go.
 
 ### Trust model changes, when built
 
-- T1: text on a ticket the harness decided reaches no model in the tick, and the harness's dispatches carry no
-  model-written context. A steered overseer cannot overrule the harness (`decided`) or drop an item it holds. Residual:
-  a harness `resume` follows an observation without judgment, so a derivation's mistake starts a run, which the
-  evidence gate and T3's limits bound.
-- T3: the harness's dispatches count against every limit, cooldown, and capacity; `reserved` keeps new work behind work
+- T1: text on a ticket the harness decided reaches no overseer (its workers and reviewers still read it), and the
+  harness's dispatches carry no model-written context. A steered overseer cannot overrule the harness (`decided`) or
+  drop an item it holds. Residual: a harness `resume` follows an observation without judgment, so a derivation's
+  mistake starts a run, which the evidence gate and T3's limits bound.
+- T3: every harness dispatch counts against each limit, cooldown, and capacity; `reserved` keeps new work behind work
   in flight. T5: each decision says whether the harness or the overseer made it.
 - D008 and D020 are edited in place: rows move into code on a measurement, and the attention list is held in code.
 
