@@ -8,6 +8,7 @@ drafts it covers are checked after it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
@@ -15,18 +16,31 @@ from canopy.core import connector_runs, conversation, db, drafts, drafts_manage,
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from canopy.core.context import Context
     from canopy.infra import logs
 
 
-def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> frozenset[str]:
-    """Run every source that reads, recording each run, and return the PRs the `vcs` source read whole.
+@dataclass(frozen=True)
+class Ran:
+    """What one run of the connectors did."""
+
+    #: How each source's run ended, by the source's name, in the order they ran.
+    observed: Mapping[str, observe.Observed]
+    #: The PRs the `vcs` run read whole, which the drafts that wait on them are checked against.
+    read: frozenset[str]
+
+
+def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> Ran:
+    """Run every source that reads, recording each run.
 
     `tick_id` is the tick running them, or None for the loop's poll between ticks (`poll.run`).
 
     Returns:
-        The PRs the `vcs` run read whole, which the drafts that wait on them are checked against.
+        How each source's run ended, and the PRs the `vcs` run read whole.
     """
+    observed_by: dict[str, observe.Observed] = {}
     read: frozenset[str] = frozenset()
     for name, source in ctx.config.connect.named().items():
         kind = SourceKind(source.kind)
@@ -43,10 +57,11 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> frozenset[s
         connector_runs.record(ctx.conn, tick_id, name=name, source=source, request=request, observed=observed)
         counts = {"recorded": observed.recorded, "refused": observed.refused}
         log.info("connector ran", extra={"source": name, "status": observed.status, **counts})
+        observed_by[name] = observed
         # Config allows one source of each kind (`Connect._one_per_kind`), so this is the one `vcs` read.
         if kind is SourceKind.VCS:
             read = observed.whole.prs
-    return read
+    return Ran(observed_by, read)
 
 
 def tracker_request(ctx: Context) -> observe.Request:
