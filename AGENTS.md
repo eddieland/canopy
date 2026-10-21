@@ -90,7 +90,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
-  stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for the CLI (D025),
+  stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for every command line, the
+  workspace members' too, never argparse (D025),
   `pydantic` for validating config and anything parsed from another program's output (D026), `hypothesis` for property
   tests of input validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
@@ -98,7 +99,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub
-  client: canopy's own GitHub programs, `packages/canopy-github` (D003), are separate programs it runs as commands.
+  client: canopy's own GitHub programs, `packages/canopy-github` (D003), and its Jira connector, `packages/canopy-jira`,
+  are separate programs it runs as commands.
   The harness reaches those systems only through the agent runtime's MCP servers and the commands its config names,
   and knows nothing about Jira or GitHub beyond strings in config and prompts.
 
