@@ -33,6 +33,8 @@ export type CostTotal = Schemas['CostTotal']
 export type TicketPlans = Schemas['TicketPlans']
 /** A plan as its file stands now, read bounded and never through a link (DESIGN §25). */
 export type PlanFile = Schemas['PlanFile']
+/** The persona a run wrote in (DESIGN §31), and its instructions as its file stands now. */
+export type RunPersona = Schemas['RunPersona']
 /** One of a ticket's plans: its status and approval, never its text. */
 export type PlanSummary = Schemas['PlanSummary']
 /** One of the operator's comments on a plan: a thread on a passage, with its replies. */

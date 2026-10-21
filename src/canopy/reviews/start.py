@@ -217,6 +217,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             logs_dir=reviews_dir(ctx),
             persona=persona.name,
             persona_digest=persona.digest,
+            persona_text=persona.text,
         )
         pool = ctx.pool(repo)
         try:

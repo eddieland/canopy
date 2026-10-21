@@ -22,6 +22,7 @@ import { Leaf } from '@/components/leaf'
 import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PersonaPanel } from '@/components/persona-panel'
 import { PlanChip } from '@/components/plan-card'
 import { PlanEditor } from '@/components/plan-editor'
 import { RunLink } from '@/components/run-link'
@@ -95,6 +96,10 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
                         plan {newest.plan.id}&apos;s file is {newest.problem ?? 'unreadable'}: {newest.path}
                     </Empty>
                 </Panel>
+            )}
+            {newest !== null && newest.persona !== null && (
+                // As wide as the plan above it, as the earlier plans are.
+                <PersonaPanel persona={newest.persona} className="max-w-[51rem]" />
             )}
             {earlier.length > 0 && <EarlierPlans ticketKey={ticketKey} plans={earlier} />}
             <ConfirmLeave
@@ -564,8 +569,9 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
                         <Empty>its file is {found.problem ?? 'unreadable'}</Empty>
                     )}
                     {found !== undefined && found.text !== null && (
-                        <div className="p-3">
+                        <div className="flex flex-col gap-3 p-3">
                             <PlanEditor markdown={found.text} threads={[]} onThreadsChange={ignore} editable={false} />
+                            {found.persona !== null && <PersonaPanel persona={found.persona} />}
                         </div>
                     )}
                 </CollapsibleContent>

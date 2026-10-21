@@ -489,11 +489,26 @@ class PlanSummary(_Model):
     """How much work the plan is for its worker, as its planner judged; none when it gave no estimate."""
 
 
+class RunPersona(_Model):
+    """The persona a run wrote in (DESIGN §31), and the instructions it read."""
+
+    name: str
+    """The persona's name."""
+    digest: str
+    """The sha256 of its text as the run's prompt carried it, in hex."""
+    text: str | None = None
+    """Its instructions as the run read them; none when canopy cannot tell what they were: `problem` says why."""
+    problem: str | None = None
+    """Why there is no text: the run is from before canopy kept texts, and its file is gone or edited since."""
+
+
 class PlanFile(_Model):
     """A plan as its file stands now, read bounded and never through a link (DESIGN §25, Where plans live)."""
 
     plan: PlanSummary
     """The plan the file is."""
+    persona: RunPersona | None = None
+    """The persona its planner wrote in, and its instructions; none for a run from before canopy recorded one."""
     path: str
     """The file, under the state directory: the operator reads and edits it with their own tools too."""
     text: str | None = None

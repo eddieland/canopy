@@ -164,6 +164,7 @@ def test_a_review_runs_in_the_reviewers_persona_and_records_it(
     reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     assert f"## Persona\n\n{skeptic.text}\n" in reviewed.prompt
     assert (reviewed.row.persona, reviewed.row.persona_digest) == ("skeptic", skeptic.digest)
+    assert db.persona_text(scenario.conn, skeptic.digest) == skeptic.text
     c, _ = signed_in_client(ctx)
     got = c.get(f"/api/reviews/{reviewed.id}").json()
     assert (got["persona"], got["persona_digest"]) == ("skeptic", skeptic.digest)
