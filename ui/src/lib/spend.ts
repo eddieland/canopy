@@ -2,7 +2,17 @@
 // numbers are the server's (`canopy spend`); this lays them out.
 
 import type { SpendBreakdownRange } from '@/api/queries'
-import type { SpendBreakdown, SpendCosts, SpendDay, SpendGroup, SpendTicket } from '@/api/types'
+import { SPEND_KINDS } from '@/api/types'
+import type {
+    SpendBreakdown,
+    SpendCosts,
+    SpendDay,
+    SpendGroup,
+    SpendKind,
+    SpendModel,
+    SpendTicket,
+    SpendTool,
+} from '@/api/types'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
@@ -13,6 +23,9 @@ export const DEFAULT_WINDOW: SpendBreakdownRange = { days: 7 }
 
 /** The windows the page offers, shortest first. */
 export const SPEND_WINDOWS: readonly SpendBreakdownRange[] = [{ hours: 24 }, DEFAULT_WINDOW, { days: 30 }]
+
+// What the server divides a tool's characters by to estimate its tokens (`CHARS_PER_TOKEN` in canopy.core.spend).
+const CHARS_PER_TOKEN = 4
 
 /** A series of the by-day chart: a part of a day's spend no other series counts. */
 export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'plans' | 'chores' | 'reviews' | 'dry_run'
@@ -199,4 +212,81 @@ export function doneText(ticket: Pick<SpendTicket, 'done' | 'done_at'>): string 
     return ticket.done === null || ticket.done_at === null
         ? ''
         : `${new Date(ticket.done_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${ticket.done}`
+}
+
+/** One row of the By model table: a model's runs of one kind, or of every kind summed. */
+export type ModelRow = Omit<SpendModel, 'kind'>
+
+/** One row of the By tool table: a tool's calls in one kind's runs, or in every kind's summed. */
+export type ToolRow = Omit<SpendTool, 'kind'>
+
+/**
+ * The By model table's rows: one kind's as the server sent them, or with no kind each model summed over every kind,
+ * the most costly first and the runs no session named a model for last. A run has one kind, so the runs add up.
+ */
+export function modelRows(models: readonly SpendModel[], kind: SpendKind | undefined): ModelRow[] {
+    if (kind !== undefined) {
+        return models.filter((m) => m.kind === kind)
+    }
+    // Each row a copy, its kind left out, so summing into it never changes the query's data.
+    const summed = new Map<string | null, ModelRow>()
+    for (const { kind: _, ...m } of models) {
+        const seen = summed.get(m.model)
+        if (seen === undefined) {
+            summed.set(m.model, m)
+        } else {
+            seen.runs += m.runs
+            seen.replies += m.replies
+            seen.cost_usd = addCost(seen.cost_usd, m.cost_usd)
+        }
+    }
+    return [...summed.values()].toSorted((a, b) =>
+        firstOf(
+            Number(a.model === null) - Number(b.model === null),
+            (b.cost_usd ?? 0) - (a.cost_usd ?? 0),
+            (a.model ?? '').localeCompare(b.model ?? ''),
+        ),
+    )
+}
+
+/**
+ * The By tool table's rows: one kind's as the server sent them, or with no kind each tool summed over every kind, the
+ * most characters returned first, its tokens estimated from the sum as the server estimates each kind's.
+ */
+export function toolRows(tools: readonly SpendTool[], kind: SpendKind | undefined): ToolRow[] {
+    if (kind !== undefined) {
+        return tools.filter((t) => t.kind === kind)
+    }
+    // Each row a copy, as By model's are.
+    const summed = new Map<string, ToolRow>()
+    for (const { kind: _, ...t } of tools) {
+        const seen = summed.get(t.tool)
+        if (seen === undefined) {
+            summed.set(t.tool, t)
+        } else {
+            seen.runs += t.runs
+            seen.calls += t.calls
+            seen.errors += t.errors
+            seen.result_chars += t.result_chars
+            seen.est_tokens = Math.floor(seen.result_chars / CHARS_PER_TOKEN)
+        }
+    }
+    return [...summed.values()].toSorted((a, b) =>
+        firstOf(b.result_chars - a.result_chars, a.tool.localeCompare(b.tool)),
+    )
+}
+
+/** The kinds a filter offers: those with a row in the window, in `canopy spend`'s order, and the one chosen. */
+export function kindsOffered(rows: readonly { kind: SpendKind }[], chosen: SpendKind | undefined): SpendKind[] {
+    return SPEND_KINDS.filter((k) => k === chosen || rows.some((row) => row.kind === k))
+}
+
+// The first of a comparison's differences that is not 0, so each later one only breaks the ties of those before it.
+function firstOf(...diffs: number[]): number {
+    return diffs.find((d) => d !== 0) ?? 0
+}
+
+// Two costs summed, null only when neither reported one.
+function addCost(a: number | null | undefined, b: number | null | undefined): number | null {
+    return a === null || a === undefined ? (b ?? null) : a + (b ?? 0)
 }
