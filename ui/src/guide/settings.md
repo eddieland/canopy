@@ -37,7 +37,8 @@ down: CI builds that fetch dependencies will likely fail." Workers, reviews, and
 off sending a resume after a failure the notice explains. This is `canopy notice TEXT --for DURATION`.
 
 Pick how long it lasts, **1 hour**, **4 hours**, or **1 day**, and press **Set notice**. It lapses on its own, and
-setting another replaces it. While it's in force, a banner above every page shows it, with **Clear** to end it early.
+setting another replaces it. While it's in force, a banner above every page shows it, with **Edit**, **Renew**, and
+**Clear**: see [the banner](overview#the-header) for what each does.
 A run already going keeps the prompt it started with, so a notice reaches only the runs after it. The CLI can set one
 for up to a week, for outages with ambitions.
 
