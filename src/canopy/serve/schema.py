@@ -2067,6 +2067,8 @@ class ReviewSummary(_Model):
     """When it ended; None while it runs."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
+    persona: str | None = None
+    """The persona it ran in (DESIGN §31); None for a review from before canopy recorded it."""
     news: bool = False
     """Whether it has a result for the operator to read: it ended with a verdict that found something, or with any
     verdict when they asked for it. A clean review the loop started on its own has none."""
