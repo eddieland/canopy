@@ -1,5 +1,6 @@
 """Helpers the web UI's tests share: a browser of the server, signed in or not (DESIGN §22)."""
 
+import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 from pathlib import Path
 
 import httpx2
@@ -23,6 +24,13 @@ DEFAULT_CAPACITY = Capacity(workers=2, reviews=1, chores=1)
 def at(minutes: int) -> str:
     """A time of the mock journal's, `minutes` after it starts, as the API sends it."""
     return serve_mock.at(minutes).replace(".000Z", "Z")
+
+
+def free_port() -> int:
+    """A port no one is listening on now, for a server a test starts on a port it names."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
 
 
 def client(ui_dir: Path | None, backend: Backend, *, key: str | None = None, **options: object) -> TestClient:
