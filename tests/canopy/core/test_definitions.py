@@ -34,8 +34,8 @@ def test_the_snapshot_holds_the_bundled_agents_skills_and_plugins(tmp_path: Path
     for skill in resources.skills_dir().iterdir():
         assert (snapshot / "skills" / skill.name / "SKILL.md").read_text() == (skill / "SKILL.md").read_text()
     # The clock, which every run that loads the snapshot loads (DESIGN §33).
-    clock = resources.plugins_dir() / "canopy-clock.js"
-    assert (snapshot / "plugins" / "canopy-clock.js").read_text() == clock.read_text()
+    clock = resources.plugins_dir() / "canopy.js"
+    assert (snapshot / "plugins" / "canopy.js").read_text() == clock.read_text()
     assert "canopy-worker" in runtime_definitions.agent_names()
     assert "canopy-overseer" in runtime_definitions.agent_names()
 
@@ -44,7 +44,7 @@ def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path)
     # So the runtime installs nothing into it, and no run waits on the registry for that (DESIGN §33).
     snapshot = definitions.ensure(tmp_path)
     found = [snapshot, *snapshot.rglob("*")]
-    assert {p.relative_to(snapshot).as_posix() for p in found} >= {".", "plugins", "plugins/canopy-clock.js"}
+    assert {p.relative_to(snapshot).as_posix() for p in found} >= {".", "plugins", "plugins/canopy.js"}
     assert [p for p in found if p.lstat().st_mode & 0o222] == []
     assert all(p.lstat().st_mode & stat.S_IRUSR for p in found)
     # Still the operator's alone, as canopy checks before loading one.
@@ -55,12 +55,12 @@ def test_the_snapshots_digest_changes_with_its_plugins(tmp_path: Path) -> None:
     before = definitions.digest()
     plugins = tmp_path / "plugins"
     shutil.copytree(resources.plugins_dir(), plugins)
-    with (plugins / "canopy-clock.js").open("a") as f:
+    with (plugins / "canopy.js").open("a") as f:
         f.write("// changed\n")
     with mock.patch.object(resources, "plugins_dir", autospec=True, return_value=plugins):
         changed = definitions.ensure(tmp_path / "state")
     assert changed.name != before
-    assert (changed / "plugins" / "canopy-clock.js").read_text().endswith("// changed\n")
+    assert (changed / "plugins" / "canopy.js").read_text().endswith("// changed\n")
 
 
 @pytest.mark.parametrize("name", runtime_definitions.agent_names())

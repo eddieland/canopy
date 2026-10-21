@@ -22,8 +22,8 @@ def test_the_bundled_files_are_the_agents_skills_and_plugins_by_their_place_in_a
     for skill in resources.skills_dir().iterdir():
         assert files[f"skills/{skill.name}/SKILL.md"] == (skill / "SKILL.md").read_bytes()
     # OpenCode loads a config directory's `plugins/*.js` (DESIGN §33).
-    assert files["plugins/canopy-clock.js"] == (resources.plugins_dir() / "canopy-clock.js").read_bytes()
-    assert [rel for rel in files if rel.startswith("plugins/")] == ["plugins/canopy-clock.js"]
+    assert files["plugins/canopy.js"] == (resources.plugins_dir() / "canopy.js").read_bytes()
+    assert [rel for rel in files if rel.startswith("plugins/")] == ["plugins/canopy.js"]
     assert agents.WORKER in definitions.agent_names()
     assert agents.OVERSEER in definitions.agent_names()
 

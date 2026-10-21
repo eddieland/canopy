@@ -66,9 +66,10 @@ real use, `MEASUREMENTS.md` records how many `timeout` runs had pushed after a w
 
 Status: in progress. Built against the fakes on 2026-10-21, at the operator's word that day, ahead of Stage 0's
 measure pass and the go-ahead the Accept asks for: `procs` gives `CANOPY_DEADLINE` to every process it starts with a
-timeout and takes it from every other, the clock ships in the snapshot as `plugins/canopy-clock.js` (tested under
-Node's test runner from `make test`), the snapshot is unwritable once written, and every prompt, the overseer's body,
-and a chore's run section say what a `[canopy]` line asks. The open questions took the conservative answer: a worker
+timeout and takes it from every other, the clock ships in the snapshot as the first job of canopy's one plugin,
+`plugins/canopy.js`, which later jobs join (tested under Node's test runner from `make test`), the snapshot is
+unwritable once written, and every prompt, the overseer's body, and a chore's run section say what a `[canopy]` line
+asks. The open questions took the conservative answer: a worker
 or planner that winds down reports `failed`, its summary naming what remains, with no status of its own; the overseer
 is warned as every agent is; and the wait on a repository's `.opencode/` install is left to the live check, now
 SCENARIOS S61. Designed 2026-10-20 (DESIGN §33, beside §13's agent runtime), after Stage 0's source read (2026-10-19,

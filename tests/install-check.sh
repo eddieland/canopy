@@ -153,8 +153,8 @@ agent="$workspace/.canopy/chore-agents/memory-tickets/agents/canopy-memory-ticke
 # from this checkout.
 state="$workspace/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
-# With the clock plugin beside the definitions, and nothing in it the operator can write (DESIGN §33).
-ls "$state"/runtime/*/plugins/canopy-clock.js >/dev/null || fail "no clock plugin in the snapshot in $state/runtime"
+# With canopy's plugin beside the definitions, and nothing in it the operator can write (DESIGN §33).
+ls "$state"/runtime/*/plugins/canopy.js >/dev/null || fail "no canopy plugin in the snapshot in $state/runtime"
 [ -z "$(find "$state"/runtime/*/ -perm -u+w)" ] || fail "the snapshot in $state/runtime is writable"
 "$UV_TOOL_DIR/canopy/bin/python" -c '
 import sys

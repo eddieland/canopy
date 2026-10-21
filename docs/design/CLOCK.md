@@ -23,9 +23,12 @@ timeout gets none, not even one its parent had. The variable reaches a sandboxed
 
 ### The plugin
 
-canopy ships one OpenCode plugin in the snapshot, beside its definitions (§13, D040), so every run that loads canopy's
-definitions loads it, and the snapshot's digest splits runs into before and after it. It is plain JavaScript with no
-imports, so it loads with no network, inside the sandbox too.
+canopy ships one OpenCode plugin, `canopy.js`, in the snapshot, beside its definitions (§13, D040), so every run that
+loads canopy's definitions loads it, and the snapshot's digest splits runs into before and after it. It is plain
+JavaScript with no imports, so it loads with no network, inside the sandbox too. It holds each job canopy asks of the
+agent process, the clock its first: each job reads only what the harness hands it for that job, and its hooks run in a
+try of their own, so one that throws fails neither the call nor the jobs after it. A later job joins this file rather
+than shipping a plugin of its own.
 
 After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
 the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's

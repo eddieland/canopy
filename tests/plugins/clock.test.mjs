@@ -1,4 +1,5 @@
-// The clock plugin canopy ships for its agent runs (DESIGN §33), under Node's own test runner: `make test-plugin`.
+// The clock, the first job of the plugin canopy ships for its agent runs (DESIGN §33), under Node's own test runner:
+// `make test-plugin`.
 // It is driven as the agent runtime drives it: loaded with the run's environment, then its hook called after each tool
 // call with the call's input and its result, which the hook changes in place.
 
@@ -8,8 +9,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy-clock.js");
-const { CanopyClock, ...others } = await import(pathToFileURL(plugin).href);
+const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy.js");
+const { Canopy, ...others } = await import(pathToFileURL(plugin).href);
 
 /** The time the run's clock starts at in these tests, in milliseconds. */
 const START = 1_800_000_000_000;
@@ -30,7 +31,7 @@ afterEach(() => {
 /** Load the plugin for a run of `minutes`, its deadline that far from now. */
 async function load(minutes) {
     process.env.CANOPY_DEADLINE = String(START / 1000 + minutes * 60);
-    return CanopyClock({});
+    return Canopy({});
 }
 
 /** Move the clock to `seconds` after the run's start. */
@@ -54,7 +55,7 @@ async function after(hooks, output, session = "ses_1") {
 }
 
 test("it exports one plugin, since the runtime calls every export as one", () => {
-    assert.equal(typeof CanopyClock, "function");
+    assert.equal(typeof Canopy, "function");
     assert.deepEqual(Object.keys(others), []);
 });
 
@@ -142,6 +143,6 @@ test("nothing without the variable, or with one that is not a time", async () =>
         } else {
             process.env.CANOPY_DEADLINE = value;
         }
-        assert.deepEqual(await CanopyClock({}), {}, `CANOPY_DEADLINE=${value}`);
+        assert.deepEqual(await Canopy({}), {}, `CANOPY_DEADLINE=${value}`);
     }
 });
