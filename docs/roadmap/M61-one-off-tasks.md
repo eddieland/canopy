@@ -7,9 +7,10 @@ points the same day: a task runs in a worktree and may push a branch; the next t
 overseer; it may open a draft PR; and it may file tickets with no queue label.
 
 - **Stage 1, a task runs.** `canopy task submit TEXT` (`-` reads stdin, `--repo` names the repository, required when
-  the workspace has several), `canopy task list`, and `canopy show task:N`; refused inside a tick or any run
-  (`inside_run`). A `tasks` table (text, repository, submitted, stopped) and a `task_runs` table of their own, rather
-  than `runs`, whose ticket and tick a task has neither; `task:N` joins the subjects `conversation.parse_ref` knows.
+  the workspace has several, and `--project` the tracker project its tickets go in, none by default), `canopy task
+  list`, and `canopy show task:N`; refused inside a tick or any run (`inside_run`). A `tasks` table (text, repository,
+  project, submitted, stopped) and a `task_runs` table of their own, rather than `runs`, whose ticket and tick a task
+  has neither; `task:N` joins the subjects `conversation.parse_ref` knows.
   Reconcile closes a task run whose process died, as it closes a worker's, and returns its slot. Spend and health
   count task runs as a kind of their own, and a task run's report and question are messages that name their run. The
   tick starts queued tasks after reconcile and before the overseer, oldest first, under the dispatch lock: one run
@@ -25,11 +26,15 @@ overseer; it may open a draft PR; and it may file tickets with no queue label.
 - **Stage 2, the conversation.** `canopy reply task:N` queues the next run, which continues the branch, with the
   operator's messages as instructions and earlier summaries as data, and ends the loop's wait. A `blocked` run's
   question is a worker message, and raises `awaiting_reply` until a reply. A run's end is a `task.ended` event, in a
-  `tasks` group of its own (§20), with its summary, its question when `blocked`, its branch, and its PR.
+  `tasks` group of its own (§20), with its summary, its question when `blocked`, its branch, and its PR; no sink takes
+  the group unless the operator lists it, and the `awaiting_reply` item names the task, not the question.
 - **Stage 3, what a task leaves.** The report: `.canopy-task-report.md` at the slot's root, excluded from git, copied
   to `<state_dir>/tasks/<N>/<run>.md` before the slot is returned, as plans are (§25), shown by `canopy show task:N`,
-  and copied into the next run's slot as a plan is. Tickets: the result's `created`, at most `policy.max_follow_ups`,
-  recorded against the task, each key's text checked only (D003), and named in `task.ended`.
+  and copied into the next run's slot as a plan is. Tickets: the prompt lets the worker file them only with
+  `--project`, and only there. The result's `created`, at most `policy.max_follow_ups`, is recorded against the task,
+  each key's text checked only (D003), and named in `task.ended`. A key outside the project, as `follow_ups` reads a
+  key's project, or any key from a task with no project, is not recorded and raises `task_ticket_unrecorded`, as
+  `follow_up_unrecorded` does for a ticket.
 - **Later, not built here.** Tasks in the web UI; a task across several repositories; promoting a task to a ticket.
 - **TRUST_MODEL**, in Stage 1's PR: T1 (a task's text and replies are the operator's, through the operator's channels
   only; a report is data), T3 (`max_tasks`, one run per task, no retry), T6 (a task's worker is the private worker,
@@ -39,10 +44,11 @@ overseer; it may open a draft PR; and it may file tickets with no queue label.
   held by `max_tasks` and by `max_workers` and started by the tick after; its worker's prompt carries the text; a
   pushed branch recorded, an unpushed one `unpushed`; the slot returned; stop of a running and of a queued task; a
   reply's run continuing the branch; `awaiting_reply` raised and cleared; the report kept and shown; `created` keys
-  recorded and capped.
+  recorded and capped; a key outside the project, or from a task with none, unrecorded and raising its item; no
+  journal row a task writes names a ticket; `task.ended` reaching only a sink that lists `tasks`.
 
-Accept: on the operator's workspace, an exploring task that pushes a branch and opens a draft PR, and a planning task
-that files two unlabeled tickets and leaves a report; each shown by `canopy show task:N`, and neither touching any
-ticket.
+Accept: on the operator's workspace, an exploring task that pushes a branch and opens a draft PR, and a planning task,
+submitted with `--project`, that files two unlabeled tickets there and leaves a report; each shown by
+`canopy show task:N`, and neither touching any existing ticket.
 
 Status: not started. Designed 2026-10-21 (DESIGN §36).

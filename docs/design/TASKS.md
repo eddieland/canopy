@@ -43,9 +43,12 @@ pushes nothing, and that is not a failure.
 - It may open one PR for its branch, a draft by its prompt. canopy never drives it: no `resume`, no CI fix, no review
   reply. It is the operator's PR like any other, so it is reviewed only when `review.query` or a request names it
   (§21), which is one way to give it its pass.
-- It may file tickets where the operator's text says, with no queue label, as follow-ups are filed (§18), at most
-  `policy.max_follow_ups` per run. They authorize nothing; canopy records their keys against the task, checking only
-  their text (D003), and the operator labels or starts the ones worth working.
+- It may file tickets only when its submission names a tracker project, and only in that project, with no queue label,
+  as follow-ups are filed (§18), at most `policy.max_follow_ups` per run. They authorize nothing; canopy records their
+  keys against the task, checking only their text (D003), and the operator labels or starts the ones worth working. A
+  reported key outside the named project, as far as its text shows, or any key from a task that names none, is not
+  recorded and raises an attention item, so a steered worker's ticket elsewhere is not silent. One it files and never
+  reports is T6's residual for follow-ups, unchanged.
 - It may leave a report, a markdown file at the slot's root, excluded from git. canopy keeps it as it keeps a plan
   (§25): an operator-only file in the state directory, copied out before the slot is returned, never read through a
   link, never sent anywhere. The next run gets a copy, as a worker gets its plan. The result line's summary stays short;
@@ -60,18 +63,22 @@ Result contract, the last line of its text (§13), validated (D026); anything el
 ### The conversation
 
 A reply to a task (§22) queues its next run, which continues its branch, or starts one if none was pushed. A `blocked`
-run's question raises `awaiting_reply` for the task (§14) until the operator replies. Stopping a task ends its run as
-`canopy stop` ends a ticket's, and drops what was queued; it is never deleted, so its runs, report, and spend stay to
-read. Each run that ends is a `task.ended` event (§20) with its summary, its question when `blocked`, and its branch and
-PR, never its report.
+run's question raises `awaiting_reply` for the task (§14) until the operator replies; the item names the task, not the
+question, which the operator reads in canopy. Stopping a task ends its run as `canopy stop` ends a ticket's, and drops
+what was queued; it is never deleted, so its runs, report, and spend stay to read.
+
+Each run that ends is a `task.ended` event (§20) with its summary, its question when `blocked`, and its branch and PR,
+never its report. Its group, `tasks`, reaches only the sinks the operator lists it for, as `runs` does: a task's work is
+private, and a sink's audience may not be.
 
 ### Trust model changes
 
 The PR that builds it proposes them: T1 (a task's text and replies are the operator's, written only through the
 operator's channels; its reports are data), T3 (`capacity.max_tasks`, one run per task, one run per operator word),
 and T6 (a task's worker is the private worker, which may also open a PR for its own branch and file unlabeled tickets
-where its text says; the PR's draft state is the prompt's rule, not a guard, and, as on a private ticket, only its
-create tool writes to the tracker, which on GitHub also edits issues).
+in the project its submission names; the PR's draft state and the project are the prompt's rules, a ticket reported
+outside the project is caught after the run, and, as on a private ticket, only its create tool writes to the tracker,
+which on GitHub also edits issues; `task.ended` reaches only sinks that list its group).
 
 ### Open
 
