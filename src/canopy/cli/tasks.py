@@ -45,7 +45,7 @@ def task_group() -> None:
 @click.option(
     "--project",
     metavar="KEY",
-    help="The tracker project the tickets it may file go in, as a key's prefix: PROJ. None by default.",
+    help="A tracker project, as a key's prefix: PROJ. Recorded for a later stage; this one files no ticket.",
 )
 @click.pass_context
 def cmd_task_submit(click_ctx: click.Context, text: str, repo: str | None, project: str | None) -> int:
