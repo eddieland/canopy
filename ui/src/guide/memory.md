@@ -70,9 +70,9 @@ memory in use never share a label, so you never mistake one for the other.
   by review date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run
   is served from your lessons, or would be served at use while recording.
 - **Ticket notes** lists the tickets with notes in force, one row each with its title, how many notes it has, and how
-  many a run relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has thousands, so the
-  page reads a ticket's notes only once you ask. It flips between the newest note first and the oldest, and on a wide
-  screen it sits beside the other two.
+  many a run cited as relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has
+  thousands, so the page reads a ticket's notes only once you ask. It flips between the newest note first and the
+  oldest, and on a wide screen it sits beside the other two.
 
 Above the panels, a filter field narrows all three as you type: a word in a memory's key, its text, its ticket, or its
 repository, or in a ticket's key or title. The repository picker beside it keeps the proposals and lessons for the
@@ -98,8 +98,10 @@ for a proposal waiting on you (in the Proposals panel, where every row is, the t
 amber in its last two days), `superseded` or `invalid` once it's out of force, and for a lesson that needs you, `due`
 once its review date has come or `wrong` once a run reported it wrong, so a glance down the left edge finds them. Hover
 over the word for the reason. Then its ref, as `memory:42`, with a button on hover that copies it, since that's what
-Forget and the CLI ask for; its ticket, on the proposals; its repository; its key; how many runs relied on it, once any
-has; and how long ago it was written.
+Forget and the CLI ask for; its ticket, on the proposals; its repository; its key; how many runs read it and how many
+cited it, `read 6 · cited 1`, once any has, with when each last did on hover; and how long ago it was written. A read
+is a prompt it was in, so the reads tell you how far a note spread. A citation is a worker saying it relied on it, which
+a worker can forget to say, so a low count proves less than it seems to.
 
 Under that, what it says, and one line of where it came from: the run that wrote it, with the commit it was written
 against on hover; for a proposal, how its run ended, whether its ticket is done, and `private` if its run worked a
@@ -131,7 +133,7 @@ reads. A run started while recording read `none, recording only`, which isn't th
 Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported says
 `this run found it wrong`.
 
-Going the other way, a memory names the latest runs that relied on it, `used in run:40, run:38`, each opening that
+Going the other way, a memory names the latest runs that cited it, `cited in run:40, run:38`, each opening that
 run's page, so you can check what a note actually steered before you trust it. Past five, or for runs from before
 canopy kept track, it counts the rest as `and 3 more`.
 
@@ -172,8 +174,9 @@ In your shell, `canopy memory promote ID` takes `--text` for your words and `--r
 ## Keeping lessons honest
 
 A lesson never lapses on its own: it's your word, and only you retire it. Each comes up for review 90 days after you
-promoted it or a run last used it. Then you renew it, with **Renew** under it on the memory page or `canopy memory renew
-ID`, move it into a repository's AGENTS.md or a skill through a ticket and a PR you merge, or forget it. Renewing also
+promoted it or a run last cited it. A run that only read it doesn't count, or a lesson every run is served would never
+come up at all. Then you renew it, with **Renew** under it on the memory page or `canopy memory renew ID`, move it into
+a repository's AGENTS.md or a skill through a ticket and a PR you merge, or forget it. Renewing also
 clears a run's report that it's wrong. Renew stays quiet on a lesson that isn't due, and stands out once one is due or
 reported wrong. A lesson that needs nothing shows its buttons only when you point at its row, so a long list isn't a
 wall of buttons.

@@ -338,6 +338,8 @@ describe('outcomes', () => {
             run_id: null,
             head: null,
             created_at: '2026-10-08T12:00:00Z',
+            read_count: 0,
+            last_read_at: null,
             use_count: 0,
             used_by: [] as number[],
             last_used_at: null,

@@ -1435,12 +1435,16 @@ class MemoryEntry(_Model):
     """The commit the run's branch was at when its worker ended, `repo@commit` each for a joint run."""
     created_at: datetime
     """When it was written."""
+    read_count: int
+    """How many runs' prompts carried it, whether or not they cited it."""
+    last_read_at: datetime | None
+    """When the latest of those runs started; None if no run has read it."""
     use_count: int
-    """How many runs said they relied on it."""
+    """How many runs cited it as relied on, in their result's `memory_used`, which a worker may leave unsaid."""
     last_used_at: datetime | None
-    """When a run last said so; None if none has: read by no run."""
+    """When a run last cited it; None if none has."""
     used_by: list[int] = []
-    """The latest runs that said they relied on it, newest first, at most five. A run from before canopy named them
+    """The latest runs that cited it as relied on, newest first, at most five. A run from before canopy named them
     counts in `use_count` but is not here."""
     review_at: datetime | None
     """A lesson's next review."""
@@ -1502,7 +1506,7 @@ class TicketNotes(_Model):
     count: int
     """How many of its notes are in force."""
     used: int
-    """How many of those a run said it relied on."""
+    """How many of those a run cited as relied on, in its `memory_used`."""
     latest_at: datetime
     """When the newest of them was written."""
     title: str | None

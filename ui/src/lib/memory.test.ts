@@ -13,9 +13,10 @@ import {
     lessonChars,
     memorySegments,
     readNothingText,
+    readsText,
+    readsTitle,
     repoChoices,
     ticketNotesUsedText,
-    usedText,
     visibleText,
 } from './memory'
 
@@ -54,11 +55,33 @@ describe('visibleText', () => {
     })
 })
 
-describe('usedText', () => {
-    it('says a memory no run used was read by none, and one used how often', () => {
-        expect(usedText({ use_count: 0, last_used_at: null })).toBeNull()
-        expect(usedText({ use_count: 1, last_used_at: '2026-10-08T11:00:00Z' })).toBe('used by 1 run')
-        expect(usedText({ use_count: 3, last_used_at: '2026-10-08T11:00:00Z' })).toBe('used by 3 runs')
+describe('readsText', () => {
+    it('counts the runs that read a memory apart from those that cited it, and says nothing while none has', () => {
+        expect(readsText({ read_count: 0, use_count: 0 })).toBeNull()
+        expect(readsText({ read_count: 1, use_count: 0 })).toBe('read 1')
+        expect(readsText({ read_count: 6, use_count: 1 })).toBe('read 6 · cited 1')
+    })
+})
+
+// A time as `HH:MM`, so `readsTitle` reads the same in any time zone.
+function hoursMinutes(at: string): string {
+    return at.slice(11, 16)
+}
+
+describe('readsTitle', () => {
+    it('says each count in full with its latest time, and nothing while no run has read it', () => {
+        const none = { read_count: 0, last_read_at: null, use_count: 0, last_used_at: null }
+        expect(readsTitle(none, hoursMinutes)).toBeUndefined()
+        expect(readsTitle({ ...none, read_count: 1, last_read_at: '2026-10-08T11:00:00Z' }, hoursMinutes)).toBe(
+            'read by 1 run, last at 11:00',
+        )
+        const both = {
+            read_count: 6,
+            last_read_at: '2026-10-08T17:08:00Z',
+            use_count: 1,
+            last_used_at: '2026-10-08T01:37:00Z',
+        }
+        expect(readsTitle(both, hoursMinutes)).toBe('read by 6 runs, last at 17:08; cited by 1, last at 01:37')
     })
 })
 
@@ -70,9 +93,9 @@ describe('readNothingText', () => {
 })
 
 describe('ticketNotesUsedText', () => {
-    it('says how many of a ticket’s notes in force a run relied on, or that none was read', () => {
+    it('says how many of a ticket’s notes in force a run cited, or nothing while none was', () => {
         expect(ticketNotesUsedText({ count: 4, used: 0 })).toBeNull()
-        expect(ticketNotesUsedText({ count: 4, used: 3 })).toBe('3 of 4 used by runs')
+        expect(ticketNotesUsedText({ count: 4, used: 3 })).toBe('3 of 4 cited by runs')
     })
 })
 

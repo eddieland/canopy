@@ -10,6 +10,7 @@ run's prompt could be served.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, assert_never
 
 import click
@@ -63,7 +64,8 @@ def cmd_list(
     ctx = open_context(click_ctx)
     if as_json:
         found = memory.notes(ctx.conn, key, every=every)
-        click.echo(report_json({"modes": _modes(ctx), "notes": [_note_json(n) for n in found]}))
+        seen = memory.reads(ctx.conn, [n.id for n in found])
+        click.echo(report_json({"modes": _modes(ctx), "notes": [_note_json(n, _read(seen, n)) for n in found]}))
         return 0
     _print_modes(ctx)
     if run_id is not None:
@@ -75,12 +77,13 @@ def cmd_list(
     found = memory.notes(ctx.conn, key, every=every)
     if not found:
         click.echo(f"\nNo notes{f' for {key}' if key else ''}.")
+    seen = memory.reads(ctx.conn, [n.id for n in found])
     shown: str | None = None
     for note in found:
         if note.ticket_key != shown:
             shown = note.ticket_key
             click.echo(f"\n{shown}:")
-        click.echo(_line(note))
+        click.echo(_line(note, _read(seen, note)))
     return 0
 
 
@@ -209,13 +212,16 @@ def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
 @click.option("--json", "as_json", is_flag=True, help="Print the modes and the lessons as one JSON object instead.")
 @click.pass_context
 def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_json: bool) -> int:
-    """List the lessons you promoted, each with its review date, its use, and any run's report that it is wrong."""
+    """List the lessons you promoted, each with its review date, its reads and citations, and any report it is wrong."""
     if as_json and digest:
         raise click.UsageError("--json lists lessons: give it without --digest")
     ctx = open_context(click_ctx)
     if as_json:
         lessons = [m for m in memory.active_lessons(ctx.conn) if repo is None or m.repo in (None, repo)]
-        click.echo(report_json({"modes": _modes(ctx), "lessons": [_lesson_json(ctx, m) for m in lessons]}))
+        seen = memory.reads(ctx.conn, [m.id for m in lessons])
+        click.echo(
+            report_json({"modes": _modes(ctx), "lessons": [_lesson_json(ctx, m, _read(seen, m)) for m in lessons]}),
+        )
         return 0
     _print_modes(ctx)
     if digest:
@@ -226,12 +232,13 @@ def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_
     lessons = [m for m in memory.active_lessons(ctx.conn) if repo is None or m.repo in (None, repo)]
     if not lessons:
         click.echo("\nNo lessons.")
+    seen = memory.reads(ctx.conn, [m.id for m in lessons])
     for m in lessons:
         where = f" for {m.repo}" if m.repo else ""
         wrong = f"; run {m.wrong_run_id} reported it wrong at {m.wrong_at}" if m.wrong_at is not None else ""
         click.echo(
             f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; review at {m.review_at}; "
-            f"{_use(m)}{wrong}\n{quoted(m.body or '', _INDENT)}",
+            f"{_use(m, _read(seen, m))}{wrong}\n{quoted(m.body or '', _INDENT)}",
         )
     return 0
 
@@ -365,13 +372,14 @@ def cmd_history(click_ctx: click.Context, memory_id: int) -> int:
     count = f"{len(versions)} version{'s' if len(versions) != 1 else ''}"
     of = f" of {newest.ticket_key}" if newest.ticket_key is not None else ""
     click.echo(f"{_kind(newest.scope)} `{newest.key}`{of}: {count}, newest first.")
+    seen = memory.reads(ctx.conn, [m.id for m in versions])
     for number, m in zip(range(len(versions), 0, -1), versions, strict=True):
         status = m.status if m.why is None else f"{m.status}, {m.why}"
         where = f" for {m.repo}" if m.repo else ""
         made = _made(ctx, m) if m.scope is MemoryScope.LESSON else f"by run {m.run_id} at {m.created_at}"
         text = quoted(m.body if m.body is not None else "(text deleted)", _INDENT)
         mark = "  <-" if m.id == memory_id and len(versions) > 1 else ""
-        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m)}{mark}\n{text}")
+        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m, _read(seen, m))}{mark}\n{text}")
     return 0
 
 
@@ -485,8 +493,11 @@ def _modes(ctx: Context) -> dict[str, str]:
     return {"ticket_notes": settings.ticket_notes, "proposals": settings.proposals}
 
 
-def _note_json(note: records.Memory) -> dict[str, Any]:
-    """A ticket note as `memory list --json` prints it: `run_id` null for one the operator wrote."""
+def _note_json(note: records.Memory, read: memory.Reads) -> dict[str, Any]:
+    """A ticket note as `memory list --json` prints it: `run_id` null for one the operator wrote.
+
+    `read_count` counts the runs whose prompts carried it; `use_count` only the runs that cited it in `memory_used`.
+    """
     return {
         "id": note.id,
         "ticket": note.ticket_key,
@@ -495,6 +506,8 @@ def _note_json(note: records.Memory) -> dict[str, Any]:
         "why": note.why,
         "run_id": note.run_id,
         "created_at": note.created_at,
+        "read_count": read.count,
+        "last_read_at": read.last_at,
         "use_count": note.use_count,
         "last_used_at": note.last_used_at,
         "text": _text(note),
@@ -520,8 +533,11 @@ def _proposal_json(ctx: Context, p: records.Memory) -> dict[str, Any]:
     }
 
 
-def _lesson_json(ctx: Context, lesson: records.Memory) -> dict[str, Any]:
-    """A lesson as `memory lessons --json` prints it, with what it was made from, as `_made` says it."""
+def _lesson_json(ctx: Context, lesson: records.Memory, read: memory.Reads) -> dict[str, Any]:
+    """A lesson as `memory lessons --json` prints it, with what it was made from, as `_made` says it.
+
+    Its reads and citations are counted as a note's are (`_note_json`).
+    """
     source = memory.origin(ctx.conn, lesson)
     return {
         "id": lesson.id,
@@ -533,6 +549,8 @@ def _lesson_json(ctx: Context, lesson: records.Memory) -> dict[str, Any]:
         if source is None
         else {"scope": source.scope, "id": source.id, "ticket": source.ticket_key, "run_id": source.run_id},
         "review_at": lesson.review_at,
+        "read_count": read.count,
+        "last_read_at": read.last_at,
         "use_count": lesson.use_count,
         "last_used_at": lesson.last_used_at,
         "wrong_at": lesson.wrong_at,
@@ -546,18 +564,30 @@ def _text(entry: records.Memory) -> str | None:
     return quoted(entry.body, "") if entry.body is not None else None
 
 
-def _line(note: records.Memory) -> str:
+def _line(note: records.Memory, read: memory.Reads) -> str:
     by = f"run {note.run_id}" if note.run_id is not None else "the operator"
     status = note.status if note.why is None else f"{note.status}, {note.why}"
     text = quoted(note.body if note.body is not None else "(text deleted)", _INDENT)
-    return f"  {note.id}  `{note.key}`  {status}; by {by} at {note.created_at}; {_use(note)}\n{text}"
+    return f"  {note.id}  `{note.key}`  {status}; by {by} at {note.created_at}; {_use(note, read)}\n{text}"
 
 
-def _use(entry: records.Memory) -> str:
-    if entry.use_count == 0:
+def _read(seen: Mapping[int, memory.Reads], entry: records.Memory) -> memory.Reads:
+    """What `memory.reads` found of `entry`, or no reads if it found none."""
+    return seen.get(entry.id, memory.Reads())
+
+
+def _use(entry: records.Memory, read: memory.Reads) -> str:
+    """How many runs read a memory and how many cited it, each with the latest.
+
+    A read is a prompt the memory was in; a citation is a run's `memory_used`, which a worker may leave unsaid. So the
+    reads say how far a memory reached, and the citations only what workers said they relied on.
+    """
+    if read.count == 0 and entry.use_count == 0:
         return "read by no run"
-    runs = f"{entry.use_count} run{'s' if entry.use_count != 1 else ''}"
-    return f"used by {runs}, last at {entry.last_used_at}"
+    runs = f"{read.count} run{'s' if read.count != 1 else ''}"
+    said = "read by no run" if read.count == 0 else f"read by {runs} (last at {read.last_at})"
+    cited = "cited by none" if entry.use_count == 0 else f"cited by {entry.use_count} (last at {entry.last_used_at})"
+    return f"{said}, {cited}"
 
 
 def _print_digest(ctx: Context, key: str) -> None:
@@ -578,14 +608,15 @@ def _print_run(ctx: Context, run_id: int) -> None:
         return
     click.echo(f"\nRun {run_id} ({run['kind']} of {run['ticket_key']}), rendered with {_rendered(rendered)}.")
     wrote = memory.written_by(ctx.conn, run_id)
+    read = memory.read_by(ctx.conn, run_id)
+    seen = memory.reads(ctx.conn, [m.id for m in (*wrote, *read)])
     click.echo("Wrote:" if wrote else "Wrote: none")
     for entry in wrote:
-        click.echo(_line(entry))
-    read = memory.read_by(ctx.conn, run_id)
+        click.echo(_line(entry, _read(seen, entry)))
     if read:
         click.echo("Read:")
         for entry in read:
-            click.echo(_line(entry))
+            click.echo(_line(entry, _read(seen, entry)))
     else:
         # A run rendered with no tier at use read nothing because nothing was served, not because nothing was there.
         served = MemoryMode.USE in (rendered.ticket_notes, rendered.proposals)
