@@ -163,8 +163,8 @@ better. A mirror's heredoc is the one place a comment's text goes (see "Mirrorin
 - `--repo`: a repository the run works in, one unit of the ticket. At least one on every dispatch, even in a workspace
   of one repository (see "Repositories and units").
 - `--slug`: for a ticket's first `implement` only, naming the branch every later dispatch continues,
-  `agent/<KEY>-<slug>`: two to five lowercase words from the ticket's title joined by hyphens, at most 40 characters,
-  such as `add-login-button`.
+  `<branch prefix><KEY>-<slug>`, the prefix being `trust.branch_prefix` in the state block: two to five lowercase words
+  from the ticket's title joined by hyphens, at most 40 characters, such as `add-login-button`.
 - `--reason`: for `resume` only, and required, repeated once per reason, never joined with commas: `ci` (failed
   checks), `review` (review feedback or a canopy review's findings), `reply` (an authorized reply or an operator
   message), `conflict` (a conflict with its base), `no_pr` (a pushed branch with no PR), `retarget` (its blocker
@@ -323,7 +323,7 @@ whose PR needs work comes before one that waits. The Action column is shorthand 
 | Phase | Live evidence | Action |
 |---|---|---|
 | `running` | a running worker exists for this key in the state block | `wait` |
-| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `plan` (see "Plans") |
+| `ready` | label present, not closed, no `<branch prefix><KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `plan` (see "Plans") |
 | `plan_proposed` | the ticket's newest plan waits on the operator (see "Plans") | `attention plan_review`, or `dispatch plan` |
 | `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume --reason no_pr` with context "open the PR" |
