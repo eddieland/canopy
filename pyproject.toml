@@ -189,6 +189,11 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+# pydantic resolves a model's annotations when its class is made, so what they name is imported for real (TC001): the
+# API's models in serve are built on schema.Model, and each feature's *_schema.py imports the shared ones it names.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["canopy.serve.schema.Model"]
+
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
@@ -253,6 +258,9 @@ banned-from = ["unittest.mock"]
 # are imported for real (TC001). A route's docstring is its description in the schema, and the errors it answers are
 # its decorator's `responses`, so Returns, Yields, and Raises sections would only repeat them there.
 "src/canopy/serve/api/*" = ["DOC201", "DOC402", "DOC501", "TC001"]
+# The API's models are pydantic's, built on schema.Model, which ruff cannot see is pydantic's from another module:
+# pydantic copies a field's mutable default for each instance (RUF012).
+"src/canopy/serve/*_schema.py" = ["RUF012"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

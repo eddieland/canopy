@@ -14,17 +14,9 @@ from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, ChoreName, ChoreRunId, RefusedError, chore_ref, not_found
-from canopy.serve.schema import (
-    ChoreDetail,
-    ChoreRunDetail,
-    ChoreSummary,
-    ChoreTried,
-    Dismissed,
-    DismissRequest,
-    Replied,
-    ReplyRequest,
-    Transcript,
-)
+from canopy.serve.chore_schema import ChoreDetail, ChoreRunDetail, ChoreSummary, ChoreTried, Dismissed, DismissRequest
+from canopy.serve.schema import Replied, ReplyRequest
+from canopy.serve.transcript_schema import Transcript
 
 TAG = "chores"
 router = APIRouter(tags=[TAG])

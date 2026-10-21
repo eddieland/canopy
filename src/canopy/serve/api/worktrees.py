@@ -9,7 +9,7 @@ from fastapi import APIRouter
 
 from canopy.serve import worktrees
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.schema import Pool
+from canopy.serve.worktree_schema import Pool
 
 TAG = "worktrees"
 router = APIRouter(tags=[TAG])

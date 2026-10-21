@@ -36,10 +36,7 @@ from canopy.core.items import fingerprint
 from canopy.core.vocab import ChoreRunStatus, ModelsRead, RunStatus, TickStatus
 from canopy.runtime import entries, transcript
 from canopy.serve import draft_views, memory_views
-from canopy.serve.schema import (
-    AgentPersona,
-    AttentionItem,
-    Capacity,
+from canopy.serve.chore_schema import (
     ChoreDetail,
     ChoreFinding,
     ChoreRun,
@@ -48,6 +45,11 @@ from canopy.serve.schema import (
     ChoreSpend,
     ChoreSpendWindow,
     ChoreSummary,
+)
+from canopy.serve.persona_schema import AgentPersona, PersonaChoice
+from canopy.serve.schema import (
+    AttentionItem,
+    Capacity,
     Comment,
     CostTotal,
     Decision,
@@ -61,15 +63,19 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
-    PersonaChoice,
-    RawOutput,
     Run,
     RunActivity,
     RunsSince,
     RunState,
-    SearchHit,
-    SearchResults,
     ServedModel,
+    StartStatus,
+    Tick,
+    TickDetail,
+    TicketSummary,
+    WorkerNotice,
+)
+from canopy.serve.search_schema import SearchHit, SearchResults
+from canopy.serve.spend_schema import (
     Spend,
     SpendBreakdown,
     SpendCosts,
@@ -82,12 +88,10 @@ from canopy.serve.schema import (
     SpendUnpriced,
     SpendWindow,
     SpendWoken,
-    StartStatus,
-    Tick,
-    TickDetail,
-    TicketDetail,
-    TicketForget,
-    TicketSummary,
+)
+from canopy.serve.ticket_schema import TicketDetail, TicketForget, Unit
+from canopy.serve.transcript_schema import (
+    RawOutput,
     Transcript,
     TranscriptEntry,
     TranscriptError,
@@ -96,8 +100,6 @@ from canopy.serve.schema import (
     TranscriptText,
     TranscriptTokens,
     TranscriptTool,
-    Unit,
-    WorkerNotice,
 )
 
 if TYPE_CHECKING:

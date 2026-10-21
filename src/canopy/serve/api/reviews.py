@@ -15,8 +15,7 @@ from canopy.infra import logs
 from canopy.serve import reviews
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
-from canopy.serve.schema import (
-    RawOutput,
+from canopy.serve.review_schema import (
     RequestedReview,
     ReviewDetail,
     ReviewDismissed,
@@ -24,8 +23,8 @@ from canopy.serve.schema import (
     ReviewSendRequest,
     ReviewSent,
     ReviewSummary,
-    Transcript,
 )
+from canopy.serve.transcript_schema import RawOutput, Transcript
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
