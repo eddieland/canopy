@@ -19,7 +19,7 @@ from canopy.chores import execute, history, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import db, definitions, prompts, workspace
+from canopy.core import db, definitions, prompts, run_models, workspace
 from canopy.core.config import Chore, load
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
@@ -901,9 +901,11 @@ def test_a_chore_run_records_what_it_cost(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
+    opencode_state: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """With OpenCode's JSON events, as the default `chore_cmd` asks for, a chore run records its session and cost."""
+    opencode_state.write_text(json.dumps({"sessions": {"ses_chore": [["anthropic", "claude-x", 0.25]]}}))
     with_events(canopy_env, "canopy-chore")
     # The tries after the run report what it did.
     with chore_reports(OK, ["echo", "read it"], session="ses_chore"):
@@ -918,6 +920,10 @@ def test_a_chore_run_records_what_it_cost(
         assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
         assert tools_of(conn, "chore_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
+        # Which models served it, read from its session as it ended (DESIGN §13).
+        assert [(m.model, m.replies) for m in run_models.of_run(conn, "chore_runs", run_id)] == [
+            ("anthropic/claude-x", 1),
+        ]
 
         capsys.readouterr()
         assert main(["show", "chore:build-health"]) == 0

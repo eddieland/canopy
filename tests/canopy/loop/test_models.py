@@ -1,15 +1,21 @@
-"""Which models served each agent run, read from its session after each live tick (DESIGN §13, Each agent's model)."""
+"""Which models served each agent run (DESIGN §13, Each agent's model): each live tick reads its overseer's session, and
+the wait after it reads the runs left unread."""
 
 import json
 import sqlite3
 from pathlib import Path
+from unittest import mock
 
-from canopy.core import run_models
+import pytest
+
+from canopy.core import pause, run_models
 from canopy.core.context import Context
+from canopy.core.vocab import ModelsRead
 from canopy.infra import logs
-from canopy.loop import models
-from tests.canopy.helpers import with_events
+from canopy.loop import models, repeat
+from tests.canopy.helpers import FakeTime, console, context, overseer_does, with_events
 from tests.canopy.scenario_helpers import Scenario
+from tests.conftest import CanopyEnv
 
 #: The fake agent's session id on every event it prints.
 SESSION = "ses_fake"
@@ -25,6 +31,20 @@ def exports(state: Path) -> list[tuple[list[str], str]]:
     log = state.with_name("opencode.jsonl")
     lines: list[str] = log.read_text().splitlines() if log.exists() else []
     return [(entry["argv"], entry["cwd"]) for entry in map(json.loads, lines)]
+
+
+def ended_ticks(conn: sqlite3.Connection, n: int) -> None:
+    """Record `n` live ticks that ended with sessions `ses_0` up, a day apart and older than any tick a test runs."""
+    for i in range(n):
+        conn.execute(
+            "INSERT INTO ticks (started_at, ended_at, dry_run, status, session_id) VALUES (?, ?, 0, 'ok', ?)",
+            (f"2026-10-{i + 10}T00:00:00.000Z", f"2026-10-{i + 10}T00:01:00.000Z", f"ses_{i}"),
+        )
+
+
+def exported(state: Path) -> list[str]:
+    """The sessions the fake `opencode` exported, in order."""
+    return [argv[1] for argv, _ in exports(state)]
 
 
 def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int]]:
@@ -71,44 +91,87 @@ def test_a_session_opencode_no_longer_has_is_missing_and_not_read_again(
     assert run_models.of_run(scenario.conn, "ticks", first.tick.id) == []
 
 
-def test_a_failing_opencode_ends_the_batch_and_never_the_tick(
-    scenario: Scenario,
+def test_a_tick_reads_its_own_overseer_and_no_run_left_unread(scenario: Scenario, opencode_state: Path) -> None:
+    ended_ticks(scenario.conn, 3)
+    with_events(scenario.env, "canopy-overseer")
+    scenario.tick()
+    # The wait after a tick reads the rest, not the tick.
+    assert exported(opencode_state) == [SESSION]
+
+
+def test_a_failing_opencode_never_fails_the_tick(scenario: Scenario, opencode_state: Path) -> None:
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: database is locked\n"}))
+    with_events(scenario.env, "canopy-overseer")
+    ticked = scenario.tick()
+    assert ticked.tick.status == "ok"
+    # Failed in canopy's words, not OpenCode's, and read again later.
+    assert reads(scenario.conn) == [
+        ("ticks", ticked.tick.id, "failed", "`opencode export --sanitize` exited 1", 1),
+    ]
+
+
+def test_the_backlog_reads_one_run_a_step_the_newest_first_until_none_is_due(
     opencode_state: Path,
     ctx: Context,
 ) -> None:
-    for i in range(3):
-        scenario.conn.execute(
-            "INSERT INTO ticks (started_at, ended_at, dry_run, status, session_id) VALUES (?, ?, 0, 'ok', ?)",
-            (f"2026-10-0{i + 1}T00:00:00.000Z", f"2026-10-0{i + 1}T00:01:00.000Z", f"ses_{i}"),
-        )
+    ended_ticks(ctx.conn, 3)
+    sessions(opencode_state, ses_2=[("anthropic", "claude-x", 0.1)])
+    time = FakeTime()
+    backlog = models.Backlog(time.clock, logs.for_tick(None))
+    assert backlog.step(ctx) is ModelsRead.FOUND
+    # Too soon after the last read: none.
+    assert backlog.step(ctx) is None
+    time.sleep(models.GAP_SECONDS)
+    assert backlog.step(ctx) is ModelsRead.MISSING
+    time.sleep(models.GAP_SECONDS)
+    assert backlog.step(ctx) is ModelsRead.MISSING
+    time.sleep(models.GAP_SECONDS)
+    assert backlog.step(ctx) is None  # none is due
+    assert exported(opencode_state) == ["ses_2", "ses_1", "ses_0"]
+    assert [(m.model, m.replies) for m in run_models.of_run(ctx.conn, "ticks", 3)] == [("anthropic/claude-x", 1)]
+
+    # Finding none due ends the reading for this wait; the wait after the next tick reads again.
+    ended_ticks(ctx.conn, 4)
+    time.sleep(models.GAP_SECONDS)
+    assert backlog.step(ctx) is None
+    backlog.ticked()
+    assert backlog.step(ctx) is ModelsRead.MISSING
+    assert exported(opencode_state)[-1] == "ses_3"
+
+
+def test_a_failed_read_ends_the_backlogs_reading_for_the_wait(opencode_state: Path, ctx: Context) -> None:
+    ended_ticks(ctx.conn, 2)
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: database is locked\n"}))
-    assert models.attribute(ctx, logs.for_tick(None)) == 1
-    [(table, run_id, status, error, attempts)] = reads(scenario.conn)
-    # The newest first, failed in canopy's words, not OpenCode's.
-    assert (table, run_id, status, error, attempts) == (
-        "ticks",
-        3,
-        "failed",
-        "`opencode export --sanitize` exited 1",
-        1,
-    )
-    with_events(scenario.env, "canopy-overseer")
-    # The tick's own overseer is due first, being newest, and fails the same; the tick still closes `ok`.
-    assert scenario.tick().tick.status == "ok"
-    assert reads(scenario.conn)[-1][2:] == ("failed", "`opencode export --sanitize` exited 1", 1)
+    time = FakeTime()
+    backlog = models.Backlog(time.clock, logs.for_tick(None))
+    assert backlog.step(ctx) is ModelsRead.FAILED
+    time.sleep(models.GAP_SECONDS)
+    assert backlog.step(ctx) is None
+    assert exported(opencode_state) == ["ses_1"]
+    # The next wait reads the run never read, before the failed one, which waits a day.
+    opencode_state.write_text("{}")
+    backlog.ticked()
+    assert backlog.step(ctx) is ModelsRead.MISSING
+    assert exported(opencode_state) == ["ses_1", "ses_0"]
 
 
-def test_a_tick_reads_at_most_a_few_sessions_the_newest_first(opencode_state: Path, ctx: Context) -> None:
-    for i in range(models.PER_TICK + 2):
-        ctx.conn.execute(
-            "INSERT INTO ticks (started_at, ended_at, dry_run, status, session_id) VALUES (?, ?, 0, 'ok', ?)",
-            (f"2026-10-{i + 10}T00:00:00.000Z", f"2026-10-{i + 10}T00:01:00.000Z", f"ses_{i}"),
-        )
-    sessions(opencode_state, ses_6=[("anthropic", "claude-x", 0.1)])
-    assert models.attribute(ctx, logs.for_tick(None)) == models.PER_TICK
-    assert [argv[1] for argv, _ in exports(opencode_state)] == ["ses_6", "ses_5", "ses_4", "ses_3", "ses_2"]
-    assert models.attribute(ctx, logs.for_tick(None)) == 2
-    assert models.attribute(ctx, logs.for_tick(None)) == 0
+def test_what_a_read_raises_ends_the_backlogs_reading_and_never_the_loop(opencode_state: Path, ctx: Context) -> None:
+    ended_ticks(ctx.conn, 2)
+    time = FakeTime()
+    backlog = models.Backlog(time.clock, logs.for_tick(None))
+    with mock.patch.object(run_models, "read", autospec=True, side_effect=RuntimeError("boom")):
+        assert backlog.step(ctx) is ModelsRead.FAILED
+    time.sleep(models.GAP_SECONDS)
+    assert backlog.step(ctx) is None
+
+
+def test_the_backlog_reads_nothing_while_the_loop_is_paused(opencode_state: Path, ctx: Context) -> None:
+    ended_ticks(ctx.conn, 1)
+    backlog = models.Backlog(FakeTime().clock, logs.for_tick(None))
+    pause.pause(ctx.conn, channel=pause.LOOP)
+    assert backlog.step(ctx) is None
+    pause.resume(ctx.conn)
+    assert backlog.step(ctx) is ModelsRead.MISSING
 
 
 def test_an_export_longer_than_a_pipe_holds_is_read_whole(opencode_state: Path, ctx: Context) -> None:
@@ -118,6 +181,33 @@ def test_an_export_longer_than_a_pipe_holds_is_read_whole(opencode_state: Path, 
     )
     # Far past the 64 KiB a pipe holds, which the fake, as OpenCode does, would cut it to.
     sessions(opencode_state, ses_big=[("anthropic", "claude-x", 0.5)] * 1000)
-    assert models.attribute(ctx, logs.for_tick(None)) == 1
+    assert models.Backlog(FakeTime().clock, logs.for_tick(None)).step(ctx) is ModelsRead.FOUND
     assert reads(ctx.conn) == [("ticks", 1, "found", None, 1)]
     assert [(m.model, m.replies) for m in run_models.of_run(ctx.conn, "ticks", 1)] == [("anthropic/claude-x", 1000)]
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_the_wait_between_live_ticks_reads_the_runs_left_unread(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    opencode_state: Path,
+    dry_run: bool,  # noqa: FBT001
+) -> None:
+    ended_ticks(canopy_env.journal(), 3)
+    ctx = context(canopy_env)
+    with overseer_does():
+        time = FakeTime()
+        term, _ = console()
+        repeat.run(
+            ctx,
+            dry_run=dry_run,
+            interval_minutes=1,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+    # A minute's wait reads them all, `GAP_SECONDS` apart; a dry run reads none.
+    assert exported(opencode_state) == ([] if dry_run else ["ses_2", "ses_1", "ses_0"])
