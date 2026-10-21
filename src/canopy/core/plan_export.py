@@ -287,10 +287,11 @@ def _is_name_of(run_id: int, file_name: str) -> bool:
     """Whether `file_name` is one an export could have given the plan of run `run_id`, now or in an earlier format.
 
     Returns:
-        True for `<run>.md`, and for `<run>-<status>.md`, the status in any case, with anything `name` adds after it.
+        True for `<run>.md`, and for `<run>-<status>.md`, the status lowercase or capitalized, with anything `name`
+        adds after it.
     """
-    statuses = "|".join(s.value for s in PlanStatus)
-    return re.fullmatch(rf"{run_id}(?:-(?i:{statuses})(?:-[a-z0-9]+)*)?\.md", file_name) is not None
+    statuses = "|".join(f"{s.value}|{s.value.capitalize()}" for s in PlanStatus)
+    return re.fullmatch(rf"{run_id}(?:-(?:{statuses})(?:-[a-z0-9]+)*)?\.md", file_name) is not None
 
 
 class _Seen:

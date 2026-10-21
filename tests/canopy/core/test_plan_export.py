@@ -130,7 +130,13 @@ def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, st
     (dest / KEY / f"{run_id}-approved.md").write_text("old\n")
     (dest / KEY / f"{run_id}-Approved-old-title.md").write_text("old\n")
     # Not names an export gives this plan: another run's, and the operator's own.
-    kept = [f"{run_id}0-proposed.md", f"{run_id}-notes.md", f"{run_id}-Proposed.txt", "README.md"]
+    kept = [
+        f"{run_id}0-proposed.md",
+        f"{run_id}-notes.md",
+        f"{run_id}-Proposed.txt",
+        f"{run_id}-APPROVED.md",
+        "README.md",
+    ]
     for name in kept:
         (dest / KEY / name).write_text("theirs\n")
 
