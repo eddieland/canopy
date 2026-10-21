@@ -299,6 +299,15 @@ _MAX_HEADER = 150
 _MAX_CONTEXT = 10
 # Digest runs listed by name, as the text format lists them.
 _DIGEST_LISTED = 10
+#: Each kind of run a digest's `spend` names, as its field shows it.
+_SPENT = (
+    ("overseer", "overseer"),
+    ("workers", "workers"),
+    ("plans", "plans"),
+    ("chores", "chores"),
+    ("reviews", "reviews"),
+    ("dry_run", "dry runs"),
+)
 _URL = re.compile(r"https?://[^\s|]+")
 # A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
 # can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
@@ -533,6 +542,10 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
         f"*Runs ended*\n{_counted(digest.get('runs_ended'))}",
         f"*Needs you*\n{needs_you}",
     ]
+    spent = digest.get("spend")
+    # A canopy from before digests carried spend sends none, and gets no field for it.
+    if isinstance(spent, dict):
+        fields.append(f"*Spent*\n{_spent({str(k): v for k, v in spent.items()})}")
     out: list[Block] = [
         {
             "type": "section",
@@ -551,6 +564,19 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     if runs:
         out.append(_section(*runs[: 2 * _DIGEST_LISTED]))
     return out
+
+
+# What the digest's span cost: the total, then each kind that reported a cost, in the order canopy's text lists them.
+def _spent(spent: Mapping[str, object]) -> str:
+    total = spent.get("total")
+    if not isinstance(total, int | float):
+        return "none reported"
+    parts = [f"{name} {_usd(usd)}" for kind, name in _SPENT if isinstance(usd := spent.get(kind), int | float)]
+    return f"{_usd(total)} ({', '.join(parts)})"
+
+
+def _usd(usd: float) -> str:
+    return f"${usd:.2f}"
 
 
 def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]:

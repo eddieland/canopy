@@ -17,7 +17,16 @@ from canopy.core.config import ConfigError, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
-from tests.canopy.helpers import InlineRunner, canopy, chore_reports, in_tick, messages, waits, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    canopy,
+    chore_reports,
+    in_tick,
+    messages,
+    waits,
+    with_events,
+    worker_does,
+)
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, raises
 from tests.conftest import CanopyEnv, GitPool
 
@@ -242,7 +251,9 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
     scenario.tick()
     [first] = messages(out)
     assert first.startswith("canopy digest\nDigest since ")
-    assert ": 1 ticks (ok 1)\n  nothing ran\n  nothing needs you\n  workers running: 0\n" in first
+    assert (
+        ": 1 ticks (ok 1)\n  nothing ran\n  spent: none reported\n  nothing needs you\n  workers running: 0\n" in first
+    )
     scenario.tick()
     assert len(messages(out)) == 1  # not due again yet
     scenario.time_passes(minutes=61)
@@ -366,6 +377,21 @@ def test_a_json_digest_names_each_ticket_by_its_title(
     [message] = json_messages(out)
     assert message["digest"]["blocked"] == [{"ticket": "PROJ-1", "title": "Retry failed checkouts", "run": 1}]
     assert "  blocked PROJ-1\n" in message["text"]  # the text format shows the key alone
+
+
+def test_a_digest_says_what_its_runs_cost_by_kind(
+    scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+) -> None:
+    out = tmp_path / "digest.txt"
+    add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
+    with_events(scenario.env, "canopy-worker")
+    scenario.run(worker=worker_does())  # two model calls at 0.125
+    scenario.tick(*waits("PROJ-1"))
+
+    [message] = json_messages(out)
+    spent = message["digest"]["spend"]
+    assert (spent["total"], spent["workers"], spent["overseer"], spent["chores"]) == (0.25, 0.25, None, None)
+    assert "  spent: $0.25 (workers $0.25)\n" in message["text"]
 
 
 def test_bounds_count_what_they_leave_out(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
