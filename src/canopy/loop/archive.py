@@ -3,7 +3,9 @@
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`
 (`plan_export`), commits what changed there and nothing else, and pushes the clone's branch to its upstream. A dry run
 only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a
-push that failed is retried each live tick and the operator sees why until one succeeds.
+push that failed is retried each live tick and the operator sees why until one succeeds. A tick writes at most
+`PER_TICK` files, so a long history goes in over several ticks, each commit and push bounded, and the item stays open
+until it all has.
 
 The path must be a clone's own top level, never a directory inside a repository, which could be one the operator works
 in. git runs as the harness always runs it (D107), and the push never forces. Nothing here raises: an archive that fails
@@ -25,6 +27,8 @@ if TYPE_CHECKING:
 
 #: The attention item raised while the plan archive is not all on its upstream.
 REASON = "archive_unpushed"
+#: The most plan files one tick exports, commits, and pushes, so a push of a long history fits its timeout.
+PER_TICK = 1000
 _GIT_TIMEOUT_SECONDS = 60
 # The most of git's own message an item's detail carries.
 _MAX_ERROR = 300
@@ -50,18 +54,34 @@ def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool) -> str | None:
 
 
 def _archive(ctx: Context, git: _Git, name: str, log: logs.TickAdapter) -> str | None:
-    """Export the plans into the clone, commit what changed in `name/`, and push when the branch is ahead.
+    """Export the plans into the clone, at most `PER_TICK` files, then commit and push them.
 
     Returns:
-        Why the archive is not pushed, or None when every step it needed succeeded.
+        Why the archive is not all pushed, or None when every step it needed succeeded and no plan waits.
     """
     try:
-        exported = plan_export.export(ctx.conn, ctx.state_dir, git.clone / name)
+        exported = plan_export.export(ctx.conn, ctx.state_dir, git.clone / name, limit=PER_TICK)
     except plan_export.ExportError as e:
         log.warning("plans not archived", extra={"error": str(e)})
         return f"plans were not exported to {git.clone}: {e}"
     if exported.written:
-        log.info("plans archived", extra={"written": len(exported.written), "clone": str(git.clone)})
+        extra = {"written": len(exported.written), "left": exported.left, "clone": str(git.clone)}
+        log.info("plans archived", extra=extra)
+    failure = _commit_and_push(git, name, log)
+    if failure is None and exported.left:
+        return (
+            f"{exported.left} {'plans wait' if exported.left != 1 else 'plan waits'} for the next tick's archive: "
+            f"a tick archives at most {PER_TICK} files"
+        )
+    return failure
+
+
+def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
+    """Commit what changed in `name/`, and push when the branch is ahead.
+
+    Returns:
+        Why the archive is not pushed, or None when every step it needed succeeded.
+    """
     # git refuses a path that matches nothing, as `name/` does before the workspace has a plan.
     if any((git.clone / name).iterdir()):
         added = git.run("add", "--all", "--", name)

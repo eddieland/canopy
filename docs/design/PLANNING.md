@@ -85,7 +85,9 @@ of theirs, each under a front matter of its row, since status and approval live 
 file only when its plan or row changed and removes nothing, so the directory can be a repository the operator pushes.
 With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, commits that
 directory alone, and pushes to the clone's upstream, never forcing; `archive_unpushed` stays open while the archive is
-not all there, so a failed push is retried each tick. A dry run only reads the clone (TRUST_MODEL T6).
+not all there, so a failed push is retried each tick. A tick writes at most a thousand files, so a long history goes in
+over several, each push bounded, and reads again only the plans whose row or files changed since it last found them as
+they stand. A dry run only reads the clone (TRUST_MODEL T6).
 
 ### Commenting on a plan
 
