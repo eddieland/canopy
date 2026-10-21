@@ -53,7 +53,9 @@ def subjects(git_pool: GitPool, branch: str) -> list[str]:
 
 
 def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     first = blocker(scenario)
     run = stacked(scenario)
@@ -64,7 +66,7 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
         (
             "dispatch:implement",
             f"run 2: agent/PROJ-2-second on {FIRST} in repo at {slot.slot_path}; label {LABEL}",
-        )
+        ),
     ]
     assert subjects(git_pool, "agent/PROJ-2-second") == ["PROJ-2: stacked", "PROJ-1: the blocker", "initial"]
     assert subjects(git_pool, FIRST) == ["PROJ-1: the blocker", "initial"]  # the base is untouched
@@ -91,7 +93,8 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
     merged = dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.RETARGET], context="blocker merged")
     retarget = scenario.run(
-        merged, worker=worker_does(["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{SECOND}"])
+        merged,
+        worker=worker_does(["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{SECOND}"]),
     )
     assert (retarget.status, slot_of(scenario.conn, retarget.id).base_branch) == ("done", "main")
     text = read(retarget)
@@ -108,7 +111,9 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
 
 
 def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     # The blocker's PR merged and its branch was deleted between the overseer's look and the run.
     run = scenario.run(dispatches("PROJ-2", base=FIRST))
@@ -120,7 +125,9 @@ def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
 
 
 def test_a_continued_branch_whose_base_is_gone_is_crashed(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     blocker(scenario)
     stacked(scenario)
@@ -129,7 +136,8 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     # The blocker's branch is deleted after PROJ-2's branch exists; a resume still naming it must not start.
     git("branch", "--quiet", "-D", FIRST, cwd=git_pool.origin)
     run = scenario.run(
-        dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.CI], base=FIRST), worker=pushes(SECOND)
+        dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.CI], base=FIRST),
+        worker=pushes(SECOND),
     )
     assert run.status == "crashed"
     assert json.loads(run.row["result_json"])["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
@@ -154,7 +162,11 @@ BAD_BASE = "--base must be another ticket's branch, agent/<KEY>-<slug>"
     ],
 )
 def test_bad_base_is_refused_before_leasing(
-    scenario: Scenario, treehouse_state: Path, slug: str | None, base: str, reason: str
+    scenario: Scenario,
+    treehouse_state: Path,
+    slug: str | None,
+    base: str,
+    reason: str,
 ) -> None:
     assert scenario.refuses(dispatches("PROJ-2", slug=slug, base=base)) == [("refused:bad_base", reason)]
     assert not treehouse_state.exists()
@@ -192,7 +204,9 @@ def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: Gi
     assert [r.status for r in first.runs] == ["done"]
 
     then = scenario.tick(
-        *waits("PROJ-1", rationale="ci_running"), dispatches("PROJ-2", slug="second", base=FIRST), worker=commits
+        *waits("PROJ-1", rationale="ci_running"),
+        dispatches("PROJ-2", slug="second", base=FIRST),
+        worker=commits,
     )
     [second] = then.runs
     assert (second.status, slot_of(scenario.conn, second.id).base_branch) == ("done", FIRST)

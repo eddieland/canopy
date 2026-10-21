@@ -395,7 +395,7 @@ class Select:
                     empty=None,
                     parenthesize=False,
                     prefix="WITH RECURSIVE " if self.recursive else "WITH ",
-                )
+                ),
             ]
         parts.append(_prefixed("SELECT DISTINCT " if self.distinct else "SELECT ", "{}", (self.columns,)))
         if self.source is not None:
@@ -482,10 +482,14 @@ class Insert:
             columns = ", ".join(c for c, _ in self.values)
             row = _joined(", ", [v for _, v in self.values], empty=None, parenthesize=False)
             head = Fragment(
-                f"INSERT{self.resolution} INTO {self.table.text} ({columns}) VALUES ({row.text})", row.params
+                f"INSERT{self.resolution} INTO {self.table.text} ({columns}) VALUES ({row.text})",
+                row.params,
             )
         return _joined(
-            " ", [p for p in (head, self.conflict, self.returns) if p is not None], empty=None, parenthesize=False
+            " ",
+            [p for p in (head, self.conflict, self.returns) if p is not None],
+            empty=None,
+            parenthesize=False,
         )
 
 

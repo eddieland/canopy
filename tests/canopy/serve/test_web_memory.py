@@ -63,7 +63,13 @@ def test_the_loop_state_counts_the_proposals_waiting_only_while_proposals_are_on
     with in_tick(ctx.conn) as tick_id:
         db.touch_ticket(ctx.conn, KEY, "repo")
         run_id = db.insert_run(
-            ctx.conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/r")
+            ctx.conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/r"),
         )
     ctx.conn.executemany(
         "INSERT INTO memories (scope, ticket_key, run_id, key, body, status, author, created_at) "
@@ -132,7 +138,7 @@ def test_a_runs_memory_is_what_it_wrote_read_and_had_refused(backend: Backend) -
     assert [m["id"] for m in found["read"]] == [1]
     assert (found["used"], found["wrong"]) == ([1], [])
     assert found["refused"] == [
-        {"field": "notes", "key": "staging-login", "why": "its text looks like it holds a secret"}
+        {"field": "notes", "key": "staging-login", "why": "its text looks like it holds a secret"},
     ]
     # Rendered while notes were recording: it read nothing because nothing was served.
     recorded = c.get("/api/runs/37/memory").json()
@@ -155,7 +161,13 @@ def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(can
     with in_tick(ctx.conn) as tick_id:
         db.touch_ticket(ctx.conn, KEY, "repo")
         run_id = db.insert_run(
-            ctx.conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/r")
+            ctx.conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/r"),
         )
     ctx.conn.executemany(
         "INSERT INTO memories (id, scope, key, body, status, author, created_at, review_at, wrong_at, wrong_run_id) "
@@ -220,7 +232,10 @@ def test_promote_takes_the_operators_words_and_repository_and_supersedes_under_t
     ],
 )
 def test_promote_is_refused_as_the_cli_refuses_it(
-    backend: Backend, memory_id: int, body: dict[str, str], guard: str
+    backend: Backend,
+    memory_id: int,
+    body: dict[str, str],
+    guard: str,
 ) -> None:
     c = client(None, backend)
     assert refused(c.post(f"/api/memory/{memory_id}/promote", json=body, headers=WRITE)).startswith(guard)
@@ -302,7 +317,10 @@ def test_a_notes_history_is_each_note_under_its_key(backend: Backend) -> None:
     ],
 )
 def test_edit_is_refused_as_the_cli_refuses_it(
-    backend: Backend, memory_id: int, body: dict[str, str | bool], guard: str
+    backend: Backend,
+    memory_id: int,
+    body: dict[str, str | bool],
+    guard: str,
 ) -> None:
     c = client(None, backend)
     assert refused(c.post(f"/api/memory/{memory_id}/edit", json=body, headers=WRITE)).startswith(guard)

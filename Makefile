@@ -16,8 +16,8 @@ check: lint test ui-check ## Verify without modifying files: lint, test, the UI'
 
 ##@ Development
 
-fmt: ui-fmt ## Run autoformatters (ruff import sorting, ruff format, rumdl for Markdown, oxfmt for ui/)
-	uv run ruff check --select I --fix .
+fmt: ui-fmt ## Run autoformatters (ruff imports and trailing commas, ruff format, rumdl for Markdown, oxfmt for ui/)
+	uv run ruff check --select I,COM812 --fix .
 	uv run ruff format .
 	uv run rumdl fmt .
 

@@ -175,7 +175,8 @@ def _ticket(conn: sqlite3.Connection, key: str) -> records.Ticket:
     ticket = db.get_ticket(conn, key)
     if ticket is None:
         raise Refused(
-            "unknown", f"canopy has no record of {key}: start it, or label it and let a tick see it, before planning it"
+            "unknown",
+            f"canopy has no record of {key}: start it, or label it and let a tick see it, before planning it",
         )
     return ticket
 
@@ -189,7 +190,8 @@ def _not_planning(conn: sqlite3.Connection, key: str) -> None:
     running = db.running_run_of(conn, key)
     if running is not None and running.kind == RunKind.PLAN:
         raise Refused(
-            "bad_plan", f"plan run {running.id} for {key} is running; wait for it to end, then decide on its plan"
+            "bad_plan",
+            f"plan run {running.id} for {key} is running; wait for it to end, then decide on its plan",
         )
 
 
@@ -218,7 +220,12 @@ class PlanState(TypedDict):
 
 
 def state_section(
-    conn: sqlite3.Connection, policy: Policy, ticket: records.Ticket, *, attempts: int, limit: int
+    conn: sqlite3.Connection,
+    policy: Policy,
+    ticket: records.Ticket,
+    *,
+    attempts: int,
+    limit: int,
 ) -> PlanState | None:
     """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
 
@@ -228,7 +235,9 @@ def state_section(
     key = ticket.key
     needed_now = needed(policy.plan, ticket.plan_setting)
     newest = records.fetch_one(
-        conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1)
+        conn,
+        records.Plan,
+        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
     )
     run = records.fetch_one(
         conn,
@@ -294,7 +303,9 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     """
     key = ticket.key
     newest = records.fetch_one(
-        conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1)
+        conn,
+        records.Plan,
+        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
     )
     if newest is not None and newest.status is PlanStatus.APPROVED:
         return None
@@ -523,7 +534,9 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
         The plans' rows, oldest first.
     """
     return records.fetch_all(
-        conn, records.Plan, sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id")
+        conn,
+        records.Plan,
+        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id"),
     )
 
 
@@ -608,7 +621,8 @@ def save(
             raise Refused("bad_plan", f"plan {plan.id}'s file {path} is {reading.problem}, so it is not saved over")
         if reading.sha256 != read_sha256:
             raise Refused(
-                "bad_plan", f"plan {plan.id}'s file {path} changed since it was read; read it again before saving"
+                "bad_plan",
+                f"plan {plan.id}'s file {path} changed since it was read; read it again before saving",
             )
         try:
             return _replace(state_dir, key, path.name, text)

@@ -37,7 +37,9 @@ def section_of(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
 
 
 def test_the_operators_standing_instructions_reach_the_worker(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
 ) -> None:
     instruct(canopy_env, f"\n{FIXUP}\n\n")
     code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
@@ -46,7 +48,9 @@ def test_the_operators_standing_instructions_reach_the_worker(
 
 
 def test_without_standing_instructions_there_is_no_section(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
 ) -> None:
     code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
     assert code == 0, decisions
@@ -61,7 +65,7 @@ def test_an_override_with_the_old_placeholder_gets_the_text_alone(canopy_env: Ca
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir(parents=True)
     (overrides / "worker-implement.md").write_text(
-        "Implement {{KEY}} if it carries {{LABELS}}.\n{{STANDING_INSTRUCTIONS}}\n"
+        "Implement {{KEY}} if it carries {{LABELS}}.\n{{STANDING_INSTRUCTIONS}}\n",
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert prompts.render_worker(cfg, "implement", PROMPT_VALUES).endswith("\nNone.\n")

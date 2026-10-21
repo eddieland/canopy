@@ -202,7 +202,8 @@ def test_a_joint_runs_desk_names_every_worktree_it_links_to(sandbox: Sandbox, tm
     "script",
     [
         pytest.param(
-            'git init --quiet "$1" && git -C "$1" commit --quiet --allow-empty -m cached', id="init-then-commit"
+            'git init --quiet "$1" && git -C "$1" commit --quiet --allow-empty -m cached',
+            id="init-then-commit",
         ),
         pytest.param(
             'mkdir "$1" && cd "$1" && git init --quiet --bare && git fetch --quiet "$2" HEAD && '
@@ -222,7 +223,9 @@ def test_a_joint_runs_desk_names_every_worktree_it_links_to(sandbox: Sandbox, tm
     ],
 )
 def test_a_repository_a_tool_keeps_outside_the_worktree_keeps_its_own_objects(
-    sandbox: Sandbox, tmp_path: Path, script: str
+    sandbox: Sandbox,
+    tmp_path: Path,
+    script: str,
 ) -> None:
     """A cache a tool keeps as a git repository (DESIGN §24): with git's variables set for every process, its
     objects went to the run's directory and were gone with it. The worker's own commit still lands only there."""
@@ -232,7 +235,15 @@ def test_a_repository_a_tool_keeps_outside_the_worktree_keeps_its_own_objects(
     work = f"git commit --quiet --allow-empty -m work && {script}"
 
     done = wrap(
-        "worker", "sh", "-c", work, "sh", str(cache), str(primary), cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects)}
+        "worker",
+        "sh",
+        "-c",
+        work,
+        "sh",
+        str(cache),
+        str(primary),
+        cwd=slot,
+        env={"CANOPY_GIT_OBJECTS": str(objects)},
     )
 
     assert done.ok, done.stderr
@@ -358,7 +369,7 @@ def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandb
 def test_setup_gets_its_own_policy(sandbox: Sandbox, tmp_path: Path) -> None:
     _, slot = linked_worktree(tmp_path, "repo")
     (sandbox.templates / "setup.json").write_text(
-        json.dumps({"network": {"allowedDomains": ["registry.npmjs.org"]}, "filesystem": {"denyRead": ["~"]}})
+        json.dumps({"network": {"allowedDomains": ["registry.npmjs.org"]}, "filesystem": {"denyRead": ["~"]}}),
     )
 
     done = wrap("setup", "true", cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path))})
@@ -426,7 +437,9 @@ def test_a_review_outside_a_review_directory_runs_nothing(sandbox: Sandbox, tmp_
 
 
 def test_the_srt_canopy_installed_runs_and_reads_its_own_vendor_directory(
-    sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path
+    sandbox: Sandbox,
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
 ) -> None:
     """`canopy sandbox setup`'s srt wins over PATH's, and the seccomp helper under the denied HOME stays runnable."""
     package = canopy_env.home / ".local" / "share" / "canopy" / "sandbox-runtime" / "node_modules" / SRT_PACKAGE
@@ -535,7 +548,10 @@ def test_a_worker_outside_a_linked_worktree_runs_nothing(sandbox: Sandbox, tmp_p
     ],
 )
 def test_a_template_that_would_not_confine_the_command_runs_nothing(
-    sandbox: Sandbox, tmp_path: Path, template: object, error: str
+    sandbox: Sandbox,
+    tmp_path: Path,
+    template: object,
+    error: str,
 ) -> None:
     path = sandbox.templates / "chore.json"
     if template is None:

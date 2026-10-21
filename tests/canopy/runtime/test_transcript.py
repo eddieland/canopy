@@ -205,7 +205,9 @@ def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_ch
     path.write_bytes("first line\nsecond, ünïcode\n--- stderr ---\nbell\x07 and \x1b escape\n".encode())
     found = transcript.tail(path)
     assert found == transcript.Tail(
-        "first line\nsecond, ünïcode\n--- stderr ---\nbell  and   escape\n", path.stat().st_size, truncated=False
+        "first line\nsecond, ünïcode\n--- stderr ---\nbell  and   escape\n",
+        path.stat().st_size,
+        truncated=False,
     )
     # Past the bound, the cut lands inside a character, and the text starts at the next whole line.
     with mock.patch.object(transcript, "MAX_TAIL", path.stat().st_size - len("first line\nsecond, ü")):

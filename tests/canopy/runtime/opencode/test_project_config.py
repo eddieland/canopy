@@ -35,7 +35,8 @@ def test_shadowing_ignores_other_agents_and_skills(tmp_path: Path, rel: str) -> 
 
 
 @pytest.mark.parametrize(
-    "rel", ["opencode.json", "opencode.jsonc", ".opencode/opencode.json", ".opencode/opencode.jsonc"]
+    "rel",
+    ["opencode.json", "opencode.jsonc", ".opencode/opencode.json", ".opencode/opencode.jsonc"],
 )
 def test_shadowing_finds_a_json_config_that_names_a_canopy_agent(tmp_path: Path, rel: str) -> None:
     path = tmp_path / rel

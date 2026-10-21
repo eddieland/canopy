@@ -355,7 +355,8 @@ def _review_limit(ctx: Context, url: str) -> Limit | None:
     if runs == 0:
         return None
     row = sql.execute(
-        ctx.conn, sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", url)
+        ctx.conn,
+        sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", url),
     ).fetchone()
     granted = int(row[0])
     return Limit("review", None, url, runs, granted, ctx.config.policy.max_reviews_per_pr + granted)
@@ -377,7 +378,8 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
             reviewed = _review_limit(ctx, ref.id)
             if reviewed is None:
                 raise conversation.Refused(
-                    "unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant"
+                    "unknown",
+                    f"canopy has not reviewed {ref}, so it has no review limit to grant",
                 )
             sql.execute(ctx.conn, sql.insert("review_grants", pr_url=ref.id, runs=1, granted_at=db.format_time(T0)))
             return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
@@ -391,7 +393,12 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
         sql.execute(
             ctx.conn,
             sql.insert(
-                "attempt_grants", ticket_key=ref.id, repo=repo, kind=kind, runs=1, granted_at=db.format_time(T0)
+                "attempt_grants",
+                ticket_key=ref.id,
+                repo=repo,
+                kind=kind,
+                runs=1,
+                granted_at=db.format_time(T0),
             ),
         )
         return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
@@ -514,7 +521,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         sql.execute(
             conn,
             sql.insert(
-                "ticket_units", ticket_key=key, repo="web", branch=branch, pr_url=pr_url, phase="review_pending"
+                "ticket_units",
+                ticket_key=key,
+                repo="web",
+                branch=branch,
+                pr_url=pr_url,
+                phase="review_pending",
             ),
         )
     # Each PR's own title, as its worker or its review reported it: not its ticket's, and #12 has no ticket at all.
@@ -677,7 +689,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         sql.execute(
             conn,
             sql.insert(
-                "starts", subject_kind="ticket", subject_id=key, status="started", started_at=at(started), channel="web"
+                "starts",
+                subject_kind="ticket",
+                subject_id=key,
+                status="started",
+                started_at=at(started),
+                channel="web",
             ),
         )
     sql.execute(
@@ -1276,7 +1293,9 @@ def _tools(conn: sqlite3.Connection) -> None:
         ("review_runs", 4, "bash", 5, 0, 8_800),
     )
     sql.execute_many(
-        conn, sql.insert_rows("run_tools", ("run_table", "run_id", "tool", "calls", "errors", "result_chars")), calls
+        conn,
+        sql.insert_rows("run_tools", ("run_table", "run_id", "tool", "calls", "errors", "result_chars")),
+        calls,
     )
 
 
@@ -1303,7 +1322,10 @@ def _tool(session: str, minutes: float, tool: str, state: Mapping[str, object], 
     metadata: dict[str, object] = {}
     timed = {**state, "metadata": metadata, "time": {"start": ms - int(seconds * 1000), "end": ms}}
     return _event(
-        "tool_use", session, minutes, part={"type": "tool", "callID": f"call_{ms}", "tool": tool, "state": timed}
+        "tool_use",
+        session,
+        minutes,
+        part={"type": "tool", "callID": f"call_{ms}", "tool": tool, "state": timed},
     )
 
 
@@ -1318,7 +1340,10 @@ def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls",
         "cache": {"read": sent - sent // 4 - 512, "write": 512},
     }
     return _event(
-        "step_finish", session, minutes, part={"type": "step-finish", "reason": reason, "cost": cost, "tokens": tokens}
+        "step_finish",
+        session,
+        minutes,
+        part={"type": "step-finish", "reason": reason, "cost": cost, "tokens": tokens},
     )
 
 

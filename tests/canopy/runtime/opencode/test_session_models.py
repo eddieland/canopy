@@ -87,7 +87,7 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first() -> Non
             assistant("anthropic", "claude-haiku", 0.25),
             # OpenCode prints a cost of 0 as an integer.
             assistant("local", "free", 0),
-        )
+        ),
     )
     assert read(export) == SessionModels(
         "found",
@@ -100,7 +100,7 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first() -> Non
     # Sanitized, so canopy reads no transcript text; started where the caller says, bounded in time, and its stdout
     # read from a file, as OpenCode cuts what it prints to a pipe short.
     assert export.ran == [
-        (("opencode", "export", "ses_1", "--sanitize"), Path("/ws"), session_models.TIMEOUT_SECONDS, True)
+        (("opencode", "export", "ses_1", "--sanitize"), Path("/ws"), session_models.TIMEOUT_SECONDS, True),
     ]
 
 
@@ -146,7 +146,8 @@ def test_the_export_is_read_from_among_what_a_plugin_prints(stdout: str) -> None
 def test_a_plugin_s_output_alone_is_not_an_export() -> None:
     stdout = '[corp-plugin] loaded\n{"level": "info"}\n{"messages": [{"info": {}}]}\n'
     assert read(printing(stdout)) == SessionModels(
-        "failed", error="`opencode export --sanitize` printed what canopy cannot read"
+        "failed",
+        error="`opencode export --sanitize` printed what canopy cannot read",
     )
 
 
@@ -168,6 +169,7 @@ def test_a_model_name_is_made_printable_and_past_the_limit_counted_together() ->
 def test_a_session_id_opencode_would_read_as_an_option_is_never_passed() -> None:
     export = printing(exported())
     assert session_models.read(export, cwd=Path("/ws"), session_id="--help") == SessionModels(
-        "failed", error="not a session id OpenCode names"
+        "failed",
+        error="not a session id OpenCode names",
     )
     assert export.ran == []

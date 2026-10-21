@@ -75,7 +75,9 @@ def test_an_override_with_the_old_placeholder_gets_the_text_alone(scenario: Scen
     ids=["missing", "not-utf8", "too-large"],
 )
 def test_instructions_that_cannot_be_used_fail_the_tick(
-    scenario: Scenario, text: str | bytes | None, error: str
+    scenario: Scenario,
+    text: str | bytes | None,
+    error: str,
 ) -> None:
     # The operator set them for the overseer; one that ran without them would decide as if they were never written.
     path = instruct(scenario, text if text is not None else "")

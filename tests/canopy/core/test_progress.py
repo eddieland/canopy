@@ -40,12 +40,19 @@ def test_each_line_reaches_the_log_and_a_ticks_session_and_spend_so_far_reach_th
 
 
 def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_ended(
-    conn: sqlite3.Connection, tmp_path: Path
+    conn: sqlite3.Connection,
+    tmp_path: Path,
 ) -> None:
     with in_tick(conn) as tick_id:
         run_id = db.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=tmp_path)
         watch = progress.Progress(
-            conn, "chore_runs", run_id, io.StringIO(), logs.for_tick(tick_id), agent="chore", fields={}
+            conn,
+            "chore_runs",
+            run_id,
+            io.StringIO(),
+            logs.for_tick(tick_id),
+            agent="chore",
+            fields={},
         )
         watch(STEP)
         run = present(db.get_chore_run(conn, run_id))
@@ -54,7 +61,13 @@ def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_
         # A tick that ended is not written to by an overseer still printing: what it cost is recorded as it ended.
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         ended = progress.Progress(
-            conn, "ticks", tick_id, io.StringIO(), logs.for_tick(tick_id), agent="overseer", fields={}
+            conn,
+            "ticks",
+            tick_id,
+            io.StringIO(),
+            logs.for_tick(tick_id),
+            agent="overseer",
+            fields={},
         )
         ended(STEP)
         assert present(db.get_tick(conn, tick_id)).cost_usd is None

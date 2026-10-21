@@ -35,7 +35,13 @@ type _Subject = Literal["key", "url"]
 
 
 def record(
-    conn: sqlite3.Connection, tick_id: int | None, *, name: str, source: Source, request: Request, observed: Observed
+    conn: sqlite3.Connection,
+    tick_id: int | None,
+    *,
+    name: str,
+    source: Source,
+    request: Request,
+    observed: Observed,
 ) -> int:
     """Record one run of source `name` that tick `tick_id` made, or the loop's poll when `tick_id` is None.
 
@@ -163,7 +169,10 @@ def _ages(conn: sqlite3.Connection, request: str | None) -> tuple[list[str], int
 
 
 def _observed_at(
-    conn: sqlite3.Connection, table: _Observed, column: _Subject, subjects: Collection[str]
+    conn: sqlite3.Connection,
+    table: _Observed,
+    column: _Subject,
+    subjects: Collection[str],
 ) -> dict[str, str]:
     if not subjects:
         return {}

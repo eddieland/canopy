@@ -59,7 +59,9 @@ class Context:
     runner: procs.Runner
     ws: Workspace
     finding_starts: chore_view.FindingStarts = field(
-        default_factory=chore_view.FindingStarts, compare=False, repr=False
+        default_factory=chore_view.FindingStarts,
+        compare=False,
+        repr=False,
     )
 
     @property

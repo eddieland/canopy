@@ -62,7 +62,8 @@ def planned(scenario: Scenario, github_state: Path, result: object = None) -> in
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_once(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn, env = scenario.conn, scenario.env
     with_a_pr(scenario)
@@ -143,7 +144,7 @@ def test_a_resume_for_no_pr_alone_waits_on_no_plan(scenario: Scenario) -> None:
 def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario) -> None:
     with_a_pr(scenario, approve=False)
     assert scenario.refuses(FEEDBACK_PLAN) == [
-        ("refused:feedback_plan_off", 'policy.feedback_plan is not "approve": a resume goes ahead without a plan')
+        ("refused:feedback_plan_off", 'policy.feedback_plan is not "approve": a resume goes ahead without a plan'),
     ]
     run = scenario.run(RESUME, worker=pushes())
     assert run.status == RunStatus.DONE
@@ -153,13 +154,14 @@ def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario) -> None
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_waiting_plan_is_planned_again_only_once_the_operator_asks_for_changes(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     with_a_pr(scenario)
     first = planned(scenario, github_state)
     [plan] = feedback_plans.history(scenario.conn, KEY)
     assert scenario.refuses(FEEDBACK_PLAN) == [
-        ("refused:bad_plan", f"feedback plan {plan.id} of {KEY} waits on the operator, who has asked for no change")
+        ("refused:bad_plan", f"feedback plan {plan.id} of {KEY} waits on the operator, who has asked for no change"),
     ]
     scenario.operator("reply", KEY, "Accept bob's point instead.")
     planner = planner_does(["cat", plans.REPLACED], plan="# Feedback plan, again\n", result={"status": "done"})
@@ -177,7 +179,8 @@ def test_a_waiting_plan_is_planned_again_only_once_the_operator_asks_for_changes
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_plan_changed_since_its_approval_is_approved_again_before_its_resume(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     with_a_pr(scenario)
     run_id = planned(scenario, github_state)
@@ -196,7 +199,8 @@ def test_a_plan_changed_since_its_approval_is_approved_again_before_its_resume(
 
 @pytest.mark.usefixtures("git_pool")
 def test_feedback_plans_are_limited_per_unit_and_granted_by_the_operator(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     with_a_pr(scenario)
     scenario.configures("workspace", policy={"max_feedback_plan_attempts": 1})
@@ -217,7 +221,7 @@ def test_a_feedback_plan_needs_a_pr(scenario: Scenario) -> None:
     scenario.run(dispatches(slug="work"), worker=pushes(prs={"repo": None}))
     scenario.configures("private", policy={"feedback_plan": "approve"})
     assert scenario.refuses(FEEDBACK_PLAN) == [
-        ("refused:bad_plan", f"{KEY} has no PR recorded in repo: a feedback plan plans what came back to a PR")
+        ("refused:bad_plan", f"{KEY} has no PR recorded in repo: a feedback plan plans what came back to a PR"),
     ]
 
 
@@ -228,7 +232,8 @@ def test_a_feedback_plan_needs_a_branch(scenario: Scenario, treehouse_state: Pat
 
 @pytest.mark.usefixtures("git_pool")
 def test_the_state_block_carries_the_feedback_plan_only_while_feedback_plans_touch_the_ticket(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     with_a_pr(scenario, approve=False)
     scenario.seen()
@@ -257,7 +262,8 @@ def test_the_state_block_carries_the_feedback_plan_only_while_feedback_plans_tou
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_feedback_plan_takes_no_persona_so_an_unusable_one_refuses_it_not(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     # DESIGN §31: a feedback plan's prompt carries no persona, so a `canopy.md` of the operator's that canopy will not
     # use leaves it be, while it refuses a worker's run, whose prompt takes it in.
@@ -271,7 +277,10 @@ def test_a_feedback_plan_takes_no_persona_so_an_unusable_one_refuses_it_not(
 
 @pytest.mark.usefixtures("git_pool")
 def test_the_feedback_planner_prompt(
-    scenario: Scenario, canopy_env: CanopyEnv, github_state: Path, markdown_snapshot: SnapshotAssertion
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    github_state: Path,
+    markdown_snapshot: SnapshotAssertion,
 ) -> None:
     """The feedback planner's prompt, whole, so a change to its wording or to what fills it in is a diff in review."""
     with_a_pr(scenario)
@@ -283,7 +292,10 @@ def test_the_feedback_planner_prompt(
 
 @pytest.mark.usefixtures("git_pool")
 def test_the_feedback_planner_prompt_when_it_may_approve_its_plan(
-    scenario: Scenario, canopy_env: CanopyEnv, github_state: Path, markdown_snapshot: SnapshotAssertion
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    github_state: Path,
+    markdown_snapshot: SnapshotAssertion,
 ) -> None:
     """The same prompt under `policy.planner_may_approve`, whole: how it says a plan needs no review (DESIGN §25)."""
     with_a_pr(scenario)
@@ -296,7 +308,8 @@ def test_the_feedback_planner_prompt_when_it_may_approve_its_plan(
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and_resumed(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
@@ -314,7 +327,7 @@ def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_pla
     assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.APPROVED, plans.PLANNER, reason)
     rows = conn.execute("SELECT kind, fields FROM notify_events WHERE kind LIKE 'plan.%'").fetchall()
     assert [(str(r["kind"]), json.loads(str(r["fields"]))) for r in rows] == [
-        ("plan.approved", {"ticket": KEY, "run": run_id, "plan": plan.id, "feedback": True, "reason": reason})
+        ("plan.approved", {"ticket": KEY, "run": run_id, "plan": plan.id, "feedback": True, "reason": reason}),
     ]
     resume = scenario.run(RESUME, worker=pushes())
     assert resume.status == RunStatus.DONE
@@ -324,7 +337,8 @@ def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_pla
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_feedback_plan_that_replaces_one_waiting_on_the_operator_waits_on_them_too(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     with_a_pr(scenario)
     planned(scenario, github_state)

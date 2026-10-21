@@ -129,7 +129,10 @@ def outcome_of(done: procs.Result, output: AgentOutput, chore: Chore) -> Outcome
     printed = Printed(output, done.stderr, done.returncode)
     if done.timed_out:
         return Outcome(
-            ChoreRunStatus.TIMEOUT, None, f"the chore timed out after {chore.timeout_minutes} minutes", printed
+            ChoreRunStatus.TIMEOUT,
+            None,
+            f"the chore timed out after {chore.timeout_minutes} minutes",
+            printed,
         )
     parsed = result.parse(output.text)
     if parsed is None:
@@ -170,7 +173,13 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
         on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
         # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so far.
         on_line=progress.Progress(
-            ctx.conn, "chore_runs", run_id, out, log, agent="chore", fields={"chore_run_id": run_id}
+            ctx.conn,
+            "chore_runs",
+            run_id,
+            out,
+            log,
+            agent="chore",
+            fields={"chore_run_id": run_id},
         ),
     )
     out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
@@ -179,7 +188,13 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     output = stdout.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
-            ctx.conn, "chore_runs", run_id, output.session_id, output.usage, digest=digest, tools=output.tools
+            ctx.conn,
+            "chore_runs",
+            run_id,
+            output.session_id,
+            output.usage,
+            digest=digest,
+            tools=output.tools,
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})

@@ -321,7 +321,7 @@ class Working:
         """
         _killed(int(self.row["pid"]), f"run {self.id}'s `canopy _run`")
         self.scenario.story.append(
-            f"{_named(self.row, self.reasons)}: its `canopy _run` dies, its worker still at work"
+            f"{_named(self.row, self.reasons)}: its `canopy _run` dies, its worker still at work",
         )
 
     def __str__(self) -> str:
@@ -528,7 +528,11 @@ class Scenario:
         return ticked
 
     def run(
-        self, command: list[str] | None = None, *, worker: Worker | None = None, runner: InlineRunner | None = None
+        self,
+        command: list[str] | None = None,
+        *,
+        worker: Worker | None = None,
+        runner: InlineRunner | None = None,
     ) -> Ran:
         """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
         process, its worker doing `worker`, made for the ticket `command` names.
@@ -585,7 +589,11 @@ class Scenario:
         return working
 
     def review(
-        self, command: list[str], *, reviewer: Worker | None = None, runner: InlineRunner | None = None
+        self,
+        command: list[str],
+        *,
+        reviewer: Worker | None = None,
+        runner: InlineRunner | None = None,
     ) -> Reviewed:
         """Start the review `command`, a `reviews(...)`, in a tick of its own, and do it in this process, its reviewer
         doing `reviewer`, a `reviewer_reports(...)`, or the fake's default report if None.
@@ -672,7 +680,7 @@ class Scenario:
         self.story.append(f"{passed} passes")
         tables = self.conn.execute(
             "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
-            "AND sql NOT LIKE 'CREATE VIRTUAL%'"
+            "AND sql NOT LIKE 'CREATE VIRTUAL%'",
         ).fetchall()
         for (table,) in tables:
             for column in self.conn.execute("SELECT name FROM pragma_table_info(?)", (table,)).fetchall():
@@ -932,7 +940,11 @@ def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str |
 
 
 def pushes(
-    branch: str | None = None, message: str | None = None, *, repos: Sequence[str] = (), **reported: object
+    branch: str | None = None,
+    message: str | None = None,
+    *,
+    repos: Sequence[str] = (),
+    **reported: object,
 ) -> Script:
     """The worker commits `message`, pushes `branch`, and reports it done with a PR, its result carrying `reported`
     too: `pushes(notes=[...])`.

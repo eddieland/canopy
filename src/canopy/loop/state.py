@@ -417,7 +417,7 @@ def state_block(
             json.dumps(state, separators=(",", ":")),
             "```",
             "",
-        ]
+        ],
     )
 
 
@@ -443,7 +443,9 @@ def _run_summary(
 
 
 def _running_summary(
-    run: sqlite3.Row, run_slots: Mapping[int, Sequence[records.RunSlot]], run_reasons: Mapping[int, Sequence[str]]
+    run: sqlite3.Row,
+    run_slots: Mapping[int, Sequence[records.RunSlot]],
+    run_reasons: Mapping[int, Sequence[str]],
 ) -> RunningWorker:
     summary: RunningWorker = {
         "run_id": run["id"],

@@ -71,7 +71,7 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
             named.append(f"{count - len(named)} more")
         return _line(
             f"? {f.get('ticket')} run {f.get('run')} filed follow-ups {', '.join(named) or '-'}: "
-            "label or `canopy start` each one you want worked"
+            "label or `canopy start` each one you want worked",
         )
     if kind == "chore.ended":
         findings = f.get("findings") or 0
@@ -323,7 +323,9 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
         str(r[0]) for r in sql.execute(conn, sql.select("kind").from_("runs").where("started_at >= ?", since))
     )
     ended_rows = records.fetch_all(
-        conn, records.Run, sql.select("*").from_("runs").where("ended_at >= ?", since).order_by("id")
+        conn,
+        records.Run,
+        sql.select("*").from_("runs").where("ended_at >= ?", since).order_by("id"),
     )
     ended = Counter(str(r.status) for r in ended_rows)
     named = titles(conn)

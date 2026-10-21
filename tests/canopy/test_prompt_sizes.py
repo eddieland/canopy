@@ -82,17 +82,17 @@ def problems(measured: Mapping[str, int], record: Mapping[str, int]) -> list[str
         line = f'"{path}" = {new}'
         if new is None:
             found.append(
-                f"{path} is gone. Removing a file is fine: remove its line from {SHOWN} so the record matches."
+                f"{path} is gone. Removing a file is fine: remove its line from {SHOWN} so the record matches.",
             )
         elif old is None:
             found.append(
                 f"{path} is new, at {new} characters. Adding a file is fine: add {line} to {SHOWN} so the diff"
-                " shows it."
+                " shows it.",
             )
         elif new > old or new < old - SLACK:
             found.append(
                 f"{path} is now {new} characters (recorded {old}). Changing a prompt's size is fine: update its line"
-                f" in {SHOWN} to {line} so the diff shows it."
+                f" in {SHOWN} to {line} so the diff shows it.",
             )
     return found
 

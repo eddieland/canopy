@@ -38,7 +38,11 @@ VALUES = {
 
 @pytest.mark.parametrize(("kind", "private"), PROMPTS, ids=[f"{k}{'-private' if p else ''}" for k, p in PROMPTS])
 def test_with_memory_off_every_worker_prompt_is_as_it_was(
-    canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, kind: str, *, private: bool
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+    kind: str,
+    *,
+    private: bool,
 ) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
     # A private ticket's worker files follow-ups as one that writes nothing else to the tracker (DESIGN §18, §22).

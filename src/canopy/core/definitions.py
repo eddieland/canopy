@@ -85,7 +85,8 @@ def _drafts(config: Config, *, private: bool) -> agents.Drafts:
     approve = replied is not None and replied.mode is ReplyMode.APPROVE
     # A public worker without a ticket's draft posts its ticket comments itself; a private one posts none.
     return agents.Drafts(
-        approve=approve, ticket_comments=not private and not (replied is not None and replied.ticket_drafts)
+        approve=approve,
+        ticket_comments=not private and not (replied is not None and replied.ticket_drafts),
     )
 
 
@@ -141,7 +142,7 @@ def _checked(snapshot: Path) -> Path:
     if not logs.private_dir(snapshot):
         raise DefinitionsError(
             f"{snapshot} is not a snapshot canopy made: canopy creates it readable only by you, and this one is a "
-            "symlink, someone else's, or open to others. Remove it; canopy recreates it."
+            "symlink, someone else's, or open to others. Remove it; canopy recreates it.",
         )
     return snapshot
 

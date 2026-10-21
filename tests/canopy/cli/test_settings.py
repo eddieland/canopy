@@ -19,7 +19,8 @@ PLAN_CMD = (
 
 
 def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.configure(
         canopy_env.private_file,
@@ -104,7 +105,7 @@ def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys:
             "some model",
             "--title=PROJ-1 plan: Example ticket",
             "<prompt>",
-        ]
+        ],
     )
     assert f"\n  {line}\n" in out
     assert "setup:" not in out

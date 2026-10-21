@@ -106,7 +106,13 @@ def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None, ui: str
 
 
 def state_block(
-    ctx: Context, *, tick_id: int, dry_run: bool, now: datetime, reconciled: reconcile.Reconciled, query_due: bool
+    ctx: Context,
+    *,
+    tick_id: int,
+    dry_run: bool,
+    now: datetime,
+    reconciled: reconcile.Reconciled,
+    query_due: bool,
 ) -> str:
     """Read the journal for tick `tick_id` and render the overseer's state block from it (DESIGN §6 step 4).
 
@@ -222,7 +228,11 @@ def _render(
         chores=chores,
     )
     title = session_title(
-        tick_id, woken_by, tickets=len(tickets), running=len(running), open_items=len(attention.current(ctx.conn))
+        tick_id,
+        woken_by,
+        tickets=len(tickets),
+        running=len(running),
+        open_items=len(attention.current(ctx.conn)),
     )
     return block, owed, title
 
@@ -298,7 +308,13 @@ class _Finish(Protocol):
 
 
 def _steps(
-    ctx: Context, tick_id: int, log: logs.TickAdapter, finish: _Finish, *, dry_run: bool, woken_by: WokenBy | None
+    ctx: Context,
+    tick_id: int,
+    log: logs.TickAdapter,
+    finish: _Finish,
+    *,
+    dry_run: bool,
+    woken_by: WokenBy | None,
 ) -> Outcome:
     """Run tick `tick_id` from reconcile to closing it, through `finish` (DESIGN §6 steps 2 to 5).
 
@@ -326,7 +342,13 @@ def _steps(
     query_due = _query_due(ctx, now)
     db.set_tick_query(ctx.conn, tick_id, due=query_due)
     block, owed, title = _render(
-        ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due, woken_by=woken_by
+        ctx,
+        tick_id=tick_id,
+        dry_run=dry_run,
+        now=now,
+        reconciled=reconciled,
+        query_due=query_due,
+        woken_by=woken_by,
     )
     halted = _halt(ctx, tick_id, log)
     if halted is not None:
@@ -430,7 +452,12 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
         if not repo.cloned:
             detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
             db.record_decision(
-                ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
+                ctx.conn,
+                tick_id,
+                None,
+                f"{attention.ACTION_PREFIX}repo_missing",
+                detail,
+                repo=repo.name,
             )
 
 
@@ -499,7 +526,10 @@ def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
     """
     try:
         result = ctx.runner.run(
-            CANOPY_CHECK, cwd=ctx.repo_root, env={TICK_ID_ENV: str(tick_id)}, timeout=CANOPY_CHECK_TIMEOUT_SECONDS
+            CANOPY_CHECK,
+            cwd=ctx.repo_root,
+            env={TICK_ID_ENV: str(tick_id)},
+            timeout=CANOPY_CHECK_TIMEOUT_SECONDS,
         )
     except procs.ProcError as e:
         failure = f"`canopy` does not start for the overseer: {e}"
@@ -516,7 +546,13 @@ def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
 
 
 def _run_overseer(
-    ctx: Context, tick_id: int, block: str, title: str, *, dry_run: bool, log: logs.TickAdapter
+    ctx: Context,
+    tick_id: int,
+    block: str,
+    title: str,
+    *,
+    dry_run: bool,
+    log: logs.TickAdapter,
 ) -> tuple[str | None, Usage | None]:
     """Run `overseer_cmd` with the state block `block` as its `{prompt}`, and `title` as its `{title}`.
 
@@ -565,7 +601,12 @@ def _run_overseer(
 
     output = stdout.read(result.stdout)
     db.set_tick_report(
-        ctx.conn, tick_id, output.session_id, output.usage, digest=definitions_dir.name, tools=output.tools
+        ctx.conn,
+        tick_id,
+        output.session_id,
+        output.usage,
+        digest=definitions_dir.name,
+        tools=output.tools,
     )
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"

@@ -22,7 +22,7 @@ from canopy.runs import dispatch, policy, worker
     "--kind",
     required=True,
     type=click.Choice(
-        [*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED), str(policy.SPLIT), str(policy.NEEDS_PLAN)]
+        [*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED), str(policy.SPLIT), str(policy.NEEDS_PLAN)],
     ),
     help="What the worker does.",
 )

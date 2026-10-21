@@ -55,7 +55,11 @@ def ctx(canopy_env: CanopyEnv) -> Context:
 
 @pytest.fixture
 def scenario(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection, tmp_path: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    tmp_path: Path,
 ) -> Iterator[Scenario]:
     """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story
     (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too. Its workers are titled, as the default
@@ -74,7 +78,11 @@ def scenario(
 
 @pytest.fixture
 def ws_scenario(
-    ws: "Ws", canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, tmp_path: Path
+    ws: "Ws",
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    tmp_path: Path,
 ) -> Iterator[Scenario]:
     """The scenario told in `ws`, the workspace of two repositories, `api` and `web`, each pool a slot of its own
     (`seed_pools`), for a story of a joint run, or a ticket in each repository. The test names the

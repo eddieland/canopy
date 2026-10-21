@@ -213,7 +213,8 @@ def test_a_chore_runs_page_is_its_row_and_the_whole_of_what_it_reported(backend:
             (json.dumps({"status": "ok", "summary": summary, "findings": []}),),
         )
         ctx.conn.execute(
-            "UPDATE chore_runs SET status = 'unknown', result_json = ? WHERE id = 3", (json.dumps({"harness": note}),)
+            "UPDATE chore_runs SET status = 'unknown', result_json = ? WHERE id = 3",
+            (json.dumps({"harness": note}),),
         )
     first = c.get("/api/chores/deps/runs/1").json()
     assert len(first["run"]["summary"]) < len(summary) == len(first["summary"])

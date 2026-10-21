@@ -158,7 +158,10 @@ def signals(
 
 
 def _on_hangup(
-    reload: reread.Reload, hung_up: Callable[[], bool], *, ignored: bool
+    reload: reread.Reload,
+    hung_up: Callable[[], bool],
+    *,
+    ignored: bool,
 ) -> Callable[[int, FrameType | None], None]:
     """SIGHUP's handler: a reload, unless the terminal hung up and SIGHUP was not `ignored` before the loop started.
 
@@ -617,7 +620,12 @@ def _defer(
 
 
 def _log_woken(
-    log: logs.TickAdapter, woken: Woken | None, *, seen: int, since: str | None, read_at: str | None
+    log: logs.TickAdapter,
+    woken: Woken | None,
+    *,
+    seen: int,
+    since: str | None,
+    read_at: str | None,
 ) -> None:
     if woken == "message":
         log.info("an operator message ended the wait", extra={"after_message": seen})
@@ -890,11 +898,11 @@ def _header(
             "Ctrl-C stops after the current tick and waits for running runs to end; a second Ctrl-C aborts the tick,"
             " or stops waiting and leaves the runs running.",
             style="dim",
-        )
+        ),
     )
     if keys:
         console.print(
-            Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim")
+            Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim"),
         )
     console.print()
 
@@ -977,7 +985,7 @@ def _report(
             (duration(elapsed), "dim"),
             "  ",
             outcome.summary,
-        )
+        ),
     )
 
     # Only the last column may give up width on a narrow terminal. rich shrinks wrappable columns first and, when every

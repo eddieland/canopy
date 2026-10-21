@@ -191,7 +191,7 @@ def cursor(name: str, cursor_id: str) -> tuple[str, str]:
         raise ValueError(f"a message cursor is a message id, a number; got {cursor_id!r}")
     if name == "review" and not valid_review_cursor(cursor_id):
         raise ValueError(
-            f"a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got {cursor_id!r}"
+            f"a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got {cursor_id!r}",
         )
     return name, cursor_id
 
@@ -279,7 +279,9 @@ CursorName = Literal["comment", "message", "review", "ci"]
 Key = Annotated[str, _matching(KEY_RE, "ticket key"), Field(description="A ticket key, such as PROJ-123.")]
 #: A repository's name in the workspace's map.
 Repo = Annotated[
-    str, _matching(config.REPO_NAME_RE, "repository name"), Field(description="A repository's name in the map.")
+    str,
+    _matching(config.REPO_NAME_RE, "repository name"),
+    Field(description="A repository's name in the map."),
 ]
 #: Free text for the journal, stripped and cut to `MAX_TEXT`.
 Text = Annotated[str, AfterValidator(clean_text)]
@@ -292,7 +294,7 @@ Cursors = Annotated[
     AfterValidator(_cursors),
     Field(
         description="Cursors to advance past what you handled, by name. comment and message are the ticket's; review "
-        "(a UTC time, YYYY-MM-DDTHH:MM:SSZ) and ci a unit's, one repository's."
+        "(a UTC time, YYYY-MM-DDTHH:MM:SSZ) and ci a unit's, one repository's.",
     ),
 ]
 
@@ -327,7 +329,7 @@ class Dispatch(_Request):
         str | None,
         Field(
             description="The configured queue label you read on the ticket just now. Required for a public ticket; "
-            "a ticket the operator started needs none."
+            "a ticket the operator started needs none.",
         ),
     ] = None
     #: The repositories the run works in, a unit each; several for a joint run.
@@ -347,7 +349,8 @@ class Dispatch(_Request):
     )
     #: resume only: the canopy review run whose findings the worker addresses.
     review_run: Annotated[
-        StrictInt | None, Field(ge=1, description="resume only: the review run whose findings the worker addresses.")
+        StrictInt | None,
+        Field(ge=1, description="resume only: the review run whose findings the worker addresses."),
     ] = None
     #: resume only, and required for it: why it runs.
     reasons: Annotated[
@@ -357,7 +360,8 @@ class Dispatch(_Request):
     ] = ()
     #: What the worker should read or do: links, comment ids, check names. Never quoted text.
     context: Annotated[
-        Text | None, Field(description="What the worker should read or do. Never quoted ticket or PR text.")
+        Text | None,
+        Field(description="What the worker should read or do. Never quoted ticket or PR text."),
     ] = None
     #: The cursors to advance, only if the worker starts.
     cursors: Cursors = Field(default_factory=dict)
@@ -368,7 +372,7 @@ class Dispatch(_Request):
         if unit_cursors and len(set(self.repos)) > 1:
             raise ValueError(
                 f"cursors: a {unit_cursors[0]} cursor belongs to one unit, so repos (--repo) names one; advance it "
-                f"after with ticket-set and its repo (`canopy ticket set {self.key} --repo NAME`)"
+                f"after with ticket-set and its repo (`canopy ticket set {self.key} --repo NAME`)",
             )
         return self
 
@@ -459,7 +463,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
                     *extras,
                 ]
                 if e
-            )
+            ),
         )
         db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
@@ -488,7 +492,7 @@ class Decide(_Request):
         Text,
         Field(
             description="Why, in your own words. A skip with no key starts 'mcp_unavailable:' or "
-            "'tracker_unsupported:'; a skip with a key may not."
+            "'tracker_unsupported:'; a skip with a key may not.",
         ),
     ]
 
@@ -504,13 +508,13 @@ class Decide(_Request):
         if key is None and not duties.tick_wide(rationale):
             raise ValueError(
                 f"a skip with no key skips the whole tick, so its rationale is {reasons}; "
-                "a skip about one ticket names its key"
+                "a skip about one ticket names its key",
             )
         if key is not None and action == "skip" and duties.tick_wide(rationale):
             raise ValueError(
                 f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick, so it names no key: leave key out "
                 "(`canopy decide skip --rationale '...'`), only when the tick cannot go on; "
-                "otherwise decide each ticket under its own key"
+                "otherwise decide each ticket under its own key",
             )
         return self
 
@@ -536,7 +540,8 @@ class Queried(_Request):
 
     #: Each open ticket the query returned; none when it returned none.
     keys: Annotated[
-        tuple[Key, ...], Field(description="Each open ticket the query returned; none when it returned none.")
+        tuple[Key, ...],
+        Field(description="Each open ticket the query returned; none when it returned none."),
     ] = ()
 
     @model_validator(mode="after")
@@ -578,7 +583,8 @@ class Attention(_Request):
     repo: Annotated[Repo | None, Field(description="The repository of the unit the item is about.")] = None
     #: A PR the loop reviews.
     pr: Annotated[
-        PrUrl | None, Field(description="A PR the loop reviews; in place of key for a PR with no ticket.")
+        PrUrl | None,
+        Field(description="A PR the loop reviews; in place of key for a PR with no ticket."),
     ] = None
 
     @model_validator(mode="after")
@@ -617,12 +623,15 @@ class TicketSet(_Request):
     key: Key
     #: The unit a phase about a PR, and the review and ci cursors, are for.
     repo: Annotated[
-        Repo | None, Field(description="The unit a phase about a PR, and the review and ci cursors, are for.")
+        Repo | None,
+        Field(description="The unit a phase about a PR, and the review and ci cursors, are for."),
     ] = None
     #: The ticket's phase, or a unit's with `repo`.
     phase: Annotated[
         Annotated[
-            str, _one_of("phase", SETTABLE_PHASES), WithJsonSchema({"type": "string", "enum": list(SETTABLE_PHASES)})
+            str,
+            _one_of("phase", SETTABLE_PHASES),
+            WithJsonSchema({"type": "string", "enum": list(SETTABLE_PHASES)}),
         ]
         | None,
         Field(description="The ticket's phase, or a unit's with repo: pushed_no_pr to merged are about a PR."),
@@ -710,7 +719,8 @@ class Mirror(_Request):
     at: Annotated[str, Field(description="When the tracker says it was written, ISO 8601.")]
     #: Its text, cut to `conversation.MAX_MIRRORED` characters and marked truncated.
     body: Annotated[
-        str, Field(description=f"Its text; cut to {conversation.MAX_MIRRORED} characters, and marked truncated.")
+        str,
+        Field(description=f"Its text; cut to {conversation.MAX_MIRRORED} characters, and marked truncated."),
     ]
 
 
@@ -819,7 +829,12 @@ def review_run(ctx: Context, request: ReviewRun) -> str:
         if r.attention is not None:
             # A persona the operator must fix (DESIGN §31): the item is about the PR, or its ticket.
             db.record_decision(
-                ctx.conn, tick_id, ticket, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, pr=pr_key
+                ctx.conn,
+                tick_id,
+                ticket,
+                f"{attention.ACTION_PREFIX}{r.attention}",
+                r.reason,
+                pr=pr_key,
             )
         log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
         raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
@@ -910,7 +925,8 @@ class ChoreRun(_Request):
     name: Chore
     #: What the chore should look at. Never quoted text.
     context: Annotated[
-        Text | None, Field(description="What the chore should look at: a PR, a job name. Never quoted text.")
+        Text | None,
+        Field(description="What the chore should look at: a PR, a job name. Never quoted text."),
     ] = None
 
 
@@ -999,7 +1015,7 @@ def running_tick(ctx: Context) -> records.Tick:
     row = current_tick(ctx)
     if row is None:
         raise Refused(
-            f"no tick is running ({conversation.TICK_ID_ENV} is not set); the overseer's verbs run only inside one"
+            f"no tick is running ({conversation.TICK_ID_ENV} is not set); the overseer's verbs run only inside one",
         )
     return row
 
@@ -1070,7 +1086,11 @@ def _for(reasons: Collection[str]) -> str:
 
 
 def _review_findings(
-    conn: sqlite3.Connection, key: str, kind: str, repos: Sequence[str], run_id: int | None
+    conn: sqlite3.Connection,
+    key: str,
+    kind: str,
+    repos: Sequence[str],
+    run_id: int | None,
 ) -> str | None:
     """Return the worker's `{{REVIEW_FINDINGS}}` for `review_run`, or None without it (DESIGN §21).
 
@@ -1082,7 +1102,8 @@ def _review_findings(
         return None
     if kind != RunKind.RESUME:
         raise dispatch.Refusal(
-            "bad_review", "review_run (--review-run) names findings for a resume to address; it is for resume only"
+            "bad_review",
+            "review_run (--review-run) names findings for a resume to address; it is for resume only",
         )
     try:
         return findings.for_worker(conn, run_id, key, repos)

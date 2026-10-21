@@ -94,7 +94,12 @@ def ticket(conn: sqlite3.Connection, key: str, *, title: str | None = None, done
 
 
 def run(
-    conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None, prs: dict[str, str] | None
+    conn: sqlite3.Connection,
+    tick_id: int,
+    key: str,
+    started: str,
+    cost: float | None,
+    prs: dict[str, str] | None,
 ) -> None:
     conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, result_json, log_path, cost_usd) "
@@ -184,7 +189,8 @@ def test_a_window_in_hours_is_whole_clock_hours_ending_with_this_one(tmp_path: P
 
 
 def test_a_window_in_hours_is_whole_local_hours_in_a_zone_a_half_hour_off_utc(
-    tmp_path: Path, journals: Journals
+    tmp_path: Path,
+    journals: Journals,
 ) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     now = datetime(2026, 10, 8, 12, 15, tzinfo=UTC)  # 17:45 in Kolkata, UTC+5:30
@@ -312,7 +318,8 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
 
 
 def test_canopy_spend_json_is_the_breakdown_with_each_total(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     journal_of_a_week(canopy_env.journal(), noon_today())
     assert main(["spend", "--json"]) == 0
@@ -346,7 +353,8 @@ def test_a_running_dry_run_is_never_the_live_overseers(tmp_path: Path, journals:
 
 
 def test_canopy_spend_says_when_every_run_reported_a_cost(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     tick(canopy_env.journal(), earlier(noon_today(), 0), 0.25, idle=True, woken_by="timer")
     assert main(["spend", "--days", "1"]) == 0
@@ -389,7 +397,8 @@ def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Pat
     ticket(conn, "A-4", done=True)  # done the week before, its last run in the window
     ticket(conn, "A-5", done=True)  # done in the window, no run in it
     conn.execute(
-        "INSERT INTO ticket_units (ticket_key, repo, pr_url, phase) VALUES ('A-1', 'web', ?, 'merged')", (web,)
+        "INSERT INTO ticket_units (ticket_key, repo, pr_url, phase) VALUES ('A-1', 'web', ?, 'merged')",
+        (web,),
     )
     run(conn, t, "A-1", earlier(NOW, 2), 3.0, {"web": web, "api": api})  # a joint run: on each PR, once on its ticket
     run(conn, t, "A-1", earlier(NOW, 9), 50.0, {"web": web})  # before the window
@@ -436,7 +445,8 @@ def test_a_ticket_forgotten_or_reopened_since_it_was_done_is_not_done(tmp_path: 
 
 
 def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     now = noon_today()
     conn = canopy_env.journal()
@@ -456,7 +466,12 @@ def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
 
 
 def triage(
-    conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None, status: str = "done"
+    conn: sqlite3.Connection,
+    tick_id: int,
+    key: str,
+    started: str,
+    cost: float | None,
+    status: str = "done",
 ) -> int:
     """An old triage before a plan (M55): a `runs` row of kind `needs-plan`, with no branch."""
     return branchless(conn, "needs-plan", tick_id, key, started, cost, status)
@@ -468,7 +483,13 @@ def plan_run(conn: sqlite3.Connection, tick_id: int, key: str, started: str, cos
 
 
 def branchless(
-    conn: sqlite3.Connection, kind: str, tick_id: int, key: str, started: str, cost: float | None, status: str
+    conn: sqlite3.Connection,
+    kind: str,
+    tick_id: int,
+    key: str,
+    started: str,
+    cost: float | None,
+    status: str,
 ) -> int:
     """A `runs` row of a kind that works on no branch."""
     cursor = conn.execute(
@@ -481,7 +502,8 @@ def branchless(
 
 
 def test_plan_runs_are_a_kind_of_their_own_with_old_triages_among_them(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A triage before a plan (M55) was removed: its old runs count as plan runs, and no worker's."""
     now = noon_today()
@@ -517,7 +539,8 @@ def first_call(sent: int, written: int) -> Usage:
 
 
 def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
-    tmp_path: Path, journals: Journals
+    tmp_path: Path,
+    journals: Journals,
 ) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     calls = [(5, 50_000, 49_000, "old"), (4, 52_000, 3_000, "old"), (3, 51_000, 2_000, "old")]
@@ -556,7 +579,7 @@ def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: py
             "cold_share": 1.0,
             "first_started": earlier(now, 0),
             "last_started": earlier(now, 0),
-        }
+        },
     ]
 
 
@@ -573,7 +596,8 @@ def tools_journal(conn: sqlite3.Connection, now: datetime) -> None:
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     db.set_run_report(conn, "runs", run_id, "s", usage, tools=[ToolUse("bash", 30, 4, 20_000)])
     conn.execute(
-        "INSERT INTO chore_runs (chore, started_at, status, log_path) VALUES ('deps', ?, 'ok', 'l')", (earlier(now, 0),)
+        "INSERT INTO chore_runs (chore, started_at, status, log_path) VALUES ('deps', ?, 'ok', 'l')",
+        (earlier(now, 0),),
     )
     chore_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
     db.set_run_report(conn, "chore_runs", chore_id, "s", usage, tools=[ToolUse("read", 1, 0, 10)])
@@ -598,7 +622,8 @@ def test_tools_are_by_kind_and_tool_the_most_returned_first(tmp_path: Path, jour
 
 
 def test_canopy_spend_prints_the_tools_that_returned_the_most(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     now = noon_today()
@@ -704,7 +729,8 @@ def test_canopy_spend_prints_the_spend_by_model(canopy_env: CanopyEnv, capsys: p
 
 
 def test_canopy_spend_says_when_no_run_s_models_were_read(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     journal_of_a_week(canopy_env.journal(), noon_today())
     assert main(["spend"]) == 0

@@ -32,7 +32,7 @@ REFUSED = "refused:"
 # (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A plan run (§25), an old triage before
 # a plan among them, is a run of the `runs` table, and fails as a worker does.
 _WORKER_FAILED = frozenset(
-    {RunStatus.FAILED, RunStatus.UNKNOWN, RunStatus.UNPUSHED, RunStatus.CRASHED, RunStatus.TIMEOUT}
+    {RunStatus.FAILED, RunStatus.UNKNOWN, RunStatus.UNPUSHED, RunStatus.CRASHED, RunStatus.TIMEOUT},
 )
 _FAILED: dict[Kind, frozenset[str]] = {
     "overseer": frozenset(TickStatus) - {TickStatus.RUNNING, TickStatus.OK},
@@ -46,21 +46,21 @@ _FAILED: dict[Kind, frozenset[str]] = {
 # kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input, and
 # each is built from literal SQL (D125).
 _RUN_ROWS = sql.select(
-    "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd"
+    "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd",
 ).from_("runs")
 _PLAN_KINDS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
 _ROWS: Mapping[Kind, sql.Select] = {
     "overseer": sql.select(
         "id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
-        "NULL AS subject, summary AS note, cost_usd"
+        "NULL AS subject, summary AS note, cost_usd",
     ).from_("ticks"),
     "workers": _RUN_ROWS.where_not_in("kind", _PLAN_KINDS),
     "plans": _RUN_ROWS.where_in("kind", _PLAN_KINDS),
     "chores": sql.select("id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd").from_(
-        "chore_runs"
+        "chore_runs",
     ),
     "reviews": sql.select(
-        "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd"
+        "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd",
     ).from_("review_runs"),
 }
 

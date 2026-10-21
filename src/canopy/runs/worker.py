@@ -461,7 +461,13 @@ def _run_agent(
     output = stdout.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
-            ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
+            ctx.conn,
+            "runs",
+            run_id,
+            output.session_id,
+            output.usage,
+            digest=snapshot.name,
+            tools=output.tools,
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
@@ -564,7 +570,11 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
 
 
 def _feedback_plan(
-    ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter
+    ctx: Context,
+    run: sqlite3.Row,
+    slots: Sequence[_Slot],
+    out: TextIO,
+    log: logs.TickAdapter,
 ) -> Outcome:
     """Run the planner on what came back to the run's PRs, and write and record the feedback plan (DESIGN §32).
 
@@ -697,7 +707,10 @@ def _drop_local_branch(git: _Git, branch: str, target: str) -> None:
     """
     ref = f"refs/heads/{branch}"
     if git.ok("rev-parse", "--verify", "--quiet", ref) and git.ok(
-        "merge-base", "--is-ancestor", ref, f"refs/remotes/origin/{target}"
+        "merge-base",
+        "--is-ancestor",
+        ref,
+        f"refs/remotes/origin/{target}",
     ):
         git.result("branch", "--quiet", "--delete", "--force", branch)  # refused if a worktree has it checked out
 
@@ -848,13 +861,13 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     if approved is None or approved.id != run["plan_id"] or again:
         raise _SetupError(
             f"plan {run['plan_id']}, which the worker's prompt names, is no longer the plan approved for "
-            f"{run['ticket_key']} when the run was dispatched; the worker did not start"
+            f"{run['ticket_key']} when the run was dispatched; the worker did not start",
         )
     text = plans.approved_text(ctx.state_dir, approved)
     if text is None:
         path = plans.path_for(ctx.state_dir, approved.ticket_key, approved.run_id)
         raise _SetupError(
-            f"plan {approved.id}'s file {path} is no longer the text the operator approved; the worker did not start"
+            f"plan {approved.id}'s file {path} is no longer the text the operator approved; the worker did not start",
         )
     return text
 
@@ -872,14 +885,14 @@ def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
     if plan is None or plan.spent_run_id != run["id"] or feedback_plans.current(ctx.conn, plan.ticket_key) != plan:
         raise _SetupError(
             f"feedback plan {run['feedback_plan_id']}, which the worker's prompt names, is no longer the one approved "
-            f"for {run['ticket_key']} when the run was dispatched; the worker did not start"
+            f"for {run['ticket_key']} when the run was dispatched; the worker did not start",
         )
     text = feedback_plans.approved_text(ctx.state_dir, plan)
     if text is None:
         path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
         raise _SetupError(
             f"feedback plan {plan.id}'s file {path} is no longer the text the operator approved; the worker did not "
-            "start"
+            "start",
         )
     return text
 
@@ -1143,7 +1156,9 @@ def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdap
     fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
     try:
         outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
-            slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder
+            slot.path,
+            lease_id=slot.lease_id,
+            lease_holder=slot.lease_holder,
         )
     except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease with no running run.

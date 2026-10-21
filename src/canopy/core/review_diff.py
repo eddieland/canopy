@@ -248,7 +248,7 @@ class _Parser:
                 old=self.old if kind != "add" else None,
                 new=self.new if kind != "del" else None,
                 text=_clean(text),
-            )
+            ),
         )
         self.lines += 1
         self.old += kind != "add"

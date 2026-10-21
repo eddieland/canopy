@@ -60,5 +60,6 @@ class Progress:
             self.log.warning("agent progress not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
         if change.started:
             self.log.info(
-                "agent session started", extra={**self.fields, "agent": self.agent, "session_id": change.session_id}
+                "agent session started",
+                extra={**self.fields, "agent": self.agent, "session_id": change.session_id},
             )

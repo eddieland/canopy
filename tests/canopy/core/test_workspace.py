@@ -32,7 +32,7 @@ def dispatch(key: str, *args: str) -> list[str]:
 def with_docs(ws: Ws) -> None:
     """Map a third repository, `docs`, between api and web, with no clone."""
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
+        map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"]))),
     )
 
 
@@ -40,7 +40,8 @@ def with_docs(ws: Ws) -> None:
 
 
 def test_the_workspace_is_found_from_below_and_its_repositories_files_are_not_read(
-    ws: Ws, canopy_env: CanopyEnv
+    ws: Ws,
+    canopy_env: CanopyEnv,
 ) -> None:
     (ws.clone("api") / "canopy.toml").write_text('[tracker]\nprovider = "jira"\nquery = "project = API"\n')
     deep = ws.clone("api") / "src"
@@ -103,7 +104,7 @@ def test_a_repositorys_branch_url_comes_from_its_github_url_unless_the_map_sets_
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
         map_text(("web", "git@github.com:acme/web.git"), ("docs", "https://github.com/acme/docs"))
         + f'\n[repos.api]\nurl = "https://github.com/acme/api.git"\nbranch_url = "{template}"\n'
-        + '\n[repos.ops]\nurl = "https://github.com/acme/ops.git"\nbranch_url = ""\n'
+        + '\n[repos.ops]\nurl = "https://github.com/acme/ops.git"\nbranch_url = ""\n',
     )
     assert [(r.name, r.branch_url) for r in workspace.load(ws.root).repos] == [
         ("api", template),
@@ -179,7 +180,10 @@ def test_a_definitions_snapshot_canopy_did_not_make_is_refused(tmp_path: Path) -
 
 
 def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, agent_log: Path
+    ws_scenario: Scenario,
+    ws: Ws,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with_docs(ws)
     (ws.root / "MAP.md").write_text("# map\n")
@@ -240,15 +244,17 @@ def test_items_about_two_repositories_are_two_items(ws_scenario: Scenario, ws: W
 
 
 def test_dispatch_names_one_repository_and_leases_from_its_pool(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
+    ws_scenario: Scenario,
+    ws: Ws,
+    treehouse_state: Path,
 ) -> None:
     with_docs(ws)
     conn = ws_scenario.conn
     assert ws_scenario.refuses(canopy(*dispatch("PROJ-1"))) == [
-        ("refused:unknown_repo", "--repo is required: name the repositories for PROJ-1 (api, docs, web)")
+        ("refused:unknown_repo", "--repo is required: name the repositories for PROJ-1 (api, docs, web)"),
     ]
     assert ws_scenario.refuses(dispatches(repo="nope")) == [
-        ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)")
+        ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)"),
     ]
     no_clone = ws_scenario.refuses(dispatches(repo="docs"))
     [(action, rationale)] = no_clone
@@ -274,7 +280,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     ]
     assert where == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
     assert decisions(conn, int(run.row["tick_id"])) == [
-        ("dispatch:implement", f"run {run.id}: agent/PROJ-1-login in api at {slot.slot_path}; label {LABEL}")
+        ("dispatch:implement", f"run {run.id}: agent/PROJ-1-login in api at {slot.slot_path}; label {LABEL}"),
     ]
 
     # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
@@ -282,13 +288,16 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI], repo=repo)
 
     assert ws_scenario.refuses(resume("web")) == [
-        ("refused:no_branch", "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web")
+        ("refused:no_branch", "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web"),
     ]
     assert ws_scenario.run(resume("api"), worker=pushes("agent/PROJ-1-login")).status == "done"
 
 
 def test_two_tickets_in_two_repositories_end_to_end(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, agent_log: Path
+    ws_scenario: Scenario,
+    ws: Ws,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     conn = ws_scenario.conn
     # Each ticket's worker pushes its own branch, in the repository its run was dispatched to.
@@ -342,7 +351,9 @@ def test_reconcile_returns_leases_in_each_pool(ws_scenario: Scenario, ws: Ws, tr
 
 
 def test_init_workspace_writes_the_skeleton(
-    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     root = tmp_path / "acme"
     root.mkdir()
@@ -374,11 +385,13 @@ def test_init_workspace_writes_the_skeleton(
 
 
 def test_sync_clones_missing_repositories_and_reports_a_different_origin(
-    ws: Ws, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("api", str(ws.origins["api"])), ("docs", str(extra)), ("web", "https://x.test/web.git"))
+        map_text(("api", str(ws.origins["api"])), ("docs", str(extra)), ("web", "https://x.test/web.git")),
     )
     assert main(["workspace", "sync"]) == 0
     out = capsys.readouterr().out
@@ -408,10 +421,12 @@ def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_d
 
 
 def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(
-    ws: Ws, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
-        map_text(("docs", "https://someone:s3cret@x.invalid/docs.git"), ("notes", str(ws.origins["api"])))
+        map_text(("docs", "https://someone:s3cret@x.invalid/docs.git"), ("notes", str(ws.origins["api"]))),
     )
     (ws.root / "repos" / "notes").write_text("a file where the clone should be")
     assert main(["workspace", "sync"]) == 1
@@ -425,7 +440,9 @@ def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(
 
 
 def test_sync_outside_a_workspace_refuses(
-    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()

@@ -51,7 +51,7 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
         kind="implement",
         branch=f"agent/{KEY}-work",
         slots=[
-            db.RunSlot(repo="repo", slot_path=slot, lease_id="lease-1", lease_holder="canopy:x", base_branch="main")
+            db.RunSlot(repo="repo", slot_path=slot, lease_id="lease-1", lease_holder="canopy:x", base_branch="main"),
         ],
         runs_dir=ctx.state_dir / "runs",
         private=False,
@@ -130,7 +130,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
     c, headers = signed_in_client(ctx)
 
     assert refused(
-        c.post(f"/api/tickets/{KEY}/replies", json={"body": "hi", "submission": "form-0001"}, headers=headers)
+        c.post(f"/api/tickets/{KEY}/replies", json={"body": "hi", "submission": "form-0001"}, headers=headers),
     ) == (f"unknown: canopy has no record of {KEY}: start it, or label it and let a tick see it, before replying")
     assert refused(c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers)).startswith("not_started")
     assert refused(c.post("/api/tickets/run:4/start", headers=headers)).startswith("unsupported")
@@ -145,7 +145,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
     too_long = {"body": "x" * (conversation.MAX_OPERATOR + 1), "submission": "form-0002"}
     assert refused(c.post(f"/api/tickets/{KEY}/replies", json=too_long, headers=headers)).startswith("bad_body")
     assert refused(
-        c.post(f"/api/tickets/{KEY}/replies", json={"body": "  ", "submission": "form-0002"}, headers=headers)
+        c.post(f"/api/tickets/{KEY}/replies", json={"body": "  ", "submission": "form-0002"}, headers=headers),
     ).startswith("bad_body")
     assert (
         c.post(f"/api/tickets/{KEY}/replies", json={"body": "x", "submission": "a b"}, headers=headers).status_code
@@ -243,7 +243,7 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     assert [m["id"] for m in detail["messages"]] == [before.message_id]
     # Nothing has happened since, so there is nothing new to forget.
     assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith(
-        "already_forgotten"
+        "already_forgotten",
     )
 
 
@@ -427,7 +427,9 @@ def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
 
 
 def test_a_web_pause_holds_the_loops_wait_until_the_web_resumes_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
@@ -622,7 +624,9 @@ def wait_until_up(url: str) -> None:
 
 
 def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     port = free_port()
     serve_on(canopy_env, port)
@@ -677,7 +681,9 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
 
 def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     port = free_port()
     serve_on(canopy_env, port)
@@ -727,7 +733,9 @@ def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
 
 
 def test_without_a_secret_the_loop_serves_nothing_and_says_how_to_make_one(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     port = free_port()
     serve_on(canopy_env, port)
@@ -749,7 +757,12 @@ def test_without_a_secret_the_loop_serves_nothing_and_says_how_to_make_one(
 
 @pytest.mark.parametrize("url", [None, "http://localhost:9000/canopy/"])
 def test_a_loop_that_serves_the_ui_links_its_notifications_to_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, sink_script: Path, tmp_path: Path, url: str | None
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+    url: str | None,
 ) -> None:
     port = free_port()
     out = tmp_path / "slack.txt"
@@ -797,7 +810,8 @@ def test_the_loop_serves_unless_told_not_to(
 
 
 def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["secret"]) == 0
     first = capsys.readouterr()

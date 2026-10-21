@@ -92,7 +92,7 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
             # Canopy's read tools only: every tool of the server denied, then some named.
             "canopy-planner": [rule("github_*"), rule("github_issue_read", "allow"), rule("skill")],
             "canopy-worker": [],
-        }
+        },
     )
     found = offered(debug, "canopy-chore", "canopy-planner", "canopy-worker")
     assert found.error is None
@@ -112,7 +112,7 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     assert worker.servers == (ServerOffer("github", "all"), ServerOffer("sentry.io", "all"))
     # Every command started where a run starts, with canopy's definitions as OpenCode's config directory.
     assert {(cwd, tuple(sorted((env or {}).items()))) for _, cwd, env in debug.ran} == {
-        (Path("/ws"), (("OPENCODE_CONFIG_DIR", "/defs"),))
+        (Path("/ws"), (("OPENCODE_CONFIG_DIR", "/defs"),)),
     }
 
 
@@ -159,7 +159,8 @@ def test_a_debug_command_that_fails_is_the_error_and_names_no_secret() -> None:
     assert found.agents[0].error is None
     assert "s3cret" not in str(found)
     assert found.agents[1] == AgentOffer(
-        "canopy-worker", error="`opencode debug agent canopy-worker` exited 1; run it to see why"
+        "canopy-worker",
+        error="`opencode debug agent canopy-worker` exited 1; run it to see why",
     )
     unreadable = offered(Debug({}, config={"mcp": {"github": {"enabled": "token-abc"}}}))
     assert unreadable.error == "`opencode debug config` printed what canopy cannot read"

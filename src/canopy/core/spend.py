@@ -408,7 +408,10 @@ def local_day(stamp: str) -> str:
 
 
 def idle_ticks(
-    conn: sqlite3.Connection, since: str, until: str, limit: int = IDLE_TICKS
+    conn: sqlite3.Connection,
+    since: str,
+    until: str,
+    limit: int = IDLE_TICKS,
 ) -> list[tuple[records.Tick, int]]:
     """The newest live idle ticks that started in `[since, until)`, newest first, each with how many decisions it made.
 
@@ -448,7 +451,8 @@ class _TickRow:
 def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fragment) -> list[_TickRow]:
     grouped = (
         sql.select(
-            "{} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), count(*) - count(cost_usd)", bucket
+            "{} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), count(*) - count(cost_usd)",
+            bucket,
         )
         .from_("ticks")
         .where("started_at >= ? AND started_at < ?", since, until)
@@ -558,7 +562,10 @@ def _done(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[D
 
 # Each ticket with a run or a review run that started in the window, or marked done in it, the costliest first.
 def _tickets(
-    conn: sqlite3.Connection, since: str, until: str, done: Mapping[str, tuple[Done, str]]
+    conn: sqlite3.Connection,
+    since: str,
+    until: str,
+    done: Mapping[str, tuple[Done, str]],
 ) -> list[TicketSpend]:
     runs = _by_ticket(conn, "runs", since, until)
     reviews = _by_ticket(conn, "review_runs", since, until)
@@ -581,7 +588,10 @@ def _tickets(
 
 
 def _by_ticket(
-    conn: sqlite3.Connection, table: Literal["runs", "review_runs"], since: str, until: str
+    conn: sqlite3.Connection,
+    table: Literal["runs", "review_runs"],
+    since: str,
+    until: str,
 ) -> dict[str, tuple[int, float | None]]:
     by_key = (
         sql.select("ticket_key, count(*), SUM(cost_usd)")
@@ -686,7 +696,7 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
                     errors=int(errors),
                     result_chars=int(chars),
                     est_tokens=int(chars) // CHARS_PER_TOKEN,
-                )
+                ),
             )
     return sorted(found, key=lambda t: (-t.result_chars, KINDS.index(t.kind), t.tool))
 

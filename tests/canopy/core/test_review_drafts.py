@@ -68,7 +68,9 @@ def github(state: Path) -> dict[str, Any]:
 
 
 def test_a_done_review_of_someone_elses_pr_drafts_a_review_its_finding_off_the_diff_in_the_body(
-    scenario: Scenario, reviewed: int, git_pool: GitPool
+    scenario: Scenario,
+    reviewed: int,
+    git_pool: GitPool,
 ) -> None:
     first = newest(scenario, reviewed)
     assert (first.number, first.author, first.channel) == (1, ReviewDraftAuthor.REVIEWER, None)
@@ -93,7 +95,10 @@ def feature_head(git_pool: GitPool) -> str:
 
 
 def test_a_reviewers_text_canopy_would_not_keep_is_left_out_alone(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
 ) -> None:
     del reviewing
     sha = feature_commit(git_pool, tmp_path)
@@ -151,7 +156,10 @@ def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenar
     ],
 )
 def test_an_edit_canopy_would_not_keep_is_refused(
-    scenario: Scenario, reviewed: int, args: list[str], guard: str
+    scenario: Scenario,
+    reviewed: int,
+    args: list[str],
+    guard: str,
 ) -> None:
     refused = scenario.operator("review", "edit", str(reviewed), *args, code=1)
     assert f"edit refused ({guard})" in refused.err
@@ -159,7 +167,9 @@ def test_an_edit_canopy_would_not_keep_is_refused(
 
 
 def test_publishing_posts_the_version_verbatim_as_one_comment_review_on_the_reviewed_commit(
-    scenario: Scenario, reviewed: int, github_state: Path
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
 ) -> None:
     sha = present(db.get_review_run(scenario.conn, reviewed)).sha
     scenario.operator("review", "edit", str(reviewed), "--add", "retry.py:2", "--text", "Call what?")
@@ -175,7 +185,7 @@ def test_publishing_posts_the_version_verbatim_as_one_comment_review_on_the_revi
                 {"path": "retry.py", "line": 1, "text": ON_LINE.text},
                 {"path": "retry.py", "line": 2, "text": "Call what?"},
             ],
-        }
+        },
     ]
     [review] = [r for r in github(github_state)["prs"][THEIRS]["reviews"] if r["item"] == "review"]
     assert (review["state"], review["commit"], review["author"]) == ("commented", sha, "me")
@@ -195,7 +205,9 @@ def test_publishing_posts_the_version_verbatim_as_one_comment_review_on_the_revi
 
 
 def test_a_stale_version_an_agent_and_a_draft_whose_diff_is_gone_publish_nothing(
-    scenario: Scenario, reviewed: int, github_state: Path
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
 ) -> None:
     first = newest(scenario, reviewed).hash
     scenario.operator("review", "edit", str(reviewed), "--drop", "1")
@@ -220,7 +232,9 @@ def test_a_review_whose_pr_a_ticket_now_holds_publishes_nothing(scenario: Scenar
 
 
 def test_a_comment_github_refuses_posts_nothing_and_the_draft_waits_again(
-    scenario: Scenario, reviewed: int, github_state: Path
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
 ) -> None:
     github_state.write_text(json.dumps({"prs": {THEIRS: {}}, "refuse_lines": ["retry.py:1"]}))
     version = newest(scenario, reviewed).hash
@@ -233,7 +247,10 @@ def test_a_comment_github_refuses_posts_nothing_and_the_draft_waits_again(
 
 
 def test_publishing_stages_by_default_and_a_read_settles_what_the_operator_did_on_github(
-    scenario: Scenario, reviewed: int, github_state: Path, ctx: Context
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+    ctx: Context,
 ) -> None:
     version = newest(scenario, reviewed).hash
     out = scenario.operator("review", "publish", str(reviewed), version).out
@@ -258,7 +275,10 @@ def test_publishing_stages_by_default_and_a_read_settles_what_the_operator_did_o
 
 
 def test_a_staged_review_deleted_on_github_is_publishable_again(
-    scenario: Scenario, reviewed: int, github_state: Path, ctx: Context
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+    ctx: Context,
 ) -> None:
     version = newest(scenario, reviewed).hash
     scenario.operator("review", "publish", str(reviewed), version)
@@ -334,7 +354,14 @@ def publish_stopped(scenario: Scenario, ctx: Context, run_id: int, runner: procs
     seen = newest(scenario, run_id).hash
     with pytest.raises((KeyboardInterrupt, RuntimeError)):
         review_drafts_manage.publish(
-            scenario.conn, ctx.config, runner, run_id, seen, submit=True, channel="cli", log=logs.for_tick(None)
+            scenario.conn,
+            ctx.config,
+            runner,
+            run_id,
+            seen,
+            submit=True,
+            channel="cli",
+            log=logs.for_tick(None),
         )
 
 

@@ -29,6 +29,9 @@ def test_each_line_says_what_it_changed() -> None:
 def test_a_model_call_that_cannot_be_read_reports_nothing_spent_from_then_on() -> None:
     watch = Watch()
     assert watch.read(event("step_finish", {"cost": -1, "tokens": TOKENS})) == Change(
-        "ses_abc123", started=True, usage=None, did=None
+        "ses_abc123",
+        started=True,
+        usage=None,
+        did=None,
     )
     assert watch.read(event("step_finish", {"cost": 0.25, "tokens": TOKENS})) is None

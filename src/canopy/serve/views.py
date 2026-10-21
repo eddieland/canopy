@@ -160,7 +160,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 since=db.parse_time(item.since),
                 finding=item.finding,
                 pr=pr,
-            )
+            ),
         )
     return found
 
@@ -233,7 +233,12 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
         ],
         pull_requests=[
             SpendPullRequest(
-                url=p.url, ticket_key=p.ticket, phase=p.phase, runs=p.runs, reviews=p.reviews, cost_usd=p.cost_usd
+                url=p.url,
+                ticket_key=p.ticket,
+                phase=p.phase,
+                runs=p.runs,
+                reviews=p.reviews,
+                cost_usd=p.cost_usd,
             )
             for p in found.pull_requests
         ],
@@ -483,7 +488,11 @@ def transcript_entry(entry: entries.Entry) -> TranscriptEntry:
     match entry:
         case entries.Text():
             return TranscriptText(
-                at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut, call=entry.call
+                at=entry.at,
+                text=entry.text,
+                reasoning=entry.reasoning,
+                cut=entry.cut,
+                call=entry.call,
             )
         case entries.ToolCall():
             return TranscriptTool(
@@ -626,7 +635,9 @@ def _activity(row: sqlite3.Row) -> RunActivity | None:
     if row["activity_tool"] is None or row["activity_at"] is None:
         return None
     return RunActivity(
-        tool=str(row["activity_tool"]), did=str(row["activity"] or ""), at=db.parse_time(str(row["activity_at"]))
+        tool=str(row["activity_tool"]),
+        did=str(row["activity"] or ""),
+        at=db.parse_time(str(row["activity_at"])),
     )
 
 
@@ -819,7 +830,7 @@ def limit(found: served.Limit, *, repo: str | None = None) -> Limit:
             "runs": found.runs,
             "granted": found.granted,
             "limit": found.limit,
-        }
+        },
     )
 
 

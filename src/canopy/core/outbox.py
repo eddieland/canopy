@@ -145,7 +145,13 @@ def cut(text: object, limit: int) -> str:
 
 
 def run_started(
-    config: Config, *, key: str, kind: str, branch: str, attempt: int, limit: int
+    config: Config,
+    *,
+    key: str,
+    kind: str,
+    branch: str,
+    attempt: int,
+    limit: int,
 ) -> Callable[[int], Event | None]:
     """Return what builds a `run.started` event from the new run's id, for `db.insert_run`."""
 
@@ -166,7 +172,10 @@ def run_started(
 
 
 def run_ended(
-    config: Config, run: sqlite3.Row, status: RunStatus, result_json: str | None
+    config: Config,
+    run: sqlite3.Row,
+    status: RunStatus,
+    result_json: str | None,
 ) -> Callable[[int | None], Event | None]:
     """Return what builds the `run.ended` event for a run closing as `status` with `result_json`.
 
@@ -207,7 +216,11 @@ def run_ended(
 
 
 def plan_recorded(
-    config: Config, *, key: str, run_id: int, feedback: bool = False
+    config: Config,
+    *,
+    key: str,
+    run_id: int,
+    feedback: bool = False,
 ) -> Callable[[int, str | None], Event | None]:
     """Return what builds a new plan's event from its id and its planner's approval, for `plans.record`.
 
@@ -258,7 +271,11 @@ def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[st
 
 
 def chore_ended(
-    config: Config, chore: str, run_id: int, status: ChoreRunStatus, result_json: str | None
+    config: Config,
+    chore: str,
+    run_id: int,
+    status: ChoreRunStatus,
+    result_json: str | None,
 ) -> Event | None:
     """Return the `chore.ended` event for run `run_id` of `chore`, or None if no sink takes chores."""
     if not config.notify.takes(CHORES):
@@ -277,7 +294,10 @@ def chore_ended(
 
 
 def review_ended(
-    config: Config, run: records.ReviewRun, status: ReviewRunStatus, result_json: str | None
+    config: Config,
+    run: records.ReviewRun,
+    status: ReviewRunStatus,
+    result_json: str | None,
 ) -> Event | None:
     """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
     if not config.notify.takes(REVIEWS):

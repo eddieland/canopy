@@ -26,7 +26,7 @@ SOURCES = {
     "sources": {
         "jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1},
         "github": {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1},
-    }
+    },
 }
 
 
@@ -98,7 +98,7 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
                 },
                 {"kind": "branch", "repository": "repo", "name": "agent/proj-1", "head_sha": "abc1234"},
                 ticket("PROJ-2"),
-            ]
+            ],
         },
     )
     ticked = scenario.tick(*waits(*KEYS))
@@ -147,7 +147,8 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
 
 
 def test_a_line_out_of_bounds_is_refused_its_subject_kept_and_the_rest_recorded(
-    scenario: Scenario, watched: Path
+    scenario: Scenario,
+    watched: Path,
 ) -> None:
     plays(watched, jira={"lines": [ticket("PROJ-1", title="Before")]})
     scenario.tick(*waits(*KEYS))
@@ -171,7 +172,8 @@ def test_a_line_out_of_bounds_is_refused_its_subject_kept_and_the_rest_recorded(
 
 
 def test_a_cut_off_output_keeps_the_previous_observations_and_the_tick_goes_on(
-    scenario: Scenario, watched: Path
+    scenario: Scenario,
+    watched: Path,
 ) -> None:
     plays(watched, github={"lines": [pr(labels=["agent"])]})
     scenario.tick(*waits(*KEYS))
@@ -204,7 +206,8 @@ def test_a_source_that_does_not_start_fails_and_the_tick_goes_on(scenario: Scena
 
 
 def test_output_that_cannot_be_recorded_fails_the_run_keeps_the_old_rows_and_the_tick_goes_on(
-    scenario: Scenario, watched: Path
+    scenario: Scenario,
+    watched: Path,
 ) -> None:
     plays(watched)
     scenario.tick(*waits(*KEYS))
@@ -221,7 +224,8 @@ def test_output_that_cannot_be_recorded_fails_the_run_keeps_the_old_rows_and_the
 
 
 def test_status_names_each_source_its_last_run_and_the_age_of_its_observations(
-    scenario: Scenario, watched: Path
+    scenario: Scenario,
+    watched: Path,
 ) -> None:
     assert "jira  tracker  never ran" in scenario.operator("status").out
     plays(watched, jira={"lines": [ticket("PROJ-1")]})
@@ -237,7 +241,8 @@ def test_status_names_each_source_its_last_run_and_the_age_of_its_observations(
 
 
 def test_the_default_vcs_source_is_canopys_own_reader_and_reads_each_watched_pr(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     scenario.seen("PROJ-1")
     db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
@@ -250,7 +255,8 @@ def test_the_default_vcs_source_is_canopys_own_reader_and_reads_each_watched_pr(
 
 
 def test_canopys_own_reader_is_asked_only_the_prs_and_not_run_while_none_is_watched(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     scenario.seen("PROJ-1")
     scenario.configures("private", review={"query": "is:pr review-requested:@me"})

@@ -141,7 +141,7 @@ _TICKETS = sql.select(
     "    SELECT t.branch AS v UNION SELECT u.branch FROM ticket_units u WHERE u.ticket_key = t.key"
     "    UNION SELECT u.pr_url FROM ticket_units u WHERE u.ticket_key = t.key"
     "  ) WHERE v IS NOT NULL AND v != ''), '') AS text,"
-    "  t.last_seen_at AS id"
+    "  t.last_seen_at AS id",
 ).from_("tickets t")
 _MESSAGES = sql.select("id, subject_kind, subject_id, at, kind, run_id, body AS text").from_("messages")
 # A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
@@ -153,13 +153,13 @@ _CHORE_RUNS = (
         "  || coalesce(json_extract(result_json, '$.summary'), '') || char(10)"
         "  || coalesce((SELECT group_concat("
         "    coalesce(json_extract(f.value, '$.title'), '') || ': ' || coalesce(json_extract(f.value, '$.detail'), ''),"
-        "    char(10)) FROM json_each(result_json, '$.findings') AS f WHERE f.type = 'object'), '') AS text"
+        "    char(10)) FROM json_each(result_json, '$.findings') AS f WHERE f.type = 'object'), '') AS text",
     )
     .from_("chore_runs")
     .where("json_valid(result_json)")
 )
 _DECISIONS = sql.select("id, tick_id, ticket_key, chore, action, created_at AS at, rationale AS text").from_(
-    "decisions"
+    "decisions",
 )
 _TICKS = (
     sql.select("id, status, coalesce(ended_at, started_at) AS at, summary AS text")
@@ -191,7 +191,12 @@ def _message(row: sqlite3.Row, text: str) -> Hit:
 
 def _chore_run(row: sqlite3.Row, text: str) -> Hit:
     return Hit(
-        "chore_run", str(row["at"]), text, chore=str(row["chore"]), run_id=int(row["id"]), label=str(row["status"])
+        "chore_run",
+        str(row["at"]),
+        text,
+        chore=str(row["chore"]),
+        run_id=int(row["id"]),
+        label=str(row["status"]),
     )
 
 

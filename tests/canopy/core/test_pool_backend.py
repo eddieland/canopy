@@ -76,7 +76,10 @@ def test_the_backend_is_user_only_and_treehouse_by_default(ws: Ws, canopy_env: C
 
 
 def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_there(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     use(canopy_env, "canopy")
     conn = ws.journal()
@@ -98,7 +101,10 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
 
 
 def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
@@ -116,7 +122,9 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
 
 
 def test_under_canopy_reconcile_still_returns_a_stale_treehouse_lease(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
 ) -> None:
     seed_pools(ws, treehouse_state)
     runner = procs.SubprocessRunner()
@@ -178,7 +186,10 @@ def set_status(treehouse_state: Path, ws: Ws, name: str, status: str) -> None:
 
 
 def test_switching_to_canopy_moves_idle_treehouse_slots_with_their_caches(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     old = treehouse_worktree(ws, treehouse_state, "api")
     use(canopy_env, "canopy")
@@ -200,7 +211,10 @@ def test_switching_to_canopy_moves_idle_treehouse_slots_with_their_caches(
 
 
 def test_switching_back_removes_canopy_s_idle_slots(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = ws.journal()
     use(canopy_env, "canopy")
@@ -242,7 +256,10 @@ def test_the_worktrees_page_shows_canopy_s_pool_under_canopy(canopy_env: CanopyE
 
 
 def test_a_treehouse_slot_that_cannot_move_stays_and_sync_says_why(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     old = treehouse_worktree(ws, treehouse_state, "api")
     (old / "scratch.txt").write_text("not committed\n")
@@ -256,7 +273,10 @@ def test_a_treehouse_slot_that_cannot_move_stays_and_sync_says_why(
 
 
 def test_a_treehouse_slot_busy_at_the_switch_moves_in_at_a_later_sync(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     old = treehouse_worktree(ws, treehouse_state, "api")
     set_status(treehouse_state, ws, "api", "leased")
@@ -285,7 +305,10 @@ def test_a_treehouse_slot_busy_at_the_switch_moves_in_at_a_later_sync(
 
 
 def test_an_idle_treehouse_slot_the_move_refuses_is_made_up_in_canopy_s_pool(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     old = treehouse_worktree(ws, treehouse_state, "api")
     (old / "scratch.txt").write_text("not committed\n")
@@ -300,7 +323,10 @@ def test_an_idle_treehouse_slot_the_move_refuses_is_made_up_in_canopy_s_pool(
 
 
 def test_a_switch_s_dry_run_counts_the_slots_its_move_brings_in(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     treehouse_worktree(ws, treehouse_state, "api")
     use(canopy_env, "canopy", slots="api = 1")
@@ -313,7 +339,10 @@ def test_a_switch_s_dry_run_counts_the_slots_its_move_brings_in(
 
 
 def test_switching_back_keeps_a_canopy_slot_with_work_in_it(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = ws.journal()
     use(canopy_env, "canopy")
@@ -329,7 +358,9 @@ def test_switching_back_keeps_a_canopy_slot_with_work_in_it(
 
 
 def test_under_treehouse_a_canopy_pool_that_cannot_be_read_is_logged_not_fatal(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
 ) -> None:
     seed_pools(ws, treehouse_state)
     (ws.root / pool.POOLS_DIR / "api").mkdir(parents=True)
@@ -363,7 +394,10 @@ def quarantined(ws: Ws, canopy_env: CanopyEnv, conn: sqlite3.Connection, tmp_pat
 
 
 def test_release_frees_a_quarantined_slot_of_canopy_s_pool(
-    ws: Ws, canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     use(canopy_env, "canopy")
     conn = ws.journal()
@@ -378,7 +412,9 @@ def test_release_frees_a_quarantined_slot_of_canopy_s_pool(
 
 
 def test_release_refuses_a_slot_no_failed_seeding_holds(
-    ws: Ws, canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     use(canopy_env, "canopy")
     conn = ws.journal()
@@ -393,7 +429,9 @@ def test_release_refuses_a_slot_no_failed_seeding_holds(
 
 
 def test_under_treehouse_release_frees_the_slot_through_treehouse(
-    ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     slot = ws.root / ".treehouse" / "api-fake" / "1" / "api"
     slot.mkdir(parents=True)

@@ -202,7 +202,11 @@ def test_an_agent_gets_its_default_temperature(canopy_env: CanopyEnv, agent: str
 @pytest.mark.parametrize(("agent", "key"), TEMPERATURES)
 @pytest.mark.parametrize(("setting", "rendered"), [("0.1", "0.1"), ("0.7", "0.7"), ("0", "0.0")])
 def test_an_agent_gets_its_configured_temperature(
-    canopy_env: CanopyEnv, agent: str, key: str, setting: str, rendered: str
+    canopy_env: CanopyEnv,
+    agent: str,
+    key: str,
+    setting: str,
+    rendered: str,
 ) -> None:
     _set_runtime(canopy_env, f"{key} = {setting}")
     text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
@@ -283,7 +287,10 @@ def test_the_public_worker_may_create_follow_up_tickets(tool: str) -> None:
     ],
 )
 def test_the_private_worker_may_create_follow_ups_and_write_nothing_else_to_the_tracker(
-    provider: str, tool: str, *, allowed: bool
+    provider: str,
+    tool: str,
+    *,
+    allowed: bool,
 ) -> None:
     # Its follow-ups are the one thing it writes there (DESIGN §18, §22): the create tools are allowed by name, whole,
     # after the server's wildcard deny; every other write of the server stays denied by it.
@@ -295,7 +302,9 @@ def test_the_private_worker_may_create_follow_ups_and_write_nothing_else_to_the_
 def test_the_planner_gets_no_create_tool() -> None:
     bundled = (resources.agents_dir() / f"{agents.PLANNER}.md").read_text()
     rendered = opencode_definitions.render_private(
-        bundled, config.DEFAULT_TRACKER_TOOLS["github"], f"agents/{agents.PLANNER}.md"
+        bundled,
+        config.DEFAULT_TRACKER_TOOLS["github"],
+        f"agents/{agents.PLANNER}.md",
     )
     assert not _allowed(_rules_in(rendered), "github_issue_write")
 
@@ -577,7 +586,7 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     body = text.removeprefix(head)
     prompt = prompts.render_overseer(config.load(canopy_env.root)).strip("\n")
     assert body.startswith(
-        f"{prompt}\n\nThe skill `tracker-jira` follows, given here so that you need not load it.\n\n"
+        f"{prompt}\n\nThe skill `tracker-jira` follows, given here so that you need not load it.\n\n",
     )
     skill = (resources.skills_dir() / "tracker-jira" / "SKILL.md").read_text()
     assert body.endswith(skill.split("\n---\n", 1)[1].strip() + "\n")
@@ -612,7 +621,9 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
 
 @pytest.mark.parametrize("agent", runtime_definitions.agent_names())
 def test_each_agent_definition_as_rendered(
-    canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, agent: str
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+    agent: str,
 ) -> None:
     # What each agent runs on, as a run loads it: its rules, and the overseer's whole prompt and tracker skill.
     files = definitions.sources(config.load(canopy_env.root))
@@ -726,7 +737,10 @@ def test_a_chore_keeps_githubs_reads_and_loses_copilot(canopy_env: CanopyEnv) ->
 
 @pytest.mark.parametrize(("provider", "issues"), [("jira", False), ("github", True)])
 def test_the_overseer_is_sent_only_the_github_reads_it_makes(
-    canopy_env: CanopyEnv, provider: str, *, issues: bool
+    canopy_env: CanopyEnv,
+    provider: str,
+    *,
+    issues: bool,
 ) -> None:
     # Every write is denied (TRUST_MODEL T6), and every read its prompt has no use for: GitHub's issue reads too, but
     # when the issues are the tickets.
@@ -816,7 +830,10 @@ def test_the_reviewer_may_call_exactly_the_jira_read_tools(canopy_env: CanopyEnv
 
 @pytest.mark.parametrize(("provider", "issues"), [("jira", False), ("github", True)])
 def test_the_reviewer_is_sent_githubs_issue_reads_only_when_they_are_the_tickets(
-    canopy_env: CanopyEnv, provider: str, *, issues: bool
+    canopy_env: CanopyEnv,
+    provider: str,
+    *,
+    issues: bool,
 ) -> None:
     # It reads the PR, its discussion among it, with `pull_request_read`, and the ticket through the tracker's server.
     # On a GitHub tracker that server is the PR's too, so its GitHub tools stay as shipped.
@@ -997,7 +1014,12 @@ def test_the_overseer_has_no_todo_list_and_no_skill_tool_with_the_trackers_skill
     ],
 )
 def test_under_approve_workers_lose_the_tools_that_comment(
-    canopy_env: CanopyEnv, agent: str, provider: str, *, tracker_posts: bool, issue_comments: bool
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+    *,
+    tracker_posts: bool,
+    issue_comments: bool,
 ) -> None:
     """Under `trust.review_replies = "approve"` a worker drafts its comments (DESIGN §29); denied by name in depth."""
     path = f"agents/{agent}.md"

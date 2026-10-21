@@ -143,7 +143,8 @@ def grants(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
     """Return the runs of each kind the operator granted each unit past its policy limit. Units without are missing."""
     granted: dict[Unit, dict[str, int]] = {}
     rows = sql.execute(
-        conn, sql.select("ticket_key, repo, kind, sum(runs)").from_("attempt_grants").group_by("ticket_key, repo, kind")
+        conn,
+        sql.select("ticket_key, repo, kind, sum(runs)").from_("attempt_grants").group_by("ticket_key, repo, kind"),
     )
     for row in rows:
         of_unit = granted.setdefault(unit(str(row[0]), str(row[1])), {})
@@ -180,7 +181,8 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     conversation.check_operator()
     if kind == RETIRED:
         raise conversation.Refused(
-            "bad_kind", "a resume now fixes CI, and fix-ci runs count as resume runs: grant resume instead"
+            "bad_kind",
+            "a resume now fixes CI, and fix-ci runs count as resume runs: grant resume instead",
         )
     if kind not in UNIT_GRANT_KINDS:
         raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(UNIT_GRANT_KINDS)}")
@@ -198,7 +200,8 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
         sql.execute(
-            conn, sql.insert("attempt_grants", ticket_key=key, repo=repo, kind=kind, runs=runs, granted_at=db.now())
+            conn,
+            sql.insert("attempt_grants", ticket_key=key, repo=repo, kind=kind, runs=runs, granted_at=db.now()),
         )
         granted = grants(conn).get(unit(key, repo), {})
         if kind == FEEDBACK_PLAN:
@@ -247,7 +250,8 @@ def ticket_limit(conn: sqlite3.Connection, config: Config, key: str, kind: str) 
 def ticket_grants(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
     """Return the runs of `kind` the operator granted each ticket past its policy limit. Tickets without are missing."""
     rows = sql.execute(
-        conn, sql.select("ticket_key, sum(runs)").from_("ticket_grants").where("kind = ?", kind).group_by("ticket_key")
+        conn,
+        sql.select("ticket_key, sum(runs)").from_("ticket_grants").where("kind = ?", kind).group_by("ticket_key"),
     )
     return {str(r[0]): int(r[1]) for r in rows}
 
@@ -258,7 +262,8 @@ def ticket_attempts(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
     Tickets with no such run are missing.
     """
     rows = sql.execute(
-        conn, sql.select("ticket_key, count(*)").from_("runs").where("kind = ?", kind).group_by("ticket_key")
+        conn,
+        sql.select("ticket_key, count(*)").from_("runs").where("kind = ?", kind).group_by("ticket_key"),
     )
     return {str(r[0]): int(r[1]) for r in rows}
 

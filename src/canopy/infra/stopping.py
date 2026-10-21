@@ -47,7 +47,10 @@ class StopOnSignal:
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         """Put back the handlers that were there before."""
         for s, handler in self._previous.items():

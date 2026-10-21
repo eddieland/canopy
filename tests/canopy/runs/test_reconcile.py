@@ -42,7 +42,12 @@ def lease(treehouse_state: Path, key: str) -> dict[str, str]:
 
 
 def add_run(
-    conn: sqlite3.Connection, key: str, leased: Mapping[str, str], *, pid: int | None, status: str = "running"
+    conn: sqlite3.Connection,
+    key: str,
+    leased: Mapping[str, str],
+    *,
+    pid: int | None,
+    status: str = "running",
 ) -> int:
     tick_id = db.start_tick(conn, dry_run=False)
     db.finish_tick(conn, tick_id, TickStatus.OK, "test")
@@ -60,7 +65,7 @@ def add_run(
                 lease_id=leased["lease_id"],
                 lease_holder=leased["lease_holder"],
                 base_branch="main",
-            )
+            ),
         ],
         runs_dir=Path("/state/runs"),
     )
@@ -77,7 +82,9 @@ def last_tick_decisions(conn: sqlite3.Connection) -> list[tuple[str | None, str,
 
 
 def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_returned(
-    scenario: Scenario, treehouse_state: Path, git_pool: GitPool
+    scenario: Scenario,
+    treehouse_state: Path,
+    git_pool: GitPool,
 ) -> None:
     dies = scenario.starts(worker=pushes())
     lives = scenario.starts(dispatches("PROJ-2"), worker=pushes())
@@ -105,7 +112,10 @@ def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_retu
 
 
 def test_a_run_never_claimed_is_crashed_and_its_slot_returned(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    conn: sqlite3.Connection,
 ) -> None:
     with overseer_does(*waits("PROJ-1")):
         never_started = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=None)
@@ -196,7 +206,11 @@ def test_stale_canopy_lease_is_returned_and_others_are_not(
     ],
 )
 def test_attention_from_the_latest_run(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, status: str, reason: str | None
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    status: str,
+    reason: str | None,
 ) -> None:
     run_id = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID, status=status)
     items = attention.from_runs(conn)
@@ -209,7 +223,9 @@ def test_attention_from_the_latest_run(
 
 
 def test_attention_clears_with_a_newer_run_or_when_done(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
 ) -> None:
     add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID, status="crashed")
     add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=DEAD_PID, status="crashed")
@@ -220,7 +236,9 @@ def test_attention_clears_with_a_newer_run_or_when_done(
 
 
 def test_a_stopped_ticket_raises_no_attention_until_started_again(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
 ) -> None:
     add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID, status="crashed")
     with db.transaction(conn):

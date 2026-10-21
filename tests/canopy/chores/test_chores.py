@@ -91,7 +91,9 @@ def _stamp(seconds: float) -> str:
 
 
 def test_without_chores_nothing_about_them_reaches_the_overseer(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
@@ -101,12 +103,15 @@ def test_without_chores_nothing_about_them_reaches_the_overseer(
     with in_tick(conn) as tick_id:
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
         assert chore_decisions(conn, tick_id) == [
-            ("build-health", "refused:unknown_chore", "no chore named 'build-health' is configured for this workspace")
+            ("build-health", "refused:unknown_chore", "no chore named 'build-health' is configured for this workspace"),
         ]
 
 
 def test_max_chores_zero_turns_every_chore_off(
-    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     canopy_env.append_user("\n[capacity]\nmax_chores = 0\n")
     with overseer_does():
@@ -128,7 +133,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert row.status == "ok", Path(row.log_path).read_text()
         assert result.stored(row.result_json) == result.ChoreResult.model_validate(OK)
         assert chore_decisions(conn, tick_id) == [
-            ("build-health", "dispatch:chore", "chore run 1; context=Look at build 90")
+            ("build-health", "dispatch:chore", "chore run 1; context=Look at build 90"),
         ]
 
         [agent] = agent_runs(agent_log)
@@ -178,14 +183,16 @@ def chore_instructions(canopy_env: CanopyEnv, text: str | None) -> Path:
 
 
 def test_the_operators_standing_instructions_follow_every_chores_own_prompt(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
 ) -> None:
     rule = "Name a CI job by its workflow file."
     chore_instructions(canopy_env, f"\n{rule}\n\n")
     run_inline(canopy_env.journal(), OK)
     prompt = (canopy_env.state_dir / "chore-runs" / "build-health" / "1.prompt").read_text()
     assert prompt.startswith(
-        f"# Build health\n\nLook at the build queue.\n\n## Standing instructions from the operator\n\n{rule}\n\n"
+        f"# Build health\n\nLook at the build queue.\n\n## Standing instructions from the operator\n\n{rule}\n\n",
     )
     assert prompt.index(rule) < prompt.index("\n## Run\n")
     # A try is a run through the same code, so its prompt carries them too.
@@ -195,7 +202,9 @@ def test_the_operators_standing_instructions_follow_every_chores_own_prompt(
 
 
 def test_chore_instructions_that_cannot_be_used_refuse_the_run(
-    canopy_env: CanopyEnv, chores: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    chores: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # The operator set them for every chore; a run without them would work as if they were never written.
     path = chore_instructions(canopy_env, "x" * (prompts.MAX_STANDING_BYTES + 1))
@@ -211,7 +220,10 @@ def test_chore_instructions_that_cannot_be_used_refuse_the_run(
 
 
 def test_the_chore_prompt(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, markdown_snapshot: SnapshotAssertion
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    markdown_snapshot: SnapshotAssertion,
 ) -> None:
     """A chore's prompt, whole, at its first run and at one after it, so a change to the `## Run` section the harness
     writes is a diff in review (DESIGN §19).
@@ -306,7 +318,10 @@ def test_wait_names_a_configured_chore(canopy_env: CanopyEnv, chores: Path, caps
     ],
 )
 def test_an_invalid_result_is_unknown_and_records_no_findings(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, report: object
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    report: object,
 ) -> None:
     conn = canopy_env.journal()
     run_id = run_inline(conn, report)
@@ -351,7 +366,7 @@ def test_a_chore_lists_at_most_its_max_findings_and_counts_the_rest(
 ) -> None:
     """A guard in code: a run keeps the first `max_findings` it lists, and counts the rest with those it left out."""
     canopy_env.user_file.write_text(
-        canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\nmax_findings = 2")
+        canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\nmax_findings = 2"),
     )
     listed = [{**FINDING, "id": f"f{i}", "title": f"finding {i}"} for i in range(3)]
     conn = canopy_env.journal()
@@ -385,7 +400,7 @@ def test_a_chore_within_its_max_findings_is_kept_as_it_reported() -> None:
     nothing = present(result.parse(json.dumps({"status": "ok", "findings": [FINDING]})))
     assert result.capped(nothing, 1).more_findings == 0
     assert attention.render([], datetime.now(UTC), {"chore:x": 0}).startswith(
-        "# canopy attention\n\nNothing needs you."
+        "# canopy attention\n\nNothing needs you.",
     )
 
 
@@ -453,7 +468,9 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
 
 
 def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
 ) -> None:
     conn = canopy_env.journal()
     run_inline(conn, OK)
@@ -490,7 +507,10 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
 
 
 def test_deleting_a_chore_clears_its_items(
-    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     conn = canopy_env.journal()
     run_inline(conn, {"status": "failed", "findings": []})
@@ -516,7 +536,7 @@ def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: Canopy
 
 def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\ntimeout_minutes = 1")
+        canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\ntimeout_minutes = 1"),
     )
     conn = canopy_env.journal()
     with in_tick(conn):
@@ -528,7 +548,10 @@ def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
 
 
 def test_a_killed_chore_run_is_crashed_on_the_next_tick(
-    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     conn = canopy_env.journal()
     with in_tick(conn, ends_ok=True), chore_reports(OK, sleep=60):
@@ -691,7 +714,9 @@ def test_try_refuses_while_the_chore_runs_unless_it_records_nothing(
 
 
 def test_try_refuses_an_unknown_chore_and_inside_canopy_runs(
-    canopy_env: CanopyEnv, chores: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    chores: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["chore", "try", "nope"]) == 1
     assert capsys.readouterr().err.rstrip().endswith("no chore named 'nope' is defined for this workspace")
@@ -702,7 +727,9 @@ def test_try_refuses_an_unknown_chore_and_inside_canopy_runs(
 
 
 def test_a_try_from_the_web_is_recorded_and_done_by_a_chore_process_of_its_own(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
 ) -> None:
     # As the CLI's try, it runs with chores off: no guard on time or capacity applies.
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
@@ -739,7 +766,8 @@ def test_a_try_from_the_web_is_recorded_and_done_by_a_chore_process_of_its_own(
 
 
 def test_a_try_from_the_web_that_cannot_start_is_refused_and_its_run_closed(
-    canopy_env: CanopyEnv, chores: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
 ) -> None:
     conn = canopy_env.journal()
     c, headers = signed_in_client(context(canopy_env))
@@ -754,7 +782,7 @@ def test_a_try_from_the_web_that_cannot_start_is_refused_and_its_run_closed(
 
     chores.unlink()
     assert refused(c.post("/api/chores/build-health/tries", headers=headers)).startswith(
-        f"not_started: cannot read {chores}"
+        f"not_started: cannot read {chores}",
     )
     assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 1
 
@@ -903,13 +931,15 @@ GONE: dict[str, object] = {"status": "ok", "summary": "all green", "findings": [
 
 
 def test_a_chore_reads_its_earlier_runs_from_a_cwd_outside_the_workspace(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
 ) -> None:
     """DESIGN §19, History: a run lists its chore's runs and reads one whole, from wherever its `cwd` is."""
     own = canopy_env.home / "build-tools"
     own.mkdir()
     canopy_env.user_file.write_text(
-        canopy_env.user_file.read_text().replace("every_minutes = 120", f'every_minutes = 120\ncwd = "{own}"')
+        canopy_env.user_file.read_text().replace("every_minutes = 120", f'every_minutes = 120\ncwd = "{own}"'),
     )
     conn = canopy_env.journal()
     run_inline(conn, OK)
@@ -939,7 +969,10 @@ def test_a_chore_reads_its_earlier_runs_from_a_cwd_outside_the_workspace(
 
 
 def test_the_operator_pages_a_chores_history(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     for _ in range(3):
@@ -974,7 +1007,10 @@ def test_the_operator_pages_a_chores_history(
 
 
 def test_only_the_operator_and_a_chores_own_runs_read_its_history(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.append_user(chore_toml("queue-age", every=30))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")
@@ -1003,7 +1039,10 @@ def test_only_the_operator_and_a_chores_own_runs_read_its_history(
 
 
 def test_a_run_read_whole_names_every_hidden_character(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     hidden = {**FINDING, "detail": "Seen on build 90.\u202e\nAnd on 91.\u200b"}

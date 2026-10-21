@@ -85,7 +85,7 @@ class Jira:
     fail: dict[str, int] = field(default_factory=dict[str, int])
     #: Each request: its method, path, query, Authorization header, and body.
     seen: list[tuple[str, str, dict[str, str], str | None, Any]] = field(
-        default_factory=list[tuple[str, str, dict[str, str], str | None, Any]]
+        default_factory=list[tuple[str, str, dict[str, str], str | None, Any]],
     )
 
     def add(self, *issues: Issue) -> None:
@@ -96,7 +96,11 @@ class Jira:
         return [f"{method} {path}" for method, path, _, _, _ in self.seen]
 
     def handle(
-        self, method: str, path: str, params: Mapping[str, str], body: Mapping[str, Any] | None
+        self,
+        method: str,
+        path: str,
+        params: Mapping[str, str],
+        body: Mapping[str, Any] | None,
     ) -> Mapping[str, Any]:
         if body is not None and (method, path) == ("POST", "/rest/api/3/search/jql"):
             start = int(body.get("nextPageToken") or 0)
@@ -278,7 +282,8 @@ def read(url: str, request: object, credentials: Path, *, site: str = "acme.atla
 
 
 def test_a_watched_ticket_prints_its_ticket_its_new_comments_then_the_query_its_blockers_and_the_end(
-    jira: tuple[Jira, str], credentials: Path
+    jira: tuple[Jira, str],
+    credentials: Path,
 ) -> None:
     fake, url = jira
     fake.add(
@@ -382,7 +387,8 @@ def test_a_query_past_its_bound_is_not_read_and_says_so(jira: tuple[Jira, str], 
 
 
 def test_comments_are_read_newest_first_and_stop_at_one_older_than_asked(
-    jira: tuple[Jira, str], credentials: Path
+    jira: tuple[Jira, str],
+    credentials: Path,
 ) -> None:
     fake, url = jira
     times = [f"2026-10-{day:02}T10:00:00.000+0000" for day in range(1, 11)]
@@ -414,7 +420,8 @@ def test_a_changelog_cut_short_in_the_fetch_is_read_whole_on_its_own(jira: tuple
 
 
 def test_a_changelog_that_does_not_say_its_length_is_read_whole_on_its_own(
-    jira: tuple[Jira, str], credentials: Path
+    jira: tuple[Jira, str],
+    credentials: Path,
 ) -> None:
     fake, url = jira
     fake.add(Issue("PROJ-1", labels=["agent"], history=[labelled("2026-10-01T00:00:00.000+0000", ["agent"])]))
@@ -437,7 +444,8 @@ def test_a_ticket_without_labels_reads_no_changelog(jira: tuple[Jira, str], cred
 
 
 def test_a_ticket_jira_does_not_return_is_left_off_the_end_even_when_the_query_returns_it(
-    jira: tuple[Jira, str], credentials: Path
+    jira: tuple[Jira, str],
+    credentials: Path,
 ) -> None:
     fake, url = jira
     fake.add(Issue("PROJ-1"), Issue("PROJ-2", comments=[Comment("201", "2026-10-18T10:00:00.000+0000")]))
@@ -455,7 +463,8 @@ def test_a_ticket_jira_does_not_return_is_left_off_the_end_even_when_the_query_r
 
 
 def test_a_blocker_jira_does_not_return_is_named_and_its_ticket_still_read(
-    jira: tuple[Jira, str], credentials: Path
+    jira: tuple[Jira, str],
+    credentials: Path,
 ) -> None:
     fake, url = jira
     fake.add(Issue("PROJ-1", blocked_by=["PROJ-8", "PROJ-9"]), Issue("PROJ-8", blocked_by=["PROJ-7"]))
@@ -510,7 +519,8 @@ def test_canopy_records_every_line_it_prints(jira: tuple[Jira, str], credentials
     conn = canopy_env.journal()
     db.touch_ticket(conn, "PROJ-1", "repo")
     source = Source(
-        kind="tracker", cmd=f"canopy-connect-jira --site acme.atlassian.net --credentials-file {credentials}"
+        kind="tracker",
+        cmd=f"canopy-connect-jira --site acme.atlassian.net --credentials-file {credentials}",
     )
     request = observe.Request(query="project = PROJ", tickets=[observe.AskedTicket("PROJ-1")])
 
@@ -613,7 +623,9 @@ def test_a_site_is_a_host(site: str, host: str) -> None:
     ],
 )
 def test_a_site_that_is_not_one_host_over_https_is_refused(
-    jira: tuple[Jira, str], credentials: Path, site: str
+    jira: tuple[Jira, str],
+    credentials: Path,
+    site: str,
 ) -> None:
     fake, url = jira
     found = read(url, {"query": "x"}, credentials, site=site)
@@ -633,7 +645,11 @@ def test_a_site_that_is_not_one_host_over_https_is_refused(
     ],
 )
 def test_a_credentials_file_that_is_not_usable_is_refused_unquoted(
-    jira: tuple[Jira, str], tmp_path: Path, text: str, mode: int, message: str
+    jira: tuple[Jira, str],
+    tmp_path: Path,
+    text: str,
+    mode: int,
+    message: str,
 ) -> None:
     fake, url = jira
     path = tmp_path / "jira-credentials"
@@ -674,7 +690,10 @@ def test_the_credentials_file_defaults_to_the_operators_config(tmp_path: Path) -
     ],
 )
 def test_a_request_it_cannot_use_is_refused(
-    jira: tuple[Jira, str], credentials: Path, request_: object, message: str
+    jira: tuple[Jira, str],
+    credentials: Path,
+    request_: object,
+    message: str,
 ) -> None:
     fake, url = jira
     found = read(url, request_, credentials)
@@ -704,7 +723,9 @@ def test_help_never_reads_stdin(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_a_command_line_it_cannot_use_is_a_usage_error_and_sends_nothing(
-    jira: tuple[Jira, str], credentials: Path, capsys: pytest.CaptureFixture[str]
+    jira: tuple[Jira, str],
+    credentials: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     fake, url = jira
     assert connect.run([], io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2

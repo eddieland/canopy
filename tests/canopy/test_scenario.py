@@ -143,7 +143,8 @@ def test_a_tick_gives_back_what_it_printed(scenario: Scenario) -> None:
 
 
 def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
-    scenario: Scenario, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def crashes(*args: str) -> int:
         sys.stdout.write(f"{args[0]}: half done\n")
@@ -207,7 +208,8 @@ def test_a_run_takes_a_runner_of_its_own_and_gives_back_what_it_printed(scenario
 
 
 def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_each(
-    ws_scenario: Scenario, ws: Ws
+    ws_scenario: Scenario,
+    ws: Ws,
 ) -> None:
     both = ("api", "web")
     assert dispatches(repo=both)[:6] == ["canopy", "dispatch", "PROJ-1", "--repo", "api", "--repo"]
@@ -255,7 +257,8 @@ def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git
 
 
 def test_a_review_held_at_work_runs_until_the_story_says_what_becomes_of_it(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     reviews_on(scenario)
     sha = head(git_pool)

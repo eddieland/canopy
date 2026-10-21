@@ -29,7 +29,8 @@ def limit_of(runs: int) -> tuple[str, str]:
 
 
 def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     fail_twice(scenario)
     [first, _] = scenario.refuses(dispatches())
@@ -65,7 +66,8 @@ def test_a_unit_with_no_grant_has_no_granted_key(scenario: Scenario, git_pool: G
 
 
 def test_a_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     fail_twice(scenario)
     conn = scenario.conn
@@ -90,7 +92,10 @@ def test_a_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits
 
 @pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
 def test_only_the_operator_grants(
-    scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str], env: str
+    scenario: Scenario,
+    git_pool: GitPool,
+    capsys: pytest.CaptureFixture[str],
+    env: str,
 ) -> None:
     fail_twice(scenario)
     capsys.readouterr()
@@ -124,7 +129,8 @@ def test_grant_refusals(scenario: Scenario, git_pool: GitPool) -> None:
 
 
 def test_a_forgotten_ticket_is_granted_in_the_repository_its_runs_were_in(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     fail_twice(scenario)
     forgot = scenario.operator("forget", KEY)

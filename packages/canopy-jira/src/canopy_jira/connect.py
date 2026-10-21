@@ -102,7 +102,10 @@ def run(argv: Sequence[str], stdin: TextIO, stdout: TextIO, *, endpoint_of: Endp
     """
     try:
         found = command.main(
-            args=list(argv), prog_name="canopy-connect-jira", standalone_mode=False, obj=Io(stdin, stdout, endpoint_of)
+            args=list(argv),
+            prog_name="canopy-connect-jira",
+            standalone_mode=False,
+            obj=Io(stdin, stdout, endpoint_of),
         )
     except click.ClickException as e:
         e.show()

@@ -125,7 +125,10 @@ def forget(key: TicketKey, body: ForgetRequest, backend: BackendDep) -> Forgot:
 
 
 @router.post(
-    "/tickets/{key}/grants", operation_id="grantTicket", summary="Grant a ticket's unit a run", responses=REFUSED
+    "/tickets/{key}/grants",
+    operation_id="grantTicket",
+    summary="Grant a ticket's unit a run",
+    responses=REFUSED,
 )
 def grant(key: TicketKey, body: GrantRequest, backend: BackendDep) -> Granted:
     """`canopy grant KEY KIND --repo NAME`, for one more run: the unit may have one more run of the kind than now.

@@ -75,7 +75,8 @@ def test_a_diff_parses_into_files_hunks_and_numbered_lines() -> None:
     ],
 )
 def test_a_finding_anchors_where_the_diff_shows_its_line(
-    location: str, anchored: tuple[int | None, int | None]
+    location: str,
+    anchored: tuple[int | None, int | None],
 ) -> None:
     assert review_diff.anchor(review_diff.parse(DIFF), location) == anchored
 

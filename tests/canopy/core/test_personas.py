@@ -55,7 +55,10 @@ SHADOW = "When you write anything, write it as a field note: what you saw, then 
 @pytest.mark.parametrize("source", ["shipped", "shadowed"])
 @pytest.mark.parametrize("agent", AGENTS)
 def test_each_agent_renders_the_canopy_persona_after_its_obligations(
-    canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, agent: str, source: str
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+    agent: str,
+    source: str,
 ) -> None:
     if source == "shadowed":
         (personas_dir(canopy_env) / "canopy.md").write_text(f"\n{SHADOW}\n")
@@ -137,7 +140,9 @@ def test_an_operators_persona_adds_to_canopys_and_shadows_one_of_its_name(canopy
     ids=["over-its-bound", "zero-width", "bidi", "tag", "carriage-return"],
 )
 def test_a_persona_past_its_bound_or_with_hidden_characters_is_refused(
-    canopy_env: CanopyEnv, text: str, why: str
+    canopy_env: CanopyEnv,
+    text: str,
+    why: str,
 ) -> None:
     path = personas_dir(canopy_env) / "loud.md"
     path.write_text(text, encoding="utf-8")
@@ -171,7 +176,8 @@ def test_a_name_with_no_file_is_missing_not_canopys(canopy_env: CanopyEnv) -> No
 
 @pytest.mark.parametrize("agent", ["implement", "reviewer"])
 def test_an_override_without_the_placeholder_serves_canopy_and_refuses_any_other(
-    canopy_env: CanopyEnv, agent: str
+    canopy_env: CanopyEnv,
+    agent: str,
 ) -> None:
     # An override that cannot carry a persona keeps the voice it already holds for a run in canopy's; a run given any
     # other persona refuses it, rather than run without the one the operator chose.
@@ -213,7 +219,7 @@ def test_canopy_personas_names_an_agent_whose_runs_would_refuse(scenario: Scenar
     assert f"  loud  yours, {yours / 'loud.md'}; the default for reviewer\n" in printed.out
     assert f"    refused (bad_persona): persona loud at {yours / 'loud.md'} holds U+200B" in printed.out
     assert printed.out.endswith(
-        "[personas] worker names terse, which has no file: its runs refuse (persona_missing).\n"
+        "[personas] worker names terse, which has no file: its runs refuse (persona_missing).\n",
     )
 
 

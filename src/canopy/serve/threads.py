@@ -40,7 +40,9 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
     conn = ctx.conn
     observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", url))
     found = records.fetch_all(
-        conn, records.Draft, sql.select("*").from_("drafts").where("pr_url = ?", url).order_by("run_id, number")
+        conn,
+        records.Draft,
+        sql.select("*").from_("drafts").where("pr_url = ?", url).order_by("run_id, number"),
     )
     if observed is None and not found:
         return None

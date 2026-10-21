@@ -89,7 +89,7 @@ def cmd_release(click_ctx: click.Context, repo: str, slot: str) -> int:
         if found.lease_holder != pools.QUARANTINED:
             held = f", held by {found.lease_holder}" if found.lease_holder else ""
             raise CliError(
-                f"slot {slot} is {found.status}{held}, not quarantined by a failed seeding; nothing released"
+                f"slot {slot} is {found.status}{held}, not quarantined by a failed seeding; nothing released",
             )
         outcome = pool_.release(found.path)
     except pools.PoolError as e:
@@ -99,7 +99,7 @@ def cmd_release(click_ctx: click.Context, repo: str, slot: str) -> int:
             click.echo(f"{repo}: released slot {slot} ({found.path})")
         case pools.ReturnOutcome.FAILED | pools.ReturnOutcome.DIRTY:
             raise CliError(
-                f"{repo}'s pool kept slot {slot}: it is no longer quarantined, or a process in it outlived its signals"
+                f"{repo}'s pool kept slot {slot}: it is no longer quarantined, or a process in it outlived its signals",
             )
         case unknown:
             assert_never(unknown)
@@ -183,7 +183,11 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
         if want is not None and repo.cloned:
             incoming = _incoming(ctx, repo, dry_run=dry_run)
             converged = setup_workspace.converge_pool(
-                ctx.pool(repo.name), repo, want, dry_run=dry_run, incoming=incoming
+                ctx.pool(repo.name),
+                repo,
+                want,
+                dry_run=dry_run,
+                incoming=incoming,
             )
             results.append(_report(converged))
         elif want is not None and dry_run:
@@ -229,7 +233,11 @@ def _incoming(ctx: Context, repo: workspace.Repo, *, dry_run: bool) -> setup_wor
 
 
 def _clone_or_check(
-    ctx: Context, ws: workspace.Workspace, repo: workspace.Repo, *, dry_run: bool
+    ctx: Context,
+    ws: workspace.Workspace,
+    repo: workspace.Repo,
+    *,
+    dry_run: bool,
 ) -> setup_workspace.Checked:
     if repo.cloned:
         return setup_workspace.check_origin(ctx.runner, repo)

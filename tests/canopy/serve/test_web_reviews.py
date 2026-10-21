@@ -34,7 +34,8 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
 
 
 def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_again_if_it_fails(
-    backend: Backend, tmp_path: Path
+    backend: Backend,
+    tmp_path: Path,
 ) -> None:
     c = client(None, backend)
     # Asked for from the web UI, and no review of it has run yet: the reviews page shows it waiting on a tick.
