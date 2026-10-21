@@ -12,6 +12,7 @@ from unittest import mock
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
+from canopy.chores import history
 from canopy.core import config, definitions, plans, prompts
 from canopy.infra import resources
 from canopy.runtime import agents
@@ -460,7 +461,7 @@ def _outside_bash(definition: str) -> list[str]:
         if line.lstrip().startswith("#") or line.startswith("description:"):
             continue
         if line.startswith("  ") and not line.startswith("   "):
-            in_bash = line.strip() == "bash:"
+            in_bash = line.strip().partition(":")[0] == "bash"
         if not in_bash:
             kept.append(line)
     return kept
@@ -488,6 +489,34 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, 
     path = f"agents/{agents.PLANNER}.md"
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     assert _allowed(_rules_in(rendered), tool) is allowed
+
+
+#: A chore's one tool of canopy's, its own history (DESIGN §19), as the runtime names it.
+CHORE_HISTORY = history.tool_name()
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+def test_a_chore_may_call_its_history_tool_and_has_no_shell(canopy_env: CanopyEnv, provider: str) -> None:
+    """The shipped chore reads its history through its tool alone: its shell is gone (ROADMAP M48, Stage 1b)."""
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agents.CHORE)
+    assert _opencode_action(ruleset, CHORE_HISTORY, "*") == "allow"
+    assert _opencode_disabled(ruleset, "bash")
+    assert _opencode_action(ruleset, "bash", "canopy chore history build-health") == "deny"
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.CHORE}))
+def test_no_other_agent_may_call_a_chores_history_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    _set_provider(canopy_env, provider)
+    assert _opencode_disabled(_ruleset(canopy_env, agent), CHORE_HISTORY)
+
+
+@pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))
+def test_an_example_chores_agent_may_call_its_history_tool_too(agent: str) -> None:
+    """Copied at install, it keeps its shell for its prompts' commands, and gets the tool every chore's prompt names."""
+    definition = (resources.example_chores_dir() / "agents" / f"{agent}.md").read_text()
+    assert _allowed(_rules_in(definition), CHORE_HISTORY)
 
 
 def test_the_planner_has_no_shell_or_subagent_tools() -> None:

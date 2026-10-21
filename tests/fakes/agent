@@ -11,12 +11,18 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_SLEEP    seconds to sleep before printing the final line, to exercise timeouts. Default 0.
     FAKE_AGENT_COMMANDS a JSON list of argv lists, run in order before the final line, the way an agent runs
                         commands through its bash tool. Stands in for an overseer calling `canopy decide`. Default none.
+    FAKE_AGENT_TOOLS    a JSON list of [tool, arguments] pairs, each called in order before the commands, `tool` named
+                        as OpenCode names it, `<server>_<tool>`, through the local MCP server of that name its inline
+                        config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
+                        the agent's whole environment. Stands in for a chore calling `canopy_chore_history`. Default
+                        none. A call no server named answers fails as OpenCode's would.
     FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true`: a JSON list of the ticket keys it
                         records with `canopy queried` before its commands, as the prompt's step 1 does once it has run
                         the query. Default `[]`, the query found nothing open. `skip` records no query.
-    FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "...", "env": {...}, "commands": [...]} is
+    FAKE_AGENT_LOG      if set, a JSON object of "argv", "cwd", "env", "tools", and "commands", on one line, is
                         appended to this file per run. `env` holds the CANOPY_* and OPENCODE_* variables the agent
-                        saw; `commands` holds each command's argv, exit code, stdout, and stderr.
+                        saw; `commands` holds each command's argv, exit code, stdout, and stderr; `tools` each tool
+                        call's name, arguments, text, and whether it was an error.
     FAKE_AGENT_SESSION  with `--format json`, the `sessionID` on every event. Default `ses_fake`.
     FAKE_AGENT_STEP_COST
                         with `--format json`, each of the two `step_finish` events' `part.cost`, verbatim JSON, so a
@@ -25,7 +31,8 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         line, as OpenCode prints one when the session fails. Default none.
 
 With `--format json` it prints what `opencode run --format json` does: one JSON event per line, its text as `text`
-events, each command it ran as a `bash` `tool_use` event once it ends, and two model calls as `step_finish` events.
+events, each command it ran as a `bash` `tool_use` event once it ends, each tool it called as a `tool_use` event of its
+name, and two model calls as `step_finish` events.
 Otherwise it prints its text as plain lines.
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_SAYS, FAKE_WORKER_EXIT,
@@ -48,6 +55,7 @@ import subprocess  # noqa: TID251  (stands in for an agent runtime, so a fake ov
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 DEFAULT_RESULT = {
     "status": "done",
@@ -56,6 +64,8 @@ DEFAULT_RESULT = {
     "summary": "fake agent: nothing to do",
 }
 STEP_TOKENS = {"input": 1000, "output": 200, "reasoning": 30, "cache": {"read": 4000, "write": 500}}
+# How long the agent waits for a local MCP server to answer.
+SERVER_TIMEOUT = 60
 
 
 def role(argv: list[str]) -> str:
@@ -102,6 +112,74 @@ def queried(argv: list[str]) -> list[list[str]]:
     return [["canopy", "queried", *json.loads(found)]]
 
 
+def call_tools(argv: list[str]) -> list[dict[str, object]]:
+    """Call each tool the script names, through the server the inline config names for it, one session per server."""
+    calls: list[list[Any]] = json.loads(setting(argv, "TOOLS", "[]"))
+    if not calls:
+        return []
+    servers = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+    made: list[dict[str, object]] = []
+    for name, arguments in calls:
+        # The longest server name the tool's name starts with, as `<server>_<tool>`.
+        owner = max((s for s in servers if name.startswith(f"{s}_")), key=len, default=None)
+        if owner is None:
+            text, error = f"no MCP server serves {name}", True
+        else:
+            [(text, error)] = served(servers[owner], [[name.removeprefix(f"{owner}_"), arguments]])
+        made.append({"name": name, "arguments": arguments, "text": text, "error": error})
+        if events(argv):
+            outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
+            emit(argv, "tool_use", {"type": "tool", "tool": name, "state": {**outcome, "input": arguments}})
+    return made
+
+
+def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool]]:
+    """Open a session with the local server `entry` names, call each of `calls` in it, and close it: each call's text
+    and whether it was a tool error. A server that does not answer fails every call left."""
+    proc = subprocess.Popen(  # noqa: S603  (the command canopy's inline config names)
+        entry["command"],
+        cwd=entry.get("cwd"),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    stdin, stdout = proc.stdin, proc.stdout
+    assert stdin is not None
+    assert stdout is not None
+    answers: list[tuple[str, bool]] = []
+
+    def ask(request_id: int, method: str, params: dict[str, Any]) -> dict[str, Any] | None:
+        stdin.write(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}) + "\n")
+        stdin.flush()
+        line = stdout.readline()
+        return json.loads(line) if line else None
+
+    try:
+        hello: dict[str, Any] = {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "fake", "version": "0"},
+        }
+        if ask(0, "initialize", hello) is not None:
+            stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+            for n, (name, arguments) in enumerate(calls, 1):
+                answer = ask(n, "tools/call", {"name": name, "arguments": arguments})
+                if answer is None:
+                    break
+                if "result" not in answer:
+                    answers.append((str(answer.get("error")), True))
+                    continue
+                result = answer["result"]
+                answers.append(("".join(c["text"] for c in result["content"]), bool(result["isError"])))
+    finally:
+        stdin.close()
+        proc.wait(SERVER_TIMEOUT)
+        stdout.close()
+    left = len(calls) - len(answers)
+    return [*answers, *[("the MCP server did not answer", True)] * left]
+
+
 def query_due(prompt: str) -> bool:
     """Whether `prompt`, an overseer's state block, says the query is due: its JSON between the fences."""
     _, fenced, rest = prompt.partition("```json\n")
@@ -143,13 +221,15 @@ def main(argv: list[str]) -> int:
     if says:
         say(argv, says)
     step(argv)
+    tools = call_tools(argv)
     commands = run_commands(argv)
 
     log = os.environ.get("FAKE_AGENT_LOG")
     if log:
         env = {k: v for k, v in os.environ.items() if k.startswith(("CANOPY_", "OPENCODE_"))}
         with Path(log).open("a") as f:
-            f.write(json.dumps({"argv": argv, "cwd": str(Path.cwd()), "env": env, "commands": commands}) + "\n")
+            ran = {"argv": argv, "cwd": str(Path.cwd()), "env": env, "tools": tools, "commands": commands}
+            f.write(json.dumps(ran) + "\n")
 
     time.sleep(float(setting(argv, "SLEEP", "0")))
 

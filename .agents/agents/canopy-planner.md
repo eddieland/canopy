@@ -77,6 +77,8 @@ permission:
   # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools are allowed by name: the
   # last matching rule wins (D021), so a write tool missing from both lists fails closed.
   # canopy: tracker tools
+  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
+  "canopy_chore_history": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker: plan" prompt, print

@@ -9,11 +9,8 @@ description: canopy chore. Recurring read-only check the operator defines; repor
 mode: primary
 permission:
   edit: deny
-  # The one command it may run reads its own chore's earlier runs back (DESIGN §19, History); `canopy chore history`
-  # refuses any other chore's. Everything else in bash is denied.
-  bash:
-    "*": deny
-    "canopy chore history *": allow
+  # It reads its history through its tool, below, not a shell.
+  bash: deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny
@@ -53,6 +50,9 @@ permission:
   "*branch*": deny
   "*fork*": deny
   "*copilot*": deny
+  # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
+  # chore's, allowed by exact name: last, so no pattern above closes it.
+  "canopy_chore_history": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it does not end in a "## Run" section from canopy,

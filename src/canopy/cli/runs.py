@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import sys
 
 import click
 
-from canopy.cli.common import CliError, OverseerCommand, open_context
+from canopy.cli.common import CliError, OverseerCommand, leave_the_tick, open_context
 from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, verb
 from canopy.core.vocab import ResumeReason
-from canopy.loop import tick, tools
+from canopy.loop import tools
 from canopy.runs import dispatch, policy, worker
 
 
@@ -119,8 +118,7 @@ def cmd_dispatch(
 @click.pass_context
 def cmd_run(click_ctx: click.Context, run_id: int) -> int:
     """Do one dispatched run. Started by `canopy dispatch`, detached; not for people or agents."""
-    # The worker must not be able to act as the overseer of the tick that dispatched it (D020).
-    os.environ.pop(tick.TICK_ID_ENV, None)
+    leave_the_tick()
     ctx = open_context(click_ctx)
     try:
         outcome = worker.execute(ctx, run_id, out=sys.stdout)

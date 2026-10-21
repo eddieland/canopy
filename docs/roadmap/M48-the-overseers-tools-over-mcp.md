@@ -2,7 +2,7 @@
 
 DESIGN §27, D020, D081. Asked for by the operator (2026-10-16): the overseer acts through MCP tools canopy serves,
 not by running the `canopy` CLI through bash. Needs nothing; taken before M37, so that M37 and M38 rewrite the
-overseer's prompt once, against tools. Workers are out of scope (§27, Why). Four stages, in order, each in its own
+overseer's prompt once, against tools. Workers are out of scope (§27, Why). Five stages, in order, each in its own
 PRs, a stage starting only once the one before has passed its check, recorded on the `Status:` line.
 
 **Stage 0, measure and read.** Nothing is built.
@@ -33,7 +33,24 @@ PRs, a stage starting only once the one before has passed its check, recorded on
   descendant and outlives it. The server writes nothing to stderr, and exits when its stdin closes.
 - Check: `make check`, and a hand-run `canopy _mcp` in a dry tick answering an OpenCode client.
 
-**Stage 2, the overseer switches.**
+**Stage 1b, a chore trials the server.** The operator's call (2026-10-21): an agent with fewer responsibilities than
+the overseer is given the server first. Nothing the overseer runs changes.
+
+- Every chore's one command, `canopy chore history`, is also a tool, `canopy_chore_history`, scoped to that chore's own
+  runs: one request and one function (`chores/history.py`) that the command and the tool share, the same bounds and the
+  same refusal of another chore's history. `canopy _mcp --chore` lists and serves that tool alone, only where
+  `CANOPY_RUN_ID` names a chore's run; the overseer's tools are still served only inside a tick and never in a run.
+- A chore run's environment carries the server's inline-config entry and code mode off, as stage 2 gives the overseer;
+  every run canopy starts drops both first. `canopy-chore` allows the tool by exact name and loses its shell; every other
+  definition denies the tool. The example chores' agents allow it too and keep their shell for canopy's read-only
+  commands. The `## Run` section names the tool.
+- Tests with the fakes: the fake agent gains `FAKE_AGENT_TOOLS`, calls through the server its inline config names. A
+  chore reads its history through the tool from a `cwd` outside the workspace, told what the command prints; another
+  chore's history is refused; nothing is listed without a chore's run; a run below a chore's inherits no server.
+- Check: a week of the operator's chores with the tool, no chore run failing for the server, and history read through
+  the tool in the transcripts.
+
+**Stage 2, the overseer switches.** Waits on stage 1b's check.
 
 - The harness gives the overseer's run the server's entry, removes it from every run it starts, and removes the code
   mode flags from the overseer's environment; the definition
@@ -72,4 +89,6 @@ Stage 2's check, which is held to it. Stage 1 is built (2026-10-20): the verbs a
 `loop/tools.py`, which the commands and `canopy _mcp` both call; `procs` removes named variables from a child's
 environment and spawns through an intermediate. Its check: `make check`, and in a dry tick OpenCode 1.19.3's own client,
 given the server in its inline config and a stand-in model, listed the eleven tools as `canopy_<tool>` and called
-`canopy_decide`, which recorded its decision; with no running tick it was offered none.
+`canopy_decide`, which recorded its decision; with no running tick it was offered none. Stage 2 is built in #1090 and
+held for Stage 1b, at the operator's word (2026-10-21): the server is tried first on an agent with fewer
+responsibilities. Stage 1b is built against the fakes; its check, a week of the operator's chores, is the operator's.

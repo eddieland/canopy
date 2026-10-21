@@ -112,10 +112,10 @@ attention list: they shape what the chore looks for, not when it runs.
 ## What a run knows of the last ones
 
 Each run's prompt carries the previous run's summary and the open findings, so it reports a problem still there under
-the same id. That's all it gets for free. When it wants more, say whether a flaky test came and went last week, it runs
-`canopy chore history NAME` for the chore's runs and what each found, and `--run ID` for one in full. A run reads its
-own chore's history and no other's, and the overseer reads none. You can run it too; it's the **Runs** list with the
-details left in.
+the same id. That's all it gets for free. When it wants more, say whether a flaky test came and went last week, it calls
+its one canopy tool, `canopy_chore_history`, for the chore's runs and what each found, or for one run in full. A run
+reads its own chore's history and no other's, and the overseer reads none. You can read it too, with
+`canopy chore history NAME`: it's the **Runs** list with the details left in.
 
-A chore with an agent definition of your own needs `"canopy chore history *": allow` among its bash rules to look back.
+A chore with an agent definition of your own needs `"canopy_chore_history": allow` among its permissions to look back.
 A sandboxed chore can't: the journal sits in the part of `.canopy/` its sandbox hides, so it makes do with its prompt.

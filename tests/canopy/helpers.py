@@ -433,6 +433,20 @@ def canopy(*args: str) -> list[str]:
     return ["canopy", *args]
 
 
+class Called(NamedTuple):
+    """A call an agent makes of one of canopy's tools (DESIGN §27), through the server its inline config names."""
+
+    #: The tool, as the runtime names it: `canopy_chore_history`.
+    name: str
+    #: Its arguments, the fields of its request.
+    arguments: Mapping[str, object]
+
+
+def calls(name: str, /, **arguments: object) -> Called:
+    """The call an agent makes of canopy's tool `name`, as the runtime names it, with `arguments`."""
+    return Called(name, arguments)
+
+
 class Behavior(TypedDict, total=False):
     """What a fake agent does besides run its commands and print its result line, as tests/fakes/agent reads it."""
 
@@ -645,10 +659,18 @@ def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iter
 
 
 @contextmanager
-def chore_reports(report: object, *commands: list[str], **behavior: Unpack[Behavior]) -> Iterator[None]:
-    """Until the block ends, the fake chore prints `report`, verbatim if it is a string, after running `commands` if
-    given."""
-    with scripted("CHORE", reported(report, commands), behavior):
+def chore_reports(
+    report: object,
+    *commands: list[str],
+    tools: Sequence[Called] = (),
+    **behavior: Unpack[Behavior],
+) -> Iterator[None]:
+    """Until the block ends, the fake chore prints `report`, verbatim if it is a string, after making the calls `tools`
+    names and running `commands`, if given."""
+    settings = reported(report, commands)
+    if tools:
+        settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
+    with scripted("CHORE", settings, behavior):
         yield
 
 
@@ -813,15 +835,17 @@ class Served:
         return [t["name"] for t in self.responses[request_id]["result"]["tools"]]
 
 
-def mcp_session(*requests: Mapping[str, object], raw: Sequence[str] = ()) -> Served:
-    """Talk to `canopy _mcp` as the runtime does for the overseer, here, in this environment: open the session, send
-    each of `requests` numbered from 1, then each line of `raw` as it is, and close the server's stdin.
+def mcp_session(*requests: Mapping[str, object], raw: Sequence[str] = (), chore: bool = False) -> Served:
+    """Talk to `canopy _mcp` as the runtime does for the overseer, or with `chore` for a chore's run, here, in this
+    environment: open the session, send each of `requests` numbered from 1, then each line of `raw` as it is, and close
+    the server's stdin.
 
     The server answers one message at a time, and the session waits for it to exit, which it must on its own.
     """
     numbered = [{"jsonrpc": "2.0", "id": n, **request} for n, request in enumerate(requests, 1)]
     lines = [*(json.dumps(m) for m in (*MCP_OPENING, *numbered)), *raw]
-    result = procs.SubprocessRunner().run(MCP_SERVER, stdin="".join(f"{line}\n" for line in lines), timeout=60)
+    server = (*MCP_SERVER, "--chore") if chore else MCP_SERVER
+    result = procs.SubprocessRunner().run(server, stdin="".join(f"{line}\n" for line in lines), timeout=60)
     assert not result.timed_out, f"canopy _mcp did not exit when its stdin closed: {result.stderr}"
     answers = [json.loads(line) for line in result.stdout.splitlines()]
     return Served({a["id"]: a for a in answers}, result.stderr, result.returncode)

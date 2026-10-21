@@ -13,11 +13,12 @@ from unittest import mock
 
 import pytest
 
+from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.context import Context
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp
 from canopy.runs import policy
@@ -653,6 +654,111 @@ def test_the_server_answers_in_the_version_asked_or_its_newest_writes_no_stderr_
     assert (served.stderr, served.returncode) == ("", 0)
 
 
+# A chore's run: `canopy _mcp --chore` serves it its own history alone (DESIGN §19, §27).
+
+
+def chore_runs(env: CanopyEnv) -> sqlite3.Connection:
+    """The journal, holding two ended runs of build-health, 1 and 2, the second a finding's."""
+    conn = env.journal()
+    for summary in ("all green", "one flaky test"):
+        run_id = db.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=env.state_dir)
+        report: dict[str, object] = {"status": "ok", "summary": summary, "findings": []}
+        db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, json.dumps(report))
+    return conn
+
+
+def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
+    conn = chore_runs(overseen)
+    for run in ("chore-2", "chore-try:build-health"):
+        with in_run(run):
+            served = mcp_session(
+                LIST_TOOLS,
+                tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
+                chore=True,
+            )
+        assert served.listed() == ["history"], run
+        # None of the overseer's verbs is served to a chore, whatever it asks.
+        assert served.responses[2]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    schema = served.responses[1]["result"]["tools"][0]["inputSchema"]
+    assert (schema["required"], schema["additionalProperties"]) == (["name"], False)
+    assert schema["properties"]["limit"]["maximum"] == history.MAX_LIMIT
+    # The overseer's server lists nothing inside a chore's run, its history included.
+    with in_tick(conn), in_run("chore-2"):
+        assert mcp_session(LIST_TOOLS).listed() == []
+
+
+@pytest.mark.parametrize("run", [None, "7", "review-1", "chore-99", "chore-x"])
+def test_nothing_is_served_where_no_chores_run_is(overseen: CanopyEnv, run: str | None) -> None:
+    conn = chore_runs(overseen)
+    read = tool_call("history", name="build-health")
+    with in_tick(conn), in_run(run) if run is not None else contextlib.nullcontext():
+        served = mcp_session(LIST_TOOLS, read, chore=True)
+    assert served.listed() == []
+    assert served.said(2) == (
+        "chore history refused (not_chore): the history tool serves a chore's own runs alone, and this is none",
+        True,
+    )
+
+
+def test_a_chores_history_tool_says_what_its_command_prints(
+    overseen: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chore_runs(overseen)
+    reads = [
+        {"name": "build-health"},
+        {"name": "build-health", "limit": 1},
+        {"name": "build-health", "before": 2},
+        {"name": "build-health", "run": 2},
+    ]
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    env = {history.WORKSPACE_ENV: str(overseen.root)}
+    # From a `cwd` outside the workspace, as a chore's may be: its run names the workspace.
+    with in_run("chore-2"), mock.patch.dict(os.environ, env), contextlib.chdir(elsewhere):
+        served = mcp_session(*(tool_call("history", **read) for read in reads), chore=True)
+        printed: list[str] = []
+        for read in reads:
+            flags = [f"--{field}={value}" for field, value in read.items() if field != "name"]
+            assert main(["chore", "history", str(read["name"]), *flags]) == 0
+            printed.append(capsys.readouterr().out)
+    for n, out in enumerate(printed, 1):
+        said = served.said(n)
+        assert not said.error, said.text
+        assert f"{said.text}\n" == out
+    assert served.said(1).text.startswith(history.DATA_NOTE)
+    assert served.said(2).text.endswith("Older runs: before (--before) 2.")
+    assert "summary: one flaky test" in served.said(4).text
+
+
+def test_a_chores_history_tool_refuses_what_its_command_refuses(
+    overseen: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chore_runs(overseen)
+    refused = [
+        ({"name": "queue-age"}, "chore history refused (other_chore): this is a run of chore build-health"),
+        ({"name": "build-health", "run": 9}, "chore history refused (unknown): chore build-health has no run 9"),
+        ({"name": "build-health", "run": 1, "before": 2}, "run (--run) prints one run and before (--before) pages"),
+        ({"name": "build-health", "limit": history.MAX_LIMIT + 1}, "limit: Input should be less than or equal to 50"),
+        ({"name": "Build Health"}, "invalid chore name 'Build Health'"),
+        ({"name": "build-health", "colour": "blue"}, "colour: Extra inputs are not permitted"),
+    ]
+    with in_run("chore-2"):
+        served = mcp_session(*(tool_call("history", **arguments) for arguments, _ in refused), chore=True)
+    for n, (_, refusal) in enumerate(refused, 1):
+        said = served.said(n)
+        assert said.error
+        assert refusal in said.text, said.text
+    # The command refuses the first two, a guard's, as the tool does.
+    with in_run("chore-2"):
+        assert main(["chore", "history", "queue-age"]) == 1
+        assert refused[0][1] in capsys.readouterr().err
+        assert main(["chore", "history", "build-health", "--run", "1", "--before", "2"]) == 2
+        assert "run (--run) prints one run and before (--before) pages" in capsys.readouterr().err
+
+
 def test_a_run_a_tool_starts_is_not_the_servers_descendant(overseen: CanopyEnv) -> None:
     # The runtime signals every descendant of the server when the overseer's run ends (DESIGN §27, What OpenCode
     # does). The server here is this process, so a run it started would be this process's descendant.
@@ -724,7 +830,7 @@ def test_canopy_mcp_spawns_through_an_intermediate() -> None:
 @contextlib.contextmanager
 def opened(env: CanopyEnv, runner: procs.Runner) -> Iterator[Context]:
     """The workspace as the server opens it for a call, with `runner`."""
-    with mcp.opened(runner) as ctx:
+    with mcp.opened(runner, Path.cwd()) as ctx:
         assert ctx.ws.root == env.root
         yield ctx
 

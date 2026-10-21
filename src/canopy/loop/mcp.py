@@ -1,14 +1,19 @@
-"""`canopy _mcp`: the overseer's verbs as MCP tools, served over stdio to the run that starts it (DESIGN §27).
+"""`canopy _mcp`: canopy's verbs as MCP tools, served over stdio to the run that starts it (DESIGN §27).
 
-The agent runtime starts it as a child of the overseer's process, and it lives as long as that run. It opens no
+The agent runtime starts it as a child of the agent's process, and it lives as long as that run. It opens no
 socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, and five methods, `initialize`,
 `notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
 with its own async stack and HTTP transports, for these few methods.
 
-A call is what the same command would be (`loop.tools`): its arguments validated, the workspace opened afresh, the tick
-checked, one call at a time. A refusal or an invalid argument is a tool error, `isError`, with the text the command
-prints, and the server goes on. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every
-call. It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
+It serves in one of two modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
+command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
+time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
+(`CHORE`, `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy
+chore history` also reads; it lists and serves it only where CANOPY_RUN_ID names a chore's run, and serves nothing of
+the overseer's.
+
+A refusal or an invalid argument is a tool error, `isError`, with the text the command prints, and the server goes on.
+It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
 """
 
 from __future__ import annotations
@@ -18,13 +23,14 @@ import json
 import os
 import sys
 import traceback
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
+from canopy.chores import history
 from canopy.core import config, context, conversation, db
 from canopy.infra import logs
 from canopy.loop import tools
@@ -50,7 +56,7 @@ type Response = dict[str, object] | None
 
 @dataclass(frozen=True)
 class Tool:
-    """One of the overseer's verbs as a tool."""
+    """One of canopy's verbs as a tool."""
 
     #: Its name: the command's, with hyphens for spaces. No name holds an underscore, which the runtime joins its
     #: server's name and the tool's with, so `canopy_ticket-set` cannot also be another server's tool.
@@ -74,13 +80,16 @@ class Tool:
 def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
     """Make verb `do` a tool, taking `request` as its arguments.
 
-    Every call is refused outside a running tick, `ticket-set` included, which the command takes outside one.
+    Every call is refused inside a run, and outside a running tick, `ticket-set` included, which the command takes
+    outside one.
 
     Returns:
         The tool.
     """
 
     def call(arguments: Mapping[str, object], opened: Opener) -> str:
+        if os.environ.get(conversation.RUN_ID_ENV):
+            raise tools.Refused(_inside_run())
         asked = request.model_validate(arguments)
         with opened() as ctx:
             tools.running_tick(ctx)
@@ -158,8 +167,50 @@ TOOLS = (
 )
 
 
-def run_stdio(runner: procs.Runner) -> int:
+def _chore_history(arguments: Mapping[str, object], opened: Opener) -> str:
+    """Read the chore's own history, as `canopy chore history` would inside its run.
+
+    Returns:
+        What the command prints.
+
+    Raises:
+        tools.Refused: CANOPY_RUN_ID names no chore's run, or the read refused, as the command would.
+    """
+    asked = history.History.model_validate(arguments)
+    with opened() as ctx:
+        try:
+            history.run_chore(ctx.conn)
+            return history.read(ctx, asked)
+        except history.Refused as r:
+            raise tools.Refused(str(r)) from None
+
+
+#: A chore's one tool, which the runtime names `canopy_chore_history` (its server is `history.SERVER`).
+CHORE_TOOLS = (
+    Tool(
+        history.TOOL,
+        "List this chore's earlier runs, newest first, with what each reported; with run, one run's findings in full; "
+        "with before, the page of runs before that id.",
+        history.History,
+        _chore_history,
+    ),
+)
+
+
+@dataclass(frozen=True)
+class Mode:
+    """What the server serves: the overseer's verbs, or a chore its history."""
+
+    #: The tools it lists and serves.
+    tools: Sequence[Tool]
+    #: Why it lists no tool now, or None when it lists them; each call checks again for itself.
+    refusal: Callable[[Opener], str | None]
+
+
+def run_stdio(runner: procs.Runner, *, chore: bool = False) -> int:
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
+
+    `chore` serves a chore's run its history (`CHORE`), from the workspace its run names; else the overseer's verbs.
 
     The protocol keeps its own copy of stdout; the process's stdout and stderr then go nowhere, so nothing a call
     prints, and no warning or traceback, reaches the runtime's pipes.
@@ -177,40 +228,44 @@ def run_stdio(runner: procs.Runner) -> int:
         out.write(line)
         out.flush()
 
+    # A chore's agent may run in a `cwd` outside the workspace; its run names the workspace it belongs to.
+    root = os.environ.get(history.WORKSPACE_ENV) if chore else None
+    start = Path(root) if root else Path.cwd()
     with contextlib.suppress(BrokenPipeError), out:
-        serve(sys.stdin.buffer, write, lambda: opened(runner))
+        serve(sys.stdin.buffer, write, lambda: opened(runner, start), CHORE if chore else OVERSEER)
     return 0
 
 
-def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener) -> None:
+def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener, mode: Mode | None = None) -> None:
     """Answer each message in `lines` with `write`, one at a time, until `lines` ends.
 
-    `opener` opens the workspace for a call: `opened`, outside the tests.
+    `opener` opens the workspace for a call: `opened`, outside the tests. `mode` is what it serves, the overseer's verbs
+    unless given.
     """
     for line in lines:
         if line.strip():
-            response = answer(line, opener)
+            response = answer(line, opener, mode)
             if response is not None:
                 # Escaped to ASCII: a lone surrogate a client sent, echoed in a refusal, could not be written as UTF-8.
                 write(json.dumps(response) + "\n")
 
 
 @contextlib.contextmanager
-def opened(runner: procs.Runner) -> Iterator[Context]:
-    """Open the workspace this process runs in, as a command does, for one call.
+def opened(runner: procs.Runner, start: Path) -> Iterator[Context]:
+    """Open the workspace `start` is in, as a command does, for one call.
 
     Yields:
         The context, whose journal closes when the block ends.
     """
-    ctx = context.open_at(Path.cwd(), runner)
+    ctx = context.open_at(start, runner)
     try:
         yield ctx
     finally:
         ctx.conn.close()
 
 
-def answer(line: bytes, opener: Opener) -> Response:
-    """Answer one message.
+def answer(line: bytes, opener: Opener, mode: Mode | None = None) -> Response:
+    """Answer one message, serving `mode`, the overseer's verbs unless given.
 
     Returns:
         The response to a request, or None for a notification, which is never answered.
@@ -225,7 +280,7 @@ def answer(line: bytes, opener: Opener) -> Response:
     if method is None:
         return _error(message.id, METHOD_NOT_FOUND, f"no method {message.method!r}: canopy serves tools only")
     try:
-        result = method(message.params, opener)
+        result = method(message.params, opener, mode or OVERSEER)
     except _Failed as e:
         return _error(message.id, e.code, str(e))
     except Exception as e:  # noqa: BLE001  (a bug answers this request, and the server goes on serving)
@@ -316,7 +371,7 @@ def _read(line: bytes) -> _Message | None:
     return message if "id" in raw else None
 
 
-def _initialize(params: Mapping[str, object], opener: Opener) -> dict[str, object]:  # noqa: ARG001  (no workspace)
+def _initialize(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:  # noqa: ARG001
     asked = _parsed(_Initialize, params)
     version = asked.protocol_version if asked.protocol_version in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0]
     return {
@@ -326,21 +381,19 @@ def _initialize(params: Mapping[str, object], opener: Opener) -> dict[str, objec
     }
 
 
-def _ping(params: Mapping[str, object], opener: Opener) -> dict[str, object]:  # noqa: ARG001  (nothing to say)
+def _ping(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:  # noqa: ARG001
     return {}
 
 
-def _list(params: Mapping[str, object], opener: Opener) -> dict[str, object]:  # noqa: ARG001  (no page to ask for)
-    return {"tools": [] if _refusal(opener) is not None else [t.listed() for t in TOOLS]}
+def _list(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:  # noqa: ARG001  (one page)
+    return {"tools": [] if mode.refusal(opener) is not None else [t.listed() for t in mode.tools]}
 
 
-def _call(params: Mapping[str, object], opener: Opener) -> dict[str, object]:
+def _call(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:
     asked = _parsed(_Call, params)
-    found = next((t for t in TOOLS if t.name == asked.name), None)
+    found = next((t for t in mode.tools if t.name == asked.name), None)
     if found is None:
         raise _Failed(INVALID_PARAMS, f"no tool named {asked.name!r}")
-    if os.environ.get(conversation.RUN_ID_ENV):
-        return _said(_inside_run(), error=True)
     try:
         return _said(found.call(asked.arguments or {}, opener))
     except ValidationError as e:
@@ -351,7 +404,7 @@ def _call(params: Mapping[str, object], opener: Opener) -> dict[str, object]:
         return _said(f"canopy: {e}", error=True)
 
 
-_METHODS: Mapping[str, Callable[[Mapping[str, object], Opener], dict[str, object]]] = {
+_METHODS: Mapping[str, Callable[[Mapping[str, object], Opener, Mode], dict[str, object]]] = {
     "initialize": _initialize,
     "ping": _ping,
     "tools/list": _list,
@@ -359,8 +412,8 @@ _METHODS: Mapping[str, Callable[[Mapping[str, object], Opener], dict[str, object
 }
 
 
-def _refusal(opener: Opener) -> str | None:
-    """Say why no tool is served now: inside a run, or outside a running tick.
+def _overseer_refusal(opener: Opener) -> str | None:
+    """Say why none of the overseer's tools is served now: inside a run, or outside a running tick.
 
     Returns:
         Why, as a refusal says it, or None when tools are served.
@@ -375,6 +428,28 @@ def _refusal(opener: Opener) -> str | None:
     except (config.ConfigError, db.MigrationError) as e:
         return f"canopy: {e}"
     return None
+
+
+def _chore_refusal(opener: Opener) -> str | None:
+    """Say why a chore's tool is not served now: CANOPY_RUN_ID names no chore's run.
+
+    Returns:
+        Why, as a refusal says it, or None when it is served.
+    """
+    try:
+        with opener() as ctx:
+            history.run_chore(ctx.conn)
+    except history.Refused as r:
+        return str(r)
+    except (config.ConfigError, db.MigrationError) as e:
+        return f"canopy: {e}"
+    return None
+
+
+#: The overseer's verbs, served inside a running tick and never inside a run.
+OVERSEER = Mode(TOOLS, _overseer_refusal)
+#: A chore's history, served inside that chore's run alone.
+CHORE = Mode(CHORE_TOOLS, _chore_refusal)
 
 
 def _inside_run() -> str:

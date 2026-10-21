@@ -40,6 +40,13 @@ runtime dependency with its own async stack and HTTP transports, for the few met
 - A run a tool starts is never the server's descendant, since OpenCode kills those when the overseer's run ends; it is
   reparented, as a `canopy dispatch` run is today.
 
+A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server named `canopy_chore` in a chore run's
+inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's
+history (§19), the request and text `canopy chore history` has, refused for any other chore. It lists nothing where
+`CANOPY_RUN_ID` names no chore's run, and serves none of the overseer's tools. The chore's definition allows the tool by
+exact name and denies bash; every other definition denies it. Each run canopy starts drops the variables that name a
+server, so none passes below the run it was given to.
+
 ### The tools
 
 One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `queried`,

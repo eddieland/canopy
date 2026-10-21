@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from canopy.core import contract, db, records
+from canopy.infra.text import one_line
 from canopy.loop import attention
 
 if TYPE_CHECKING:
@@ -18,8 +19,6 @@ if TYPE_CHECKING:
 
     from canopy.core import chore_view
 
-# Agent-written text is cut to this many characters to fit one terminal line.
-SUMMARY_WIDTH = 160
 #: How much of a persona's digest a line shows: enough to tell two versions of it apart.
 DIGEST_WIDTH = 12
 
@@ -41,16 +40,6 @@ def named(key: object, title: object) -> str:
         The key and its title fit for one line, or the key alone when `title` is empty or None.
     """
     return f"{key}: {one_line(str(title))}" if title else str(key)
-
-
-def one_line(text: str) -> str:
-    """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut.
-
-    Returns:
-        The flattened text, cut to `SUMMARY_WIDTH` characters and ended with "..." when longer.
-    """
-    flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
-    return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
 
 
 def phase_of(conn: sqlite3.Connection, ticket: records.Ticket) -> str:

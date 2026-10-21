@@ -1,12 +1,12 @@
 # Each bundled prompt, agent definition, and skill's size in characters. This is a record, not a limit: grow or shrink
 # a prompt as the work needs, and update its number here in the same PR, so the diff shows by how much.
 # tests/canopy/test_prompt_sizes.py names the line to update; `make prompt-sizes` prints the sizes, with tokens.
-"agents/canopy-chore.md" = 2787
-"agents/canopy-overseer.md" = 4444
-"agents/canopy-planner.md" = 4019
-"agents/canopy-reviewer.md" = 3776
-"agents/canopy-worker-private.md" = 6715
-"agents/canopy-worker.md" = 5312
+"agents/canopy-chore.md" = 2847
+"agents/canopy-overseer.md" = 4594
+"agents/canopy-planner.md" = 4169
+"agents/canopy-reviewer.md" = 3926
+"agents/canopy-worker-private.md" = 6865
+"agents/canopy-worker.md" = 5462
 "personas/canopy.md" = 614
 "personas/explainer.md" = 982
 "personas/minimalist.md" = 2378

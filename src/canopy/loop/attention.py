@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
 from canopy.core import (
+    chore_result,
     chore_view,
     connector_runs,
     contract,
@@ -386,18 +387,9 @@ def render(items: Sequence[Item], now: datetime, more: Mapping[str, int] | None 
         lines += [f"## {chore}", ""]
         lines += [f"- {one_line(i.detail)}, {age(i.since, now)} ({i.reason})" for i in findings if i.subject == chore]
         if chore in more:
-            lines.append(f"- {more_text(more[chore])}")
+            lines.append(f"- {chore_result.more_text(more[chore])}")
         lines.append("")
     return "\n".join(lines)
-
-
-def more_text(count: int) -> str:
-    """Say that a chore found `count` findings past its `max_findings` and did not list them (DESIGN §19).
-
-    Returns:
-        The sentence `attention.md`, `canopy status`, and `canopy show` say it in.
-    """
-    return f"{count} more finding{'s' if count != 1 else ''} not listed, past the chore's max_findings"
 
 
 def publish(ctx: Context, log: logs.TickAdapter, *, ui: str | None = None) -> None:

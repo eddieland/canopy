@@ -10,7 +10,6 @@ commands that write refuse inside canopy's own ticks and runs.
 from __future__ import annotations
 
 import contextlib
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,13 +17,13 @@ from typing import TYPE_CHECKING, assert_never
 
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, open_context
+from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
 from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
 from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_requests, sql
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
-from canopy.loop import tick, tools
+from canopy.loop import tools
 from canopy.reviews import execute, findings, view
 
 if TYPE_CHECKING:
@@ -290,8 +289,7 @@ def _by(version: review_drafts.Version) -> str:
 @click.pass_context
 def cmd_review_process(click_ctx: click.Context, run_id: int) -> int:
     """Do one review run. Started by `canopy review run`, detached; not for people or agents."""
-    # The reviewer must not be able to act as the overseer of the tick that started it (D020).
-    os.environ.pop(tick.TICK_ID_ENV, None)
+    leave_the_tick()
     ctx = open_context(click_ctx)
     try:
         outcome = execute.execute(ctx, run_id, out=sys.stdout)
