@@ -111,8 +111,9 @@ such as `tracker.labels` and everything under `runtime`, may be set only in the 
 
 Work through these in order and stop at the first that explains it.
 
-1. Did a recent tick run? `canopy status` shows the last one; a failed or skipped tick decides nothing. `skipped`
-   usually means an MCP server was unreachable (`mcp_unavailable: <which>`). `canopy_unavailable`, `disk_low`,
+1. Did a recent tick run? `canopy status` shows the last one. `skipped` usually means an MCP server was unreachable
+   (`mcp_unavailable: <which>`); such a tick still runs due chores, reviews, and a private ticket's resume when GitHub
+   answers, but dispatches no public ticket. `canopy_unavailable`, `disk_low`,
    `overseer_failed`, and `reconcile_failed` have a summary, the detail in `ticks/<id>.log`. `overseer_failed` with
    `left duties undone` names what the overseer skipped (the query, a ticket, or a chore); what that tick dispatched
    still runs. `error` names the exception; `canopy.log` has its traceback.

@@ -109,10 +109,20 @@ You can do nothing else. If you want to, record `canopy decide <KEY> skip --rati
    holding only `CANOPY_TICK_DONE`, and exit; you may summarize before it. The harness reads only your final message:
    without that line there, the tick fails and its attention items are lost.
 
-Never decide on partial data. If the tracker or GitHub MCP is unavailable or returns errors, or you cannot read a
-ticket or what raised an attention item, record `canopy decide skip --rationale "mcp_unavailable: <which>"`, with no
-key, and finish as step 8 says. If the tracker works but cannot do something you need (find tickets, read labels, read
-comment authors), do the same with `--rationale "tracker_unsupported: <what>"`. These are the only skips without a key.
+Never decide on partial data, but do not let one server's outage stop work that needs nothing from it. If the tracker
+or GitHub MCP is unavailable or returns errors, or you cannot read a ticket or what raised an attention item, the tick
+cannot be whole. First do only what you can read whole without what failed, in step 6's order and under step 4's
+holds; record nothing else, attention items included, since such a tick leaves the attention list as it was:
+
+- every due chore (see "Chores"), which needs neither server;
+- with GitHub readable, the reviews "Reviews" asks for, and a private ticket's `resume`, which its start record
+  authorizes: for `pushed_no_pr`, `conflicted`, `ci_red`, or an operator message. Dispatch no public ticket, whose
+  label only the tracker shows, and no other kind;
+- with the tracker readable, each closed ticket in the state block marked done (see "Which tickets are candidates").
+
+Then record `canopy decide skip --rationale "mcp_unavailable: <which>"`, with no key, and finish as step 8 says. If the
+tracker works but cannot do something you need (find tickets, read labels, read comment authors), record only the
+skip, with `--rationale "tracker_unsupported: <what>"`. These are the only skips without a key.
 
 ## Which tickets are candidates
 
