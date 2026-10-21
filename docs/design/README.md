@@ -108,6 +108,9 @@ not go in the middle of the sequence.
   - [35. The overseer reads the journal](READING_THE_JOURNAL.md#35-the-overseer-reads-the-journal)
 - [One-off tasks](TASKS.md): work the operator hands canopy in their own words, about no ticket.
   - [36. One-off tasks](TASKS.md#36-one-off-tasks)
+- [The harness decides](HARNESS_DECIDES.md): the decisions the harness records in code before the overseer runs, and
+  what it leaves to judgment.
+  - [37. The harness decides what needs no judgment](HARNESS_DECIDES.md#37-the-harness-decides-what-needs-no-judgment)
 
 ## 1. Problem
 
