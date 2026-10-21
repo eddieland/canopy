@@ -17,6 +17,8 @@ Keys of the state besides `sessions`, each optional:
     skills  the names `debug skill` lists. Default none.
     agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `debug agent NAME` prints
             after an allow of everything. Default none.
+    tools   each agent's built-in tools by name, each to whether it keeps it, as `debug agent NAME` prints them.
+            Default none.
 
 It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
 arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
@@ -66,7 +68,11 @@ def debug(command: list[str]) -> int:
             ]
         case ["agent", name]:
             rules = [["*", "*", "allow"], *state.get("agents", {}).get(name, [])]
-            printed = {"name": name, "permission": [{"permission": p, "pattern": t, "action": a} for p, t, a in rules]}
+            printed = {
+                "name": name,
+                "permission": [{"permission": p, "pattern": t, "action": a} for p, t, a in rules],
+                "tools": state.get("tools", {}).get(name, {}),
+            }
         case _:
             sys.stderr.write(f"fake opencode does not play `debug {' '.join(command)}`\n")
             return 2

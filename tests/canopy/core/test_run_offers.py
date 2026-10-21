@@ -18,7 +18,7 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 
 
 def offered(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[object, ...] | None:
-    """What `run_offers.of_run` read back for a run, as plain values."""
+    """What `run_offers.of_run` read back for a run, as plain values: its agent, error, servers, and skills."""
     found = run_offers.of_run(conn, table, run_id)
     if found is None:
         return None
@@ -26,15 +26,32 @@ def offered(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[obj
     return found.asked.agent, found.asked.error, servers, tuple(s.skill for s in found.skills)
 
 
+def tools_and_rules(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[object, ...]:
+    """The built-in tools a run was offered, and the rules that leave it some of a server's tools, as plain values."""
+    found = run_offers.of_run(conn, table, run_id)
+    assert found is not None
+    return tuple(t.tool for t in found.tools), {server: list(rules) for server, rules in found.server_rules.items()}
+
+
 def test_a_run_keeps_only_what_it_was_offered_and_the_latest_ask(conn: sqlite3.Connection) -> None:
-    servers = (ServerOffer("github", "some", ("offer github_issue_read",)), ServerOffer("sentry", "none"))
-    offer = AgentOffer("canopy-worker", servers=servers, skills=("pdf",), denied_skills=("xlsx",))
+    rules = ("deny github_*", "offer github_issue_read")
+    servers = (ServerOffer("github", "some", rules), ServerOffer("sentry", "none", ("offer sentry_x",)))
+    offer = AgentOffer(
+        "canopy-worker",
+        servers=servers,
+        skills=("pdf",),
+        denied_skills=("xlsx",),
+        tools=("bash", "read"),
+    )
     run_offers.record(conn, "runs", 1, offer)
     assert offered(conn, "runs", 1) == ("canopy-worker", None, (("github", "some"),), ("pdf",))
+    # A server not offered keeps none of its rules either.
+    assert tools_and_rules(conn, "runs", 1) == (("bash", "read"), {"github": list(rules)})
     # Another table's run of the same id is another run.
     assert offered(conn, "ticks", 1) is None
     run_offers.record(conn, "runs", 1, AgentOffer("canopy-worker", error="`opencode debug skill` exited 1"))
     assert offered(conn, "runs", 1) == ("canopy-worker", "`opencode debug skill` exited 1", (), ())
+    assert tools_and_rules(conn, "runs", 1) == ((), {})
 
 
 def test_an_agent_that_could_not_start_still_has_its_ask_recorded(conn: sqlite3.Connection) -> None:
@@ -96,6 +113,7 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
                 "config": {"mcp": {"github": {"type": "remote"}, "sentry": {"enabled": False}}},
                 "skills": ["pdf", "tracker-jira"],
                 "agents": {"canopy-overseer": [["skill", "pdf", "deny"], ["github_*", "*", "deny"]]},
+                "tools": {"canopy-worker": {"bash": True, "edit": True, "task": False}},
             },
         ),
     )
@@ -112,6 +130,7 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
         (("github", "all"),),
         ("pdf", "tracker-jira"),
     )
+    assert tools_and_rules(scenario.conn, "runs", run.id) == (("bash", "edit"), {})
     # Each asked where its agent ran: the overseer in the repository, the worker in its worktree.
     log = [json.loads(line) for line in opencode_state.with_name("opencode.jsonl").read_text().splitlines()]
     asked = {(entry["argv"][-1], entry["cwd"]) for entry in log if entry["argv"][:2] == ["debug", "agent"]}

@@ -55,9 +55,9 @@ Two more read-only commands serve those chores. `canopy config show` lists each 
 merged config with its default, bounds, and the file that set it; text, commands, and paths are left out, since they
 may carry a host or a token and an agent reports what it reads. `canopy config commands` shows those commands,
 rendered as a run would start them, to the operator alone: it is refused inside a tick or a run. `canopy agents` asks
-the runtime what each of canopy's agents is offered, MCP servers and skills, once it has merged the operator's own
-runtime config into canopy's definitions, so a recommendation to deny one rests on the merge the runtime makes, not on
-canopy's files alone.
+the runtime what each of canopy's agents is offered, MCP servers, skills, and its own tools, once it has merged the
+operator's own runtime config into canopy's definitions, so a recommendation to deny one rests on the merge the
+runtime makes, not on canopy's files alone.
 
 ## 12. Configuration
 
@@ -189,10 +189,11 @@ tool calls by tool, a skill's by the skill it loaded, and records them on the ti
 definitions it loaded, so a prompt or definition change splits runs into before and after. Figures that do not
 validate make the run report no cost rather than too little, and a template that asks for no events records no cost.
 
-What the run was offered, MCP servers and skills, is recorded beside them: the runtime is asked as `canopy agents`
-asks it, while the agent starts, by the run's own command with its agent's run swapped for the runtime's debug
-commands, so it is asked where the agent starts and inside any sandbox that wraps it. A run whose command canopy
-cannot read so, or that the runtime could not answer for, records why instead, and the run goes on either way.
+What the run was offered is recorded beside them: MCP servers, with the rules that leave it only some of one's tools,
+skills, and the runtime's own tools. The runtime is asked as `canopy agents` asks it, while the agent starts, by the
+run's own command with its agent's run swapped for the runtime's debug commands, so it is asked where the agent starts
+and inside any sandbox that wraps it. A run whose command canopy cannot read so, or that the runtime could not answer
+for, records why instead, and the run goes on either way.
 
 The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
 what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.
