@@ -24,7 +24,7 @@ import json
 import os
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 
@@ -38,46 +38,34 @@ from canopy.core import (
     drafts,
     feedback_plans,
     follow_ups,
-    hostgit,
     memory,
     observe,
     outbox,
     plans,
-    pools,
     replies,
     review_diff,
     run_models,
     run_offers,
 )
-from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
+from canopy.core.config import render_command
+from canopy.core.vocab import PlanEffort, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import desks, dispatch, drafted, policy, tidy
+from canopy.runs import checkpoint, desks, dispatch, drafted, policy, tidy
 from canopy.runtime import project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
-    from canopy.core import records
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
 #: A planner's reason for saying its plan needs no review: a sentence, as a sink's line carries it.
 MAX_REVIEW_REASON = 300
 MAX_PR_URL = 500
-_GIT_TIMEOUT_SECONDS = 300
-# The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
-# checked out detached (DESIGN §8).
-SETUP_REPO_ENV = "CANOPY_REPO"
-SETUP_BRANCH_ENV = "CANOPY_BRANCH"
 
 
 class WorkerError(Exception):
     """`_run` cannot start this run at all. Nothing was leased or changed."""
-
-
-class _SetupError(Exception):
-    """A git step before or after the worker failed."""
 
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
@@ -215,13 +203,13 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
 
     Raises:
         WorkerError: The run does not exist or is not waiting to start, for example because another `_run` has it.
-    """  # noqa: DOC501  (the _SetupError raised below is caught below, into a crashed outcome)
+    """  # noqa: DOC501  (the checkpoint.SetupError raised below is caught below, into a crashed outcome)
     run = db.get_run(ctx.conn, run_id)
     if run is None:
         raise WorkerError(f"no run {run_id}")
     if not db.claim_run(ctx.conn, "runs", run_id, os.getpid()):
         raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
-    slots = [_Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
+    slots = [checkpoint.Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
     for slot in slots:
         # Before any git step: reconcile checks it for a `_run` that dies before putting a changed link back.
         db.set_slot_link(ctx.conn, run_id, slot.repo, slot.link)
@@ -235,12 +223,12 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         try:
             kind = RunKind(run["kind"])
             if not slots:
-                raise _SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
+                raise checkpoint.SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (handled as git failures are)
             tidy.make_objects(_objects(ctx, run))
             outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:
             outcome = Outcome(RunStatus.CRASHED, None, str(e))
-        except (_SetupError, desks.DeskError) as e:
+        except (checkpoint.SetupError, desks.DeskError) as e:
             outcome = Outcome(RunStatus.CRASHED, None, str(e))
             log.error("run setup failed", extra={**fields, "error": str(e)})  # noqa: TRY400  (no traceback needed)
         except Exception as e:
@@ -299,7 +287,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
             db.record_event(ctx.conn, event)
 
 
-type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
+type _Doer = Callable[[Context, sqlite3.Row, Sequence[checkpoint.Slot], TextIO, logs.TickAdapter], Outcome]
 
 
 def _doer(kind: RunKind) -> _Doer:
@@ -309,11 +297,11 @@ def _doer(kind: RunKind) -> _Doer:
         The function for the kind: a plan's or a worker's.
 
     Raises:
-        _SetupError: for `split` or `needs-plan`, retired kinds nothing dispatches now (M46, M55).
+        checkpoint.SetupError: for `split` or `needs-plan`, retired kinds nothing dispatches now (M46, M55).
     """
     match kind:
         case RunKind.SPLIT | RunKind.NEEDS_PLAN:
-            raise _SetupError(f"{kind} is retired; nothing runs it")
+            raise checkpoint.SetupError(f"{kind} is retired; nothing runs it")
         case RunKind.PLAN:
             return _plan
         case RunKind.FEEDBACK_PLAN:
@@ -322,71 +310,6 @@ def _doer(kind: RunKind) -> _Doer:
             return _work
         case _:
             assert_never(kind)
-
-
-@dataclass(frozen=True)
-class _Slot:
-    """One of a run's slots: the repository it is in, the worktree, its lease, git in it, and its `.git` link.
-
-    `link` is what the worktree's `.git` file held when the run started, before any git step, or None if it is not a
-    file (DESIGN §8). `pool` is the pool that made the lease, which the slot goes back to (DESIGN §18).
-    """
-
-    repo: str
-    path: Path
-    lease_id: str
-    lease_holder: str
-    base: str
-    git: _Git
-    link: bytes | None
-    pool: PoolKind
-
-    def rewritten(self) -> Path | None:
-        """Return the file that says where the slot's git is, if the worker changed it: the `.git` file, or `commondir`.
-
-        Returns:
-            The `.git` file if it no longer holds what it did when the run started, else `commondir` in the slot's own
-            git directory if it no longer names the common directory, else None. Always None when `.git` was not a
-            file at the start.
-        """
-        if self.link is None:
-            return None
-        if hostgit.read_link(self.path) != self.link:
-            return self.path / hostgit.LINK
-        if hostgit.commondir_moved(self.path, self.link):
-            own = hostgit.own_git_dir(self.path, self.link)
-            return (own or self.path) / hostgit.COMMONDIR
-        return None
-
-    def reading(self, ctx: Context, objects: Path) -> _Slot:
-        """The slot, with its git reading the run's object directory as well as the slot's own objects.
-
-        Returns:
-            A copy of the slot whose git has the environment that reads `objects` too.
-
-        Raises:
-            _SetupError: git could not be set up to read `objects`.
-        """
-        try:
-            env = tidy.reading(ctx.runner, self.path, objects)
-        except tidy.GitError as e:
-            raise _SetupError(f"{self.git.where}{e}") from e
-        return replace(self, git=_Git(ctx.runner, self.path, self.repo, env))
-
-    @classmethod
-    def of(cls, ctx: Context, row: records.RunSlot) -> _Slot:
-        repo = str(row.repo)
-        path = Path(row.slot_path)
-        return cls(
-            repo,
-            path,
-            row.lease_id,
-            row.lease_holder,
-            str(row.base_branch),
-            _Git(ctx.runner, path, repo),
-            hostgit.read_link(path),
-            row.pool,
-        )
 
 
 def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
@@ -403,7 +326,7 @@ def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
 def _run_agent(
     ctx: Context,
     run: sqlite3.Row,
-    slots: Sequence[_Slot],
+    slots: Sequence[checkpoint.Slot],
     out: TextIO,
     log: logs.TickAdapter,
     *,
@@ -423,8 +346,8 @@ def _run_agent(
         The agent's process and the text its result line is read from.
 
     Raises:
-        _SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run or a
-            plan, names one of the tracker server's tools.
+        checkpoint.SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run
+            or a plan, names one of the tracker server's tools.
     """
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     desked = dispatch.in_desk(str(run["kind"]), slots)
@@ -437,7 +360,7 @@ def _run_agent(
     read_only = run["private"] or run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
     refused = project_config.refusal(places, tracker_server=tools.server if read_only and tools is not None else None)
     if refused is not None:
-        raise _SetupError(refused)
+        raise checkpoint.SetupError(refused)
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     command = ctx.config.runtime.worker_template(template)
@@ -448,7 +371,7 @@ def _run_agent(
             try:
                 logs.write_private(cwd / name, text)
             except OSError as e:
-                raise _SetupError(f"could not write {name} in the desk {cwd}: {e}") from e
+                raise checkpoint.SetupError(f"could not write {name} in the desk {cwd}: {e}") from e
     else:
         cwd = slots[0].path
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -520,7 +443,13 @@ class _Progress:
             self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": change.session_id})
 
 
-def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+def _plan(
+    ctx: Context,
+    run: sqlite3.Row,
+    slots: Sequence[checkpoint.Slot],
+    out: TextIO,
+    log: logs.TickAdapter,
+) -> Outcome:
     """Run the planner in a desk of worktrees at their bases, and write and record the plan it wrote (DESIGN §25).
 
     The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan.
@@ -534,7 +463,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
     for slot in slots:
-        _check_out(slot)
+        checkpoint.check_out(slot)
     key = str(run["ticket_key"])
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
@@ -590,7 +519,7 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
 def _feedback_plan(
     ctx: Context,
     run: sqlite3.Row,
-    slots: Sequence[_Slot],
+    slots: Sequence[checkpoint.Slot],
     out: TextIO,
     log: logs.TickAdapter,
 ) -> Outcome:
@@ -606,7 +535,7 @@ def _feedback_plan(
         whose file in the desk is not a plan; or `crashed` when the plan's own file could not be written.
 
     Raises:
-        _SetupError: a PR could not be read whole, so the planner would plan from less than its feedback.
+        checkpoint.SetupError: a PR could not be read whole, so the planner would plan from less than its feedback.
     """
     stopped = _stopped(ctx, run)
     if stopped:
@@ -614,12 +543,14 @@ def _feedback_plan(
         return Outcome(RunStatus.STOPPED, None, stopped)
     key = str(run["ticket_key"])
     for slot in slots:
-        _check_out(slot, str(run["branch"]))
+        checkpoint.check_out(slot, str(run["branch"]))
     units = {str(u.repo): str(u.pr_url) for u in db.units(ctx.conn, key) if u.pr_url}
     prs = [units[s.repo] for s in slots if s.repo in units]
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
     if not prs or read.failure is not None:
-        raise _SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
+        raise checkpoint.SetupError(
+            f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}",
+        )
     offered = feedback_plans.offered(ctx.conn, ctx.config.trust, key, prs)
     desk_files = {feedback_plans.ITEMS: feedback_plans.items_file(offered)}
     replaced = feedback_plans.current(ctx.conn, key)
@@ -687,62 +618,30 @@ def _record_feedback_plan(
     return Outcome(RunStatus.DONE, parsed, matched.note())
 
 
-def _check_out(slot: _Slot, branch: str = "") -> _Start:
-    """Check out the slot's base branch from origin, detached, or `branch` from origin if it is given and there.
-
-    A plan reads its base and creates no branch. A worker run passes its branch, which it continues if it was pushed.
-    No run makes a local branch: every slot of a pool shares the repository's branch refs, so one would be state other
-    slots see. The worker pushes `HEAD` to the branch by refspec (DESIGN §8, D109).
-
-    Returns:
-        HEAD's commit after the checkout, and how many entries HEAD's reflog then had.
-
-    Raises:
-        _SetupError: a git step failed, or the base branch is not on origin.
-    """
-    git = slot.git
-    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
-    git.run("fetch", "--quiet", "--prune", "origin")
-    # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
-    # is another ticket's branch, deleted when its PR merged (DESIGN §10).
-    if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{slot.base}"):
-        hint = "; if it was stacked on, its PR may have merged" if branch else ""
-        raise _SetupError(f"{git.where}the base branch {slot.base} is not on origin{hint}")
-    target = slot.base
-    if branch and git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
-        target = branch
-    git.run("checkout", "--quiet", "--detach", f"refs/remotes/origin/{target}")
-    if branch:
-        _drop_local_branch(git, branch, target)
-    commit = git.run("rev-parse", "HEAD")
-    return _Start(commit, len(_head_log(git)), commit if target == branch else "")
-
-
-def _drop_local_branch(git: _Git, branch: str, target: str) -> None:
-    """Delete a local `branch` an earlier canopy's `checkout -B` left in the pool's repository, if origin has it all.
-
-    A worker that made the branch again would fail, or fall back to the stale one. One with commits origin lacks is
-    kept: they may be the only copy.
-    """
-    ref = f"refs/heads/{branch}"
-    if git.ok("rev-parse", "--verify", "--quiet", ref) and git.ok(
-        "merge-base",
-        "--is-ancestor",
-        ref,
-        f"refs/remotes/origin/{target}",
-    ):
-        git.result("branch", "--quiet", "--delete", "--force", branch)  # refused if a worktree has it checked out
-
-
-def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+def _work(
+    ctx: Context,
+    run: sqlite3.Row,
+    slots: Sequence[checkpoint.Slot],
+    out: TextIO,
+    log: logs.TickAdapter,
+) -> Outcome:
     stopped = _stopped(ctx, run)
     if stopped:
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
         return Outcome(RunStatus.STOPPED, None, stopped)
     branch = str(run["branch"])
-    starts = [_check_out(slot, branch) for slot in slots]
+    starts = [checkpoint.check_out(slot, branch) for slot in slots]
     for slot in slots:
-        _run_setup(ctx, run, slot, out, log)
+        checkpoint.run_setup(
+            ctx,
+            slot,
+            out,
+            log,
+            run_id=str(run["id"]),
+            branch=branch,
+            objects=_objects(ctx, run),
+            fields={"run_id": int(run["id"])},
+        )
     copy = _plan_copy(ctx, run)
     desk_files = _place_copy(run, slots, copy)
     runtime = ctx.config.runtime
@@ -785,7 +684,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     unpushed = [
         found
         for slot, start in zip(slots, starts, strict=True)
-        if (found := _ensure_pushed(slot, branch, start, log, rebase=rebase))
+        if (found := checkpoint.ensure_pushed(slot, branch, start, log, rebase=rebase))
     ]
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
@@ -811,7 +710,7 @@ def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow
     )
 
 
-def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
+def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[checkpoint.Slot], log: logs.TickAdapter) -> None:
     """Keep each slot's diff, for a run whose drafts the PR's page shows on it: one rendered under `approve`."""
     rendered = replies.run_replies(ctx.conn, int(run["id"]))
     if rendered is not None and rendered.mode is ReplyMode.APPROVE:
@@ -819,7 +718,7 @@ def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: log
             _keep_diff(slot, Path(run["log_path"]), log)
 
 
-def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
+def _keep_diff(slot: checkpoint.Slot, log_path: Path, log: logs.TickAdapter) -> None:
     """Keep the slot's diff at the run's head, from where it leaves its base, for the PR's page (DESIGN §29).
 
     Best effort, as a review's is (§21, The diff): the run does not need it, so any failure, git's or the disk's, is
@@ -838,11 +737,11 @@ def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
         path = review_diff.run_path_for(log_path, slot.repo)
         review_diff.keep_head(path, sha)
         review_diff.keep(path, diff.stdout)
-    except (_SetupError, OSError) as e:
+    except (checkpoint.SetupError, OSError) as e:
         log.warning("run diff not kept", extra={**fields, "error": str(e)})
 
 
-def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:
+def _heads(slots: Sequence[checkpoint.Slot], log: logs.TickAdapter) -> str | None:
     """Return the commit each slot's HEAD is at, which a note the run wrote was written against (DESIGN §28).
 
     Returns:
@@ -850,7 +749,7 @@ def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:
     """
     try:
         found = [(s.repo, s.git.run("rev-parse", "--short=12", "HEAD")) for s in slots]
-    except _SetupError as e:
+    except checkpoint.SetupError as e:
         log.warning("could not read the head a note was written against", extra={"error": str(e)})
         return None
     if len(found) == 1:
@@ -868,7 +767,8 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
         The plan's text, or None for a run dispatched to follow no plan.
 
     Raises:
-        _SetupError: the plan was superseded or approved again since the dispatch, or its file changed or is gone.
+        checkpoint.SetupError: the plan was superseded or approved again since the dispatch, or its file changed or is
+            gone.
     """
     if run["feedback_plan_id"] is not None:
         return _feedback_plan_copy(ctx, run)
@@ -878,14 +778,14 @@ def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
     # Approving again keeps the plan's id, but may approve another text than the one the prompt's outline is of.
     again = approved is not None and str(approved.approved_at) > str(run["started_at"])
     if approved is None or approved.id != run["plan_id"] or again:
-        raise _SetupError(
+        raise checkpoint.SetupError(
             f"plan {run['plan_id']}, which the worker's prompt names, is no longer the plan approved for "
             f"{run['ticket_key']} when the run was dispatched; the worker did not start",
         )
     text = plans.approved_text(ctx.state_dir, approved)
     if text is None:
         path = plans.path_for(ctx.state_dir, approved.ticket_key, approved.run_id)
-        raise _SetupError(
+        raise checkpoint.SetupError(
             f"plan {approved.id}'s file {path} is no longer the text the operator approved; the worker did not start",
         )
     return text
@@ -898,25 +798,26 @@ def _feedback_plan_copy(ctx: Context, run: sqlite3.Row) -> str:
         The plan's text.
 
     Raises:
-        _SetupError: the plan was superseded since the dispatch, is not the one this run spent, or its file changed.
+        checkpoint.SetupError: the plan was superseded since the dispatch, is not the one this run spent, or its file
+            changed.
     """
     plan = feedback_plans.get(ctx.conn, int(run["feedback_plan_id"]))
     if plan is None or plan.spent_run_id != run["id"] or feedback_plans.current(ctx.conn, plan.ticket_key) != plan:
-        raise _SetupError(
+        raise checkpoint.SetupError(
             f"feedback plan {run['feedback_plan_id']}, which the worker's prompt names, is no longer the one approved "
             f"for {run['ticket_key']} when the run was dispatched; the worker did not start",
         )
     text = feedback_plans.approved_text(ctx.state_dir, plan)
     if text is None:
         path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
-        raise _SetupError(
+        raise checkpoint.SetupError(
             f"feedback plan {plan.id}'s file {path} is no longer the text the operator approved; the worker did not "
             "start",
         )
     return text
 
 
-def _place_copy(run: sqlite3.Row, slots: Sequence[_Slot], copy: str | None) -> dict[str, str]:
+def _place_copy(run: sqlite3.Row, slots: Sequence[checkpoint.Slot], copy: str | None) -> dict[str, str]:
     """Put the worker's copy of the plan where it starts: in its desk, or at its one worktree's root (DESIGN §25).
 
     Returns:
@@ -930,14 +831,14 @@ def _place_copy(run: sqlite3.Row, slots: Sequence[_Slot], copy: str | None) -> d
     return {}
 
 
-def _write_copy(slot: _Slot, text: str) -> None:
+def _write_copy(slot: checkpoint.Slot, text: str) -> None:
     """Write the worker's copy of the plan at the root of its worktree, ignored by git there (DESIGN §25).
 
     The repository's exclude file, which every slot shares, gets the copy's line once, so `git add -A` leaves it out.
 
     Raises:
-        _SetupError: git could not name the repository's git directory, or the exclude file or the copy could not be
-            written.
+        checkpoint.SetupError: git could not name the repository's git directory, or the exclude file or the copy
+            could not be written.
     """
     common = Path(slot.git.run("rev-parse", "--path-format=absolute", "--git-common-dir"))
     exclude = common / "info" / "exclude"
@@ -950,16 +851,16 @@ def _write_copy(slot: _Slot, text: str) -> None:
                 f.write(f"{'' if not held or held.endswith(chr(10)) else chr(10)}{line}\n")
         logs.write_private(slot.path / plans.COPY, text)
     except OSError as e:
-        raise _SetupError(f"{slot.git.where}could not write the plan's copy: {e}") from e
+        raise checkpoint.SetupError(f"{slot.git.where}could not write the plan's copy: {e}") from e
 
 
-def _committed_copy(slot: _Slot, branch: str) -> str:
+def _committed_copy(slot: checkpoint.Slot, branch: str) -> str:
     """Return a harness note when the branch pushed from `slot` holds the plan's copy at its root, else "".
 
     Ignored is not untrackable: a worker can add the copy by name. canopy reports it and does not rewrite the branch
     (DESIGN §25, Workers follow the plan).
     """
-    remote = _remote_head(slot.git, branch)
+    remote = checkpoint.remote_head(slot.git, branch)
     if not remote:
         return ""
     found = slot.git.result("ls-tree", "--name-only", remote, "--", plans.COPY)
@@ -982,211 +883,18 @@ def _stopped(ctx: Context, run: sqlite3.Row) -> str:
     return ""
 
 
-@dataclass(frozen=True)
-class _Start:
-    """Where a worker run's slot started: HEAD's commit, how many entries HEAD's reflog then had, and origin's branch.
-
-    `pushed` is the commit the branch held on origin when the run started, or "" if origin did not have it.
-    """
-
-    commit: str
-    moves: int
-    pushed: str
-
-
-def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
-    """Run the operator's `setup_cmd` in the slot, at the run's branch, and fail the run if it fails (DESIGN §8).
-
-    Unlike treehouse's `post_create`, which runs on the base before the branch is checked out and whose failure leaves
-    the lease standing, this sees the branch the worker gets, and a failure stops the run before the worker starts.
-
-    Raises:
-        _SetupError: `setup_cmd` could not start, timed out, or exited non-zero.
-    """
-    argv = setup_words(ctx.config.runtime.setup_cmd)
-    if not argv:
-        return
-    run_id = int(run["id"])
-    timeout_minutes = ctx.config.runtime.setup_timeout_minutes
-    log.info("running setup", extra={"run_id": run_id, "cmd": argv[0], "cwd": str(slot.path), "repo": slot.repo})
-    try:
-        result = ctx.runner.run(
-            argv,
-            cwd=slot.path,
-            # The run's id, as the worker gets it: the operator's commands refuse inside canopy's runs (DESIGN §22).
-            env={
-                conversation.RUN_ID_ENV: str(run_id),
-                SETUP_REPO_ENV: slot.repo,
-                SETUP_BRANCH_ENV: str(run["branch"]),
-                tidy.OBJECTS_ENV: str(_objects(ctx, run)),
-            },
-            timeout=timeout_minutes * 60,
-        )
-    except procs.ProcError as e:
-        raise _SetupError(f"{slot.git.where}setup could not start: {e}") from e
-    out.write(f"--- setup {slot.repo} stdout ---\n{result.stdout}\n--- setup {slot.repo} stderr ---\n{result.stderr}\n")
-    out.write(f"--- setup {slot.repo} exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
-    out.flush()
-    if result.timed_out:
-        raise _SetupError(f"{slot.git.where}setup timed out after {timeout_minutes} minutes; see the run log")
-    if not result.ok:
-        raise _SetupError(f"{slot.git.where}setup exited {result.returncode}; see the run log")
-
-
-def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapter, *, rebase: bool) -> str:
-    """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
-
-    Detached, HEAD is the only thing holding the worker's commits, so a worker that moved it off them leaves them
-    behind: that is unpushed too. With `rebase` (`trust.rebase`), the push may replace the branch, but only if origin
-    still has it where the run started: a worker that rebased and did not push loses nothing anyone else pushed.
-
-    Returns:
-        Why the work is not pushed, or "" if it is, or if the worker committed nothing.
-    """
-    git = slot.git
-    local = git.run("rev-parse", "HEAD")
-    remote = _remote_head(git, branch)
-    # A HEAD that holds nothing past the start is no work of the worker's; whatever is on origin is its doing.
-    if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
-        log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
-        pushed = _push(git, branch, start.pushed if rebase else None)
-        remote = _remote_head(git, branch)
-        if not pushed.ok or remote != local:
-            detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
-            return f"{git.where}commits on {branch} are not on origin; the push failed: {detail}"
-    left = _left_behind(git, branch, start, remote)
-    if left:
-        return (
-            f"{git.where}the worker moved HEAD off {len(left)} commit(s) not on origin, such as {left[0][:12]}; "
-            "nothing was pushed for them"
-        )
-    return ""
-
-
-def _push(git: _Git, branch: str, lease: str | None) -> procs.Result:
-    """Push HEAD to `branch` on origin, and leave the shared refs as they were if git reads the run's objects.
-
-    With a `lease`, the push may replace the branch, if origin has it at that commit, or does not have it when the
-    lease is "". Without one, it only adds commits.
-
-    A push also moves origin's remote-tracking ref, which every slot of the pool shares. Pointed at a commit only the
-    run's object directory holds, it would break git in every slot, and in the primary clone, once that directory goes
-    (DESIGN §8). The next fetch moves it, from origin's own objects.
-
-    Returns:
-        The push's result, whether or not it succeeded.
-    """
-    tracking = f"refs/remotes/origin/{branch}"
-    before = git.result("rev-parse", "--verify", "--quiet", tracking).stdout.strip() if git.reads_run else ""
-    force = () if lease is None else (f"--force-with-lease=refs/heads/{branch}:{lease}",)
-    pushed = git.result("push", "--quiet", *force, "origin", f"HEAD:refs/heads/{branch}")
-    if git.reads_run and before:
-        git.result("update-ref", tracking, before)
-    elif git.reads_run:
-        git.result("update-ref", "-d", tracking)
-    return pushed
-
-
-def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str]:
-    """Commits HEAD held during the run whose changes neither HEAD nor origin holds.
-
-    That is commits that neither HEAD, origin's `branch` now or when the run started, nor any of origin's branches
-    holds, less those whose own change origin's `branch` already has (`_on_origin`). A worker that rebased, could not
-    push the copies, and pushed the same work another way left nothing behind; one that rebased and pushed with a lease
-    (`trust.rebase`) replaced the commits origin had, which were pushed before the run.
-
-    Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
-    checked something else out, not one that tried to hide its work.
-
-    Returns:
-        The commits left behind, none if HEAD did not move during the run.
-    """
-    entries = _head_log(git)
-    held = list(dict.fromkeys(entries[: max(0, len(entries) - start.moves)]))
-    if not held:
-        return []
-    keep = ["HEAD", start.pushed] if start.pushed else ["HEAD"]
-    if remote and not git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
-        # --refmap=: no remote-tracking ref moves, only the slot's own FETCH_HEAD, which tidying drops.
-        git.result("fetch", "--quiet", "--refmap=", "origin", f"refs/heads/{branch}")
-    if not (remote and git.ok("cat-file", "-e", f"{remote}^{{commit}}")):
-        return git.run("rev-list", *held, "--not", *keep, "--remotes=origin").split()
-    left = git.run("rev-list", *held, "--not", *keep, remote, "--remotes=origin").split()
-    tree = git.run("rev-parse", f"{remote}^{{tree}}")
-    return [commit for commit in left if not _on_origin(git, commit, remote, tree)]
-
-
-def _on_origin(git: _Git, commit: str, remote: str, tree: str) -> bool:
-    """Whether `remote`, with tree `tree`, already has `commit`'s own change: applying it there changes nothing.
-
-    A rebased copy of a commit origin has, or a commit whose change went up in another one, is not lost. It is a
-    three-way merge of `commit` into `remote` on `commit`'s first parent, so a change made again by hand counts too, and
-    a change origin has only in part does not. A root commit counts as not on origin, and so does every commit under
-    git older than 2.40, which lacks `--merge-base`.
-
-    Returns:
-        True if the merge is clean and leaves `remote`'s tree as it is.
-    """
-    if not git.ok("rev-parse", "--verify", "--quiet", f"{commit}^"):
-        return False
-    merged = git.result("merge-tree", "--write-tree", f"--merge-base={commit}^", remote, commit)
-    return merged.ok and merged.stdout.split()[:1] == [tree]
-
-
-def _head_log(git: _Git) -> list[str]:
-    """The commits in the slot's HEAD reflog, newest first, or none if it has no reflog.
-
-    Returns:
-        The commits' full hashes, one per reflog entry.
-    """
-    found = git.result("log", "--walk-reflogs", "--format=%H", "HEAD")
-    return found.stdout.split() if found.ok else []
-
-
-def _remote_head(git: _Git, branch: str) -> str:
-    listed = git.run("ls-remote", "origin", f"refs/heads/{branch}")
-    return listed.split()[0] if listed else ""
-
-
-def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs.TickAdapter) -> None:
+def _release(ctx: Context, run: sqlite3.Row, slots: Collection[checkpoint.Slot], log: logs.TickAdapter) -> None:
     """Remove a joint run's desk, tidy each slot, return the ones tidied, and remove the run's object directory.
 
     A slot that could not be tidied is not returned, and the object directory is kept, so its objects can still be read.
     """
     if dispatch.in_desk(str(run["kind"]), slots):
         _remove_desk(ctx, str(run["ticket_key"]), log)
-    objects = _objects(ctx, run)
-    tidied = True
-    for slot in slots:
-        fields = {"run_id": run["id"], "slot": str(slot.path), "repo": slot.repo}
-        ok = tidy.tidy(ctx.runner, slot.path, link=slot.link, base=slot.base, objects=objects, log=log, fields=fields)
-        if ok:
-            _return_slot(ctx, run, slot, log)
-        tidied = tidied and ok
-    if tidied:
-        tidy.remove_objects(objects, log)
+    checkpoint.release(ctx, slots, objects=_objects(ctx, run), log=log, fields={"run_id": run["id"]})
 
 
 def _objects(ctx: Context, run: sqlite3.Row) -> Path:
     return tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
-
-
-def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
-    fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
-    try:
-        outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
-            slot.path,
-            lease_id=slot.lease_id,
-            lease_holder=slot.lease_holder,
-        )
-    except pools.PoolError as e:
-        # The next tick's reconcile returns a canopy lease with no running run.
-        log.error("slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
-        return
-    if outcome is pools.ReturnOutcome.RETURNED:
-        log.info("slot returned", extra=fields)
-    else:
-        log.warning("slot not returned", extra={**fields, "outcome": outcome.value})
 
 
 def _remove_desk(ctx: Context, key: str, log: logs.TickAdapter) -> None:
@@ -1208,34 +916,3 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
             db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, pr_url=url)
             if title := titles.get(repo):
                 db.set_pr_title(ctx.conn, url, title)
-
-
-class _Git:
-    """git in one slot, through the runner. `name` is the slot's repository, for errors, or "" to leave it unnamed."""
-
-    def __init__(self, runner: procs.Runner, slot: Path, name: str = "", env: Mapping[str, str] = hostgit.ENV) -> None:
-        self.runner = runner
-        self.slot = slot
-        self.where = f"{name}: " if name else ""
-        self.env = env
-        # Whether git here reads the run's object directory, and so must write no shared ref (DESIGN §8).
-        self.reads_run = "GIT_OBJECT_DIRECTORY" in env
-
-    def result(self, *args: str) -> procs.Result:
-        try:
-            result = self.runner.run(hostgit.argv(*args), cwd=self.slot, env=self.env, timeout=_GIT_TIMEOUT_SECONDS)
-        except procs.ProcError as e:
-            raise _SetupError(f"{self.where}git {args[0]}: {e}") from e
-        if result.timed_out:
-            raise _SetupError(f"{self.where}git {args[0]} timed out")
-        return result
-
-    def ok(self, *args: str) -> bool:
-        return self.result(*args).ok
-
-    def run(self, *args: str) -> str:
-        result = self.result(*args)
-        if not result.ok:
-            detail = (result.stderr.strip() or result.stdout.strip())[:500]
-            raise _SetupError(f"{self.where}git {args[0]} exited {result.returncode}: {detail}")
-        return result.stdout.strip()
