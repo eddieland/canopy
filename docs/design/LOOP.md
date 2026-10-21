@@ -47,7 +47,8 @@ in order:
    succeeded if it exited 0 and a line of its final message (§13) is exactly `CANOPY_TICK_DONE`, which catches a run
    that exits 0 short of the last step; otherwise the tick closes `overseer_failed`. A successful run that recorded a
    tick-wide skip, such as the tracker's MCP being down, closes the tick `skipped`, which leaves the attention list
-   standing, so an outage does not resolve and re-raise every item.
+   standing, so an outage does not resolve and re-raise every item. What it started before the skip stands: an outage
+   of one server does not hold work that needs nothing from it (§15).
 
    **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7); a
    decision for every ticket in the block and every ticket the query returned, except those stopped or recently done;
