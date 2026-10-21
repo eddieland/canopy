@@ -3,10 +3,10 @@
 OpenCode merges the operator's config into canopy's definitions, so what an agent is offered is not what canopy's
 definitions say alone. OpenCode prints the merged result: `opencode debug config` its resolved config, of which only the
 MCP servers' names and `enabled` are read, since the rest may hold what its redaction misses; `opencode debug skill`
-every skill it finds; and `opencode debug agent NAME` an agent's merged permission rules. From those this applies
-OpenCode's own rules, read from its source at 1.19.3: the last rule whose permission pattern matches a tool's name
-decides, and only a deny with the pattern `*` keeps the tool from the agent; a skill is offered unless the skill tool is
-kept so, or the last `skill` rule matching its name denies it.
+every skill it finds; and `opencode debug agent NAME` an agent's merged permission rules and which of its built-in tools
+it keeps. From those this applies OpenCode's own rules, read from its source at 1.19.3: the last rule whose permission
+pattern matches a tool's name decides, and only a deny with the pattern `*` keeps the tool from the agent; a skill is
+offered unless the skill tool is kept so, or the last `skill` rule matching its name denies it.
 
 An MCP server's tools are not listed without connecting to it, so a server is judged by a name none of its tools has,
 `<server>_` and a NUL: a rule that matches that name matches every tool of the server. A later rule that could match
@@ -39,6 +39,9 @@ TIMEOUT_SECONDS = 120
 SKILL = "skill"
 # The words that start OpenCode, as canopy's debug commands run it.
 _OPENCODE = ("opencode",)
+# The built-in tools `opencode debug agent` lists that no request carries: OpenCode's stand-in for a call to a tool it
+# does not have (MEASUREMENTS 2026-10-19, F42).
+_UNSENT = frozenset({"invalid"})
 # An agent's name, as one path component could hold it.
 _AGENT_RE = re.compile(r"[a-z][a-z0-9-]*")
 # What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
@@ -59,6 +62,8 @@ class _Agent(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     permission: tuple[_Rule, ...]
+    # Each built-in tool, and whether the agent keeps it after its rules.
+    tools: Mapping[str, StrictBool] = {}
 
 
 class _Server(BaseModel):
@@ -205,15 +210,17 @@ def _read[T](stdout: str, validate: Callable[[str], T], command: str) -> T:
 def _offer(ask: _Ask, agent: str, *, servers: Sequence[str], skills: Sequence[str]) -> AgentOffer:
     try:
         printed = ask.run("debug", "agent", agent)
-        rules = _read(printed, _Agent.model_validate_json, "debug agent").permission
+        read = _read(printed, _Agent.model_validate_json, "debug agent")
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
+    rules = read.permission
     offered = () if _hidden(SKILL, rules) else tuple(s for s in skills if _action(SKILL, s, rules) != "deny")
     return AgentOffer(
         agent,
         servers=tuple(_server(name, rules) for name in servers),
         skills=offered,
         denied_skills=tuple(s for s in skills if s not in offered),
+        tools=tuple(sorted(name for name, kept in read.tools.items() if kept and name not in _UNSENT)),
     )
 
 

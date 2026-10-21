@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 @click.option("--json", "as_json", is_flag=True, help="Print what each agent is offered as one JSON object instead.")
 @click.pass_context
 def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
-    """Print the MCP servers and skills each of canopy's agents is offered, after your own runtime config.
+    """Print the MCP servers, skills, and built-in tools each of canopy's agents is offered, after your runtime config.
 
     A server's reach is `all` of its tools, `some`, with the rules that offer or deny the rest, or `none`. Deny what an
     agent never uses in your global runtime config, for that agent by name. Exits 1 when the runtime could not say.
@@ -77,5 +77,10 @@ def _agent(offer: AgentOffer) -> list[str]:
         why = f": {'; '.join(server.exceptions)}" if server.exceptions else ""
         lines.append(f"  {server.server}: {server.reach}{why}")
     denied = f"; denied {', '.join(offer.denied_skills)}" if offer.denied_skills else ""
-    lines.append(f"  skills: {', '.join(offer.skills) or 'none'}{denied}")
+    lines.extend(
+        [
+            f"  skills: {', '.join(offer.skills) or 'none'}{denied}",
+            f"  built-in tools: {', '.join(offer.tools) or 'none'}",
+        ],
+    )
     return lines

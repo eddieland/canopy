@@ -87,13 +87,15 @@ class ServerOffer:
 
 @dataclass(frozen=True)
 class AgentOffer:
-    """What one of canopy's agents is offered, after the operator's config: MCP servers and skills."""
+    """What one of canopy's agents is offered, after the operator's config: MCP servers, skills, and built-in tools."""
 
     agent: str
     servers: Sequence[ServerOffer] = ()
     #: The skills it is offered, and those it is denied, by name.
     skills: Sequence[str] = ()
     denied_skills: Sequence[str] = ()
+    #: The runtime's own tools it is offered, by name: its MCP servers' are in `servers`.
+    tools: Sequence[str] = ()
     #: Why the runtime could not say what the agent is offered, or None when it said.
     error: str | None = None
 

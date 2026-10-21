@@ -35,7 +35,8 @@ elif args[:2] == ["debug", "agent"] and (agents / (args[2] + ".md")).is_file():
     rules = [{{"permission": "*", "pattern": "*", "action": "allow"}}]
     if args[2] == "canopy-chore":
         rules.append({{"permission": "github_*", "pattern": "*", "action": "deny"}})
-    print(json.dumps({{"name": args[2], "permission": rules}}))
+    tools = {{"invalid": True, "bash": args[2] != "canopy-chore", "read": True}}
+    print(json.dumps({{"name": args[2], "permission": rules, "tools": tools}}))
 else:
     print("Error: Agent " + args[-1] + " not found", file=sys.stderr)
     sys.exit(1)
@@ -68,7 +69,9 @@ def test_canopy_agents_says_what_each_agent_is_offered(
     assert main(["agents"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("MCP servers: github.\nSkills: tracker-jira.\n")
-    assert "\ncanopy-chore\n  github: none\n  skills: tracker-jira\n" in out
+    # OpenCode's stand-in for a call to a tool it lacks is no tool the agent is offered.
+    assert "\ncanopy-chore\n  github: none\n  skills: tracker-jira\n  built-in tools: read\n" in out
+    assert by_agent["canopy-worker"]["tools"] == ["bash", "read"]
 
 
 def test_canopy_agents_fails_when_opencode_cannot_say(

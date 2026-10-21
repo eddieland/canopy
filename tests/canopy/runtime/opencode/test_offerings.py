@@ -47,6 +47,8 @@ class Debug:
     rules: Mapping[str, Sequence[dict[str, str]]]
     config: object = field(default_factory=lambda: CONFIG)
     fail: Callable[[Sequence[str]], procs.Result | None] = lambda _: None
+    #: The built-in tools `debug agent` says each agent keeps.
+    tools: Mapping[str, bool] = field(default_factory=dict)
     ran: list[tuple[tuple[str, ...], Path | None, Mapping[str, str] | None]] = field(default_factory=list)
 
     def run(
@@ -73,7 +75,8 @@ class Debug:
             case ["opencode", "debug", "skill"]:
                 printed = SKILLS
             case ["opencode", "debug", "agent", name]:
-                printed = {"name": name, "mode": "primary", "permission": [*DEFAULTS, *self.rules[name]]}
+                permission = [*DEFAULTS, *self.rules[name]]
+                printed = {"name": name, "mode": "primary", "permission": permission, "tools": self.tools}
             case _:
                 raise AssertionError(args)
         return procs.Result(tuple(args), 0, json.dumps(printed, indent=2), "")
@@ -235,3 +238,10 @@ def test_a_run_the_runtime_cannot_say_about_has_only_its_error() -> None:
         env={},
     )
     assert found == AgentOffer("canopy-worker", error="`opencode debug skill` exited 1; run it to see why")
+
+
+def test_an_agent_is_offered_the_built_in_tools_opencode_says_it_keeps() -> None:
+    debug = Debug({"canopy-reviewer": []}, tools={"invalid": True, "read": True, "bash": False, "glob": True})
+    [reviewer] = offered(debug, "canopy-reviewer").agents
+    # `invalid` stands in for a call to a tool OpenCode does not have, and no request carries it.
+    assert reviewer.tools == ("glob", "read")
