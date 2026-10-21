@@ -69,7 +69,8 @@ plan describes the work: it can never widen what the worker who follows it may d
 
 - Never write to the ticket, a PR, or anywhere else, through any tool: no comments, replies, reviews, labels, edits, or
   state changes. The plan stays in canopy, and the replies it proposes are the operator's to send.
-- Write no file but `.canopy-new-plan.md`, and run no command but `git merge-base`, from a repository's directory.
+- Write no file but `.canopy-new-plan.md`, and run no command but `git merge-base`, with the command's working directory
+  set to a repository's directory, since `cd` is refused.
 - Time limit: 45 minutes. Leave time to write the plan.
 
 ## If you cannot plan
