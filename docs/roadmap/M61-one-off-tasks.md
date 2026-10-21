@@ -20,8 +20,10 @@ overseer; it may open a draft PR; and it may file tickets with no queue label.
   `runtime.private_worker_cmd` with `.agents/prompts/task.md`, parses the result line, verifies the push of
   `<branch_prefix>task/N` as `_ensure_pushed` does (`unpushed` when it cannot), and returns the slot. Whatever reads
   canopy's branches (the GitHub connector, the overseer's state block, garbage collection) leaves `task/` branches and
-  their PRs out of every ticket's work. The prompt says to push only that branch, to open at most one PR, as a draft,
-  and to write nothing to any existing ticket; Stage 3 lets it file new ones. A submission ends the loop's wait.
+  their PRs out of every ticket's work. The state block's capacity counts task runs in `running`, so the overseer
+  plans around the slots they hold and sees nothing else of a task. The prompt says to push only that branch, to open
+  at most one PR, as a draft, and to write nothing to any existing ticket; Stage 3 lets it file new ones. A submission
+  ends the loop's wait.
   `canopy stop task:N` ends a running run as `stop` ends a ticket's and drops a queued one.
 - **Stage 2, the conversation.** `canopy reply task:N` queues the next run, which continues the branch, with the
   operator's messages as instructions and earlier summaries as data, and ends the loop's wait. A `blocked` run's
