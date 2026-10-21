@@ -91,6 +91,14 @@ ALLOWS: Mapping[Phase, AbstractSet[str]] = {
     Phase.HUMAN_REPLIED: frozenset({_RESUME, _ATTEMPT_LIMIT}),
     Phase.SPLIT: frozenset(),
 }
+#: The phase a decision moves its ticket to within the tick that made it: a worker it dispatched is running, so the
+#: overseer sets `running` at once, though the derivation, made before it decided, held the row that dispatched it.
+MOVES_TO: Mapping[str, Phase] = {
+    f"{_DISPATCH}implement": Phase.RUNNING,
+    f"{_DISPATCH}plan": Phase.RUNNING,
+    _RESUME: Phase.RUNNING,
+    _FEEDBACK_PLAN: Phase.RUNNING,
+}
 #: What the overseer may decide for a ticket the tracker says is closed: mark it done (DESIGN §7).
 CLOSED_ALLOWS: AbstractSet[str] = frozenset({"done"})
 #: What it may decide for an open ticket no row holds for, such as one without a queue label.
@@ -186,7 +194,9 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     A ticket agrees when the phase the overseer left each subject at is one of the rows that held for it, wherever any
     did, and its decision is one those rows allow. Its decision is its dispatches, waits, skips, and done marks, or,
     with none, the attention items the overseer recorded for it; the harness's items, refusals, and mirrors are not
-    the overseer's choice. A ticket with a stale subject is `stale`, never a disagreement.
+    the overseer's choice. A phase the ticket's own decision moved it to this tick (`MOVES_TO`), such as `running`
+    after a dispatch, stands for the row that allowed the decision. A subject with no rows held is compared on the
+    decision only, not its phase. A ticket with a stale subject is `stale`, never a disagreement.
 
     Returns:
         One comparison per ticket the tick derived, by key.
@@ -244,6 +254,7 @@ def _compared(key: str, subjects: Sequence[records.Derivation], actions: Sequenc
     stale = [f"{_subject(s)}: {s.stale}" for s in subjects if s.stale is not None]
     if stale:
         return Compared(key, "stale", "; ".join(stale))
+    chosen = [a for a in actions if not a.startswith(_ATTENTION)] or list(actions)
     allowed: set[str] = set()
     wrong: list[str] = []
     for s in subjects:
@@ -252,13 +263,17 @@ def _compared(key: str, subjects: Sequence[records.Derivation], actions: Sequenc
             allowed |= CLOSED_ALLOWS
         if not held:
             continue
+        # The overseer sets the phase its own decision leads to: a ticket derived `ready` it dispatched closes the tick
+        # `running`. That phase stands for the row whose decision led there.
+        led = [p for p in held if any(a in ALLOWS[p] and MOVES_TO.get(a) == s.overseer_phase for a in chosen)]
         if s.overseer_phase in held:
             allowed |= ALLOWS[s.overseer_phase]
+        elif led:
+            allowed.update(*(ALLOWS[p] for p in led))
         else:
             wrong.append(f"{_subject(s)} set {s.overseer_phase or 'no phase'}, held {', '.join(held)}")
     if not allowed and not wrong:
         allowed |= NONE_ALLOWS
-    chosen = [a for a in actions if not a.startswith(_ATTENTION)] or list(actions)
     if not any(a in allowed for a in chosen):
         wrong.append(f"decided {', '.join(chosen) or 'nothing'}, allowed {', '.join(sorted(allowed)) or 'nothing'}")
     return Compared(key, "disagrees", "; ".join(wrong)) if wrong else Compared(key, "agrees")

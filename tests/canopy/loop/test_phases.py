@@ -421,6 +421,23 @@ def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_
     assert compared.verdict == verdict, compared.why
 
 
+@pytest.mark.parametrize(
+    ("action", "verdict"),
+    [("dispatch:implement", "agrees"), ("dispatch:plan", "agrees"), ("wait", "disagrees")],
+)
+def test_a_ready_ticket_the_overseer_dispatched_agrees_though_it_left_it_running(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, action: str, verdict: str
+) -> None:
+    seen(conn, canopy_env)
+    with in_tick(conn) as tick_id:
+        recorded(conn, tick_id, phases.Derived(KEY, None, (phases.Phase.READY,), candidate=True, closed=False))
+        db.record_decision(conn, tick_id, KEY, action, "because")
+        db.set_ticket(conn, KEY, str(canopy_env.root), phase=phases.Phase.RUNNING)
+        phases.record_overseer(conn, tick_id)
+    [compared] = phases.compare(conn, tick_id)
+    assert compared.verdict == verdict, compared.why
+
+
 def test_a_closed_ticket_agrees_when_marked_done_and_a_stale_one_is_counted_apart(
     canopy_env: CanopyEnv, conn: sqlite3.Connection
 ) -> None:
