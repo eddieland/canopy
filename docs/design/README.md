@@ -103,6 +103,9 @@ not go in the middle of the sequence.
 - [Published reviews](PUBLISHED_REVIEWS.md): a review of a PR the loop does not own, revised in canopy and published
   as the operator's comment review.
   - [34. Publishing a review](PUBLISHED_REVIEWS.md#34-publishing-a-review)
+- [The overseer reads the journal](READING_THE_JOURNAL.md): the overseer deciding from what the connectors observed,
+  and the harness checking in code what was its word.
+  - [35. The overseer reads the journal](READING_THE_JOURNAL.md#35-the-overseer-reads-the-journal)
 
 ## 1. Problem
 
