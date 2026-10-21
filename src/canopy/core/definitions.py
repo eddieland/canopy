@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import prompts, replies
+from canopy.core import bash_allows, prompts, replies
 from canopy.core.config import NO_TEMPERATURE
 from canopy.core.vocab import ReplyMode, RunKind
 from canopy.infra import logs
@@ -77,6 +77,7 @@ def rules(config: Config) -> agents.Rules:
         temperatures={agent: None if t == NO_TEMPERATURE else t for agent, t in temperatures.items()},
         overseer_prompt=prompt,
         tracker_provider=config.tracker.provider,
+        bash_allows=bash_allows.by_agent(runtime.allow_bash),
     )
 
 

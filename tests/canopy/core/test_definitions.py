@@ -648,6 +648,28 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
         definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
 
 
+JIRA_CLI_READS = ("jira issue list *", "jira issue view *")
+
+
+def test_the_overseer_may_run_the_commands_config_allows_it_and_its_snapshot_says_so(canopy_env: CanopyEnv) -> None:
+    before = config.load(canopy_env.root, canopy_env.user_file)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"overseer": list(JIRA_CLI_READS)}}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    rendered = definitions.sources(cfg)
+    rules = _rules_in(rendered["agents/canopy-overseer.md"].decode(), "bash")
+    assert rules[-2:] == [(pattern, "allow") for pattern in JIRA_CLI_READS]
+    for allowed in ("jira issue list -q 'project = PROJ'", "jira issue view PROJ-1 --plain", "canopy decisions"):
+        assert _allowed(rules, allowed), allowed
+    for refused in ("jira issue create", "sh -c 'jira issue list'", "treehouse get", "rm -rf /"):
+        assert not _allowed(rules, refused), refused
+    # Only the overseer's definition changes, and so the snapshot's digest: a run loading the old one keeps it (D040).
+    shipped = definitions.sources(before)
+    assert [rel for rel in rendered if rendered[rel] != shipped[rel]] == ["agents/canopy-overseer.md"]
+    assert definitions.digest(cfg) != definitions.digest(before)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"overseer": []}}})
+    assert definitions.digest(config.load(canopy_env.root, canopy_env.user_file)) == definitions.digest(before)
+
+
 @pytest.mark.parametrize("agent", runtime_definitions.agent_names())
 def test_each_agent_definition_as_rendered(
     canopy_env: CanopyEnv,

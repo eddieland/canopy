@@ -14,11 +14,13 @@ import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.render import report_json
-from canopy.core import definitions
+from canopy.core import bash_allows, definitions
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime import offerings
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from canopy.runtime.agents import AgentOffer, Offerings
 
 
@@ -29,7 +31,8 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
     """Print the MCP servers, skills, and built-in tools each of canopy's agents is offered, after your runtime config.
 
     A server's reach is `all` of its tools, `some`, with the rules that offer or deny the rest, or `none`. Deny what an
-    agent never uses in your global runtime config, for that agent by name. Exits 1 when the runtime could not say.
+    agent never uses in your global runtime config, for that agent by name. The commands `runtime.allow_bash` allows an
+    agent beyond its own bash rules follow its tools. Exits 1 when the runtime could not say.
     """
     ctx = open_context(click_ctx)
     try:
@@ -43,16 +46,17 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
         agents=runtime_definitions.agent_names(),
     )
     failed = found.error is not None or any(a.error is not None for a in found.agents)
+    allows = bash_allows.by_agent(ctx.config.runtime.allow_bash)
     if as_json:
-        click.echo(report_json(dataclasses.asdict(found)))
+        click.echo(report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}}))
         return int(failed)
-    for line in render(found):
+    for line in render(found, allows):
         click.echo(line)
     return int(failed)
 
 
-def render(found: Offerings) -> list[str]:
-    """What each agent is offered, as `canopy agents` prints it.
+def render(found: Offerings, allows: Mapping[str, Sequence[str]]) -> list[str]:
+    """What each agent is offered, as `canopy agents` prints it, with the commands `allows` gives it by agent name.
 
     Returns:
         Its lines, without line ends.
@@ -66,6 +70,9 @@ def render(found: Offerings) -> list[str]:
     ]
     for offer in found.agents:
         lines.extend(["", *_agent(offer)])
+        if allows.get(offer.agent):
+            # A pattern holds no `;` (`canopy.core.bash_allows`), so it parts them unmistakably.
+            lines.append(f"  bash allowed by runtime.allow_bash: {'; '.join(allows[offer.agent])}")
     return lines
 
 

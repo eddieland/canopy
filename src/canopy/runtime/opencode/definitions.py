@@ -12,6 +12,8 @@ files mark for it:
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
 - the reviewer's and overseer's temperature, unless it sets none;
+- the commands the operator allows an agent beyond its own bash rules (`runtime.allow_bash`, DESIGN §13), last of
+  them;
 - the overseer's prompt, then the tracker's skill if canopy ships one, as the overseer's body: the body is the agent's
   system prompt, which the provider caches across ticks, where the state block, the tick's message, changes every tick
   (DESIGN §6). With the skill there, the overseer's skill tool is denied, so that OpenCode sends neither it nor the
@@ -34,7 +36,7 @@ from canopy.infra import resources
 from canopy.runtime.agents import CHORE, OVERSEER, PLANNER, PRIVATE_WORKER, REVIEWER, WORKER, DefinitionsError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
     from canopy.runtime.agents import McpTools, Rules
@@ -49,6 +51,13 @@ TOOL_PART_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 #: OpenCode's rule for a skill's name: lowercase letters and digits in words joined by single hyphens, at most 64.
 SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 MAX_SKILL_NAME = 64
+#: A bash rule canopy renders from config: a command's name, a literal word, then words of plain characters and
+#: OpenCode's wildcards, `*` for any run of characters and `?` for one, each after a single space. No character of it
+#: ends a shell's word or command, or a YAML string in double quotes, and with no wildcard in its first word it matches
+#: one command.
+BASH_ALLOW_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._,:=@%+/*?-]+)*")
+#: The commands of OpenCode itself, which run an agent with rules of its own.
+RUNTIME_COMMANDS = ("opencode",)
 
 
 def _file(agent: str) -> str:
@@ -113,6 +122,9 @@ _PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 # `skill` rules, after the denial of the operator's skill.
 _SKILL_MARKER = "    # canopy: skill rule\n"
 _SKILL_RULE = '    "*": deny\n'
+# The line of a shipped definition the commands config allows it are rendered at: the last of its bash rules, so each
+# allow wins (D021). Only a definition whose bash rules deny every command but those they name has it.
+_BASH_ALLOWS_MARKER = "    # canopy: bash allows\n"
 
 
 def agent_names() -> list[str]:
@@ -152,10 +164,7 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
             drafts = rules.private_drafts if rel == _PRIVATE_FILE else rules.worker_drafts
             rendered = render_replies(text, rel, approve=drafts.approve, ticket_comments=drafts.ticket_comments)
             found[rel] = rendered.encode()
-    for agent, temperature in rules.temperatures.items():
-        rel = _file(agent)
-        if rel in found:
-            found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
+    _render_by_agent(found, rules)
     if _OVERSEER_FILE in found:
         skill = _tracker_skill(found, rules.tracker_provider)
         text = render_overseer_reads(found[_OVERSEER_FILE].decode(), rules.tracker_tools, rules.tracker_provider)
@@ -167,6 +176,18 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
         text = found[_CHORE_FILE].decode()
         found[_CHORE_FILE] = render_chore_reads(text, rules.tracker_tools, rules.tracker_provider).encode()
     return found
+
+
+def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
+    """Render into `found`, in place, what `rules` gives agents by name: their bash allows and their temperature."""
+    for agent, allows in rules.bash_allows.items():
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_bash_allows(found[rel].decode(), rel, allows).encode()
+    for agent, temperature in rules.temperatures.items():
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
 
 
 def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE) -> str:
@@ -243,6 +264,26 @@ def render_temperature(text: str, name: str, temperature: float | None) -> str:
     if temperature is None:
         return text
     return text.replace(_TEMPERATURE_MARKER, f"{_TEMPERATURE_MARKER}temperature: {temperature}\n", 1)
+
+
+def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
+    """Return definition `name` with each of `allows` allowed at its marked line, the last of its bash rules.
+
+    The last matching rule wins (D021), so each allow beats the definition's catch-all deny, and no rule of canopy's
+    comes after it to beat it in turn. The shipped definitions mark the line only where every command is denied but
+    those named: a worker's shell allows every command but those it denies, which an allow could only undo, and the
+    agents with no shell deny bash whole.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the allows at, or an allow is not a rule canopy renders.
+    """
+    if _BASH_ALLOWS_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_BASH_ALLOWS_MARKER.strip()!r} to render bash allows at")
+    for allow in allows:
+        if not BASH_ALLOW_RE.fullmatch(allow):
+            raise DefinitionsError(f"{name}: {allow!r} is not a bash rule canopy renders")
+    rules = [f'    "{allow}": allow\n' for allow in allows]
+    return text.replace(_BASH_ALLOWS_MARKER, _BASH_ALLOWS_MARKER + "".join(rules), 1)
 
 
 def render_overseer_reads(text: str, tools: McpTools | None, provider: str) -> str:

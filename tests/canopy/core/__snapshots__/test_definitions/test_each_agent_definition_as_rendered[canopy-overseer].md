@@ -26,6 +26,9 @@ permission:
     "*": deny
     "canopy *": allow
     "treehouse status*": allow
+    # The commands `runtime.allow_bash` names for the overseer, such as a tracker's CLI, are rendered at the marked
+    # line, last, so that each is allowed (DESIGN §13). canopy refuses a shell, an interpreter, or its own tools there.
+    # canopy: bash allows
   # Nothing to plan across calls: a tick's work is its decisions, each recorded as it is made.
   todowrite: deny
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. With the
