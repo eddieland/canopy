@@ -306,7 +306,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D075. Operator commands are top-level verbs taking a reference to any subject
 
-- `start`, `stop`, `reply`, `show` take a `REF` (ticket, PR, `chore:NAME`, `run:ID`).
+- `start`, `stop`, `reply`, `show` take a `REF` (ticket, PR, `chore:NAME`, `run:ID`, `task:N`).
 - Rejected: a command group per kind.
 
 ## D076. Private tickets and the web UI ship without sandboxing or TLS

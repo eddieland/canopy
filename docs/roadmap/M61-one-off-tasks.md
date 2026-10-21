@@ -10,23 +10,26 @@ overseer; it may open a draft PR; and it may file tickets with no queue label.
   the workspace has several), `canopy task list`, and `canopy show task:N`; refused inside a tick or any run
   (`inside_run`). A `tasks` table (text, repository, submitted, stopped) and a `task_runs` table of their own, rather
   than `runs`, whose ticket and tick a task has neither; `task:N` joins the subjects `conversation.parse_ref` knows.
-  The tick starts queued tasks after reconcile and before the overseer, oldest first, under the dispatch lock: one run
+  Reconcile closes a task run whose process died, as it closes a worker's, and returns its slot. Spend and health
+  count task runs as a kind of their own, and a task run's report and question are messages that name their run. The
+  tick starts queued tasks after reconcile and before the overseer, oldest first, under the dispatch lock: one run
   per task, `capacity.max_tasks` (default 1, shared, may only be lowered) within `capacity.max_workers`, which counts
   task runs with worker and review runs. A dry tick starts none. `canopy _task ID` leases a slot as
-  `canopy:task:<N>`, checks out the base at a detached HEAD, runs `runtime.private_worker_cmd` with
-  `.agents/prompts/task.md`, parses the result line, verifies the push of `<branch_prefix>task/N` as `_ensure_pushed`
-  does (`unpushed` when it cannot), and returns the slot. Whatever reads canopy's branches (the GitHub connector, the
-  overseer's state block, garbage collection) leaves `task/` branches and their PRs out of every ticket's work. The
-  prompt says to push only that branch, to open at most one PR, as a draft, and to write nothing to any ticket.
+  `canopy:task:<N>`, checks out the task's branch, or the base before one is pushed, at a detached HEAD, runs
+  `runtime.private_worker_cmd` with `.agents/prompts/task.md`, parses the result line, verifies the push of
+  `<branch_prefix>task/N` as `_ensure_pushed` does (`unpushed` when it cannot), and returns the slot. Whatever reads
+  canopy's branches (the GitHub connector, the overseer's state block, garbage collection) leaves `task/` branches and
+  their PRs out of every ticket's work. The prompt says to push only that branch, to open at most one PR, as a draft,
+  and to write nothing to any existing ticket; Stage 3 lets it file new ones. A submission ends the loop's wait.
   `canopy stop task:N` ends a running run as `stop` ends a ticket's and drops a queued one.
 - **Stage 2, the conversation.** `canopy reply task:N` queues the next run, which continues the branch, with the
-  operator's messages as instructions and earlier summaries as data. A `blocked` run's question is a worker message,
-  and raises `awaiting_reply` until a reply. A run's end is a `task.ended` event, in a `tasks` group of its own (§20),
-  with its summary, its question when `blocked`, its branch, and its PR.
+  operator's messages as instructions and earlier summaries as data, and ends the loop's wait. A `blocked` run's
+  question is a worker message, and raises `awaiting_reply` until a reply. A run's end is a `task.ended` event, in a
+  `tasks` group of its own (§20), with its summary, its question when `blocked`, its branch, and its PR.
 - **Stage 3, what a task leaves.** The report: `.canopy-task-report.md` at the slot's root, excluded from git, copied
-  to `<state_dir>/tasks/<N>/<run>.md` as plans are (§25), shown by `canopy show task:N`. Tickets: the result's
-  `created`, at most `policy.max_follow_ups`, recorded against the task, each key's text checked only (D003), and
-  named in `task.ended`.
+  to `<state_dir>/tasks/<N>/<run>.md` before the slot is returned, as plans are (§25), shown by `canopy show task:N`,
+  and copied into the next run's slot as a plan is. Tickets: the result's `created`, at most `policy.max_follow_ups`,
+  recorded against the task, each key's text checked only (D003), and named in `task.ended`.
 - **Later, not built here.** Tasks in the web UI; a task across several repositories; promoting a task to a ticket.
 - **TRUST_MODEL**, in Stage 1's PR: T1 (a task's text and replies are the operator's, through the operator's channels
   only; a report is data), T3 (`max_tasks`, one run per task, no retry), T6 (a task's worker is the private worker,

@@ -215,7 +215,7 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    - the request does not fit its kind: a `resume` with no branch to continue, a cursor moved without its reason, or a
      stacked base that is not one of canopy's branches (§10). The first `implement` names the ticket's branch, which
      every later run continues in every unit (D058).
-   - a run for the ticket is running, or `max_workers` runs and review runs, together, are (§21).
+   - a run for the ticket is running, or `max_workers` runs, review runs, and tasks' runs, together, are (§21, §36).
    - a named unit has had `policy.max_<kind>_attempts` runs of this kind, plus what `canopy grant` gave it (§22). A run
      counts against every unit it covered, whatever it ended as, and the count never resets (D030). The refusal raises
      an `attempt_limit` attention item (§14).
