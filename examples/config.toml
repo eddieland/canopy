@@ -172,6 +172,12 @@ cmd = ""
 # [connect.sources.issues]
 # kind = "tracker"
 # post_cmd = "canopy-post-github"
+#
+# Or, at most one tracker source, canopy's Jira Cloud reader (DESIGN §30). It reads your email and an API token, one
+# line EMAIL:API_TOKEN, from ~/.config/canopy/jira-credentials, mode 600, and sends them to this site alone.
+# [connect.sources.jira]
+# kind = "tracker"
+# cmd = "canopy-connect-jira --site acme.atlassian.net"
 
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.

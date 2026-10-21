@@ -323,6 +323,17 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
   5. Start a run. Expect it to reuse a moved slot, `settings.local` reading `v1`, no quarantine, and `cache/warm.bin`
      at its first inode. Remove `pools.backend` from the config: the warning stops.
 
+### Connectors
+
+- **S56. Jira read by its connector** (M36). Put your email and an API token in `~/.config/canopy/jira-credentials`,
+  one line `EMAIL:API_TOKEN`, mode 600, and add `[connect.sources.jira]` with `kind = "tracker"` and
+  `cmd = "canopy-connect-jira --site <your site>"`. Run `canopy tick --dry-run`. Expect `canopy status` to name the
+  source with an `ok` run; `observed_tickets` to hold every open ticket the query returns, each watched ticket's
+  blockers, and a `needs-human` label's time from its changelog; and `observed_comments` each watched ticket's
+  comments, authors as account ids, text as Jira shows it. Label a ticket the query returns past its first 100: expect
+  it in the run's query result. Then `chmod 644` the file: expect the next run failed, naming the file, the
+  observations kept.
+
 ## Measurements
 
 Each records its numbers in `MEASUREMENTS.md`, as a dated section.

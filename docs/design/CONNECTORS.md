@@ -18,7 +18,7 @@ world. Authority stays with the source (§4 principle 1, §22): an observation s
 what is true now. Nothing yet reads an observation to decide anything but the derivation, which only the operator and
 the measurement read.
 
-Not yet built: canopy's connectors grown to this contract.
+Not yet built: canopy's GitHub reader grown to this contract. `canopy-connect-jira` speaks it whole.
 
 ### Sources
 

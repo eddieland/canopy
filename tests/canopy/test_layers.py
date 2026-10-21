@@ -25,9 +25,10 @@ LAYERS: tuple[frozenset[str], ...] = (
 )
 # Third-party packages only one canopy package may import.
 CONFINED = {"anyio": "serve", "click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
-# Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink and the GitHub
-# programs hold secrets and open connections, which the harness never does (DESIGN §20, §29).
-SEPARATE = frozenset({"canopy_github", "canopy_notify_slack"})
+# Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
+# programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
+# §30).
+SEPARATE = frozenset({"canopy_github", "canopy_jira", "canopy_notify_slack"})
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
 RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)

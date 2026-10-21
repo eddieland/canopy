@@ -161,8 +161,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Templates cannot pipe or redirect; a wrapper such as a sandbox is a prefix or a script.
 - Revisit: if the prompt must go on stdin or nears Linux's 128 KiB argument limit.
 
-## D025. click for the CLI
+## D025. click for every command line
 
+- canopy's CLI and every program it ships, the workspace members included (the operator, 2026-10-21). Options or
+  setup two programs share go in a common workspace member, not copied into each.
 - Exit codes: usage and config errors 2, refusals 1. `decide [KEY] ACTION` parses positionals by hand.
 - Rejected: argparse (the CLI grows every milestone).
 
