@@ -4,6 +4,7 @@ import errno
 import json
 import os
 import re
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,7 @@ from canopy.loop import attention, duties, tick
 from tests.canopy.helpers import (
     agent_runs,
     canopy,
+    has_deadline,
     in_tick,
     only_tick,
     overseer_titles,
@@ -36,6 +38,7 @@ from tests.conftest import CanopyEnv, executable
 
 def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_state: Path) -> None:
     env = scenario.env
+    before = time.time()
     ticked = scenario.tick(
         *waits("PROJ-1", rationale="checks pending"),
         sets_phase("PROJ-1", Phase.CI_RUNNING, repo="repo", cursor="ci=run-1"),
@@ -45,6 +48,7 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
         dry_run=True,
     )
     assert ticked.printed.out.startswith("tick 1: ok: dry run; 4 decisions")
+    after = time.time()
 
     [run] = agent_runs(scenario.agent_log)
     commands = run["commands"]
@@ -67,7 +71,13 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     assert '"labels":["agent-ready-tester"]' in state
     assert run["cwd"] == str(env.root)
     snapshot = definitions.ensure(env.state_dir, config.load(env.root))
-    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
+    # Its deadline, the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
+    assert has_deadline(run, 15, before=before, after=after)
+    assert run["env"] == {
+        "CANOPY_TICK_ID": "1",
+        "CANOPY_DEADLINE": run["env"]["CANOPY_DEADLINE"],
+        "OPENCODE_CONFIG_DIR": str(snapshot),
+    }
     assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
     conn = scenario.conn

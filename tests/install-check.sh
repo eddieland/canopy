@@ -11,7 +11,8 @@ set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd)
 source=${1:-$repo}
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+# canopy leaves its agents' snapshot unwritable (DESIGN §33), so write permission goes back before the removal.
+trap 'chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"' EXIT
 
 export HOME="$work/home"
 export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share" XDG_CACHE_HOME="$HOME/.cache"
@@ -148,10 +149,13 @@ canopy chore install memory-tickets >/dev/null || fail "canopy chore install mem
 agent="$workspace/.canopy/chore-agents/memory-tickets/agents/canopy-memory-tickets.md"
 [ -s "$agent" ] || fail "canopy chore install did not copy the agent to $agent"
 
-# The migrations, prompts, personas, agent definitions, skills, and example chores came from the wheel, not from
-# this checkout.
+# The migrations, prompts, personas, agent definitions, skills, plugins, and example chores came from the wheel, not
+# from this checkout.
 state="$workspace/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
+# With canopy's plugin beside the definitions, and nothing in it the operator can write (DESIGN §33).
+ls "$state"/runtime/*/plugins/canopy.js >/dev/null || fail "no canopy plugin in the snapshot in $state/runtime"
+[ -z "$(find "$state"/runtime/*/ -perm -u+w)" ] || fail "the snapshot in $state/runtime is writable"
 "$UV_TOOL_DIR/canopy/bin/python" -c '
 import sys
 from pathlib import Path
@@ -163,6 +167,7 @@ for found in (
     resources.personas_dir(),
     resources.agents_dir(),
     resources.skills_dir(),
+    resources.plugins_dir(),
     resources.example_chores_dir(),
 ):
     if not found.is_relative_to(tool):

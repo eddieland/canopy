@@ -35,6 +35,7 @@ from tests.canopy.helpers import (
     chore_reports,
     chore_toml,
     context,
+    has_deadline,
     in_run,
     in_tick,
     json_block,
@@ -127,12 +128,14 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
     # A server some other process was given, such as the operator's own inline config, is not the chore's.
     inherited = {"OPENCODE_CONFIG_CONTENT": '{"mcp": {}}', "OPENCODE_EXPERIMENTAL_CODE_MODE": "true"}
     with in_tick(conn) as tick_id, chore_reports(OK), mock.patch.dict(os.environ, inherited):
+        before = time.time()
         assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
         deadline = time.monotonic() + 30
         row = db.get_chore_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
             time.sleep(0.05)
             row = db.get_chore_run(conn, 1)
+        after = time.time()
         assert row is not None
         assert row.status == "ok", Path(row.log_path).read_text()
         assert result.stored(row.result_json) == result.ChoreResult.model_validate(OK)
@@ -145,6 +148,9 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert agent["cwd"] == str(cwd)
         assert cwd.stat().st_mode & 0o777 == 0o700
         assert "CANOPY_TICK_ID" not in agent["env"]  # a chore cannot act as the overseer
+        # Its own timeout's deadline, not the tick's it was started in (DESIGN §33).
+        timeout = load(canopy_env.root, canopy_env.user_file).chores["build-health"].timeout_minutes
+        assert has_deadline(agent, timeout, before=before, after=after)
         # Its own history's server, and no other (DESIGN §27), with code mode off, which would hide it.
         given = servers.env(history.SERVER, history.SERVER_COMMAND, cwd=canopy_env.root.absolute())
         assert {name: agent["env"].get(name) for name in given} == given

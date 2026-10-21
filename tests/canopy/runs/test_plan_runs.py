@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from tests.canopy.helpers import (
     calls,
     commands_run,
     decisions,
+    has_deadline,
     in_tick,
     plan_file,
     planner_does,
@@ -43,12 +45,16 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
 ) -> None:
     conn, env = scenario.conn, scenario.env
     status = ["git", "-C", "repo", "status", "--porcelain=v2", "--branch"]
+    before = time.time()
     run = scenario.run(PLAN, worker=planner_does(status, plan=TEXT))
+    after = time.time()
     assert run.status == RunStatus.DONE, Path(run.row["log_path"]).read_text()
 
     # Planned in a desk, even over one repository, at the base and detached: a plan makes no branch.
     desk = env.root / "desks" / KEY
     [planner] = agent_runs(scenario.agent_log)
+    # Within the worker's timeout, which its deadline names (DESIGN §33).
+    assert has_deadline(planner, 45, before=before, after=after)
     argv = planner["argv"]
     assert isinstance(argv, list)
     assert argv[:3] == ["run", "--agent", "canopy-planner"]

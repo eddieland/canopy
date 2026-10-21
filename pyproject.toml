@@ -90,6 +90,7 @@ packages = ["src/canopy"]
 ".agents/personas" = "canopy/_data/personas"
 ".agents/agents" = "canopy/_data/agents"
 ".agents/skills" = "canopy/_data/skills"
+".agents/plugins" = "canopy/_data/plugins"
 ".agents/operator-skill" = "canopy/_data/operator-skill"
 "examples/chores" = "canopy/_data/chores"
 

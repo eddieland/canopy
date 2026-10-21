@@ -25,6 +25,7 @@ from tests.canopy.helpers import (
     canopy,
     decisions,
     granted_meanwhile,
+    has_deadline,
     in_run,
     in_tick,
     lifelock_left,
@@ -76,12 +77,14 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         in_tick(conn) as tick_id,
         reviewer_reports(FINDINGS, ["git", "-C", "checkout", "rev-parse", "HEAD"], ["pwd"]),
     ):
+        before = time.time()
         assert main(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py")[1:]) == 0
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
             time.sleep(0.05)
             row = db.get_review_run(conn, 1)
+        after = time.time()
         assert row is not None
         assert row.status == "done", Path(row.log_path).read_text()
         assert result.stored(row.result_json) == result.ReviewResult.model_validate(FINDINGS)
@@ -92,6 +95,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert reviewer["cwd"] == str(run_dir)
         assert reviewer["argv"][:3] == ["run", "--agent", "canopy-reviewer"]
         assert "CANOPY_TICK_ID" not in reviewer["env"]
+        assert has_deadline(reviewer, 20, before=before, after=after)  # the review's timeout (DESIGN §33)
         checked, _ = reviewer["commands"]
         assert checked["stdout"].strip() == sha
         assert not run_dir.exists()  # removed, and its link with it, once the run ended

@@ -203,11 +203,11 @@ what woke it, and what it faces; a chore or review by its name or PR. A title ne
 
 ### Where the runtime finds canopy's definitions
 
-canopy snapshots its bundled agents and skills into the state directory, named for a digest of their contents, and the
-templates point the runtime at it (§12). The snapshot is written whole, never changed, and readable only by the
-operator, so overlapping runs never load a partial set; one that is a symlink, someone else's, or open to others is
-refused, failing the tick or making the run `crashed` (D040). Two definitions are rendered from config, so a change to
-their inputs makes a new snapshot:
+canopy snapshots its bundled agents, skills, and plugin into the state directory, named for a digest of their contents,
+and the templates point the runtime at it (§12). The snapshot is written whole, never changed, unwritable once written
+(§33), and readable only by the operator, so overlapping runs never load a partial set; one that is a symlink, someone
+else's, or open to others is refused, failing the tick or making the run `crashed` (D040). Two definitions are
+rendered from config, so a change to their inputs makes a new snapshot:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
 - `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
@@ -227,8 +227,8 @@ turns none off, but for the overseer whose body holds the tracker's skill, and t
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
-canopy ships no plugin yet. The one designed, a clock that tells a running agent the minutes left, and what OpenCode
-does with a plugin, are §33.
+canopy ships one plugin, `canopy.js`, whose first job is a clock that tells a running agent the minutes left; it, and
+what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 

@@ -1,8 +1,8 @@
 """canopy's agent definitions in the runtime's format (DESIGN §13): the bundled files, rendered with config's rules.
 
-canopy ships its agents and skills as the runtime reads them from a config directory, and writes into them what each
-agent may do (`canopy.runtime.agents.Rules`). `canopy.core.definitions` snapshots the result for runs to load (D040).
-The format, and the names the runtime gives tools and skills, are the implementation's.
+canopy ships its agents, skills, and plugins as the runtime reads them from a config directory, and writes into its
+agents what each agent may do (`canopy.runtime.agents.Rules`). `canopy.core.definitions` snapshots the result for runs
+to load (D040). The format, and the names the runtime gives tools and skills, are the implementation's.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def agent_names() -> list[str]:
 
 
 def bundled() -> dict[str, bytes]:
-    """Return the bundled agents and skills as a config directory holds them, by relative path, unrendered."""
+    """Return the bundled agents, skills, and plugins as a config directory holds them, by relative path, unrendered."""
     return definitions.bundled()
 
 

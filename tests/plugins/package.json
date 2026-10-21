@@ -1,0 +1,11 @@
+{
+  "name": "canopy-plugin-checks",
+  "private": true,
+  "description": "Dev only: type-checks the plugin in .agents/plugins against the pinned runtime's own types.",
+  "type": "module",
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.19.3",
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3"
+  }
+}

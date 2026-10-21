@@ -10,6 +10,7 @@ import re
 import signal
 import sqlite3
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -26,6 +27,7 @@ from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     commit_and_push,
+    has_deadline,
     pool,
     present,
     scripted,
@@ -41,7 +43,9 @@ from tests.conftest import CanopyEnv, GitPool, git
 
 
 def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
+    before = time.time()
     run = scenario.run(worker=pushes())
+    after = time.time()
 
     assert run.status == "done"
     assert run.row["ended_at"] is not None
@@ -61,9 +65,12 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     snapshot = definitions.ensure(scenario.env.state_dir, config.load(scenario.env.root))
     # CANOPY_GIT_OBJECTS: the run's object directory, for a sandbox wrapper (DESIGN §8).
     objects = scenario.env.state_dir / "runs" / f"{run.id}.objects"
+    # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
+    assert has_deadline(w, 45, before=before, after=after)
     assert w["env"] == {
         "CANOPY_RUN_ID": str(run.id),
         "CANOPY_GIT_OBJECTS": str(objects),
+        "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
     }
     assert not objects.exists()  # removed once the run was over

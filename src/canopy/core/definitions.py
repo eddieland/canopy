@@ -1,8 +1,12 @@
 """The directory agent runs load canopy's agent definitions and skills from (DESIGN §13, D040).
 
-canopy snapshots its bundled agents and skills into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial one.
-Command templates name it with `{definitions_dir}`, and the runtime reads it as its config directory.
+canopy snapshots its bundled agents, skills, and plugins into `<state_dir>/runtime/<digest>/`, named for a digest of
+their contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial
+one. Command templates name it with `{definitions_dir}`, and the runtime reads it as its config directory.
+
+A snapshot is unwritable once written, by the operator too, and gets its write permission back only to be removed: the
+runtime installs a package for its plugins into each config directory it can write, and waits on the registry for it
+before a session starts (DESIGN §33). Nothing is installed into one it cannot write.
 
 Some definitions are rendered from config: what canopy decides here, from config, that each agent may do
 (`canopy.runtime.agents.Rules`), the runtime package writes in its own format. The digest covers the rendered text, so a
@@ -11,9 +15,11 @@ config or override change makes a new snapshot rather than changing one a run ma
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import shutil
+import stat
 import tempfile
 import time
 from pathlib import Path
@@ -105,7 +111,7 @@ def _digest(files: Mapping[str, bytes]) -> str:
 
 
 def ensure(state_dir: Path, config: Config | None = None) -> Path:
-    """Return the snapshot for the installed canopy and `config`, creating it if missing.
+    """Return the snapshot for the installed canopy and `config`, creating it, unwritable, if missing.
 
     Safe to call from concurrent processes.
 
@@ -129,9 +135,11 @@ def ensure(state_dir: Path, config: Config | None = None) -> Path:
             path = tmp / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+        # Before the rename, so no run ever loads it writable. Renamed within its parent, it needs no write of its own.
+        _set_writable(tmp, writable=False)
         os.rename(tmp, final)  # noqa: PTH104  (os.rename, unlike Path.replace, never replaces a non-empty directory)
     except OSError:
-        shutil.rmtree(tmp, ignore_errors=True)
+        _remove(tmp)
         # Another process renamed its copy into place first; theirs has the same contents.
         if final.is_dir():
             return _checked(final)
@@ -166,6 +174,34 @@ def prune(state_dir: Path, keep: Path) -> list[Path]:
             continue
         if entry.name.startswith(_TMP_PREFIX) and now - entry.stat().st_mtime < _STALE_TMP_SECONDS:
             continue
-        shutil.rmtree(entry, ignore_errors=True)
+        _remove(entry)
         removed.append(entry)
     return removed
+
+
+def _remove(snapshot: Path) -> None:
+    """Remove `snapshot`, a snapshot or a temporary one, giving its directories their write permission back first.
+
+    What cannot be removed is left, as `shutil.rmtree` with `ignore_errors` leaves it.
+    """
+    with contextlib.suppress(OSError):
+        _set_writable(snapshot, writable=True)
+    shutil.rmtree(snapshot, ignore_errors=True)
+
+
+def _set_writable(root: Path, *, writable: bool) -> None:
+    """Give `root` and every directory and file under it the owner's write permission, or take everyone's away.
+
+    Symlinks are neither followed nor changed, `root` among them: canopy writes none into a snapshot.
+
+    Raises:
+        OSError: a permission could not be changed.
+    """
+    if root.is_symlink():
+        return
+    for here, _, names in os.walk(root):
+        for path in (Path(here), *(Path(here) / name for name in names)):
+            if path.is_symlink():
+                continue
+            mode = stat.S_IMODE(path.lstat().st_mode)
+            path.chmod(mode | stat.S_IWUSR if writable else mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))

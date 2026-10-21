@@ -316,6 +316,8 @@ Controls in code, not prompts:
 - One running worker per ticket.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
+- The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
+  the harness kills it by, and nothing it does with them extends the run or holds off the kill.
 - A tick that cannot acquire the lock exits immediately.
 - Reviews: one `done` review per commit, or per commit and persona for a request naming several (DESIGN §31), each
   counting toward `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
@@ -366,6 +368,11 @@ Controls now:
   loads its definition the way canopy loads its own (DESIGN §13), and checks that
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
+- canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose one job today
+  is the clock (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is written,
+  the operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs
+  nothing into it. The plugin reads one variable, `CANOPY_DEADLINE`, and the clock; it writes nothing, refuses no call,
+  grants no tool, and catches its own errors. A repository's own plugins already load in the same process (T7).
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
@@ -408,7 +415,8 @@ Controls now:
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
 
-Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one
+Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in; such a run could
+give the snapshot its write permission back, as it could do anything else the operator can. A sandboxed one
 shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
 git and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`,
 so two runs can pass files through it. A filter driver the operator's own git config defines still runs on whatever a

@@ -25,6 +25,11 @@ from typing import IO, Protocol, cast
 
 from canopy.infra import lock
 
+#: The variable a child started with a timeout finds its deadline in, as Unix seconds: the moment `run` kills it, taken
+#: when its clock starts, so the two agree (DESIGN §33). A child started without a timeout gets none, not even one its
+#: parent had: a deadline is for the process it was set for alone.
+DEADLINE_ENV = "CANOPY_DEADLINE"
+
 
 class ProcError(Exception):
     """A process could not be started at all."""
@@ -77,7 +82,8 @@ class Runner(Protocol):
                 it, overriding any `PWD` in `env`.
             env: Entries merged over the inherited environment.
             stdin: Text written to the child's stdin. When None, stdin is `/dev/null`.
-            timeout: Seconds before the child's process group is killed. None waits forever.
+            timeout: Seconds before the child's process group is killed. None waits forever. With one, the child's
+                `DEADLINE_ENV` names when, whatever `env` or the inherited environment says; without, it has none.
             on_start: Called with the child's pid, which is also its process group id, once it has started.
             on_line: Called with each line of the child's stdout, its newline kept, as the child prints it, on the
                 calling thread. `stdout` in the result holds the same lines. An exception it raises kills the child
@@ -100,7 +106,7 @@ class Runner(Protocol):
 
         Args:
             args: The command and its arguments. Never passed through a shell.
-            cwd: Working directory for the child, which its `PWD` also names.
+            cwd: Working directory for the child, which its `PWD` also names. It gets no `DEADLINE_ENV`.
             log_path: File the child's stdout and stderr are appended to, created readable only by the operator.
                 The child holds the lock beside it, `lifelock(log_path)`, for its whole life; `running` asks after it.
 
@@ -215,7 +221,9 @@ class SubprocessRunner:
             ProcError: `cwd` cannot be used as the working directory.
             OSError: The process could not be started for any other reason.
         """
-        full_env = _child_env(cwd, env, self.unset)
+        # Taken as the clock `timeout` counts on starts, so the child's deadline is never later than its kill.
+        deadline = None if timeout is None else time.time() + timeout
+        full_env = _child_env(cwd, env, self.unset, deadline)
         try:
             proc = subprocess.Popen(
                 argv,
@@ -281,7 +289,7 @@ class SubprocessRunner:
             drop_lifelock(log_path)
             os.close(held)
             raise
-        env = _child_env(cwd, None, self.unset)
+        env = _child_env(cwd, None, self.unset, None)
         try:
             if self.reparent:
                 return _spawn_reparented(argv, cwd=cwd, env=env, log=fd, held=held)
@@ -351,16 +359,27 @@ def _spawn_reparented(argv: tuple[str, ...], *, cwd: Path, env: Mapping[str, str
     raise ProcError(f"cannot start {argv[0]}: {started.get('error')}")
 
 
-def _child_env(cwd: Path | None, env: Mapping[str, str] | None, unset: AbstractSet[str]) -> dict[str, str] | None:
+def _child_env(
+    cwd: Path | None,
+    env: Mapping[str, str] | None,
+    unset: AbstractSet[str],
+    deadline: float | None,
+) -> dict[str, str] | None:
     """Return the child's environment: the inherited one, `env` merged over it, `unset` removed; None to inherit it.
 
     A child given a working directory gets `PWD` naming it, as a shell's `cd` would, whatever `env` says. Some programs
     trust `PWD` over the real working directory: OpenCode runs its tools in `PWD`, so an inherited one would put a
     worker's edits in the directory canopy was started from instead of its worktree.
+
+    A child with a `deadline` gets `DEADLINE_ENV` naming it, in whole seconds, rounded down so it is never late; one
+    without gets none, so a process canopy starts from inside an agent run does not take the run's deadline as its own.
     """
-    if cwd is None and env is None and not unset:
+    if cwd is None and env is None and not unset and deadline is None and DEADLINE_ENV not in os.environ:
         return None
     merged = {**os.environ, **(env or {})}
+    merged.pop(DEADLINE_ENV, None)
+    if deadline is not None:
+        merged[DEADLINE_ENV] = str(int(deadline))
     if cwd is not None:
         merged["PWD"] = str(cwd.absolute())
     return {name: value for name, value in merged.items() if name not in unset}
