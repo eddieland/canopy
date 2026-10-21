@@ -203,10 +203,7 @@ def choose(
     """
     conversation.check_operator()
     if name is not None:
-        try:
-            load(config, name)
-        except PersonaError as e:
-            raise conversation.Refused(UNKNOWN if e.guard == MISSING else e.guard, e.reason) from e
+        check(config, name)
     where = "ticket_key = ? AND agent = ? AND kind = ?"
     with db.transaction(conn):
         sql.execute(conn, sql.delete("ticket_overrides").where(where, ticket, agent, OverrideKind.PERSONA))
@@ -224,6 +221,19 @@ def choose(
                 ),
             )
     return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
+
+
+def check(config: Config, name: str) -> None:
+    """Refuse a persona the operator is choosing that a run could not use: it is refused when set, not when one starts.
+
+    Raises:
+        Refused: `unknown_persona` for a name with no file, or `bad_persona` for a file canopy would not put in a
+            prompt.
+    """
+    try:
+        load(config, name)
+    except PersonaError as e:
+        raise conversation.Refused(UNKNOWN if e.guard == MISSING else e.guard, e.reason) from e
 
 
 def load(config: Config, name: str) -> Persona:

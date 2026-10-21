@@ -1,4 +1,4 @@
-"""`canopy personas`, each persona a run could get, and `canopy persona`, a ticket's override of one (DESIGN §31)."""
+"""`canopy personas`, each persona a run could get, and `canopy persona`, a ticket's or a PR's choice of one (§31)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,14 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, personas
+from canopy.core import conversation, personas, review_requests
 from canopy.infra import logs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from canopy.core.config import Config
+    from canopy.core.context import Context
 
 CLI = "cli"
 #: How `canopy persona KEY` names where each agent's persona comes from.
@@ -41,12 +42,12 @@ def cmd_personas(click_ctx: click.Context) -> int:
 
 
 @click.command("persona")
-@click.argument("key", metavar="KEY")
+@click.argument("key", metavar="KEY|URL")
 @click.argument("name", metavar="[NAME]", required=False)
 @click.option(
     "--agent",
     type=click.Choice(personas.AGENTS),
-    help="The agent to choose for: its planner or its reviewer. The ticket's workers without it.",
+    help="The agent to choose for: its planner or its reviewer. The ticket's workers without it; a PR's reviewer.",
 )
 @click.option("--clear", is_flag=True, help="Clear the override: the agent's runs take [personas]' choice again.")
 @click.pass_context
@@ -64,6 +65,9 @@ def cmd_persona(
     before canopy has seen the ticket. NAME is one `canopy personas` lists; a run whose persona's file has gone by then
     is refused, never run in another voice. Without NAME or --clear, prints each agent's next persona and where it
     comes from. Only from your shell or the web UI: never inside one of canopy's runs.
+
+    URL, a PR's, chooses the persona of the review you requested of it with `canopy start URL --review`, as that
+    command's --persona does.
     """
     try:
         ref = conversation.parse_ref(key)
@@ -73,6 +77,10 @@ def cmd_persona(
     if name is not None and clear:
         raise click.UsageError("give NAME or --clear, not both")
     ctx = open_context(click_ctx)
+    if ref.kind == conversation.PR:
+        if agent not in (None, "reviewer"):
+            raise click.UsageError("a PR's review request has only a reviewer's persona")
+        return _pr_persona(ctx, ref, name, clear=clear)
     if name is None and not clear:
         found = personas.next_for(ctx.conn, ctx.config, ref.id)
         for line in show(ref.id, [n for n in found if agent is None or n.agent == agent]):
@@ -90,6 +98,29 @@ def cmd_persona(
     click.echo(f"{ref.id}'s {chosen_for} runs write in {now.name} from their next run: {SOURCES[now.source]}.")
     if now.error is not None:
         click.echo(f"  its runs refuse: {now.error}")
+    return 0
+
+
+def _pr_persona(ctx: Context, ref: conversation.Ref, name: str | None, *, clear: bool) -> int:
+    # A review request's persona: shown, chosen, or cleared, as a ticket's reviewer override is.
+    if name is not None or clear:
+        try:
+            review_requests.choose_persona(ctx.conn, ctx.config, ref, name)
+        except conversation.Refused as r:
+            raise CliError(f"persona refused ({r.guard}): {r.reason}") from None
+        logs.for_tick(None).info(
+            "persona chosen" if name is not None else "persona cleared",
+            extra={"pr": ref.id, "agent": "reviewer", "persona": name, "channel": CLI},
+        )
+    found = review_requests.open_request(ctx.conn, ref.id)
+    if found is None:
+        raise CliError(f"{ref} has no open review request; ask for one with `canopy start {ref} --review`")
+    chosen = review_requests.persona_of(ctx.conn, found.id)
+    configured = ctx.config.personas.reviewer
+    source = (
+        "this request's" if chosen is not None else SOURCES["config" if configured != personas.DEFAULT else "default"]
+    )
+    click.echo(f"{ref}'s review is written in {chosen or configured}, from its next: {source}.")
     return 0
 
 
