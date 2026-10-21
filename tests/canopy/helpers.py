@@ -682,9 +682,13 @@ def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unp
 
 
 @contextmanager
-def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iterator[None]:
+def private_worker_does(
+    *commands: list[str],
+    result: dict[str, object],
+    **behavior: Unpack[Behavior],
+) -> Iterator[None]:
     """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
-    with scripted("WORKER_PRIVATE", {"COMMANDS": json.dumps(commands), "RESULT": json.dumps(result)}):
+    with scripted("WORKER_PRIVATE", {"COMMANDS": json.dumps(commands), "RESULT": json.dumps(result)}, behavior):
         yield
 
 
