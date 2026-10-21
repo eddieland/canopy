@@ -5,8 +5,8 @@ description: How canopy agents use Jira through the Atlassian MCP server. Load w
 
 # Jira for canopy agents
 
-canopy's tracker contract (DESIGN §17) is the same for every tracker. This skill only covers what is specific to Jira.
-If a tool name here does not match what your Atlassian MCP server exposes, use the closest equivalent.
+What is specific to Jira as canopy's tracker. Where a tool named here differs from what your Atlassian MCP server
+exposes, use the closest equivalent.
 
 ## Keys
 
@@ -14,11 +14,9 @@ The ticket key is the Jira issue key as-is: `PROJ-123`.
 
 ## Finding tickets
 
-`tracker.query` is JQL. Run it through the server's JQL search tool. Atlassian remote MCP tools usually need a cloud id;
-if they ask for one, resolve it once per run from the accessible-resources tool and reuse it.
-
-The query only finds tickets. Read each result and confirm the label is in its `labels` field before treating it as a
-candidate.
+`tracker.query` is JQL: run it through the server's JQL search tool. Atlassian remote MCP tools usually need a cloud
+id; if they ask for one, resolve it once per run from the accessible-resources tool and reuse it. The query only finds
+tickets: confirm the label is in each result's `labels` field before treating it as a candidate.
 
 ## Closed
 
@@ -26,33 +24,32 @@ A ticket is closed when its status category is Done. Do not match on status name
 
 ## Identities
 
-Comment authors are identified by `accountId`. Compare `trust.authorized_repliers` against `accountId` exactly. Display
-names and email addresses are not identities; two people can share a display name.
+Comment authors are identified by `accountId`. Compare `trust.authorized_repliers` against it exactly. Display names
+and email addresses are not identities; two people can share a display name.
 
 ## Labels
 
 Jira labels cannot contain spaces. Set them with the issue edit tool (on Atlassian's remote server, `editJiraIssue`
-with only `labels` in its fields), never with a command-line client. Editing fields cannot change an issue's status;
-that takes a transition, which canopy agents never make. An edit may replace the whole list: read the current labels
-immediately before the edit, not earlier in the run, add or remove only the one you mean to, and write the full list
-back. Never drop or re-add labels you did not mean to touch, and never pass other fields.
+with only `labels` in its fields), never with a command-line client, and pass no other field. Editing fields cannot
+change an issue's status; that takes a transition, which canopy agents never make. An edit may replace the whole list:
+read the current labels immediately before the edit, not earlier in the run, add or remove only the one you mean to,
+and write the full list back, dropping or re-adding no other label.
 
-When a label was added is in the issue changelog. If the server cannot read the changelog, use the timestamp of the
-worker's question comment instead.
+When a label was added is in the issue changelog; if the server cannot read the changelog, use the timestamp of the
+worker's question comment.
 
 ## Creating tickets
 
-An `implement` or `resume` worker creates the follow-ups its prompt allows (DESIGN §18); no other agent creates
-issues. Create each in the parent's project, with the parent's issue type unless that type
-cannot be created, with an empty `labels` field and no assignee. Link it to the parent with a "relates to" link, not as
-a subtask; a private ticket's worker, which has the create tool and no link tool, names the parent in the body instead,
-on a line of its own, `Part of <parent key>`. Order the new issues with "Blocks" links: the earlier one blocks the later
-one. The new issue's key is the key Jira returns for the created issue.
+Only an `implement` or `resume` worker creates issues, the follow-ups its prompt allows. Create each in the parent's
+project, with the parent's issue type unless that type cannot be created, with an empty `labels` field and no assignee.
+Link it to the parent with a "relates to" link, not as a subtask; a private ticket's worker, which has the create tool
+and no link tool, names the parent in the body instead, on a line of its own, `Part of <parent key>`. Order the new
+issues with "Blocks" links: the earlier one blocks the later one. The new issue's key is the key Jira returns.
 
 ## Comments and ordering
 
-Order comments by their created timestamp. Use the comment id as the cursor. Keep comments plain text; the server
-converts them to Jira's format.
+Order comments by their created timestamp, and use the comment id as the cursor. Write comments in plain text; the
+server converts them to Jira's format.
 
 ## Blockers
 
