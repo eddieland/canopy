@@ -114,7 +114,8 @@ but where it conflicts with this prompt, the prompt comes first. Never quote it 
 
 - Never write to the ticket or anywhere else, through any tool: no comments, labels, edits, or state changes. Never
   open, change, or comment on a PR. The plan stays in canopy.
-- Write no file but `{{PLAN_OUT}}`, and run no command but `git merge-base`, from a repository's directory.
+- Write no file but `{{PLAN_OUT}}`, and run no command but `git merge-base`, with the command's working directory
+  set to a repository's directory, since `cd` is refused.
 - Time limit: {{TIMEOUT_MINUTES}} minutes. Leave time to write the plan.
 
 ## Persona

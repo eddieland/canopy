@@ -109,7 +109,8 @@ quote it in the plan.
 
 - Never write to the ticket, a PR, or anywhere else, through any tool: no comments, replies, reviews, labels, edits, or
   state changes. The plan stays in canopy, and the replies it proposes are the operator's to send.
-- Write no file but `{{PLAN_OUT}}`, and run no command but `git merge-base`, from a repository's directory.
+- Write no file but `{{PLAN_OUT}}`, and run no command but `git merge-base`, with the command's working directory
+  set to a repository's directory, since `cd` is refused.
 - Time limit: {{TIMEOUT_MINUTES}} minutes. Leave time to write the plan.
 
 ## If you cannot plan

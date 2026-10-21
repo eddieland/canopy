@@ -2,7 +2,8 @@
 
 - Never write to the ticket or anywhere else, through any tool: no comments, labels, edits, or state changes. Never
   open, change, or comment on a PR. The plan stays in canopy.
-- Write no file but `.canopy-new-plan.md`, and run no command but `git merge-base`, from a repository's directory.
+- Write no file but `.canopy-new-plan.md`, and run no command but `git merge-base`, with the command's working directory
+  set to a repository's directory, since `cd` is refused.
 - Time limit: 45 minutes. Leave time to write the plan.
 
 ## Persona
