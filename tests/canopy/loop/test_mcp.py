@@ -16,7 +16,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, git_tools
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import procs
@@ -38,7 +38,8 @@ from tests.canopy.helpers import (
     tool_call,
     worker_does,
 )
-from tests.conftest import CanopyEnv
+from tests.canopy.review_helpers import feature_commit
+from tests.conftest import CanopyEnv, GitPool, executable, git
 
 #: One of the loop's own PRs, PROJ-1's in `repo`, which reviews are on for.
 PR = "https://github.com/acme/api/pull/7"
@@ -757,6 +758,88 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
         assert refused[0][1] in capsys.readouterr().err
         assert main(["chore", "history", "build-health", "--run", "1", "--before", "2"]) == 2
         assert "run (--run) prints one run and before (--before) pages" in capsys.readouterr().err
+
+
+# A review's or a plan's run: `canopy _mcp --git NAME=PATH` serves it read-only git in those checkouts alone (§27).
+
+
+def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
+    overseen: CanopyEnv,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    sha = feature_commit(git_pool, tmp_path)
+    seed = tmp_path / "seed"
+    with in_tick(overseen.journal()):
+        served = mcp_session(
+            LIST_TOOLS,
+            tool_call("log", range="main..feature"),
+            tool_call("diff", base="main", head=sha),
+            tool_call("show", rev="feature", path="retry.py"),
+            tool_call("merge-base", base="main", head="feature"),
+            tool_call("show", rev="feature", path="../seed/retry.py"),
+            tool_call("show", rev="--output=x", path="retry.py"),
+            tool_call("show", rev="feature", path="retry.py", repo="web"),
+            tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
+            git=[f"checkout={seed}"],
+        )
+    # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
+    assert served.listed() == ["merge-base", "diff", "log", "show"]
+    schema = served.responses[1]["result"]["tools"][2]["inputSchema"]
+    assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
+    assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
+    log, diff, show, base = (served.said(n) for n in (2, 3, 4, 5))
+    assert [said.error for said in (log, diff, show, base)] == [False] * 4
+    assert log.text.startswith(git_tools.DATA_NOTE)
+    assert f"commit {sha}\n" in log.text
+    assert "+while True:\n+    call()" in diff.text
+    assert show.text.endswith("while True:\n    call()")
+    assert base.text == git("rev-parse", "main", cwd=seed)
+    escape, option, other = (served.said(n) for n in (6, 7, 8))
+    assert (escape.error, option.error, other.error) == (True, True, True)
+    assert "path: a path stays inside the repository: no `..`" in escape.text
+    assert "rev: not a revision" in option.text
+    assert other.text == "no repository named 'web' here: this run reads checkout"
+    assert served.responses[9]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    assert (served.stderr, served.returncode) == ("", 0)
+
+
+def test_git_reads_no_variable_the_runtime_passes_down(git_pool: GitPool, tmp_path: Path) -> None:
+    """A `GIT_*` variable in the agent's environment, which the server inherits, steers none of its git (#1130)."""
+    feature_commit(git_pool, tmp_path)
+    marker = tmp_path / "ran"
+    external = executable(tmp_path / "external", f'#!/bin/sh\necho ran >> "{marker}"\n')
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    git("init", "--quiet", cwd=elsewhere)
+    inherited = {
+        "GIT_DIR": str(elsewhere / ".git"),
+        "GIT_EXTERNAL_DIFF": str(external),
+        "GIT_CONFIG_PARAMETERS": f"'diff.external={external}'",
+    }
+    with mock.patch.dict(os.environ, inherited):
+        served = mcp_session(tool_call("diff", base="main", head="feature"), git=[f"checkout={tmp_path / 'seed'}"])
+    said = served.said()
+    assert not said.error, said.text
+    assert "+while True:" in said.text
+    assert not marker.exists()
+
+
+def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> None:
+    assert main(["_mcp", "--chore", "--git", "checkout=/repo"]) == 2
+    assert main(["_mcp", "--git", "checkout=repo"]) == 2
+    assert main(["_mcp", "--git", "Checkout=/repo"]) == 2
+    with (
+        mock.patch.object(mcp, "run_stdio", autospec=True, return_value=0) as served,
+        mock.patch.dict(os.environ, {"GIT_DIR": "/elsewhere"}),
+    ):
+        assert main(["_mcp", "--git", "api=/a", "--git", "web=/w"], runner=procs.SubprocessRunner(unset=["S"])) == 0
+    [((runner,), kwargs)] = served.call_args_list
+    assert kwargs == {"checkouts": {"api": Path("/a"), "web": Path("/w")}}
+    # Nothing it starts is a run: none is reparented, and none reads the git variables it inherited.
+    assert isinstance(runner, procs.SubprocessRunner)
+    assert not runner.reparent
+    assert {"S", "GIT_DIR"} <= runner.unset
 
 
 def test_a_run_a_tool_starts_is_not_the_servers_descendant(overseen: CanopyEnv) -> None:

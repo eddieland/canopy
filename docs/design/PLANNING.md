@@ -41,8 +41,9 @@ plan, waits on the operator, who has had a word on it. The sinks hear of it (§2
 
 A plan runs in a desk of worktrees at their bases (§18), with no branch and nothing pushed, within
 `capacity.max_workers`; under `tracker.private` (§22), a ticket's first plan starts it privately. The planner,
-`canopy-planner` (§13), has no shell, web fetch, or subagent tools, reads only inside its desk and through the private
-worker's tracker read tools (§22), without which it is not run, and writes one file, its plan. The ticket's text and the
+`canopy-planner` (§13), has no shell, web fetch, or subagent tools, reads only inside its desk, its worktrees' history
+through canopy's read-only git tools (§27), and the ticket through the private worker's tracker read tools (§22),
+without which it is not run, and writes one file, its plan. The ticket's text and the
 code are data to it (T1).
 Result contract, the last line of its text (§13), validated (D026):
 

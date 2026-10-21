@@ -13,7 +13,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.chores import history
-from canopy.core import config, definitions, plans, prompts
+from canopy.core import config, definitions, git_tools, plans, prompts
 from canopy.infra import resources
 from canopy.runtime import agents
 from canopy.runtime import definitions as runtime_definitions
@@ -510,6 +510,36 @@ def test_a_chore_may_call_its_history_tool_and_has_no_shell(canopy_env: CanopyEn
 def test_no_other_agent_may_call_a_chores_history_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
     _set_provider(canopy_env, provider)
     assert _opencode_disabled(_ruleset(canopy_env, agent), CHORE_HISTORY)
+
+
+#: canopy's read-only git tools, the reviewer's and the planner's (DESIGN §27), as the runtime names them.
+GIT_TOOLS = git_tools.tool_names()
+#: The agents that read git through them, having no shell.
+GIT_READERS = {agents.REVIEWER, agents.PLANNER}
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(GIT_READERS))
+def test_the_reviewer_and_the_planner_may_call_canopys_git_tools_and_have_no_shell(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
+    """Each tool by its exact name, whatever pattern before it denies, such as `*merge*` (#1130)."""
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    assert [_opencode_action(ruleset, tool, "*") for tool in GIT_TOOLS] == ["allow"] * len(GIT_TOOLS)
+    assert _opencode_disabled(ruleset, "bash")
+    # Allowed by name, never by a pattern: a tool of the server it does not serve is no one's.
+    assert _opencode_action(ruleset, "canopy_git_merge", "*") == "deny"
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - GIT_READERS))
+def test_no_other_agent_may_call_canopys_git_tools(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    assert [tool for tool in GIT_TOOLS if not _opencode_disabled(ruleset, tool)] == []
 
 
 @pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))

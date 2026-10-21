@@ -50,6 +50,9 @@ permission:
   "*branch*": deny
   "*fork*": deny
   "*copilot*": deny
+  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
+  # above reopens one.
+  "canopy_git_*": deny
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
   # chore's, allowed by exact name: last, so no pattern above closes it.
   "canopy_chore_history": allow

@@ -132,6 +132,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   on their threads and the comment as its body, which a coworker cannot see; add a comment of your own to it and
   submit it from the PR's files page. Expect the next tick to settle both drafts `sent`, to dispatch nothing for them,
   and the body you submitted to be the one canopy staged.
+- **S58. The reviewer and the planner read git through canopy's tools** (#1130). Review a stacked PR, and plan a
+  ticket over two repositories, once unsandboxed and once with `canopy-sandbox` around `plan_cmd` and `review_cmd`.
+  Expect `canopy show` of each run to list `canopy_git_*` among its tools, the transcripts to show the reviewer finding
+  where the PR leaves its base and reading the diff from there, and the planner naming each repository with `repo`;
+  no tool call fails for the server, and nothing in either checkout changes.
 
 ### Chores and notifications
 
