@@ -36,6 +36,7 @@ from canopy.core import (
     db,
     definitions,
     drafts,
+    feedback_items,
     feedback_plans,
     follow_ups,
     git_tools,
@@ -600,8 +601,9 @@ def _feedback_plan(
 
     Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
     `vcs` source first: the items the planner may cover are what that read observed, written to its desk with a copy
-    of the feedback plan this one replaces, if the ticket has one. An item the result names that it was not given is
-    refused, with a harness note; the rest are recorded with the plan.
+    of the feedback plan this one replaces, if the ticket has one, and what changed on its PRs since that plan saw them.
+    An item the result names that it was not given is refused, with a harness note; the rest are recorded with the
+    plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 
     Returns:
         The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
@@ -622,12 +624,9 @@ def _feedback_plan(
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
-    offered = feedback_plans.offered(ctx.conn, ctx.config.trust, key, prs)
-    desk_files = {feedback_plans.ITEMS: feedback_plans.items_file(offered)}
-    replaced = feedback_plans.current(ctx.conn, key)
-    copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
-    if copy is not None:
-        desk_files[plans.REPLACED] = copy
+    offered = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
+    snapshot = feedback_items.take(ctx.conn, prs, offered)
+    desk_files = _feedback_desk(ctx, key, offered)
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(FeedbackPlanResult, text)
@@ -642,7 +641,27 @@ def _feedback_plan(
         note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
         return Outcome(RunStatus.UNKNOWN, parsed, note)
     matched = feedback_plans.match(offered, [feedback_plans.Named(i.id, i.proposal, i.reply) for i in parsed.items])
-    return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, log=log)
+    return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
+
+
+def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Offered]) -> dict[str, str]:
+    """Return the files a feedback planner's desk holds, each data to it (DESIGN §32).
+
+    Returns:
+        Its PRs' items with their replies, and, when the ticket has a feedback plan this one replaces, that plan's file
+        as it stands, the operator's edits included, and what changed on its PRs since that plan saw them.
+    """
+    desk_files = {feedback_items.ITEMS: feedback_items.items_file(offered)}
+    replaced = feedback_plans.current(ctx.conn, key)
+    if replaced is None:
+        return desk_files
+    copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text
+    if copy is not None:
+        desk_files[plans.REPLACED] = copy
+    changed = feedback_items.changes(ctx.conn, ctx.config.trust, replaced)
+    if changed:
+        desk_files[feedback_items.CHANGES] = feedback_items.changes_file(changed)
+    return desk_files
 
 
 def _record_feedback_plan(
@@ -652,9 +671,10 @@ def _record_feedback_plan(
     text: str,
     *,
     matched: feedback_plans.Matched,
+    snapshot: feedback_items.Snapshot,
     log: logs.TickAdapter,
 ) -> Outcome:
-    """Write a `done` feedback plan's `text` to its own file and record it `proposed`, with its items (DESIGN §32).
+    """Write a `done` feedback plan's `text` to its own file and record it `proposed`, with its items and `snapshot`.
 
     Returns:
         `done` once it is recorded, with a note naming the items refused, or `crashed` when its file could not be
@@ -672,6 +692,7 @@ def _record_feedback_plan(
         run_id,
         file,
         matched.kept,
+        snapshot=snapshot,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id, feedback=True),
         no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
         effort=parsed.effort,

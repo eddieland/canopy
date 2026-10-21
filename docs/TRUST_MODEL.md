@@ -120,9 +120,12 @@ Controls:
   run reads only: canopy's planner, which writes one file and nothing else, with the PR's items as canopy's reader
   observed them, data in its desk, each with its author and whether they are trusted. An item id the reader did not
   return is refused with a note, so a plan cannot name feedback canopy never saw. The `resume` that follows names the
-  approved items by id from the journal, never the plan's text, and spends the approval: one approval, one run.
-  Trust labels then inform the operator rather than gate a run. Residual: the plan's text, model-written from anyone's
-  comments, reaches the worker as its copy, data as an approved plan's is; and approval is of the plan whole for now.
+  approved items by id from the journal, never the plan's text, only those the operator named when they approved by
+  item, and spends the approval: one approval, one run. The approval's operator message names the items by number and
+  observed id, journal values, and never quotes them. Trust labels then inform the operator rather than gate a run.
+  Residual: the plan's text, model-written from anyone's comments, reaches the worker as its copy, data as an approved
+  plan's is, the sections of items left out included, which only its prompt and the operator's message tell it to
+  leave.
 - With `policy.planner_may_approve` (DESIGN §25, private, off by default), a plan or feedback plan whose planner says
   it needs no review, with a reason, is approved by the harness as the planner's approval, recorded so and never as
   the operator's, and its `implement` or `resume` goes ahead without them. That lifts the plan gate on an agent's
@@ -369,8 +372,10 @@ Controls in code, not prompts:
 - Feedback plans (DESIGN §32): a feedback plan run holds its unit's slot within `capacity.max_workers`, has the
   worker's timeout, and counts toward `policy.max_feedback_plan_attempts` per unit (6 by default), never reset, raised
   only by the operator, in config or with `canopy grant KEY feedback-plan`. A new one is refused while the ticket's
-  feedback plan waits on the operator with no change asked, or its approval waits for its `resume`, so a stream of
-  comments from a bot spends a bounded number of plan runs. The quiet period before a re-plan is not built yet.
+  feedback plan waits on the operator with no change asked and nothing changed on its PR, or its approval waits for its
+  `resume`; a stale one is planned again only once its PR has had no new item, reply, head, or check conclusion for
+  `policy.feedback_quiet_minutes` (10 by default; a repository may only raise it), refused `quiet` before then, in code.
+  So a stream of comments or pushes from a bot spends a bounded number of plan runs.
 - Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
   repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.

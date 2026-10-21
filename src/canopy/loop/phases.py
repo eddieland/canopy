@@ -546,7 +546,7 @@ class _World:
             latest = self.latest_runs.get(key)
             if latest is not None and latest.status is RunStatus.BLOCKED:
                 ended = latest.ended_at or latest.started_at
-                if not any(m.at > ended for m in operator):
+                if not any(m.at > ended and conversation.answers_questions(m) for m in operator):
                     found.append(Phase.NEEDS_HUMAN)
             if operator:
                 found.append(Phase.HUMAN_REPLIED)
@@ -707,8 +707,11 @@ class _World:
         record = self.tickets.get(key)
         if record is None:
             return []
+        # A verb's instruction, such as a feedback plan's approval, is not the operator speaking to the feedback.
         return [
-            m.at for m in conversation.operator_messages_after(self.ctx.conn, key, record.forgotten_message_id or 0)
+            m.at
+            for m in conversation.operator_messages_after(self.ctx.conn, key, record.forgotten_message_id or 0)
+            if conversation.answers_questions(m)
         ]
 
     def _runs_of(self, url: str) -> list[records.ReviewRun]:

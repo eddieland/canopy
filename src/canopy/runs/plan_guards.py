@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.core import db, feedback_plans, plans, prompts
@@ -46,12 +47,12 @@ def feedback_plan_refusal(ctx: Context, key: str, *, base: str | None) -> tuple[
 
     Returns:
         The guard and reason that refuse it, or None: a base is given (`bad_base`); feedback plans are off
-        (`feedback_plan_off`); or the ticket's feedback plan waits on the operator, or its approval waits for its
-        resume (`bad_plan`).
+        (`feedback_plan_off`); the ticket's feedback plan waits on the operator with nothing changed, or its approval
+        waits for its resume (`bad_plan`); or it is stale, but inside the quiet period on its PRs (`quiet`).
     """
     if base is not None:
         return "bad_base", "a feedback plan reads the PR's head and starts from no other branch; leave out --base"
-    return feedback_plans.dispatch_refusal(ctx.conn, ctx.config.policy, key)
+    return feedback_plans.dispatch_refusal(ctx.conn, ctx.config, key, now=datetime.now(UTC))
 
 
 def feedback_prs_refusal(
@@ -151,11 +152,15 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
         feedback = feedback_plans.follows(ctx.conn, ctx.config.policy, key, reasons)
         text = feedback_plans.approved_text(ctx.state_dir, feedback) if feedback is not None else None
         if feedback is not None and text is not None:
-            covered = [
-                (i.number, i.pr_url, i.item_id, str(i.proposal)) for i in feedback_plans.items(ctx.conn, feedback.id)
-            ]
-            by_planner = feedback.approved_channel == plans.PLANNER
-            note = prompts.feedback_plan_note(copy, plans.outline(text), covered, by_planner=by_planner)
+            covered = feedback_plans.items(ctx.conn, feedback.id)
+            note = prompts.feedback_plan_note(
+                copy,
+                plans.outline(text),
+                [(i.number, i.pr_url, i.item_id, str(i.proposal)) for i in covered if not i.left_out],
+                left_out=[(i.number, i.item_id) for i in covered if i.left_out],
+                message_id=feedback.approved_message_id,
+                by_planner=feedback.approved_channel == plans.PLANNER,
+            )
             return Followed(note=note, feedback_plan_id=feedback.id)
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
