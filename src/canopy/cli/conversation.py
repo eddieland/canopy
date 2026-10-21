@@ -20,8 +20,9 @@ import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
+from canopy.cli.render import chore_line, named, phase_of, prs_of, result_of, spent
 from canopy.core import (
+    chore_result,
     chore_view,
     contract,
     conversation,
@@ -35,6 +36,7 @@ from canopy.core import (
 )
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.infra import logs
+from canopy.infra.text import one_line
 from canopy.loop import attention
 from canopy.reviews import grants
 from canopy.runs import halt, policy
@@ -790,7 +792,7 @@ def _show_chore(ctx: Context, name: str) -> None:
             + mark,
         )
     if more:
-        click.echo(f"  {attention.more_text(more)}")
+        click.echo(f"  {chore_result.more_text(more)}")
     elif not findings:
         click.echo("  none")
     notes = db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)

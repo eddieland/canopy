@@ -12,11 +12,22 @@ from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.cli.render import chore_line, named, one_line, persona_of, phase_of, prs_of, result_of, run_kind, spent
-from canopy.core import chore_view, connector_runs, contract, conversation, db, memory, notice, pause, review_requests
+from canopy.cli.render import chore_line, named, persona_of, phase_of, prs_of, result_of, run_kind, spent
+from canopy.core import (
+    chore_result,
+    chore_view,
+    connector_runs,
+    contract,
+    conversation,
+    db,
+    memory,
+    notice,
+    pause,
+    review_requests,
+)
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
-from canopy.infra.text import printable
+from canopy.infra.text import one_line, printable
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
 from canopy.runs import drafted
@@ -299,7 +310,7 @@ def _print_chores(ctx: Context) -> None:
         dismissed = sum(f.dismissed for f in state.findings())
         note = f"; {dismissed} finding{'s' if dismissed != 1 else ''} dismissed" if dismissed else ""
         more = state.more_findings()
-        note += f"; {attention.more_text(more)}" if more else ""
+        note += f"; {chore_result.more_text(more)}" if more else ""
         click.echo(f"  {state.name}  {chore_line(state, now)}{note}")
 
 

@@ -36,11 +36,12 @@ comes with if any, in the state directory, which its table in the private file n
 canopy is upgraded. The command owns them, so installing again replaces them whole with the shipped ones, and leaves
 every other line of the file as it was or writes nothing.
 
-canopy ships `canopy-chore` (§13): no edits, no subagents, no bash but reading its own chore's history, and no MCP write
-tools where the runtime can deny them by name. A chore using the operator's own read-only tools gets its own copy, in
-the operator's runtime config (never the repository's), with bash allowed for exactly those tools. Their credentials are
-the tools' (§4, principle 5); canopy never sees them and knows nothing of any CI system. The example chores that read
-canopy's own journal come with such a copy, allowing exactly the read-only canopy commands its prompt runs.
+canopy ships `canopy-chore` (§13): no edits, no subagents, no bash, one tool of canopy's, which reads its own chore's
+history, and no MCP write tools where the runtime can deny them by name. A chore using the operator's own read-only
+tools gets its own copy, in the operator's runtime config (never the repository's), with bash allowed for exactly those
+tools. Their credentials are the tools' (§4, principle 5); canopy never sees them and knows nothing of any CI system.
+The example chores that read canopy's own journal come with such a copy, allowing exactly the read-only canopy commands
+its prompt runs.
 
 ### Delegation
 
@@ -76,9 +77,11 @@ Result contract, one JSON line, last line of the agent's text (§13), validated 
 
 ### History
 
-`canopy chore history` lists a chore's runs, or prints one whole, and records nothing. A chore's run reads its own
-chore's runs only; the overseer, workers, and reviews are refused, and the operator reads any. What it prints is what
-runs reported, as data. Rejected: more runs in the prompt, a cost every run pays for what few use.
+`canopy chore history` lists a chore's runs, or prints one whole, and records nothing. A chore's run reads them through
+its tool, `canopy_chore_history`, which takes the command's bounds and says what it prints (§27); a definition of the
+operator's own allows that tool by name. A chore's run reads its own chore's runs only; the overseer, workers, and
+reviews are refused, and the operator reads any. What it prints is what runs reported, as data. Rejected: more runs in
+the prompt, a cost every run pays for what few use.
 
 ### The operator's part
 

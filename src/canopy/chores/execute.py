@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, TextIO
 from canopy.chores import history, start
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import conversation, db, definitions, outbox, progress
+from canopy.core import db, definitions, outbox, progress
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
@@ -163,12 +163,9 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     done = ctx.runner.run(
         argv,
         cwd=cwd,
-        # The operator's commands refuse inside canopy's own runs (DESIGN §22); `canopy chore history` reads this
-        # chore's runs from this workspace's journal, wherever `cwd` is.
-        env={
-            conversation.RUN_ID_ENV: f"{history.RUN_PREFIX}{run_id}",
-            history.WORKSPACE_ENV: str(ctx.ws.root.absolute()),
-        },
+        # The operator's commands refuse inside canopy's own runs (DESIGN §22); its history tool reads this chore's
+        # runs from this workspace's journal, wherever `cwd` is.
+        env=history.run_env(ctx, f"{history.RUN_PREFIX}{run_id}"),
         timeout=chore.timeout_minutes * 60,
         on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
         # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so far.

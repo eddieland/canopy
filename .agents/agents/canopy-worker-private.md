@@ -129,6 +129,8 @@ permission:
   # With `trust.review_replies = "approve"`, canopy renders the denial of the GitHub server's comment tools here, last,
   # so that it beats the tracker's allow of GitHub's reply tool.
   # canopy: reply tools
+  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
+  "canopy_chore_history": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy private worker" prompt,

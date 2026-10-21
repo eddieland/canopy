@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 import click
 
-from canopy.core import context
+from canopy.core import context, conversation
+from canopy.runtime import servers
 
 if TYPE_CHECKING:
     from click.shell_completion import CompletionItem
@@ -56,6 +58,16 @@ class Obj:
     """What `main` hands every command through click's context."""
 
     runner: procs.Runner
+
+
+def leave_the_tick() -> None:
+    """Drop from this process's environment what a run must not inherit, for a detached run.
+
+    The run must not act as the overseer of the tick that started it (D020), nor pass on to its agent a server of
+    canopy's that the process tree it was started from was given (DESIGN §27): its agent gets its own, if any.
+    """
+    for name in (conversation.TICK_ID_ENV, *servers.VARIABLES):
+        os.environ.pop(name, None)
 
 
 def open_context(click_ctx: click.Context, *, migrate: bool = True, start: Path | None = None) -> Context:

@@ -199,10 +199,7 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         cwd=prepared.cwd,
         # What its agent sees as CANOPY_RUN_ID, so the operator's commands refuse inside it (DESIGN §22), and names the
         # chore, whose history it reads with no run row to find it from. A recorded try's is `chore-<run id>`.
-        env={
-            conversation.RUN_ID_ENV: f"{history.TRY_PREFIX}{prepared.name}",
-            history.WORKSPACE_ENV: str(ctx.ws.root.absolute()),
-        },
+        env=history.run_env(ctx, f"{history.TRY_PREFIX}{prepared.name}"),
         timeout=prepared.chore.timeout_minutes * 60,
     )
     return execute.outcome_of(done, stdout.read(done.stdout), prepared.chore)

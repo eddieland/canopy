@@ -97,6 +97,15 @@ def capped(parsed: ChoreResult, limit: int) -> ChoreResult:
     )
 
 
+def more_text(count: int) -> str:
+    """Say that a chore found `count` findings past its `max_findings` and did not list them (DESIGN §19).
+
+    Returns:
+        The sentence `attention.md`, `canopy status`, `canopy show`, and a chore's history say it in.
+    """
+    return f"{count} more finding{'s' if count != 1 else ''} not listed, past the chore's max_findings"
+
+
 def parse(stdout: str) -> ChoreResult | None:
     """Parse `stdout`'s result line (DESIGN §13) as a chore's result. None if it is missing or invalid.
 
