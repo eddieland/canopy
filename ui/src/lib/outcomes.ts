@@ -335,10 +335,12 @@ export function reloadedText(reload: ConfigReload): string {
 /**
  * What a review request did, as `canopy start URL --review` says it: new, or already open, its notes replaced when
  * `noted`, the request having given some, and the personas it is reviewed in when `chose`, the request having named
- * some.
+ * some, or when an open request kept its own.
  */
 export function reviewRequestedText(url: string, requested: ReviewRequested, noted = false, chose = false): string {
-    const written = chose ? ` ${reviewPersonasText(requested.request.personas)}` : ''
+    // A request that has personas keeps them when none are chosen: say which, lest the form's default read as theirs.
+    const kept = requested.already && requested.request.personas.length > 0
+    const written = chose || kept ? ` ${reviewPersonasText(requested.request.personas)}` : ''
     if (requested.already) {
         return `${url} was already requested for review.${noted ? ' Its notes are replaced.' : ''}${written}`
     }

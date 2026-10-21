@@ -25,6 +25,13 @@ import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_NOTES = 4000
+// The most personas one request names, as the server bounds them: a review in each is a run in each.
+const MAX_PERSONAS = 10
+
+// What an open request does: one review, or one in each of its personas.
+const ONCE = 'canopy reviews its head once, in the repository it is in, and the request ends with that review.'
+const SEVERAL =
+    'canopy reviews its head once in each persona, in the repository it is in, and the request ends once each has.'
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME` from the reviews page (DESIGN §21, §22, §31): a PR the loop
@@ -158,7 +165,7 @@ function PersonasMenu({
                         key={p.name}
                         className="font-mono text-xs"
                         checked={chosen.includes(p.name)}
-                        disabled={p.error !== null}
+                        disabled={p.error !== null || (chosen.length >= MAX_PERSONAS && !chosen.includes(p.name))}
                         title={p.error ?? undefined}
                         // Kept open, so several can be checked for a review in each.
                         onSelect={(event) => event.preventDefault()}
@@ -209,8 +216,8 @@ export function ReviewRequestStatus({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 {open ? (
                     <span>
-                        Requested <Age at={request.created_at} variant="ago" /> ({request.channel}). canopy reviews its
-                        head once, in the repository it is in, and the request ends with that review.
+                        Requested <Age at={request.created_at} variant="ago" /> ({request.channel}).{' '}
+                        {request.personas.length > 1 ? SEVERAL : ONCE}
                     </span>
                 ) : (
                     <span className="text-muted-foreground">

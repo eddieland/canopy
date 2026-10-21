@@ -153,6 +153,11 @@ describe('outcomes', () => {
         expect(
             reviewRequestedText(pr, { request: { ...request, personas: ['skeptic'] }, already: false }, false, true),
         ).toBe(`${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`)
+        // An open request that keeps its personas says which.
+        const kept = { request: { ...request, personas: ['skeptic'] }, already: true }
+        expect(reviewRequestedText(pr, kept)).toBe(
+            `${pr} was already requested for review. Its review is written in skeptic.`,
+        )
         const both = { request: { ...request, personas: ['skeptic', 'canopy'] }, already: true }
         expect(reviewRequestedText(pr, both, false, true)).toBe(
             `${pr} was already requested for review. It is reviewed once in each of skeptic, canopy, side by side.`,

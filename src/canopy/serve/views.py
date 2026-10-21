@@ -886,7 +886,7 @@ def agent_persona(found: personas.Next) -> AgentPersona:
 
 
 def persona_choice(found: personas.Listed) -> PersonaChoice:
-    """A persona a run could get, as the API sends it: never its file's path, which is the operator's machine's.
+    """A persona a run could get, as the API sends it, its error worded as `canopy personas` words it.
 
     Returns:
         Its name, whether it is the operator's, the agents it is the default for, and why a run would refuse it.

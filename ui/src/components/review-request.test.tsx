@@ -30,13 +30,15 @@ const PERSONAS: PersonaList = {
 let sent: { path: string; url: string | null }[] = []
 let bodies: unknown[] = []
 let answer: Response | undefined
+// The personas the server stand-in lists.
+let listed: PersonaList = PERSONAS
 
 const server: Middleware = {
     async onRequest({ request }) {
         const url = new URL(request.url)
         // The personas the form's menu lists: a read, not one of the requests a test counts.
         if (url.pathname === '/api/personas') {
-            return Response.json(PERSONAS)
+            return Response.json(listed)
         }
         sent.push({ path: url.pathname, url: url.searchParams.get('url') })
         const body = await request.text()
@@ -51,6 +53,7 @@ beforeEach(() => {
     sent = []
     bodies = []
     answer = undefined
+    listed = PERSONAS
     api.use(server)
 })
 
@@ -209,6 +212,32 @@ describe('ReviewRequestForm', () => {
         expect(await screen.findByRole('button', { name: 'Persona: canopy (default)' })).toBeTruthy()
     })
 
+    it('checks no more personas than one request may name', async () => {
+        const names = Array.from({ length: 11 }, (_, i) => `p${String(i).padStart(2, '0')}`)
+        listed = {
+            reviewer: 'canopy',
+            personas: names.map((name) => ({ name, yours: true, defaults: [], error: null })),
+        }
+        renderWith(<ReviewRequestForm />)
+        const menu = await openPersonas()
+        for (const name of names.slice(0, 10)) {
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name }))
+        }
+        expect(within(menu).getByRole('menuitemcheckbox', { name: 'p10' }).getAttribute('aria-disabled')).toBe('true')
+        // One checked may still be unchecked.
+        expect(within(menu).getByRole('menuitemcheckbox', { name: 'p09' }).getAttribute('aria-disabled')).toBeNull()
+    })
+
+    it('names the personas an open request keeps when the form chose none', async () => {
+        answer = Response.json({ already: true, request: { ...OPEN, personas: ['skeptic'] } })
+        renderWith(<ReviewRequestForm />)
+        fireEvent.change(field(), { target: { value: PR } })
+        fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            `${PR} was already requested for review. Its review is written in skeptic.`,
+        )
+    })
+
     it('says so when the PR was already requested', async () => {
         answer = Response.json({ already: true, request: OPEN })
         renderWith(<ReviewRequestForm />)
@@ -262,6 +291,16 @@ describe('ReviewRequestStatus', () => {
     it('names the personas the request is reviewed in', () => {
         renderWith(<ReviewRequestStatus url={PR} request={{ ...OPEN, personas: ['skeptic'] }} />)
         expect(screen.getByTestId('review-request-personas').textContent).toBe('Its review is written in skeptic.')
+    })
+
+    it('says a request in several personas ends once each has reviewed', () => {
+        const { container } = renderWith(
+            <ReviewRequestStatus url={PR} request={{ ...OPEN, personas: ['skeptic', 'canopy'] }} />,
+        )
+        expect(container.textContent).toContain(
+            'canopy reviews its head once in each persona, in the repository it is in, ' +
+                'and the request ends once each has.',
+        )
     })
 
     it('says how an ended request ended, with nothing left to stop', () => {
