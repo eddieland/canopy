@@ -163,9 +163,10 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
 
 ## Done for a UI pull request
 
-- The checks the change reaches pass, run as the repository's `AGENTS.md` says (Toolchain): `npm run fmt:check`,
-  `lint`, and `typecheck` on any change, `check:api` when a pydantic model behind the API changed, `npm test` for the
-  unit tests of what changed, and `npm run test:e2e` for the Playwright specs that cover it. CI runs the rest.
+- The checks pass, run as the repository's `AGENTS.md` says (Toolchain): every formatter and linter (`make fmt`,
+  `make lint`, `npm run lint`, `npm run typecheck`), `check:api` when a pydantic model behind the API changed,
+  `npm test` for the unit tests of what changed, and `npm run test:e2e` for the Playwright specs that cover it. CI runs
+  the rest.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.
 - `DESIGN.md` here is updated for any new token, pattern, or rule, and the guide for anything a page of it describes.
   Fun is the exception: what the ticker, Sprig, the rave, and the like do is written in their code, and `DESIGN.md`
