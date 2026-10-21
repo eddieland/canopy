@@ -26,7 +26,10 @@ import type {
     PlanThreadView,
     Reaction,
     Replied,
+    ReviewDetail,
     ReviewDismissed,
+    ReviewDraft,
+    ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
     ReviewSent,
@@ -45,8 +48,8 @@ import type {
  * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
  * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
  * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, `edit`, and `forget`, and `draft edit`, `drop`, and `send`, or as `t` at the
- * loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
+ * `memory promote`, `reject`, `renew`, `edit`, and `forget`, `draft edit`, `drop`, and `send`, and `review edit` and
+ * `publish`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -314,6 +317,61 @@ export async function stageDrafts(drafts: Pick<Draft, 'run' | 'number' | 'hash'>
     )
 }
 
+/** `canopy review edit RUN --body --text TEXT`: the body of the review's draft, as a new version; empty for none. */
+export async function editReviewDraftBody(run: number, text: string): Promise<ReviewDraft> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/body', { params: { path: { run_id: run } }, body: { text } }),
+    )
+}
+
+/** `canopy review edit RUN --comment N --text TEXT`: comment N's text, on the line it is on, as a new version. */
+export async function editReviewDraftComment(run: number, number: number, text: string): Promise<ReviewDraft> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/comments/{number}/edit', {
+            params: { path: { run_id: run, number } },
+            body: { text },
+        }),
+    )
+}
+
+/** `canopy review edit RUN --drop N`: the draft without comment N, as a new version. */
+export async function dropReviewDraftComment(run: number, number: number): Promise<ReviewDraft> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/comments/{number}/drop', {
+            params: { path: { run_id: run, number } },
+        }),
+    )
+}
+
+/** `canopy review edit RUN --add PATH:LINE --text TEXT`: a comment on a line of the diff the review kept. */
+export async function addReviewDraftComment(
+    run: number,
+    path: string,
+    line: number,
+    text: string,
+): Promise<ReviewDraft> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/comments', {
+            params: { path: { run_id: run } },
+            body: { path, line, text },
+        }),
+    )
+}
+
+/**
+ * `canopy review publish RUN HASH`, with `--submit` when `submit`: the version the page showed, named by its hash, as
+ * the operator's own comment review on the PR, word for word. Left pending on GitHub for them to submit, unless
+ * `submit`.
+ */
+export async function publishReviewDraft(run: number, hash: string, submit: boolean): Promise<ReviewDraftPublished> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/publish', {
+            params: { path: { run_id: run } },
+            body: { hash, submit },
+        }),
+    )
+}
+
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
 export async function pauseLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/pause'))
@@ -419,6 +477,17 @@ export async function refreshFindings(client: QueryClient, name: string): Promis
         client.invalidateQueries({ queryKey: keys.chore(name) }),
         client.invalidateQueries({ queryKey: keys.attention }),
     ])
+}
+
+/**
+ * After a verb on a review's draft: its page shows the draft the server sent back at once, so a publish carries the
+ * newest hash, and reads the review again.
+ */
+export function showReviewDraft(client: QueryClient, run: number, draft: ReviewDraft): Promise<void> {
+    client.setQueryData<ReviewDetail>(keys.review(run), (detail) =>
+        detail === undefined ? detail : { ...detail, draft },
+    )
+    return refreshReview(client, run)
 }
 
 /** After a dismissal of a review's finding: read the review again now. */

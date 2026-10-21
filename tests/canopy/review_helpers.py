@@ -8,6 +8,7 @@ from typing import Unpack
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.review_drafts import Comment
 from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted
 from tests.conftest import GitPool, git
 
@@ -28,6 +29,24 @@ FINDINGS = {
     ],
 }
 CLEAN = {"status": "done", "verdict": "clean", "impact": "low", "summary": "Nothing found."}
+#: A coworker's PR, which the loop did not open: a `review.query` match, whose review has a draft (DESIGN §34).
+THEIRS = "https://github.com/acme/api/pull/8"
+#: The reviewer's report on the commit `feature_commit` pushes, which adds `retry.py`'s two lines: one finding on a line
+#: of the diff, one on a file the diff does not touch.
+REPORT = {
+    "status": "done",
+    "verdict": "findings",
+    "impact": "normal",
+    "summary": "Two defects.",
+    "findings": [
+        {"severity": "blocking", "title": "loops forever", "location": "retry.py:1", "detail": "Nothing ends it."},
+        {"severity": "minor", "title": "no tests", "location": "tests/test_retry.py:3", "detail": "Add one."},
+    ],
+}
+#: What `REPORT`'s draft makes of its finding on a line of the diff: a comment on it.
+ON_LINE = Comment("retry.py", 1, "**blocking**: loops forever\n\nNothing ends it.", finding=1)
+#: What it makes of its finding off the diff: a part of the body.
+OFF_DIFF = "**minor** at `tests/test_retry.py:3`: no tests\n\nAdd one."
 
 
 def run_inline(

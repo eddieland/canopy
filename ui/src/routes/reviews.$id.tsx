@@ -17,6 +17,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
+import { ReviewDraftPanel } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
@@ -37,8 +38,8 @@ import { cn } from '@/lib/utils'
 
 // What every review's page shows, on its title's hover: its description is the review's state.
 const HELP =
-    "canopy's adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on the diff, at " +
-    'the lines they name.'
+    "canopy's adversarial read of one commit of a PR, kept here: its findings sit on the diff, at the lines they " +
+    'name. On a PR the loop does not own it is also a draft of your review, which posts nothing until you publish it.'
 
 /** Why a review has no diff, when retention did not remove it. */
 const NO_DIFF = 'no diff kept for this review: it is older than kept diffs, or its base could not be read'
@@ -91,6 +92,16 @@ function Loaded({ id }: { id: number }) {
             <div className="stagger flex flex-col gap-6">
                 <ReviewPanel detail={data} />
                 {data.findings.length > 0 && <FindingsPanel detail={data} onFollow={(file) => setWanted({ file })} />}
+                {data.draft !== null && (
+                    <ReviewDraftPanel
+                        run={data.review.id}
+                        prUrl={data.review.pr_url}
+                        sha={data.review.sha}
+                        draft={data.draft}
+                        hasDiff={data.diff !== null}
+                        onFollow={(file) => setWanted({ file })}
+                    />
+                )}
                 {/* With no diff, the findings list is their cards, so each finding shows once. */}
                 {data.diff === null ? (
                     <Panel>
@@ -99,7 +110,13 @@ function Loaded({ id }: { id: number }) {
                     </Panel>
                 ) : (
                     <>
-                        <ReviewDiffPanels run={data.review.id} diff={data.diff} placed={placed} wanted={wanted} />
+                        <ReviewDiffPanels
+                            run={data.review.id}
+                            diff={data.diff}
+                            placed={placed}
+                            draft={data.draft}
+                            wanted={wanted}
+                        />
                         {/* After the files, which are what the operator reads the findings against. */}
                         {placed.elsewhere.length > 0 && (
                             <Panel>

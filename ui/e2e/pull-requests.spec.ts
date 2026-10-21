@@ -24,7 +24,7 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(page).toHaveURL(/\/pull-requests$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pull requests')
     const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
-    await expect(rows).toHaveCount(4)
+    await expect(rows).toHaveCount(5)
     const ours = rows.filter({ hasText: 'acme/web#88' })
     // The PR's own title, as its worker reported it, rather than its ticket's.
     await expect(ours).toContainText('ABC-099: debounce the search box by 250 ms')

@@ -18,7 +18,13 @@ from tests.canopy.web_helpers import SECRET, client, signed_in
 
 def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(backend: Backend) -> None:
     by_url = {p["url"]: p for p in client(None, backend).get("/api/pull-requests").json()}
-    assert set(by_url) == {mock_reviews.PR_88, mock_reviews.PR_91, mock_reviews.PR_12, mock_reviews.PR_95}
+    assert set(by_url) == {
+        mock_reviews.PR_88,
+        mock_reviews.PR_91,
+        mock_reviews.PR_12,
+        mock_reviews.PR_14,
+        mock_reviews.PR_95,
+    }
     ours = by_url[mock_reviews.PR_88]
     assert (ours["ticket_key"], ours["ticket_title"], ours["branch"], ours["phase"], ours["reviews"]) == (
         "ABC-099",

@@ -20,34 +20,17 @@ from canopy.core.review_drafts import Comment
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs, procs
 from tests.canopy.helpers import present, reads, tick_reads
-from tests.canopy.review_helpers import FINDINGS, feature_commit, reviewer_reports
+from tests.canopy.review_helpers import (
+    FINDINGS,
+    OFF_DIFF,
+    ON_LINE,
+    REPORT,
+    THEIRS,
+    feature_commit,
+    reviewer_reports,
+)
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.conftest import CanopyEnv, GitPool
-
-#: A coworker's PR, which the loop did not open: a `review.query` match.
-THEIRS = "https://github.com/acme/api/pull/8"
-#: The reviewer's report on the commit `feature_commit` pushes, which adds `retry.py`'s two lines: one finding on a line
-#: of the diff, one on a file the diff does not touch.
-REPORT = {
-    "status": "done",
-    "verdict": "findings",
-    "impact": "normal",
-    "summary": "Two defects.",
-    "findings": [
-        {"severity": "blocking", "title": "loops forever", "location": "retry.py:1", "detail": "Nothing ends it."},
-        {"severity": "minor", "title": "no tests", "location": "tests/test_retry.py:3", "detail": "Add one."},
-    ],
-}
-ON_LINE = Comment("retry.py", 1, "**blocking**: loops forever\n\nNothing ends it.", finding=1)
-OFF_DIFF = "**minor** at `tests/test_retry.py:3`: no tests\n\nAdd one."
-
-
-@pytest.fixture
-def reviewed(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path) -> int:
-    """A `done` review of `THEIRS` at the commit `feature_commit` pushes, which kept its diff. Returns its run's id."""
-    del reviewing
-    sha = feature_commit(git_pool, tmp_path)
-    return scenario.review(reviews(sha, THEIRS), reviewer=reviewer_reports(REPORT)).id
 
 
 def newest(scenario: Scenario, run_id: int) -> review_drafts.Version:

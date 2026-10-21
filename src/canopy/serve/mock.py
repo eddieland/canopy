@@ -270,6 +270,7 @@ def seed(directory: Path) -> Backend:
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
+        mock_reviews.drafts(ctx.conn)
     mock_transcripts.write(ws.state_dir, T0)
     return backend
 
@@ -538,6 +539,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             ("https://github.com/acme/web/pull/88", "ABC-099: debounce the search box by 250 ms", at(-59)),
             ("https://github.com/acme/web/pull/91", "ABC-103: move billing to v2 and drop the v1 client", at(-125)),
             ("https://github.com/acme/api/pull/12", "Bump the retry budget for flaky upstreams", at(-79)),
+            ("https://github.com/acme/api/pull/14", "Retry the upstream on a 503, with backoff", at(-30)),
         ],
     )
     runs = (

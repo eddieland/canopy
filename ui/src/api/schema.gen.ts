@@ -826,6 +826,122 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/draft/body": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit a review's draft's body
+         * @description `canopy review edit ID --body --text TEXT`: the body of the review's draft, as a new version; empty for none.
+         *
+         *     Refused as the CLI refuses it: `unknown`, `no_draft` for a review with none, a status past edits (`published`,
+         *     `staged`, ...), and `bad_text`.
+         */
+        post: operations["editReviewDraftBody"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/draft/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a comment to a review's draft
+         * @description `canopy review edit ID --add PATH:LINE --text TEXT`: a comment on a line of the diff the review kept.
+         *
+         *     Refused as the CLI refuses it: as an edit of the body is, `no_diff` once the diff is gone, `off_diff` for a line it
+         *     does not show, and `too_many` past the comments a version may carry.
+         */
+        post: operations["addReviewDraftComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/draft/comments/{number}/drop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drop a comment of a review's draft
+         * @description `canopy review edit ID --drop N`: the draft without comment N, as a new version. Its finding stays as it is.
+         *
+         *     Refused as the CLI refuses it: as an edit of the body is, and `unknown` for a comment the version does not hold.
+         */
+        post: operations["dropReviewDraftComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/draft/comments/{number}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit a comment of a review's draft
+         * @description `canopy review edit ID --comment N --text TEXT`: comment N's text, on the line it is on, as a new version.
+         *
+         *     Refused as the CLI refuses it: as an edit of the body is, and `unknown` for a comment the version does not hold.
+         */
+        post: operations["editReviewDraftComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/draft/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a review's draft on its PR
+         * @description `canopy review publish ID HASH [--submit]`: the version the page showed, as the operator's own review.
+         *
+         *     It goes word for word, unmarked, as one comment review on the commit the review read, its comments on their lines;
+         *     it approves nothing and requests no change. Left pending on GitHub for the operator to submit there, unless
+         *     `submit`. Every check runs before anything posts: refused `no_draft`, `not_ours` for a PR a ticket holds now, a
+         *     status that cannot publish (`published`, `staged`, `unconfirmed`, `publishing`), `stale` for a version the page no
+         *     longer shows, `empty`, `no_diff`, `staged` for a PR holding a review the operator staged, and `no_post`.
+         */
+        post: operations["publishReviewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews/{run_id}/output": {
         parameters: {
             query?: never;
@@ -4164,6 +4280,11 @@ export type components = {
              */
             diff_removed_after_days: number | null;
             /**
+             * @description Its draft of a review on the PR, for a review of a PR the loop does not own (DESIGN §34); None for one of the
+             *     loop's own PRs, one that did not end `done`, or one from before drafts were kept.
+             */
+            draft: components["schemas"]["ReviewDraft"] | null;
+            /**
              * Findings
              * @description Its findings, each anchored on the diff where it can be.
              */
@@ -4280,6 +4401,248 @@ export type components = {
              * @default false
              */
             undo: boolean;
+        };
+        /**
+         * ReviewDraft
+         * @description A review of a PR the loop does not own as the comment review it would post (DESIGN §34), at its newest version.
+         *
+         *     What it holds is exactly what would post: the body as the review's, each comment on its line. Its text is the
+         *     reviewer's, written from the PR's, until the operator publishes it.
+         */
+        ReviewDraft: {
+            /** @description Who wrote that version. */
+            author: components["schemas"]["ReviewDraftAuthorName"];
+            /**
+             * Body
+             * @description The review's body: plain text here, empty for comments alone.
+             */
+            body: string;
+            /**
+             * Change
+             * @description What made that version, in the harness's words.
+             */
+            change: string;
+            /**
+             * Channel
+             * @description For the operator's version, where they wrote it.
+             */
+            channel: string | null;
+            /**
+             * Comments
+             * @description Its comments, in the order they post.
+             */
+            comments: components["schemas"]["ReviewDraftComment"][];
+            /**
+             * Hash
+             * @description That version's hash, which a publish carries, so what posts is what the page showed.
+             */
+            hash: string;
+            /**
+             * Max Comments
+             * @description How many comments a version may carry; an addition past it is refused.
+             */
+            max_comments: number;
+            /**
+             * Moved Head
+             * @description The PR's head when canopy last read it, when that is past the commit the review read: its comments would show
+             *     as outdated there. None when canopy has not read the PR, or its head is that commit.
+             */
+            moved_head: string | null;
+            /**
+             * Published At
+             * @description When it was published; None until it is.
+             */
+            published_at: string | null;
+            /**
+             * Published Url
+             * @description The review's URL on GitHub, once published.
+             */
+            published_url: string | null;
+            /**
+             * Refused
+             * @description What canopy left out as it made that version, and why, in the harness's words.
+             */
+            refused: string[];
+            /** @description Where it stands. */
+            status: components["schemas"]["ReviewDraftStatusName"];
+            /**
+             * Version
+             * @description Its newest version's number.
+             */
+            version: number;
+            /**
+             * Versions
+             * @description Every version, oldest first.
+             */
+            versions: components["schemas"]["ReviewDraftVersion"][];
+            /**
+             * Why
+             * @description The harness's words for its latest change of status, such as why a publish posted nothing.
+             */
+            why: string | null;
+        };
+        /**
+         * ReviewDraftAddRequest
+         * @description A comment to add on a line of the diff the review kept, as `canopy review edit RUN --add PATH:LINE` takes it.
+         */
+        ReviewDraftAddRequest: {
+            /**
+             * Line
+             * @description The line, on the diff's new side.
+             */
+            line: number;
+            /**
+             * Path
+             * @description The file, by its path in the diff.
+             */
+            path: string;
+            /**
+             * Text
+             * @description The comment's text. Bounded again in code, as the reviewer's text is.
+             */
+            text: string;
+        };
+        /**
+         * @description Who wrote a version of a review's draft: the review, a revision, or the operator.
+         * @enum {string}
+         */
+        ReviewDraftAuthorName: "reviewer" | "reviser" | "operator";
+        /**
+         * ReviewDraftBodyRequest
+         * @description A new body for a review's draft, as `canopy review edit RUN --body --text TEXT` takes it.
+         */
+        ReviewDraftBodyRequest: {
+            /**
+             * Text
+             * @description The body, empty to post the comments alone. Bounded again in code, as the reviewer's text is.
+             */
+            text: string;
+        };
+        /**
+         * ReviewDraftComment
+         * @description One comment of a review's draft, on a line of the diff the review kept: the reviewer's text until published.
+         */
+        ReviewDraftComment: {
+            /**
+             * Diff Line
+             * @description Its line on the diff's new side; None once the diff is gone.
+             */
+            diff_line: number | null;
+            /**
+             * File
+             * @description The index of its file in the diff; None once the diff is gone.
+             */
+            file: number | null;
+            /**
+             * Finding
+             * @description The review's finding it was made from, by number; None for one the operator added.
+             */
+            finding: number | null;
+            /**
+             * Line
+             * @description The line it is on, in the commit's file, on the diff's new side.
+             */
+            line: number;
+            /**
+             * Number
+             * @description Its number in the version, from 1: how an edit or a drop names it.
+             */
+            number: number;
+            /**
+             * Path
+             * @description The file it is on.
+             */
+            path: string;
+            /**
+             * Text
+             * @description Its text, as the version holds it: plain text here, untrusted until the operator publishes it.
+             */
+            text: string;
+        };
+        /**
+         * ReviewDraftCommentRequest
+         * @description A comment's new text, as `canopy review edit RUN --comment N --text TEXT` takes it.
+         */
+        ReviewDraftCommentRequest: {
+            /**
+             * Text
+             * @description The comment's text. Bounded again in code, as the reviewer's text is.
+             */
+            text: string;
+        };
+        /**
+         * ReviewDraftPublished
+         * @description What a publish did, as `canopy review publish` reports it: the draft as it now stands.
+         */
+        ReviewDraftPublished: {
+            /** @description The draft: published, staged, unconfirmed, or waiting again. */
+            draft: components["schemas"]["ReviewDraft"];
+            /**
+             * Failed
+             * @description Why nothing was posted, in the harness's words; None when it posted, staged, or may have.
+             */
+            failed: string | null;
+            /**
+             * Published
+             * @description The version it posted, or tried to.
+             */
+            published: number;
+        };
+        /**
+         * ReviewDraftPublishRequest
+         * @description A publish of a review's draft, as `canopy review publish RUN HASH [--submit]` takes it.
+         */
+        ReviewDraftPublishRequest: {
+            /**
+             * Hash
+             * @description The hash of the version the page showed: any other version is refused `stale`.
+             */
+            hash: string;
+            /**
+             * Submit
+             * @description Submit it on GitHub now, as `--submit` does, rather than leave it pending for the operator to submit there.
+             * @default false
+             */
+            submit: boolean;
+        };
+        /**
+         * @description Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; `staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.
+         * @enum {string}
+         */
+        ReviewDraftStatusName: "waiting" | "publishing" | "unconfirmed" | "staged" | "published";
+        /**
+         * ReviewDraftVersion
+         * @description One version of a review's draft, as its history lists it.
+         */
+        ReviewDraftVersion: {
+            /** @description Who wrote it. */
+            author: components["schemas"]["ReviewDraftAuthorName"];
+            /**
+             * Change
+             * @description What made it, in the harness's words.
+             */
+            change: string;
+            /**
+             * Channel
+             * @description For the operator's, where they wrote it: `cli` or `web`.
+             */
+            channel: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When it was made.
+             */
+            created_at: string;
+            /**
+             * Hash
+             * @description The name a publish carries: its body's and its comments' hash.
+             */
+            hash: string;
+            /**
+             * Number
+             * @description The version's number, from 1.
+             */
+            number: number;
         };
         /**
          * ReviewFinding
@@ -9432,6 +9795,456 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewDismissed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    editReviewDraftBody: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDraftBodyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    addReviewDraftComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDraftAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    dropReviewDraftComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The comment's number in the draft's newest version, from 1. */
+                number: number;
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    editReviewDraftComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The comment's number in the draft's newest version, from 1. */
+                number: number;
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDraftCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    publishReviewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDraftPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraftPublished"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

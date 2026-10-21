@@ -21,9 +21,9 @@ from canopy.infra import resources
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import context, titled_workers
-from tests.canopy.review_helpers import PR
-from tests.canopy.scenario_helpers import Scenario
-from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, executable, git
+from tests.canopy.review_helpers import PR, REPORT, THEIRS, feature_commit, reviewer_reports
+from tests.canopy.scenario_helpers import Scenario, reviews
+from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, Journals, executable, git
 
 
 @pytest.fixture
@@ -37,6 +37,14 @@ def reviewing(canopy_env: CanopyEnv) -> CanopyEnv:
     canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
     db.set_unit(canopy_env.journal(), "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
     return canopy_env
+
+
+@pytest.fixture
+def reviewed(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path) -> int:
+    """A `done` review of `THEIRS` at the commit `feature_commit` pushes, which kept its diff. Returns its run's id."""
+    del reviewing
+    sha = feature_commit(git_pool, tmp_path)
+    return scenario.review(reviews(sha, THEIRS), reviewer=reviewer_reports(REPORT)).id
 
 
 @pytest.fixture

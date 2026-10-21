@@ -1,7 +1,8 @@
 # Pull requests and reviews
 
-Every PR canopy knows about, and canopy's own reviews of them. The reviews are yours alone: canopy never posts one on
-a PR by itself, so this is the only place, besides `canopy review show`, you'll read them.
+Every PR canopy knows about, and canopy's own reviews of them. The reviews are yours alone: canopy posts nothing of
+one on its own, so this is the only place, besides `canopy review show`, you'll read them. On a coworker's PR, a review
+is also a draft of your own review, which reaches GitHub only when you publish it ([below](#publishing-your-review)).
 
 ## The pull requests page
 
@@ -173,8 +174,9 @@ If you always reach for the same reviewer, pick it once in [Settings](settings#r
 saying `as Settings prefers`. You can still check others for one request; the next one starts from your preference
 again. **Use the default** is still `[personas] reviewer`'s.
 
-The review stays in canopy, like every other. Whether you pass any of it on to your coworker, and in what tone, is
-between you and them.
+The review stays in canopy until you say otherwise. Its page holds it as a draft of your review on the PR, which you
+can trim, reword, and publish ([below](#publishing-your-review)); whether you pass any of it on, and in what tone, is
+between you and your coworker.
 
 ## The reviews page
 
@@ -257,9 +259,34 @@ is tell canopy which findings matter.
   your go-ahead for a worker to fix those and leave the rest alone. For an untrusted reviewer it's the go-ahead the
   findings wait for; for a trusted one, it narrows what the worker takes on.
 
-A review of a PR the loop doesn't own has neither. From your shell, though, a finished one is the draft of a review
-you could post yourself: `canopy review draft ID` shows exactly what would go, with its hash, `canopy review edit ID`
-rewrites its body or a comment, and `canopy review publish ID HASH` posts that version on the PR as your own comment
-review, pending on GitHub until you submit it there, or at once with `--submit`. The page has no buttons for it yet,
-which is a fine excuse to read the draft before it goes out under your name. Dismissals and sends belong to one review,
-so a new commit's review starts fresh.
+A review of a PR the loop doesn't own has no worker to send to; it has a draft instead (below). Dismissals and sends
+belong to one review, so a new commit's review starts fresh.
+
+## Publishing your review
+
+A finished review of a PR the loop doesn't own, a coworker's you asked for or one `review.query` matched, is also the
+first draft of a review you could leave on it. **Draft review**, under the findings, shows exactly what canopy would
+post in your name: the reviewer's summary as the body, each finding on a line of the diff as a comment on that line,
+and a finding the diff doesn't show tucked into the body under its location. The comments sit on the diff beside the
+findings they came from. Every word is the reviewer's, written after reading the PR, so read it as you'd read anything
+a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
+
+Change it until it says what you would:
+
+- **edit**, beside **Body**, rewrites the body; empty, the comments post alone.
+- **edit** and **drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
+  **dismiss** on the finding drops its comment too, and **undo** puts it back.
+- The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it.
+
+Each change is a new version, listed under **Versions** with who made it, and is the same as `canopy review edit`.
+A version holds at most 30 comments, which is more than any review worth reading needs.
+
+**Start the review on GitHub** publishes the version on the page, word for word, as a pending review on the commit the
+review read: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read of the PR records
+which. Tick **Submit it on GitHub now** and the button reads **Publish version N**: canopy submits it for you. Either
+way it is one comment review that approves nothing and requests no change, and it's `canopy review publish RUN HASH`,
+with `--submit` for the second. The hash is the version you looked at, so if anything changed it since, the publish is
+refused as `stale` and you read it again. A draft publishes once; a later commit's review is a draft of its own. If
+the PR has moved on since, the panel says so: your comments would land on the old commit and show as outdated.
+
+canopy can't take a published review back, and nothing on GitHub says a model wrote it but what you leave in.
