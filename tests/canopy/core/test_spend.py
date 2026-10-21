@@ -270,6 +270,7 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
         ("plans", 0, 0),
         ("chores", 2, 1),
         ("reviews", 1, 0),
+        ("tasks", 0, 0),
     ]
 
 
@@ -303,11 +304,11 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     out = capsys.readouterr().out.splitlines()
     start = spend.window(now, 3)[0]
     assert out[0] == f"Spend over 3 days, since {start:%Y-%m-%d} UTC, as the runtime reported it."
-    header = ["day", "overseer", "idle", "workers", "plans", "chores", "reviews", "dry", "run", "total"]
+    header = ["day", "overseer", "idle", "workers", "plans", "chores", "reviews", "tasks", "dry", "run", "total"]
     assert out[2].split() == header
     days = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
-    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "$0.30", "$7.05"]
+    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "-", "$0.30", "$7.05"]
     words = [line.split() for line in out]
     assert ["idle", "3", "$0.50"] in words
     assert ["not", "idle", "2", "$1.50"] in words

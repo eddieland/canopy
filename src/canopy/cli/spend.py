@@ -29,6 +29,7 @@ KIND_LABELS: dict[spend.Kind, str] = {
     "plans": "plan runs",
     "chores": "chore runs",
     "reviews": "review runs",
+    "tasks": "task runs",
 }
 # The per-day table's columns: a heading and the cost it shows.
 _COLUMNS: tuple[tuple[str, str], ...] = (
@@ -38,6 +39,7 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("plans", "plans"),
     ("chores", "chores"),
     ("reviews", "reviews"),
+    ("tasks", "tasks"),
     ("dry run", "dry_run"),
     ("total", "total"),
 )

@@ -2,7 +2,7 @@
 
 In a workspace, every repository with a clone has its own pool, and each is read and cleaned up in turn. A joint run
 holds a slot in several pools, and all of them are returned, and its desk removed, when its process is gone
-(DESIGN §18).
+(DESIGN §18). A one-off task's run is closed as a worker's is, and its slot returned (DESIGN §36).
 
 While treehouse makes the pools, reconcile also classifies each idle treehouse slot with canopy's own pool's checks and
 logs a `pool_shadow_mismatch` line wherever the two disagree (ROADMAP M45, stage 2). The shadow changes nothing.
@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, dead_runs, definitions, pool, pools, workspace
+from canopy.core import conversation, db, dead_runs, definitions, pool, pools, tasks, workspace
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import cwds, logs, procs
-from canopy.runs import desks, dispatch, tidy
+from canopy.runs import desks, dispatch, task_run, tidy
 
 if TYPE_CHECKING:
     import sqlite3
@@ -71,13 +71,16 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     if ctx.config.pools.backend is PoolKind.TREEHOUSE:
         shadow(ctx.runner, ws, log, {name: slots for name, _, slots in found})
     found += _other_pools(ctx, log)
-    returned = _close_dead_runs(ctx, log)
+    returned = _close_dead_runs(ctx, log) | _close_dead_task_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     held = {s.lease_id for slots in running_slots.values() for s in slots}
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
+    # So does a task's run (DESIGN §36).
+    task_runs = tasks.running(ctx.conn)
+    held |= {r.lease_id for r in task_runs}
     leased: dict[str, list[pools.Slot]] = {}
     for name, pool_, slots in found:
         still = _return_stale(log, name, pool_, slots, held=held, returned=returned)
@@ -87,7 +90,8 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     if not running:
         # No run is live, so no run of an earlier canopy is still loading its snapshot.
         _prune_definitions(ctx, log)
-    capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running) + len(reviews))
+    busy = len(running) + len(reviews) + len(task_runs)
+    capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=busy)
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
     return Reconciled(capacity, leased)
 
@@ -145,6 +149,20 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     returned: set[str] = set()
     for run in dead_runs.find(ctx.conn, "runs"):
         returned |= end_run(ctx, run, RunStatus.CRASHED, "the worker process is gone", log)
+    return returned
+
+
+def _close_dead_task_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
+    """Mark running task runs whose `_task` is gone `crashed`, and return their slots (DESIGN §36).
+
+    Returns:
+        The lease ids returned, or kept for the operator.
+    """
+    returned: set[str] = set()
+    for row in dead_runs.find(ctx.conn, "task_runs"):
+        run = tasks.get_run(ctx.conn, int(row["id"]))
+        if run is not None:
+            returned |= task_run.end(ctx, run, RunStatus.CRASHED, "the task's process is gone", log)
     return returned
 
 

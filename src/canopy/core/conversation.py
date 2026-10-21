@@ -81,6 +81,8 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 REVIEW = "review"
+#: A one-off task the operator submitted (DESIGN §36), `task:N`.
+TASK = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
 # `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
@@ -92,6 +94,8 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21), and to mark it seen, as that show and its page do (§22).
     REVIEW: ("dismiss", "send", "seen"),
+    # Submitted with `canopy task submit`; stopping one ends it, and drops it while it waits (DESIGN §36).
+    TASK: ("stop", "show"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -128,15 +132,15 @@ class Ref:
 
 
 def parse_ref(text: str) -> Ref:
-    """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, `run:ID`, or `review:ID`.
+    """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, `run:ID`, `review:ID`, or `task:N`.
 
     Returns:
-        The subject, its kind read from the reference's shape. A run id is normalized to plain digits.
+        The subject, its kind read from the reference's shape. A run's or task's id is normalized to plain digits.
 
     Raises:
         Refused: (`bad_ref`) it is none of them.
     """
-    if text.startswith(("run:", "review:")):
+    if text.startswith(("run:", "review:", "task:")):
         kind, run_id = text.split(":", 1)
         if run_id.isascii() and run_id.isdigit() and 0 < len(run_id) <= 18 and int(run_id) > 0:  # noqa: PLR2004
             return Ref(kind, str(int(run_id)))
@@ -154,7 +158,8 @@ def parse_ref(text: str) -> Ref:
         return Ref(TICKET, text)
     raise Refused(
         "bad_ref",
-        f"{text[:MAX_KEY]!r} is not a reference: a ticket key, REPO#N or a PR's URL, chore:NAME, run:ID, or review:ID",
+        f"{text[:MAX_KEY]!r} is not a reference: a ticket key, REPO#N or a PR's URL, chore:NAME, run:ID, review:ID, "
+        "or task:N",
     )
 
 
@@ -188,9 +193,9 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, plans, chooses personas, dismisses or sends findings, marks "
-                "reviews seen, edits or sends drafts, pauses, resumes, collects garbage, or reads the commands agents "
-                "start with",
+                "stops, replies, forgets, grants attempts, plans, submits tasks, chooses personas, dismisses or sends "
+                "findings, marks reviews seen, edits or sends drafts, pauses, resumes, collects garbage, or reads the "
+                "commands agents start with",
             )
 
 

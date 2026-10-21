@@ -104,6 +104,8 @@ def _ref(f: Failure) -> str:
             return f"chore:{f.what} run {f.id}"
         case "reviews":
             return f"review {f.id} of {f.subject}"
+        case "tasks":
+            return f"{f.subject} run {f.id}"
         case _:
             assert_never(f.kind)
 

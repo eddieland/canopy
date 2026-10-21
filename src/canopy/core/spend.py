@@ -2,8 +2,9 @@
 
 Reads only. Every cost is what the agent runtime reported (§13), summed by the local day a run started on, or by the
 local hour for a window in hours: the overseer of each tick, worker runs (old split runs among them), plan runs (§25,
-old triage runs before a plan among them), chore runs, and review runs. A dry run's overseer is kept apart from the live
-ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window
+old triage runs before a plan among them), chore runs, review runs, and task runs (§36). A dry run's overseer is kept
+apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's.
+Beside what the window
 cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
@@ -27,16 +28,16 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
-type Kind = Literal["overseer", "workers", "plans", "chores", "reviews"]
+type Kind = Literal["overseer", "workers", "plans", "chores", "reviews", "tasks"]
 type Done = Literal["merged", "closed"]
 #: A table of agent runs, each with a `started_at` and a `cost_usd`: the overseer's ticks, and the others'.
-type _Table = Literal["ticks", "runs", "chore_runs", "review_runs"]
+type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
-KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews")
+KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
@@ -56,6 +57,7 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
     "plans": ("runs", sql.in_("kind", _PLANS)),
     "chores": ("chore_runs", _EVERY),
     "reviews": ("review_runs", _EVERY),
+    "tasks": ("task_runs", _EVERY),
 }
 _ALL_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
@@ -86,11 +88,13 @@ class Costs:
     plans: float | None = None
     chores: float | None = None
     reviews: float | None = None
+    #: The operator's one-off tasks' runs (DESIGN §36).
+    tasks: float | None = None
 
     @property
     def total(self) -> float | None:
         """Everything, dry runs included, as the web UI's 24 hour and 30 day counters count it; None when none did."""
-        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews])
+        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews, self.tasks])
 
 
 @dataclass(frozen=True)
@@ -796,6 +800,7 @@ def _costs(found: Mapping[str, float | None]) -> Costs:
         plans=found.get("plans"),
         chores=found.get("chores"),
         reviews=found.get("reviews"),
+        tasks=found.get("tasks"),
     )
 
 

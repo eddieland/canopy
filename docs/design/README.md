@@ -177,7 +177,8 @@ canopy (harness, Python)
   cli/         the command line; only cli imports click, and only __main__ imports cli
   loop/        the tick (§6) and canopy loop, which drive the features below; the state block; the attention list;
                the overseer's verbs, which its commands and its MCP server share (§27)
-  runs/        worker runs on tickets (§8): guards, leases, the detached _run, reconcile
+  runs/        worker runs on tickets (§8) and the operator's tasks (§36): guards, leases, the detached _run and
+               _task, reconcile
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)

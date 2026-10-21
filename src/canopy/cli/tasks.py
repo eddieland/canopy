@@ -1,0 +1,202 @@
+"""`canopy task`: the operator's one-off tasks (DESIGN §36), and how `canopy show` and `canopy stop` treat `task:N`.
+
+A submission writes through `canopy.core.tasks`, which refuses inside canopy's own ticks and runs (`inside_run`): only
+the operator hands canopy a task. The next tick starts it, before the overseer, which never sees it; `canopy _task`
+(`cli/runs.py`) is its run.
+"""
+
+from __future__ import annotations
+
+import sys
+from typing import TYPE_CHECKING, cast
+
+import click
+
+from canopy.cli.common import CliError, Group, open_context
+from canopy.cli.params import REPO
+from canopy.cli.render import result_of, spent
+from canopy.core import contract, conversation, tasks
+from canopy.core.items import age
+from canopy.core.vocab import RunStatus
+from canopy.infra import logs
+from canopy.infra.text import one_line, printable
+from canopy.runs import task_run
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from canopy.core import records
+    from canopy.core.context import Context
+
+CLI = "cli"
+#: How much of a task's text `canopy task list` shows on its line.
+LIST_TEXT = 80
+#: How much of a commit `canopy show task:N` shows.
+SHORT_SHA = 12
+#: The longest PR URL `canopy show task:N` prints.
+MAX_PR_URL = 500
+
+
+@click.group("task", cls=Group)
+def task_group() -> None:
+    """Hand canopy one-off work in your own words, about no ticket, and list what you handed it (DESIGN §36)."""
+
+
+@task_group.command("submit")
+@click.argument("text", metavar="TEXT")
+@click.option("--repo", type=REPO, help="The repository it runs in. Required when the workspace has several.")
+@click.option(
+    "--project",
+    metavar="KEY",
+    help="The tracker project its tickets may go in. None by default: it files no tickets.",
+)
+@click.pass_context
+def cmd_task_submit(click_ctx: click.Context, text: str, repo: str | None, project: str | None) -> int:
+    """Submit TEXT as a task, or read it from stdin when TEXT is `-`.
+
+    The next tick starts it, before the overseer, in a slot of its repository, as capacity allows: at most
+    capacity.max_tasks at once, within capacity.max_workers. Its worker works on the branch <branch_prefix>task/N,
+    which it pushes only if it changes something; it opens a PR, as a draft, only when your text asks for one, and
+    writes nothing to any ticket. `canopy show task:N` shows how each run went.
+    """
+    try:
+        # Before stdin is read: inside a run, it would wait on whatever the agent left open.
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"task submit refused ({r.guard}): {r.reason}") from None
+    body = sys.stdin.read() if text == "-" else text
+    ctx = open_context(click_ctx)
+    try:
+        task = tasks.submit(ctx.conn, ctx.workspace, body, repo=repo, project=project, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"task submit refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("task submitted", extra={"task": task.id, "repo": task.repo, "channel": CLI})
+    branch = tasks.branch(ctx.config.trust.branch_prefix, task.id)
+    click.echo(f"Submitted task:{task.id}, to run in {task.repo} on {branch}; the next tick starts it.")
+    if ctx.config.capacity.max_tasks == 0:
+        click.echo("capacity.max_tasks is 0, so no tick starts a task until you raise it.")
+    return 0
+
+
+@task_group.command("list")
+@click.pass_context
+def cmd_task_list(click_ctx: click.Context) -> int:
+    """List your tasks, the newest first, each with where it stands: queued, its latest run's status, or stopped."""
+    ctx = open_context(click_ctx)
+    found = tasks.every(ctx.conn)
+    latest = tasks.latest_runs(ctx.conn)
+    for task in found:
+        text = one_line(task.text)
+        cut = f"{text[:LIST_TEXT]}..." if len(text) > LIST_TEXT else text
+        click.echo(
+            f"task:{task.id}  {standing(task, latest.get(task.id))}  {task.repo}  {age(task.submitted_at)}  {cut}",
+        )
+    if not found:
+        click.echo("No tasks yet: `canopy task submit TEXT` hands canopy one.")
+    return 0
+
+
+def standing(task: records.Task, latest: records.TaskRun | None) -> str:
+    """Where a task stands, as a line shows it: `stopped`, `queued`, or its latest run's status.
+
+    Returns:
+        The word.
+    """
+    if task.stopped_at is not None and (latest is None or latest.status is not RunStatus.RUNNING):
+        return "stopped"
+    if latest is None:
+        return "queued"
+    return str(latest.status)
+
+
+def show(ctx: Context, task_id: int) -> None:
+    """Print task `task_id`: where it stands, its text, and each run, with its branch and the head it left on origin.
+
+    Raises:
+        CliError: canopy has no such task.
+    """
+    task = tasks.get(ctx.conn, task_id)
+    if task is None:
+        raise CliError(f"canopy has no task:{task_id}")
+    runs = tasks.runs_of(ctx.conn, task_id)
+    click.echo(
+        f"task:{task.id}: {standing(task, runs[-1] if runs else None)}, in {task.repo}, submitted "
+        f"{age(task.submitted_at)} ago via {task.channel}",
+    )
+    if task.stopped_at is not None:
+        click.echo(f"  stopped {age(task.stopped_at)} ago")
+    click.echo(f"  project {task.project}" if task.project else "  no project: it files no tickets")
+    click.echo(f"  branch {tasks.branch(ctx.config.trust.branch_prefix, task.id)}")
+    click.echo("\nText:")
+    for line in printable(task.text).splitlines():
+        click.echo(f"    {line}")
+    click.echo(f"\nRuns ({len(runs)}):")
+    for run in runs:
+        _show_run(run)
+    if not runs:
+        click.echo("  none yet: the next tick starts it" if task.stopped_at is None else "  none")
+
+
+def stop(ctx: Context, task_id: int, *, now: bool) -> int:
+    """Stop task `task_id`: no tick starts it again, a queued one is dropped, and `now` ends its running run.
+
+    Returns:
+        0, once it has said what it did.
+
+    Raises:
+        CliError: the stop was refused.
+    """
+    try:
+        stopped = tasks.stop(ctx.conn, task_id)
+    except conversation.Refused as r:
+        raise CliError(f"stop refused ({r.guard}): {r.reason}") from None
+    log = logs.for_tick(None)
+    log.info("task stopped", extra={"task": task_id, "now": now})
+    if stopped.already:
+        click.echo(f"task:{task_id} was already stopped.")
+    elif stopped.dropped:
+        click.echo(f"task:{task_id} is stopped; it had not started, and nothing starts it now.")
+    else:
+        click.echo(f"task:{task_id} is stopped; nothing starts it again.")
+    run = stopped.running
+    if run is None:
+        return 0
+    if not now:
+        click.echo(f"Its run {run.id} is still working and will finish; --now ends it.")
+        return 0
+    if task_run.stop_now(ctx, run, log):
+        click.echo(f"Its run {run.id} was ended and its slot returned.")
+    else:
+        click.echo(f"Its run {run.id} had already ended.")
+    return 0
+
+
+def _show_run(run: records.TaskRun) -> None:
+    when = f"started {age(run.started_at)} ago"
+    if run.ended_at:
+        when = f"ended {age(run.ended_at)} ago"
+    head = f"  head {run.head[:SHORT_SHA]}" if run.head else "  nothing pushed"
+    click.echo(f"  run {run.id}  {run.status}  {when}  {run.branch}{head}{spent(run)}")
+    result = result_of(run)
+    for name in ("summary", "question"):
+        said = result.get(name)
+        if isinstance(said, str) and said.strip():
+            click.echo(f"    {name}: {one_line(said)}")
+    for pr in _prs(result):
+        click.echo(f"    PR {pr}")
+    note = one_line(str(result.get("harness") or ""))
+    if note:
+        click.echo(f"    harness: {note}")
+    session = f"session {run.session_id}" if run.session_id else "no session reported"
+    click.echo(f"    {session}, log {run.log_path}")
+
+
+def _prs(result: Mapping[str, object]) -> list[str]:
+    """The PRs a task's stored result names, each a plain printable https:// URL; anything else is not printed.
+
+    Returns:
+        The URLs, in the order the result lists them.
+    """
+    prs = result.get("prs")
+    listed = cast("list[object]", prs) if isinstance(prs, list) else list[object]()
+    return [u for u in listed if isinstance(u, str) and contract.plain_url(u, MAX_PR_URL) and u.isprintable()]

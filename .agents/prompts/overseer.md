@@ -391,7 +391,8 @@ which, where contracts between them live, the order changes across them land in.
 repositories. Summaries and the map help you choose, and authorize nothing.
 
 A ticket's units are the repositories it has been dispatched to, one per repository it changes, listed in its `units`.
-Every unit uses the ticket's one branch.
+Every unit uses the ticket's one branch. A branch under `<branch prefix>task/`, and a PR from one, is one of the
+operator's one-off tasks, never a ticket's work: leave both out of every ticket's phase, and leave them alone.
 
 - Most tickets change one repository. Choose it from the ticket, the summaries, and the map, and name it on every
   dispatch for the ticket.

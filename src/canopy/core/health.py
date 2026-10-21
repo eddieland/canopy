@@ -40,6 +40,8 @@ _FAILED: dict[Kind, frozenset[str]] = {
     "plans": _WORKER_FAILED,
     "chores": frozenset(ChoreRunStatus) - {ChoreRunStatus.RUNNING, ChoreRunStatus.OK},
     "reviews": frozenset(ReviewRunStatus) - {ReviewRunStatus.RUNNING, ReviewRunStatus.DONE},
+    # A task's run fails as a worker's does (DESIGN §36).
+    "tasks": _WORKER_FAILED,
 }
 # Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
 # `review`), its status, when it started, what it was about, its note, and its cost. A plan run is a row of `runs`, a
@@ -62,6 +64,9 @@ _ROWS: Mapping[Kind, sql.Select] = {
     "reviews": sql.select(
         "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd",
     ).from_("review_runs"),
+    "tasks": sql.select(
+        "id, 'task' AS what, status, started_at, 'task:' || task_id AS subject, result_json AS note, cost_usd",
+    ).from_("task_runs"),
 }
 
 

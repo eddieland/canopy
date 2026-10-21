@@ -54,7 +54,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from canopy.core import config, db, notice, pause
+from canopy.core import config, db, notice, pause, tasks
 from canopy.infra import lock, logfmt, logs, procs, resources
 from canopy.loop import attention, duties, models, pacing, phases, poll, reread, tick, tick_now
 
@@ -100,6 +100,7 @@ _STATUS_STYLES = {
 _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
     "starts": "a ticket started or stopped; next tick in ",
+    "task": "a task submitted or stopped; next tick in ",
     "grant": "a grant; next tick in ",
     "notice": "a notice to workers set or cleared; next tick in ",
     "run": "a run ended; next tick in ",
@@ -596,9 +597,9 @@ def _gap_seconds(ctx: Context) -> float:
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
-    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, or a notice to
-    workers set or cleared, after `since`. A note to a chore waits for the chore's next run, and a config reload waits
-    for the next tick.
+    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, a task submitted
+    or stopped (DESIGN §36), or a notice to workers set or cleared, after `since`. A note to a chore waits for the
+    chore's next run, and a config reload waits for the next tick.
 
     Returns:
         The first of those that happened, or None.
@@ -610,6 +611,8 @@ def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
         return "starts"
     if db.granted_after(conn, since):
         return "grant"
+    if tasks.moved_after(conn, since):
+        return "task"
     return "notice" if notice.moved_after(conn, since) else None
 
 
@@ -671,6 +674,8 @@ def _log_woken(
         log.info("a ticket started or stopped ended the wait", extra={"after": since})
     elif woken == "grant":
         log.info("a grant ended the wait", extra={"after": since})
+    elif woken == "task":
+        log.info("a task submitted or stopped ended the wait", extra={"after": since})
     elif woken == "notice":
         log.info("a notice to workers set or cleared ended the wait", extra={"after": since})
     elif woken == "run":
@@ -728,7 +733,7 @@ def _live_runs(conn: sqlite3.Connection) -> list[str]:
     """Every table's running runs whose own process is alive, as the operator reads them.
 
     Returns:
-        A label for each run, workers first, then chores, then reviews, oldest first within each.
+        A label for each run, workers first, then chores, then reviews, then tasks, oldest first within each.
     """
     return [
         _run_label(table, r)
@@ -746,6 +751,8 @@ def _run_label(table: db.RunTable, row: sqlite3.Row) -> str:
             return f"chore {row['chore']}"
         case "review_runs":
             return f"review {row['ticket_key'] or row['pr_url']}"
+        case "task_runs":
+            return f"task:{row['task_id']}"
         case _:
             assert_never(table)
 
@@ -996,8 +1003,8 @@ def _report(
         changes += _decisions(ctx, outcome.tick_id, failed=outcome.status == "overseer_failed")
     after = attention.listed(ctx)
     changes += _attention_changes(before, after)
-    # Running reviews take worker capacity too (DESIGN §6).
-    running = len(db.running_runs(ctx.conn, "runs")) + len(db.running_runs(ctx.conn, "review_runs"))
+    # Running reviews and tasks take worker capacity too (DESIGN §6, §36).
+    running = db.busy_workers(ctx.conn)
     paused = wait is not None and pause.paused(ctx.conn) is not None
     if not console.is_terminal:
         usage = outcome.usage

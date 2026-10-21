@@ -28,6 +28,8 @@ labels = ["agent-ready-yourname"]
 max_workers = 2
 # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
 max_chores = 1
+# Runs of your one-off tasks (`canopy task submit`) at once, within max_workers; 0 starts none (DESIGN §36).
+# max_tasks = 1
 # Slots in each repository's pool. `canopy workspace sync` makes and removes slots to match, and no run grows a pool
 # past it. Unset leaves the pools to treehouse's own max_trees (DESIGN §18).
 # slots_per_repo = 2
