@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, personas, pools, prompts, review_requests
+from canopy.core import contract, db, notice, outbox, personas, pools, prompts, records, review_requests, sql
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
@@ -28,7 +28,6 @@ from canopy.reviews import findings, grants
 if TYPE_CHECKING:
     import sqlite3
 
-    from canopy.core import records
     from canopy.core.context import Context
 
 REVIEWS_DIR = "reviews"
@@ -231,7 +230,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             slot=lease.path,
             lease_id=lease.lease_id,
             lease_holder=lease.lease_holder,
-            base_branch=lease.base_branch,
+            base_branch=_base(ctx.conn, request.pr) or lease.base_branch,
             pool=ctx.config.pools.backend,
         )
         try:
@@ -240,6 +239,18 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             with contextlib.suppress(pools.PoolError):
                 pool.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
             raise
+
+
+def _base(conn: sqlite3.Connection, pr: str) -> str | None:
+    """The branch the PR merges into, as the vcs source last read it, or None when it has not read the PR.
+
+    A PR stacked on another branch, or one into a release branch, leaves that branch, not the pool's (DESIGN §21).
+
+    Returns:
+        The PR's base branch, or None.
+    """
+    found = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
+    return found.base_ref if found is not None else None
 
 
 def _persona(ctx: Context, request: Request) -> personas.Persona:
@@ -300,10 +311,14 @@ def _spawn(
     persona: personas.Persona,
 ) -> Started:
     cfg = ctx.config
+    run = db.get_review_run(ctx.conn, run_id)
+    if run is None:
+        raise RuntimeError(f"review run {run_id} vanished")
     values = {
         "PR_URL": request.pr,
         "SHA": request.sha,
         "CHECKOUT": str(run_dir(ctx, run_id) / CHECKOUT_LINK),
+        "BASE": run.base_branch or lease.base_branch,
         "RUN_ID": str(run_id),
         "TICKET": request.ticket or "none: this PR is not one of the loop's own",
         "TRACKER_PROVIDER": cfg.tracker.provider,
@@ -314,9 +329,6 @@ def _spawn(
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
         "CONTRACT": result.CONTRACT,
     }
-    run = db.get_review_run(ctx.conn, run_id)
-    if run is None:
-        raise RuntimeError(f"review run {run_id} vanished")
     try:
         prompt = prompts.render_reviewer(
             cfg,
