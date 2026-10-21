@@ -274,7 +274,8 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         _git_tool(
             git_tools.LOG,
             "List commits, newest first, with each one's message and the files it changed: one commit's history, or "
-            "BASE..HEAD for those on HEAD and not BASE.",
+            "BASE..HEAD for those on HEAD and not BASE. Narrow it to commits that change some paths, add or remove a "
+            "text (search), or say one in their message (message); follow one path across renames.",
             git_tools.Log,
             git_tools.log,
             runner=runner,
@@ -285,6 +286,15 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
             "Read a file as it is at a commit, or list a directory's entries there.",
             git_tools.Show,
             git_tools.show,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.BLAME,
+            "Name the commit that last changed each of some lines of a file as it is at a commit, with its author and "
+            "date: which lines a branch wrote, and what commit to read for why the rest are so.",
+            git_tools.Blame,
+            git_tools.blame,
             runner=runner,
             checkouts=checkouts,
         ),

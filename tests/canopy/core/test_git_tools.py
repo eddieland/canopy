@@ -77,6 +77,45 @@ def test_each_tool_reads_the_checkouts_history(repo: Repo) -> None:
     assert listed.endswith("\tretry.py")
 
 
+def test_log_narrows_to_commits_that_change_a_text_or_say_one_and_follows_a_rename(repo: Repo) -> None:
+    git("mv", "retry.py", "retries.py", cwd=repo.path)
+    git("commit", "--quiet", "-m", "rename retry", cwd=repo.path)
+    at = repo.checkouts
+
+    def subjects(**asked: object) -> list[str]:
+        listed = git_tools.log(RUNNER, at, git_tools.Log.model_validate({"range": "feature", **asked}))
+        return [line.strip() for line in listed.splitlines() if line.startswith("    ")]
+
+    assert subjects(search="return 2") == ["second"]
+    assert subjects(search="return 1") == ["second", "first"]
+    assert subjects(message="rename") == ["rename retry"]
+    assert subjects(message="ren.me") == []  # the text as written, never a pattern
+    assert subjects(search="return 2", message="first") == []
+    # Text that looks like an option is searched for, never read as one.
+    assert subjects(search="--all") == []
+    assert subjects(message="--all") == []
+    assert subjects(paths=["retries.py"]) == ["rename retry"]
+    assert subjects(paths=["retries.py"], follow=True) == ["rename retry", "second", "first"]
+
+
+def test_blame_names_the_commit_that_last_changed_each_line(repo: Repo) -> None:
+    (repo.path / "retry.py").write_text("def retry():\n    return 2\n# done\n")
+    git("commit", "--quiet", "-am", "third", cwd=repo.path)
+    third = git("rev-parse", "HEAD", cwd=repo.path)
+    at = repo.checkouts
+    blamed = git_tools.blame(RUNNER, at, git_tools.Blame(rev="feature", path="./retry.py", start=1, end=3))
+    first, second, last = blamed.removeprefix(f"{git_tools.DATA_NOTE}\n\n").splitlines()
+    # Each line after its commit's full id: the first commit's too, never marked as a boundary.
+    assert first.startswith(f"{repo.base} (canopy test ")
+    assert first.endswith(" 1) def retry():")
+    assert second.startswith(f"{repo.head} ")
+    assert second.endswith(" 2)     return 2")
+    assert last.startswith(f"{third} ")
+    one = git_tools.blame(RUNNER, at, git_tools.Blame(rev="main", path="retry.py", start=2, end=2))
+    assert one.endswith(" 2)     return 1")
+    assert one.count("\n") == 2
+
+
 def test_what_a_tool_returns_is_bounded(repo: Repo) -> None:
     big = repo.path / "big.txt"
     big.write_text("".join(f"line {n}\n" for n in range(1000)))
@@ -132,6 +171,17 @@ def test_a_file_that_is_not_text_is_refused_and_a_hidden_character_is_named(repo
         (git_tools.Log, {"range": "main", "limit": 0}, "greater than or equal to 1"),
         (git_tools.Log, {"range": "main", "limit": git_tools.MAX_LIMIT + 1}, "less than or equal to 100"),
         (git_tools.Log, {"range": "main", "all": True}, "Extra inputs are not permitted"),
+        (git_tools.Log, {"range": "main", "search": ""}, "at least 1 character"),
+        (git_tools.Log, {"range": "main", "search": "a\nb"}, "printable"),
+        (git_tools.Log, {"range": "main", "message": "a\tb"}, "printable"),
+        (git_tools.Log, {"range": "main", "search": "a" * 201}, "at most 200 characters"),
+        (git_tools.Log, {"range": "main", "follow": True}, "name exactly one in paths"),
+        (git_tools.Log, {"range": "main", "follow": True, "paths": ["a", "b"]}, "name exactly one in paths"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 0, "end": 1}, "greater than or equal to 1"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 2, "end": 1}, "at or after start"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 1, "end": 401}, "at most 400 lines"),
+        (git_tools.Blame, {"rev": "main", "path": "../x", "start": 1, "end": 1}, "no `..`"),
+        (git_tools.Blame, {"rev": "-L1,2", "path": "retry.py", "start": 1, "end": 1}, "not a revision"),
     ],
 )
 def test_an_argument_that_is_an_option_leaves_the_checkout_or_is_no_revision_is_refused(
@@ -153,6 +203,18 @@ def test_what_names_nothing_here_is_refused(repo: Repo) -> None:
         (lambda: git_tools.log(RUNNER, at, git_tools.Log(range="main..nope")), "nope names no commit"),
         (lambda: git_tools.show(RUNNER, at, git_tools.Show(rev="main", path="notes.md")), "notes.md is not in main"),
         (lambda: git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="main", paths=["."])), "whole repo"),
+        (
+            lambda: git_tools.blame(RUNNER, at, git_tools.Blame(rev="main", path="notes.md", start=1, end=1)),
+            "no such path notes.md in",
+        ),
+        (
+            lambda: git_tools.blame(RUNNER, at, git_tools.Blame(rev="main", path="retry.py", start=3, end=4)),
+            "file retry.py has only 2 lines",
+        ),
+        (
+            lambda: git_tools.blame(RUNNER, at, git_tools.Blame(rev="main", path=".", start=1, end=1)),
+            "blame reads a file",
+        ),
         (
             lambda: git_tools.show(RUNNER, at, git_tools.Show(rev="main", path="retry.py", repo="web")),
             "no repository named 'web' here: this run reads checkout",
@@ -202,6 +264,7 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
         "core.hooksPath": str(hooks),
         "log.showSignature": "true",
         "gpg.program": program("gpg"),
+        "blame.ignoreRevsFile": str(tmp_path / "ignored"),
     }
     for key, value in settings.items():
         git("config", key, value, cwd=path)
@@ -216,12 +279,17 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     assert git_tools.log(RUNNER, at, git_tools.Log(range=f"main..{signed}")).count("commit ") == 1
     assert git_tools.show(RUNNER, at, git_tools.Show(rev=signed, path="notes.md")).endswith("hello")
     assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)) == repo.base
+    assert git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).count("commit ") == 1
+    assert git_tools.blame(RUNNER, at, git_tools.Blame(rev=signed, path="notes.md", start=1, end=1)).endswith("hello")
     assert not marker.exists(), marker.read_text()
 
     # The same reads by plain git run what the repository names: the test above would have seen them.
     git("diff", "main", signed, cwd=path)
     git("diff", "--no-ext-diff", "main", signed, cwd=path)
     git("log", "-1", signed, cwd=path)
+    git("blame", "--no-ignore-revs-file", signed, "--", "notes.md", cwd=path)
+    # And plain blame reads the file of revisions to skip the config names, here none.
+    assert "could not open object name list" in RUNNER.run(["git", "blame", signed, "--", "notes.md"], cwd=path).stderr
     assert set(marker.read_text().split()) >= {"external", "command", "textconv", "gpg"}
 
 
@@ -247,5 +315,11 @@ def test_a_checkout_on_the_command_line_is_a_name_and_an_absolute_path() -> None
 
 
 def test_the_tools_are_named_as_the_definitions_name_them() -> None:
-    assert git_tools.tool_names() == ["canopy_git_merge-base", "canopy_git_diff", "canopy_git_log", "canopy_git_show"]
+    assert git_tools.tool_names() == [
+        "canopy_git_merge-base",
+        "canopy_git_diff",
+        "canopy_git_log",
+        "canopy_git_show",
+        "canopy_git_blame",
+    ]
     assert git_tools.inherited(["GIT_DIR", "GIT_EXTERNAL_DIFF", "HOME", "XGIT"]) == {"GIT_DIR", "GIT_EXTERNAL_DIFF"}
