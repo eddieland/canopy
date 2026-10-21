@@ -70,6 +70,29 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
     assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}-approved.md", cwd=upstream)
 
 
+def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    first = proposed(scenario.conn, scenario.env.state_dir)
+    second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY, "PROJ-2"))
+    assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
+        f"Archive 2 plans of {name}: {KEY}, PROJ-2\n\nNew:\n- {KEY}/{first}-proposed.md\n- PROJ-2/{second}-proposed.md"
+    )
+
+    plans.approve(
+        scenario.conn,
+        scenario.env.state_dir,
+        KEY,
+        channel="cli",
+        dispatch_lock=scenario.env.state_dir / DISPATCH_LOCK,
+    )
+    scenario.tick(*waits(KEY, "PROJ-2"))
+    assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
+        f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}-approved.md (was {first}-proposed.md)"
+    )
+
+
 def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Path, upstream: Path) -> None:
     first = proposed(scenario.conn, scenario.env.state_dir)
     second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
