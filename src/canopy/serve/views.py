@@ -616,6 +616,8 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
         activity=_activity(row) if status == "running" else None,
+        persona=str(row["persona"]) if row["persona"] is not None else None,
+        persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
     )
 
 

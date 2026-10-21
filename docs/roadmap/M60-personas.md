@@ -61,5 +61,12 @@ refuses that ticket's next run with an attention item.
 Status: in progress. Stage 0's list, in #996, was read and merged by the operator (2026-10-19). Stage 1 is built
 (2026-10-20): `.agents/personas/canopy.md` holds the lines that list moved, and every planner, reviewer, and worker run
 renders it as `{{PERSONA}}`, after the obligations. The plan and resume prompts shrank; the reviewer and implement
-prompts grew by the persona's section, since they gave up only a sentence or a phrase. Stage 2 is next. Designed
-2026-10-19 (DESIGN §31).
+prompts grew by the persona's section, since they gave up only a sentence or a phrase. Stage 2 is built (2026-10-20):
+`paths.personas` and `[personas]`, private; a persona file bounded at 4 KiB and refused with hidden characters; `canopy
+personas`; a run whose persona has no file refused `persona_missing`, and one whose file is past its bounds
+`bad_persona`, each with its attention item, no attempt spent and no slot leased; an override without `{{PERSONA}}`
+serving `canopy` runs alone; each run's and review's persona and digest recorded, in `canopy status` and the web API;
+and `skeptic`, `minimalist`, and `explainer` shipped, for the operator to keep, rename, or drop. A feedback plan takes
+no persona, since its prompt carries none. Next, once M58's model override per ticket and its web UI control are built:
+the override per ticket, `canopy persona`, the ticket page's control, and the run and review pages' display of a run's
+persona. Designed 2026-10-19 (DESIGN §31).

@@ -70,6 +70,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
 | `canopy config commands` | Each agent's command as a run starts it, and the keys it is made of; `--json`. |
 | `canopy agents` | The MCP servers and skills each canopy agent is offered, after OpenCode merges the operator's config; `--json`. |
+| `canopy personas` | Each persona, canopy's and the operator's in `paths.personas`, and the agents `[personas]` gives it; exits 1 when an agent's would refuse. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |

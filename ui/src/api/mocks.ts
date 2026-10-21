@@ -40,6 +40,8 @@ export const mockRuns: Run[] = [
         worktrees: ['.treehouse/web-3f9c2a1b/1/web'],
         log_path: '/home/op/.canopy/runs/41.log',
         activity: { tool: 'bash', did: 'npm test -- login', at: '2026-10-08T12:27:00Z' },
+        persona: 'canopy',
+        persona_digest: '6c1f0a3e9b2d4c5a7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
     },
     {
         id: 42,
@@ -63,6 +65,8 @@ export const mockRuns: Run[] = [
         worktrees: [],
         log_path: '/home/op/.canopy/runs/42.log',
         activity: null,
+        persona: null,
+        persona_digest: null,
     },
 ]
 
@@ -120,6 +124,7 @@ export const mockReviews: ReviewSummary[] = [
         started_at: '2026-10-08T12:01:00Z',
         ended_at: null,
         cost_usd: 0.04,
+        news: false,
         seen: false,
     },
 ]
