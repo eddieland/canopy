@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import db, records, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
@@ -398,6 +398,27 @@ def test_a_private_ticket_needs_a_human_from_the_journal_alone(canopy_env: Canop
         candidate=True,
         closed=False,
     )
+
+
+def test_an_untrusted_review_waits_on_an_operator_reply_and_no_verbs_instruction(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    case_untrusted_review(canopy_env, observed)
+    ticket = conversation.Ref(conversation.TICKET, KEY)
+    with db.transaction(observed):
+        conversation.write_reply(
+            observed,
+            ticket,
+            "Address item 1 of feedback plan 1.",
+            channel="cli",
+            submission="x",
+            answers=False,
+        )
+    assert any(phases.Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
+    with db.transaction(observed):
+        conversation.write_reply(observed, ticket, "Go ahead with the map.", channel="cli", submission=None)
+    assert not any(phases.Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
 
 
 def recorded(conn: sqlite3.Connection, tick_id: int, *derived: phases.Derived) -> None:
