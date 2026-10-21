@@ -330,7 +330,10 @@ inside a run, so no agent can hold a finding back from a worker or start work in
 
 Since the slot goes with the review and the web UI cannot ask GitHub (principle 5), the review keeps the diff of exactly
 the commit the reviewer read, best effort and readable only by the operator. Diff drivers and textconv are off, since a
-commit's `.gitattributes` can name them (D107). It is the PR's text: rendered as text, never served as a file.
+commit's `.gitattributes` can name them (D107). It is the PR's text: rendered as text, never served as a file. It runs
+from the commit's merge base with the branch the PR merges into, as the vcs source last read the PR, and the
+reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch. For this, the vcs
+source reads a requested PR from the tick after its request.
 
 ### Open
 

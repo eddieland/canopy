@@ -209,8 +209,10 @@ back. To read only some kinds of file, open **All file types** above the first f
 thousand lines are rarely where the bug is. Following a finding from the list opens its file again, and ticks its type,
 so nothing you folded hides a finding from you.
 
-A PR stacked on another branch shows that branch's commits too, since the diff runs from where the PR's branch left
-the pool's base branch. If a finding seems to be about code the PR never touched, check that first.
+The diff runs from where the PR's branch left the branch it merges into, so a PR stacked on another branch shows only
+its own commits. If canopy had not read the PR from GitHub when its review started, the diff runs from the
+repository's base branch instead, and a stacked PR shows its parent's commits too: if a finding seems to be about code
+the PR never touched, check that first.
 
 ## A review's run
 
