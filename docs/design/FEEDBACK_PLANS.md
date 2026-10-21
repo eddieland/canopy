@@ -48,8 +48,9 @@ never reset (D030), and raised only by the operator's grant.
 ### Approving
 
 The operator approves the newest plan whole, or ticks the items to address, from the PR's page or `canopy plan`; only
-the operator's channels do, each refused inside any agent run, the web channel's behind its token (T8). As in §25,
-approval records the file's hash, and a reply newer than a waiting plan asks for changes. It also writes an operator
+the operator's channels do, each refused inside any agent run, the web channel's behind its token (T8), or the planner,
+whose word stands for theirs as in §25 unless the plan replaces one no `resume` spent. Approval records the file's
+hash, and a reply newer than a waiting plan asks for changes. It also writes an operator
 message on the ticket naming the plan and the items to address and to leave, by number, never quoting them, as sending
 findings does (§21): the plan's text stays data, and the message is the instruction (T1).
 

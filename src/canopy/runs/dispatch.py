@@ -972,6 +972,10 @@ def _spawn(
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
+        "PLAN_REVIEW": prompts.plan_review(
+            on=planning and cfg.policy.planner_may_approve and _planner_may_approve(ctx, key, kind),
+            feedback=kind == policy.FEEDBACK_PLAN,
+        ),
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {
@@ -1031,6 +1035,17 @@ def _spawn(
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _planner_may_approve(ctx: Context, key: str, kind: str) -> bool:
+    """Whether the plan this run writes could be approved on its planner's word, so its prompt says how (DESIGN §25).
+
+    Returns:
+        What `record` will decide for the plan's kind, as the journal stands at dispatch.
+    """
+    if kind == policy.FEEDBACK_PLAN:
+        return feedback_plans.planner_may_approve(ctx.conn, key)
+    return plans.planner_may_approve(ctx.conn, key)
 
 
 def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
@@ -1197,13 +1212,15 @@ def _plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collectio
             covered = [
                 (i.number, i.pr_url, i.item_id, str(i.proposal)) for i in feedback_plans.items(ctx.conn, feedback.id)
             ]
-            note = prompts.feedback_plan_note(copy, plans.outline(text), covered)
+            by_planner = feedback.approved_channel == plans.PLANNER
+            note = prompts.feedback_plan_note(copy, plans.outline(text), covered, by_planner=by_planner)
             return _Followed(note=note, feedback_plan_id=feedback.id)
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
     if approved is None or text is None:
         return None
-    return _Followed(note=prompts.plan_note(copy, plans.outline(text)), plan_id=approved.id)
+    note = prompts.plan_note(copy, plans.outline(text), by_planner=approved.approved_channel == plans.PLANNER)
+    return _Followed(note=note, plan_id=approved.id)
 
 
 def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:

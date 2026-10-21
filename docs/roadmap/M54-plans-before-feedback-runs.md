@@ -13,9 +13,10 @@ a new CI state reaches the PR before they accept. The design is DESIGN §32, bes
   findings, a failed check, a conflict with the base, an authorized reply on the ticket) goes to the planner, with the
   PR's checks at its head. A failed check is an item because M56 makes fixing CI part of `resume`, so one plan, and one
   run, covers a round's comments and its red CI together. A round that is only red CI waits on its plan too, as the
-  operator asked, trivial or not (M55's triage was removed, D126). A worker's own comments and the replies the operator
-  sent through canopy (M53) are not items. The plan shows each item's author, and whether they are trusted, so the
-  operator weighs it; trust no longer decides what runs.
+  operator asked, trivial or not (M55's triage was removed, D126), unless its planner says it needs no review under
+  `policy.planner_may_approve` (DESIGN §25). A worker's own comments and the replies the operator sent through canopy
+  (M53) are not items. The plan shows each item's author, and whether they are trusted, so the operator weighs it;
+  trust no longer decides what runs.
 - **The planner.** M44's planner, definition, desk, prompt shape, and file, with the PR and its items in place of a
   ticket's first plan; it posts nothing and pushes nothing. Its plan is a markdown file the operator reads, edits, and
   comments on as M44's are, with one section per item, and its result line lists each item it covers by M53's thread or

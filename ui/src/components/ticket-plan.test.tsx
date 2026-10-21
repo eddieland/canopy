@@ -19,6 +19,7 @@ const EARLIER: PlanSummary = {
     created_at: '2026-10-08T10:00:00Z',
     approved_at: null,
     approved_channel: null,
+    approved_reason: null,
 }
 const PLAN: PlanSummary = { ...EARLIER, id: 2, run_id: 50, status: 'proposed', created_at: '2026-10-08T11:00:00Z' }
 const TEXT = '# Plan\n\nAdd the CSV writer.\n'
@@ -223,6 +224,23 @@ describe('TicketPlan', () => {
                 new RegExp(
                     '^Written by run:50, approved \\S+ ago via web, edited since the planner wrote it, changed since ' +
                         'it was approved\\. $',
+                    'u',
+                ),
+            )
+        })
+
+        it('says the planner approved a plan it said needs no review, and why', async () => {
+            const approved = {
+                ...PLAN,
+                status: 'approved' as const,
+                approved_at: '2026-10-08T11:30:00Z',
+                approved_channel: 'planner',
+                approved_reason: 'A one-line typo fix in the README.',
+            }
+            expect(await state({ newest: { ...NEWEST, plan: approved } })).toMatch(
+                new RegExp(
+                    '^Written by run:50, approved \\S+ ago by the planner\\. It said the plan needs no review: A ' +
+                        'one-line typo fix in the README\\.$',
                     'u',
                 ),
             )

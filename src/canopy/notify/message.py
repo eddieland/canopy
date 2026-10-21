@@ -38,11 +38,12 @@ def _line(text: object) -> str:
     return " ".join(str(text).split())
 
 
-def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, PLR0911  (one shape per kind)
+def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, PLR0911, PLR0912  (one shape per kind)
     """One line of text for an event, for a person.
 
     Returns:
-        The line, led by `>`, `<`, `!`, or `*` for the event's kind. A kind it does not know shows its fields as JSON.
+        The line, led by `>`, `<`, `?`, `+`, `!`, or `*` for the event's kind. A kind it does not know shows its
+        fields as JSON.
     """
     f = fields
     if kind == "run.started":
@@ -58,6 +59,9 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         return _line(f"{text}: {' '.join(extras)}" if extras else text)
     if kind == "plan.proposed":
         return f"? {f.get('ticket')} plan {f.get('plan')} waits on your approval: canopy show {f.get('ticket')}"
+    if kind == "plan.approved":
+        which = "feedback plan" if f.get("feedback") else "plan"
+        return _line(f"+ {f.get('ticket')} {which} {f.get('plan')} approved by its planner: {f.get('reason')}")
     if kind == "follow_ups.filed":
         given = f.get("follow_ups")
         filed: dict[str, object] = cast("dict[str, object]", given) if isinstance(given, dict) else {}
@@ -118,8 +122,9 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
     match kind:
         case "run.started" | "run.ended" | "follow_ups.filed" if f.get("run"):
             return page(ui, "runs", f["run"])
-        case "plan.proposed" if f.get("ticket"):
-            return page(ui, "tickets", f["ticket"], "plan")
+        case "plan.proposed" | "plan.approved" if f.get("ticket"):
+            # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
+            return page(ui, "tickets", f["ticket"], *(() if f.get("feedback") else ("plan",)))
         case "chore.ended" if f.get("chore") and f.get("run"):
             return page(ui, "chores", f["chore"], "runs", f["run"])
         case "review.ended" if f.get("run"):

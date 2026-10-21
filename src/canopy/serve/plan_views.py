@@ -76,6 +76,7 @@ def plan_summary(plan: records.Plan) -> PlanSummary:
         created_at=db.parse_time(plan.created_at),
         approved_at=db.parse_time(plan.approved_at) if plan.approved_at is not None else None,
         approved_channel=plan.approved_channel,
+        approved_reason=plan.approved_reason,
     )
 
 

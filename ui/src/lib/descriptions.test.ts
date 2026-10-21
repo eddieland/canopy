@@ -150,6 +150,7 @@ describe('ticketDescription', () => {
             created_at: '2026-10-08T11:00:00Z',
             approved_at: null,
             approved_channel: null,
+            approved_reason: null,
         } as const
         const file = {
             plan,
