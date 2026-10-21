@@ -33,10 +33,10 @@ from tests.canopy.helpers import (
     canopy,
     console,
     context,
+    log_file,
     overseer_does,
     present,
     running_run,
-    terminal,
     with_events,
 )
 from tests.conftest import CanopyEnv, user_toml
@@ -116,7 +116,7 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
             canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
         time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
-        term, out = terminal()
+        term, out = console()
 
         statuses = repeat.run(
             context(canopy_env),
@@ -204,7 +204,7 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
             canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
         time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
-        term, out = terminal(width=80)
+        term, out = console(width=80)
 
         repeat.run(
             context(canopy_env),
@@ -228,26 +228,29 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
         assert "-   PROJ-3  needs_reviewer  resolved" in tick2
 
 
-def test_output_to_a_file_is_a_log_with_each_line_whole(
+def test_output_to_a_file_is_a_logfmt_line_for_each_event(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     detail = "https://example.test/pr/3/" + "x" * 300
-    with overseer_does(canopy("attention", "PROJ-3", "needs_reviewer", "--detail", detail)):
-        term, out = console()
+    with overseer_does(
+        canopy("dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"),
+        canopy("attention", "PROJ-3", "needs_reviewer", "--detail", detail),
+    ):
+        term, out = log_file()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
 
     lines = out.getvalue().splitlines()
-    stamp = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}  "
-    assert re.fullmatch(stamp + rf"canopy loop started, pid {os.getpid()}", lines[0])
-    assert "  mode  dry run: the overseer plans, nothing is dispatched" in lines
-    assert re.fullmatch(stamp + r"tick 1  ok  .*", lines[-4])
-    assert lines[-3] == f"  +  PROJ-3  needs_reviewer  {detail}"  # whole, where a terminal cuts it to fit
-    assert lines[-2] == "  workers 0/2  ·  attention 1"
-    assert re.fullmatch(stamp + r"canopy loop stopped after 1 tick: ok=1", lines[-1])
-    text = "\n".join(lines)
-    assert "─" not in text  # no rules
-    assert "Ctrl-C" not in text  # no hints for a person at the terminal
-    assert all(line == line.rstrip() and line for line in lines)  # no padding, no blank lines
+    stamp = r"time=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} "
+    assert all(re.match(stamp, line) for line in lines)
+    started, ended, decision, added, stopped = [re.sub(stamp, "", line, count=1) for line in lines]
+    assert started.startswith(f'msg="loop started" pid={os.getpid()} repository={canopy_env.root} dry_run=true')
+    assert " every_minutes=1 idle_max_minutes=120 max_workers=2 max_ticks=1 log=" in started
+    assert re.fullmatch(r'msg="tick ended" tick=1 status=ok elapsed_seconds=\d+ summary="dry run; .*" .*', ended)
+    assert ended.endswith(" workers=0 max_workers=2 attention=1")  # the last tick: no wait after it
+    assert decision.startswith("msg=decision tick=1 subject=PROJ-2 action=dispatch:implement rationale=")
+    assert added == f'msg="attention added" tick=1 subject=PROJ-3 reason=needs_reviewer detail={detail}'  # whole
+    assert stopped == 'msg="loop stopped" ticks=1 statuses="ok=1"'
+    assert "Ctrl-C" not in out.getvalue()  # no hints for a person at the terminal
 
 
 class SlowOutput(io.StringIO):
@@ -260,7 +263,7 @@ class SlowOutput(io.StringIO):
 
     @override
     def write(self, s: str, /) -> int:
-        if "tick 1  " in s:
+        if 'msg="tick ended" tick=1 ' in s:
             self.written_at.setdefault("tick 1", self.time.now)
         self.time.now += 1
         return super().write(s)
@@ -337,9 +340,9 @@ def test_loop_holds_its_own_lock_and_a_second_loop_is_refused(
     with overseer_does():  # records nothing, ends with "CANOPY_TICK_DONE"
         assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
         out = capsys.readouterr().out
-        assert "wait 3 minutes after each tick ends" in out
-        assert "tick 1  ok" in out
-        assert "stopped after 1 tick: ok=1" in out
+        assert " every_minutes=3 " in out
+        assert 'msg="tick ended" tick=1 status=ok ' in out
+        assert 'msg="loop stopped" ticks=1 statuses="ok=1"' in out
         assert tick_statuses(canopy_env) == ["ok"]
 
 
@@ -351,7 +354,7 @@ def test_loop_output_to_a_file_is_never_drawn_as_on_a_terminal(
     with overseer_does(), mock.patch.dict(os.environ, {"FORCE_COLOR": "1", "TTY_COMPATIBLE": "1"}):
         assert main(["loop", "--dry-run", "--ticks", "1", "--no-serve"]) == 0
     out = capsys.readouterr().out
-    assert "tick 1  ok" in out
+    assert 'msg="tick ended" tick=1 status=ok ' in out
     assert "\x1b" not in out
 
 
@@ -600,7 +603,7 @@ def test_the_tick_now_key_ends_the_wait_at_once(canopy_env: CanopyEnv, treehouse
         time = FakeTime()
         # Another key first, then the tick-now key in capitals, as with Caps Lock on.
         time.on_sleep = lambda: keys.type("x" if len(time.slept) == 1 else repeat.TICK_NOW_KEY.upper())
-        term, out = terminal()
+        term, out = console()
 
         statuses = repeat.run(
             context(canopy_env),
@@ -765,7 +768,7 @@ def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
                 keys.type(repeat.PAUSE_KEY.upper())
 
         time.on_sleep = operator
-        term, out = terminal()
+        term, out = console()
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,
@@ -804,7 +807,7 @@ def test_a_pause_key_pressed_during_a_tick_holds_the_next_one(
                 assert main(["resume"]) == 0
 
         time.on_sleep = resume_from_the_shell
-        term, out = terminal()
+        term, out = console()
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,
@@ -869,7 +872,7 @@ def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
             dry_run=True,
             interval_minutes=15,
             max_ticks=1,
-            console=terminal()[0],
+            console=console()[0],
             stop=repeat.Stop(),
             keys=keys.pressed,
             sleep=time.sleep,
@@ -1013,7 +1016,7 @@ def test_the_loop_does_not_poll_while_paused(canopy_env: CanopyEnv, treehouse_st
                 keys.type(repeat.PAUSE_KEY)
 
         time.on_sleep = operator
-        term, _ = terminal()
+        term, _ = console()
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,

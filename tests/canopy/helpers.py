@@ -861,16 +861,16 @@ class FakeKeys:
         return text
 
 
-def console() -> tuple[Console, io.StringIO]:
-    """A wide console writing to a file, as the daemon's does, and what it printed."""
-    out = io.StringIO()
-    return Console(file=out, width=200, highlight=False), out
-
-
-def terminal(width: int = 200) -> tuple[Console, io.StringIO]:
+def console(width: int = 200) -> tuple[Console, io.StringIO]:
     """A console that draws as on a terminal `width` columns wide, without colors, and what it printed."""
     out = io.StringIO()
     return Console(file=out, width=width, highlight=False, force_terminal=True, color_system=None), out
+
+
+def log_file() -> tuple[Console, io.StringIO]:
+    """A console writing to a file, as the daemon's does, which the loop writes logfmt lines to, and what it printed."""
+    out = io.StringIO()
+    return Console(file=out, width=200, highlight=False), out
 
 
 # Migrations
