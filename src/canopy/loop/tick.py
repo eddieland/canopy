@@ -30,7 +30,7 @@ from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, attention, connectors, duties, models, phases, state
+from canopy.loop import acknowledge, archive, attention, connectors, duties, models, phases, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -330,13 +330,14 @@ def _steps(
         return finish(TickStatus.RECONCILE_FAILED, str(e))
     chore_reconcile.run(ctx, log)
     memory_reconcile.run(ctx, log)
+    archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log), log)
     _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
-    _record_harness_items(ctx, tick_id)
+    _record_harness_items(ctx, tick_id, archive_unpushed)
 
     now = datetime.now(UTC)
     query_due = _query_due(ctx, now)
@@ -420,8 +421,11 @@ def _query_due(ctx: Context, now: datetime) -> bool:
     return last is None or now - db.parse_time(last) >= timedelta(minutes=every)
 
 
-def _record_harness_items(ctx: Context, tick_id: int) -> None:
-    """Record the attention items the harness raises itself, every tick their cause holds (DESIGN §14)."""
+def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | None) -> None:
+    """Record the attention items the harness raises itself, every tick their cause holds (DESIGN §14).
+
+    `archive_unpushed` is what this tick's archive pass found not pushed, if anything (DESIGN §25).
+    """
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
     # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
@@ -447,6 +451,8 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
         action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
         db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
     _record_connector_failed(ctx, tick_id)
+    if archive_unpushed is not None:
+        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{archive.REASON}", archive_unpushed)
     for repo in ctx.workspace.repos:
         # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
         if not repo.cloned:
