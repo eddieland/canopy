@@ -26,7 +26,7 @@ from canopy.core import conversation, db, pause
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs, resources
-from canopy.loop import repeat, reread, tick_now
+from canopy.loop import loop_view, repeat, reread, tick_now
 from tests.canopy.helpers import (
     FakeKeys,
     FakeTime,
@@ -645,10 +645,10 @@ def test_the_tick_now_key_ends_the_wait_at_once(canopy_env: CanopyEnv, treehouse
     with overseer_does():
         keys = FakeKeys()
         # Typed during the first tick: not meant for the wait that follows it, so it is dropped.
-        keys.type(repeat.TICK_NOW_KEY)
+        keys.type(loop_view.TICK_NOW_KEY)
         time = FakeTime()
         # Another key first, then the tick-now key in capitals, as with Caps Lock on.
-        time.on_sleep = lambda: keys.type("x" if len(time.slept) == 1 else repeat.TICK_NOW_KEY.upper())
+        time.on_sleep = lambda: keys.type("x" if len(time.slept) == 1 else loop_view.TICK_NOW_KEY.upper())
         term, out = console()
 
         statuses = repeat.run(
@@ -667,7 +667,7 @@ def test_the_tick_now_key_ends_the_wait_at_once(canopy_env: CanopyEnv, treehouse
         # Two steps of the wait, then the second tick: no one-minute floor, unlike an operator message.
         assert time.slept == [0.5, 0.5]
         assert (
-            f"Press {repeat.TICK_NOW_KEY} during the wait to tick now, {repeat.PAUSE_KEY} to pause or resume."
+            f"Press {loop_view.TICK_NOW_KEY} during the wait to tick now, {loop_view.PAUSE_KEY} to pause or resume."
             in out.getvalue()
         )
         log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
@@ -744,7 +744,7 @@ def test_a_deferred_start_waits_before_the_first_tick(
 def test_the_tick_now_key_ends_a_deferred_start(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
     with overseer_does():
         keys = FakeKeys()
-        time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY))
+        time = FakeTime(on_sleep=lambda: keys.type(loop_view.TICK_NOW_KEY))
         statuses, _ = deferred(canopy_env, time, keys)
         assert statuses == {"ok": 1}
         assert time.slept == [0.5]
@@ -822,9 +822,9 @@ def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
         def operator() -> None:
             ticks_seen.append(len(tick_statuses(canopy_env)))
             if len(time.slept) == 1:
-                keys.type(repeat.PAUSE_KEY)
+                keys.type(loop_view.PAUSE_KEY)
             elif len(time.slept) == 400:  # 200 seconds in, well past the one-minute wait's deadline
-                keys.type(repeat.PAUSE_KEY.upper())
+                keys.type(loop_view.PAUSE_KEY.upper())
 
         time.on_sleep = operator
         term, out = console()
@@ -850,7 +850,7 @@ def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
         lines = [(line["msg"], line.get("channel")) for line in log_messages(canopy_env)]
         assert ("loop paused", "loop") in lines
         assert ("loop resumed", "loop") in lines
-        assert f"{repeat.PAUSE_KEY} to pause or resume" in out.getvalue()
+        assert f"{loop_view.PAUSE_KEY} to pause or resume" in out.getvalue()
 
 
 def test_a_pause_key_pressed_during_a_tick_holds_the_next_one(
@@ -860,7 +860,7 @@ def test_a_pause_key_pressed_during_a_tick_holds_the_next_one(
 ) -> None:
     with overseer_does():
         keys = FakeKeys()
-        keys.type(repeat.PAUSE_KEY)  # read when the first tick ends, unlike the tick-now key
+        keys.type(loop_view.PAUSE_KEY)  # read when the first tick ends, unlike the tick-now key
         time = FakeTime()
 
         def resume_from_the_shell() -> None:
@@ -931,7 +931,7 @@ def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
     with overseer_does():
         assert main(["pause"]) == 0
         keys = FakeKeys()
-        time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY) if len(time.slept) == 2 else None)
+        time = FakeTime(on_sleep=lambda: keys.type(loop_view.TICK_NOW_KEY) if len(time.slept) == 2 else None)
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,
@@ -1012,14 +1012,6 @@ def test_an_agent_can_neither_pause_nor_resume_the_loop(
             assert paused(canopy_env) == before
 
 
-@pytest.mark.parametrize(
-    ("seconds", "text"),
-    [(0, "0s"), (44.6, "45s"), (60, "1m"), (185, "3m 05s"), (3600, "1h"), (7800, "2h 10m"), (-3, "0s")],
-)
-def test_duration(seconds: float, text: str) -> None:
-    assert repeat.duration(seconds) == text
-
-
 def hup_me() -> list[str]:
     """A command that sends SIGHUP to this test process, as `kill -HUP` from the operator's shell would."""
     return [sys.executable, "-c", f"import os, signal; os.kill({os.getpid()}, signal.SIGHUP)"]
@@ -1086,7 +1078,7 @@ def test_the_loop_does_not_poll_while_paused(canopy_env: CanopyEnv, treehouse_st
 
         def operator() -> None:
             if len(time.slept) in {1, 2400}:  # paused for twenty minutes, then resumed past the deadline
-                keys.type(repeat.PAUSE_KEY)
+                keys.type(loop_view.PAUSE_KEY)
 
         time.on_sleep = operator
         term, _ = console()

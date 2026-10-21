@@ -33,7 +33,7 @@ terminal. With output sent to a file, as the daemon's is, the loop writes a log 
 each with its time and `msg`, and no rules, tables, or hints about keys. A tick writes a line for itself, with what its
 overseer cost when the runtime reported it, then one for each decision that changes something and for each change to
 the attention list. Between ticks it writes one for each poll of the connectors, for what ended a wait early, and for
-the loop paused or resumed, through whichever channel.
+the loop paused or resumed, through whichever channel. `tick_report` draws what a tick did, and `loop_view` the rest.
 """
 
 from __future__ import annotations
@@ -42,21 +42,20 @@ import os
 import signal
 import time
 from collections import Counter
-from collections.abc import Callable, Collection, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 from rich.live import Live
 from rich.spinner import Spinner
-from rich.table import Table
 from rich.text import Text
 
 from canopy.core import config, db, notice, pause, tasks
-from canopy.infra import lock, logfmt, logs, procs, resources
-from canopy.loop import attention, duties, models, pacing, phases, poll, reread, tick, tick_now
+from canopy.infra import lock, logs, procs, resources
+from canopy.loop import loop_view, models, pacing, phases, poll, reread, tick, tick_now, tick_report
 
 if TYPE_CHECKING:
     import sqlite3
@@ -64,10 +63,8 @@ if TYPE_CHECKING:
 
     from rich.console import Console
 
-    from canopy.core import observe
     from canopy.core.config import Config
     from canopy.core.context import Context
-    from canopy.loop import web
     from canopy.loop.tick import Woken, WokenBy
     from canopy.serve.backend import Backend
 
@@ -78,33 +75,6 @@ _WAIT_STEP_SECONDS = 0.5
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
-# Pressed during the wait, this key runs the next tick now, as `canopy tick` by hand would.
-TICK_NOW_KEY = "t"
-# Pressed during a tick or the wait, this key pauses the loop, or resumes it when paused.
-PAUSE_KEY = "p"
-# Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
-# them.
-_QUIET_ACTIONS = ("wait", "mirror", duties.QUERIED_ACTION)
-_STATUS_STYLES = {
-    "ok": "bold green",
-    "skipped": "bold yellow",
-    "lock_busy": "bold yellow",
-    "canopy_unavailable": "bold red",
-    "disk_low": "bold red",
-    "overseer_failed": "bold red",
-    "reconcile_failed": "bold red",
-    "error": "bold red",
-}
-
-
-_WOKEN_NOTES: dict[Woken | None, str] = {
-    "message": "operator message; next tick in ",
-    "starts": "a ticket started or stopped; next tick in ",
-    "task": "a task submitted or stopped; next tick in ",
-    "grant": "a grant; next tick in ",
-    "notice": "a notice to workers set or cleared; next tick in ",
-    "run": "a run ended; next tick in ",
-}
 
 
 @dataclass
@@ -251,7 +221,7 @@ def run(
             settings.backend = serving.backend
             settings.ui = serving.links
         try:
-            _header(
+            loop_view.header(
                 console,
                 ctx,
                 dry_run=dry_run,
@@ -284,7 +254,7 @@ def run(
     counts = ", ".join(f"{status}={n}" for status, n in sorted(statuses.items())) or "none"
     ticks = statuses.total()
     if not console.is_terminal:
-        _record(console, "loop stopped", ticks=ticks, statuses=counts)
+        loop_view.record(console, "loop stopped", ticks=ticks, statuses=counts)
         return statuses
     console.rule(f"[bold]canopy loop[/] stopped after {ticks} tick{'' if ticks == 1 else 's'}: {counts}", style="dim")
     return statuses
@@ -328,9 +298,11 @@ class _Settings:
         except config.ConfigError as e:
             log.warning("config not reloaded", extra={"error": str(e)})
             if not self.console.is_terminal:
-                _record(self.console, "config not reloaded", error=str(e))
+                loop_view.record(self.console, "config not reloaded", error=str(e))
                 return
-            self.console.print(_stamped(Text("config not reloaded", style="bold red"), f"; kept the one it had: {e}"))
+            self.console.print(
+                loop_view.stamped(Text("config not reloaded", style="bold red"), f"; kept the one it had: {e}"),
+            )
             return
         pace = _pace(found.config, self.every)
         self.ctx = replace(self.ctx, config=found.config, ws=found.ws)
@@ -339,21 +311,21 @@ class _Settings:
         log.info("config reloaded", extra={"changed": list(found.changed), "restart": list(found.restart)})
         self.pace, before = pace, self.pace
         if not self.console.is_terminal:
-            _record(
+            loop_view.record(
                 self.console,
                 "config reloaded",
                 changed=", ".join(found.changed) or None,
                 restart=", ".join(found.restart) or None,
-                **(_pace_fields(pace) if pace != before else {}),
+                **(loop_view.pace_fields(pace) if pace != before else {}),
             )
             return
         what = f"{', '.join(found.changed)} changed" if found.changed else "nothing changed"
-        self.console.print(_stamped(Text("config reloaded", style="bold green"), f"  {what}"))
+        self.console.print(loop_view.stamped(Text("config reloaded", style="bold green"), f"  {what}"))
         if found.restart:
             later = f"  {', '.join(found.restart)} take{'s' if len(found.restart) == 1 else ''} effect on a restart"
             self.console.print(Text(later, style="yellow"))
         if pace != before:
-            self.console.print(Text(f"  pace  {_pace_note(pace)}", style="dim"))
+            self.console.print(Text(f"  pace  {loop_view.pace_note(pace)}", style="dim"))
 
 
 @dataclass
@@ -396,40 +368,7 @@ class _Polls:
         self.last = self.clock()
         polled = poll.run(ctx, self.log)
         if not self.settings.console.is_terminal:
-            _record_poll(self.settings.console, polled)
-
-
-def _record_poll(console: Console, polled: Mapping[str, observe.Observed] | None) -> None:
-    """Write a poll's line: how each source's run ended, what they recorded and refused, and what they missed."""
-    if polled is None:
-        _record(console, "poll skipped", reason="a tick holds the lock")
-        return
-    if not polled:  # no source is configured
-        return
-    _record(
-        console,
-        "polled",
-        sources=", ".join(f"{name} {observed.status}" for name, observed in polled.items()),
-        recorded=sum(n for observed in polled.values() for n in observed.recorded.values()),
-        refused=sum(n for observed in polled.values() for n in observed.refused.values()),
-        missed="; ".join(f"{name}: {o.missed}" for name, o in polled.items() if o.missed is not None) or None,
-    )
-
-
-def _record(console: Console, msg: str, **fields: object) -> None:
-    """Write one logfmt line to a file: the time, `msg`, and `fields` in their order, a None among them left out."""
-    stamp = datetime.now(UTC).astimezone().isoformat(timespec="seconds")
-    # As Text, never str, so rich reads no markup in what the overseer wrote; soft_wrap keeps the line whole.
-    console.print(Text(logfmt.line({"time": stamp, "msg": msg, **fields})), soft_wrap=True)
-
-
-def _stamped(label: Text, rest: str) -> Text:
-    """A line of the loop's own, outside any tick's block: the time, `label`, and `rest` as plain text.
-
-    Returns:
-        The line, the local time dimmed.
-    """
-    return Text.assemble((datetime.now(UTC).astimezone().strftime("%H:%M:%S"), "dim"), "  ", label, rest)
+            loop_view.record_poll(self.settings.console, polled)
 
 
 def _ticks(
@@ -510,7 +449,7 @@ def _ticks(
         derived = phases.tally(ctx.conn, outcome.tick_id) if outcome.tick_id is not None else Counter[phases.Verdict]()
         _log_wait(outcome, wait, idle=idle, idle_count=idle_count, churn=churn, derived=derived)
         # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
-        _report(
+        tick_report.report(
             console,
             ctx,
             outcome,
@@ -667,7 +606,7 @@ def _log_woken(
     read_at: str | None,
 ) -> None:
     if woken is not None and not console.is_terminal:
-        _record(console, "wait ended", by=woken)
+        loop_view.record(console, "wait ended", by=woken)
     if woken == "message":
         log.info("an operator message ended the wait", extra={"after_message": seen})
     elif woken == "starts":
@@ -705,28 +644,35 @@ def _await_runs(
         return
     log.info("loop waits for runs to end", extra={"runs": running})
     if console.is_terminal:
-        console.print(_stamped(Text("waiting for runs", style="bold"), f"  {_runs_note(running)}"))
+        console.print(loop_view.stamped(Text("waiting for runs", style="bold"), f"  {loop_view.runs_note(running)}"))
     else:
-        _record(console, "waiting for runs", runs=", ".join(running))
+        loop_view.record(console, "waiting for runs", runs=", ".join(running))
     started = clock()
     try:
         with Live(console=console, transient=True, auto_refresh=False) as live:
             while running:
-                live.update(_draining(running, clock() - started), refresh=True)
+                live.update(loop_view.draining(running, clock() - started), refresh=True)
                 sleep(_WAIT_STEP_SECONDS)
                 running = _live_runs(ctx.conn)
     except KeyboardInterrupt:
         log.info("loop left runs running", extra={"runs": running})
         if console.is_terminal:
-            console.print(_stamped(Text("left runs running", style="bold yellow"), f"  {_runs_note(running)}"))
+            console.print(
+                loop_view.stamped(Text("left runs running", style="bold yellow"), f"  {loop_view.runs_note(running)}"),
+            )
         else:
-            _record(console, "left runs running", runs=", ".join(running))
+            loop_view.record(console, "left runs running", runs=", ".join(running))
         return
     log.info("runs ended", extra={"wait_seconds": round(clock() - started)})
     if console.is_terminal:
-        console.print(_stamped(Text("runs ended", style="bold green"), f"  after {duration(clock() - started)}"))
+        console.print(
+            loop_view.stamped(
+                Text("runs ended", style="bold green"),
+                f"  after {loop_view.duration(clock() - started)}",
+            ),
+        )
     else:
-        _record(console, "runs ended", wait_seconds=round(clock() - started))
+        loop_view.record(console, "runs ended", wait_seconds=round(clock() - started))
 
 
 def _live_runs(conn: sqlite3.Connection) -> list[str]:
@@ -757,18 +703,6 @@ def _run_label(table: db.RunTable, row: sqlite3.Row) -> str:
             assert_never(table)
 
 
-def _runs_note(labels: Sequence[str]) -> str:
-    return f"{len(labels)} run{'' if len(labels) == 1 else 's'}: {', '.join(labels)}"
-
-
-def _draining(labels: Sequence[str], elapsed: float) -> Text:
-    return Text.assemble(
-        ("waiting for ", "dim"),
-        (_runs_note(labels), "bold"),
-        (f"  {duration(elapsed)}  ·  Ctrl-C again leaves them running", "dim"),
-    )
-
-
 def _tick(ctx: Context, *, dry_run: bool, woken_by: WokenBy, ui: str | None, log: logs.TickAdapter) -> tick.Outcome:
     """Run one tick, which `woken_by` started. An unexpected error ends that tick, not the loop, as a scheduler would.
 
@@ -795,7 +729,7 @@ class _Ticking:
         self._spinner = Spinner("dots", style="cyan")
 
     def __rich__(self) -> Spinner:
-        text = Text.assemble(("tick running ", "bold"), (duration(self._clock() - self._started), "dim"))
+        text = Text.assemble(("tick running ", "bold"), (loop_view.duration(self._clock() - self._started), "dim"))
         if self._stop.requested:
             text.append("  stopping after this tick; Ctrl-C again aborts it", style="yellow")
         self._spinner.update(text=text)
@@ -837,14 +771,14 @@ def _wait(
             each_step()
             pressed = keys() if keys is not None else ""
             _toggle_pause(ctx, pressed, log)
-            if TICK_NOW_KEY in pressed.lower():
+            if loop_view.TICK_NOW_KEY in pressed.lower():
                 asked()  # one tick for both: a web request this wait would take is the same ask
                 return "key"
             if asked():
                 return "web"
             held = pause.paused(ctx.conn)
             if (held is None) != (was is None) and not console.is_terminal:
-                _record_pause(console, held)
+                loop_view.record_pause(console, held)
             was = held
             remaining = deadline - clock()
             if remaining <= 0 and held is None:
@@ -853,9 +787,9 @@ def _wait(
                 deadline = min(deadline, max(earliest, clock()))
                 continue
             shown = (
-                _held(held, keys=keys is not None)
+                loop_view.held(held, keys=keys is not None)
                 if held
-                else _countdown(note, woken, remaining, keys=keys is not None)
+                else loop_view.countdown(note, woken, remaining, keys=keys is not None)
             )
             live.update(shown, refresh=True)
             sleep(_WAIT_STEP_SECONDS if held else min(_WAIT_STEP_SECONDS, remaining))
@@ -864,7 +798,7 @@ def _wait(
 
 def _toggle_pause(ctx: Context, pressed: str, log: logs.TickAdapter) -> None:
     """Pause the loop, or resume it, once for each `PAUSE_KEY` in `pressed`."""
-    if pressed.lower().count(PAUSE_KEY) % 2 == 0:
+    if pressed.lower().count(loop_view.PAUSE_KEY) % 2 == 0:
         return
     if pause.paused(ctx.conn) is None:
         pause.pause(ctx.conn, channel=pause.LOOP)
@@ -872,333 +806,3 @@ def _toggle_pause(ctx: Context, pressed: str, log: logs.TickAdapter) -> None:
     else:
         pause.resume(ctx.conn)
         log.info("loop resumed", extra={"channel": pause.LOOP})
-
-
-def _record_pause(console: Console, held: pause.Paused | None) -> None:
-    """Write the line for the loop paused, with since when and through which channel, or for the loop resumed."""
-    if held is None:
-        _record(console, "loop resumed")
-    else:
-        _record(console, "loop paused", since=held.since, channel=held.channel)
-
-
-def _countdown(note: str, woken: Woken | None, remaining: float, *, keys: bool) -> Text:
-    hint = f"  ·  {TICK_NOW_KEY} to tick now  ·  {PAUSE_KEY} to pause" if keys else ""
-    return Text.assemble(
-        (_WOKEN_NOTES.get(woken, note), "dim"),
-        (duration(remaining), "bold"),
-        (f" at {_clock_time(remaining)}{hint}  ·  Ctrl-C to stop", "dim"),
-    )
-
-
-def _held(held: pause.Paused, *, keys: bool) -> Text:
-    hint = f"{PAUSE_KEY} to resume  ·  {TICK_NOW_KEY} to tick once" if keys else "`canopy resume` or the web UI resumes"
-    return Text.assemble(
-        ("paused", "bold yellow"),
-        (
-            f" since {_local_time(held.since)} ({held.channel}); no tick until resumed  ·  {hint}  ·  Ctrl-C to stop",
-            "dim",
-        ),
-    )
-
-
-def _header(
-    console: Console,
-    ctx: Context,
-    *,
-    dry_run: bool,
-    pace: pacing.Pace,
-    max_ticks: int | None,
-    serving: web.Serving | None = None,
-    keys: bool = False,
-    defer_seconds: float = 0,
-) -> None:
-    held = pause.paused(ctx.conn)
-    if not console.is_terminal:
-        # No hints: a loop writing to a file is stopped by `canopy daemon stop` or a signal, never by a key.
-        _record(
-            console,
-            "loop started",
-            pid=os.getpid(),
-            repository=ctx.repo_root,
-            dry_run=dry_run,
-            **_pace_fields(pace),
-            first_tick_in_seconds=round(defer_seconds) or None,
-            max_workers=ctx.config.capacity.max_workers,
-            max_ticks=max_ticks,
-            log=ctx.state_dir / logs.LOG_FILE_NAME,
-            web_ui=serving.note if serving is not None else None,
-            paused_since=held.since if held is not None else None,
-        )
-        return
-    console.rule("[bold]canopy loop[/]", style="dim")
-    grid = Table.grid(padding=(0, 2))
-    grid.add_column(style="dim")
-    grid.add_column()
-    grid.add_row("repository", Text(str(ctx.repo_root)))
-    grid.add_row("pace", _pace_note(pace))
-    if defer_seconds:
-        grid.add_row("first tick", f"in {duration(defer_seconds)} at {_clock_time(defer_seconds)}")
-    mode = Text("dry run: the overseer plans, nothing is dispatched", style="yellow") if dry_run else Text("live")
-    grid.add_row("mode", mode)
-    grid.add_row("workers", f"up to {ctx.config.capacity.max_workers}")
-    if max_ticks is not None:
-        grid.add_row("stops", f"after {max_ticks} tick{'' if max_ticks == 1 else 's'}")
-    grid.add_row("log", Text(str(ctx.state_dir / logs.LOG_FILE_NAME)))
-    if serving is not None:
-        grid.add_row("web UI", Text(serving.note, style="" if serving.server is not None else "yellow"))
-    if held is not None:
-        since = f"since {_local_time(held.since)} ({held.channel}); no tick until resumed"
-        grid.add_row("paused", Text(since, style="yellow"))
-    console.print(grid)
-    console.print(
-        Text(
-            "Ctrl-C stops after the current tick and waits for running runs to end; a second Ctrl-C aborts the tick,"
-            " or stops waiting and leaves the runs running.",
-            style="dim",
-        ),
-    )
-    if keys:
-        console.print(
-            Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim"),
-        )
-    console.print()
-
-
-def _pace_fields(pace: pacing.Pace) -> dict[str, object]:
-    """The pace as a log line's fields: minutes after each tick, and the most when idle, if idle pacing is on.
-
-    Returns:
-        `every_minutes`, and `idle_max_minutes` or None.
-    """
-    return {
-        "every_minutes": round(pace.base_seconds / 60),
-        "idle_max_minutes": round(pace.cap_seconds / 60) if pace.on else None,
-    }
-
-
-def _pace_note(pace: pacing.Pace) -> str:
-    base, cap = round(pace.base_seconds / 60), round(pace.cap_seconds / 60)
-    note = f"wait {base} minute{'' if base == 1 else 's'} after each tick ends"
-    return f"{note}, up to {cap} minutes when idle" if pace.on else note
-
-
-def _report(
-    console: Console,
-    ctx: Context,
-    outcome: tick.Outcome,
-    before: Collection[attention.Item],
-    *,
-    elapsed: float,
-    wait: float | None,
-    idle_count: int = 0,
-    derived: Counter[phases.Verdict] | None = None,
-) -> None:
-    """Print what one tick did: its status, the decisions that change something, and how the attention list moved.
-
-    `derived` counts the tick's tickets by how the derivation compared with the overseer (DESIGN §30).
-    """
-    changes: list[_Change] = []
-    if outcome.tick_id is not None:
-        changes += _decisions(ctx, outcome.tick_id, failed=outcome.status == "overseer_failed")
-    after = attention.listed(ctx)
-    changes += _attention_changes(before, after)
-    # Running reviews and tasks take worker capacity too (DESIGN §6, §36).
-    running = db.busy_workers(ctx.conn)
-    paused = wait is not None and pause.paused(ctx.conn) is not None
-    if not console.is_terminal:
-        usage = outcome.usage
-        _record(
-            console,
-            "tick ended",
-            tick=outcome.tick_id,
-            status=outcome.status,
-            elapsed_seconds=round(elapsed),
-            summary=outcome.summary,
-            workers=running,
-            max_workers=ctx.config.capacity.max_workers,
-            attention=len(after),
-            cost_usd=f"{usage.cost_usd:.2f}" if usage is not None else None,
-            tokens=usage.new_tokens if usage is not None else None,
-            peak_context=usage.peak_context if usage is not None else None,
-            **{f"derived_{verdict}": n for verdict, n in sorted((derived or {}).items())},
-            paused=paused or None,
-            idle_count=idle_count or None,
-            wait_seconds=round(wait) if wait is not None and not paused else None,
-        )
-        for change in changes:
-            msg, fields = _fields(change)
-            _record(console, msg, tick=outcome.tick_id, **fields)
-        return
-
-    label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
-    console.print(
-        Text.assemble(
-            (datetime.now(UTC).astimezone().strftime("%H:%M:%S"), "dim"),
-            "  ",
-            (label, "bold"),
-            "  ",
-            (outcome.status, _STATUS_STYLES.get(outcome.status, "bold")),
-            "  ",
-            (duration(elapsed), "dim"),
-            "  ",
-            outcome.summary,
-        ),
-    )
-
-    # Only the last column may give up width on a narrow terminal. rich shrinks wrappable columns first and, when every
-    # column is no_wrap, shrinks them all alike, which drops the ticket key. So the last column is wrappable and its
-    # cells (`_detail`) keep themselves to one line with an ellipsis.
-    rows = Table.grid(padding=(0, 2))
-    rows.add_column(width=2, no_wrap=True)
-    rows.add_column(style="cyan", no_wrap=True)
-    rows.add_column(no_wrap=True)
-    rows.add_column(style="dim", ratio=1)
-    for change in changes:
-        rows.add_row(*_cells(change))
-    if rows.row_count:
-        console.print(rows)
-
-    footer = Text("  ", style="dim")
-    footer.append(f"workers {running}/{ctx.config.capacity.max_workers}")
-    footer.append("  ·  ")
-    footer.append(f"attention {len(after)}", style="bold yellow" if after else "dim")
-    if outcome.usage is not None:
-        footer.append(f"  ·  cost {outcome.usage.describe()}")
-    if derived:
-        footer.append(f"  ·  {phases.describe(derived)}", style="yellow" if derived["disagrees"] else "")
-    if paused:
-        footer.append("  ·  paused: no tick until resumed", style="yellow")
-    elif wait is not None:
-        idle = f"idle {idle_count}, " if idle_count else ""
-        footer.append(f"  ·  {idle}next tick in {duration(wait)} at {_clock_time(wait)}")
-    console.print(footer)
-    console.print()
-
-
-@dataclass(frozen=True)
-class _Change:
-    """A line of a tick's report below its first: a decision that changes something, or the attention list's change."""
-
-    #: A decision, an attention item added or resolved, or where a failed overseer's output was kept.
-    kind: Literal["decision", "added", "resolved", "output"]
-    #: The ticket or other subject it is about; empty for the output.
-    subject: str = ""
-    #: The decision's action, or the item's reason.
-    what: str = ""
-    #: The decision's rationale, the added item's detail, or the output's path. The overseer's text, unescaped.
-    detail: str = ""
-
-
-def _decisions(ctx: Context, tick_id: int, *, failed: bool) -> list[_Change]:
-    """The tick's decisions that change something. Attention items are shown as the list's change instead.
-
-    Returns:
-        One for each, then where the overseer's output was kept when the tick `failed` and it was.
-    """
-    changes = [
-        _Change("decision", attention.decided_about(d), d.action, d.rationale)
-        for d in db.decisions_for_tick(ctx.conn, tick_id)
-        if not d.action.startswith(attention.ACTION_PREFIX) and d.action not in _QUIET_ACTIONS
-    ]
-    output = ctx.state_dir / "ticks" / f"{tick_id}.log"
-    if failed and output.exists():
-        changes.append(_Change("output", detail=str(output)))
-    return changes
-
-
-def _attention_changes(before: Collection[attention.Item], after: Collection[attention.Item]) -> list[_Change]:
-    """Items the tick added to the attention list, then items it resolved.
-
-    Returns:
-        A change for each.
-    """
-    had, has = attention.keys(before), attention.keys(after)
-    added = [
-        _Change("added", i.subject, i.reason, i.detail) for i in after if (i.ticket_key, i.reason, i.repo) not in had
-    ]
-    resolved = [_Change("resolved", i.subject, i.reason) for i in before if (i.ticket_key, i.reason, i.repo) not in has]
-    return [*added, *resolved]
-
-
-def _cells(change: _Change) -> tuple[Text, Text, Text, Text]:
-    """A change as a terminal's row: a mark, its subject, what changed, and the detail.
-
-    Returns:
-        The row's cells. Text, never str: rich parses a str as markup, and rationales and details are the overseer's.
-    """
-    match change.kind:
-        case "decision":
-            action = change.what
-            style = "red" if action.startswith("refused:") else "green" if action.startswith("dispatch:") else ""
-            return Text(""), Text(change.subject), Text(action, style=style), _detail(change.detail)
-        case "added":
-            mark = Text("+", style="bold yellow")
-            return mark, Text(change.subject), Text(change.what, style="yellow"), _detail(change.detail)
-        case "resolved":
-            mark = Text("-", style="bold green")
-            return mark, Text(change.subject), Text(change.what, style="green"), _detail("resolved")
-        case "output":
-            # Not `_detail`: collapsing whitespace would print a path that does not exist.
-            path = Text(change.detail, no_wrap=True, overflow="ellipsis")
-            return Text(""), Text(""), Text("overseer output", style="red"), path
-        case _:
-            assert_never(change.kind)
-
-
-def _fields(change: _Change) -> tuple[str, dict[str, object]]:
-    """A change as a log line's `msg` and fields.
-
-    Returns:
-        The `msg`, and the fields after it.
-    """
-    match change.kind:
-        case "decision":
-            return "decision", {"subject": change.subject, "action": change.what, "rationale": change.detail}
-        case "added":
-            return "attention added", {"subject": change.subject, "reason": change.what, "detail": change.detail}
-        case "resolved":
-            return "attention resolved", {"subject": change.subject, "reason": change.what}
-        case "output":
-            return "overseer output", {"path": change.detail}
-        case _:
-            assert_never(change.kind)
-
-
-def _detail(text: str) -> Text:
-    """A last-column cell: one line, whitespace collapsed, cut with an ellipsis when the terminal is too narrow.
-
-    Returns:
-        The cell's text, set not to wrap.
-    """
-    return Text(" ".join(text.split()), no_wrap=True, overflow="ellipsis")
-
-
-def duration(seconds: float) -> str:
-    """Render a length of time for a person: `45s`, `3m 05s`, `1m`, `2h 10m`, `2h`.
-
-    Returns:
-        Hours and minutes, minutes and seconds, or seconds alone, rounded to the second, with a zero second unit left
-        off (`1m`, not `1m 00s`). A negative length is `0s`.
-    """
-    total = max(0, round(seconds))
-    hours, rest = divmod(total, 3600)
-    minutes, secs = divmod(rest, 60)
-    if hours:
-        return f"{hours}h {minutes:02d}m" if minutes else f"{hours}h"
-    if minutes:
-        return f"{minutes}m {secs:02d}s" if secs else f"{minutes}m"
-    return f"{secs}s"
-
-
-def _clock_time(seconds_from_now: float) -> str:
-    return (datetime.now(UTC).astimezone() + timedelta(seconds=seconds_from_now)).strftime("%H:%M")
-
-
-def _local_time(stamp: str) -> str:
-    """A time the journal wrote, as the terminal's clock shows it.
-
-    Returns:
-        The local time as `HH:MM`.
-    """
-    return db.parse_time(stamp).astimezone().strftime("%H:%M")
