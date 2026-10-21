@@ -121,6 +121,6 @@ credentials with it).
 
 ### Open
 
-- The tracker query's result in the state block in place of the query, which a cheaper overseer skipped unseen,
-  ahead of §35, which puts it there.
+- The tracker query's result in the state block in place of the query, which a cheaper overseer skipped unseen.
+  §35 puts it there.
 - Whether one failed run should raise `connector_failed`, or only one that leaves an observation stale.
