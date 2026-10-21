@@ -44,7 +44,9 @@ def requests_of(conn: sqlite3.Connection) -> list[tuple[str, str, str | None]]:
 
 
 def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
-    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     # Without a request, no `[review]` table means reviews are off.
@@ -68,7 +70,9 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
 
 
 def test_the_reviewer_is_handed_the_requests_notes(
-    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", PR, "--review", "--notes", "  The author asked about the cache.  ")
@@ -86,7 +90,9 @@ def test_the_reviewer_is_handed_the_requests_notes(
 
 
 def test_a_review_without_a_requests_notes_has_no_section_for_them(
-    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.operator("start", PR, "--review")
     assert review_requests.open_requests(scenario.conn)[0].notes is None
@@ -103,7 +109,9 @@ def test_notes_are_refused_without_review_or_past_their_bound(requests_env: Cano
 
 
 def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal(
-    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", PR, "--review")
@@ -118,7 +126,9 @@ def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal
 
 
 def test_a_failed_review_leaves_the_request_open(
-    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.operator("start", PR, "--review")
     failing = reviewer_reports({"status": "failed", "summary": "Could not read the diff."})
@@ -127,7 +137,8 @@ def test_a_failed_review_leaves_the_request_open(
 
 
 def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
-    requests_env: CanopyEnv, scenario: Scenario
+    requests_env: CanopyEnv,
+    scenario: Scenario,
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", PR, "--review")
@@ -154,7 +165,9 @@ def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
 
 @pytest.mark.parametrize("variable", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
 def test_only_the_operator_requests_or_stops_a_review(
-    requests_env: CanopyEnv, capsys: pytest.CaptureFixture[str], variable: str
+    requests_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    variable: str,
 ) -> None:
     conn = requests_env.journal()
     with mock.patch.dict(os.environ, {variable: "1"}):
@@ -199,7 +212,9 @@ def test_status_lists_an_open_request_and_stop_ends_it(requests_env: CanopyEnv, 
 
 
 def test_the_state_block_carries_the_open_requests(
-    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     # No request, no query, and agent_prs off: nothing about reviews reaches the overseer.
     scenario.tick(dry_run=True)
@@ -244,7 +259,7 @@ def test_the_web_channel_requests_and_stops_a_review_as_the_cli_does(ctx: Contex
     assert page["pull_request"]["review_request"]["notes"] == "The cache."
     long = {"notes": "x" * (review_requests.MAX_NOTES + 1)}
     assert refused(c.post("/api/pull-request/start", params={"url": PR}, json=long, headers=headers)).startswith(
-        "bad_notes"
+        "bad_notes",
     )
     assert [p["url"] for p in c.get("/api/pull-requests").json()] == [PR]
 

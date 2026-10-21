@@ -74,10 +74,20 @@ def test_a_chore_runs_summary_and_findings_and_its_notes_are_found(ctx: Context)
     db.finish_run(ctx.conn, "chore_runs", bad, ChoreRunStatus.FAILED, "not json")
     odd = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
     db.finish_run(
-        ctx.conn, "chore_runs", odd, ChoreRunStatus.OK, json.dumps({"summary": "odd", "findings": ["lodash", 3]})
+        ctx.conn,
+        "chore_runs",
+        odd,
+        ChoreRunStatus.OK,
+        json.dumps({"summary": "odd", "findings": ["lodash", 3]}),
     )
     db.insert_message(
-        ctx.conn, conversation.CHORE, "deps", source="operator", kind="reply", channel="web", body="Ignore lodash."
+        ctx.conn,
+        conversation.CHORE,
+        "deps",
+        source="operator",
+        kind="reply",
+        channel="web",
+        body="Ignore lodash.",
     )
 
     found = search.search(ctx.conn, "lodash")

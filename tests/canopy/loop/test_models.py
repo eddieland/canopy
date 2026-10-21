@@ -31,7 +31,7 @@ def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int
     return [
         (str(r[0]), int(r[1]), str(r[2]), r[3], int(r[4]))
         for r in conn.execute(
-            "SELECT run_table, run_id, status, error, attempts FROM run_model_reads ORDER BY run_table, run_id"
+            "SELECT run_table, run_id, status, error, attempts FROM run_model_reads ORDER BY run_table, run_id",
         )
     ]
 
@@ -62,7 +62,8 @@ def test_a_dry_run_reads_no_session(scenario: Scenario, opencode_state: Path) ->
 
 
 def test_a_session_opencode_no_longer_has_is_missing_and_not_read_again(
-    scenario: Scenario, opencode_state: Path
+    scenario: Scenario,
+    opencode_state: Path,
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
     first = scenario.tick()
@@ -71,7 +72,9 @@ def test_a_session_opencode_no_longer_has_is_missing_and_not_read_again(
 
 
 def test_a_failing_opencode_ends_the_batch_and_never_the_tick(
-    scenario: Scenario, opencode_state: Path, ctx: Context
+    scenario: Scenario,
+    opencode_state: Path,
+    ctx: Context,
 ) -> None:
     for i in range(3):
         scenario.conn.execute(

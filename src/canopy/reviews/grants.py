@@ -29,7 +29,8 @@ def limit(conn: sqlite3.Connection, config: Config, pr_url: str) -> int:
 def granted(conn: sqlite3.Connection, pr_url: str) -> int:
     """Return the review runs the operator granted the PR at `pr_url` past the policy's limit, 0 for none."""
     row = sql.execute(
-        conn, sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", pr_url)
+        conn,
+        sql.select("coalesce(sum(runs), 0)").from_("review_grants").where("pr_url = ?", pr_url),
     ).fetchone()
     return int(row[0])
 

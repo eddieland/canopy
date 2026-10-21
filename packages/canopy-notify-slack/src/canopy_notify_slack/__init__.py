@@ -538,7 +538,7 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
             "type": "section",
             "text": _mrkdwn(f"*Digest* since {_when(digest.get('since'))}"),
             "fields": [_mrkdwn(f) for f in fields],
-        }
+        },
     ]
     runs = [
         f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))} "
@@ -688,7 +688,12 @@ class Send(Protocol):
     """Post one message to the channel, as a reply in a thread when given its `ts`: `post_message`, its target bound."""
 
     def __call__(
-        self, text: str, blocks: list[Block], *, thread_ts: str | None = None, reply_broadcast: bool = False
+        self,
+        text: str,
+        blocks: list[Block],
+        *,
+        thread_ts: str | None = None,
+        reply_broadcast: bool = False,
     ) -> tuple[bool, str]:
         """Post it.
 
@@ -759,7 +764,11 @@ class Threads:
                 scopes = _scopes(self.path)
                 scopes[self.scope] = mine
                 with tempfile.NamedTemporaryFile(
-                    "w", encoding="utf-8", dir=self.path.parent, prefix=".slack-threads-", delete=False
+                    "w",
+                    encoding="utf-8",
+                    dir=self.path.parent,
+                    prefix=".slack-threads-",
+                    delete=False,
                 ) as f:
                     tmp = Path(f.name)
                     json.dump({"version": 1, "scopes": dict(sorted(scopes.items()))}, f)
@@ -863,7 +872,10 @@ class Part:
 
 
 def post_threaded(
-    message: Mapping[str, object], send: Send, threads: Threads, broadcast: AbstractSet[str] = frozenset()
+    message: Mapping[str, object],
+    send: Send,
+    threads: Threads,
+    broadcast: AbstractSet[str] = frozenset(),
 ) -> tuple[bool, str]:
     """Post `message` as `split` divides it, recording in `threads` each thread it starts and each post it makes.
 
@@ -1041,7 +1053,9 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
     parser.add_argument("--token-file", type=Path, default=None, help="default: " + str(default_token_file()))
     parser.add_argument("--username", default=None, help="with --channel, the name to post as")
     parser.add_argument(
-        "--icon-emoji", default=None, help="with --channel, the emoji to post with, such as :robot_face:"
+        "--icon-emoji",
+        default=None,
+        help="with --channel, the emoji to post with, such as :robot_face:",
     )
     parser.add_argument(
         "--threads",

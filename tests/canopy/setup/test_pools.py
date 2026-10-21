@@ -157,7 +157,9 @@ def test_a_pool_declared_smaller_than_it_is_counts_its_busy_slots(
 
 
 def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 2\nweb = 1")
     set_slots(treehouse_state, ws, "api", "leased")
@@ -173,7 +175,10 @@ def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
 
 
 def test_sync_fills_each_pool_to_its_size_and_returns_every_lease_it_took(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 3\n[capacity.repo_slots]\nweb = 1")
     seed_pools(ws, treehouse_state)
@@ -193,7 +198,10 @@ def test_sync_fills_each_pool_to_its_size_and_returns_every_lease_it_took(
 
 
 def test_a_dry_run_previews_the_pool_of_a_repository_not_cloned_yet(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\ndocs = 2")
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("docs", "https://x.test/docs.git")))
@@ -206,7 +214,10 @@ def test_a_dry_run_previews_the_pool_of_a_repository_not_cloned_yet(
 
 
 def test_sync_returns_what_a_dead_sync_left_leased_before_counting(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 1")
     set_slots(treehouse_state, ws, "api", "available")
@@ -220,7 +231,10 @@ def test_sync_returns_what_a_dead_sync_left_leased_before_counting(
 
 
 def test_sync_reports_a_pool_treehouse_will_not_grow(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 3")
     set_slots(treehouse_state, ws, "api", "available")
@@ -236,7 +250,10 @@ def test_sync_reports_a_pool_treehouse_will_not_grow(
 
 
 def test_sync_removes_idle_slots_over_the_size_highest_first_and_never_a_busy_one(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 1\nweb = 2")
     api = set_slots(treehouse_state, ws, "api", "available", "leased", "available", "available")
@@ -264,7 +281,10 @@ def test_sync_removes_idle_slots_over_the_size_highest_first_and_never_a_busy_on
 
 
 def test_sync_passes_over_a_slot_treehouse_keeps_and_says_so_when_it_cannot_converge(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 1")
     unmerged = str(ws.root / ".treehouse" / "api-fake" / "2" / "api")
@@ -290,7 +310,10 @@ def test_sync_leaves_unmanaged_pools_alone(ws: Ws, treehouse_state: Path, capsys
 
 
 def test_sync_waits_for_a_running_tick(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 1")
     set_slots(treehouse_state, ws, "api", "available")
@@ -320,7 +343,9 @@ def drop_from_map(ws: Ws, *keep: str) -> None:
 
 
 def test_sync_removes_a_clean_clone_the_map_dropped_with_its_slots(
-    ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     seed_pools(ws, treehouse_state)
     [web_slot] = [s["path"] for s in slots_of(treehouse_state, ws, "web")]
@@ -353,7 +378,11 @@ def test_sync_removes_a_clean_clone_the_map_dropped_with_its_slots(
     ],
 )
 def test_sync_keeps_a_dropped_clone_with_anything_to_lose(
-    ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str], change: str, reason: str
+    ws: Ws,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
+    change: str,
+    reason: str,
 ) -> None:
     clone = ws.clone("web")
     set_slots(treehouse_state, ws, "web", "leased" if change == "leased" else "available")
@@ -378,7 +407,10 @@ def test_sync_keeps_a_dropped_clone_with_anything_to_lose(
 
 
 def test_sync_keeps_what_under_repos_is_not_a_clone(
-    ws: Ws, treehouse_state: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    treehouse_state: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (ws.root / "repos" / "notes").write_text("a file of the operator's")
     (ws.root / "repos" / "linked").symlink_to(tmp_path)
@@ -425,7 +457,11 @@ def test_a_repository_argument_that_cannot_be_used_is_refused(arg: str, error: s
 
 
 def test_add_lists_new_urls_in_the_map_and_syncs_them(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\ndocs = 2")
     docs = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
@@ -498,7 +534,9 @@ def test_sync_warns_about_an_origin_rewritten_to_push_over_ssh(
 
 
 def test_clone_urls_in_a_code_checkout_are_refused(
-    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     checkout = tmp_path / "code"
     (checkout / ".git").mkdir(parents=True)

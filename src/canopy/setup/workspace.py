@@ -265,7 +265,10 @@ def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
     """
     try:
         result = runner.run(
-            hostgit.argv("remote", "get-url", "origin"), cwd=repo.path, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS
+            hostgit.argv("remote", "get-url", "origin"),
+            cwd=repo.path,
+            env=hostgit.ENV,
+            timeout=_GIT_TIMEOUT_SECONDS,
         )
     except procs.ProcError as e:
         return Checked(repo, "failed", str(e))
@@ -275,7 +278,9 @@ def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
     if _same_url(origin, str(repo.url)):
         return Checked(repo, "present")
     return Checked(
-        repo, "present", f"origin is {shown(origin)}, but the map says {shown(str(repo.url))}; canopy changes no remote"
+        repo,
+        "present",
+        f"origin is {shown(origin)}, but the map says {shown(str(repo.url))}; canopy changes no remote",
     )
 
 
@@ -300,7 +305,9 @@ def turn_off_auto_maintenance(runner: procs.Runner, repo: workspace.Repo) -> Che
             return Checked(repo, "failed", str(e))
         if not result.ok:
             return Checked(
-                repo, "failed", f"git config {key} exited {result.returncode}: {result.stderr.strip()[:500]}"
+                repo,
+                "failed",
+                f"git config {key} exited {result.returncode}: {result.stderr.strip()[:500]}",
             )
     return None
 

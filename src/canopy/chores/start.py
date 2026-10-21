@@ -208,7 +208,8 @@ def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -
     earliest = state.earliest()
     if earliest is not None and earliest > now:
         raise Refusal(
-            "not_due", f"{name} runs at most every {chore.every_minutes} minutes; next after {db.format_time(earliest)}"
+            "not_due",
+            f"{name} runs at most every {chore.every_minutes} minutes; next after {db.format_time(earliest)}",
         )
     if not window.is_open(chore, now):
         opens = window.next_open(chore, now)
@@ -286,5 +287,5 @@ def render(
             json.dumps(run, indent=2),
             "```",
             "",
-        ]
+        ],
     )

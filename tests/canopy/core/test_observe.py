@@ -34,7 +34,9 @@ def run(ctx: Context, request: observe.Request = ASKED) -> observe.Observed:
 def branches(ctx: Context) -> list[tuple[str, str]]:
     """Each observed branch, as (repository, name)."""
     found = records.fetch_all(
-        ctx.conn, records.ObservedBranch, sql.frag("SELECT * FROM observed_branches ORDER BY name")
+        ctx.conn,
+        records.ObservedBranch,
+        sql.frag("SELECT * FROM observed_branches ORDER BY name"),
     )
     return [(b.repository, b.name) for b in found]
 
@@ -45,7 +47,8 @@ def branch(name: str, sha: str = "abc1234") -> dict[str, Any]:
 
 
 def test_a_branch_outside_the_prefix_is_refused_and_its_repository_keeps_its_rows(
-    ctx: Context, connector_state: Path
+    ctx: Context,
+    connector_state: Path,
 ) -> None:
     prints(connector_state, branch("agent/one"))
     assert run(ctx).status is ConnectorRunStatus.OK
@@ -61,7 +64,8 @@ def test_a_branch_outside_the_prefix_is_refused_and_its_repository_keeps_its_row
 
 
 def test_a_line_whose_subject_cannot_be_read_leaves_no_subject_of_its_kind_whole(
-    ctx: Context, connector_state: Path
+    ctx: Context,
+    connector_state: Path,
 ) -> None:
     prints(connector_state, branch("agent/one"), {"kind": "check", "status": "completed"}, "not json")
     found = run(ctx)

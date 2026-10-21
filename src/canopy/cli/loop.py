@@ -244,7 +244,7 @@ def _print_workers(ctx: Context) -> None:
         where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
-            f"{persona_of(r)}"
+            f"{persona_of(r)}",
         )
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:

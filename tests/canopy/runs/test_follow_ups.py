@@ -53,7 +53,8 @@ def note_of(row: sqlite3.Row) -> str:
 
 
 def test_an_implement_records_each_follow_up_it_reports_with_its_repository(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     run = scenario.run(worker=pushes(created={FOLLOW_UP: "repo", "PROJ-15": None}))
     assert run.status == "done"
@@ -73,7 +74,8 @@ def test_a_blocked_or_failed_run_records_what_it_filed_too(scenario: Scenario, g
 
 
 def test_each_refused_entry_is_recorded_nowhere_named_in_the_note_and_on_the_attention_list(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.seen("PROJ-9")
     created = {
@@ -138,7 +140,8 @@ def test_a_follow_ups_runs_file_none(scenario: Scenario, git_pool: GitPool) -> N
 
 
 def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     takes_runs(scenario)
     run = scenario.run(worker=pushes(created={FOLLOW_UP: "repo", "PROJ-15": None}))
@@ -158,7 +161,7 @@ def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
     assert len(told(scenario)) == 1
     # Nothing dispatches it without a label: it is a request.
     assert scenario.refuses(dispatches(FOLLOW_UP, label=None)) == [
-        ("refused:unauthorized", f"--label is required: name the queue label you read on {FOLLOW_UP}")
+        ("refused:unauthorized", f"--label is required: name the queue label you read on {FOLLOW_UP}"),
     ]
 
 
@@ -183,17 +186,19 @@ def test_the_event_names_at_most_its_bound_and_counts_the_rest(scenario: Scenari
     assert list(cast("dict[str, object]", fields["follow_ups"])) == [f"PROJ-{n}" for n in range(100, 120)]
     assert fields["count"] == more
     assert message.event_line("follow_ups.filed", fields).endswith(
-        "PROJ-119, 3 more: label or `canopy start` each one you want worked"
+        "PROJ-119, 3 more: label or `canopy start` each one you want worked",
     )
 
 
 def test_a_private_run_records_its_follow_up_which_waits_for_the_operator(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.operator("start", KEY)
     result: dict[str, object] = {"status": "done", "summary": "did it", "created": {FOLLOW_UP: "repo"}}
     run = scenario.run(
-        dispatches(label=None), worker=private_worker_does(*commit_and_push(f"agent/{KEY}-work"), result=result)
+        dispatches(label=None),
+        worker=private_worker_does(*commit_and_push(f"agent/{KEY}-work"), result=result),
     )
     assert run.row["private"] == 1
     assert recorded(scenario.conn) == [(FOLLOW_UP, KEY, run.id, "repo")]
@@ -224,7 +229,9 @@ def test_a_ticket_no_run_recorded_still_needs_a_label(scenario: Scenario) -> Non
 
 
 def test_a_run_that_rewrites_its_slots_git_records_no_follow_up(
-    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]]
+    scenario: Scenario,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
 ) -> None:
     del worktree_pool
     result = json.dumps({"status": "done", "summary": "did it", "created": {FOLLOW_UP: "repo"}})
@@ -243,15 +250,28 @@ def test_a_key_another_run_recorded_first_is_named_as_refused(scenario: Scenario
             db.touch_ticket(scenario.conn, KEY, "/ws")
             db.touch_ticket(scenario.conn, "PROJ-2", "/ws")
         first = db.insert_run(
-            scenario.conn, tick_id=tick_id, key=KEY, kind="implement", branch="b", slots=(), runs_dir=runs
+            scenario.conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind="implement",
+            branch="b",
+            slots=(),
+            runs_dir=runs,
         )
         second = db.insert_run(
-            scenario.conn, tick_id=tick_id, key="PROJ-2", kind="implement", branch="c", slots=(), runs_dir=runs
+            scenario.conn,
+            tick_id=tick_id,
+            key="PROJ-2",
+            kind="implement",
+            branch="c",
+            slots=(),
+            runs_dir=runs,
         )
         with db.transaction(scenario.conn):
             db.record_follow_up(scenario.conn, FOLLOW_UP, KEY, first, None)
         scenario.conn.execute(
-            "UPDATE runs SET result_json = ? WHERE id = ?", (json.dumps({"summary": "did it"}), second)
+            "UPDATE runs SET result_json = ? WHERE id = ?",
+            (json.dumps({"summary": "did it"}), second),
         )
         checked = follow_ups.Checked(recorded={FOLLOW_UP: None, "PROJ-15": None})
         with db.transaction(scenario.conn):
@@ -264,7 +284,9 @@ def test_a_key_another_run_recorded_first_is_named_as_refused(scenario: Scenario
 
 @pytest.mark.parametrize("created", ["PROJ-14", ["PROJ-14"], 7])
 def test_a_created_field_that_is_not_an_object_is_one_refused_entry(
-    scenario: Scenario, git_pool: GitPool, created: object
+    scenario: Scenario,
+    git_pool: GitPool,
+    created: object,
 ) -> None:
     run = scenario.run(worker=pushes(created=created))
     assert run.status == "done"

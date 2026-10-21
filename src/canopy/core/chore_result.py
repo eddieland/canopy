@@ -93,7 +93,7 @@ def capped(parsed: ChoreResult, limit: int) -> ChoreResult:
         update={
             "findings": parsed.findings[:limit],
             "more_findings": min(parsed.more_findings + extra, MAX_MORE_FINDINGS),
-        }
+        },
     )
 
 

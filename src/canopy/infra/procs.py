@@ -179,7 +179,14 @@ class SubprocessRunner:
         # Text, in the encoding and with the newlines `text=True` decodes a pipe with.
         with tempfile.TemporaryFile("w+") if stdout_to_file else contextlib.nullcontext() as out:
             result = self._run(
-                tuple(args), cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line, out=out
+                tuple(args),
+                cwd=cwd,
+                env=env,
+                stdin=stdin,
+                timeout=timeout,
+                on_start=on_start,
+                on_line=on_line,
+                out=out,
             )
             if out is None:
                 return result

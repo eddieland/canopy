@@ -44,7 +44,10 @@ def test_the_planted_hooks_fire_for_plain_git(worktree_pool: tuple[Path, list[Pa
 
 
 def test_host_git_runs_no_hook_or_monitor_from_the_shared_git_directory(
-    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]], tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    tmp_path: Path,
 ) -> None:
     primary, _ = worktree_pool
     fired = tmp_path / "fired"
@@ -100,7 +103,9 @@ def plant_common_dir(fired: Path) -> str:
 
 
 def test_a_planted_commondir_runs_its_config_for_host_git(
-    worktree_pool: tuple[Path, list[Path]], git_pool: GitPool, tmp_path: Path
+    worktree_pool: tuple[Path, list[Path]],
+    git_pool: GitPool,
+    tmp_path: Path,
 ) -> None:
     """The control for the test below: host git in a slot whose `commondir` was rewritten reads the planted config."""
     _, slots = worktree_pool

@@ -24,7 +24,7 @@ FINDINGS = {
             "title": "retry never stops",
             "location": "src/retry.py:42",
             "detail": "The loop resets attempts on every error.\nA failing call retries forever.",
-        }
+        },
     ],
 }
 CLEAN = {"status": "done", "verdict": "clean", "impact": "low", "summary": "Nothing found."}

@@ -84,7 +84,7 @@ def _check_new_root(root: Path, *, in_checkout: bool) -> None:
     if state_dir.exists():
         raise click.UsageError(
             f"{state_dir} exists but {root} has no {config.WORKSPACE_FILE_NAME}: it may be an earlier canopy's "
-            f"journal, which a new workspace must not take over. Move it aside, or run `canopy init` elsewhere."
+            f"journal, which a new workspace must not take over. Move it aside, or run `canopy init` elsewhere.",
         )
     checkout = hostgit.git_root(root)
     if checkout is None or checkout == home or in_checkout:
@@ -125,7 +125,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         click.echo(
             f"Edit tracker.query and add each repository under [repos.<name>] in {map_file}, describe them in "
             f"{workspace.MAP_FILE_NAME}, then run `canopy workspace sync`. Or pass clone URLs to "
-            f"`canopy workspace add`, which adds and syncs them."
+            f"`canopy workspace add`, which adds and syncs them.",
         )
     try:
         ws = workspace.load(root)
@@ -142,7 +142,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         ws = workspace.load(root)
         click.echo(
             f"\nWrite a one-line summary for each repository in {map_file}, and describe them in "
-            f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit tracker.query too."
+            f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit tracker.query too.",
         )
     click.echo()
     click.echo(init.BRANCH_PROTECTION.format(prefix=cfg.trust.branch_prefix), nl=False)
@@ -171,7 +171,7 @@ def _print_shadowing(report: init.Report) -> None:
         click.echo()
         click.echo(f"Warning: {project_config.shadowing_message(report.shadowing)}")
         click.echo(
-            "  Earlier versions of `canopy init` put them there. Agent runs refuse to start until they are gone."
+            "  Earlier versions of `canopy init` put them there. Agent runs refuse to start until they are gone.",
         )
 
 
@@ -203,7 +203,7 @@ def cmd_sandbox_setup(click_ctx: click.Context) -> int:
     user_file = config.user_config_path()
     click.echo(
         "\nFill in your hosts in each template: your model provider, your tracker's and other MCP services,\n"
-        "and the registries your builds fetch from (docs/SANDBOX.md, step 3)."
+        "and the registries your builds fetch from (docs/SANDBOX.md, step 3).",
     )
     runtime = _runtime(runner_of(click_ctx), user_file)
     if suggestion := init.sandbox_suggestion(runtime, user_file, text=init.SANDBOX_NEXT):

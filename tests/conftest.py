@@ -101,7 +101,8 @@ def github_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """
     state = tmp_path / "github.json"
     with mock.patch.dict(
-        os.environ, {"FAKE_GITHUB_STATE": str(state), "FAKE_GITHUB_LOG": str(tmp_path / "github.jsonl")}
+        os.environ,
+        {"FAKE_GITHUB_STATE": str(state), "FAKE_GITHUB_LOG": str(tmp_path / "github.jsonl")},
     ):
         yield state
 
@@ -114,7 +115,8 @@ def connector_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """
     state = tmp_path / "connector.json"
     with mock.patch.dict(
-        os.environ, {"FAKE_CONNECTOR_STATE": str(state), "FAKE_CONNECTOR_LOG": str(tmp_path / "connector.jsonl")}
+        os.environ,
+        {"FAKE_CONNECTOR_STATE": str(state), "FAKE_CONNECTOR_LOG": str(tmp_path / "connector.jsonl")},
     ):
         yield state
 
@@ -127,7 +129,8 @@ def opencode_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """
     state = tmp_path / "opencode.json"
     with mock.patch.dict(
-        os.environ, {"FAKE_OPENCODE_STATE": str(state), "FAKE_OPENCODE_LOG": str(tmp_path / "opencode.jsonl")}
+        os.environ,
+        {"FAKE_OPENCODE_STATE": str(state), "FAKE_OPENCODE_LOG": str(tmp_path / "opencode.jsonl")},
     ):
         yield state
 
@@ -420,7 +423,10 @@ def git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> It
 
 @pytest.fixture
 def worktree_pool(
-    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    tmp_path: Path,
 ) -> tuple[Path, list[Path]]:
     """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
     primary = tmp_path / "primary"

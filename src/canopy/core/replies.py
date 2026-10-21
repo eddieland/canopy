@@ -47,7 +47,11 @@ class Rendered:
 
 
 def render(
-    config: Config, kind: str, *, private: bool, sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None
+    config: Config,
+    kind: str,
+    *,
+    private: bool,
+    sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
 ) -> Rendered | None:
     """Return how a `kind` run's prompt says its comments reach GitHub, or None for a kind that comments nowhere.
 
@@ -84,7 +88,8 @@ def render(
 def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -> None:
     """Record what run `run_id`'s prompt was rendered under. Call inside the transaction that inserts the run."""
     sql.execute(
-        conn, sql.insert("run_replies", run_id=run_id, mode=rendered.mode, ticket_drafts=rendered.ticket_drafts)
+        conn,
+        sql.insert("run_replies", run_id=run_id, mode=rendered.mode, ticket_drafts=rendered.ticket_drafts),
     )
 
 
@@ -241,7 +246,7 @@ def _contract(*, ticket: bool) -> str:
         entries.append(
             '- `{"on":"ticket","url":"<the ticket\'s URL>","text":"<comment>"}`: at most one, for the ticket: your '
             "question when you are blocked, and otherwise what you did, every PR link, and anything a reviewer "
-            "should look at first."
+            "should look at first.",
         )
     lines = [
         "",

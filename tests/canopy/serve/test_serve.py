@@ -293,7 +293,8 @@ def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(ui: Path, backend: 
 
 
 def test_signing_in_sets_an_httponly_strict_cookie_named_for_the_port_and_scoped_to_the_base(
-    ui: Path, backend: Backend
+    ui: Path,
+    backend: Backend,
 ) -> None:
     c = client(ui, backend, key=SECRET, base_path="/canopy", port=9001)
     response = c.post("/canopy/api/session", json={"secret": SECRET})
@@ -321,7 +322,9 @@ def test_a_write_needs_the_sessions_token_and_an_origin(ui: Path, backend: Backe
 
 
 def test_a_write_that_waits_out_a_held_journal_is_a_503_saying_so(
-    ui: Path, backend: Backend, journals: Journals
+    ui: Path,
+    backend: Backend,
+    journals: Journals,
 ) -> None:
     c = client(ui, backend)
     url = "/api/tickets/ABC-102/replies"
@@ -336,7 +339,7 @@ def test_a_write_that_waits_out_a_held_journal_is_a_503_saying_so(
             response = c.post(url, json=body, headers={"origin": ORIGIN})
             assert response.status_code == 503, response.text
             assert response.json() == {
-                "detail": "the journal is busy: another writer held it for over 0.05s; try again"
+                "detail": "the journal is busy: another writer held it for over 0.05s; try again",
             }
             assert c.get("/api/tickets").status_code == 200
             holder.execute("ROLLBACK")
@@ -557,7 +560,12 @@ def test_the_mock_journal_waits_for_a_held_lock_off_the_event_loop(backend: Back
     ],
 )
 def test_a_grant_on_the_mock_reports_the_limit_of_its_own_transaction(
-    backend: Backend, ref: str, kind: str, repo: str | None, reads: str, insert: str
+    backend: Backend,
+    ref: str,
+    kind: str,
+    repo: str | None,
+    reads: str,
+    insert: str,
 ) -> None:
     with backend.open() as ctx:
         before = backend.review_limit(ctx, ref) if repo is None else backend.limits(ctx, ref)[1]
@@ -593,7 +601,7 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
             with backend.open() as other:
                 other.conn.execute(
                     "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
-                    "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')"
+                    "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')",
                 )
         return rows
 
@@ -632,7 +640,8 @@ def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_pat
 
 
 def test_a_review_of_a_requested_pr_starting_takes_it_off_the_requests_waiting(
-    backend: Backend, tmp_path: Path
+    backend: Backend,
+    tmp_path: Path,
 ) -> None:
     with backend.open() as ctx:
         sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
@@ -684,7 +693,7 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
                 with backend.open() as ctx:
                     ctx.conn.execute(
                         "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
-                        "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')"
+                        "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')",
                     )
             if any(isinstance(e.root, TicketChanged) for e in found):
                 break
@@ -790,7 +799,7 @@ def test_quiet_leaving_absorbs_only_a_streams_teardown_once_its_client_left(
 
     async def app(_scope: Scope, receive: Receive, send: Send) -> None:
         await send(
-            {"type": "http.response.start", "status": 200, "headers": [(b"content-type", content_type.encode())]}
+            {"type": "http.response.start", "status": 200, "headers": [(b"content-type", content_type.encode())]},
         )
         await receive()
         raise error

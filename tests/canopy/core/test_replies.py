@@ -41,7 +41,12 @@ def approving(env: CanopyEnv, *, tracker_posts: bool = False) -> None:
     ids=[f"{k}{'-private' if p else ''}{'-ticket-drafts' if t else ''}" for k, p, t in DRAFTING],
 )
 def test_under_approve_a_prompt_asks_for_drafts(
-    canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, kind: RunKind, *, private: bool, tracker_posts: bool
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+    kind: RunKind,
+    *,
+    private: bool,
+    tracker_posts: bool,
 ) -> None:
     approving(canopy_env, tracker_posts=tracker_posts)
     cfg = load(canopy_env.root, canopy_env.user_file)

@@ -61,7 +61,11 @@ def forget(conn: sqlite3.Connection, memory_id: int) -> tuple[records.Memory, Sc
 
 
 def purge(
-    conn: sqlite3.Connection, *, ticket: str | None = None, run: int | None = None, every: bool = False
+    conn: sqlite3.Connection,
+    *,
+    ticket: str | None = None,
+    run: int | None = None,
+    every: bool = False,
 ) -> Scrubbed:
     """Delete the bodies of every note and proposal of a ticket's runs, of one run, or with `every`, of every memory.
 
@@ -257,7 +261,8 @@ def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
         raise conversation.Refused("unknown", f"no lesson in force has id {lesson_id}")
     due = db.format_time(datetime.now(UTC) + timedelta(days=memory.REVIEW_DAYS))
     sql.execute(
-        conn, sql.update("memories").set(review_at=due, wrong_at=None, wrong_run_id=None).where("id = ?", lesson_id)
+        conn,
+        sql.update("memories").set(review_at=due, wrong_at=None, wrong_run_id=None).where("id = ?", lesson_id),
     )
     return due
 
@@ -390,5 +395,6 @@ def _pending(conn: sqlite3.Connection, config: Config, proposal_id: int) -> reco
 def _check_on(config: Config) -> None:
     if config.memory.proposals is MemoryMode.OFF:
         raise conversation.Refused(
-            "off", "memory.proposals is off: set it to record or use to build lessons up, or to serve them"
+            "off",
+            "memory.proposals is off: set it to record or use to build lessons up, or to serve them",
         )

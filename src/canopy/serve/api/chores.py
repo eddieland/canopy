@@ -104,7 +104,12 @@ def note(name: ChoreName, body: ReplyRequest, backend: BackendDep) -> Replied:
         try:
             defined = chore_view.defined(ctx.config, ctx.workspace)
             replied = conversation.reply(
-                ctx.conn, ref, body.body, channel=WEB, submission=body.submission, chores=defined
+                ctx.conn,
+                ref,
+                body.body,
+                channel=WEB,
+                submission=body.submission,
+                chores=defined,
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None

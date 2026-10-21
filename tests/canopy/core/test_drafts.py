@@ -157,7 +157,8 @@ def test_with_a_tracker_that_posts_a_ticket_draft_waits_at_once(scenario: Scenar
     scenario.configures("private", trust=APPROVE, connect=TRACKER_POSTS)
     ticket = {"on": "ticket", "url": ISSUE, "text": "Which base?"}
     run = scenario.run(
-        WORK, worker=sends_drafts([{**ticket, "url": "http://x/1"}, ticket, {**ticket, "text": "Again?"}])
+        WORK,
+        worker=sends_drafts([{**ticket, "url": "http://x/1"}, ticket, {**ticket, "text": "Again?"}]),
     )
     [draft] = all_drafts(conn)
     assert (draft.kind, draft.issue_url, draft.pr_url, draft.status) == (

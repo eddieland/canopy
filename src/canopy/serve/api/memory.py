@@ -41,7 +41,8 @@ def overview(
     backend: BackendDep,
     *,
     history: Annotated[
-        bool, Query(description="Also send the latest proposals and lessons no longer pending or in force.")
+        bool,
+        Query(description="Also send the latest proposals and lessons no longer pending or in force."),
     ] = False,
 ) -> MemoryOverview:
     """Each tier's mode, every ticket's notes in force, the proposals waiting, and the lessons and what they serve.
@@ -89,7 +90,10 @@ def ticket_memory(key: TicketKey, backend: BackendDep) -> TicketMemory:
 
 
 @router.get(
-    "/runs/{run_id}/memory", operation_id="getRunMemory", summary="Get a run's memory", responses=not_found("run")
+    "/runs/{run_id}/memory",
+    operation_id="getRunMemory",
+    summary="Get a run's memory",
+    responses=not_found("run"),
 )
 def run_memory(run_id: RunId, backend: BackendDep) -> RunMemory:
     """The modes the run's prompt was rendered under, what it wrote and read of memory, and what it had refused."""
@@ -131,7 +135,12 @@ def promote(memory_id: MemoryId, body: PromoteRequest, backend: BackendDep) -> M
         try:
             repos = [r.name for r in ctx.ws.repos]
             promoted = memory_manage.promote(
-                ctx.conn, ctx.config, memory_id, text=body.text, repo=body.repo, repos=repos
+                ctx.conn,
+                ctx.config,
+                memory_id,
+                text=body.text,
+                repo=body.repo,
+                repos=repos,
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None

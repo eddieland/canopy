@@ -130,7 +130,8 @@ READERS: dict[str, Callable[[str, agents.McpTools | None, str], str]] = {
 @pytest.mark.parametrize("agent", sorted(READERS))
 @pytest.mark.parametrize("tools", [None, agents.McpTools("tracker", ("read",))])
 def test_a_readers_definition_without_its_tracker_reads_line_is_refused(
-    agent: str, tools: agents.McpTools | None
+    agent: str,
+    tools: agents.McpTools | None,
 ) -> None:
     bundled = (resources.agents_dir() / f"{agent}.md").read_text()
     with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line"):
@@ -169,5 +170,8 @@ def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:
     bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
     with pytest.raises(agents.DefinitionsError, match="reply rules"):
         definitions.render_replies(
-            bundled.replace("  # canopy: reply tools\n", ""), "canopy-worker", approve=False, ticket_comments=True
+            bundled.replace("  # canopy: reply tools\n", ""),
+            "canopy-worker",
+            approve=False,
+            ticket_comments=True,
         )

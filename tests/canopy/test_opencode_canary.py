@@ -171,7 +171,9 @@ Finally print exactly one line: canary finished
 @requires_canary
 @pytest.mark.parametrize("workspace_is_checkout", [False, True])
 def test_a_worker_in_a_desk_edits_through_its_links_and_nothing_beside_them(
-    tmp_path: Path, *, workspace_is_checkout: bool
+    tmp_path: Path,
+    *,
+    workspace_is_checkout: bool,
 ) -> None:
     runner = SubprocessRunner()
     workspace = tmp_path / "acme"
@@ -438,7 +440,10 @@ def test_opencode_says_what_it_offers_each_of_canopys_agents(tmp_path: Path) -> 
         (config_dir / relative).parent.mkdir(parents=True, exist_ok=True)
         (config_dir / relative).write_bytes(content)
     found = offerings.offerings(
-        SubprocessRunner(), cwd=tmp_path, definitions_dir=config_dir, agents=definitions.agent_names()
+        SubprocessRunner(),
+        cwd=tmp_path,
+        definitions_dir=config_dir,
+        agents=definitions.agent_names(),
     )
     assert found.error is None
     assert [a.agent for a in found.agents if a.error is not None] == []

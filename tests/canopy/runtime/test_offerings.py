@@ -54,7 +54,8 @@ def opencode(tmp_path: Path) -> Iterator[Path]:
 
 @pytest.mark.usefixtures("opencode")
 def test_canopy_agents_says_what_each_agent_is_offered(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["agents", "--json"]) == 0
     found = json.loads(capsys.readouterr().out)
@@ -71,7 +72,9 @@ def test_canopy_agents_says_what_each_agent_is_offered(
 
 
 def test_canopy_agents_fails_when_opencode_cannot_say(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     with mock.patch.dict(os.environ, {"PATH": str(tmp_path / "nothing")}):
         assert main(["agents"]) == 1

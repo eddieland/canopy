@@ -51,7 +51,9 @@ def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:
 def open_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     """Return the open requests, oldest first."""
     return records.fetch_all(
-        conn, records.ReviewRequest, sql.select("*").from_("review_requests").where("ended_at IS NULL").order_by("id")
+        conn,
+        records.ReviewRequest,
+        sql.select("*").from_("review_requests").where("ended_at IS NULL").order_by("id"),
     )
 
 
@@ -98,7 +100,12 @@ class Requested:
 
 
 def request(
-    conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, channel: str, notes: str | None = None
+    conn: sqlite3.Connection,
+    config: Config,
+    ref: conversation.Ref,
+    *,
+    channel: str,
+    notes: str | None = None,
 ) -> Requested:
     """Ask for the PR `ref` names to be reviewed at its head, through `channel`, with `notes`. Operator only.
 
@@ -259,6 +266,7 @@ def _pr_url(ref: conversation.Ref) -> str:
     """
     if ref.kind != conversation.PR or not contract.plain_url(ref.id, conversation.MAX_PR_URL):
         raise conversation.Refused(
-            "bad_pr", f"name the PR by its plain https:// URL, as `canopy review show` does, not {ref}"
+            "bad_pr",
+            f"name the PR by its plain https:// URL, as `canopy review show` does, not {ref}",
         )
     return ref.id

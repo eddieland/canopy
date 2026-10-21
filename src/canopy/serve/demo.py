@@ -40,7 +40,10 @@ def create(environ: Mapping[str, str], directory: Path) -> FastAPI:
         The app, which serves the UI bundled with canopy and the API over the mock journal.
     """
     options = ServeOptions(
-        mock=True, public_hosts=public_hosts(environ), ui_dir=ui_dir(), stream_seconds=STREAM_SECONDS
+        mock=True,
+        public_hosts=public_hosts(environ),
+        ui_dir=ui_dir(),
+        stream_seconds=STREAM_SECONDS,
     )
     sessions = Sessions(None, port=options.port, base_path=options.base_path, hosts=options.hosts)
     return create_app(options, mock.seed(directory), sessions)

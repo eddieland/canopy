@@ -199,7 +199,7 @@ def cmd_send(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) ->
     for draft in sent.unconfirmed:
         click.echo(
             f"Run {run_id}'s draft {draft.number} may have been posted: the post ended without saying. A read of "
-            "its PR settles it; canopy sends it no other time."
+            "its PR settles it; canopy sends it no other time.",
         )
     return 1 if sent.failed or sent.unconfirmed else 0
 
@@ -232,7 +232,7 @@ def cmd_stage(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) -
         if draft.reacted is not None:
             click.echo(
                 f"Run {run_id}'s draft {draft.number} put {draft.reacted} on comment {draft.comment_id} now, not in "
-                "the review: GitHub has no pending reaction."
+                "the review: GitHub has no pending reaction.",
             )
     for draft in staged.already:
         click.echo(f"Run {run_id}'s draft {draft.number} was sent already: {draft.sent_url}")
@@ -241,7 +241,7 @@ def cmd_stage(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) -
     for draft in staged.unconfirmed:
         click.echo(
             f"Run {run_id}'s draft {draft.number} may have been staged: the post ended without saying. A read of its "
-            "PR settles it."
+            "PR settles it.",
         )
     return 1 if staged.failed or staged.unconfirmed else 0
 
@@ -293,7 +293,7 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
             click.echo(f"  > {c.author} at {c.created_at}: {visible(' '.join(c.body.split()))}")
     if draft.reacted is not None and draft.status is not DraftStatus.SENT:
         click.echo(
-            f"  {draft.reacted} is on comment {draft.comment_id} already: a send that did not post the rest added it"
+            f"  {draft.reacted} is on comment {draft.comment_id} already: a send that did not post the rest added it",
         )
     hashed = f"  hash {drafts_manage.hash_of_version(text)}{edited}"
     if text.reaction is not None and not text.body:

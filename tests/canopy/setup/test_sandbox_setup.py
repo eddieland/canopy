@@ -139,7 +139,8 @@ def test_a_template_already_there_is_kept_as_it_is(machine: Machine, canopy_env:
 
 
 def test_a_template_kept_that_lets_a_run_write_the_operators_caches_is_to_be_changed(
-    machine: Machine, canopy_env: CanopyEnv
+    machine: Machine,
+    canopy_env: CanopyEnv,
 ) -> None:
     """Templates from before `@CACHE@` let a worker write `~/.cache/opencode`, which the overseer runs code from."""
     machine.install(*LINUX_COMMANDS)
@@ -171,7 +172,8 @@ def test_a_lockfile_that_changed_is_installed_again(machine: Machine, canopy_env
 
 
 def test_an_install_that_failed_is_tried_again_though_its_lockfile_is_in_place(
-    machine: Machine, canopy_env: CanopyEnv
+    machine: Machine,
+    canopy_env: CanopyEnv,
 ) -> None:
     """A new canopy's lockfile, copied in before npm ci failed, beside the srt an older canopy installed."""
     machine.install(*LINUX_COMMANDS)
@@ -215,7 +217,10 @@ def test_a_failed_npm_install_is_reported(machine: Machine) -> None:
 
 @pytest.mark.parametrize(("restricted", "says"), [("1", "AppArmor restricts unprivileged ones"), ("0", "no userns")])
 def test_bubblewrap_that_cannot_make_a_sandbox_says_why(
-    machine: Machine, tmp_path: Path, restricted: str, says: str
+    machine: Machine,
+    tmp_path: Path,
+    restricted: str,
+    says: str,
 ) -> None:
     machine.install(*LINUX_COMMANDS)
     setting = tmp_path / "apparmor_restrict_unprivileged_userns"
@@ -232,10 +237,13 @@ def test_bubblewrap_that_cannot_make_a_sandbox_says_why(
 
 
 @pytest.mark.parametrize(
-    ("says", "too_old"), [("bubblewrap 0.4.0\n", "0.4.0"), ("0.5\n", None), ("bubblewrap 0.9.0\n", None)]
+    ("says", "too_old"),
+    [("bubblewrap 0.4.0\n", "0.4.0"), ("0.5\n", None), ("bubblewrap 0.9.0\n", None)],
 )
 def test_a_bubblewrap_older_than_srt_fully_supports_is_to_be_upgraded(
-    machine: Machine, says: str, too_old: str | None
+    machine: Machine,
+    says: str,
+    too_old: str | None,
 ) -> None:
     machine.install(*LINUX_COMMANDS)
     with mock.patch.dict(os.environ, {"FAKE_STDOUT_BWRAP": says}):
@@ -282,7 +290,8 @@ def test_root_and_an_install_without_the_wrapper_on_path_are_told_what_to_do(mac
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the command checks the machine it runs on")
 def test_the_command_prints_what_it_did_and_the_line_for_the_prefix(
-    machine: Machine, capsys: pytest.CaptureFixture[str]
+    machine: Machine,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     machine.install(*LINUX_COMMANDS)
 

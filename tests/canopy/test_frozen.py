@@ -29,7 +29,7 @@ MUTABLE = frozenset(
         "MutableSequence",
         "MutableMapping",
         "MutableSet",
-    }
+    },
 )
 
 

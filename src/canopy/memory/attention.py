@@ -50,7 +50,8 @@ def items(conn: sqlite3.Connection, config: Config, now: datetime | None = None)
     done = {
         str(r["key"])
         for r in sql.execute(
-            conn, sql.select("key").from_("tickets").where("done = 1").where("key IN ({})", remembered)
+            conn,
+            sql.select("key").from_("tickets").where("done = 1").where("key IN ({})", remembered),
         )
     }
     by_ticket: dict[str, list[int]] = {}

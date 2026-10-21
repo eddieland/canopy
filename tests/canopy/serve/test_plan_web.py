@@ -91,7 +91,7 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
     plan = present(plans.current(ctx.conn, KEY))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "web")
     assert refused(c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)).startswith(
-        "bad_plan: plan 1 of PROJ-1 is approved, and its file has not changed since"
+        "bad_plan: plan 1 of PROJ-1 is approved, and its file has not changed since",
     )
 
     asked = c.post(f"/api/tickets/{KEY}/plan", json={"action": "request"}, headers=headers)
@@ -110,7 +110,9 @@ def test_an_edit_saved_from_the_web_is_the_file_approve_takes(ctx: Context) -> N
     plan_id = proposed(ctx)
     edited = TEXT + "\n## Out of scope\n\nThe API.\n"
     saved = c.put(
-        f"/api/tickets/{KEY}/plans/{plan_id}/file", json={"markdown": edited, "read_sha256": sha(TEXT)}, headers=headers
+        f"/api/tickets/{KEY}/plans/{plan_id}/file",
+        json={"markdown": edited, "read_sha256": sha(TEXT)},
+        headers=headers,
     )
     assert saved.json() == {"sha256": sha(edited), "size": len(edited.encode())}
     path = plans.path_for(ctx.state_dir, KEY, 1)
@@ -152,7 +154,7 @@ def test_a_save_is_refused_for_anything_but_the_current_plan_or_a_plan(ctx: Cont
     )
     empty = {"markdown": "  \n", "read_sha256": sha("# Second\n")}
     assert refused(c.put(f"/api/tickets/{KEY}/plans/{second}/file", json=empty, headers=headers)).startswith(
-        "bad_plan: a plan is 1 to 100,000 characters"
+        "bad_plan: a plan is 1 to 100,000 characters",
     )
     # A link in the plan's place is not saved over.
     path = plans.path_for(ctx.state_dir, KEY, 2)
@@ -162,7 +164,7 @@ def test_a_save_is_refused_for_anything_but_the_current_plan_or_a_plan(ctx: Cont
     path.symlink_to(real)
     linked = {"markdown": "# Mine\n", "read_sha256": sha("# Second\n")}
     assert "is not a regular file" in refused(
-        c.put(f"/api/tickets/{KEY}/plans/{second}/file", json=linked, headers=headers)
+        c.put(f"/api/tickets/{KEY}/plans/{second}/file", json=linked, headers=headers),
     )
     assert real.read_text() == "# Second\n"
 
@@ -208,7 +210,10 @@ def test_comments_are_threads_on_passages_the_tickets_own(ctx: Context) -> None:
 
 
 def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
-    canopy_env: CanopyEnv, git_pool: GitPool, ctx: Context, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    ctx: Context,
+    conn: sqlite3.Connection,
 ) -> None:
     with planner_does(plan=TEXT):
         dispatch_and_run(conn, *PLAN)
@@ -248,7 +253,10 @@ def test_the_tickets_list_says_whose_plan_waits_on_the_operator(ctx: Context) ->
 
 
 def test_the_plan_verbs_refuse_while_a_plan_run_is_running_from_the_web(
-    canopy_env: CanopyEnv, git_pool: GitPool, ctx: Context, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    ctx: Context,
+    conn: sqlite3.Connection,
 ) -> None:
     with planner_does(plan=TEXT):
         dispatch_and_run(conn, *PLAN)
@@ -257,15 +265,17 @@ def test_the_plan_verbs_refuse_while_a_plan_run_is_running_from_the_web(
     assert c.get(f"/api/tickets/{KEY}/plans").json()["planning"] == 2
     body = {"markdown": "# Mine\n", "read_sha256": sha(TEXT)}
     assert refused(c.put(f"/api/tickets/{KEY}/plans/1/file", json=body, headers=headers)).startswith(
-        "bad_plan: plan run 2 for PROJ-1 is running"
+        "bad_plan: plan run 2 for PROJ-1 is running",
     )
     assert refused(c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)).startswith(
-        "bad_plan: plan run 2"
+        "bad_plan: plan run 2",
     )
 
 
 def test_canopy_show_prints_the_newest_plan_and_plans_every_one(
-    ctx: Context, canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    ctx: Context,
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     proposed(ctx)
     capsys.readouterr()
@@ -300,7 +310,9 @@ def test_canopy_show_prints_the_newest_plan_and_plans_every_one(
 
 
 def test_canopy_show_says_when_a_plan_is_needed_and_none_is_written(
-    ctx: Context, canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    ctx: Context,
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     db.touch_ticket(ctx.conn, KEY, ctx.repo)
     ctx.conn.commit()

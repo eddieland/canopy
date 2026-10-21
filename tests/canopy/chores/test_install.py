@@ -63,7 +63,8 @@ def test_an_example_that_runs_an_agent_of_canopys_naming_comes_with_it_and_runs_
 
 
 def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.write_private(PRIVATE)
     assert main(["chore", "install", "memory-tickets"]) == 0
@@ -71,13 +72,13 @@ def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
     out = capsys.readouterr().out
     agent = canopy_env.state_dir / "chore-agents" / "memory-tickets" / "agents" / "canopy-memory-tickets.md"
     assert out.startswith(
-        f"wrote {prompt}, its agent {agent}, and [chores.memory-tickets] in {canopy_env.private_file}\n"
+        f"wrote {prompt}, its agent {agent}, and [chores.memory-tickets] in {canopy_env.private_file}\n",
     )
     assert "keep this chore out of the sandbox" in out
     assert "`canopy chore try memory-tickets`" in out
     text = canopy_env.private_file.read_text()
     assert text.startswith(
-        PRIVATE + "\n" + install.MARKER.format(name="memory-tickets") + "\n[chores.memory-tickets]\n"
+        PRIVATE + "\n" + install.MARKER.format(name="memory-tickets") + "\n[chores.memory-tickets]\n",
     )
     assert canopy_env.private_file.stat().st_mode & 0o777 == 0o600
     assert prompt.stat().st_mode & 0o777 == 0o600
@@ -93,7 +94,8 @@ def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
 
 
 def test_installing_again_replaces_the_prompt_and_the_whole_table(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     after = '\n# My own chore.\n[chores.mine]\nprompt = "~/mine.md"\nevery_minutes = 60\n'
     canopy_env.write_private(PRIVATE)
@@ -112,7 +114,8 @@ def test_installing_again_replaces_the_prompt_and_the_whole_table(
 
 
 def test_the_agents_copy_stays_as_installed_until_the_chore_is_installed_again(
-    canopy_env: CanopyEnv, tmp_path: Path
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
 ) -> None:
     canopy_env.write_private(PRIVATE)
     ws = workspace.find(canopy_env.root)
@@ -131,7 +134,8 @@ def test_the_agents_copy_stays_as_installed_until_the_chore_is_installed_again(
 
 
 def test_install_refuses_to_hide_the_user_files_chores(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.write_private(PRIVATE)
     canopy_env.append_user('\n[chores.mine]\nprompt = "~/mine.md"\nevery_minutes = 60\n')
@@ -149,7 +153,9 @@ def test_install_refuses_to_hide_the_user_files_chores(
     ],
 )
 def test_install_refuses_a_table_it_cannot_replace_and_writes_nothing(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], form: str
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    form: str,
 ) -> None:
     canopy_env.write_private(PRIVATE + form)
     assert main(["chore", "install", "build-health"]) == 1
@@ -159,7 +165,8 @@ def test_install_refuses_a_table_it_cannot_replace_and_writes_nothing(
 
 
 def test_install_lists_the_examples_and_refuses_an_unknown_one_a_missing_file_and_inside_runs(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["chore", "install"]) == 0
     assert capsys.readouterr().out.split() == install.available()

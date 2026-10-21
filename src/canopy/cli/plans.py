@@ -76,7 +76,7 @@ def _approve_feedback(ctx: Context, key: str) -> None:
     covered = len(feedback_plans.items(ctx.conn, plan.id))
     click.echo(
         f"Feedback plan {plan.id} of {key}, covering {covered} item{'s' if covered != 1 else ''}, is approved whole as "
-        f"{path} stands now. The next tick can resume {key} on it, once."
+        f"{path} stands now. The next tick can resume {key} on it, once.",
     )
     click.echo("Its resume refuses (plan_changed) if the file changes before then; approve it again if it does.")
 
@@ -98,5 +98,5 @@ def _ask(ctx: Context, key: str, *, skip: bool) -> None:
     else:
         click.echo(
             f"{key} is planned first: the next tick dispatches a planner, and nothing is implemented until you approve "
-            f"its plan with `canopy plan {key} --approve`."
+            f"its plan with `canopy plan {key} --approve`.",
         )

@@ -54,7 +54,10 @@ __all__ = [
 
 
 def verb[R: BaseModel](
-    click_ctx: click.Context, do: Callable[[Context, R], str], request: type[R], **fields: object
+    click_ctx: click.Context,
+    do: Callable[[Context, R], str],
+    request: type[R],
+    **fields: object,
 ) -> int:
     """Do one of the overseer's verbs (`loop.tools`) as its command: build its request, do it, and print what it says.
 
@@ -94,7 +97,11 @@ class PatternType(click.ParamType[str, object]):
     """A string that must match a pattern: ticket keys and attention reasons."""
 
     def __init__(
-        self, name: str, pattern: re.Pattern[str], what: str, names: Callable[[], Iterable[str]] | None = None
+        self,
+        name: str,
+        pattern: re.Pattern[str],
+        what: str,
+        names: Callable[[], Iterable[str]] | None = None,
     ) -> None:
         """Name the type for help text, and say what `pattern` validates for error messages.
 

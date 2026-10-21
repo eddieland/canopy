@@ -83,7 +83,13 @@ def test_decisions_before_the_overseer_ran_are_the_harnesss(canopy_env: CanopyEn
         seen(conn, canopy_env, "PROJ-1", "PROJ-2")
         db.record_decision(conn, tick_id, "PROJ-1", f"{attention.ACTION_PREFIX}crashed", "run 1 crashed")
         owed = duties.owed(
-            conn, tick_id, query_due=False, tickets=db.open_tickets(conn), stopped=[], recently_done=[], chores=[]
+            conn,
+            tick_id,
+            query_due=False,
+            tickets=db.open_tickets(conn),
+            stopped=[],
+            recently_done=[],
+            chores=[],
         )
         db.record_decision(conn, tick_id, "PROJ-2", "wait", "running")
         assert duties.undone(conn, tick_id, owed) == ["no decision for PROJ-1"]
@@ -95,7 +101,13 @@ def test_a_long_list_of_tickets_left_out_is_counted(canopy_env: CanopyEnv) -> No
     with in_tick(conn) as tick_id:
         seen(conn, canopy_env, *keys)
         owed = duties.owed(
-            conn, tick_id, query_due=False, tickets=db.open_tickets(conn), stopped=[], recently_done=[], chores=[]
+            conn,
+            tick_id,
+            query_due=False,
+            tickets=db.open_tickets(conn),
+            stopped=[],
+            recently_done=[],
+            chores=[],
         )
         assert duties.undone(conn, tick_id, owed) == [f"no decision for {', '.join(keys[:10])} and 2 more"]
 

@@ -174,8 +174,9 @@ extend-select = [
     # Pickle and the stdlib XML parsers, unsafe on untrusted input; canopy reads other programs' output (TRUST_MODEL).
     "S403", "S405", "S406", "S407", "S408", "S409", "S411",
 ]
+# COM812 (a trailing comma on every multi-line call, literal, and signature) stays on, though `ruff format` warns that
+# it may conflict: `make fmt` adds the commas before formatting, and the formatter then keeps one item per line.
 ignore = [
-    "COM812",  # Conflicts with `ruff format`, which owns trailing commas.
     "CPY001",  # No per-file copyright headers.
     "EM101",   # Building the message in a variable first only moves the string; tracebacks are readable as is.
     "EM102",   # Same as EM101, for f-strings.

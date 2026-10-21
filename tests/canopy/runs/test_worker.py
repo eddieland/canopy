@@ -86,7 +86,10 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     [(None, "PROJ-1 implement"), ("Fix the\nlogin loop\x1b[2J", "PROJ-1 implement: Fix the login loop [2J")],
 )
 def test_the_session_title_names_the_ticket_and_its_title(
-    scenario: Scenario, git_pool: GitPool, title: str | None, session_title: str
+    scenario: Scenario,
+    git_pool: GitPool,
+    title: str | None,
+    session_title: str,
 ) -> None:
     """`{title}` is the run's session title, so the runtime's session list names the ticket (DESIGN §13)."""
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
@@ -103,7 +106,7 @@ def test_the_session_title_names_the_ticket_and_its_title(
 def test_the_worker_runs_between_the_prefix_and_the_suffix(scenario: Scenario, git_pool: GitPool) -> None:
     """One prefix and suffix wrap every command a worker run starts, such as a sandbox wrapper (DESIGN §12)."""
     scenario.configures(
-        runtime={"worker_cmd_prefix": "env CANOPY_WRAPPED={title}", "worker_cmd_suffix": "--variant high"}
+        runtime={"worker_cmd_prefix": "env CANOPY_WRAPPED={title}", "worker_cmd_suffix": "--variant high"},
     )
     run = scenario.run(worker=pushes())
     assert run.status == "done"
@@ -120,7 +123,7 @@ def test_a_run_makes_no_local_branch(scenario: Scenario, git_pool: GitPool) -> N
             ["git", "for-each-ref", "--format=%(refname)", "refs/heads/agent/"],
             ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"],
             ["git", "push", "--quiet", "origin"],
-        )
+        ),
     )
     [w] = agent_runs(scenario.agent_log)
     commands = w["commands"]
@@ -134,7 +137,7 @@ def test_a_run_makes_no_local_branch(scenario: Scenario, git_pool: GitPool) -> N
 
 def test_unpushed_commits_are_pushed_once(scenario: Scenario, git_pool: GitPool) -> None:
     run = scenario.run(
-        worker=worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: forgot to push"])
+        worker=worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: forgot to push"]),
     )
     assert run.status == "done"
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
@@ -147,7 +150,7 @@ def test_commits_the_worker_moved_head_off_are_unpushed(scenario: Scenario, git_
         worker=worker_does(
             ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: left behind"],
             ["git", "checkout", "--quiet", "--detach", "origin/main"],
-        )
+        ),
     )
     assert run.status == "unpushed"
     assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
@@ -191,7 +194,7 @@ def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(scenario:
             ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
             commit_file("fix"),
             ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
-        )
+        ),
     )
     assert run.status == "done", run.row["result_json"]
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
@@ -208,7 +211,7 @@ def test_a_rebase_dropped_with_work_of_its_own_is_unpushed(scenario: Scenario, g
             ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
             commit_file("fix"),
             ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
-        )
+        ),
     )
     assert run.status == "unpushed"
     assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
@@ -224,7 +227,8 @@ def test_without_rebase_a_rebased_branch_is_never_forced(scenario: Scenario, git
 
 
 def test_with_rebase_a_worker_that_rebased_and_pushed_with_a_lease_is_done(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     """Its own commit, made before the rebase, and origin's old commits are replaced by copies: nothing is lost."""
     scenario.configures(trust={"rebase": True})
@@ -234,7 +238,7 @@ def test_with_rebase_a_worker_that_rebased_and_pushed_with_a_lease_is_done(
             commit_file("fix"),
             ["git", "rebase", "--quiet", "origin/main"],
             ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
-        )
+        ),
     )
     assert run.status == "done", run.row["result_json"]
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
@@ -252,7 +256,8 @@ def test_with_rebase_canopy_pushes_a_rebased_branch_with_a_lease(scenario: Scena
 
 
 def test_with_rebase_canopy_never_overwrites_a_push_made_since_the_run_started(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.configures(trust={"rebase": True})
     branch_behind_main(git_pool)
@@ -347,7 +352,10 @@ def test_existing_branch_on_origin_is_continued(scenario: Scenario, git_pool: Gi
 
 
 def test_worker_refuses_to_start_on_a_branch_that_defines_its_agent(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    tmp_path: Path,
 ) -> None:
     # Anyone who can push to the repository could commit this (TRUST_MODEL T7).
     clone = tmp_path / "pusher"
@@ -367,7 +375,9 @@ def test_worker_refuses_to_start_on_a_branch_that_defines_its_agent(
 
 
 def test_git_failure_is_crashed_and_returns_the_slot(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     for slot in git_pool.slots:
         git("remote", "set-url", "origin", str(git_pool.origin.parent / "gone.git"), cwd=slot)
@@ -479,7 +489,8 @@ def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario:
 
 
 def test_a_journal_that_refuses_a_progress_write_does_not_stop_the_worker(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     refused = sqlite3.OperationalError("database is locked")
     with (
@@ -524,7 +535,9 @@ def test_a_worker_without_events_reports_no_session(scenario: Scenario, git_pool
 
 
 def test_status_lists_recent_runs_newest_first(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["status"]) == 0
     assert "\nRecent runs (0):\n  none\n" in capsys.readouterr().out
@@ -532,7 +545,13 @@ def test_status_lists_recent_runs_newest_first(
     db.touch_ticket(conn, "PROJ-1", str(canopy_env.root))
     for n in range(12):
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key="PROJ-1", kind="fix-ci", branch="b", slots=[], runs_dir=Path()
+            conn,
+            tick_id=tick_id,
+            key="PROJ-1",
+            kind="fix-ci",
+            branch="b",
+            slots=[],
+            runs_dir=Path(),
         )
         db.finish_run(conn, "runs", run_id, RunStatus.DONE, json.dumps({"summary": f"run {n + 1}"}))
     running = db.insert_run(conn, tick_id=tick_id, key="PROJ-1", kind="resume", branch="b", slots=[], runs_dir=Path())

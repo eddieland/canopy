@@ -84,7 +84,7 @@ def review_request(row: records.ReviewRequest) -> ReviewRequest:
             "ended_at": db.parse_time(row.ended_at) if row.ended_at else None,
             "end_reason": row.end_reason,
             "notes": row.notes,
-        }
+        },
     )
 
 
@@ -130,5 +130,8 @@ def _cost(runs: Collection[sqlite3.Row], reviews: Collection[records.ReviewRun])
     costs = [float(r["cost_usd"]) for r in runs if r["cost_usd"] is not None]
     costs += [r.cost_usd for r in reviews if r.cost_usd is not None]
     return CostTotal(
-        runs=len(runs), reviews=len(reviews), priced=len(costs), cost_usd=math.fsum(costs) if costs else None
+        runs=len(runs),
+        reviews=len(reviews),
+        priced=len(costs),
+        cost_usd=math.fsum(costs) if costs else None,
     )

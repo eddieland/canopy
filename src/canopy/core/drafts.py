@@ -76,7 +76,8 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
     if rendered is None or rendered.mode is not ReplyMode.APPROVE or fields is None or fields.drafts is None:
         return []
     run = sql.execute(
-        conn, sql.select("ticket_key, tick_id, started_at").from_("runs").where("id = ?", run_id)
+        conn,
+        sql.select("ticket_key, tick_id, started_at").from_("runs").where("id = ?", run_id),
     ).fetchone()
     writing = _Writing(
         run_id=run_id,
@@ -223,7 +224,9 @@ def check_words(text: object, reaction: Reaction | None) -> str:
 
 
 def _target(
-    writing: _Writing, kind: DraftKind, entry: Mapping[str, JsonValue]
+    writing: _Writing,
+    kind: DraftKind,
+    entry: Mapping[str, JsonValue],
 ) -> tuple[str | None, int | None, DraftStance | None, str | None]:
     """Where an entry goes: a thread's or a PR's PR, a thread's comment and stance, or a ticket's issue.
 

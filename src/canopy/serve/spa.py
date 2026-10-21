@@ -55,7 +55,7 @@ def content_security_policy(html: str) -> str:
             "base-uri 'self'",
             "form-action 'self'",
             "frame-ancestors 'none'",
-        )
+        ),
     )
 
 

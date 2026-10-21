@@ -24,7 +24,8 @@ MIB = 1024 * 1024
 
 def tick(conn: sqlite3.Connection, ended: str | None, status: str = "ok") -> int:
     cursor = conn.execute(
-        "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, ?)", (ended or db.now(), ended, status)
+        "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, ?)",
+        (ended or db.now(), ended, status),
     )
     assert cursor.lastrowid is not None
     return cursor.lastrowid
@@ -66,7 +67,8 @@ removes = operator.itemgetter("count", "size", "removable", "removable_size")
 
 
 def test_a_dry_run_counts_what_a_pass_would_remove_and_removes_nothing(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     now = datetime.now(UTC)
     conn = canopy_env.journal()
@@ -134,7 +136,8 @@ def test_retention_of_zero_keeps_a_kind_forever(canopy_env: CanopyEnv, capsys: p
 
 
 def test_canopy_log_rotation_would_drop_what_passes_log_keep(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.append_user("\n[retention]\nlog_max_mib = 1\nlog_keep = 2\n")
     for name, size in (("", MIB + 1), (".1", 3), (".2", 4)):
@@ -152,7 +155,8 @@ def test_canopy_log_rotation_would_drop_what_passes_log_keep(
 
 
 def test_harness_attention_goes_only_outside_the_window_and_after_journal_days(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     now = datetime.now(UTC)
@@ -180,7 +184,8 @@ def test_harness_attention_goes_only_outside_the_window_and_after_journal_days(
 
 
 def test_a_connector_run_goes_outside_the_window_after_journal_days_but_each_sources_newest_stays(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     now = datetime.now(UTC)
@@ -202,7 +207,8 @@ def test_a_connector_run_goes_outside_the_window_after_journal_days_but_each_sou
 
 
 def test_a_polls_connector_run_is_outside_the_window_once_it_started_before_the_windows_oldest_tick(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     now = datetime.now(UTC)
@@ -224,7 +230,8 @@ def test_a_polls_connector_run_is_outside_the_window_once_it_started_before_the_
 
 
 def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = canopy_env.journal()
     now = datetime.now(UTC)

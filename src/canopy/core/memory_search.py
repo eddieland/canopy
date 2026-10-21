@@ -137,7 +137,7 @@ def _reach(scope: RunScope | None, ticket: str | None) -> sql.Fragment:
                 MemoryScope.TICKET,
                 scope.ticket_key,
                 sql.in_("m.status", (MemoryStatus.ACTIVE, MemoryStatus.SUPERSEDED)),
-            )
+            ),
         )
     if scope.lessons:
         # With no repository leased, `IN ()` matches none, and only a lesson for every repository is found.
@@ -147,6 +147,6 @@ def _reach(scope: RunScope | None, ticket: str | None) -> sql.Fragment:
                 MemoryScope.LESSON,
                 MemoryStatus.ACTIVE,
                 sql.in_("m.repo", sorted(scope.repos)),
-            )
+            ),
         )
     return sql.any_of(*clauses)

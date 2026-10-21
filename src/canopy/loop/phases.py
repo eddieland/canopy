@@ -57,11 +57,11 @@ FAILED: AbstractSet[CheckConclusion] = frozenset(
         CheckConclusion.TIMED_OUT,
         CheckConclusion.ACTION_REQUIRED,
         CheckConclusion.STARTUP_FAILURE,
-    }
+    },
 )
 #: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
 PASSED: AbstractSet[CheckConclusion] = frozenset(
-    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED}
+    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
 )
 _DISPATCH = "dispatch:"
 _ATTENTION = attention.ACTION_PREFIX
@@ -448,7 +448,8 @@ class _World:
             # Without label history, the worker's question comment is the reference point (DESIGN §17).
             comments = self.comments.get(key, [])
             since = label.get("added_at") or next(
-                (c.commented_at for c in reversed(comments) if c.source == "worker"), None
+                (c.commented_at for c in reversed(comments) if c.source == "worker"),
+                None,
             )
             repliers = set(self.ctx.config.trust.authorized_repliers)
             replied = since is not None and any(
@@ -501,14 +502,14 @@ class _World:
         units = {u.repo: u for u in self.units_of.get(key, []) if u.repo is not None}
         found: list[Derived] = []
         for repo in sorted(
-            {*units, *(r.name for r in self.ctx.workspace.repos if self._branch_in(r.name, key, record))}
+            {*units, *(r.name for r in self.ctx.workspace.repos if self._branch_in(r.name, key, record))},
         ):
             unit = units.get(repo)
             if unit is not None and unit.pr_url is not None:
                 found.append(self._pr_unit(key, repo, unit, unit.pr_url))
             elif repo not in self.fresh_repos:
                 found.append(
-                    Derived(key, repo, stale=f"branches of {repo} not observed since {db.format_time(self.cutoff)}")
+                    Derived(key, repo, stale=f"branches of {repo} not observed since {db.format_time(self.cutoff)}"),
                 )
             else:
                 branch = self._branch_in(repo, key, record)
@@ -647,7 +648,9 @@ def _done(conn: sqlite3.Connection) -> set[str]:
 
 
 def _fresh_repos(
-    conn: sqlite3.Connection, branches: Mapping[str, Sequence[records.ObservedBranch]], cutoff: datetime
+    conn: sqlite3.Connection,
+    branches: Mapping[str, Sequence[records.ObservedBranch]],
+    cutoff: datetime,
 ) -> frozenset[str]:
     """The repositories whose branches were read whole since `cutoff`.
 
@@ -664,7 +667,10 @@ def _fresh_repos(
         sql.select("*")
         .from_("connector_runs")
         .where(
-            "kind = ? AND status = ? AND ended_at >= ?", SourceKind.VCS, ConnectorRunStatus.OK, db.format_time(cutoff)
+            "kind = ? AND status = ? AND ended_at >= ?",
+            SourceKind.VCS,
+            ConnectorRunStatus.OK,
+            db.format_time(cutoff),
         ),
     )
     for run in runs:

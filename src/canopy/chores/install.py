@@ -118,7 +118,7 @@ def install(ws: Workspace, name: str) -> Installed:
     if "chores" not in old and "chores" in _read(config.user_config_path()):
         raise InstallError(
             f"your chores are in {config.user_config_path()}, and a chore in {private} would hide them all; move them "
-            "there first"
+            "there first",
         )
     prompt = ws.state_dir / PROMPTS_DIR / f"{name}.md"
     table = dict(tomllib.loads(shipped_text)["chores"][name])
@@ -190,7 +190,7 @@ def _with_table(text: str, name: str, block: str) -> tuple[str, bool]:
     lines = text.splitlines(keepends=True)
     quoted = re.escape(name)
     header = re.compile(
-        rf"[ \t]*\[[ \t]*chores[ \t]*\.[ \t]*(?:{quoted}|\"{quoted}\"|'{quoted}')[ \t]*\][ \t]*(?:#.*)?"
+        rf"[ \t]*\[[ \t]*chores[ \t]*\.[ \t]*(?:{quoted}|\"{quoted}\"|'{quoted}')[ \t]*\][ \t]*(?:#.*)?",
     )
     found = next((i for i, line in enumerate(lines) if header.fullmatch(line.rstrip("\r\n"))), None)
     if found is None:
@@ -251,7 +251,7 @@ def _check(private: Path, old: Mapping[str, object], new_text: str, name: str, t
     if not ok:
         raise InstallError(
             f"cannot replace [chores.{name}] in {private} without changing anything else in it; remove that table, "
-            "then install again"
+            "then install again",
         )
 
 

@@ -99,7 +99,9 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(scenario: S
 
 
 def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     scenario.configures(runtime={"setup_cmd": "sh -c 'echo cannot fetch >&2; exit 3'"})
     run = scenario.run(dispatches(slug="work"))
@@ -178,7 +180,9 @@ def test_setup_and_the_include_file_are_user_only(canopy_env: CanopyEnv, section
 
 
 def test_every_lease_passes_the_operators_include_file(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     manifest = scenario.env.home / ".config" / "canopy" / "worktreeinclude"
     manifest.parent.mkdir(parents=True, exist_ok=True)
@@ -194,7 +198,9 @@ def test_every_lease_passes_the_operators_include_file(
 
 
 def test_without_an_include_file_treehouse_reads_the_committed_one(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     scenario.run(dispatches(slug="work"), worker=worker_does(["true"]))
     [get] = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
@@ -202,7 +208,9 @@ def test_without_an_include_file_treehouse_reads_the_committed_one(
 
 
 def test_a_missing_include_file_refuses_the_dispatch_and_leases_nothing(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     scenario.configures(paths={"worktree_include": "~/nowhere/worktreeinclude"})
     [(action, rationale)] = scenario.refuses(dispatches(slug="work"))

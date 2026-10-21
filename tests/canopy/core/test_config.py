@@ -45,7 +45,7 @@ def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEn
 def test_user_file_wins_over_the_workspace_file_for_shared_keys(canopy_env: CanopyEnv) -> None:
     canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\nbranch_prefix = "bot/"\n')
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[runtime]", '[trust]\nbranch_prefix = "mine/"\n\n[runtime]', 1)
+        canopy_env.user_file.read_text().replace("[runtime]", '[trust]\nbranch_prefix = "mine/"\n\n[runtime]', 1),
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.tracker.query == "project = A"
@@ -56,7 +56,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
     canopy_env.append_shared('needs_human_label = "blocked-on-team"\n')
     assert load(canopy_env.root, canopy_env.user_file).tracker.needs_human_label == "blocked-on-team"
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nneeds_human_label = "ask-me"\n', 1)
+        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nneeds_human_label = "ask-me"\n', 1),
     )
     assert load(canopy_env.root, canopy_env.user_file).tracker.needs_human_label == "ask-me"
 
@@ -143,7 +143,10 @@ def test_a_removed_pr_label_says_to_delete_it(canopy_env: CanopyEnv) -> None:
 )
 @pytest.mark.parametrize("where", ["workspace", "user"])
 def test_fix_cis_keys_were_removed_and_say_what_replaced_them(
-    canopy_env: CanopyEnv, where: str, key: str, says: str
+    canopy_env: CanopyEnv,
+    where: str,
+    key: str,
+    says: str,
 ) -> None:
     """A resume fixes CI now, so its limit counts CI runs, and the cooldown holds a resume for CI alone (DESIGN §8)."""
     if where == "workspace":
@@ -162,7 +165,10 @@ def test_fix_cis_keys_were_removed_and_say_what_replaced_them(
     ],
 )
 def test_splits_keys_were_removed_and_say_what_replaced_them(
-    canopy_env: CanopyEnv, table: str, key: str, says: str
+    canopy_env: CanopyEnv,
+    table: str,
+    key: str,
+    says: str,
 ) -> None:
     """Workers file follow-up tickets now, which replaced split runs (M46)."""
     text = canopy_env.user_file.read_text()
@@ -396,11 +402,12 @@ def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
 
 @pytest.mark.parametrize("key", ["worker_cmd_prefix", "worker_cmd_suffix"])
 @pytest.mark.parametrize(
-    ("value", "error"), [("wrap {prompt}", "must not contain {prompt}"), ("wrap 'open", "No closing quotation")]
+    ("value", "error"),
+    [("wrap {prompt}", "must not contain {prompt}"), ("wrap 'open", "No closing quotation")],
 )
 def test_a_worker_prefix_or_suffix_places_no_prompt(canopy_env: CanopyEnv, key: str, value: str, error: str) -> None:
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("\n[runtime]\n", f'\n[runtime]\n{key} = "{value}"\n')
+        canopy_env.user_file.read_text().replace("\n[runtime]\n", f'\n[runtime]\n{key} = "{value}"\n'),
     )
     with pytest.raises(ConfigError, match=re.escape(f"runtime.{key}: Value error, {error}")):
         load(canopy_env.root, canopy_env.user_file)
@@ -419,7 +426,7 @@ def test_an_agent_template_without_the_definitions_dir_prints_its_replacement(ca
 
 def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(
-        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line)
+        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
     )
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     for template in (runtime.overseer_cmd, runtime.worker_cmd):
@@ -483,7 +490,7 @@ def test_changed_names_the_keys_whose_values_differ_in_the_schemas_order(canopy_
     assert config.changed(before, before) == []
     canopy_env.append_user(
         "\n[serve]\nport = 9000\n\n[capacity]\nmax_workers = 3\n"
-        '\n[chores.deps]\nprompt = "~/chores/deps.md"\nevery_minutes = 60\n'
+        '\n[chores.deps]\nprompt = "~/chores/deps.md"\nevery_minutes = 60\n',
     )
     after = load(canopy_env.root, canopy_env.user_file)
     # A table section is one key, whichever of its tables changed.
@@ -495,7 +502,7 @@ def test_the_private_file_wins_over_the_user_file_and_the_workspace_file(canopy_
     canopy_env.append_shared('\n[trust]\nbranch_prefix = "team/"\n')
     canopy_env.append_user('\n[trust]\nbranch_prefix = "mine/"\n')
     canopy_env.write_private(
-        '[tracker]\nlabels = ["agent-ready-acme"]\nquery = "project = MINE"\n\n[trust]\nbranch_prefix = "acme/"\n'
+        '[tracker]\nlabels = ["agent-ready-acme"]\nquery = "project = MINE"\n\n[trust]\nbranch_prefix = "acme/"\n',
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.tracker.labels == ("agent-ready-acme",)
@@ -517,7 +524,12 @@ def test_a_private_key_in_the_workspace_file_names_the_private_file(canopy_env: 
 
 def test_retention_defaults_to_the_proposal_and_takes_zero_for_forever(canopy_env: CanopyEnv) -> None:
     assert load(canopy_env.root, canopy_env.user_file).retention == config.Retention(
-        run_files_days=30, tick_files_days=7, journal_days=90, log_max_mib=50, log_keep=3, memory_days=30
+        run_files_days=30,
+        tick_files_days=7,
+        journal_days=90,
+        log_max_mib=50,
+        log_keep=3,
+        memory_days=30,
     )
     canopy_env.append_user("\n[retention]\nrun_files_days = 0\nlog_keep = 0\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
@@ -550,7 +562,7 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
     canopy_env.append_user(
         '\n[trust]\nreview_replies = "post"\n\n[connect.sources.ghe]\nkind = "vcs"\n'
         'cmd = "ghe-read --host ghe.example.com"\ntimeout_minutes = 5\n'
-        '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
+        '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n',
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.trust.review_replies == "post"
@@ -583,7 +595,8 @@ def test_review_replies_and_sources_are_checked(canopy_env: CanopyEnv, toml: str
 
 
 @pytest.mark.parametrize(
-    "toml", ['[trust]\nreview_replies = "post"\n', '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n']
+    "toml",
+    ['[trust]\nreview_replies = "post"\n', '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n'],
 )
 def test_the_workspace_file_cannot_say_how_replies_go_or_what_reads_github(canopy_env: CanopyEnv, toml: str) -> None:
     canopy_env.append_shared("\n" + toml)

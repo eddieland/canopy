@@ -54,7 +54,8 @@ def test_after_a_run_its_pr_is_read_and_its_drafts_checked(scenario: Scenario, g
     scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), comment(502, "PRRT_2"))
     run = scenario.run(
-        WORK, worker=sends_drafts([thread(501), thread(999), {"on": "pr", "pr": PR, "text": "Fixed CI."}])
+        WORK,
+        worker=sends_drafts([thread(501), thread(999), {"on": "pr", "pr": PR, "text": "Fixed CI."}]),
     )
     reply, unknown, body = all_drafts(conn)
     assert (reply.status, reply.thread_id) == (DraftStatus.WAITING, "PRRT_1")
@@ -73,7 +74,9 @@ def test_after_a_run_its_pr_is_read_and_its_drafts_checked(scenario: Scenario, g
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whole(
-    scenario: Scenario, github_state: Path, ctx: Context
+    scenario: Scenario,
+    github_state: Path,
+    ctx: Context,
 ) -> None:
     conn = scenario.conn
     scenario.configures("private", trust=APPROVE)
@@ -132,7 +135,8 @@ def stop_once_there(path: Path) -> None:
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_later_runs_draft_supersedes_an_unsent_one_for_the_same_thread(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), comment(503, "PRRT_1", "bob"), comment(502, "PRRT_2"))
@@ -198,7 +202,7 @@ def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_
     scenario.run(WORK, worker=sends_drafts([thread(501)]))
     scenario.tick(*waits(KEY, rationale="waiting on review"))
     assert [(i.ticket_key, i.reason, i.repo) for i in attention.current(scenario.conn)] == [
-        (KEY, "drafts_waiting", "repo")
+        (KEY, "drafts_waiting", "repo"),
     ]
     assert "drafts_waiting" not in str(scenario.state())
     assert attention.for_overseer(scenario.conn) == []
@@ -206,7 +210,8 @@ def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_
 
 @pytest.mark.usefixtures("git_pool")
 def test_dropping_drafts_takes_them_off_the_attention_list_without_a_tick(
-    scenario: Scenario, github_state: Path
+    scenario: Scenario,
+    github_state: Path,
 ) -> None:
     scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), comment(502, "PRRT_2"))
@@ -227,7 +232,9 @@ def test_dropping_drafts_takes_them_off_the_attention_list_without_a_tick(
 
 
 def test_a_read_records_only_what_it_read_whole_and_a_line_it_cannot_use_leaves_its_pr_unread(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, tmp_path: Path
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    tmp_path: Path,
 ) -> None:
     other = "https://github.com/acme/api/pull/8"
     third = "https://github.com/acme/api/pull/9"
@@ -242,7 +249,7 @@ def test_a_read_records_only_what_it_read_whole_and_a_line_it_cannot_use_leaves_
     ]
     reader = tmp_path / "reader"
     reader.write_text(
-        "#!/bin/sh\ncat >/dev/null\ncat <<'EOF'\n" + "\n".join(map(json.dumps, lines)) + "\nnot json\nEOF\n"
+        "#!/bin/sh\ncat >/dev/null\ncat <<'EOF'\n" + "\n".join(map(json.dumps, lines)) + "\nnot json\nEOF\n",
     )
     reader.chmod(0o755)
     canopy_env.write_private(f'[connect.sources.github]\nkind = "vcs"\ncmd = "{reader}"\n')
@@ -278,7 +285,9 @@ def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(scenario: Scenari
 @pytest.mark.usefixtures("git_pool")
 @pytest.mark.parametrize("write", ["keep_head", "keep"])
 def test_a_diff_that_cannot_be_kept_leaves_the_run_and_its_drafts_as_they_are(
-    scenario: Scenario, github_state: Path, write: str
+    scenario: Scenario,
+    github_state: Path,
+    write: str,
 ) -> None:
     scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501))

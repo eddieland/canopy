@@ -278,7 +278,7 @@ _INLINE = frozenset(
         "mediaInline",
         "placeholder",
         "inlineExtension",
-    }
+    },
 )
 
 

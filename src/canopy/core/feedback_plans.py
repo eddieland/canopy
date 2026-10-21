@@ -140,7 +140,7 @@ def offered(conn: sqlite3.Connection, trust: Trust, key: str, prs: Sequence[str]
                     line=row.line,
                     outdated=row.outdated,
                     body=row.body,
-                )
+                ),
             )
     return found
 
@@ -297,7 +297,8 @@ def record(
         sql.execute_many(
             conn,
             sql.insert_rows(
-                "feedback_plan_items", ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply")
+                "feedback_plan_items",
+                ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
             ),
             [
                 (plan.id, number, o.pr_url, o.item, o.id, n.proposal, n.reply)
@@ -340,7 +341,9 @@ def get(conn: sqlite3.Connection, plan_id: int) -> records.FeedbackPlan | None:
         The plan's row, or None when there is none.
     """
     return records.fetch_one(
-        conn, records.FeedbackPlan, sql.select("*").from_("feedback_plans").where("id = ?", plan_id)
+        conn,
+        records.FeedbackPlan,
+        sql.select("*").from_("feedback_plans").where("id = ?", plan_id),
     )
 
 
@@ -351,7 +354,9 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
         The plans' rows, oldest first.
     """
     return records.fetch_all(
-        conn, records.FeedbackPlan, sql.select("*").from_("feedback_plans").where("ticket_key = ?", key).order_by("id")
+        conn,
+        records.FeedbackPlan,
+        sql.select("*").from_("feedback_plans").where("ticket_key = ?", key).order_by("id"),
     )
 
 
@@ -375,7 +380,8 @@ def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ..
         Their names, in order.
     """
     rows = sql.execute(
-        conn, sql.select("repo").from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo")
+        conn,
+        sql.select("repo").from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo"),
     ).fetchall()
     return tuple(str(r[0]) for r in rows)
 
@@ -433,7 +439,10 @@ def resume_refusal(
 
 
 def follows(
-    conn: sqlite3.Connection, policy: Policy, key: str, reasons: Collection[str]
+    conn: sqlite3.Connection,
+    policy: Policy,
+    key: str,
+    reasons: Collection[str],
 ) -> records.FeedbackPlan | None:
     """The approved feedback plan a `resume` for `reasons` follows, once `resume_refusal` let it through.
 
@@ -486,7 +495,12 @@ def dispatch_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tupl
 
 
 def approve(
-    conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str, dispatch_lock: Path
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    key: str,
+    *,
+    channel: str,
+    dispatch_lock: Path,
 ) -> records.FeedbackPlan:
     """Approve the ticket's current feedback plan, whole, as its file stands now, recording its hash (DESIGN §32).
 
@@ -503,7 +517,8 @@ def approve(
         running = db.running_run_of(conn, key)
         if running is not None and running.kind == RunKind.FEEDBACK_PLAN:
             raise Refused(
-                "bad_plan", f"feedback plan run {running.id} for {key} is running; wait for it, then decide on it"
+                "bad_plan",
+                f"feedback plan run {running.id} for {key} is running; wait for it, then decide on it",
             )
         plan = current(conn, key)
         if plan is None:
@@ -514,11 +529,13 @@ def approve(
         reading = plans.read(path)
         if plan.status is PlanStatus.APPROVED and reading.sha256 == plan.approved_sha256:
             raise Refused(
-                "bad_plan", f"feedback plan {plan.id} of {key} is approved, and its file has not changed since"
+                "bad_plan",
+                f"feedback plan {plan.id} of {key} is approved, and its file has not changed since",
             )
         if reading.problem is not None:
             raise Refused(
-                "bad_plan", f"feedback plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved"
+                "bad_plan",
+                f"feedback plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved",
             )
         [approved] = records.fetch_all(
             conn,

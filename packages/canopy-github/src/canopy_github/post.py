@@ -446,7 +446,10 @@ def _submit(  # noqa: PLR0917  (what one review is posted from)
 
 
 def _fill(
-    client: Client, pending: str, replies: Sequence[tuple[int, str, str]], comments: Sequence[NewComment]
+    client: Client,
+    pending: str,
+    replies: Sequence[tuple[int, str, str]],
+    comments: Sequence[NewComment],
 ) -> list[Mapping[str, object]]:
     """Add each reply and each comment to pending review `pending`, in order.
 

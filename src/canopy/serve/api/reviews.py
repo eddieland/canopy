@@ -152,7 +152,11 @@ def send(run_id: ReviewId, body: ReviewSendRequest, backend: BackendDep) -> Revi
         },
     )
     return ReviewSent(
-        run=run_id, findings=findings, ticket_key=sent.ticket, message_id=sent.replied.message_id, new=sent.replied.new
+        run=run_id,
+        findings=findings,
+        ticket_key=sent.ticket,
+        message_id=sent.replied.message_id,
+        new=sent.replied.new,
     )
 
 

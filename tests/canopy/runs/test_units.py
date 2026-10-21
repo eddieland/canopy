@@ -62,7 +62,9 @@ def slots_of(conn: sqlite3.Connection, run_id: int) -> dict[str, Path]:
 
 
 def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
+    ws_scenario: Scenario,
+    ws: Ws,
+    treehouse_state: Path,
 ) -> None:
     """M7 acceptance, against the fakes: one run over two repositories pushes both and records both PRs."""
     conn = ws_scenario.conn
@@ -154,7 +156,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws_scenario: Scenari
     assert ws_scenario.run(dispatches(repo="api", slug="login"), worker=login).kind == RunKind.IMPLEMENT
     # The first implement named the branch; a later one adds a unit on the same branch, and may not rename it.
     assert ws_scenario.refuses(dispatches(repo="web", slug="other")) == [
-        ("refused:bad_slug", "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug")
+        ("refused:bad_slug", "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug"),
     ]
     ws_scenario.run(dispatches(repo="web", slug="login"), worker=login)
     ws_scenario.run(ci_fix("api"), worker=login)
@@ -208,13 +210,14 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
             (
                 "refused:bad_slug",
                 "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug",
-            )
+            ),
         ]
 
 
 def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     ws_scenario.run(
-        dispatches(repo=("api", "web")), worker=worker_does(*push_in("api"), *push_in("web"), result=done(PRS))
+        dispatches(repo=("api", "web")),
+        worker=worker_does(*push_in("api"), *push_in("web"), result=done(PRS)),
     )
     # The overseer records web's phase and cursor, and the ticket's own; the next tick's state block shows them.
     ws_scenario.tick(
@@ -265,7 +268,15 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "nope", "--phase", "ci_red", code=1)
         assert "'nope' is not a repository in this workspace (api, web)" in refused.err
         updated = ws_scenario.overseer(
-            "ticket", "set", "PROJ-1", "--repo", "api", "--cursor", f"review={reviewed}", "--phase", "ci_red"
+            "ticket",
+            "set",
+            "PROJ-1",
+            "--repo",
+            "api",
+            "--cursor",
+            f"review={reviewed}",
+            "--phase",
+            "ci_red",
         )
         assert updated.out == "updated PROJ-1 (api)\n"
         [unit] = db.units(conn, "PROJ-1")
@@ -322,12 +333,13 @@ def test_untrusted_review_is_a_units_phase(ws_scenario: Scenario) -> None:
 
 
 def test_a_joint_prompt_override_without_the_repositories_is_refused(
-    ws_scenario: Scenario, treehouse_state: Path
+    ws_scenario: Scenario,
+    treehouse_state: Path,
 ) -> None:
     overrides = ws_scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text(
-        "Work {{KEY}} in {{SLOT}} on {{BRANCH}} for {{LABELS}}\n{{DRAFTS}}\n"
+        "Work {{KEY}} in {{SLOT}} on {{BRANCH}} for {{LABELS}}\n{{DRAFTS}}\n",
     )
     [(action, reason)] = ws_scenario.refuses(dispatches(repo=("api", "web")))
     assert action == "refused:bad_prompt"
@@ -339,7 +351,9 @@ def test_a_joint_prompt_override_without_the_repositories_is_refused(
 
 
 def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
+    ws_scenario: Scenario,
+    ws: Ws,
+    treehouse_state: Path,
 ) -> None:
     """M7 acceptance, against the fakes: a joint run killed mid-way is found by the next tick, every slot returned."""
     working = ws_scenario.starts(dispatches(repo=("api", "web")))
@@ -397,7 +411,9 @@ def test_canopy_removes_only_the_desks_it_made(ws: Ws) -> None:
 
 
 def test_a_joint_run_refuses_a_workspace_that_defines_canopys_agents(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path
+    ws_scenario: Scenario,
+    ws: Ws,
+    treehouse_state: Path,
 ) -> None:
     # The desk is not a repository, so OpenCode may read config above it: the workspace root is checked (D044).
     (ws.root / ".opencode" / "agent").mkdir(parents=True)

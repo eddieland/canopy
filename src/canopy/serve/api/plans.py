@@ -70,7 +70,10 @@ def ticket_plan(key: TicketKey, plan_id: PlanId, backend: BackendDep) -> PlanFil
 
 
 @router.post(
-    "/tickets/{key}/plan", operation_id="changeTicketPlan", summary="Decide a ticket's plan", responses=REFUSED
+    "/tickets/{key}/plan",
+    operation_id="changeTicketPlan",
+    summary="Decide a ticket's plan",
+    responses=REFUSED,
 )
 def change(key: TicketKey, body: PlanAction, backend: BackendDep) -> PlanChanged:
     """`canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: approve the newest plan, ask for a new one, or skip.
@@ -135,7 +138,12 @@ def comment(key: TicketKey, body: PlanCommentRequest, backend: BackendDep) -> Pl
     with backend.open() as ctx:
         try:
             added = plan_threads.add(
-                ctx.conn, ref.id, quote=body.quote, prefix=body.prefix, suffix=body.suffix, body=body.body
+                ctx.conn,
+                ref.id,
+                quote=body.quote,
+                prefix=body.prefix,
+                suffix=body.suffix,
+                body=body.body,
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None
@@ -175,7 +183,13 @@ def change_thread(key: TicketKey, thread_id: ThreadId, body: PlanThreadChange, b
         try:
             anchor = (body.anchor.quote, body.anchor.prefix, body.anchor.suffix) if body.anchor is not None else None
             changed = plan_threads.change(
-                ctx.conn, ref.id, thread_id, body=body.body, reply_id=body.reply, resolved=body.resolved, anchor=anchor
+                ctx.conn,
+                ref.id,
+                thread_id,
+                body=body.body,
+                reply_id=body.reply,
+                resolved=body.resolved,
+                anchor=anchor,
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None

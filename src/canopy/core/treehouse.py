@@ -168,12 +168,17 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None, pool: Pool
         return leased
     raise TreehouseError(
         f"no slot of the {len(before)} could be reused, and capacity declares {pool.slots} for this pool; "
-        f"{_undo(runner, leased, pool)}"
+        f"{_undo(runner, leased, pool)}",
     )
 
 
 def lease_as(
-    runner: procs.Runner, holder: str, *, base: str | None = None, pool: Pool = DEFAULT_POOL, fetch: bool = True
+    runner: procs.Runner,
+    holder: str,
+    *,
+    base: str | None = None,
+    pool: Pool = DEFAULT_POOL,
+    fetch: bool = True,
 ) -> Lease:
     """Lease any slot of `pool` for `holder`, making one if none is available, whatever the pool's declared size.
 
@@ -208,7 +213,12 @@ def lease_as(
 
 
 def return_slot(
-    runner: procs.Runner, path: Path, *, lease_id: str, lease_holder: str, pool: Pool = DEFAULT_POOL
+    runner: procs.Runner,
+    path: Path,
+    *,
+    lease_id: str,
+    lease_holder: str,
+    pool: Pool = DEFAULT_POOL,
 ) -> ReturnOutcome:
     """Return a slot of `pool` only if it is still held under this exact lease.
 

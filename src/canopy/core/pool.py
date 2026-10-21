@@ -465,7 +465,7 @@ class CanopyPool:
         if base == "HEAD" or not _branch_exists(self._git, self.clone, base):
             raise PoolError(
                 f"base branch {base!r} does not exist: no local branch {base} and no remote-tracking branch "
-                f"origin/{base}"
+                f"origin/{base}",
             )
         return base
 
@@ -569,7 +569,9 @@ class CanopyPool:
 
     def _row(self, path: Path) -> records.PoolSlot | None:
         return records.fetch_one(
-            self.conn, records.PoolSlot, sql.select("*").from_("slots").where("path = ?", str(path))
+            self.conn,
+            records.PoolSlot,
+            sql.select("*").from_("slots").where("path = ?", str(path)),
         )
 
     def _seeded(self, path: Path) -> list[str]:

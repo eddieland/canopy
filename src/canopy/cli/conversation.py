@@ -198,7 +198,7 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, notes: str | 
     if plan:
         click.echo(
             "It is planned first: nothing is implemented until you approve its plan with "
-            f"`canopy plan {subject} --approve`."
+            f"`canopy plan {subject} --approve`.",
         )
     if started.running is not None:
         run = started.running
@@ -217,7 +217,8 @@ def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None) -> 
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     noted = requested.request.notes is not None
     logs.for_tick(None).info(
-        "review requested", extra={"pr": subject.id, "already": requested.already, "notes": noted, "channel": CLI}
+        "review requested",
+        extra={"pr": subject.id, "already": requested.already, "notes": noted, "channel": CLI},
     )
     if requested.already:
         replaced = " Its notes are replaced." if (notes or "").strip() else ""
@@ -325,7 +326,8 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
     except conversation.Refused as r:
         raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info(
-        "ticket forgotten", extra={"ticket": subject.id, "branch": forgot.branch, "prs": forgot.prs}
+        "ticket forgotten",
+        extra={"ticket": subject.id, "branch": forgot.branch, "prs": forgot.prs},
     )
     click.echo(f"{subject} is forgotten: its next implement starts over on a new branch.")
     if forgot.branch is not None or forgot.prs:
@@ -333,7 +335,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
         click.echo(f"canopy no longer tracks {', '.join(untracked)}.")
         click.echo(
             "Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and "
-            "the ticket cannot start over."
+            "the ticket cannot start over.",
         )
     granted = policy.grants(ctx.conn)
     for (key, repo), counts in sorted(policy.attempts(ctx.conn).items(), key=str):
@@ -342,7 +344,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
             where, flag = ("", "") if repo is None else (f" in {repo}", f" --repo {repo}")
             click.echo(
                 f"It has had {counts['implement']} implement runs{where}, and its limit is {limit}: grant it "
-                f"another with `canopy grant {subject} implement{flag}`."
+                f"another with `canopy grant {subject} implement{flag}`.",
             )
     return 0
 
@@ -353,7 +355,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 @click.argument(
     "kind",
     type=click.Choice(
-        [*(str(k) for k in (*policy.UNIT_GRANT_KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND, str(policy.RETIRED)]
+        [*(str(k) for k in (*policy.UNIT_GRANT_KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND, str(policy.RETIRED)],
     ),
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
@@ -380,11 +382,12 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     except conversation.Refused as r:
         raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info(
-        "attempts granted", extra={"ticket": subject.id, "repo": granted.repo, "kind": kind, "runs": runs}
+        "attempts granted",
+        extra={"ticket": subject.id, "repo": granted.repo, "kind": kind, "runs": runs},
     )
     click.echo(
         f"{subject} in {granted.repo} has had {granted.runs} {kind} runs, and may now have {granted.limit}. "
-        "The next tick decides whether to dispatch it."
+        "The next tick decides whether to dispatch it.",
     )
     return 0
 
@@ -405,7 +408,7 @@ def _grant_ticket(ctx: Context, subject: Ref, kind: str, *, repo: str | None, ru
     logs.for_tick(None).info("attempts granted", extra={"ticket": subject.id, "kind": kind, "runs": runs})
     click.echo(
         f"{subject} has had {granted.runs} {kind} runs, and may now have {granted.limit}. "
-        "The next tick decides whether to dispatch it."
+        "The next tick decides whether to dispatch it.",
     )
     return 0
 
@@ -420,7 +423,7 @@ def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -
     logs.for_tick(None).info("reviews granted", extra={"pr": subject.id, "runs": runs})
     click.echo(
         f"{subject} has had {granted.runs} review runs, and may now have {granted.limit}. "
-        "The next tick decides whether to review it."
+        "The next tick decides whether to review it.",
     )
     return 0
 
@@ -447,7 +450,12 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
     ctx = open_context(click_ctx)
     try:
         conversation.dismiss(
-            ctx.conn, subject, findings, channel=CLI, chores=chore_view.defined(ctx.config, ctx.workspace), undo=undo
+            ctx.conn,
+            subject,
+            findings,
+            channel=CLI,
+            chores=chore_view.defined(ctx.config, ctx.workspace),
+            undo=undo,
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
@@ -474,7 +482,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
     else:
         click.echo(
             f"{subject} {listed} {is_} dismissed: "
-            f"{they} {is_} off the attention list until the chore stops reporting {it}."
+            f"{they} {is_} off the attention list until the chore stops reporting {it}.",
         )
     return 0
 
@@ -512,7 +520,7 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
     if sent.replied.new:
         click.echo(
             f"{subject} findings {numbers} went to {sent.ticket} as message {sent.replied.message_id}: "
-            "the next tick reads it as your go-ahead."
+            "the next tick reads it as your go-ahead.",
         )
     else:
         click.echo(f"{subject} findings {numbers} already went to {sent.ticket} as message {sent.replied.message_id}.")
@@ -522,7 +530,10 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
 @click.command("show")
 @click.argument("ref", metavar="REF")
 @click.option(
-    "--plans", "every_plan", is_flag=True, help="For a ticket, every plan it has had, and your open comments."
+    "--plans",
+    "every_plan",
+    is_flag=True,
+    help="For a ticket, every plan it has had, and your open comments.",
 )
 @click.pass_context
 def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
@@ -729,7 +740,7 @@ def _show_run(ctx: Context, run_id: int) -> None:
         raise CliError(f"no run {run_id}")
     private = ", private" if run["private"] else ""
     click.echo(
-        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}"
+        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}",
     )
     click.echo(f"  started {run['started_at']}" + (f", ended {run['ended_at']}" if run["ended_at"] else ""))
     if run["branch"]:
@@ -774,7 +785,7 @@ def _show_chore(ctx: Context, name: str) -> None:
         click.echo(
             f"  {f.finding.id}  {attention.age(f.since)}  {title}"
             + (f"  {f.finding.link}" if f.finding.link else "")
-            + mark
+            + mark,
         )
     if more:
         click.echo(f"  {attention.more_text(more)}")

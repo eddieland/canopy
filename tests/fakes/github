@@ -178,7 +178,7 @@ def post_pr(state: dict[str, Any], request: dict[str, Any], login: str, outcome:
             "body": request.get("body") or "",
             "url": review_url,
             **({"commit": request["commit"]} if "commit" in request else {}),
-        }
+        },
     )
     if outcome == "unknown":
         return 1
@@ -225,7 +225,7 @@ def add_comments(
                 "url": f"{url}#discussion_r{comment_id}",
                 "review": review_id,
                 "thread": answered["thread"],
-            }
+            },
         )
         discussion = f"{url}#discussion_r{comment_id}"
         lines.append({"kind": "comment", "comment": reply["comment"], "id": comment_id, "url": discussion})
@@ -244,7 +244,7 @@ def add_comments(
                 "url": discussion,
                 "review": review_id,
                 "thread": where,
-            }
+            },
         )
         lines.append({"kind": "comment", "index": index, "id": comment_id, "url": discussion})
     return lines

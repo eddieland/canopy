@@ -76,7 +76,10 @@ class Stream:
         self._closed = False
 
     async def events(
-        self, *, poll_seconds: float = POLL_SECONDS, lifetime: float | None = None
+        self,
+        *,
+        poll_seconds: float = POLL_SECONDS,
+        lifetime: float | None = None,
     ) -> AsyncIterator[StreamEvent]:
         """Yield every list, the spend, the latest tick, and the pause at once, then whatever changes.
 
@@ -234,8 +237,8 @@ class _Sent:
             self.loop = loop
             found.append(
                 StreamEvent(
-                    LoopUpdated(capacity=loop.capacity, paused=loop.paused, notice=loop.notice, memory=loop.memory)
-                )
+                    LoopUpdated(capacity=loop.capacity, paused=loop.paused, notice=loop.notice, memory=loop.memory),
+                ),
             )
         return found
 

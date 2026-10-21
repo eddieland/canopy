@@ -43,7 +43,7 @@ _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 _ROW_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
     "coalesce(length(CAST(ticket_key AS BLOB)), 0) + coalesce(length(CAST(repo AS BLOB)), 0) + "
-    "coalesce(length(CAST(chore AS BLOB)), 0) + coalesce(length(CAST(pr AS BLOB)), 0)"
+    "coalesce(length(CAST(chore AS BLOB)), 0) + coalesce(length(CAST(pr AS BLOB)), 0)",
 )
 
 
@@ -356,7 +356,7 @@ def _window(conn: sqlite3.Connection) -> int:
 _RUN_BYTES = sql.frag(
     "length(CAST(request AS BLOB)) + length(CAST(recorded AS BLOB)) + length(CAST(refused AS BLOB)) + "
     "length(CAST(stderr AS BLOB)) + coalesce(length(CAST(missed AS BLOB)), 0) + "
-    "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)"
+    "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)",
 )
 
 
@@ -422,7 +422,7 @@ def _derivations(conn: sqlite3.Connection, now: datetime, retention: Retention) 
     row = sql.execute(
         conn,
         sql.select(
-            "count(*) AS n, sum(bytes) AS b, sum(removable) AS rn, sum(CASE WHEN removable THEN bytes END) AS rb"
+            "count(*) AS n, sum(bytes) AS b, sum(removable) AS rn, sum(CASE WHEN removable THEN bytes END) AS rb",
         ).from_("({})", rows),
     ).fetchone()
     return Kind(
@@ -439,7 +439,7 @@ def _derivations(conn: sqlite3.Connection, now: datetime, retention: Retention) 
 # The bytes of a derivation's row: what it holds, not the pages it fills.
 _DERIVED_BYTES = sql.frag(
     "length(CAST(d.ticket_key AS BLOB)) + coalesce(length(CAST(d.repo AS BLOB)), 0) + length(CAST(d.phases AS BLOB)) + "
-    "coalesce(length(CAST(d.stale AS BLOB)), 0) + coalesce(length(CAST(d.overseer_phase AS BLOB)), 0)"
+    "coalesce(length(CAST(d.stale AS BLOB)), 0) + coalesce(length(CAST(d.overseer_phase AS BLOB)), 0)",
 )
 
 
@@ -546,7 +546,13 @@ def _memory_text(conn: sqlite3.Connection, now: datetime, retention: Retention) 
     ).fetchone()
     count, size, removable, removable_bytes = (int(v or 0) for v in found)
     return Kind(
-        "memory text", "rows", count, size, removable, removable_bytes, f"memory_days = {retention.memory_days}"
+        "memory text",
+        "rows",
+        count,
+        size,
+        removable,
+        removable_bytes,
+        f"memory_days = {retention.memory_days}",
     )
 
 

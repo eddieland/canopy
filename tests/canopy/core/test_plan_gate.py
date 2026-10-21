@@ -157,7 +157,9 @@ def test_a_missing_plan_holds_a_resume_until_skipped(scenario: Scenario, git_poo
 
 
 def test_the_operators_plan_verbs_refuse_inside_a_run(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     seen(conn, canopy_env)
     for flags in VERBS:
@@ -196,7 +198,9 @@ def test_start_with_plan_starts_a_private_ticket_planned(scenario: Scenario) -> 
 
 
 def test_start_with_plan_refuses_a_ticket_with_a_branch(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     seen(conn, canopy_env)
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = ?", (KEY,))
@@ -227,7 +231,9 @@ def test_grant_plan_raises_the_tickets_plan_limit(scenario: Scenario, git_pool: 
 
 
 def test_grant_plan_refuses_inside_a_run_and_an_unknown_ticket(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert operator("grant", KEY, "plan") == 1
     assert "grant refused (unknown): canopy has no record of PROJ-1" in capsys.readouterr().err

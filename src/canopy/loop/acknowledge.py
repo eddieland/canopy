@@ -59,7 +59,10 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
     decisions = db.decisions_for_tick(conn, tick_id)
     return {
         key: conversation.note(
-            conn, key, body(tick_id, key, ids, [d for d in decisions if d.ticket_key == key]), answers=ids[-1]
+            conn,
+            key,
+            body(tick_id, key, ids, [d for d in decisions if d.ticket_key == key]),
+            answers=ids[-1],
         )
         for key, ids in sorted(read.items())
     }

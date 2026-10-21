@@ -28,7 +28,10 @@ from canopy.loop import tools
 # click has no optional positional before a required one, so `[KEY] ACTION` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] ACTION")
 @click.option(
-    "--rationale", required=True, type=TextType(), help="Why, in your own words: `canopy decisions` shows it."
+    "--rationale",
+    required=True,
+    type=TextType(),
+    help="Why, in your own words: `canopy decisions` shows it.",
 )
 @click.pass_context
 def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str) -> int:
@@ -63,13 +66,20 @@ def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
 # click has no optional positional before a required one, so `[KEY] REASON` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] REASON")
 @click.option(
-    "--detail", required=True, type=TextType(), help="What the operator needs to know, shown on the attention list."
+    "--detail",
+    required=True,
+    type=TextType(),
+    help="What the operator needs to know, shown on the attention list.",
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit the item is about, in a workspace.")
 @click.option("--pr", "pr", type=PR_URL, help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
 @click.pass_context
 def cmd_attention(
-    click_ctx: click.Context, words: tuple[str, ...], detail: str, repo: str | None, pr: str | None
+    click_ctx: click.Context,
+    words: tuple[str, ...],
+    detail: str,
+    repo: str | None,
+    pr: str | None,
 ) -> int:
     """Record an attention item about a ticket, or about a PR with --pr (overseer only)."""
     # A REASON with neither KEY nor --pr is the request's to refuse, in the words its tool's refusal uses.

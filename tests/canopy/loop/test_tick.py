@@ -111,7 +111,11 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     ],
 )
 def test_the_session_title_says_what_started_the_tick_and_what_it_faces(
-    woken_by: tick.WokenBy | None, tickets: int, running: int, open_items: int, title: str
+    woken_by: tick.WokenBy | None,
+    tickets: int,
+    running: int,
+    open_items: int,
+    title: str,
 ) -> None:
     """So the runtime's session list tells a tick with something before it from one of a quiet stretch (DESIGN §13)."""
     assert tick.session_title(7, woken_by, tickets=tickets, running=running, open_items=open_items) == title
@@ -286,10 +290,13 @@ def test_the_done_token_in_an_earlier_message_fails_the_tick(scenario: Scenario)
 
 
 @pytest.mark.parametrize(
-    ("exit_code", "failure"), [(1, "overseer exited 1"), (0, "overseer's final message has no CANOPY_TICK_DONE line")]
+    ("exit_code", "failure"),
+    [(1, "overseer exited 1"), (0, "overseer's final message has no CANOPY_TICK_DONE line")],
 )
 def test_an_overseer_failure_names_the_error_the_runtime_reported(
-    scenario: Scenario, exit_code: int, failure: str
+    scenario: Scenario,
+    exit_code: int,
+    failure: str,
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
     server = {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}}
@@ -301,10 +308,13 @@ def test_an_overseer_failure_names_the_error_the_runtime_reported(
 
 
 @pytest.mark.parametrize(
-    ("names", "reported"), [("ABC", "A; then B; then C"), ("ABCDE", "A; then 3 more; then E"), ("ABAB", "A; then B")]
+    ("names", "reported"),
+    [("ABC", "A; then B; then C"), ("ABCDE", "A; then 3 more; then E"), ("ABAB", "A; then B")],
 )
 def test_an_overseer_failure_names_each_distinct_error_the_first_and_last_past_three(
-    scenario: Scenario, names: str, reported: str
+    scenario: Scenario,
+    names: str,
+    reported: str,
 ) -> None:
     """The first error may be the cause, and the last ended the run (OpenCode goes on after a context overflow)."""
     with_events(scenario.env, "canopy-overseer")
@@ -322,7 +332,9 @@ def test_an_overseer_that_ends_its_tick_after_an_error_is_ok(scenario: Scenario)
 
 @pytest.mark.parametrize(("last_line", "status"), [("CANOPY_TICK_DONE", "ok"), ("I got distracted", "overseer_failed")])
 def test_an_overseer_printing_json_events_is_read_by_their_text(
-    scenario: Scenario, last_line: str, status: str
+    scenario: Scenario,
+    last_line: str,
+    status: str,
 ) -> None:
     """With OpenCode's `--format json`, its last line of stdout is an event; the done line is in the events' text."""
     with_events(scenario.env, "canopy-overseer")
@@ -494,7 +506,10 @@ def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
     ],
 )
 def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
-    scenario: Scenario, tmp_path: Path, script: str, summary: str
+    scenario: Scenario,
+    tmp_path: Path,
+    script: str,
+    summary: str,
 ) -> None:
     scenario.tick(dry_run=True)  # an `ok` tick, whose list the failed one leaves standing
     with broken_canopy(tmp_path, script):
@@ -537,7 +552,10 @@ def test_too_little_free_disk_closes_the_tick_without_the_overseer(scenario: Sce
 
 
 def test_busy_lock_exits_zero_without_a_tick(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with lock.hold(canopy_env.state_dir / "lock"):
         assert main(["tick", "--dry-run"]) == 0

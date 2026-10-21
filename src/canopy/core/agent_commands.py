@@ -73,7 +73,9 @@ def commands(cfg: Config, layer_of: Mapping[str, Layer], definitions_dir: Path) 
 
     found = [
         Command(
-            "overseer", keys("runtime.overseer_cmd"), render(runtime.overseer_cmd, "tick 1 · by hand · nothing open")
+            "overseer",
+            keys("runtime.overseer_cmd"),
+            render(runtime.overseer_cmd, "tick 1 · by hand · nothing open"),
         ),
         Command(
             "worker",

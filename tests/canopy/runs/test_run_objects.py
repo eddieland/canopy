@@ -65,7 +65,10 @@ def assert_healthy(slot: Path, primary: Path) -> None:
 
 
 def test_a_sandboxed_workers_commits_are_pushed_from_the_run_directory_and_the_slot_is_tidied(
-    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]], treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    treehouse_state: Path,
 ) -> None:
     primary, _ = worktree_pool
     run = scenario.run(dispatches(slug="work"), worker=worker_does(["sh", "-c", WORKER]))
@@ -84,7 +87,9 @@ def test_a_sandboxed_workers_commits_are_pushed_from_the_run_directory_and_the_s
 
 
 def test_an_unsandboxed_run_leaves_the_directory_empty_and_its_slot_alone(
-    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]]
+    scenario: Scenario,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
 ) -> None:
     commits = worker_does(hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"))
     run = scenario.run(dispatches(slug="work"), worker=commits)

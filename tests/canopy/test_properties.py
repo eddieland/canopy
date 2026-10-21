@@ -106,7 +106,9 @@ VALIDATORS = [
 @pytest.mark.parametrize(("pattern", "accepts"), VALIDATORS)
 @given(data=st.data())
 def test_validators_accept_the_whole_pattern_and_nothing_around_it(
-    pattern: re.Pattern[str], accepts: Callable[[str], bool], data: st.DataObject
+    pattern: re.Pattern[str],
+    accepts: Callable[[str], bool],
+    data: st.DataObject,
 ) -> None:
     value = data.draw(near(pattern))
     accepted = accepts(value)
@@ -159,7 +161,7 @@ def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: i
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text(
         '[tracker]\nprovider = "jira"\nquery = "q"\n'
         f"[policy]\nmax_resume_attempts = {attempts}\nci_cooldown_minutes = {cooldown}\n"
-        f"max_implement_attempts = {attempts}\n"
+        f"max_implement_attempts = {attempts}\n",
     )
     user = tmp_path / "config.toml"
     user.write_text('[tracker]\nlabels = ["mine"]\n')

@@ -51,7 +51,10 @@ def lapse(conn: sqlite3.Connection) -> None:
     ],
 )
 def test_the_next_worker_hears_the_notice_in_force_and_no_other(
-    scenario: Scenario, git_pool: GitPool, then: list[str] | str | None, heard: str | None
+    scenario: Scenario,
+    git_pool: GitPool,
+    then: list[str] | str | None,
+    heard: str | None,
 ) -> None:
     scenario.operator("notice", OUTAGE, "--for", "2h")
     if then == "lapsed":
@@ -150,7 +153,10 @@ def test_notice_usage(scenario: Scenario, args: list[str]) -> None:
 
 @pytest.mark.parametrize("variable", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
 def test_only_the_operator_sets_or_clears_a_notice(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str], variable: str
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+    variable: str,
 ) -> None:
     # A notice reaches every later run's prompt: an agent steered by one ticket's text could otherwise write
     # instructions into every other ticket's runs, or lift the operator's.

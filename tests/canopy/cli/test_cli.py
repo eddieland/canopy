@@ -45,7 +45,8 @@ def test_python_m_canopy_answers_version_as_the_console_script_does() -> None:
 
 @pytest.mark.parametrize("argv", [["--help"], ["--version", "--help"], ["--help", "--version"]])
 def test_the_console_script_hands_anything_but_version_alone_to_the_cli(
-    capsys: pytest.CaptureFixture[str], argv: list[str]
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
 ) -> None:
     with mock.patch.object(sys, "argv", ["canopy", *argv]):
         assert launcher.main() == 0
@@ -130,7 +131,8 @@ def test_skill_help_keeps_the_install_commands_on_their_own_lines(capsys: pytest
 
 
 def test_skill_install_saves_it_in_the_home_skills_directory(
-    capsys: pytest.CaptureFixture[str], tmp_path: Path
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     saved = tmp_path / ".agents" / "skills" / "canopy" / "SKILL.md"
     with mock.patch.dict(os.environ, {"HOME": str(tmp_path)}):
@@ -195,19 +197,22 @@ def test_help_still_lists_the_overseers_commands(capsys: pytest.CaptureFixture[s
 
 
 def test_completion_completes_repository_names_from_the_workspace(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.write_shared(
         canopy_env.shared_file.read_text().replace(
-            "[tracker]", '[repos.web]\nurl = "https://example.test/acme/web.git"\n\n[tracker]'
-        )
+            "[tracker]",
+            '[repos.web]\nurl = "https://example.test/acme/web.git"\n\n[tracker]',
+        ),
     )
     assert complete(capsys, "canopy grant PROJ-1 implement --repo ") == ["plain,repo", "plain,web"]
     assert complete(capsys, "canopy grant PROJ-1 implement --repo w") == ["plain,web"]
 
 
 def test_completion_completes_chore_names_from_the_config(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     chores = "".join(
         f"\n[chores.{name}]\nprompt = '~/chores/{name}.md'\ncmd = 'agent run {{prompt}}'\nevery_minutes = 60\n"
@@ -219,7 +224,9 @@ def test_completion_completes_chore_names_from_the_config(
 
 
 def test_completion_offers_no_names_where_the_config_does_not_load(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     canopy_env.write_shared("not toml [")
     assert complete(capsys, "canopy grant PROJ-1 implement --repo ") == []

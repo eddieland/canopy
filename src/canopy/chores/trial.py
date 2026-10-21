@@ -79,7 +79,12 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         raise TrialError(str(e)) from e
     state = view.state_of(ctx.conn, name, chore)
     prompt = start.render(
-        body, state, None, context, conversation.chore_notes(ctx.conn, name), held=notice.for_prompt(ctx.conn)
+        body,
+        state,
+        None,
+        context,
+        conversation.chore_notes(ctx.conn, name),
+        held=notice.for_prompt(ctx.conn),
     )
     try:
         cwd, argv, _ = execute.prepare(ctx, name, chore, prompt)
@@ -120,7 +125,12 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
             db.claim_run(ctx.conn, "chore_runs", run_id, os.getpid())
             notes = conversation.chore_notes(ctx.conn, name)
             prompt = start.render(
-                prepared.body, state, run_id, prepared.context, notes, held=notice.for_prompt(ctx.conn)
+                prepared.body,
+                state,
+                run_id,
+                prepared.context,
+                notes,
+                held=notice.for_prompt(ctx.conn),
             )
             logs.write_private(start.prompt_file(log_path), prompt)
         except OSError as e:

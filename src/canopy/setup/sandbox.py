@@ -89,7 +89,7 @@ def run_setup(runner: procs.Runner, platform: str = sys.platform) -> Report:
     if os.geteuid() == 0:
         report.todo.append(
             "canopy is running as root. Run it as yourself: a root caller's sandbox needs CAP_SETFCAP, and its "
-            "command keeps every capability inside the sandbox's namespace."
+            "command keeps every capability inside the sandbox's namespace.",
         )
     if not _answers(runner, ["canopy-sandbox"]):
         report.todo.append(WRAPPER_MISSING)
@@ -172,7 +172,7 @@ def _install_runtime(runner: procs.Runner, report: Report) -> None:
     if not _answers(runner, ["npm", "--version"]):
         report.todo.append(
             f"npm is not on PATH, so srt {version} is not installed. Install Node 22.12 or later with npm, then run "
-            "`canopy sandbox setup` again."
+            "`canopy sandbox setup` again.",
         )
         return
     try:
@@ -223,7 +223,7 @@ def _check_platform(runner: procs.Runner, platform: str, report: Report) -> None
         packages = " ".join(missing)
         report.todo.append(
             f"srt needs {', '.join(missing)}. Install them with your package manager, such as:\n"
-            f"    sudo apt-get install {packages}"
+            f"    sudo apt-get install {packages}",
         )
     if "bubblewrap" not in missing:
         _check_bwrap_version(runner, report)
@@ -254,7 +254,7 @@ def _check_userns(runner: procs.Runner, report: Report) -> None:
     except OSError:
         restricted = False
     report.todo.append(
-        USERNS_FIX if restricted else f"bubblewrap cannot make a sandbox here:\n    {_tail(done.stderr)}"
+        USERNS_FIX if restricted else f"bubblewrap cannot make a sandbox here:\n    {_tail(done.stderr)}",
     )
 
 

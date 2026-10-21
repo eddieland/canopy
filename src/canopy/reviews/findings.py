@@ -44,7 +44,7 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
         (
             f"canopy's review run {run_id} of {run.pr_url} at commit `{run.sha}` found these (verdict "
             f"{stored.verdict}, impact {stored.impact}). They are in canopy's journal only, not on the PR:"
-        )
+        ),
     ]
     lines.extend(_findings(stored, dismissed, keep_dismissed=False))
     return "\n".join(lines)
@@ -66,7 +66,7 @@ def for_reviewer(conn: sqlite3.Connection, pr_url: str, *, before: int) -> str |
             (
                 f"canopy's review run {run.id} of this PR, at commit `{run.sha}`, ended with verdict {stored.verdict}, "
                 f"impact {stored.impact}."
-            )
+            ),
         ]
         if stored.summary:
             lines += ["", "Its summary:", *(f"> {line}" for line in printable(stored.summary).splitlines())]

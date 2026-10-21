@@ -97,7 +97,7 @@ def test_a_found_or_missing_run_is_read_once(conn: sqlite3.Connection) -> None:
     run_models.record(conn, overseer, ModelsRead.MISSING)
     assert due(conn) == []
     assert [(m.model, m.replies, m.cost_usd) for m in run_models.of_run(conn, "runs", w)] == [
-        ("anthropic/claude-x", 3, 0.5)
+        ("anthropic/claude-x", 3, 0.5),
     ]
     assert run_models.of_run(conn, "ticks", first) == []
 

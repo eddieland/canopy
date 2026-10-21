@@ -139,7 +139,9 @@ def clean_up(ctx: Context, run: records.ReviewRun, log: logs.TickAdapter) -> Non
     fields = {"review_run_id": run.id, "slot": run.slot_path}
     try:
         outcome = ctx.pool_of(run.pool, run.repo).return_slot(
-            Path(str(run.slot_path)), lease_id=str(run.lease_id), lease_holder=str(run.lease_holder)
+            Path(str(run.slot_path)),
+            lease_id=str(run.lease_id),
+            lease_holder=str(run.lease_holder),
         )
     except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease no running run holds.
@@ -187,7 +189,13 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     output = stdout.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
-            ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
+            ctx.conn,
+            "review_runs",
+            run_id,
+            output.session_id,
+            output.usage,
+            digest=snapshot.name,
+            tools=output.tools,
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
@@ -255,7 +263,11 @@ def _save_diff(runner: procs.Runner, slot: Path, run: records.ReviewRun, log: lo
 
 
 def _git_or_none(
-    runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: Mapping[str, object], *args: str
+    runner: procs.Runner,
+    slot: Path,
+    log: logs.TickAdapter,
+    fields: Mapping[str, object],
+    *args: str,
 ) -> str | None:
     """`git <args>`'s stdout, or None, logged, if it fails: for steps the review can do without.
 

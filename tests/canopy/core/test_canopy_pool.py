@@ -185,7 +185,8 @@ def test_a_full_pool_names_its_bound(ws: Ws) -> None:
 
 
 def test_the_shadow_logs_where_canopy_and_treehouse_disagree_and_changes_nothing(
-    canopy_env: CanopyEnv, tmp_path: Path
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
 ) -> None:
     with mock.patch.dict(os.environ, HERMETIC_GIT):
         clone = canopy_env.repo
@@ -204,7 +205,7 @@ def test_the_shadow_logs_where_canopy_and_treehouse_disagree_and_changes_nothing
                 pools.Slot(name="1", path=clean, status="available"),
                 pools.Slot(name="2", path=dirty, status="available"),
                 pools.Slot(name="3", path=tmp_path / "held", status="leased", lease_id="x", lease_holder="canopy:P-1"),
-            ]
+            ],
         }
         log = mock.create_autospec(logs.TickAdapter, instance=True)
         with mock.patch.object(cwds, "table", autospec=True, side_effect=cwds.table) as read:

@@ -294,5 +294,5 @@ def ensure_state_dir(state_dir: Path) -> None:
         return
     raise ConfigError(
         f"{state_dir} is not private to you: canopy creates it as a directory only you can read, and this one is a "
-        f"symlink, someone else's, or open to others. If it came from a checkout, remove it; canopy recreates it."
+        f"symlink, someone else's, or open to others. If it came from a checkout, remove it; canopy recreates it.",
     )

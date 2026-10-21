@@ -30,7 +30,10 @@ REVIEWED = "review=2026-10-07T20:58:50Z"
 )
 @pytest.mark.parametrize("key", ["-rf", "PROJ 1", "PROJ-1;id", "../x", "#12", "", "_x"])
 def test_every_key_taking_command_rejects_bad_keys(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], argv: list[str], key: str
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    key: str,
 ) -> None:
     assert main([a.replace("{key}", key) for a in argv]) == 2
     err = capsys.readouterr().err
@@ -38,7 +41,9 @@ def test_every_key_taking_command_rejects_bad_keys(
 
 
 def test_journal_commands_need_a_running_tick(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["decide", "PROJ-1", "wait", "--rationale", "r"]) == 1
     assert "CANOPY_TICK_ID is not set" in capsys.readouterr().err
@@ -189,7 +194,16 @@ def test_decisions_filters_by_ticket_and_reports_no_match(scenario: Scenario) ->
 def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
     conn = scenario.conn
     scenario.operator(
-        "ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=10001", "--cursor", REVIEWED, "--done"
+        "ticket",
+        "set",
+        "PROJ-1",
+        "--repo",
+        "repo",
+        "--cursor",
+        "comment=10001",
+        "--cursor",
+        REVIEWED,
+        "--done",
     )
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert (row["last_comment_id"], row["done"]) == ("10001", 1)
@@ -219,7 +233,8 @@ def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool:
 
 
 @pytest.mark.parametrize(
-    "value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)", "review=2026-10-07T20:58:50+00:00"]
+    "value",
+    ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)", "review=2026-10-07T20:58:50+00:00"],
 )
 def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
     assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", value]) == 2

@@ -105,7 +105,9 @@ def test_worker_opens_prs_through_the_mcp_or_the_configured_skill(scenario: Scen
 
 
 def test_an_override_that_ignores_the_pr_skill_is_refused(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
@@ -159,7 +161,12 @@ def test_bad_slugs_are_usage_errors(scenario: Scenario, slug: str) -> None:
     ],
 )
 def test_dispatch_without_a_configured_label_is_unauthorized(
-    scenario: Scenario, treehouse_state: Path, label: str | None, reason: str, kind: RunKind, mode: str
+    scenario: Scenario,
+    treehouse_state: Path,
+    label: str | None,
+    reason: str,
+    kind: RunKind,
+    mode: str,
 ) -> None:
     # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D051).
     conn = scenario.conn
@@ -167,7 +174,8 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so a resume could
     reasons = [ResumeReason.CI] if kind == RunKind.RESUME else []
     [(action, rationale)] = scenario.refuses(
-        dispatches(kind=kind, label=label, reasons=reasons), dry_run=mode == "dry run"
+        dispatches(kind=kind, label=label, reasons=reasons),
+        dry_run=mode == "dry run",
     )
     assert action == "refused:unauthorized"
     assert rationale.startswith(reason)
@@ -189,7 +197,9 @@ def test_unauthorized_is_checked_before_the_other_guards(scenario: Scenario, tre
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_label_matches_case_insensitively_and_records_the_configured_spelling(
-    scenario: Scenario, git_pool: GitPool, mode: str
+    scenario: Scenario,
+    git_pool: GitPool,
+    mode: str,
 ) -> None:
     # GitHub labels are case-insensitive, so an overseer that reads `Agent-Ready-Tester` has read the configured label.
     ticked = scenario.tick(dispatches(label="Agent-Ready-TESTER"), dry_run=mode == "dry run")
@@ -277,7 +287,9 @@ def test_dry_run_still_starts_nothing(canopy_env: CanopyEnv, treehouse_state: Pa
 
 
 def test_dry_run_refuses_what_a_live_dispatch_would(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
 ) -> None:
     with in_tick(conn) as earlier:
 

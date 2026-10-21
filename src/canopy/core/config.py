@@ -170,7 +170,7 @@ def _comment_mark(value: str) -> str:
     ):
         raise ValueError(
             f"must be empty, or one line of at most {MAX_COMMENT_MARK} characters with a letter or digit, no backtick, "
-            "and no surrounding spaces"
+            "and no surrounding spaces",
         )
     return value
 
@@ -196,7 +196,7 @@ def _trailer_name(value: str) -> str:
     ):
         raise ValueError(
             f"must be one line of at most {MAX_TRAILER_NAME} characters with a letter or digit, no backtick or angle "
-            "bracket, and no surrounding spaces"
+            "bracket, and no surrounding spaces",
         )
     return value
 
@@ -205,7 +205,7 @@ def _trailer_email(value: str) -> str:
     if len(value) > MAX_TRAILER_EMAIL or not TRAILER_EMAIL_RE.fullmatch(value):
         raise ValueError(
             f"must be an address of at most {MAX_TRAILER_EMAIL} characters with one '@', and no whitespace, backtick, "
-            "or angle bracket"
+            "or angle bracket",
         )
     return value
 
@@ -226,7 +226,7 @@ def _reviewer(value: str) -> str:
     ):
         raise ValueError(
             f"must be a login of at most {MAX_REVIEWER} characters with no spaces, colon, or backtick, or "
-            f"{CANOPY_REVIEWER!r} for canopy's own reviewer"
+            f"{CANOPY_REVIEWER!r} for canopy's own reviewer",
         )
     return value
 
@@ -260,7 +260,7 @@ def _agent_template(value: str) -> str:
     if DEFINITIONS_DIR not in value:
         raise ValueError(
             f"must contain {DEFINITIONS_DIR}, the directory canopy's agent definitions are in (D040). "
-            f"For {invocation.NAME}, write: '{invocation.with_config_dir(DEFINITIONS_DIR, value)}'"
+            f"For {invocation.NAME}, write: '{invocation.with_config_dir(DEFINITIONS_DIR, value)}'",
         )
     return value
 
@@ -389,7 +389,7 @@ def link_template(placeholder: str) -> AfterValidator:
         ):
             raise ValueError(
                 f"must be empty, or a plain https:// URL of at most {MAX_LINK_URL} characters with {placeholder} "
-                "exactly once and no other braces"
+                "exactly once and no other braces",
             )
         return value
 
@@ -561,7 +561,7 @@ def _skill_name(value: str) -> str:
     if value and (len(value) > MAX_SKILL_NAME or not SKILL_NAME_RE.fullmatch(value)):
         raise ValueError(
             f"must be empty, or a skill name of at most {MAX_SKILL_NAME} lowercase letters and digits in words joined "
-            "by single hyphens"
+            "by single hyphens",
         )
     return value
 
@@ -731,7 +731,7 @@ class Loop(Section):
         if "idle_max_minutes" in self.model_fields_set and self.idle_max_minutes < self.interval_minutes:
             raise ValueError(
                 f"loop.idle_max_minutes ({self.idle_max_minutes}) must be at least loop.interval_minutes "
-                f"({self.interval_minutes}); set them equal to turn idle pacing off"
+                f"({self.interval_minutes}); set them equal to turn idle pacing off",
             )
         return self
 
@@ -1267,18 +1267,20 @@ def check_untracked(runner: procs.Runner, root: Path) -> None:
     if found is None:
         raise ConfigError(
             f"{root} is in a git repository, and git could not list what it tracks in {state_dir}: canopy uses no "
-            f"state that may have come from a checkout. Run `git ls-files {WORKSPACE_STATE_DIR}` there to see why."
+            f"state that may have come from a checkout. Run `git ls-files {WORKSPACE_STATE_DIR}` there to see why.",
         )
     if found:
         raise ConfigError(
             f"{root / found[0]} is tracked by git: {state_dir} must be yours alone, and one from a checkout could run "
             f"commands or supply a journal. Remove it from the repository (`git rm -r --cached {WORKSPACE_STATE_DIR}`) "
-            "and check what it holds before running canopy."
+            "and check what it holds before running canopy.",
         )
 
 
 def _layers(
-    root: Path, files: tuple[Path, Path, Path], runner: procs.Runner | None
+    root: Path,
+    files: tuple[Path, Path, Path],
+    runner: procs.Runner | None,
 ) -> tuple[tuple[Path, dict[str, object]], ...]:
     """Read each file `load` merges, checked as it checks them, into its keys by `section.key` name.
 
@@ -1295,7 +1297,7 @@ def _layers(
         if SPECS[name].scope is Scope.PRIVATE:
             raise ConfigError(
                 f"{shared_file}: {name} is private and cannot be set in the workspace file; set it in {private_file}, "
-                f"or in {user_file} for every workspace"
+                f"or in {user_file} for every workspace",
             )
     user_values = _read(user_file) if user_file.exists() else None
     private_values = _read_private(private_file)
@@ -1309,7 +1311,8 @@ def _layers(
 
 
 def _merge(
-    layers: Iterable[tuple[Path, Mapping[str, object]]], shared_file: Path
+    layers: Iterable[tuple[Path, Mapping[str, object]]],
+    shared_file: Path,
 ) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
     """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file.
 
@@ -1371,7 +1374,7 @@ def _read_private(path: Path) -> dict[str, object] | None:
         os.close(fd)
         raise ConfigError(
             f"{path} is not private to you: canopy reads it only as a regular file of yours that no one else can "
-            "write. If you did not write it, remove it; if you did, `chmod go-w` it."
+            "write. If you did not write it, remove it; if you did, `chmod go-w` it.",
         )
     try:
         with os.fdopen(fd, "rb") as f:

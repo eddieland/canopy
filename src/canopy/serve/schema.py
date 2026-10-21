@@ -20,7 +20,7 @@ type RunState = Annotated[
     Field(
         description="A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` "
         "is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the "
-        "operator's."
+        "operator's.",
     ),
 ]
 type MessageSource = Annotated[
@@ -48,7 +48,7 @@ type WorktreeState = Annotated[
     Field(
         description="A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run or "
         "review the journal shows running; `held` is leased or in use by anything else; `dirty` is unleased with "
-        "uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know."
+        "uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know.",
     ),
 ]
 
@@ -57,7 +57,10 @@ class _Model(BaseModel):
     # Fields with defaults are still always sent, so the generated TypeScript types mark them required. A field's
     # docstring is its description in the schema.
     model_config = ConfigDict(
-        frozen=True, extra="forbid", json_schema_serialization_defaults_required=True, use_attribute_docstrings=True
+        frozen=True,
+        extra="forbid",
+        json_schema_serialization_defaults_required=True,
+        use_attribute_docstrings=True,
     )
 
 
@@ -1134,7 +1137,7 @@ type TranscriptStatus = Annotated[
     Field(
         description="`read`: the log was read, whether or not it held any of the session's events yet (a running "
         "run's reach it when the run ends). `no_session`: the runtime reported no session (a template without "
-        "`--format json`). `no_log`: the log is missing, a symlink, or not a regular file."
+        "`--format json`). `no_log`: the log is missing, a symlink, or not a regular file.",
     ),
 ]
 
@@ -1664,14 +1667,14 @@ type SpendGroup = Annotated[
     Field(
         description="What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's "
         "word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and "
-        "`dry_run` a dry run, whatever the loop said of it."
+        "`dry_run` a dry run, whatever the loop said of it.",
     ),
 ]
 type SpendKind = Annotated[
     Literal["overseer", "workers", "plans", "chores", "reviews"],
     Field(
         description="A kind of agent run: each tick's overseer, worker runs, plan runs (`plan`, DESIGN §25, old "
-        "`needs-plan` triage runs among them), chore runs, review runs."
+        "`needs-plan` triage runs among them), chore runs, review runs.",
     ),
 ]
 
@@ -1885,10 +1888,12 @@ type ReviewImpact = Annotated[
     Field(description="A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows (DESIGN §21)."),
 ]
 type FindingSeverity = Annotated[
-    Literal["blocking", "major", "minor"], Field(description="How much a review finding matters (DESIGN §21).")
+    Literal["blocking", "major", "minor"],
+    Field(description="How much a review finding matters (DESIGN §21)."),
 ]
 type DiffLineKind = Annotated[
-    Literal["add", "del", "ctx"], Field(description="Whether a diff line is added, deleted, or context.")
+    Literal["add", "del", "ctx"],
+    Field(description="Whether a diff line is added, deleted, or context."),
 ]
 
 
@@ -2260,7 +2265,7 @@ class StreamEvent(
             | StreamEnding,
             Field(discriminator="type"),
         ]
-    ]
+    ],
 ):
     """One message on the event stream, told apart by its `type`. A named model so the UI's types get its name."""
 

@@ -42,7 +42,9 @@ def signed_in(c: TestClient, *, base: str = "") -> dict[str, str]:
 
 
 def signed_in_client(
-    ctx: Context, reload: reread.Reload | None = None, asked: tick_now.TickNow | None = None
+    ctx: Context,
+    reload: reread.Reload | None = None,
+    asked: tick_now.TickNow | None = None,
 ) -> tuple[TestClient, dict[str, str]]:
     """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs."""
     options = ServeOptions(port=8765)

@@ -63,7 +63,10 @@ def test_max_reviews_zero_turns_reviews_off(reviewing: CanopyEnv, scenario: Scen
 
 
 def test_a_review_runs_outside_the_checkout_at_the_commit(
-    reviewing: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
+    reviewing: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     """M11 against the fakes: the reviewer reads the checkout at the commit through a link, and the slot goes back."""
     conn = reviewing.journal()
@@ -124,7 +127,9 @@ def reviewer_instructions(scenario: Scenario, text: str | None) -> Path:
 
 
 def test_the_operators_standing_instructions_reach_every_reviewer(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     rule = "A migration without a test that applies it is a finding."
     reviewer_instructions(scenario, f"\n{rule}\n\n")
@@ -133,7 +138,10 @@ def test_the_operators_standing_instructions_reach_every_reviewer(
 
 
 def test_reviewer_instructions_that_cannot_be_used_cost_the_pr_nothing(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     # The operator set them for every review; a review without them would judge as if they were never written.
     path = reviewer_instructions(scenario, None)
@@ -145,7 +153,10 @@ def test_reviewer_instructions_that_cannot_be_used_cost_the_pr_nothing(
 
 
 def test_a_review_runs_in_the_reviewers_persona_and_records_it(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, ctx: Context
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    ctx: Context,
 ) -> None:
     # DESIGN §31: the reviewer's persona is the operator's choice in [personas], recorded on the run it reached.
     scenario.configures(personas={"reviewer": "skeptic"})
@@ -159,7 +170,10 @@ def test_a_review_runs_in_the_reviewers_persona_and_records_it(
 
 
 def test_a_review_whose_persona_has_no_file_costs_the_pr_nothing_and_asks_the_operator(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     yours = personas_dir(reviewing)
     scenario.configures(personas={"reviewer": "lenient"})
@@ -197,7 +211,12 @@ def test_a_reviewer_override_without_the_placeholder_fails_closed_once_instructi
 
 @pytest.mark.parametrize("full", [False, True], ids=["defaults", "every-value-set"])
 def test_the_reviewer_prompt(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, markdown_snapshot: SnapshotAssertion, *, full: bool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    markdown_snapshot: SnapshotAssertion,
+    *,
+    full: bool,
 ) -> None:
     """The reviewer's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
 
@@ -243,7 +262,7 @@ def test_review_guards(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPo
     assert [a for a, _ in scenario.refuses(reviews(sha, f"{PR}0"))] == ["refused:review_capacity"]
     assert held.finishes().status == "done"
     assert scenario.refuses(reviews(sha)) == [
-        ("refused:reviewed", f"review run 1 already reviewed {sha[:12]} (clean, impact low); one review per commit")
+        ("refused:reviewed", f"review run 1 already reviewed {sha[:12]} (clean, impact low); one review per commit"),
     ]
     # A commit origin does not have fails its review, which still counts.
     failed = scenario.review(reviews("b" * 40))
@@ -258,7 +277,9 @@ def test_review_guards(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPo
 
 
 def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_still_counts(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.configures(policy={"max_reviews_per_pr": 1})
     scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
@@ -295,7 +316,9 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
 
 
 def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
@@ -310,7 +333,11 @@ def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_
 
 @pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
 def test_only_the_operator_grants_reviews(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str], env: str
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    capsys: pytest.CaptureFixture[str],
+    env: str,
 ) -> None:
     conn = scenario.conn
     scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
@@ -340,15 +367,17 @@ def test_review_grant_refusals(reviewing: CanopyEnv, scenario: Scenario, git_poo
 
 
 def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.configures(capacity={"max_workers": 1, "max_reviews": 2})
     scenario.starts()
     assert scenario.refuses(reviews(head(git_pool), ticket="PROJ-1")) == [
-        ("refused:running", "a worker run for PROJ-1 is running; review its PR once it ends")
+        ("refused:running", "a worker run for PROJ-1 is running; review its PR once it ends"),
     ]
     assert scenario.refuses(reviews(head(git_pool), f"{PR}0")) == [
-        ("refused:capacity", "1 of 1 workers and reviews are running")
+        ("refused:capacity", "1 of 1 workers and reviews are running"),
     ]
 
 
@@ -388,7 +417,12 @@ def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv, scenario: Scenario) 
     ],
 )
 def test_the_harness_checks_what_it_can_of_a_result(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, report: dict[str, object], status: str, note: str
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    report: dict[str, object],
+    status: str,
+    note: str,
 ) -> None:
     row = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(report)).row
     assert row.status == status
@@ -401,7 +435,11 @@ def test_the_harness_checks_what_it_can_of_a_result(
 
 @pytest.mark.parametrize("events", [False, True])
 def test_a_plugin_notice_after_the_result_does_not_hide_it(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, *, events: bool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    *,
+    events: bool,
 ) -> None:
     # A plugin the operator must load prints after the agent's last word; it lands in the text (DESIGN §13).
     if events:
@@ -422,7 +460,10 @@ def test_a_review_records_the_prs_own_title(reviewing: CanopyEnv, scenario: Scen
 
 
 def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
 ) -> None:
     secret = tmp_path / "secret.txt"
     secret.write_text("operator only\n")
@@ -454,7 +495,10 @@ def test_the_review_phases_are_a_units(reviewing: CanopyEnv, scenario: Scenario,
 
 
 def test_a_commit_origin_does_not_have_fails_the_review(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     """A PR of another repository fails here: its commit cannot be fetched from this one's origin."""
     row = scenario.review(reviews("d" * 40)).row
@@ -465,7 +509,10 @@ def test_a_commit_origin_does_not_have_fails_the_review(
 
 
 def test_a_killed_review_is_crashed_on_the_next_tick(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     agent_pid = present(held.row.agent_pid)
@@ -488,7 +535,10 @@ def test_a_killed_review_is_crashed_on_the_next_tick(
 
 
 def test_reconcile_leaves_a_running_reviews_slot_alone(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     scenario.tick(*waits("PROJ-1"))
@@ -551,11 +601,15 @@ def test_review_wait_records_a_plain_pr_url_and_refuses_anything_else(reviewing:
 
 
 def test_a_sink_that_takes_reviews_hears_when_one_ends(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, sink_script: Path, tmp_path: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
 ) -> None:
     out = tmp_path / "sink.txt"
     scenario.configures(
-        notify={"sinks": {"s": {"cmd": f"{sink_script} {out}", "format": "text", "events": ["reviews"]}}}
+        notify={"sinks": {"s": {"cmd": f"{sink_script} {out}", "format": "text", "events": ["reviews"]}}},
     )
     scenario.tick(*waits("PROJ-1"))
     scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
@@ -565,7 +619,10 @@ def test_a_sink_that_takes_reviews_hears_when_one_ends(
 
 
 def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
 ) -> None:
     overrides = reviewing.user_file.parent / "prompts"
     overrides.mkdir()
@@ -594,7 +651,9 @@ def test_a_review_run_records_what_it_cost(reviewing: CanopyEnv, scenario: Scena
 
 
 def test_a_timed_out_review_records_what_it_reported_before_the_kill(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
     events = [
@@ -629,7 +688,9 @@ def resume(
 
 
 def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     """Nothing of a review is on the PR (D114): the worker reads its findings in its prompt."""
     sha = head(git_pool)
@@ -650,14 +711,18 @@ def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
 
 
 def test_a_resume_without_a_review_has_no_section_for_one(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     scenario.run(worker=pushes())
     assert "## canopy's review" not in scenario.run(resume(), worker=pushes()).prompt
 
 
 def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     sha = head(git_pool)
     of_ticket = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
@@ -695,7 +760,10 @@ def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Sc
 
 
 def test_a_review_keeps_its_commits_diff_for_the_web_ui(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
 ) -> None:
     """The diff against where the commit leaves the pool's base branch, beside the run's log (DESIGN §21)."""
     sha = feature_commit(git_pool, tmp_path)
@@ -713,7 +781,10 @@ def test_a_review_keeps_its_commits_diff_for_the_web_ui(
 
 
 def test_a_review_without_its_base_branch_still_runs(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
 ) -> None:
     """The diff is for the page only: a base origin no longer has leaves the review as it was, without one."""
     sha = feature_commit(git_pool, tmp_path)
@@ -733,7 +804,10 @@ TWO_FINDINGS = {
 
 
 def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = scenario.conn
     review_id = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
@@ -781,7 +855,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
         (
             "refused:bad_review",
             f"the operator dismissed every finding of review run {review_id}: none is left to address",
-        )
+        ),
     ]
 
     # Undo hands it back.
@@ -796,7 +870,9 @@ def previous_review(prompt: str) -> str:
 
 
 def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_dismissed(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     sha = head(git_pool)
     first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS))
@@ -838,7 +914,9 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
 
 
 def test_a_reviewer_override_without_the_previous_review_serves_only_a_prs_first_review(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     overrides = reviewing.user_file.parent / "prompts"
     overrides.mkdir()
@@ -850,7 +928,10 @@ def test_a_reviewer_override_without_the_previous_review_serves_only_a_prs_first
 
 
 def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, capsys: pytest.CaptureFixture[str]
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """`canopy send review:ID N` replies on the review's ticket, naming findings by number only (DESIGN §21).
 
@@ -904,16 +985,18 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
 
 
 def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     """A review's purpose is settled as it starts: `own` only for its ticket's unit's PR, else `query` (DESIGN §21)."""
     other = "https://github.com/acme/api/pull/8"
     sha = head(git_pool)
     assert scenario.refuses(reviews(sha, other, ticket="PROJ-1")) == [
-        ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR")
+        ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR"),
     ]
     assert scenario.refuses(reviews(sha, ticket="PROJ-2")) == [
-        ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR")
+        ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR"),
     ]
     own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     query = scenario.review(reviews(sha, other), reviewer=reviewer_reports(FINDINGS)).id
@@ -922,7 +1005,9 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
 
 
 def test_a_review_is_new_to_the_operator_until_they_see_it(
-    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     """`canopy review show ID` marks a review's result seen, as its page does; only for the operator (DESIGN §22).
 
@@ -955,7 +1040,9 @@ def test_a_review_is_new_to_the_operator_until_they_see_it(
     scenario.operator("review", "show", str(first))
     assert new() == [second]
     [mark] = records.fetch_all(
-        scenario.conn, records.Seen, sql.select("*").from_("seen").where("subject = ?", str(first))
+        scenario.conn,
+        records.Seen,
+        sql.select("*").from_("seen").where("subject = ?", str(first)),
     )
     assert (mark.kind, mark.channel) == (SeenKind.REVIEW, "cli")
 

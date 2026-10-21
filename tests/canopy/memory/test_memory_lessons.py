@@ -58,13 +58,24 @@ def memory_modes(ticket_notes: str = "off", proposals: str = "off") -> dict[str,
 
 
 def proposed(
-    conn: sqlite3.Connection, text: str = LESSON, *, key: str = "api-tests", repo: str | None = None, ticket: str = KEY
+    conn: sqlite3.Connection,
+    text: str = LESSON,
+    *,
+    key: str = "api-tests",
+    repo: str | None = None,
+    ticket: str = KEY,
 ) -> int:
     """A pending proposal from a run of `ticket`, written to the journal as `_run` would."""
     with in_tick(conn) as tick_id:
         db.touch_ticket(conn, ticket, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=ticket, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/runs")
+            conn,
+            tick_id=tick_id,
+            key=ticket,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/runs"),
         )
         cur = conn.execute(
             "INSERT INTO memories (scope, ticket_key, repo, key, body, status, author, run_id, tick_id, created_at) "
@@ -80,7 +91,13 @@ def noted(conn: sqlite3.Connection, text: str = LESSON, *, status: str = "active
     with in_tick(conn) as tick_id:
         db.touch_ticket(conn, KEY, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/runs")
+            conn,
+            tick_id=tick_id,
+            key=KEY,
+            kind=RunKind.IMPLEMENT,
+            branch=BRANCH,
+            slots=(),
+            runs_dir=Path("/runs"),
         )
         cur = conn.execute(
             "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, created_at) "
@@ -88,7 +105,8 @@ def noted(conn: sqlite3.Connection, text: str = LESSON, *, status: str = "active
             (KEY, text, status, run_id, tick_id, db.now()),
         )
         conn.execute(
-            "UPDATE runs SET status = 'done', ended_at = ?, private = ? WHERE id = ?", (db.now(), private, run_id)
+            "UPDATE runs SET status = 'done', ended_at = ?, private = ? WHERE id = ?",
+            (db.now(), private, run_id),
         )
     return int(cur.lastrowid or 0)
 
@@ -115,7 +133,8 @@ def test_with_proposals_off_a_proposal_is_stored_nowhere(scenario: Scenario, git
 
 
 def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn, canopy_env = scenario.conn, scenario.env
     scenario.configures("private", memory=memory_modes(proposals="record"))
@@ -148,7 +167,11 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
 
 @pytest.mark.parametrize(("kind", "private"), PROMPTS)
 def test_at_use_a_lesson_reaches_every_worker_prompt(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, kind: str, *, private: bool
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    kind: str,
+    *,
+    private: bool,
 ) -> None:
     with_memory(canopy_env, proposals="use")
     lesson = promoted(conn, canopy_env)
@@ -170,7 +193,8 @@ def test_the_reviewers_prompt_has_no_place_for_lessons() -> None:
 
 
 def test_a_lesson_for_one_repository_stays_out_of_anothers_runs(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, proposals="use")
     every = promoted(conn, canopy_env, "Commit messages name the ticket.", key="ticket-key")
@@ -180,7 +204,8 @@ def test_a_lesson_for_one_repository_stays_out_of_anothers_runs(
 
 
 def test_the_lessons_digest_keeps_those_last_vouched_for_in_key_order(
-    conn: sqlite3.Connection, canopy_env: CanopyEnv
+    conn: sqlite3.Connection,
+    canopy_env: CanopyEnv,
 ) -> None:
     with_memory(canopy_env, proposals="use")
     # Enough lessons of 500 characters that the cap leaves some out, whatever it is.
@@ -202,7 +227,8 @@ def test_the_lessons_digest_keeps_those_last_vouched_for_in_key_order(
 
 
 def test_with_notes_in_use_and_lessons_recording_a_cited_lesson_changes_nothing(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.configures("private", memory=memory_modes(ticket_notes="use", proposals="record"))
@@ -214,7 +240,8 @@ def test_with_notes_in_use_and_lessons_recording_a_cited_lesson_changes_nothing(
 
 
 def test_a_plan_hears_lessons_but_what_it_sends_of_memory_changes_nothing(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn = scenario.conn
     scenario.configures("private", memory=memory_modes(ticket_notes="use", proposals="use"))
@@ -230,7 +257,8 @@ def test_a_plan_hears_lessons_but_what_it_sends_of_memory_changes_nothing(
 
 
 def test_a_used_lesson_is_pushed_back_from_review_and_a_wrong_one_raises_lesson_wrong(
-    scenario: Scenario, git_pool: GitPool
+    scenario: Scenario,
+    git_pool: GitPool,
 ) -> None:
     conn, canopy_env = scenario.conn, scenario.env
     scenario.configures("private", memory=memory_modes(proposals="use"))
@@ -259,7 +287,8 @@ def test_a_used_lesson_is_pushed_back_from_review_and_a_wrong_one_raises_lesson_
 
 
 def test_review_dates_raise_one_lesson_review_once_lessons_are_in_use(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, proposals="record")
     old = [promoted(conn, canopy_env, f"Old lesson {i}.", key=f"old-{i}").id for i in range(3)]
@@ -279,7 +308,9 @@ def test_review_dates_raise_one_lesson_review_once_lessons_are_in_use(
 
 @pytest.mark.parametrize("args", [["promote", "1"], ["reject", "1"], ["renew", "1"], ["edit", "1", "--text", "x"]])
 def test_promote_reject_renew_and_edit_refuse_inside_a_run(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, args: list[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    args: list[str],
 ) -> None:
     with_memory(canopy_env, proposals="use")
     proposed(conn)
@@ -295,7 +326,8 @@ def test_promote_refuses_while_proposals_are_off(canopy_env: CanopyEnv, conn: sq
 
 
 def test_promote_takes_the_operators_words_and_supersedes_the_lesson_under_its_key(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, proposals="use")
     first = promoted(conn, canopy_env)
@@ -310,7 +342,9 @@ def test_promote_takes_the_operators_words_and_supersedes_the_lesson_under_its_k
 
 
 def test_promote_makes_a_note_a_lesson_and_leaves_the_note_its_tickets(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="record")
     # Its ticket marked done invalidated it, and what it taught may still be worth keeping.
@@ -318,7 +352,7 @@ def test_promote_makes_a_note_a_lesson_and_leaves_the_note_its_tickets(
     assert main(["memory", "promote", str(note), "--repo", "repo"]) == 0
     lesson = memories(conn)[-1]
     assert capsys.readouterr().out.startswith(
-        f"Note {note} is lesson {lesson.id} (`lint`) for repo, due for review at {lesson.review_at}.\n"
+        f"Note {note} is lesson {lesson.id} (`lint`) for repo, due for review at {lesson.review_at}.\n",
     )
     assert (lesson.scope, lesson.author, lesson.promoted_from, lesson.repo, lesson.ticket_key, lesson.body) == (
         "lesson",
@@ -333,13 +367,17 @@ def test_promote_makes_a_note_a_lesson_and_leaves_the_note_its_tickets(
     assert f"from note {note} of {KEY};" in capsys.readouterr().out
     # Without --repo, a note's lesson is every repository's.
     again = memory_manage.promote(
-        conn, load(canopy_env.root, canopy_env.user_file), noted(conn, "Run `make lint` twice.")
+        conn,
+        load(canopy_env.root, canopy_env.user_file),
+        noted(conn, "Run `make lint` twice."),
     )
     assert (again.lesson.repo, again.superseded) == (None, lesson.id)
 
 
 def test_promote_refuses_a_lesson_a_forgotten_note_and_a_repository_not_in_the_map(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="record")
     cfg = load(canopy_env.root, canopy_env.user_file)
@@ -357,7 +395,9 @@ def test_promote_refuses_a_lesson_a_forgotten_note_and_a_repository_not_in_the_m
 
 
 def test_promoting_a_private_tickets_note_in_its_own_words_warns(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="use")
     note = noted(conn, private=True)
@@ -370,7 +410,9 @@ def test_promoting_a_private_tickets_note_in_its_own_words_warns(
 
 
 def test_edit_writes_a_new_version_and_keeps_the_old_one_as_the_lessons_history(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="use")
     first = promoted(conn, canopy_env)
@@ -409,7 +451,8 @@ def test_edit_writes_a_new_version_and_keeps_the_old_one_as_the_lessons_history(
 
 
 def test_edit_moves_a_lesson_between_repositories_and_a_promote_over_it_is_its_next_version(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, proposals="record")
     cfg = load(canopy_env.root, canopy_env.user_file)
@@ -457,7 +500,9 @@ def test_edit_refuses_what_changes_nothing_or_breaks_the_bounds(
 
 
 def test_edit_takes_only_a_lesson_in_force_and_needs_proposals_on(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="record")
     first = promoted(conn, canopy_env)
@@ -481,7 +526,9 @@ def test_edit_takes_only_a_lesson_in_force_and_needs_proposals_on(
 
 
 def test_forgetting_a_lesson_names_the_versions_that_keep_their_text(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="record")
     cfg = load(canopy_env.root, canopy_env.user_file)
@@ -498,7 +545,9 @@ def test_forgetting_a_lesson_names_the_versions_that_keep_their_text(
 
 
 def test_a_notes_history_is_each_note_under_its_key(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     first = noted(conn, "The lint step fails on a stale cache.", status="superseded")
@@ -539,7 +588,7 @@ def test_proposals_past_the_bounds_are_refused(scenario: Scenario, git_pool: Git
                 {"key": "repeat", "text": LESSON.lower()},
                 {"key": "fine", "text": "Fine."},
                 {"key": "fourth", "text": "Past the cap."},
-            ]
+            ],
         ),
     )
     assert [m.key for m in memory.pending_proposals(conn)] == ["fine"]
@@ -593,7 +642,9 @@ def test_a_done_tickets_pending_proposals_raise_memory_proposal_for_the_operator
 
 
 def test_memory_proposals_lists_each_with_its_provenance_and_warns_of_a_private_ticket(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="record")
     proposal = proposed(conn, "Use `make test-api`\u200b.", repo="repo")
@@ -611,7 +662,9 @@ def test_memory_proposals_lists_each_with_its_provenance_and_warns_of_a_private_
 
 
 def test_the_memory_listings_print_json_for_an_agent_to_read(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="record", proposals="record")
     note = noted(conn, "Run `make lint`\u200b first.", private=True)
@@ -673,7 +726,9 @@ def test_json_is_for_the_listings_not_a_digest_or_a_run(canopy_env: CanopyEnv, a
 
 
 def test_with_proposals_at_use_the_cli_says_lessons_are_served(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, proposals="use")
     lesson = promoted(conn, canopy_env)
@@ -684,7 +739,8 @@ def test_with_proposals_at_use_the_cli_says_lessons_are_served(
 
 
 def test_many_lessons_due_raise_one_short_item_naming_the_longest_overdue(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, proposals="use")
     ids = [promoted(conn, canopy_env, f"Lesson number {i}.", key=f"lesson-{i}").id for i in range(25)]

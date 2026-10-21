@@ -1221,7 +1221,7 @@ def _converter(table: str, name: str, hint: object) -> _Convert:
         vocabulary: type[StrEnum] = hint
         return lambda value: _member(where, vocabulary, value)
     raise RowError(
-        f"{where} is a {hint}; a row's fields are int, float, str, bytes, bool, a StrEnum, or one of them or None"
+        f"{where} is a {hint}; a row's fields are int, float, str, bytes, bool, a StrEnum, or one of them or None",
     )
 
 

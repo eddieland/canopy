@@ -27,7 +27,9 @@ def empty(canopy_env: CanopyEnv, tmp_path: Path) -> Iterator[Path]:
 
 
 def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
-    canopy_env: CanopyEnv, empty: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    empty: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["init", "--provider", "github"]) == 0
     out = capsys.readouterr().out
@@ -67,7 +69,8 @@ def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv, e
 
 
 def test_init_in_a_workspace_never_overwrites_configs(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     user_before = canopy_env.user_file.read_text()
     shared_before = canopy_env.shared_file.read_text()
@@ -88,11 +91,12 @@ def test_init_in_a_workspace_never_overwrites_configs(
 
 
 def test_init_leaves_out_of_the_private_file_what_the_user_file_sets(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An existing user file keeps working unchanged: the private file does not override its labels or trust lists."""
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[runtime]", "[trust]\nauthorized_repliers = ['me']\n\n[runtime]")
+        canopy_env.user_file.read_text().replace("[runtime]", "[trust]\nauthorized_repliers = ['me']\n\n[runtime]"),
     )
     assert main(["init"]) == 0
 
@@ -104,7 +108,9 @@ def test_init_leaves_out_of_the_private_file_what_the_user_file_sets(
 
 
 def test_init_refuses_a_code_checkout(
-    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """D016: canopy writes nothing into a code repository; --workspace makes a repository of its own one."""
     checkout = tmp_path / "code"
@@ -120,7 +126,9 @@ def test_init_refuses_a_code_checkout(
 
 
 def test_init_names_a_leftover_canopy_toml_in_the_checkout(
-    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     checkout = tmp_path / "code"
     (checkout / ".git").mkdir(parents=True)
@@ -139,7 +147,8 @@ def test_init_refuses_the_home_directory(canopy_env: CanopyEnv, capsys: pytest.C
 
 
 def test_init_refuses_a_directory_with_a_journal_and_no_workspace_file(
-    empty: Path, capsys: pytest.CaptureFixture[str]
+    empty: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (empty / ".canopy").mkdir(mode=0o700)
     assert main(["init", "--workspace", "--provider", "jira"]) == 2
@@ -158,7 +167,8 @@ def test_init_under_a_home_that_is_a_dotfiles_repository(canopy_env: CanopyEnv) 
 
 
 def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An earlier single-repository init committed them; a clone of that repository carries them."""
     old = canopy_env.repo / ".opencode" / "agent" / "canopy-worker.md"
@@ -187,7 +197,8 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
 
 
 def test_init_suggests_a_sandbox_prefix_and_writes_none(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     before = canopy_env.user_file.read_text()
     assert main(["init"]) == 0
@@ -200,7 +211,7 @@ def test_init_suggests_a_sandbox_prefix_and_writes_none(
 
     # The suggestion is a prefix the config accepts, and every command a worker run starts goes through the wrapper.
     canopy_env.write_user(
-        before.replace("\n[runtime]\n", f"\n[runtime]\nworker_cmd_prefix = {json.dumps(suggested)}\n")
+        before.replace("\n[runtime]\n", f"\n[runtime]\nworker_cmd_prefix = {json.dumps(suggested)}\n"),
     )
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     for template in (runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
@@ -215,7 +226,9 @@ def test_init_suggests_a_sandbox_prefix_and_writes_none(
     ],
 )
 def test_init_suggests_nothing_once_workers_are_sandboxed(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], sandboxed: str
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    sandboxed: str,
 ) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace("\nworker_cmd = 'env", sandboxed))
     assert main(["init"]) == 0

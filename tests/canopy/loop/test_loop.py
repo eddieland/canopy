@@ -95,7 +95,9 @@ def tick_statuses(env: CanopyEnv) -> list[str]:
 
 
 def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with (
         overseer_does(
@@ -157,7 +159,9 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
 
 
 def test_each_tick_block_shows_what_its_overseer_cost(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with_events(canopy_env, "canopy-overseer")
     with overseer_does(), contextlib.ExitStack() as later:
@@ -185,7 +189,9 @@ def test_each_tick_block_shows_what_its_overseer_cost(
 
 
 def test_a_narrow_terminal_shortens_only_the_rationale(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     slug = "docs-readme-add-troubleshooting-section"
     with (
@@ -237,7 +243,9 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
 
 
 def test_output_to_a_file_is_a_logfmt_line_for_each_event(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     detail = "https://example.test/pr/3/" + "x" * 300
     with overseer_does(
@@ -278,7 +286,9 @@ class SlowOutput(io.StringIO):
 
 
 def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/3")):
         time = FakeTime()
@@ -299,7 +309,9 @@ def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
 
 
 def test_the_footer_counts_running_reviews_as_workers(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     conn = canopy_env.journal()
     tick_id = db.start_tick(conn, dry_run=True)
@@ -322,7 +334,9 @@ def test_the_footer_counts_running_reviews_as_workers(
 
 
 def test_the_overseer_text_is_printed_as_text_not_rich_markup(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(
         canopy("decide", "PROJ-1", "done", "--rationale", "merged [/oops] [red]not red[/red] :fire:"),
@@ -355,7 +369,10 @@ def test_loop_holds_its_own_lock_and_a_second_loop_is_refused(
 
 
 def test_loop_output_to_a_file_is_never_drawn_as_on_a_terminal(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # As in the daemon, whose output is its log: FORCE_COLOR in the operator's environment would otherwise have rich
     # draw the spinner and the countdown into it.
@@ -367,7 +384,9 @@ def test_loop_output_to_a_file_is_never_drawn_as_on_a_terminal(
 
 
 def test_ctrl_c_during_the_wait_stops_the_loop_without_another_tick(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGINT))
@@ -391,7 +410,9 @@ def test_ctrl_c_during_the_wait_stops_the_loop_without_another_tick(
 
 
 def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(
         interrupt_me(),
@@ -430,7 +451,9 @@ def seconds_apart(seconds: float) -> Callable[[], float]:
 
 
 def test_a_second_ctrl_c_aborts_the_tick_and_the_next_tick_closes_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x")):
         term, _ = console()
@@ -446,7 +469,9 @@ def test_a_second_ctrl_c_aborts_the_tick_and_the_next_tick_closes_it(
 
 
 def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     """Under `uv run`, one Ctrl-C reaches canopy twice: from the terminal, then forwarded by uv about 200 ms later."""
     with overseer_does(interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x")):
@@ -454,7 +479,12 @@ def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
         stop = repeat.Stop()
         with repeat.signals(stop, clock=seconds_apart(0.2)):
             statuses = repeat.run(
-                context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop
+                context(canopy_env),
+                dry_run=True,
+                interval_minutes=15,
+                max_ticks=None,
+                console=term,
+                stop=stop,
             )
         assert statuses == {"ok": 1}
         conn = canopy_env.journal(migrate=False)
@@ -491,7 +521,9 @@ def live_run(env: CanopyEnv, ctx: Context, key: str) -> int:
 
 
 def test_ctrl_c_waits_for_running_runs_to_end_before_the_loop_exits(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
         ctx = context(canopy_env)
@@ -528,7 +560,9 @@ def test_ctrl_c_waits_for_running_runs_to_end_before_the_loop_exits(
 
 
 def test_sigterm_stops_the_loop_without_waiting_for_runs(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     """`canopy daemon stop` sends SIGTERM and waits for the loop: it should not wait for every run as well."""
     with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
@@ -554,7 +588,9 @@ def test_sigterm_stops_the_loop_without_waiting_for_runs(
 
 
 def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
         ctx = context(canopy_env)
@@ -580,7 +616,9 @@ def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
 
 
 def test_a_tick_that_raises_closes_error_and_the_loop_goes_on(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         time = FakeTime()
@@ -638,7 +676,9 @@ def test_the_tick_now_key_ends_the_wait_at_once(canopy_env: CanopyEnv, treehouse
 
 
 def test_without_keys_the_loop_does_not_offer_them(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         time = FakeTime()
@@ -658,7 +698,10 @@ def test_without_keys_the_loop_does_not_offer_them(
 
 
 def deferred(
-    env: CanopyEnv, time: FakeTime, keys: FakeKeys | None = None, stop: repeat.Stop | None = None
+    env: CanopyEnv,
+    time: FakeTime,
+    keys: FakeKeys | None = None,
+    stop: repeat.Stop | None = None,
 ) -> tuple[Counter[str], str]:
     """One tick, the first deferred ten minutes, on `time`'s clock."""
     term, out = console()
@@ -678,7 +721,9 @@ def deferred(
 
 
 def test_a_deferred_start_waits_before_the_first_tick(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         ticked: list[bool] = []
@@ -707,7 +752,9 @@ def test_the_tick_now_key_ends_a_deferred_start(canopy_env: CanopyEnv, treehouse
 
 
 def test_an_operator_message_ends_a_deferred_start_after_a_minute(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "answered the operator")):
         ctx = context(canopy_env)
@@ -727,7 +774,9 @@ def test_an_operator_message_ends_a_deferred_start_after_a_minute(
 
 
 def test_ctrl_c_during_a_deferred_start_stops_without_a_tick(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGINT))
@@ -761,7 +810,9 @@ def paused(env: CanopyEnv) -> pause.Paused | None:
 
 
 def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         keys = FakeKeys()
@@ -803,7 +854,9 @@ def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
 
 
 def test_a_pause_key_pressed_during_a_tick_holds_the_next_one(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         keys = FakeKeys()
@@ -835,7 +888,9 @@ def test_a_pause_key_pressed_during_a_tick_holds_the_next_one(
 
 
 def test_a_loop_started_paused_holds_its_first_tick_until_resumed(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         assert main(["pause"]) == 0
@@ -869,7 +924,9 @@ def test_a_loop_started_paused_holds_its_first_tick_until_resumed(
 
 
 def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         assert main(["pause"]) == 0
@@ -894,7 +951,9 @@ def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
 
 
 def test_ctrl_c_while_paused_stops_the_loop_without_a_tick(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     with overseer_does():
         assert main(["pause"]) == 0
@@ -918,7 +977,8 @@ def test_ctrl_c_while_paused_stops_the_loop_without_a_tick(
 
 
 def test_canopy_pause_and_resume_say_what_they_did_and_status_shows_the_pause(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert main(["resume"]) == 0
     assert "The loop was not paused." in capsys.readouterr().out
@@ -937,7 +997,10 @@ def test_canopy_pause_and_resume_say_what_they_did_and_status_shows_the_pause(
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
 @pytest.mark.parametrize("verb", ["pause", "resume"])
 def test_an_agent_can_neither_pause_nor_resume_the_loop(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], env: str, verb: str
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    env: str,
+    verb: str,
 ) -> None:
     if verb == "resume":
         assert main(["pause"]) == 0
@@ -975,7 +1038,7 @@ def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
         user_toml()
         + f"\n[loop]\ninterval_minutes = {interval}\nidle_max_minutes = {interval}\n"
         + f"\n[connect]\nevery_minutes = {every}\n"
-        + '\n[connect.sources.github]\nkind = "vcs"\ncmd = "connector github"\ntimeout_minutes = 1\n'
+        + '\n[connect.sources.github]\nkind = "vcs"\ncmd = "connector github"\ntimeout_minutes = 1\n',
     )
 
 
@@ -987,7 +1050,9 @@ def connector_ticks(env: CanopyEnv) -> list[int | None]:
 
 @pytest.mark.usefixtures("connector_state")
 def test_the_loop_polls_the_connectors_between_ticks_at_their_own_pace(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     polled(canopy_env, interval=10, every=3)
     with overseer_does():
@@ -1044,7 +1109,9 @@ def test_the_loop_does_not_poll_while_paused(canopy_env: CanopyEnv, treehouse_st
 
 @pytest.mark.usefixtures("connector_state")
 def test_a_poll_due_while_a_tick_holds_the_lock_is_skipped(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     polled(canopy_env, interval=10, every=3)
     with overseer_does(), contextlib.ExitStack() as held:
@@ -1090,7 +1157,9 @@ class Asked(reread.Reload):
 
 
 def test_sighup_during_the_wait_reads_the_config_again_for_the_waits_after_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     paced(canopy_env, 10)
     with overseer_does():
@@ -1129,12 +1198,14 @@ def test_sighup_during_the_wait_reads_the_config_again_for_the_waits_after_it(
         assert "pace  wait 4 minutes after each tick ends" in text
         assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")
         assert [line["changed"] for line in log_messages(canopy_env) if line["msg"] == "config reloaded"] == [
-            ["loop.interval_minutes", "loop.idle_max_minutes"]
+            ["loop.interval_minutes", "loop.idle_max_minutes"],
         ]
 
 
 def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     paced(canopy_env, 10)
     ctx = context(canopy_env)
@@ -1166,7 +1237,9 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
 
 
 def test_a_config_that_does_not_load_leaves_the_loop_on_the_one_it_had(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
 ) -> None:
     paced(canopy_env, 10)
     good = canopy_env.user_file.read_text()

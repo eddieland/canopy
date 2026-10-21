@@ -104,7 +104,10 @@ def observe_pr(conn: sqlite3.Connection, *, state: str = "open", mergeable: str 
 
 
 def check(
-    conn: sqlite3.Connection, name: str = "build", status: str = "completed", conclusion: str | None = "success"
+    conn: sqlite3.Connection,
+    name: str = "build",
+    status: str = "completed",
+    conclusion: str | None = "success",
 ) -> None:
     """Record a check at PR's head, its run 11."""
     conn.execute(
@@ -289,7 +292,10 @@ def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connect
 
 @pytest.mark.parametrize("case", CASES, ids=list(CASES))
 def test_each_row_of_the_phase_table(
-    canopy_env: CanopyEnv, observed: sqlite3.Connection, case: str, snapshot: SnapshotAssertion
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    case: str,
+    snapshot: SnapshotAssertion,
 ) -> None:
     CASES[case](canopy_env, observed)
     observed.commit()
@@ -322,7 +328,10 @@ def test_a_ticket_without_the_queue_label_is_no_candidate(canopy_env: CanopyEnv,
     ids=["missing", "old", "blocker", "branches"],
 )
 def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
-    canopy_env: CanopyEnv, observed: sqlite3.Connection, statement: str, stale: str
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    statement: str,
+    stale: str,
 ) -> None:
     if statement:
         observed.execute(statement)
@@ -359,7 +368,8 @@ def test_a_failure_the_ci_cursor_has_passed_is_not_ci_red(canopy_env: CanopyEnv,
 
 
 def test_a_bot_approval_is_no_approval_and_feedback_at_the_cursor_is_handled(
-    canopy_env: CanopyEnv, observed: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
 ) -> None:
     unit(canopy_env, observed, review="2026-10-20T11:59:00Z")
     observe_pr(observed)
@@ -382,7 +392,11 @@ def test_a_private_ticket_needs_a_human_from_the_journal_alone(canopy_env: Canop
     branches_read(conn, f"agent/{KEY}-work")
     conn.commit()
     assert derived(canopy_env)[0] == phases.Derived(
-        KEY, None, (phases.Phase.NEEDS_HUMAN,), candidate=True, closed=False
+        KEY,
+        None,
+        (phases.Phase.NEEDS_HUMAN,),
+        candidate=True,
+        closed=False,
     )
 
 
@@ -403,7 +417,11 @@ def recorded(conn: sqlite3.Connection, tick_id: int, *derived: phases.Derived) -
     ids=["resume", "wait-at-limit", "other-phase", "other-action", "harness-item-only"],
 )
 def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_it_allows(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, phase: str, actions: list[str], verdict: str
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    phase: str,
+    actions: list[str],
+    verdict: str,
 ) -> None:
     unit(canopy_env, conn)
     with in_tick(conn) as tick_id:
@@ -426,7 +444,10 @@ def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_
     [("dispatch:implement", "agrees"), ("dispatch:plan", "agrees"), ("wait", "disagrees")],
 )
 def test_a_ready_ticket_the_overseer_dispatched_agrees_though_it_left_it_running(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, action: str, verdict: str
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    action: str,
+    verdict: str,
 ) -> None:
     seen(conn, canopy_env)
     with in_tick(conn) as tick_id:
@@ -439,7 +460,8 @@ def test_a_ready_ticket_the_overseer_dispatched_agrees_though_it_left_it_running
 
 
 def test_a_closed_ticket_agrees_when_marked_done_and_a_stale_one_is_counted_apart(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
 ) -> None:
     with in_tick(conn) as tick_id:
         recorded(
@@ -464,7 +486,8 @@ def test_a_closed_ticket_agrees_when_marked_done_and_a_stale_one_is_counted_apar
 
 
 def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
-    scenario: Scenario, connector_state: Path
+    scenario: Scenario,
+    connector_state: Path,
 ) -> None:
     scenario.configures(
         "private",
@@ -472,7 +495,7 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
             "sources": {
                 "jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1},
                 "github": {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1},
-            }
+            },
         },
     )
     scenario.seen("PROJ-1", "PROJ-2")
@@ -490,7 +513,9 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(
-        scenario.conn, records.Derivation, sql.frag("SELECT * FROM derivations ORDER BY ticket_key")
+        scenario.conn,
+        records.Derivation,
+        sql.frag("SELECT * FROM derivations ORDER BY ticket_key"),
     )
     assert [(r.ticket_key, json.loads(r.phases), r.overseer_phase) for r in rows] == [
         ("PROJ-1", ["ready", "needs_human"], "needs_human"),
