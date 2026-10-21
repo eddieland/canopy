@@ -25,9 +25,10 @@ if TYPE_CHECKING:
     from canopy.infra import logs
     from canopy.runtime.report import ModelUse
 
-#: A table of agent runs, each with a session: a tick's overseer, a worker or plan run, a chore run, a review run.
-type RunTable = Literal["ticks", "runs", "chore_runs", "review_runs"]
-_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs")
+#: A table of agent runs, each with a session: a tick's overseer, a worker or plan run, a chore run, a review run, a
+#: task's run.
+type RunTable = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
+_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs")
 #: How long a failed read waits before it is tried again, and how many reads a run gets in all.
 RETRY_AFTER = timedelta(days=1)
 MAX_ATTEMPTS = 3
@@ -210,7 +211,7 @@ def _due_in(table: RunTable, retry_before: str) -> sql.Select:
 
 def _table(name: str) -> RunTable:
     match name:
-        case "ticks" | "runs" | "chore_runs" | "review_runs":
+        case "ticks" | "runs" | "chore_runs" | "review_runs" | "task_runs":
             return name
         case _:
             msg = f"not a run table: {name}"
