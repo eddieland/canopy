@@ -7,14 +7,16 @@ everything about it at once: its phase, its PRs, its runs, its conversation, and
 
 The newest activity is at the top; the toggle above the list turns it around. Each row leads with where the ticket
 stands: the run working it, a question waiting on you, or else `done` or `open`, so a quiet ticket says so instead of
-leaving a hole. Then its key, its phase, whether it's public or private, and its title.
+leaving a hole. Then its key, its [phase](how-the-loop-works#phases), whether it's [public or
+private](how-the-loop-works#public-and-private-tickets) (a private one says `private, started` or `private, stopped`),
+its title, and how long since anything happened on it.
 
-The chips narrow it: `open`, `working` (a run is on it), `waiting on you` (a worker asked something), `blocked`, and
-`done`. `blocked` is the phase: another ticket holds this one up. A question for you is `waiting on you`, never
-`blocked`.
+The chips narrow it: `open` (anything not done, working and waiting included), `working` (a run is on it),
+`waiting on you` (a worker asked something), `blocked`, and `done`. `blocked` is the phase: another ticket holds this
+one up. A question for you is `waiting on you`, never `blocked`.
 
-The box beside them filters by key or title. Every word you type must appear somewhere, in any case, so `abc-1` finds
-ABC-101 and ABC-102. Escape leaves the box.
+The box beside them filters by key or title, and the count reads `6 of 41` while anything narrows the list. Every word
+you type must appear somewhere, in any case, so `abc-1` finds ABC-101 and ABC-102. Escape leaves the box.
 
 ## Starting a ticket
 
@@ -39,13 +41,13 @@ Below:
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
-- **Runs**: every run on the ticket, each linking to its transcript.
+- **Runs**: every run on the ticket, each linking to its transcript ([Runs](runs#a-runs-page)).
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
-  the guard that stopped it, and an `attention` decision the reason it reached your list.
+  the [guard](how-the-loop-works#guards) that stopped it, and an `attention` decision the reason it reached your list.
 - **Memory**, while ticket notes are on: the notes its runs left for the runs after them. It arrives folded, since
   you'll read it far less often than you decide anything here: the band saying what reads the notes, then **Show 3
-  notes**. Open, each note that keeps its text has Promote while lessons are on, and **Show what its next run is
-  served** at the foot shows the prompt section itself. See [Memory](memory#promoting-and-rejecting).
+  notes**. Open, each note that keeps its text has Forget, and Promote while lessons are on, and **Show what its next
+  run is served** at the foot shows the prompt section itself. See [Memory](memory#promoting-and-rejecting).
 - **Drafts for the ticket**, when its runs drafted comments for it: a question a blocked run would have asked there, or
   what a run did, each with the issue it goes to, so you can check a worker didn't get creative with the URL. **Send**,
   **Edit**, and **Drop** work as on a PR's threads ([Pull requests](pull-requests#replying-to-your-coworkers-reviews)).

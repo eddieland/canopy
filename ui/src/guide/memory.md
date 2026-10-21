@@ -52,7 +52,8 @@ nothing; `canopy memory purge --all` clears out what a trial wrote. A run keeps 
 whatever your config says by the time it ends.
 
 While either tier is on, the header shows `memory: recording`, or `memory: in use` once a tier is in use; hover over it
-for each tier's mode, and click it for the memory page. With both off, memory shows nowhere.
+for each tier's mode, and click it for the memory page. With both off, the header shows nothing, and the memory page
+says memory is off and keeps only purge at its foot, for clearing out what a trial wrote.
 
 ## The memory page
 
@@ -70,25 +71,26 @@ memory in use never share a label, so you never mistake one for the other.
   by review date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run
   is served from your lessons, or would be served at use while recording.
 - **Ticket notes** lists the tickets with notes in force, one row each with its title, how many notes it has, and how
-  many a run cited as relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has
-  thousands, so the page reads a ticket's notes only once you ask. It flips between the newest note first and the
-  oldest, and on a wide screen it sits beside the other two.
+  many a run cited as relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has thousands,
+  so the page reads a ticket's notes only once you ask. The tickets flip between the one with the latest note first and
+  the one with the oldest, and on a wide screen the panel sits beside the other two.
 
 Above the panels, a filter field narrows all three as you type: a word in a memory's key, its text, its ticket, or its
-repository, or in a ticket's key or title. The repository picker beside it keeps the proposals and lessons for the
-runs of the repositories you check, as many as you like, a lesson for every repository included, since those runs read
-it too. Its list has a search box, so a workspace of forty repositories is a few keystrokes, not a wall of buttons.
-While lessons are in use, the Lessons header has `due` and `wrong` chips for the ones that need you. All of it lives
-in the URL, so a filtered page is a link you can keep. The proposals flip between oldest first, the nearest to lapsing,
-and newest first. For what notes say, the page runs `canopy memory search` for you, the same search your shell gets, and
-lists the notes that hold every word under the tickets, as the rows above hold them, so a note is found by what it says,
-not only by its ticket. One difference: the rows match part of a word and the search matches whole ones, endings aside,
-so `time` keeps a row about a timeout but finds no note that only says `timeout`, while `retry` finds one that says
-`retries`. The count in the Ticket notes header counts those notes while you search. It stops at the best fifty, and
-says so; another word narrows them faster than scrolling would. The repository picker doesn't narrow Ticket notes: a
-note is read by its own ticket's runs, whatever the repository. The **history** chip at the end of the filter bar lists
-what's no longer pending or in force under each panel: proposals rejected, lapsed, promoted, or forgotten, and lessons
-replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
+repository, or in a ticket's key or title. With more than one repository in the workspace, the repository picker beside
+it keeps the proposals and lessons for the runs of the repositories you check, as many as you like, a lesson for every
+repository included, since those runs read it too. Its list has a search box, so a workspace of forty repositories is a
+few keystrokes, not a wall of buttons. While lessons are in use, the Lessons header has `due` and `wrong` chips for the
+ones that need you. All of it lives in the URL, so a filtered page is a link you can keep. The proposals flip between
+oldest first, the nearest to lapsing, and newest first. For what notes say, the page runs `canopy memory search` for
+you, the same search your shell gets, and lists the notes that hold every word under the tickets, as the rows above hold
+them, so a note is found by what it says, not only by its ticket. One difference: the rows match part of a word and the
+search matches whole ones, endings aside, so `time` keeps a row about a timeout but finds no note that only says
+`timeout`, while `retry` finds one that says `retries`. The count in the Ticket notes header counts those notes while
+you search. It stops at the best fifty, and says so; another word narrows them faster than scrolling would. The
+repository picker doesn't narrow Ticket notes: a note is read by its own ticket's runs, whatever the repository. The
+**history** chip at the end of the filter bar lists what's no longer pending or in force under each panel: proposals
+rejected, lapsed, promoted, or forgotten, and lessons replaced or forgotten, the latest fifty of each, so you can see
+what happened to the one you rejected last week.
 
 ## Reading a memory
 
@@ -122,16 +124,15 @@ recording. A worker can still find it with `canopy memory search`.
 
 ## On a ticket and a run
 
-A ticket's page has a **Memory** panel while ticket notes are on: every note its runs wrote, those superseded or
-invalidated included, and the text its next run would be served. It arrives folded under its band, **Show 3 notes**,
-and with no notes it is its header alone. A run's page has one too, for a run started while
-either tier was on, folded to a count in its header (`wrote 2 · read none`), each tier's mode for that run on hover.
-**Show memory** opens it: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's
-words, not the worker's. What it wrote and what it read are each sorted by kind, ticket notes, then proposals, then
-lessons, each under a label that counts them, so a note meant for one ticket never passes for a lesson every run
-reads. A run started while recording read `none, recording only`, which isn't the same as reading an empty list.
-Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported says
-`this run found it wrong`.
+[A ticket's page](tickets#a-tickets-page) has a **Memory** panel while ticket notes are on: every note its runs wrote,
+those superseded or invalidated included, and the text its next run would be served. It arrives folded under its band,
+**Show 3 notes**, and with no notes it is its header alone. A run's page has one too, for a run started while either
+tier was on, folded to a count in its header (`wrote 2 · read none`), each tier's mode for that run on hover. **Show
+memory** opens it: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's words,
+not the worker's. What it wrote and what it read are each sorted by kind, ticket notes, then proposals, then lessons,
+each under a label that counts them, so a note meant for one ticket never passes for a lesson every run reads. A run
+started while recording read `none, recording only`, which isn't the same as reading an empty list. Among what it read,
+a memory it said it relied on says `this run relied on it`, and one it reported says `this run found it wrong`.
 
 Going the other way, a memory names the latest runs that cited it, `cited in run:40, run:38`, each opening that
 run's page, so you can check what a note actually steered before you trust it. Past five, or for runs from before
@@ -218,11 +219,11 @@ shouldn't stay. It can't be undone, so the page asks you to type the memory's re
 up. A lesson from a note comes back if you promote the note again, while the note keeps its text; one from a proposal
 doesn't, since promoting it used the proposal up. Forget deletes one version's words, not the others': if you edited a
 leaked secret out of a lesson, the version before still has it. Open the lesson's versions, where each one out of force
-has its own Forget, or run `canopy memory history ID`; `canopy memory forget` names the versions that keep their words.
-`canopy memory purge`, in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`,
-everything. Neither leaves a word of what it deleted in the search index or the journal's free pages. That's the
-point, if what you're deleting is a leaked secret. The memory page keeps purge at its foot with a copy button, which
-copies the verb alone: pasted as is, it asks what to purge rather than guessing.
+has its own Forget and a forgotten one reads `text deleted`, or run `canopy memory history ID`; `canopy memory forget`
+names the versions that keep their words. `canopy memory purge`, in your shell alone, does the same for many: a ticket's
+runs', a run's, or, with `--all`, everything. Neither leaves a word of what it deleted in the search index or the
+journal's free pages. That's the point, if what you're deleting is a leaked secret. The memory page keeps purge at its
+foot with a copy button, which copies the verb alone: pasted as is, it asks what to purge rather than guessing.
 
 ## Search
 

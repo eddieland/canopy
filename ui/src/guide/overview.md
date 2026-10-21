@@ -50,11 +50,16 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
   `memory:` readout opens it too.
 
-[Settings](/settings), for the theme, the send key, a notice to workers, reloading your config, the fun, and your
-session, lives at the rail's foot.
+[Settings](/settings), for the theme, how times read, the send key, the personas you prefer for a review, a notice
+to workers, reloading your config, the fun, and your session, lives at the rail's foot.
 
-A list of more than one row has a toggle for its order, newest or oldest first, and this browser remembers your choice
-for each list.
+The nav counts what waits for you beside three of its pages: Attention's items, by how bad they are; the
+[reviews](pull-requests#the-reviews-page) you haven't opened yet; and the [proposals](memory#the-memory-page) workers
+made for memory.
+
+A list in time order with more than one row has a toggle for its order, newest or oldest first, and this browser
+remembers your choice for each list. Tickets, pull requests, and runs are sorted by their latest activity, so theirs
+reads `recently updated` instead. Attention, search, and the rail keep their own order.
 
 Where a list has no room for a fact, it keeps it in a tip: a title cut to fit, whole; an age's exact local time; a
 word as the CLI spells it, `needs_human` for `needs human`. A tip opens when you hover, when Tab lands on what it is
@@ -77,16 +82,18 @@ The bar across the top of every page. From the left:
 - **Reload**, only when canopy now serves a newer build of the UI than the page you have open. Reloading loses what
   you've typed and not sent, so send it first.
 - **Pause**, then **Resume**, as `p` at the loop's terminal, or `canopy pause` and `canopy resume`. While paused, no
-  tick starts and the button says for how long. A tick already running finishes, and so does every worker: a pause
-  stops new decisions, not the work under way. It's kept in the journal, so it outlives a restart of the loop.
+  tick starts, and a readout beside the button says for how long, `paused · 3m`, with when and from where on hover. A
+  tick already running finishes, and so does every worker: a pause stops new decisions, not the work under way. It's
+  kept in the journal, so it outlives a restart of the loop.
 - **Tick now**, as `t` at the loop's terminal: it cuts the loop's wait short and starts the next tick at once, even
   while paused. It doesn't unpause anything; a pause stays a pause. The moment you press it, the readout says
   `tick starting` and the logo's arc starts sweeping, so you know it heard you; the tick's own line takes over once the
   loop opens it, after any [poll](how-the-loop-works) already under way. While a tick is running, the button waits for
   it to finish.
-- **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok; it opens the tick.
-  Before the first one, it says `no tick yet`.
+- **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok and `(dry run)` when
+  it was one; hover it for its summary, and click it to open the tick. Before the first one, it says `no tick yet`.
   `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page.
+- **The theme**, at the far right, which flips between light and dark; [Settings](settings#theme) has the rest.
 
 While a notice to workers is in force, a banner above every page shows it until it lapses. **Edit** opens its words
 in place, keeping the time it lapses unless you pick another. **Renew** sets it again from now, for as long as it was
@@ -96,10 +103,12 @@ as `canopy notice` would, so a run already going keeps the words it started with
 
 ## The rail
 
-The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything
-working right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working**
-lists every agent on the clock: worker runs by their ticket, reviews by their PR, and chore runs by their chore, with
-the runs waiting on you after them. Each row opens its run's page. A ticket you stopped drops out once its run ends; a
+The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything working
+right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working** lists every
+agent on the clock: worker runs by their ticket, reviews by their PR, and chore runs by their chore, with the runs
+waiting on you after them. Each row opens its run's page. It shows four rows at most, then `+N more`, which opens the
+page that lists the rest, and it dims while the loop isn't answering, since what it shows may have ended. The 24 hours
+open the spend page by the hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a
 question it left behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving,
 which links to canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and
 **Settings**. On a narrow window the rail folds to icons; **Open the rail** brings it back.
@@ -113,8 +122,10 @@ Press `/` from anywhere but a text field to jump to the search box, and type. Th
 or at once on Enter, and Escape leaves the box. A search wants 2 to 200 characters and at most eight words, and finds
 what holds every word, in any case, newest first.
 
-It searches tickets by key, title, and branch, every conversation, chore runs, the overseer's decisions, and ticks,
-each in its own panel, at most 20 of each. It doesn't search transcripts, reviews, or agent memory.
+It searches tickets by key, title, and branch, every conversation, chore runs, the overseer's decisions, and ticks, each
+in its own panel, at most 20 of each; a panel that found more says `newest 20`. It doesn't search transcripts, reviews,
+or agent memory. While the next search loads, the last one's results stay, dimmed, so the page never blanks between
+keystrokes. The box's clear button starts over.
 
 ## Acting from the UI
 
