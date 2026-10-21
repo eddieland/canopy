@@ -781,10 +781,12 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
             tool_call("show", rev="--output=x", path="retry.py"),
             tool_call("show", rev="feature", path="retry.py", repo="web"),
             tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
+            tool_call("blame", rev="feature", path="retry.py", start=1, end=2),
+            tool_call("log", range="feature", search="call()"),
             git=[f"checkout={seed}"],
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
-    assert served.listed() == ["merge-base", "diff", "log", "show"]
+    assert served.listed() == ["merge-base", "diff", "log", "show", "blame"]
     schema = served.responses[1]["result"]["tools"][2]["inputSchema"]
     assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
     assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
@@ -801,6 +803,12 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert "rev: not a revision" in option.text
     assert other.text == "no repository named 'web' here: this run reads checkout"
     assert served.responses[9]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    blame, searched = served.said(10), served.said(11)
+    assert (blame.error, searched.error) == (False, False)
+    assert blame.text.endswith(" 2)     call()")
+    assert blame.text.count(f"{sha} ") == 2
+    assert searched.text.count("\ncommit ") == 1
+    assert f"commit {sha}\n" in searched.text
     assert (served.stderr, served.returncode) == ("", 0)
 
 

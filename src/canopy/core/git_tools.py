@@ -1,11 +1,12 @@
 """Read-only git, served to the reviewer and the planner as MCP tools (DESIGN §27): they have no shell.
 
-`canopy _mcp --git NAME=PATH ...`, a server named `canopy_git` in a review's or a plan's inline config, serves four
-tools: `merge-base`, `diff`, `log`, and `show`. The checkouts it reads are the run's own, named on its command line by
-the harness, never by the agent: the review's checkout, or each worktree of the planner's desk.
+`canopy _mcp --git NAME=PATH ...`, a server named `canopy_git` in a review's or a plan's inline config, serves five
+tools: `merge-base`, `diff`, `log`, `show`, and `blame`. The checkouts it reads are the run's own, named on its command
+line by the harness, never by the agent: the review's checkout, or each worktree of the planner's desk.
 
 Every argument is checked before git sees it: a revision is plain revision syntax, never an option, a range, or a path;
-a path is relative, inside the repository, and never an option; each revision must name a commit there. git then runs
+a path is relative, inside the repository, and never an option; text to search for is printable and passed joined to
+its option; each revision must name a commit there. git then runs
 through `procs` with nothing it would run unasked: no hooks, filesystem monitor, external diff, textconv, pager,
 signature check, replace refs, or transport, so not the lazy fetch a promisor remote in the repository's config could
 ask for. The server drops every `GIT_*` variable it inherits, and system config is skipped. Every read is of commits,
@@ -19,9 +20,9 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
 
 from canopy.core import config, hostgit
 from canopy.core.memory_text import visible
@@ -39,7 +40,8 @@ MERGE_BASE = "merge-base"
 DIFF = "diff"
 LOG = "log"
 SHOW = "show"
-TOOLS = (MERGE_BASE, DIFF, LOG, SHOW)
+BLAME = "blame"
+TOOLS = (MERGE_BASE, DIFF, LOG, SHOW, BLAME)
 #: The most characters a call returns; past it the text is cut at a line's end, and says so.
 MAX_CHARS = 100_000
 #: The largest file `show` reads: one past it is refused by its size, before it is read.
@@ -50,6 +52,10 @@ MAX_PATH_CHARS = 1000
 #: How many commits `log` lists unless asked for another number, and the most it may ask for.
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+#: The longest text `log` searches commits for, in their changes or their messages.
+MAX_SEARCH_CHARS = 200
+#: The most lines one `blame` reads.
+MAX_BLAME_LINES = 400
 #: How long one git command may take.
 TIMEOUT_SECONDS = 60
 #: A revision as the tools take one: a commit id, a ref, `HEAD~2`, `main^2`, `@{u}`. Never an option (no leading `-`),
@@ -163,10 +169,18 @@ def _path(value: str) -> str:
     return value
 
 
+def _text(value: str) -> str:
+    if any(not c.isprintable() for c in value):
+        raise ValueError("text to search for is printable: one line, no tab or control character")
+    return value
+
+
 #: A revision, checked to be one before git sees it.
 Revision = Annotated[StrictStr, AfterValidator(_revision)]
 #: A path in the repository, checked to stay inside it.
 RepoPath = Annotated[StrictStr, Field(max_length=MAX_PATH_CHARS), AfterValidator(_path)]
+#: Text `log` searches for, as written: never a pattern, and passed joined to its option, so never one itself.
+SearchText = Annotated[StrictStr, Field(min_length=1, max_length=MAX_SEARCH_CHARS), AfterValidator(_text)]
 
 
 class Request(BaseModel):
@@ -230,6 +244,29 @@ class Log(Request):
         StrictInt,
         Field(ge=1, le=MAX_LIMIT, description="List at most this many commits."),
     ] = DEFAULT_LIMIT
+    #: Only commits that add or remove this text.
+    search: Annotated[
+        SearchText | None,
+        Field(
+            description="Only commits that add or remove this exact text, case sensitive: when it came or went.",
+        ),
+    ] = None
+    #: Only commits whose message holds this text.
+    message: Annotated[
+        SearchText | None,
+        Field(description="Only commits whose message holds this exact text, case sensitive."),
+    ] = None
+    #: Follow the one path named across renames.
+    follow: Annotated[
+        StrictBool,
+        Field(description="Follow the one path named in paths back across renames."),
+    ] = False
+
+    @model_validator(mode="after")
+    def _one_path_to_follow(self) -> Self:
+        if self.follow and len(self.paths) != 1:
+            raise ValueError("follow follows one file: name exactly one in paths")
+        return self
 
 
 class Show(Request):
@@ -242,6 +279,30 @@ class Show(Request):
         RepoPath,
         Field(description="The file or directory, relative to the repository's root; `.` for the root."),
     ]
+
+
+class Blame(Request):
+    """`blame`: the commit that last changed each of a file's lines, as the file is at one commit."""
+
+    #: The commit to read the file at.
+    rev: Annotated[Revision, Field(description="The commit to read the file at, such as HEAD.")]
+    #: The file.
+    path: Annotated[RepoPath, Field(description="The file, relative to the repository's root.")]
+    #: The first line to read.
+    start: Annotated[StrictInt, Field(ge=1, description="The first line to read, counting from 1.")]
+    #: The last line to read.
+    end: Annotated[
+        StrictInt,
+        Field(ge=1, description=f"The last line to read: at most {MAX_BLAME_LINES} lines from start."),
+    ]
+
+    @model_validator(mode="after")
+    def _some_lines(self) -> Self:
+        if self.end < self.start:
+            raise ValueError("end is the last line to read: at or after start")
+        if self.end - self.start >= MAX_BLAME_LINES:
+            raise ValueError(f"blame reads at most {MAX_BLAME_LINES} lines: narrow start to end")
+        return self
 
 
 def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: MergeBase) -> str:
@@ -281,6 +342,9 @@ def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> 
 def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> str:
     """List `request.range`'s commits, newest first, at most `request.limit`, each with the files it changed.
 
+    Only those that change `request.paths`, add or remove `request.search`, or hold `request.message` in their
+    message, when the request names any; `request.follow` follows its one path across renames.
+
     Returns:
         The commits, cut at `MAX_CHARS`, or a line saying there are none.
 
@@ -290,12 +354,28 @@ def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> st
     where = _checkout(checkouts, request.repo)
     sides, dots = _sides(request.range)
     commits = [_commit(runner, where, side) for side in sides]
-    args = ("--no-color", "--no-show-signature", "--format=medium", "--date=iso-strict", "--name-status")
+    args = (
+        "--no-color",
+        "--no-show-signature",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--format=medium",
+        "--date=iso-strict",
+    )
+    # Each search's text joined to its option, so no text is read as one. `--fixed-strings` holds `--grep` to the text
+    # as written; `-S` takes it so unless asked for a pattern.
+    searches = (
+        *((f"-S{request.search}",) if request.search is not None else ()),
+        *(("--fixed-strings", f"--grep={request.message}") if request.message is not None else ()),
+        *(("--follow",) if request.follow else ()),
+    )
     done = _git(
         runner,
         where,
         "log",
         *args,
+        "--name-status",
+        *searches,
         f"--max-count={request.limit}",
         "--end-of-options",
         dots.join(commits),
@@ -335,6 +415,30 @@ def show(runner: procs.Runner, checkouts: Mapping[str, Path], request: Show) -> 
             return _said(text)
         case other:
             raise Refused(f"{request.path} is a {other} in {request.rev}, not a file or a directory")
+
+
+def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -> str:
+    """Name the commit that last changed each line from `request.start` to `request.end` of a file at `request.rev`.
+
+    Returns:
+        Each line after its commit's full id, the path the file had there if it was renamed since, its author,
+        date, and line number.
+
+    Raises:
+        Refused: The checkout, the revision, or the file is unknown there, the file is shorter than `request.start`,
+            or git failed.
+    """
+    where = _checkout(checkouts, request.repo)
+    path = _normal(request.path)
+    if not path:
+        raise Refused("blame reads a file: name one, not the whole repository")
+    commit = _commit(runner, where, request.rev)
+    # The repository's config may name a file of revisions to skip, anywhere on the host: none is read. Its blame.*
+    # display keys are overridden, so every call prints the same columns. git 2.43's blame takes no
+    # `--end-of-options`; the commit is a full id, never an option.
+    args = ("--no-textconv", "--no-ignore-revs-file", "--no-show-email", "--root", "-l", "--date=short")
+    done = _git(runner, where, "blame", *args, f"-L{request.start},{request.end}", commit, "--", path)
+    return _said(_out(done, "blame"))
 
 
 def _checkout(checkouts: Mapping[str, Path], repo: str | None) -> Path:

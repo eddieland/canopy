@@ -80,6 +80,7 @@ permission:
   "canopy_git_diff": allow
   "canopy_git_log": allow
   "canopy_git_show": allow
+  "canopy_git_blame": allow
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
   "canopy_chore_history": deny
 ---

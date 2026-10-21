@@ -10,8 +10,9 @@ The repositories this plan covers, as the overseer chose them:
 
 {{REPOSITORIES}}
 
-Your git tools, `canopy_git_log`, `canopy_git_show`, `canopy_git_diff`, and `canopy_git_merge-base`, read each one's
-history: how the code you plan around came to be, and a file as it was. Name the repository with `repo`, as above.
+Your git tools, `canopy_git_log`, `canopy_git_blame`, `canopy_git_show`, `canopy_git_diff`, and
+`canopy_git_merge-base`, read each one's history: how the code you plan around came to be, which commit wrote a line,
+and a file as it was. Name the repository with `repo`, as above.
 
 {{#MAP}}
 
