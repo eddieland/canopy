@@ -65,6 +65,9 @@ RUNS_COMMANDS = frozenset(
         # Commands with an option that runs a program: `find -exec`, `fd -x`, `rg --pre`, `tar -I`, `zip -TT`,
         # `sort --compress-program`, `split --filter`, `man -P`, and m4's `syscmd`.
         *("find", "fd", "rg", "tar", "zip", "sort", "split", "man", "m4"),
+        # Pagers, editors, and shells that run a command from their input: `less`'s `!`, `nano`'s speller, `dc`'s
+        # `!`, sqlite3's `.shell`, psql's `\!`, and mysql's `system`.
+        *("less", "more", "most", "pg", "nano", "dc", "sqlite3", "psql", "mysql", "mariadb", "duckdb"),
     },
 )
 #: Commands that fetch a page, which anyone can shape: no agent has web tools (D077).

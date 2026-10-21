@@ -211,11 +211,11 @@ Controls:
   canopy refuses an allow for any other agent (a worker's shell already runs all but what it denies, so an allow could
   only undo a deny; the others have none), a pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`,
   redirect, backslash, brace, or newline), a command named by a wildcard or a path, and one that runs a command it is
-  given (a shell, an interpreter, a wrapper such as `env`, `xargs`, or `timeout`, a package or build runner, `find`),
-  fetches pages (D077), is git or a forge's CLI, or is the loop's own (`canopy`, `treehouse`, the runtime). Residual,
-  the operator's: an allowed command runs as they do with arguments the overseer picks, so one that writes, such as
-  `jira issue create`, writes, and one that reads text anyone can write puts that text in front of it; and an option
-  that runs a program, in a command canopy's list does not name, runs it.
+  given (a shell, an interpreter, a wrapper such as `env`, `xargs`, or `timeout`, a package or build runner, `find`,
+  a pager, a database shell), fetches pages (D077), is git or a forge's CLI, or is the loop's own (`canopy`,
+  `treehouse`, the runtime). Residual, the operator's: an allowed command runs as they do with arguments the overseer
+  picks, so one that writes, such as `jira issue create`, writes, and one that reads text anyone can write puts that
+  text in front of it; and an option that runs a program, in a command canopy's list does not name, runs it.
 - The loop may create tickets, but they authorize nothing: a human's queue label on a ticket, or the operator's start
   of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
   may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
