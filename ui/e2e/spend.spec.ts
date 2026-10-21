@@ -155,12 +155,12 @@ test("30 days' table scrolls in its panel under its column names, and a week's s
     expect(await scrolls()).toBe(false)
 })
 
-test("the ticket, PR, and tool tables scroll under their column names, flush with the panel's title", async ({
+test("the ticket, PR, model, and tool tables scroll under their column names, flush with the panel's title", async ({
     page,
 }) => {
     await page.goto('spend')
     await settled(page)
-    for (const id of ['spend-ticket-table', 'spend-pull-request-table', 'spend-tool-table']) {
+    for (const id of ['spend-ticket-table', 'spend-pull-request-table', 'spend-model-table', 'spend-tool-table']) {
         const table = page.getByTestId(id)
         const region = page.getByRole('region').filter({ has: table })
         // The mock's rows fit their regions: shorten one until it scrolls, then scroll it to its end.
@@ -211,6 +211,19 @@ test('the tools whose calls returned the most, by kind, the most first', async (
     await expect(tools.first().getByRole('rowheader')).toHaveText('github_pull_request_read')
     await expect(tools.nth(1).getByRole('rowheader')).toHaveText('bash')
     await expect(tools.nth(1).getByRole('cell')).toHaveText(['workers', '119', '11', '279.0k', '69.8k'])
+})
+
+test('what each kind spent on each model, the runs no session named a model for last', async ({ page }) => {
+    await page.goto('spend')
+    await settled(page)
+    // Four models, each counted once whatever kinds it served.
+    await expect(page.getByTestId('spend-model-count')).toHaveText('4')
+    const models = page.getByTestId('spend-model-table').getByTestId('spend-model')
+    await expect(models).toHaveCount(8)
+    await expect(models.nth(2).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
+    await expect(models.nth(2).getByRole('cell')).toHaveText(['workers', '1', '23', '$1.65'])
+    await expect(models.nth(3).getByRole('rowheader')).toHaveText('none: no session named one')
+    await expect(models.nth(3).getByRole('cell')).toHaveText(['workers', '5', '–', '$2.53'])
 })
 
 test.describe('on a wide monitor', () => {

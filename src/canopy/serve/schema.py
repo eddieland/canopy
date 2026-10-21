@@ -1803,6 +1803,23 @@ class SpendTool(_Model):
     tool's result was."""
 
 
+class SpendModel(_Model):
+    """What one kind's runs that started in the window spent on one model, as each run's session says (DESIGN §13)."""
+
+    kind: SpendKind
+    """The kind of run; the overseer's include dry runs."""
+    model: str | None = None
+    """As `provider/model`, as the runtime names it; None for the kind's runs no session named a model for: not read
+    yet, no longer kept, failed to read, or making no model call."""
+    runs: int
+    """How many of those runs it wrote a reply of: a run on two models counts under each."""
+    replies: int
+    """How many replies it wrote; 0 for the runs no session named a model for."""
+    cost_usd: float | None = None
+    """What the sessions priced those replies at, in US dollars; for the runs no session named a model for, what the
+    runs reported, None when none did."""
+
+
 class SpendTicks(_Model):
     """How many ended ticks of the window are in a group, and what their overseers cost."""
 
@@ -1874,6 +1891,9 @@ class SpendBreakdown(_Model):
     """Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first."""
     tools: list[SpendTool] = []
     """What each kind's tool calls returned, by tool, the most characters first: a row per kind and tool."""
+    models: list[SpendModel] = []
+    """What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
+    plans, chores, reviews, each kind's models the most costly first, and its runs no session named a model for last."""
 
 
 type SearchSource = Annotated[
