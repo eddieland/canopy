@@ -8,11 +8,12 @@ cheapest code review you'll ever do, because there's no code yet.
 
 A ticket needs a plan when `policy.plan` is `approve` in your config, or when you asked for one with `canopy plan KEY`
 or `canopy start KEY --plan`. `canopy plan KEY --skip` waives it for one ticket. Until a plan is written, the ticket's
-**Plan** card says `needed` or `not needed`, and hovering it says which of those applies.
+**Plan** card says `needed`, and hovering it says why: `policy.plan`, or the ticket's own setting. A ticket that needs
+no plan has no card at all.
 
 The next tick then dispatches a `plan` run. It writes the plan as a Markdown file, and the ticket's phase becomes
 `plan proposed`, which puts a `plan review` item on your attention list. Until you approve, the overseer can't start an
-implement: the guard is `unplanned`, and no prompt gets around it.
+implement: the [guard](how-the-loop-works#guards) is `unplanned`, and no prompt gets around it.
 
 A typo fix gets a plan too, if the policy says so. canopy once let a cheaper agent judge such work trivial and skip
 its plan, and it judged so little trivial that it cost more than the plans it saved. So `--skip` the ones you'd
@@ -50,15 +51,15 @@ each persona's text once per digest, so editing the file later doesn't rewrite h
 [Choosing a persona](tickets#choosing-a-persona). Older plans are folded under **Earlier plans**, read only, each
 with its own Persona panel. The trail at the top leads back to the ticket.
 
-A plan that replaced one opens with its changes marked: the words added and removed since the plan before, word by
-word, so formatting alone is no change. A paragraph, heading, or table cell that's new whole gets one green block with
-a bar at its left, rather than confetti. A passage rewritten around a few words it happened to keep reads as the old
-passage struck and the new one after it, since nobody learns anything from a green `the` surviving between two
-strikeouts. **Changes since plan N**, in the Plan panel's header, turns the marks off and
-back on; while they're on, the header counts them, **Previous change** and **Next change** step through them, round
-to the other end, and the comments' highlights step down to a thin underline so a passage never wears two colors,
-but you can still see where your comments are. After asking for
-changes, that's how you check you got them without reading the whole plan again.
+A plan waiting on you that replaced one opens with its changes marked: the words added and removed since the plan
+before, word by word, so formatting alone is no change. A paragraph, heading, or table cell that's new whole gets one
+green block with a bar at its left, rather than confetti. A passage rewritten around a few words it happened to keep
+reads as the old passage struck and the new one after it, since nobody learns anything from a green `the` surviving
+between two strikeouts. An approved or replaced plan opens with the marks off. **Changes since plan N**, in the Plan
+panel's header, turns them off and back on; while they're on, the header counts them, **Previous change** and **Next
+change** step through them, round to the other end, and the comments' highlights step down to a thin underline so a
+passage never wears two colors, but you can still see where your comments are. After asking for changes, that's how you
+check you got them without reading the whole plan again.
 
 The plans are compared section by section first, each heading paired with its namesake in the plan before, or with
 the section most like it when the heading was renamed. So a section the planner moved wears a small **moved** at its
@@ -72,13 +73,16 @@ the menu still saves you the scrolling. As it opens it marks the section you're 
 you.
 
 While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
-only too.
+only too. Before the first plan, the page says whether a run is writing one or the next tick dispatches a planner; for
+a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's file has gone missing or can't be read,
+the page names the problem and the path instead of opening an empty editor, since an empty plan approved is the most
+expensive kind.
 
 ## Commenting
 
-Select a passage and press **Comment**, in the bubble that appears or the toolbar, or Ctrl+Alt+M (⌘+Option+M on a
-Mac). Write your comment and press **Comment** again, or your send key. Each comment is saved as you make it, and sits
-in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
+Select a passage and press **Comment**, in the bubble that appears or the toolbar, or Ctrl+Alt+M (⌘+Option+M on a Mac).
+Write your comment and press **Comment** again, or your [send key](settings#replies). Each comment is saved as you make
+it, and sits in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
 
 A comment's card says what it can do in words: **reply**, **edit**, **resolve** (or **reopen**), and **delete**,
 which asks first. Comments hold onto
@@ -126,10 +130,10 @@ decided from wherever you got to. **Approve** is always its main button; everyth
 - **Approve**, or **Save and approve** with edits not yet saved, as `canopy plan KEY --approve`. It approves the plan
   as saved, your edits included, and the next tick can implement it. Editing an approved plan means approving it
   again, and until you do, the ticket's implement waits.
-- **Ask for changes** sends the planner back with your open comments, and an optional note on the whole plan, as one
-  reply on the ticket. If you edited the plan yourself, the reply says so, and asks the planner to keep your edits.
-  Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of comments may need
-  resolving or shortening first.
+- **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, and an optional note
+  on the whole plan, as one reply on the ticket. If you edited the plan yourself, the reply says so, and asks the
+  planner to keep your edits. Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of
+  comments may need resolving or shortening first.
 - **Skip the plan**, as `canopy plan KEY --skip`: the implement goes ahead with no plan. The current plan's file
   stays. Nothing on the page undoes it, so it asks first, right there in the foot; **Keep** (or Escape) backs out.
 
@@ -141,8 +145,9 @@ foot asks whether to approve without them, rather than quietly throw away what y
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
 starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads
-`changes asked`. A reply once the plan is approved asks for no changes: it goes to the implement. The button reads
-**Ask again**, so you never send a second request without knowing about the first.
+`changes asked`. Until a planner picks it up, the button reads **Ask again**, so you never send a second request
+without knowing about the first, and the line under it says it sends your open comments again. Once the plan is
+approved, the foot has no Ask at all: a reply on the ticket then asks for no changes, it goes to the implement.
 
 Approving is the moment an agent gets the go-ahead to write code, so the foot marks it: a check, the CLI's words on
 the accent, a leaf, and a **Back to Attention** link for whatever is next. It shows only once the approval is in the

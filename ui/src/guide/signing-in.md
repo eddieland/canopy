@@ -30,7 +30,8 @@ secret ever gets out, that's the list of what was done with it. Reads aren't kep
 
 When a session ends while you're using the page, the next request finds it gone and the page turns into the sign-in
 page. If that request was an action, the sign-in page says it wasn't sent, so sign in and send it again; a reply you
-were writing is kept for you.
+were writing is kept for you. **Sign out** is the exception: it drops every reply this browser was keeping, since a
+signed-out browser has no business holding your half-written instructions.
 
 A wrong secret gets its answer after a one-second pause, and the attempt is logged. Guessing is allowed. It's just slow,
 and someone is writing it down.

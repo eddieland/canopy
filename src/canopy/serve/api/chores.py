@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 
 from canopy.core import chore_view, conversation
 from canopy.infra import logs
-from canopy.serve import views
+from canopy.serve import chore_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, ChoreName, ChoreRunId, RefusedError, chore_ref, not_found
 from canopy.serve.chore_schema import ChoreDetail, ChoreRunDetail, ChoreSummary, ChoreTried, Dismissed, DismissRequest
@@ -27,7 +27,7 @@ _log = logs.for_tick(None)
 def chores(backend: BackendDep) -> list[ChoreSummary]:
     """Each chore configured for this workspace, as `canopy status` lists it; none while `capacity.max_chores` is 0."""
     with backend.open() as ctx:
-        return views.chores(backend, ctx)
+        return chore_views.chores(backend, ctx)
 
 
 @router.get(
@@ -43,7 +43,7 @@ def chore(name: ChoreName, backend: BackendDep) -> ChoreDetail:
     """
     ref = chore_ref(name, "show")
     with backend.open() as ctx:
-        found = views.chore(backend, ctx, ref.id)
+        found = chore_views.chore(backend, ctx, ref.id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no chore {ref.id!r} is defined for this workspace")
     return found
@@ -62,7 +62,7 @@ def chore_run(name: ChoreName, run_id: ChoreRunId, backend: BackendDep) -> Chore
     """
     ref = chore_ref(name, "show")
     with backend.open() as ctx:
-        found = views.chore_run_detail(ctx, ref.id, run_id)
+        found = chore_views.chore_run_detail(ctx, ref.id, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"chore {ref.id!r} has no run {run_id}")
     return found
@@ -79,7 +79,7 @@ def chore_run_transcript(name: ChoreName, run_id: ChoreRunId, backend: BackendDe
     """The chore run's session, read back from its log: agent output, untrusted and bounded."""
     ref = chore_ref(name, "show")
     with backend.open() as ctx:
-        found = views.chore_run_transcript(ctx, ref.id, run_id)
+        found = chore_views.chore_run_transcript(ctx, ref.id, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"chore {ref.id!r} has no run {run_id}")
     return found

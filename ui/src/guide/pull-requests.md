@@ -1,7 +1,7 @@
 # Pull requests and reviews
 
 Every PR canopy knows about, and canopy's own reviews of them. The reviews are yours alone: canopy never posts one on
-a PR, so this is the only place, besides `canopy review show`, you'll read them.
+a PR by itself, so this is the only place, besides `canopy review show`, you'll read them.
 
 ## The pull requests page
 
@@ -30,7 +30,8 @@ what it has cost, its coworkers' review threads when canopy has read them (below
 that pushed to it, and the decisions that named it. A list with nothing in it shows its header and a `0`, and nothing
 else: an empty list doesn't need a paragraph. A PR with no ticket has no Runs at all, since runs belong to a ticket.
 When a PR has used every review it's allowed, its page shows **At its limit**, with **Allow one more**, and under
-it the same as a command, `canopy grant URL review`. The limit is `policy.max_reviews_per_pr`, three by default.
+it the same as a command, `canopy grant URL review`. The limit is `policy.max_reviews_per_pr`, three by default; a
+grant works as a ticket's does ([Allowing one more run](tickets#allowing-one-more-run)).
 
 ## Replying to your coworkers' reviews
 
@@ -41,9 +42,16 @@ mistakes them for you.
 
 The PR's page shows its review threads on the diff the latest run pushed, each at its line, with the run's draft under
 the thread it answers. canopy reads the threads itself, so what you see is what GitHub holds, not the worker's
-recollection of it. A thread on a line that's since changed sits under its file, marked `outdated`. If the PR has moved
-on past the diff the page shows, a warning above the diff says so. Its files fold and filter by type as a review's do
-([below](#a-reviews-page)).
+recollection of it. The line over them says which mode `trust.review_replies` is in, and when canopy last read the
+threads and at which commit, or that it hasn't yet. A thread on a line that's since changed sits under its file, marked
+`outdated`. If the PR has moved on past the diff the page shows, a warning above the diff says so. Its files fold and
+filter by type as a review's do ([below](#a-reviews-page)).
+
+Not everything has a line to sit on. A thread on a file the diff doesn't show waits in **Not in the diff**, after the
+files; when no run kept a diff at all, every thread is listed whole under **Threads**. A draft for the review's own
+text, rather than a reply, sits in **The review's body**, and one no read of the PR has placed on a thread yet, or
+that named a thread the PR doesn't have, in **Not on a thread**, so a draft never goes missing for want of a place to
+put it.
 
 Comments show as plain text, never Markdown, with any character that hides text named by its code point. The one
 exception is a `<details>` block, which folds under its summary line as it does on GitHub, so a review bot's prompt for
@@ -58,7 +66,9 @@ Each waiting draft has three buttons:
 
 - **Send** posts it, word for word, under your name, with no mark: you approved it, so it's yours. It's
   `canopy draft send`.
-- **Edit** opens the text to rewrite. Your version is kept beside the run's, and **Send** then posts yours.
+- **Edit** opens the text to rewrite, up to 4,000 characters, counted as you type. **Save**, or the send key
+  you chose in [Settings](settings#replies), keeps your version beside the run's, and **Send** then posts yours.
+  **Cancel** leaves the run's as it was.
 - **Drop** means nobody sends it. **Undo** takes that back.
 
 A reply on a thread can carry a reaction too, a 👍 or any of the eight GitHub offers, put on the comment it answers. A
@@ -102,6 +112,9 @@ looking. canopy reviews:
 
 - **The loop's own PRs**, with `review.agent_prs` set: once checks pass, before a human is asked. Each new commit is
   reviewed again, up to the limit. What happens to the findings depends on whether you trust the reviewer, below.
+  With `[personas] reviewers` in your config, each commit gets one review in every persona it names instead of one
+  ([Choosing a persona](tickets#choosing-a-persona)). Each counts against the limit, so three personas against the
+  default limit of three spend it on the first commit.
 - **PRs matching your query**, `review.query`, such as your team's: reviewed and nothing more. The loop never
   pushes to them, fixes them, or opens a ticket for them.
 - **A PR you ask about**, below.
@@ -111,7 +124,7 @@ case that shows it, and the smallest fix, pinned to the line of the diff where i
 PR goes in the summary instead, so a worker is never sent to fix code its PR didn't touch, which is how a two-line fix
 becomes a refactor nobody asked for.
 
-Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once.
+Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once in each persona chosen for it.
 
 A review of a new commit isn't starting from scratch: it reads canopy's last finished review of the PR, the summary
 and every finding you didn't dismiss, and checks whether each still holds. A finding the worker fixed stops coming back,
@@ -139,7 +152,9 @@ threads or its files tab works too: the page trims it back to the PR, so you nee
 once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
 Until then it's a `requested` row at the head of the reviews list, so you can see it landed, and it waits on the
 [pull requests page](#the-pull-requests-page) wearing `requested` too. The PR's page shows the open request, with
-**Stop** to withdraw it.
+**Stop** to withdraw it, and says where it came from, `web` or `cli`. Once the request ends, the page says when and
+why: `reviewed`, `stopped`, `merged` or `closed` before a review got to it, or `unknown_repo` when none of your
+repositories holds the PR.
 
 Under the URL, **Notes for the reviewer** takes whatever you want the reviewer to know before it starts: what the author
 asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and it's
@@ -149,10 +164,10 @@ that's already waiting, with new notes, replaces the old ones; a review already 
 
 **Persona** picks the voice the review is written in, as `--persona` does. Left alone, it reads `(default)` beside
 `[personas] reviewer`'s, which is usually `canopy`. Check one persona, say `skeptic`, and the review is written in it;
-check several and canopy reviews the PR once in each, side by side, which is the cheapest way to learn which reviewer
-you actually like. A persona canopy would refuse to run, such as a file past its size limit, is greyed out, and
-hovering it says why. Asking again for a PR that's waiting, with personas checked, replaces its personas; with none
-checked, it keeps them. The PR's page names the personas with the request.
+check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest way to learn which
+reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse to run, such as a
+file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's waiting, with personas
+checked, replaces its personas; with none checked, it keeps them. The PR's page names the personas with the request.
 
 If you always reach for the same reviewer, pick it once in [Settings](settings#reviews) and the form starts there,
 saying `as Settings prefers`. You can still check others for one request; the next one starts from your preference
@@ -169,7 +184,7 @@ it), and what it cost. A PR you had reviewed in several personas gets a row for 
 the skeptic from the minimalist. A verdict reads `clean`, or counts the findings with the worst among them, such as
 `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. With no review yet, it points you to **Review a
 PR** above the list, which works with the defaults, and to `review.agent_prs` and `review.query`, which have the loop
-review PRs on its own.
+review PRs on its own. Either way, `capacity.max_reviews` must be above 0.
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
 verdict, commit, or cost because nothing has read it yet. Once a tick starts its review, the review's own row takes its
@@ -192,12 +207,16 @@ in full leaves it new, which is the point of a list of things you haven't read.
 
 ## A review's page
 
-At the top, the reviewer's summary, since that's the answer you came for, then its verdict, the PR (with its other
-reviews, if any, on a line under it), the persona the reviewer wrote in, the commit it read, and when its run ended,
-with a link to the run. The status is the line under the title. Then its
-findings, each linking to where it sits, and the diff, a panel per file, with each finding pinned under the line it
-names. A finding about a file the diff doesn't touch waits in a panel of its own after the files. A long diff shows the
-lines around each finding at first, with folds that open the rest.
+At the top, the reviewer's summary, since that's the answer you came for, then its verdict with how big the change is,
+the PR (with its other reviews, if any, on a line under it), the persona the reviewer wrote in, the commit it read and
+the base branch it was read against, and when its run ended, with a link to the run. The persona carries the start of
+its text's digest, whole on hover: two reviews in one persona with different digests had it edited between them. When
+the harness decided the review's status itself, such as failing a run that never reported, its reason is the red
+**harness** note under the summary. The status is the line under the title. Then its findings, each linking to where it
+sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line the diff
+doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its own after
+the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed file is
+headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end.
 
 An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
 the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each
@@ -206,8 +225,8 @@ to read a blocking one.
 
 **Hide diff**, on a file's header, folds that file away to one line saying how much it hid; **Show diff** brings it
 back. To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
-thousand lines are rarely where the bug is. Following a finding from the list opens its file again, and ticks its type,
-so nothing you folded hides a finding from you.
+thousand lines are rarely where the bug is. **Show every type** ticks them all again. Following a finding from the list
+opens its file again, and ticks its type, so nothing you folded hides a finding from you.
 
 A PR stacked on another branch shows that branch's commits too, since the diff runs from where the PR's branch left
 the pool's base branch. If a finding seems to be about code the PR never touched, check that first.
@@ -215,10 +234,10 @@ the pool's base branch. If a finding seems to be about code the PR never touched
 ## A review's run
 
 The results are the page you read; how the reviewer got there is a page of its own, one link away under **run**:
-**transcript and log**. It's the review in the trail, then **Run**, and holds what a run's page does: what a failed
-review ended on, the harness's note, when it ran, what it spent and on which model, and where its log is; then the
-reviewer's transcript, every file it read and command it ran, the prompt canopy handed it, and the log's end as
-written, each folded until you open it.
+**transcript and log**. It's the review in the trail, then **Run**, and holds what [a run's page](runs#a-runs-page)
+does, [Context](runs#context) included: what a failed review ended on, the harness's note, when it ran, what it spent
+and on which model, and where its log is; then the reviewer's transcript, every file it read and command it ran, the
+prompt canopy handed it, and the log's end as written, each folded until you open it.
 
 Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
 PR, or the runtime. A reviewer's events reach its log when it ends, so while it works the transcript says so and
@@ -236,5 +255,9 @@ is tell canopy which findings matter.
   your go-ahead for a worker to fix those and leave the rest alone. For an untrusted reviewer it's the go-ahead the
   findings wait for; for a trusted one, it narrows what the worker takes on.
 
-A review of a PR the loop doesn't own has neither: the page is all it gives you. Dismissals and sends belong to one
-review, so a new commit's review starts fresh.
+A review of a PR the loop doesn't own has neither. From your shell, though, a finished one is the draft of a review
+you could post yourself: `canopy review draft ID` shows exactly what would go, with its hash, `canopy review edit ID`
+rewrites its body or a comment, and `canopy review publish ID HASH` posts that version on the PR as your own comment
+review, pending on GitHub until you submit it there, or at once with `--submit`. The page has no buttons for it yet,
+which is a fine excuse to read the draft before it goes out under your name. Dismissals and sends belong to one review,
+so a new commit's review starts fresh.

@@ -8,6 +8,10 @@ The canopy is earned. In a fresh workspace, before the journal holds a single ti
 [Tickets](/tickets), then **Tick now**. A quiet inbox and one nobody has filled yet look alike from a distance, and
 only one of them is good news.
 
+So do a quiet inbox and a dead loop. While the loop isn't answering, an empty list grows no canopy: it says
+`Nothing needed you as of 14:05`, and that the list can't change until the loop is back. An all-clear from a loop that
+stopped at lunch is a timestamp, not a verdict.
+
 ## The list
 
 The loop rebuilds the list at the end of every tick, so an item leaves when its cause is gone: the question answered,
@@ -18,14 +22,15 @@ off.
 The items come in four groups, in this order, and within a group the one open longest comes first:
 
 1. **Broken**, in red: a run that `crashed`, ended `unpushed`, or left an `unknown result`; a `worker failed`; a
-   ticket or PR at its `attempt limit` or `review limit`; a chore or review that failed; or `canopy unavailable`, when
-   the overseer couldn't run canopy at all.
+   ticket or PR at its `attempt limit` or `review limit`; a chore or review that failed; `canopy unavailable`, when
+   the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for the overseer to run.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
-   (`untrusted review`), and a plan to approve (`plan review`).
+   (`untrusted review`), a plan to approve (`plan review`), and replies a run drafted for you to send
+   (`drafts waiting`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
-   lesson a worker proposed for [memory](memory), or the follow-up tickets a ticket's workers filed (`follow up
-   filed`), which canopy works only once you label or start each; the item leaves as you do, or when its ticket is
-   done.
+   lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
+   (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:
+   [How the loop works](how-the-loop-works#public-and-private-tickets) says why.
 4. **Findings**: what your chores found.
 
 The counters above the list say how many runs are going, how many tickets wait on you and how long the oldest question
@@ -57,8 +62,9 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 
 - **A run that broke** (`worker failed`, `crashed`, `unpushed`, `unknown result`, `attempt limit`): the ticket's latest
   run, with what it said, its cost, and `run:N` to open its page. When the ticket is out of tries, a red block under it
-  says so, with **Allow one more** for each kind of run that's at its limit. Read why it failed, grant another go, and
-  never leave the page.
+  says so, with **Allow one more** for each kind of run that's at its limit and the `canopy grant` command it stands
+  for, with a button that copies it ([Allowing one more run](tickets#allowing-one-more-run)). Read why it failed, grant
+  another go, and never leave the page.
 - **A PR waiting on someone else** (`needs reviewer`, `ready to merge`): a button that opens the PR on GitHub, since the
   next move happens there, and someone other than canopy makes it. canopy never merges, however long the PR sits.
 - **A wait on your answer** (`awaiting reply`, `untrusted review`): the reply box is the action. A question's head
@@ -73,10 +79,11 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause.
 
-An item about a ticket then shows the ticket's conversation and a box to reply in. The
-ticket's own actions (**Start privately**, **Stop**, **Forget**; see [Tickets](tickets#acting-on-a-ticket)) sit quietly
-under the box, so from the keyboard the reply comes right after the conversation and **Forget** is never one Tab too
-far. On a reason that asks for none of the above, they come first instead.
+An item about a ticket then shows the ticket's conversation and a box to reply in. The conversation's header wears the
+ticket's `private` or `public` chip, which says where your reply goes ([below](#replying)). The ticket's own actions
+(**Start privately**, **Stop**, **Forget**; see [Tickets](tickets#acting-on-a-ticket)) sit quietly under the box, so
+from the keyboard the reply comes right after the conversation and **Forget** is never one Tab too far. On a reason that
+asks for none of the above, they come first instead.
 
 Memory's items carry what they're about. A `memory proposal` lists the proposals from the done ticket's runs, each with
 **Promote as written** and **Reject**; a `lesson review` lists the lessons due, each with **Renew**; a `lesson wrong`
@@ -100,7 +107,8 @@ for the ticket's next worker; the box's placeholder says which one you're writin
 Type in the box and press **Reply**, or your send key (Enter, unless you changed it in
 [Settings](settings#replies); Shift+Enter always makes a new line). This is `canopy reply KEY`. A reply answers the
 question the ticket waits on, and can say anything else a worker should know: what to try, what to leave alone, that
-the flaky test is flaky. A reply holds up to 4000 characters; a longer one is refused, not cut.
+the flaky test is flaky. A reply holds up to 4000 characters, counted beside the button, and the box takes no more;
+from the CLI, a longer one is refused, not cut.
 
 Until it's sent, what you've written stays with the tab. If your session ends mid-reply, the sign-in page says your
 last action wasn't sent, and once you're back in, the reply is still in its box, waiting for you to press **Reply**
@@ -115,9 +123,9 @@ What happens next depends on the ticket:
   the tracker.
 
 Either way, the loop reads it at its next tick. Until then your message carries `waiting for the next tick`, and the
-item shows `answered`. Once a tick has read it, the chip turns to `seen`: a read receipt, not a promise of a
-reply. Sending a reply wakes the loop, so the next tick is never far off, unless the loop is paused.
-Sending the same reply twice, say after a dropped connection, records it once.
+item shows `answered`, with a line saying it leaves at the next tick. Once a tick has read it, the chip turns to `seen`:
+a read receipt, not a promise of a reply. Sending a reply wakes the loop, so the next tick is never far off, unless the
+loop is paused. Sending the same reply twice, say after a dropped connection, records it once.
 
 The tick that reads it answers under it, as `canopy`, in a dashed bubble: what it decided about the ticket and why.
 `Tick 812 read message 40: started run 57 (resume)` means a worker is on it, and its report follows when it's done.
@@ -136,5 +144,5 @@ to its runs, such as "the deploy check is red on purpose until Friday". A note d
 run reads it.
 
 A chore's finding has a **dismiss** button. It keeps the finding off the list until the chore stops reporting it, so a
-finding that clears and comes back is listed again. Undo a dismissal on the chore's page. [Chores](chores)
-has the rest.
+finding that clears and comes back is listed again. Undo a dismissal on [the chore's page](chores#dismissing-a-finding).
+[Chores](chores) has the rest.
