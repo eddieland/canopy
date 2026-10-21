@@ -10,7 +10,8 @@ from fastapi import APIRouter, HTTPException, Query
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import RunId, not_found
-from canopy.serve.schema import RawOutput, Run, RunsSince, Transcript
+from canopy.serve.schema import Run, RunsSince
+from canopy.serve.transcript_schema import RawOutput, Transcript
 
 TAG = "runs"
 router = APIRouter(tags=[TAG])

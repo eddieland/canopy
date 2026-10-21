@@ -20,7 +20,7 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, spend_views
-from canopy.serve.schema import LoopUpdated
+from canopy.serve.event_schema import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,

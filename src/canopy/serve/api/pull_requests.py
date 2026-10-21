@@ -15,15 +15,14 @@ from canopy.infra import logs
 from canopy.serve import pull_requests
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, not_found
-from canopy.serve.schema import (
-    ErrorResponse,
-    Granted,
+from canopy.serve.review_schema import (
     PullRequest,
     PullRequestDetail,
     ReviewRequestBody,
     ReviewRequested,
     ReviewRequestStopped,
 )
+from canopy.serve.schema import ErrorResponse, Granted
 
 TAG = "pull requests"
 router = APIRouter(tags=[TAG])

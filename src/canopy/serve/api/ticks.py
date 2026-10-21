@@ -10,7 +10,8 @@ from fastapi import APIRouter, HTTPException
 from canopy.serve import tick_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import TickId, not_found
-from canopy.serve.schema import LastTick, RawOutput, Tick, TickDetail, Transcript
+from canopy.serve.schema import LastTick, Tick, TickDetail
+from canopy.serve.transcript_schema import RawOutput, Transcript
 
 TAG = "ticks"
 router = APIRouter(tags=[TAG])

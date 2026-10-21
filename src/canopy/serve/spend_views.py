@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db
 from canopy.core import spend as spending
-from canopy.serve.schema import (
+from canopy.serve.spend_schema import (
     Spend,
     SpendBreakdown,
     SpendCosts,

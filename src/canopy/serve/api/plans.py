@@ -15,7 +15,7 @@ from canopy.infra import logs
 from canopy.serve import plan_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, PlanId, RefusedError, ThreadId, TicketKey, not_found, ticket_ref
-from canopy.serve.schema import (
+from canopy.serve.plan_schema import (
     PlanAction,
     PlanChanged,
     PlanCommentRequest,

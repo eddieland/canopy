@@ -10,7 +10,8 @@ from fastapi import APIRouter, HTTPException, Query
 from canopy.core import spend as spending
 from canopy.serve import spend_views, views
 from canopy.serve.api.deps import BackendDep, SpaDep
-from canopy.serve.schema import AttentionItem, Meta, Spend, SpendBreakdown
+from canopy.serve.schema import AttentionItem, Meta
+from canopy.serve.spend_schema import Spend, SpendBreakdown
 
 TAG = "overview"
 router = APIRouter(tags=[TAG])
