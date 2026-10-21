@@ -248,11 +248,13 @@ function SpendPage() {
                         ) : data.idle_ticks.length === 0 ? (
                             <Empty size="panel">no idle ticks in these {span}</Empty>
                         ) : (
-                            <ul className="divide-y" data-testid="spend-idle-tick-list">
-                                {data.idle_ticks.map((tick) => (
-                                    <TickRow key={tick.id} tick={tick} />
-                                ))}
-                            </ul>
+                            <PanelScroll label="Idle ticks" className="max-h-96">
+                                <ul className="divide-y" data-testid="spend-idle-tick-list">
+                                    {data.idle_ticks.map((tick) => (
+                                        <TickRow key={tick.id} tick={tick} />
+                                    ))}
+                                </ul>
+                            </PanelScroll>
                         )}
                     </Panel>
                 </>

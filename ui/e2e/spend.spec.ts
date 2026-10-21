@@ -178,6 +178,23 @@ test("the ticket, PR, model, and tool tables scroll under their column names, fl
     }
 })
 
+test('a long list of idle ticks scrolls in its panel', async ({ page }) => {
+    // The mock has one idle tick: repeat it, under ids of its own, past the region's height.
+    await page.route('**/api/spend/breakdown*', async (route) => {
+        const response = await route.fetch()
+        const found = (await response.json()) as { idle_ticks: { id: number }[] }
+        const [tick] = found.idle_ticks
+        found.idle_ticks = Array.from({ length: 40 }, (_, i) => ({ ...tick, id: 1000 + i }))
+        await route.fulfill({ response, json: found })
+    })
+    await page.goto('spend')
+    await settled(page)
+    const list = page.getByTestId('spend-idle-tick-list')
+    await expect(list.getByTestId(/^tick-\d+$/u)).toHaveCount(40)
+    const region = page.getByRole('region', { name: 'Idle ticks' })
+    expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+})
+
 test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
     page,
 }) => {
