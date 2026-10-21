@@ -32,6 +32,7 @@ const NEWEST: PlanFile = {
     sha256: 'read-hash',
     edited: false,
     changed_since_approval: false,
+    persona: null,
 }
 const PLANS: TicketPlans = {
     needed: true,

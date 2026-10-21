@@ -22,9 +22,20 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
  * Agent-written text laid out as it was written: line breaks, lists, headings, and code (`src/lib/rich-text.ts`). It is
  * untrusted, so every piece is React text, never HTML; a URL outside code is a link to itself (`LinkedText`, D113).
  * With `lines`, text longer than that shows its first lines and a toggle for the rest; a long line counts as the lines
- * it wraps to, so one long paragraph folds too.
+ * it wraps to, so one long paragraph folds too. With `prose`, a paragraph's or an item's lines join with a space, as
+ * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought.
  */
-export function RichText({ text, lines, className }: { text: string; lines?: number; className?: string }) {
+export function RichText({
+    text,
+    lines,
+    prose = false,
+    className,
+}: {
+    text: string
+    lines?: number
+    prose?: boolean
+    className?: string
+}) {
     const [open, setOpen] = useState(false)
     const blocks = parse(text)
     const cut = lines === undefined ? { blocks, hidden: 0 } : clamp(blocks, lines)
@@ -32,7 +43,7 @@ export function RichText({ text, lines, className }: { text: string; lines?: num
     return (
         <div className={cn('flex min-w-0 flex-col gap-1.5 text-sm wrap-break-word', className)}>
             {shown.map((block, i) => (
-                <BlockView key={i} block={block} />
+                <BlockView key={i} block={block} prose={prose} />
             ))}
             {cut.hidden > 0 && <MoreLines hidden={cut.hidden} open={open} onToggle={() => setOpen(!open)} />}
         </div>
@@ -74,14 +85,14 @@ function HarnessText({ part, links }: { part: Piece; links: boolean }) {
     return links ? <LinkedText text={part.text} /> : part.text
 }
 
-function BlockView({ block }: { block: Block }) {
+function BlockView({ block, prose }: { block: Block; prose: boolean }) {
     switch (block.kind) {
         case 'paragraph': {
             return (
                 <p>
                     {block.lines.map((line, i) => (
                         <Fragment key={i}>
-                            {i > 0 && <br />}
+                            {i > 0 && (prose ? ' ' : <br />)}
                             <LineView line={line} />
                         </Fragment>
                     ))}
@@ -100,7 +111,7 @@ function BlockView({ block }: { block: Block }) {
                 <li key={i} className={DEPTH[item.depth]}>
                     {item.lines.map((line, j) => (
                         <Fragment key={j}>
-                            {j > 0 && <br />}
+                            {j > 0 && (prose ? ' ' : <br />)}
                             <LineView line={line} />
                         </Fragment>
                     ))}

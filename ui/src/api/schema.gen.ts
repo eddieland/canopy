@@ -3514,6 +3514,8 @@ export type components = {
              * @description The file, under the state directory: the operator reads and edits it with their own tools too.
              */
             path: string;
+            /** @description The persona its planner wrote in, and its instructions; none for a run from before canopy recorded one. */
+            persona: components["schemas"]["RunPersona"] | null;
             /** @description The plan the file is. */
             plan: components["schemas"]["PlanSummary"];
             /**
@@ -4701,6 +4703,39 @@ export type components = {
             lessons: components["schemas"]["MemoryModeName"];
             /** @description Ticket notes' mode for this run. */
             ticket_notes: components["schemas"]["MemoryModeName"];
+        };
+        /**
+         * RunPersona
+         * @description The persona a run wrote in (DESIGN §31), and its instructions, read from its file now.
+         */
+        RunPersona: {
+            /**
+             * Changed
+             * @description Whether `text` differs from what the run read, its file edited since: it is then the text now, not the run's.
+             * @default false
+             */
+            changed: boolean;
+            /**
+             * Digest
+             * @description The sha256 of its text as the run's prompt carried it, in hex.
+             */
+            digest: string;
+            /**
+             * Name
+             * @description The persona's name.
+             */
+            name: string;
+            /**
+             * Problem
+             * @description Why its file cannot be read: it has gone, or it is one canopy would not put in a prompt.
+             */
+            problem: string | null;
+            /**
+             * Text
+             * @description Its instructions as its file stands now, as a prompt would carry them; none when the file cannot be read:
+             *     `problem` says why.
+             */
+            text: string | null;
         };
         /**
          * RunsSince
