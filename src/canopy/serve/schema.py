@@ -453,6 +453,8 @@ class AgentPersona(_Model):
     """Where it comes from: the ticket's override, `[personas]` in config, or canopy's own default."""
     error: str | None = None
     """Why its next run would be refused rather than run in it, such as a file gone since; None when it would run."""
+    once: str | None = None
+    """The persona the operator chose for its next run alone, in place of `persona`; None when they chose none."""
 
 
 class PersonaRequest(_Model):

@@ -775,7 +775,7 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
 
 
 def _check_persona(ctx: Context, key: str, kind: str) -> personas.Persona | None:
-    """Return the persona a `kind` run for `key` gets, the ticket's override else `[personas]`'s, read now (DESIGN §31).
+    """Return the persona a `kind` run for `key` gets, its own, the ticket's, or `[personas]`'s, read now (DESIGN §31).
 
     It is never fallen back from: a run in a voice nobody chose would read as the chosen one's. A refusal spends no
     attempt and leases no slot, and raises an attention item of its guard's name, since only the operator can fix it.
@@ -1101,9 +1101,10 @@ def _spawn(
         rendered=functools.partial(
             _record_rendered,
             ctx,
-            remembered,
-            replied,
-            followed.feedback_plan_id if followed is not None else None,
+            remembered=remembered,
+            replied=replied,
+            feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
+            rendered_in=(key, kind, persona),
         ),
         feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
         persona=persona.name if persona is not None else None,
@@ -1244,14 +1245,18 @@ def _render(
 
 def _record_rendered(
     ctx: Context,
+    run_id: int,
+    *,
     remembered: memory.Rendered | None,
     replied: replies.Rendered | None,
     feedback_plan_id: int | None,
-    run_id: int,
+    rendered_in: tuple[str, str, personas.Persona | None],
 ) -> None:
     """Record what run `run_id`'s prompt was rendered under, inside the transaction that inserts it.
 
     A `resume` that follows a feedback plan spends its approval here, so one approval goes ahead once (DESIGN §32).
+    `rendered_in` is the run's ticket, kind, and persona: a persona chosen for its agent's next run alone is spent
+    here, so it reaches that run alone (§31).
 
     Raises:
         Refusal: (`unplanned`) the feedback plan is no longer approved and unspent; the run is not inserted.
@@ -1260,6 +1265,10 @@ def _record_rendered(
         memory.record_rendered(ctx.conn, run_id, remembered)
     if replied is not None:
         replies.record_rendered(ctx.conn, run_id, replied)
+    key, kind, persona = rendered_in
+    agent = personas.agent_of(kind)
+    if agent is not None and persona is not None:
+        personas.spend_next(ctx.conn, key, agent, persona.name)
     if feedback_plan_id is not None and not feedback_plans.spend(ctx.conn, feedback_plan_id, run_id):
         raise Refusal(
             "unplanned",

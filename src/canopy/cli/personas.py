@@ -50,6 +50,12 @@ def cmd_personas(click_ctx: click.Context) -> int:
     help="The agent to choose for: its planner or its reviewer. The ticket's workers without it; a PR's reviewer.",
 )
 @click.option("--clear", is_flag=True, help="Clear the override: the agent's runs take [personas]' choice again.")
+@click.option(
+    "--next",
+    "next_only",
+    is_flag=True,
+    help="For the agent's next run alone, its workers' or planner's; with --clear, clear that choice.",
+)
 @click.pass_context
 def cmd_persona(
     click_ctx: click.Context,
@@ -58,6 +64,7 @@ def cmd_persona(
     agent: personas.Agent | None,
     *,
     clear: bool,
+    next_only: bool,
 ) -> int:
     """Choose the persona NAME for the ticket KEY's workers, or with --agent its planner or reviewer.
 
@@ -65,6 +72,10 @@ def cmd_persona(
     before canopy has seen the ticket. NAME is one `canopy personas` lists; a run whose persona's file has gone by then
     is refused, never run in another voice. Without NAME or --clear, prints each agent's next persona and where it
     comes from. Only from your shell or the web UI: never inside one of canopy's runs.
+
+    With --next, NAME is for the agent's next run alone, whatever kind it is, in place of the override and
+    [personas]; the runs after it go back to those. `canopy start KEY --persona` and `canopy plan KEY --persona` choose
+    it too.
 
     URL, a PR's, chooses the persona of the review you requested of it with `canopy start URL --review`, as that
     command's --persona does.
@@ -78,9 +89,13 @@ def cmd_persona(
         raise click.UsageError("give NAME or --clear, not both")
     ctx = open_context(click_ctx)
     if ref.kind == conversation.PR:
-        if agent not in (None, "reviewer"):
-            raise click.UsageError("a PR's review request has only a reviewer's persona")
+        if agent not in (None, "reviewer") or next_only:
+            raise click.UsageError(
+                "a PR's review request has only its review's persona: no --agent but reviewer, or --next",
+            )
         return _pr_persona(ctx, ref, name, clear=clear)
+    if next_only:
+        return _next_persona(ctx, ref.id, agent, name, clear=clear)
     if name is None and not clear:
         found = personas.next_for(ctx.conn, ctx.config, ref.id)
         for line in show(ref.id, [n for n in found if agent is None or n.agent == agent]):
@@ -98,6 +113,31 @@ def cmd_persona(
     click.echo(f"{ref.id}'s {chosen_for} runs write in {now.name} from their next run: {SOURCES[now.source]}.")
     if now.error is not None:
         click.echo(f"  its runs refuse: {now.error}")
+    return 0
+
+
+def _next_persona(ctx: Context, key: str, agent: personas.Agent | None, name: str | None, *, clear: bool) -> int:
+    # The persona of the agent's next run alone, chosen or cleared.
+    if agent == "reviewer":
+        raise click.UsageError("--next is for a ticket's workers or planner; its reviews take its override")
+    if name is None and not clear:
+        raise click.UsageError("--next takes NAME, or --clear")
+    chosen_for: personas.NextAgent = agent or "worker"
+    try:
+        now = personas.choose_next(ctx.conn, ctx.config, key, chosen_for, name, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"persona refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "next run's persona chosen" if name is not None else "next run's persona cleared",
+        extra={"ticket": key, "agent": chosen_for, "persona": name, "channel": CLI},
+    )
+    standing = f"{now.name}: {SOURCES[now.source]}"
+    if now.once is None:
+        click.echo(f"{key}'s next {chosen_for} run writes in {standing}.")
+    else:
+        click.echo(f"{key}'s next {chosen_for} run alone writes in {now.once}; the runs after it, in {standing}.")
+    if now.error is not None:
+        click.echo(f"  that run refuses: {now.error}")
     return 0
 
 
@@ -134,6 +174,8 @@ def show(key: str, found: Sequence[personas.Next]) -> list[str]:
     lines = [f"{key}'s personas, from each agent's next run:"]
     for n in found:
         lines.append(f"  {n.agent:<8}  {n.name}  ({SOURCES[n.source]})")
+        if n.once is not None:
+            lines.append(f"    its next run alone: {n.once}")
         if n.error is not None:
             lines.append(f"    its runs refuse: {n.error}")
     return lines

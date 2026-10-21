@@ -414,6 +414,22 @@ class TicketOverride(Row):
 
 
 @dataclass(frozen=True)
+class NextRunPersona(Row):
+    """The persona the operator chose for the next run alone of one of a ticket's agents (DESIGN §31)."""
+
+    TABLE: ClassVar[str] = "next_run_personas"
+
+    ticket_key: str
+    #: `worker` or `planner`.
+    agent: str
+    #: The persona's name.
+    persona: str
+    #: `cli` or `web`: where the operator set it.
+    channel: str
+    set_at: str
+
+
+@dataclass(frozen=True)
 class PlanThread(Row):
     """One of the operator's comments on a ticket's plan, anchored by its passage's words (DESIGN §25)."""
 

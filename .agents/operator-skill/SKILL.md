@@ -71,7 +71,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy config commands` | Each agent's command as a run starts it, and the keys it is made of; `--json`. |
 | `canopy agents` | The MCP servers and skills each canopy agent is offered, after OpenCode merges the operator's config; `--json`. |
 | `canopy personas` | Each persona, canopy's and the operator's in `paths.personas`, and the agents `[personas]` gives it; exits 1 when an agent's would refuse. |
-| `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. A PR's URL sets its open review request's. |
+| `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. `--next`: its next run alone, as `canopy start KEY --persona` and `canopy plan KEY --persona` set it. A PR's URL sets its open review request's. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
