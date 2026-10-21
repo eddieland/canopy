@@ -7,6 +7,7 @@ import sys
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import override
 from unittest import mock
@@ -15,7 +16,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, prompts, records, sql, tasks
+from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql, tasks
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
@@ -35,6 +36,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     running_run,
+    with_events,
     with_rebase,
 )
 from tests.canopy.scenario_helpers import Scenario
@@ -263,6 +265,26 @@ def test_a_pushed_branch_is_recorded_with_its_head_and_the_slot_returned(
     assert f"run {run.id}  done" in out
     assert f"{BRANCH}  head {present(run.head)[:12]}" in out
     assert "summary: found it" in out
+
+
+def test_a_task_run_s_models_are_read_from_its_session_as_it_ends(
+    canopy_env: CanopyEnv,
+    inline: Context,
+    opencode_state: Path,
+) -> None:
+    """As every agent run's are (DESIGN §13), and counted under tasks by `canopy spend`."""
+    opencode_state.write_text(json.dumps({"sessions": {"ses_t1": [["anthropic", "claude-x", 0.25]]}}))
+    with_events(canopy_env, "canopy-worker-private")
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result=DONE, session="ses_t1"):
+        run = run_task(inline, started.run_id)
+    assert run.session_id == "ses_t1"
+    assert [(m.model, m.replies) for m in run_models.of_run(inline.conn, "task_runs", run.id)] == [
+        ("anthropic/claude-x", 1),
+    ]
+    spent = spend.breakdown(inline.conn, datetime.now(UTC), 1).models
+    assert [(m.model, m.runs, m.cost_usd) for m in spent if m.kind == "tasks"] == [("anthropic/claude-x", 1, 0.25)]
 
 
 def test_commits_the_worker_left_unpushed_are_pushed_once(inline: Context, git_pool: GitPool) -> None:

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
-from canopy.core import contract, conversation, db, definitions, hostgit, pools, progress, tasks
+from canopy.core import contract, conversation, db, definitions, hostgit, pools, progress, run_models, tasks
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
@@ -123,6 +123,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 log.warning("task run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("task run finished", extra={**fields, "status": outcome.status, "head": outcome.head})
+            run_models.read_ended(ctx, "task_runs", run_id, log)
     return outcome
 
 
