@@ -130,7 +130,7 @@ export const ROW_COLUMNS = {
         ['state', FREE],
         ['findings', '14rem', 1],
     ],
-    /** A review run on the reviews page: its verdict, id, ticket, impact, PR and commit, cost, and when. */
+    /** A review run on the reviews page: its verdict, id, ticket, impact, PR, commit, and persona, cost, and when. */
     review: [
         // `3 findings, 1 blocking` on one line, with its dot.
         ['verdict', '12rem', 5],

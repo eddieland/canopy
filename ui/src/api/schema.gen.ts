@@ -4520,6 +4520,11 @@ export type components = {
              */
             news: boolean;
             /**
+             * Persona
+             * @description The persona it ran in (DESIGN §31); None for a review from before canopy recorded it.
+             */
+            persona: string | null;
+            /**
              * Pr Url
              * @description The PR's URL as the overseer gave it: an opaque https:// string.
              */
