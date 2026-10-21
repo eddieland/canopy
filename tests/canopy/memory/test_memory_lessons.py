@@ -286,6 +286,27 @@ def test_a_used_lesson_is_pushed_back_from_review_and_a_wrong_one_raises_lesson_
     assert memory_attention.items(conn, cfg) == []
 
 
+def test_memory_lessons_counts_the_runs_that_read_a_lesson_apart_from_those_that_cited_it(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    conn, canopy_env = scenario.conn, scenario.env
+    scenario.configures("private", memory=memory_modes(proposals="use"))
+    lesson = promoted(conn, canopy_env)
+    scenario.run(WORK, worker=pushes(memory_used=[lesson.id]))
+    vouched = present(memory.get(conn, lesson.id)).review_at
+    # Served to another ticket's run that said nothing of it: a read, not a citation, so it is not pushed back from
+    # review, or a lesson every run reads would never come up for it.
+    quiet = scenario.run(dispatches("PROJ-2", slug="work"), worker=pushes())
+    cited = present(memory.get(conn, lesson.id))
+    assert cited.review_at == vouched
+    started = present(db.get_run(conn, quiet.id))["started_at"]
+    out = scenario.operator("memory", "lessons").out
+    assert f"read by 2 runs (last at {started}), cited by 1 (last at {cited.last_used_at})" in out
+    [found] = json.loads(scenario.operator("memory", "lessons", "--json").out)["lessons"]
+    assert (found["read_count"], found["last_read_at"], found["use_count"]) == (2, started, 1)
+
+
 def test_review_dates_raise_one_lesson_review_once_lessons_are_in_use(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,

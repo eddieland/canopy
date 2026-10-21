@@ -2820,8 +2820,13 @@ export type components = {
              */
             key: string;
             /**
+             * Last Read At
+             * @description When the latest of those runs started; None if no run has read it.
+             */
+            last_read_at: string | null;
+            /**
              * Last Used At
-             * @description When a run last said so; None if none has: read by no run.
+             * @description When a run last cited it; None if none has.
              */
             last_used_at: string | null;
             /**
@@ -2841,6 +2846,11 @@ export type components = {
              * @description What a lesson was made from: the proposal or note it was promoted from, or the lesson it was edited from.
              */
             promoted_from: number | null;
+            /**
+             * Read Count
+             * @description How many runs' prompts carried it, whether or not they cited it.
+             */
+            read_count: number;
             /**
              * Repo
              * @description The repository a proposal or lesson is about; None for every repository, and for a note.
@@ -2872,12 +2882,12 @@ export type components = {
             ticket_key: string | null;
             /**
              * Use Count
-             * @description How many runs said they relied on it.
+             * @description How many runs cited it as relied on, in their result's `memory_used`, which a worker may leave unsaid.
              */
             use_count: number;
             /**
              * Used By
-             * @description The latest runs that said they relied on it, newest first, at most five. A run from before canopy named them
+             * @description The latest runs that cited it as relied on, newest first, at most five. A run from before canopy named them
              *     counts in `use_count` but is not here.
              * @default []
              */
@@ -5773,7 +5783,7 @@ export type components = {
             title: string | null;
             /**
              * Used
-             * @description How many of those a run said it relied on.
+             * @description How many of those a run cited as relied on, in its `memory_used`.
              */
             used: number;
         };

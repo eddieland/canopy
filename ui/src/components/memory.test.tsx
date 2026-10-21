@@ -76,6 +76,8 @@ const NOTE: MemoryEntry = {
     review_at: null,
     wrong_at: null,
     wrong_run_id: null,
+    read_count: 6,
+    last_read_at: '2026-10-08T11:45:00Z',
     use_count: 2,
     used_by: [43],
     last_used_at: '2026-10-08T11:30:00Z',
@@ -93,11 +95,13 @@ function renderRows(rows: React.JSX.Element) {
 }
 
 describe('MemoryRows', () => {
-    it('says what a memory says, how runs used it, and which run wrote it at which commit', async () => {
+    it('says what a memory says, how many runs read and cited it, and which run wrote it at which commit', async () => {
         await renderRows(<MemoryRows entries={[NOTE]} />)
         const row = screen.getByRole('listitem')
         expect(within(row).getByText(NOTE.text ?? '')).toBeDefined()
-        expect(within(row).getByText('used by 2 runs')).toBeDefined()
+        expect(within(row).getByText('read 6 · cited 2').getAttribute('title')).toMatch(
+            /^read by 6 runs, last at .+; cited by 2, last at .+$/u,
+        )
         expect(within(row).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
         expect(within(row).getByTitle('written at a1b2c3d')).toBeDefined()
         expect(within(row).queryByRole('link', { name: 'ABC-102' })).toBeNull()
@@ -110,14 +114,14 @@ describe('MemoryRows', () => {
         expect(screen.queryByTitle('A character that hides text, which a model still reads')).toBeNull()
     })
 
-    it('names the runs that relied on a memory, and counts those it cannot name', async () => {
+    it('names the runs that cited a memory, and counts those it cannot name', async () => {
         await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 4, used_by: [43, 42] }]} />)
-        expect(screen.getByText(/^used in/u).textContent).toBe('used in run:43, run:42 and 2 more')
+        expect(screen.getByText(/^cited in/u).textContent).toBe('cited in run:43, run:42 and 2 more')
         expect(screen.getByRole('link', { name: 'run:43' }).getAttribute('href')).toBe('/runs/43')
 
         cleanup()
         await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 0, last_used_at: null, used_by: [] }]} />)
-        expect(screen.queryByText(/^used in/u)).toBeNull()
+        expect(screen.queryByText(/^cited in/u)).toBeNull()
     })
 
     it('marks what the run whose page it is relied on and found wrong, apart from the runs that used it', async () => {
@@ -171,10 +175,19 @@ describe('MemoryRows', () => {
         expect(screen.getAllByTestId('memory-stand').map((s) => s.textContent)).toEqual(['active', 'recorded'])
     })
 
-    it('says a deleted text was deleted, and nothing of use for a memory no run relied on', async () => {
-        await renderRows(<MemoryRows entries={[{ ...NOTE, text: null, use_count: 0, last_used_at: null }]} />)
+    it('says a deleted text was deleted, and nothing of reads for a memory no run read', async () => {
+        const unread = {
+            ...NOTE,
+            text: null,
+            read_count: 0,
+            last_read_at: null,
+            use_count: 0,
+            last_used_at: null,
+            used_by: [],
+        }
+        await renderRows(<MemoryRows entries={[unread]} />)
         expect(screen.getByText('text deleted')).toBeDefined()
-        expect(screen.queryByText(/used by|read by/u)).toBeNull()
+        expect(screen.queryByText(/^read|cited/u)).toBeNull()
     })
 
     it('says why a memory stands as it does, on hover and in its line', async () => {

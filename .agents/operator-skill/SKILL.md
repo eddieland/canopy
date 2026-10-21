@@ -271,7 +271,7 @@ take `--json`.
 | What KEY's next run gets, as its prompt carries it | `canopy memory list KEY --digest` |
 | What a run read, wrote, and had refused, and the modes its prompt was rendered under | `canopy memory list --run ID` |
 | The proposals waiting, each with its ticket, run, and whether the ticket is done | `canopy memory proposals` |
-| The lessons, with review dates, use, and any run's report that one is wrong | `canopy memory lessons [--repo R]` |
+| The lessons, with review dates, the runs that read and cited each, and any run's report that one is wrong | `canopy memory lessons [--repo R]` |
 | The lessons a run gets, as its prompt carries them | `canopy memory lessons --digest [--repo R]` |
 | Any memory by its words, best match first, older notes and proposals included | `canopy memory search WORDS [--ticket KEY]` |
 

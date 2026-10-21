@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import TYPE_CHECKING
 
@@ -169,4 +170,38 @@ def test_memory_list_says_the_digest_is_served_and_what_a_run_read(
     assert main(["memory", "list", "--run", str(second["id"])]) == 0
     out = capsys.readouterr().out
     assert "Read:\n" in out
-    assert "used by 1 run, last at" in out
+    assert "read by 1 run (last at " in out
+    assert "cited by 1 (last at " in out
+
+
+def test_the_listings_count_the_runs_that_read_a_note_apart_from_those_that_cited_it(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_memory(canopy_env, ticket_notes="use")
+    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+    [note] = memories(conn)
+    # A resume for review, which no cooldown holds back, so one may follow another.
+    resume = (*FIX_CI[:-1], "review")
+    run_with(conn, *resume, memory_used=[note.id])
+    # Shown it and silent on it: a worker may rely on a note and leave `memory_used` unsaid, so these count as reads.
+    quiet = [run_with(conn, *resume) for _ in range(2)]
+    [cited] = memories(conn)
+    use = f"read by 3 runs (last at {quiet[-1]['started_at']}), cited by 1 (last at {cited.last_used_at})"
+    capsys.readouterr()
+    for args in (
+        ["memory", "list"],
+        ["memory", "history", str(note.id)],
+        ["memory", "list", "--run", str(quiet[0]["id"])],
+    ):
+        assert main(args) == 0
+        assert use in capsys.readouterr().out
+    assert main(["memory", "list", "--json"]) == 0
+    [found] = json.loads(capsys.readouterr().out)["notes"]
+    assert {k: found[k] for k in ("read_count", "last_read_at", "use_count", "last_used_at")} == {
+        "read_count": 3,
+        "last_read_at": quiet[-1]["started_at"],
+        "use_count": 1,
+        "last_used_at": cited.last_used_at,
+    }

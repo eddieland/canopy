@@ -31,9 +31,9 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(notes.getByTestId(/^memory-ticket-/u)).toHaveCount(2)
     await expect(notes.getByTestId('memory-notes-count')).toHaveText('2 tickets · 3 notes')
     const ticket = notes.getByTestId('memory-ticket-ABC-100')
-    // Named by its title as every list names a ticket; no run has relied on its notes, so no use is shown.
+    // Named by its title as every list names a ticket; no run has cited its notes in force, so no count is shown.
     await expect(ticket.getByText('Fix the flaky checkout test')).toBeVisible()
-    await expect(ticket).not.toContainText('used by')
+    await expect(ticket).not.toContainText('cited by')
     await expect(ticket.getByTestId('memory-3')).toHaveCount(0)
     await ticket.getByRole('button', { name: 'Show 2 notes' }).click()
     // Written to the journal by hand, past the bounds: its link is text, and its zero-width space is named.
@@ -80,8 +80,9 @@ test("a ticket's page lists its notes and what its next run gets", async ({ page
     await expect(panel.getByTestId('memory-1')).toHaveCount(0)
     await panel.getByRole('button', { name: 'Show 3 notes' }).click()
     await expect(panel.getByTestId('memory-1')).toContainText('superseded')
-    // A note names the runs that relied on it, each opening its page.
-    await expect(panel.getByTestId('memory-1')).toContainText('used in run:40')
+    // A note counts the runs that read it apart from those that cited it, and names those, each opening its page.
+    await expect(panel.getByTestId('memory-1')).toContainText('read 1 · cited 1')
+    await expect(panel.getByTestId('memory-1')).toContainText('cited in run:40')
     await expect(panel.getByTestId('memory-1').getByRole('link', { name: 'run:40' })).toHaveAttribute(
         'href',
         /\/runs\/40$/u,
@@ -116,7 +117,7 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await run.getByRole('button', { name: 'Show memory' }).click()
     await expect(run.getByTestId('memory-2')).toBeVisible()
     await expect(run.getByTestId('memory-1')).toContainText('this run relied on it')
-    await expect(run.getByTestId('memory-1')).not.toContainText('used in')
+    await expect(run.getByTestId('memory-1')).not.toContainText('cited in')
     await expect(run.getByTestId('memory-refused')).toHaveText(
         'notes staging-login: its text looks like it holds a secret',
     )
