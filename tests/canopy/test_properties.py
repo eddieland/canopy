@@ -194,6 +194,8 @@ def test_every_config_key_declares_a_scope() -> None:
         "runtime.plan_cmd",
         # Feedback plans hold trusted reviewers' feedback, and plan anyone else's unasked (DESIGN §32).
         "policy.feedback_plan",
+        # It lets a planner's own word stand for the operator's approval (DESIGN §25).
+        "policy.planner_may_approve",
         "runtime.chore_cmd",
         "capacity.max_chores",
         "chores",

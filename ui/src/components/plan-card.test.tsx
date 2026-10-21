@@ -15,6 +15,7 @@ const PLAN: PlanSummary = {
     created_at: '2026-10-08T11:00:00Z',
     approved_at: null,
     approved_channel: null,
+    approved_reason: null,
 }
 
 const PLANS: TicketPlans = {
@@ -127,6 +128,25 @@ describe('PlanCard', () => {
         expect(card.textContent).toContain('proposed')
         expect(card.textContent).not.toContain('waiting on you')
         expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    })
+
+    it('says the planner approved a plan it said needs no review, and why, and who approved no other', async () => {
+        const approved = {
+            ...PLAN,
+            status: 'approved' as const,
+            approved_at: '2026-10-08T11:30:00Z',
+            approved_channel: 'planner',
+            approved_reason: 'A one-line typo fix in the README.',
+        }
+        const newest = PLANS.newest === null ? null : { ...PLANS.newest, plan: approved }
+        await renderCard({ newest })
+        expect((await screen.findByTestId('plan-card')).textContent).toContain(
+            'approved bythe planner: A one-line typo fix in the README.',
+        )
+        cleanup()
+
+        await renderCard()
+        expect((await screen.findByTestId('plan-card')).textContent).not.toContain('approved by')
     })
 
     it('says changes are asked of a proposed plan, which waits on the planner now, not on you', async () => {
