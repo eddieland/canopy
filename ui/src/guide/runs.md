@@ -16,10 +16,14 @@ it ended:
 - A **worker run** (`run:39`) names its ticket and kind, with a resume's reasons beside it (`resume (ci, review)`),
   and the ticket's title. Under it are its summary, its PRs, the worktrees it holds, and, while it runs, its latest
   tool call.
-- A **review** (`review:4`) names its ticket, if its PR has one, then the PR, the commit it read, and what it found.
-  The findings themselves are on its page.
-- A **chore run** (`#2`, beside its chore, so it reads `chore:deps #2`) has its summary under it. Its chore's page
-  has every run; here you get the latest, and the one before it while one runs.
+- A **review** (`review:4`) names its ticket, if its PR has one, and the PR's title: its own, or its ticket's until
+  a worker reports one. Under it are the PR, the commit it read, and what it found. The findings themselves are on its
+  page.
+- A **chore run** (`#2`, beside its chore, so it reads `chore:deps #2`) has its chore's title, the `# heading` its
+  prompt opens with, and its summary under it. Its chore's page has every run; here you get the latest, and the one
+  before it while one runs.
+
+A subject with no title says `untitled`, which for a chore is a hint its prompt could use a first line.
 
 A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then

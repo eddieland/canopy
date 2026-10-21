@@ -116,7 +116,7 @@ function SubjectRow({ group }: { group: SubjectRuns }) {
                 <Folding
                     testId={`chore-run-${group.chore}-${group.latest.id}`}
                     earlierTestId={`earlier-chore-runs-${group.chore}`}
-                    head={<ChoreRunBody chore={group.chore} run={group.latest} />}
+                    head={<ChoreRunBody chore={group.chore} title={group.title} run={group.latest} />}
                     earlier={group.earlier.map((run) => (
                         <EarlierChoreRow key={run.id} chore={group.chore} run={run} />
                     ))}
@@ -189,8 +189,8 @@ function EarlierRow({ run }: { run: Run }) {
 }
 
 /**
- * A review on the runs page, in a worker run's columns: how its run went, its id, its ticket, `review`, then the PR
- * and the commit it read with what it found, cost, and when. Its findings are on its page.
+ * A review on the runs page, in a worker run's columns: how its run went, its id, its ticket, `review`, its PR's
+ * title, cost, and when, and under them the PR and the commit it read with what it found. Its findings are on its page.
  */
 function ReviewBody({ review }: { review: ReviewSummary }) {
     return (
@@ -207,11 +207,12 @@ function ReviewBody({ review }: { review: ReviewSummary }) {
             <span className="flex min-w-0 items-center gap-3">
                 <Chip word="review" />
             </span>
-            <span className="flex min-w-0 items-center gap-3">
+            <TicketTitle title={review.title} />
+            <Readouts cost={review.cost_usd} started={review.started_at} ended={review.ended_at} />
+            <RowLine from="title" className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <PullRequestLink url={review.pr_url} />
                 <ReviewFound review={review} />
-            </span>
-            <Readouts cost={review.cost_usd} started={review.started_at} ended={review.ended_at} />
+            </RowLine>
         </>
     )
 }
@@ -247,10 +248,10 @@ function ReviewFound({ review }: { review: ReviewSummary }) {
 }
 
 /**
- * A chore's run on the runs page, in a worker run's columns: how it went, its number, its chore, `chore`, cost, and
- * when, and under them what it said. Its findings, and its runs before these, are on its chore's page.
+ * A chore's run on the runs page, in a worker run's columns: how it went, its number, its chore, `chore`, the chore's
+ * title, cost, and when, and under them what it said. Its findings, and its runs before these, are on its chore's page.
  */
-function ChoreRunBody({ chore, run }: { chore: string; run: ChoreRun }) {
+function ChoreRunBody({ chore, title, run }: { chore: string; title: string | null; run: ChoreRun }) {
     return (
         <>
             <StateCell state={run.state} status={run.status} />
@@ -259,7 +260,7 @@ function ChoreRunBody({ chore, run }: { chore: string; run: ChoreRun }) {
             <span className="flex min-w-0 items-center gap-3">
                 <Chip word="chore" />
             </span>
-            <span />
+            <TicketTitle title={title} />
             <Readouts cost={run.cost_usd} started={run.started_at} ended={run.ended_at} />
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom('title')} />}
         </>

@@ -101,6 +101,7 @@ describe('applyStreamEvent', () => {
         }
         const detail: ChoreRunDetail = {
             chore: chore.name,
+            title: chore.title,
             run,
             summary: null,
             note: null,
