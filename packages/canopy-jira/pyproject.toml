@@ -1,0 +1,54 @@
+[project]
+name = "canopy-jira"
+# From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
+dynamic = ["version"]
+description = "canopy's Jira connector: read Jira Cloud's tickets and comments into canopy's journal."
+license = "MIT"
+authors = [{ name = "eddieland" }]
+keywords = ["canopy", "jira", "connector", "tracker"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    # Makes PyPI refuse an upload (D046).
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Bug Tracking",
+]
+requires-python = ">=3.12"
+# Stdlib only, and nothing from canopy: canopy runs it as a command, so the harness never holds a token or opens a
+# connection (D041, DESIGN §30).
+dependencies = []
+
+[project.scripts]
+canopy-connect-jira = "canopy_jira.connect:main"
+
+[project.urls]
+Homepage = "https://github.com/eddieland/canopy"
+Repository = "https://github.com/eddieland/canopy/tree/main/packages/canopy-jira"
+Issues = "https://github.com/eddieland/canopy/issues"
+
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+# The same scheme as canopy's, in the root pyproject.toml.
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
+
+# The version is built from git, so a new commit or tag rebuilds the metadata, not only a changed pyproject.toml.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/canopy_jira"]
