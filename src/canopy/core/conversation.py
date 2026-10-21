@@ -18,7 +18,6 @@ import contextlib
 import hashlib
 import os
 import re
-import secrets
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -672,16 +671,16 @@ def mirror(
     """
     check_verb(ref, MIRROR_ACTION)
     if not COMMENT_ID_RE.fullmatch(comment_id):
-        raise Refused("bad_comment", f"{comment_id[:MAX_KEY]!r} is not a comment id: {COMMENT_ID_RE.pattern}")
+        raise Refused("bad_comment", f"comment (--comment) {comment_id[:MAX_KEY]!r} must match {COMMENT_ID_RE.pattern}")
     if not author or len(author) > MAX_AUTHOR or not author.isprintable() or any(c.isspace() for c in author):
         raise Refused(
             "bad_author",
-            f"the author is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces",
+            f"author (--author) is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces",
         )
     commented_at = _comment_time(at)
     text = body.strip()
     if not text:
-        raise Refused("bad_body", "the comment's body is empty; mirror a comment with no text as `(no text)`")
+        raise Refused("bad_body", "body (--body) is empty: mirror a comment with no text as `(no text)`")
     truncated = len(text) > MAX_MIRRORED
     if truncated:
         text = text[:MAX_MIRRORED]
@@ -739,23 +738,13 @@ def worker_marked(body: str, prefix: str, suffix: str) -> bool:
     return not suffix or (text.endswith(suffix) and not text.splitlines()[-1].lstrip().startswith(">"))
 
 
-def body_delimiter() -> str:
-    """Return a heredoc delimiter for this tick's `canopy mirror` bodies that no comment's author can predict.
-
-    The overseer passes a comment's body on stdin through a quoted heredoc, which bash never expands. A body holding the
-    delimiter on a line of its own would end the heredoc early and run the rest as commands; a fresh random delimiter
-    each tick means no comment can be written to do that.
-    """
-    return f"CANOPY_BODY_{secrets.token_hex(8)}"
-
-
 def _comment_time(text: str) -> str:
     try:
         moment = datetime.fromisoformat(text) if len(text) <= MAX_TIME else None
     except ValueError:
         moment = None
     if moment is None:
-        raise Refused("bad_time", f"{text[:MAX_TIME]!r} is not an ISO 8601 time")
+        raise Refused("bad_time", f"at (--at) {text[:MAX_TIME]!r} is not an ISO 8601 time")
     # A time with no offset is the tracker's UTC.
     return db.format_time(moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC))
 

@@ -188,10 +188,9 @@ def test_bash_allows_are_the_last_of_the_overseers_bash_rules() -> None:
     text = rendered[f"agents/{agents.OVERSEER}.md"].decode()
     bash = text.split("\n  bash:\n", 1)[1].split("\n  todowrite:", 1)[0]
     rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    # The overseer has no shell of its own (DESIGN §27): only the operator's allows follow the deny.
     assert rules == [
         '    "*": deny',
-        '    "canopy *": allow',
-        '    "treehouse status*": allow',
         '    "jira issue list *": allow',
         '    "jira issue view *": allow',
     ]

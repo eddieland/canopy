@@ -6,7 +6,7 @@
 # The body is rendered: canopy puts the overseer's prompt at its marked line (DESIGN §6, §13).
 # Its temperature is rendered at the marked line from `runtime.overseer_temperature`, unless that is -1: some models,
 # such as OpenAI's reasoning models, refuse a request that sets one.
-description: canopy overseer. Reads tracker and GitHub state, records decisions, dispatches workers through the canopy CLI. Read-only otherwise.
+description: canopy overseer. Reads tracker and GitHub state, records decisions, dispatches workers through canopy's tools. Read-only otherwise.
 mode: primary
 # canopy: temperature
 permission:
@@ -21,10 +21,10 @@ permission:
   codesearch: deny
   # Subagents run with their own, wider permissions; the overseer must not reach them.
   task: deny
+  # No shell of its own: the overseer acts through canopy's tools alone (DESIGN §27), and reads the pool from its state
+  # block. Only the commands the operator names in `runtime.allow_bash` follow the deny.
   bash:
     "*": deny
-    "canopy *": allow
-    "treehouse status*": allow
     # The commands `runtime.allow_bash` names for the overseer, such as a tracker's CLI, are rendered at the marked
     # line, last, so that each is allowed (DESIGN §13). canopy refuses a shell, an interpreter, or its own tools there.
     # canopy: bash allows
@@ -83,11 +83,22 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
-  "canopy_chore_history": deny
+  # canopy's own tools, from the server the harness names in this run's inline config alone (DESIGN §27): every tool of
+  # a server whose name starts `canopy_` is denied, the reviewer's and planner's git tools and a chore's history among
+  # them, then each of the overseer's is allowed by its exact name, last so no pattern above takes one back. An allow by
+  # pattern would also match another server's tools.
+  "canopy_*": deny
+  "canopy_dispatch": allow
+  "canopy_decide": allow
+  "canopy_queried": allow
+  "canopy_attention": allow
+  "canopy_ticket-set": allow
+  "canopy_mirror": allow
+  "canopy_review-run": allow
+  "canopy_review-wait": allow
+  "canopy_review-end": allow
+  "canopy_chore-run": allow
+  "canopy_chore-wait": allow
 ---
 
 <!-- canopy: overseer prompt -->

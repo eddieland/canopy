@@ -12,6 +12,7 @@ from canopy.cli.params import CheckoutType
 from canopy.core import git_tools
 from canopy.infra import procs
 from canopy.loop import mcp
+from canopy.runtime import servers
 
 
 @click.command("_mcp", hidden=True)
@@ -44,8 +45,7 @@ def cmd_mcp(click_ctx: click.Context, *, chore: bool, checkouts: tuple[tuple[str
                 procs.SubprocessRunner(unset={*runner.unset, *git_tools.inherited(os.environ)}),
                 checkouts=dict(checkouts),
             )
-        # Every run a tool starts is spawned by this runner, not the one `canopy dispatch` uses: what stage 2 removes
-        # from those runs' environment, the server's own entry in the inline config (ROADMAP M48), goes in its
-        # `unset` here too.
-        runner = procs.SubprocessRunner(unset=runner.unset, reparent=True)
+        # Every run a tool starts is spawned by this runner. The runtime started the server with the agent's whole
+        # environment, which names this server, so none of those runs inherits it (DESIGN §27).
+        runner = procs.SubprocessRunner(unset=runner.unset | servers.VARIABLES, reparent=True)
     return mcp.run_stdio(runner, chore=chore, checkouts=dict(checkouts))

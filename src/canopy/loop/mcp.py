@@ -42,6 +42,13 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.infra import procs
 
+#: The overseer's server, as its inline config names it, and as the server names itself: the runtime puts it before each
+#: tool's name, `canopy_dispatch`, and no workspace config may name a server so (DESIGN §13).
+SERVER = "canopy"
+#: How the runtime starts the server for the overseer, and how a tick checks it starts (DESIGN §6): this interpreter's
+#: canopy. `-P` keeps the working directory, the workspace root, off the import path, so no file a workspace holds can
+#: stand in for canopy's own modules (TRUST_MODEL T7).
+COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp")
 #: The protocol versions the server speaks, newest first: a client that asks for one of them is answered in it, and
 #: any other in the newest.
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -453,7 +460,7 @@ def _initialize(params: Mapping[str, object], opener: Opener, mode: Mode) -> dic
     return {
         "protocolVersion": version,
         "capabilities": {"tools": {"listChanged": False}},
-        "serverInfo": {"name": "canopy", "version": db.CANOPY_VERSION},
+        "serverInfo": {"name": SERVER, "version": db.CANOPY_VERSION},
     }
 
 

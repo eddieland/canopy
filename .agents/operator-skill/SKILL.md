@@ -180,7 +180,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
 | `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
-| `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
+| `canopy_unavailable` | The server of the overseer's tools, `canopy _mcp`, did not answer where the loop runs, so the overseer did not run: fix the install. |
 | `disk_low` | `.canopy/` or the workspace has under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide, or ask for a split (below). |
 

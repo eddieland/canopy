@@ -257,9 +257,9 @@ def test_the_reviewer_prompt(
 @pytest.mark.parametrize(
     ("pr", "sha", "reason"),
     [
-        ("http://x.test/pull/1", "a" * 40, "--pr must be the PR's plain https:// URL"),
-        (PR, "abc", "--sha must be the full head commit"),
-        (PR, "A" * 40, "--sha must be the full head commit"),
+        ("http://x.test/pull/1", "a" * 40, "pr (--pr) must be the PR's plain https:// URL"),
+        (PR, "abc", "sha (--sha) must be the full head commit"),
+        (PR, "A" * 40, "sha (--sha) must be the full head commit"),
     ],
 )
 def test_bad_pr(reviewing: CanopyEnv, scenario: Scenario, pr: str, sha: str, reason: str) -> None:
@@ -1056,10 +1056,16 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
     other = "https://github.com/acme/api/pull/8"
     sha = head(git_pool)
     assert scenario.refuses(reviews(sha, other, ticket="PROJ-1")) == [
-        ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR"),
+        (
+            "refused:not_ours",
+            f"PROJ-1's unit in repo did not open {other}; ticket (--ticket) is only for the loop's own PR",
+        ),
     ]
     assert scenario.refuses(reviews(sha, ticket="PROJ-2")) == [
-        ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR"),
+        (
+            "refused:not_ours",
+            f"PROJ-2's unit in repo did not open {PR}; ticket (--ticket) is only for the loop's own PR",
+        ),
     ]
     own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     query = scenario.review(reviews(sha, other), reviewer=reviewer_reports(FINDINGS)).id

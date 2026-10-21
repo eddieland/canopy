@@ -278,7 +278,7 @@ def end(conn: sqlite3.Connection, pr_url: str, reason: str, *, dry_run: bool = F
             PR with no open request.
     """
     if reason not in OVERSEER_REASONS:
-        raise conversation.Refused("bad_reason", f"--reason must be one of {', '.join(OVERSEER_REASONS)}")
+        raise conversation.Refused("bad_reason", f"reason (--reason) must be one of {', '.join(OVERSEER_REASONS)}")
     with db.transaction(conn):
         found = open_request(conn, pr_url)
         if found is None:

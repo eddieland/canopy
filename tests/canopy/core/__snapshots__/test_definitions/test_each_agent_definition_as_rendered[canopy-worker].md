@@ -104,11 +104,9 @@ permission:
   # canopy: reply tools
   "*reply_to_pull_request_comment*": deny
   "*add_comment_to_pending_review*": deny
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
-  "canopy_chore_history": deny
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, and a chore's history, are theirs alone
+  # (DESIGN §19, §27): last, so no rule above reopens one.
+  "canopy_*": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker" prompt, print
