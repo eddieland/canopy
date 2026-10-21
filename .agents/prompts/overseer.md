@@ -99,8 +99,10 @@ ticket.
    with a one-sentence rationale. A dispatch, a review run or wait, an attention item, or a refusal is recorded by the
    CLI and counts too; a mirror does not. Record again each `attention` item whose cause holds (see "The attention
    list"), and decide every due chore (see "Chores").
-6. **Dispatch** in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
-   waiting; an operator's go-ahead on untrusted feedback is `human_replied`), then `conflicted` and `ci_red`, then
+6. **Dispatch** in priority order until capacity is zero. A review the operator requested comes before everything
+   else: run each that `reviews.requests` needs (see "Reviews") before any dispatch or other review, since the
+   operator asked for it by hand and every start takes capacity. Then `human_replied` and `changes_requested` (a human
+   is waiting; an operator's go-ahead on untrusted feedback is `human_replied`), then `conflicted` and `ci_red`, then
    `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a blocker before the tickets it blocks, and never a
    ticket whose blocker is unresolved unless it can be stacked (see "Blockers and stacking").
 7. **Advance the cursors** of every ticket you inspected, so the next tick is incremental (see "Cursors").
@@ -184,8 +186,8 @@ So every attention item this prompt names is recorded every tick its cause holds
   the queue. When you drop one, the ticket's rationale says what ended it.
 - Do not drop an item because nothing about it is new. A cursor that has not moved means nothing changed, not that the
   cause went away: a PR waiting on a reviewer (`needs_reviewer`) waits until someone reviews it.
-- The harness re-raises its own items: run failures, `awaiting_reply`, `repo_missing`, chores', `follow_up_filed` for
-  the follow-up tickets a ticket's workers filed, and `follow_up_unrecorded` for those it could not record. They are
+- The harness re-raises its own items: run failures, `awaiting_reply`, `repo_missing`, chores', and
+  `follow_up_unrecorded` for follow-up tickets a ticket's workers reported that it could not record. They are
   not in `attention`; never record them. A follow-up is an ordinary ticket, a candidate only once it is labeled or
   started.
 
@@ -564,11 +566,12 @@ running, a draft).
   workspace's repositories; a match elsewhere gets no decision, since its commit cannot be fetched here. A kept PR
   whose head is already reviewed needs no decision.
 - `reviews.requests` are PRs the operator asked to have reviewed, each with its review runs so far and its latest. A
-  request authorizes one review of the PR at its head, and nothing else. Read each through GitHub. In none of the
-  workspace's repositories, or in one with no clone: `canopy review end --pr <URL> --reason unknown_repo`. Merged or
-  closed before its review: `canopy review end --pr <URL> --reason merged` (or `closed`). Open at a head already
-  reviewed: the request came after that review, so run `canopy review run` at that head anyway; it refuses `reviewed`
-  and ends the request.
+  request authorizes one review of the PR at its head, and nothing else, and is the tick's first work (Procedure step
+  6): no other review, and no worker, starts before it. Read each through GitHub. In none of the workspace's
+  repositories, or in one with no clone: `canopy review end --pr <URL> --reason unknown_repo`. Merged or closed before
+  its review: `canopy review end --pr <URL> --reason merged` (or `closed`). Open at a head already reviewed: the
+  request came after that review, so run `canopy review run` at that head anyway; it refuses `reviewed` and ends the
+  request.
 
 Attention about reviews takes `--pr`, and the ticket key for one of the loop's own PRs: `review_failed` when the PR's
 latest review run ended `failed`, `unknown`, `timeout`, or `crashed` and nothing newer has run (you may run another

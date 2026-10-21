@@ -319,6 +319,8 @@ class Plan(Row):
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None
+    #: Why the planner said its plan needs no review, when the harness approved it so (channel `planner`, DESIGN §25).
+    approved_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -341,6 +343,8 @@ class FeedbackPlan(Row):
     approved_channel: str | None
     #: The `resume` that went ahead on the approval, which it spent: an approval goes ahead once.
     spent_run_id: int | None
+    #: Why the planner said its plan needs no review, when the harness approved it so (channel `planner`, DESIGN §25).
+    approved_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -692,6 +696,29 @@ class ConnectorRun(Row):
     query_result: str | None
     #: The review query's result, the URLs in order, as a JSON list, when it read it to the end.
     review_query_result: str | None
+
+
+@dataclass(frozen=True)
+class Derivation(Row):
+    """One subject a tick derived in code, in shadow (DESIGN §30): a ticket's own phases, or a unit's."""
+
+    TABLE: ClassVar[str] = "derivations"
+
+    id: int
+    tick_id: int
+    ticket_key: str
+    #: The unit's repository; None on the ticket's own row.
+    repo: str | None
+    #: Whether the ticket is a candidate (DESIGN §17); None on a unit's row and a stale one.
+    candidate: bool | None
+    #: Whether the tracker said the ticket is closed; None on a unit's row and a stale one.
+    closed: bool | None
+    #: Every phase of §7's table that held, as a JSON list; empty when none did, or the subject is stale.
+    phases: str
+    #: The stale or missing observation the subject depends on; None when it was derived.
+    stale: str | None
+    #: The phase the journal held for the subject when the tick closed: the overseer's.
+    overseer_phase: Phase | None
 
 
 @dataclass(frozen=True)

@@ -15,8 +15,21 @@ The next tick then dispatches a `plan` run. It writes the plan as a Markdown fil
 implement: the guard is `unplanned`, and no prompt gets around it.
 
 A typo fix gets a plan too, if the policy says so. canopy once let a cheaper agent judge such work trivial and skip
-its plan, and it judged so little trivial that it cost more than the plans it saved. So the judge is you: `--skip`
-the ones you'd rather not read.
+its plan, and it judged so little trivial that it cost more than the plans it saved. So `--skip` the ones you'd
+rather not read, or let the planner, which has just read the ticket and the code, say so for you.
+
+## When the planner says a plan needs no review
+
+Set `policy.planner_may_approve = true` in your own config, the user file or the workspace's private one (a shared
+file can't), and the planner may answer that its plan leaves you nothing to judge, with a sentence saying why. canopy
+then approves the plan on the planner's word: the implement goes ahead without you, no `plan review` item appears,
+and your sinks get one line saying so. The **Plan** card says it was **approved by** the planner, with that sentence,
+so you can read the plan after and disagree at leisure. Feedback plans take the same key.
+
+The planner's word counts only until you've had one of your own. Once you've asked for changes, or asked for the plan
+by name with `canopy plan KEY`, every plan after waits on you, whatever the planner thinks. Edit an approved plan and
+it needs your approval again, as any plan does. The ticket's text can talk a planner into anything, including this,
+so the PR's review is still where the work gets judged.
 
 ## Reading a plan
 
@@ -122,7 +135,8 @@ The note on the whole plan travels the same way: only with Ask for changes. Pres
 foot asks whether to approve without them, rather than quietly throw away what you wrote.
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
-starts; the ticket's Plan card carries the same band, and the plan's chip reads `changes asked`. The button reads
+starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads
+`changes asked`. A reply once the plan is approved asks for no changes: it goes to the implement. The button reads
 **Ask again**, so you never send a second request without knowing about the first.
 
 Approving is the moment an agent gets the go-ahead to write code, so the foot marks it: a check, the CLI's words on

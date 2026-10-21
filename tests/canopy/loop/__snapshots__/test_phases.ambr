@@ -1,0 +1,364 @@
+# serializer version: 1
+# name: test_each_row_of_the_phase_table[approved]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.APPROVED: 'approved'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[blocked]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+        <Phase.BLOCKED: 'blocked'>,
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[changes_requested]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.CHANGES_REQUESTED: 'changes_requested'>,
+        <Phase.GREEN_UNREVIEWED: 'green_unreviewed'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[ci_red]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.CI_RED: 'ci_red'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[ci_running]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.CI_RUNNING: 'ci_running'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[conflicted]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.CONFLICTED: 'conflicted'>,
+        <Phase.GREEN_UNREVIEWED: 'green_unreviewed'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[green_unreviewed]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.GREEN_UNREVIEWED: 'green_unreviewed'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[human_replied]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+        <Phase.HUMAN_REPLIED: 'human_replied'>,
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.PUSHED_NO_PR: 'pushed_no_pr'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[merged]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.MERGED: 'merged'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[needs_human]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+        <Phase.NEEDS_HUMAN: 'needs_human'>,
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.PUSHED_NO_PR: 'pushed_no_pr'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[plan_proposed]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+        <Phase.READY: 'ready'>,
+        <Phase.PLAN_PROPOSED: 'plan_proposed'>,
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[pushed_no_pr]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.PUSHED_NO_PR: 'pushed_no_pr'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[ready]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+        <Phase.READY: 'ready'>,
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[review_findings]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.REVIEW_FINDINGS: 'review_findings'>,
+        <Phase.GREEN_UNREVIEWED: 'green_unreviewed'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[review_pending]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.REVIEW_PENDING: 'review_pending'>,
+        <Phase.GREEN_UNREVIEWED: 'green_unreviewed'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[running]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+        <Phase.RUNNING: 'running'>,
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---
+# name: test_each_row_of_the_phase_table[untrusted_review]
+  list([
+    Derived(
+      candidate=True,
+      closed=False,
+      phases=tuple(
+      ),
+      repo=None,
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+    Derived(
+      candidate=None,
+      closed=None,
+      phases=tuple(
+        <Phase.UNTRUSTED_REVIEW: 'untrusted_review'>,
+        <Phase.GREEN_UNREVIEWED: 'green_unreviewed'>,
+      ),
+      repo='repo',
+      stale=None,
+      ticket_key='PROJ-1',
+    ),
+  ])
+# ---

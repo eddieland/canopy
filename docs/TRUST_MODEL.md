@@ -109,6 +109,14 @@ Controls:
   approved items by id from the journal, never the plan's text, and spends the approval: one approval, one run.
   Trust labels then inform the operator rather than gate a run. Residual: the plan's text, model-written from anyone's
   comments, reaches the worker as its copy, data as an approved plan's is; and approval is of the plan whole for now.
+- With `policy.planner_may_approve` (DESIGN §25, private, off by default), a plan or feedback plan whose planner says
+  it needs no review, with a reason, is approved by the harness as the planner's approval, recorded so and never as
+  the operator's, and its `implement` or `resume` goes ahead without them. That lifts the plan gate on an agent's
+  judgment, which ticket text or any reviewer's comment can steer: the operator accepts that, as they did for M55's
+  triage (D126). It fails closed in code: only a `done` result saying so with a reason counts, and a plan that
+  replaces one the operator was asked to approve, or a ticket they asked a plan of by name, waits on them. The plan
+  and its reason stay on file, the sinks are told, and an edit to the file needs the operator's approval. The
+  backstop is the PR's review; for a feedback plan, an untrusted reviewer's items can now start a `resume` unseen.
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
@@ -195,11 +203,11 @@ Controls:
   of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
   may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
   run's validated result names, only for a key new to the journal and, as far as the key's text shows it, in the
-  parent's project, and asks the operator about it (`follow_up_filed`); nothing dispatches it until it carries a queue
-  label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
+  parent's project, and tells the operator of it once (`follow_ups.filed`); nothing dispatches it until it carries a
+  queue label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
   reported key's text only (D003), so a worker can record a ticket it did not file, one a stranger filed in the same
-  project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the attention
-  item names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it
+  project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the event
+  names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it
   reaches, as it always could; every label check is agent judgment, and review of every PR is the backstop.
 - The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
   operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
@@ -456,9 +464,10 @@ Controls:
   read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit or subagent tools, a
   shell that runs `canopy chore history` alone, which reads its own chore's earlier runs and writes nothing, and
-  denies MCP write tools by name. The agents example chores come with, `canopy-introspect` and
-  `canopy-memory-tickets`, which `canopy chore install` copies into the workspace's state directory for a chore's
-  `cmd` to name, are the same with a shell for canopy's read-only commands as well: `canopy health --json`,
+  denies MCP write tools by name. Off a GitHub tracker, the tracker's server is denied whole but its read tools, allowed
+  by name, as for the reviewer. The agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`,
+  which `canopy chore install` copies into the workspace's state directory for a chore's `cmd` to name, are the same,
+  but for that rendering, with a shell for canopy's read-only commands as well: `canopy health --json`,
   `canopy spend --json`, `canopy decisions`, `canopy show` of a run or a chore, and `opencode mcp list`; and
   `canopy memory lessons`, `proposals`, and `list`. None of those writes, and the memory commands that do refuse inside
   any run.
@@ -523,7 +532,8 @@ Controls, in code:
   config error and the tick does not run.
 - `policy.*` values from the workspace file apply only when stricter than the built-in defaults. `policy.feedback_plan`
   is private instead (DESIGN §32): it holds a trusted reviewer's feedback for the operator and lets anyone else's
-  start a plan run, so a shared file chooses neither.
+  start a plan run, so a shared file chooses neither. So is `policy.planner_may_approve` (§25), which lets a planner's
+  word stand for the operator's approval.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not

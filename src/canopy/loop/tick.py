@@ -30,7 +30,7 @@ from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, attention, connectors, duties, models, state
+from canopy.loop import acknowledge, attention, connectors, duties, models, phases, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -274,6 +274,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
 
     def finish(status: TickStatus, summary: str, usage: Usage | None = None) -> Outcome:
+        _record_overseer(ctx, tick_id, log)
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
@@ -313,6 +314,7 @@ def _steps(
     memory_reconcile.run(ctx, log)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log), log)
+    _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
@@ -355,6 +357,29 @@ def _steps(
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
+def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Derive §7's table from what the connectors observed, and record it beside the decisions (DESIGN §30).
+
+    In shadow: what it raises is logged, never the tick's outcome, and nothing the overseer reads changes.
+    """
+    try:
+        derived = phases.derive(ctx, datetime.now(UTC))
+        phases.record(ctx.conn, tick_id, derived)
+    except Exception as e:
+        log.exception("deriving the phases raised", extra={"error": str(e)})
+        return
+    stale = sum(d.stale is not None for d in derived)
+    log.info("phases derived", extra={"subjects": len(derived), "stale": stale})
+
+
+def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Record the phases the overseer left each derived subject at, as the tick closes (DESIGN §30)."""
+    try:
+        phases.record_overseer(ctx.conn, tick_id)
+    except Exception as e:
+        log.exception("recording the overseer's phases raised", extra={"error": str(e)})
+
+
 def _query_due(ctx: Context, now: datetime) -> bool:
     """Whether this tick runs the tracker query (DESIGN §7, Spacing the query).
 
@@ -385,8 +410,8 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             f"{attention.ACTION_PREFIX}awaiting_reply",
             attention.awaiting_detail(waiting),
         )
-    # The tickets runs filed, which wait on the operator's label or start, and those the journal could not record (§18).
-    for item in follow_ups.items(ctx.conn):
+    # The tickets runs reported that the journal could not record (§18). Those it recorded the sinks heard of once.
+    for item in follow_ups.unrecorded(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         action = f"{attention.ACTION_PREFIX}{remembered.reason}"

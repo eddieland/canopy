@@ -418,7 +418,9 @@ class PlanSummary(_Model):
     approved_at: datetime | None = None
     """When the operator approved it, the latest time; none if never."""
     approved_channel: str | None = None
-    """How they approved it: `cli` or `web`."""
+    """How they approved it: `cli` or `web`; or `planner`, when the harness approved it on its planner's word."""
+    approved_reason: str | None = None
+    """Why the planner said the plan needs no review, when the harness approved it so; none otherwise."""
 
 
 class PlanFile(_Model):

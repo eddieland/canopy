@@ -9,14 +9,15 @@ plan covers are its run's slots. A ticket has at most one feedback plan that is 
 
 Under `policy.feedback_plan = "approve"`, every `resume` but one whose only reason is `no_pr` waits on an approved
 feedback plan that no `resume` has spent (`resume_refusal`), and the `resume` that starts on it spends it (`spend`), in
-the transaction that inserts that run: one approval goes ahead once. Approving is the operator's verb alone, every
-channel's, refused inside canopy's own runs, and holds the dispatch lock, as approving a ticket's plan does.
+the transaction that inserts that run: one approval goes ahead once. Approving is the operator's verb, every
+channel's, refused inside canopy's own runs, and holds the dispatch lock, as approving a ticket's plan does; under
+`policy.planner_may_approve`, `record` approves a plan its planner says needs no review as the planner's (§25).
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
@@ -251,17 +252,31 @@ def match(offered: Sequence[Offered], named: Sequence[Named]) -> Matched:
 
 
 def record(
-    conn: sqlite3.Connection, key: str, run_id: int, written: plans.Written, kept: Sequence[tuple[Offered, Named]]
+    conn: sqlite3.Connection,
+    key: str,
+    run_id: int,
+    written: plans.Written,
+    kept: Sequence[tuple[Offered, Named]],
+    *,
+    event: Callable[[int, str | None], db.Event | None] | None = None,
+    no_review: str | None = None,
 ) -> records.FeedbackPlan:
     """Record the feedback plan run `run_id` wrote for `key`, after its file, as `proposed`, with its items.
 
-    It supersedes the ticket's current feedback plan, waiting, approved, or spent.
+    It supersedes the ticket's current feedback plan, waiting, approved, or spent. `no_review` is its planner's reason
+    for saying the plan needs no review, under `policy.planner_may_approve`: the plan is then recorded `approved` as
+    the planner wrote it, the planner's approval (`plans.PLANNER`), unless it replaces one no `resume` has spent, which
+    waited on the operator or was approved by them (DESIGN §32). `event` builds its event from its id and that reason
+    when it held, recorded in the same transaction (§20).
 
     Returns:
         The plan's row.
     """
     with db.transaction(conn):
+        reason = no_review if planner_may_approve(conn, key) else None
         _supersede(conn, key)
+        approved = reason is not None
+        now = db.now()
         [plan] = records.fetch_all(
             conn,
             records.FeedbackPlan,
@@ -269,10 +284,14 @@ def record(
                 "feedback_plans",
                 ticket_key=key,
                 run_id=run_id,
-                created_at=db.now(),
-                status=PlanStatus.PROPOSED,
+                created_at=now,
+                status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
                 sha256=written.sha256,
                 size=written.size,
+                approved_sha256=written.sha256 if approved else None,
+                approved_at=now if approved else None,
+                approved_channel=plans.PLANNER if approved else None,
+                approved_reason=reason,
             ).returning("*"),
         )
         sql.execute_many(
@@ -285,7 +304,20 @@ def record(
                 for number, (o, n) in enumerate(kept, start=1)
             ],
         )
+        built = event(plan.id, reason) if event is not None else None
+        if built is not None:
+            db.record_event(conn, built)
     return plan
+
+
+def planner_may_approve(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether `key`'s next feedback plan may be approved on its planner's word (DESIGN §32).
+
+    Returns:
+        False when it would replace one no `resume` has spent, which waited on the operator or was approved by them.
+    """
+    replaced = current(conn, key)
+    return replaced is None or replaced.spent_run_id is not None
 
 
 def current(conn: sqlite3.Connection, key: str) -> records.FeedbackPlan | None:
@@ -497,6 +529,7 @@ def approve(
                 approved_sha256=reading.sha256,
                 approved_at=db.now(),
                 approved_channel=channel,
+                approved_reason=None,
             )
             .where("id = ?", plan.id)
             .returning("*"),
@@ -518,13 +551,16 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
     """Return when the operator asked for changes no feedback planner has read, or None if they have not.
 
     That is their latest message on the ticket, newer than its current feedback plan and than its latest feedback plan
-    run's start: a reply on a waiting plan asks for changes, as on a ticket's plan (DESIGN §32, Approving).
+    run's start: a reply on a waiting plan asks for changes, as on a ticket's plan (DESIGN §32, Approving). A reply
+    after an approval, spent or not, asks for none.
 
     Returns:
         The message's time as the journal holds it, or None.
     """
     key = ticket.key
     plan = current(conn, key)
+    if plan is not None and plan.status is PlanStatus.APPROVED:
+        return None
     started = sql.execute(
         conn,
         sql.select("max(started_at)")

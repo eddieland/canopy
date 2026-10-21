@@ -60,6 +60,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
+#: A planner's reason for saying its plan needs no review: a sentence, as a sink's line carries it.
+MAX_REVIEW_REASON = 300
 MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
@@ -79,6 +81,8 @@ class _SetupError(Exception):
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(contract.MAX_PR_TITLE)]
 Reply = Annotated[StrictStr, contract.bounded(feedback_plans.MAX_REPLY)]
+#: A planner's one-line reason for saying its plan needs no review: shown with the plan, and sent to the sinks cut.
+ReviewReason = Annotated[StrictStr, contract.one_line, contract.bounded(MAX_REVIEW_REASON)]
 
 
 class WorkerResult(BaseModel):
@@ -123,6 +127,16 @@ class PlanResult(BaseModel):
     status: Literal["done", "blocked", "failed"]
     summary: Text = ""
     question: Text | None = None
+    #: Whether the plan needs the operator's review, as the planner judged it. Only `not_needed`, with a reason, lets
+    #: the harness approve it, and only under `policy.planner_may_approve` (DESIGN §25); a result without it needs one.
+    review: Literal["needed", "not_needed"] = "needed"
+    review_reason: ReviewReason | None = None
+
+    def no_review(self) -> str | None:
+        """Return the planner's reason for saying its plan needs no review, or None when it did not say so with one."""
+        if self.status != "done" or self.review != "not_needed" or self.review_reason is None:
+            return None
+        return self.review_reason if self.review_reason.strip() else None
 
 
 class FeedbackItem(BaseModel):
@@ -253,8 +267,8 @@ def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: l
 def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
-    That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), so a run reconcile closed first writes
-    none.
+    That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
+    them, so a run reconcile closed first writes none.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
@@ -264,6 +278,10 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
         log = logs.for_tick(int(run["tick_id"]))
         log.info("follow-ups recorded", extra={"run_id": run_id, "ticket": key, "follow_ups": recorded})
+        filed = {k: outcome.follow_ups.recorded[k] for k in recorded}
+        event = outbox.follow_ups_filed(ctx.config, key=key, run_id=run_id, filed=filed)
+        if event is not None:
+            db.record_event(ctx.conn, event)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -530,8 +548,18 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
     except (plans.PlanFileError, OSError) as e:
         return Outcome(RunStatus.CRASHED, parsed, f"the plan was not written: {e}")
     # Should this fail, the file stays with no row: it is never read, and its name is this run's alone (DESIGN §25).
-    plan = plans.record(ctx.conn, key, run_id, written, event=outbox.plan_proposed(ctx.config, key=key, run_id=run_id))
-    log.info("plan recorded", extra={"run_id": run_id, "plan_id": plan.id, "size": written.size})
+    plan = plans.record(
+        ctx.conn,
+        key,
+        run_id,
+        written,
+        event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id),
+        no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
+    )
+    log.info(
+        "plan recorded",
+        extra={"run_id": run_id, "plan_id": plan.id, "size": written.size, "approved_by": plan.approved_channel},
+    )
     return Outcome(RunStatus.DONE, parsed)
 
 
@@ -608,10 +636,24 @@ def _record_feedback_plan(
         file = plans.write(ctx.state_dir, key, run_id, text)
     except (plans.PlanFileError, OSError) as e:
         return Outcome(RunStatus.CRASHED, parsed, f"the plan was not written: {e}")
-    plan = feedback_plans.record(ctx.conn, key, run_id, file, matched.kept)
+    plan = feedback_plans.record(
+        ctx.conn,
+        key,
+        run_id,
+        file,
+        matched.kept,
+        event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id, feedback=True),
+        no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
+    )
     log.info(
         "feedback plan recorded",
-        extra={"run_id": run_id, "plan_id": plan.id, "items": len(matched.kept), "refused": len(matched.refused)},
+        extra={
+            "run_id": run_id,
+            "plan_id": plan.id,
+            "items": len(matched.kept),
+            "refused": len(matched.refused),
+            "approved_by": plan.approved_channel,
+        },
     )
     return Outcome(RunStatus.DONE, parsed, matched.note())
 

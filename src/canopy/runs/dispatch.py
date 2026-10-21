@@ -359,18 +359,23 @@ def repositories_note(
     return "\n".join(lines)
 
 
-def map_note(ctx: Context) -> str:
-    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18)."""
+def map_note(ctx: Context) -> str | None:
+    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18).
+
+    Returns:
+        The text, cut to `MAX_MAP`, or why a `MAP.md` there cannot be read; None, which leaves the prompt's section out,
+        without one or with an empty one.
+    """
     path = ctx.workspace.map_prose
     if path is None:
-        return "None: this workspace has no MAP.md."
+        return None
     try:
         text = path.read_text(encoding="utf-8", errors="replace").strip()
     except OSError as e:
-        return f"None: MAP.md could not be read ({e.strerror})."
+        return f"MAP.md could not be read ({e.strerror})."
     if len(text) > MAX_MAP:
         return f"{text[:MAX_MAP]}\n\n[MAP.md is longer than {MAX_MAP} characters; the rest is left out.]"
-    return text or "None: MAP.md is empty."
+    return text or None
 
 
 def _planned_repositories(
@@ -980,8 +985,8 @@ def _spawn(
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(limit),
         "PR_URL": JOINT_PR_NOTE if plan.joint else _pr_note(prs.get(first.repo or ""), branch),
-        "CONTEXT": context or "None.",
-        "REVIEW_FINDINGS": review or "None.",
+        "CONTEXT": context or None,
+        "REVIEW_FINDINGS": review or None,
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
         "TRUSTED_REVIEWERS": prompts.trusted_reviewers(cfg.trust.trusted_reviewers),
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
@@ -989,12 +994,16 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
-        "PLAN": "None.",
+        "PLAN": None,
         "PLAN_FILE": plans.REPLACED,
         "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
+        "PLAN_REVIEW": prompts.plan_review(
+            on=planning and cfg.policy.planner_may_approve and _planner_may_approve(ctx, key, kind),
+            feedback=kind == policy.FEEDBACK_PLAN,
+        ),
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {
@@ -1058,6 +1067,17 @@ def _spawn(
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _planner_may_approve(ctx: Context, key: str, kind: str) -> bool:
+    """Whether the plan this run writes could be approved on its planner's word, so its prompt says how (DESIGN §25).
+
+    Returns:
+        What `record` will decide for the plan's kind, as the journal stands at dispatch.
+    """
+    if kind == policy.FEEDBACK_PLAN:
+        return feedback_plans.planner_may_approve(ctx.conn, key)
+    return plans.planner_may_approve(ctx.conn, key)
 
 
 def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
@@ -1137,7 +1157,7 @@ def _render(
     ctx: Context,
     key: str,
     kind: str,
-    values: Mapping[str, str],
+    values: Mapping[str, str | None],
     required: Sequence[str],
     *,
     repos: Collection[str],
@@ -1231,13 +1251,15 @@ def _plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collectio
             covered = [
                 (i.number, i.pr_url, i.item_id, str(i.proposal)) for i in feedback_plans.items(ctx.conn, feedback.id)
             ]
-            note = prompts.feedback_plan_note(copy, plans.outline(text), covered)
+            by_planner = feedback.approved_channel == plans.PLANNER
+            note = prompts.feedback_plan_note(copy, plans.outline(text), covered, by_planner=by_planner)
             return _Followed(note=note, feedback_plan_id=feedback.id)
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
     if approved is None or text is None:
         return None
-    return _Followed(note=prompts.plan_note(copy, plans.outline(text)), plan_id=approved.id)
+    note = prompts.plan_note(copy, plans.outline(text), by_planner=approved.approved_channel == plans.PLANNER)
+    return _Followed(note=note, plan_id=approved.id)
 
 
 def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:

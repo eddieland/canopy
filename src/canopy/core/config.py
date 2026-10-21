@@ -513,6 +513,10 @@ class Policy(Section):
     #: guard in code. Private, unlike `plan`: it holds a trusted reviewer's feedback for the operator, and lets anyone
     #: else's start a plan run that reads only, so a shared file must choose neither (TRUST_MODEL T7).
     feedback_plan: Annotated[Literal["off", "approve"], Scope.PRIVATE] = "off"
+    #: Whether the harness approves a plan, or a feedback plan, whose planner says it needs no review, as the
+    #: planner's approval and not the operator's (DESIGN §25). Private: it loosens the operator's gate on plans, so only
+    #: the operator's own files turn it on (TRUST_MODEL T7).
+    planner_may_approve: Annotated[StrictBool, Scope.PRIVATE] = False
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 

@@ -3493,9 +3493,14 @@ export type components = {
             approved_at: string | null;
             /**
              * Approved Channel
-             * @description How they approved it: `cli` or `web`.
+             * @description How they approved it: `cli` or `web`; or `planner`, when the harness approved it on its planner's word.
              */
             approved_channel: string | null;
+            /**
+             * Approved Reason
+             * @description Why the planner said the plan needs no review, when the harness approved it so; none otherwise.
+             */
+            approved_reason: string | null;
             /**
              * Created At
              * Format: date-time

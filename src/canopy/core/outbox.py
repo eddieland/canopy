@@ -8,7 +8,7 @@ event is recorded. Text fields are cut to the limits DESIGN §20 lists and kept 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import contract, review_result
@@ -25,6 +25,8 @@ CHORES = "chores"
 REVIEWS = "reviews"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
+#: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
+MAX_FOLLOW_UPS = 20
 
 
 class RunStarted(TypedDict):
@@ -59,6 +61,33 @@ class PlanProposed(TypedDict):
     ticket: str
     run: int
     plan: int
+
+
+class PlanApproved(TypedDict):
+    """A `plan.approved` event's fields: a plan the harness approved on its planner's word that it needs no review.
+
+    Never the plan's text (DESIGN §25).
+    """
+
+    ticket: str
+    run: int
+    plan: int
+    #: Whether it is a feedback plan (DESIGN §32), not the ticket's plan.
+    feedback: bool
+    #: The planner's reason, model text cut to one line.
+    reason: str
+
+
+class FollowUpsFiled(TypedDict):
+    """A `follow_ups.filed` event's fields: the follow-ups one run filed, each with its repository or null (§18).
+
+    `follow_ups` names at most `MAX_FOLLOW_UPS`; `count` is how many the run filed.
+    """
+
+    ticket: str
+    run: int
+    follow_ups: dict[str, str | None]
+    count: int
 
 
 class ChoreEnded(TypedDict):
@@ -177,20 +206,55 @@ def run_ended(
     return build
 
 
-def plan_proposed(config: Config, *, key: str, run_id: int) -> Callable[[int], Event | None]:
-    """Return what builds the `plan.proposed` event from the new plan's id, for `plans.record`.
+def plan_recorded(
+    config: Config, *, key: str, run_id: int, feedback: bool = False
+) -> Callable[[int, str | None], Event | None]:
+    """Return what builds a new plan's event from its id and its planner's approval, for `plans.record`.
 
-    It names the ticket, the run, and the plan, and no plan text, so nothing of the plan leaves the machine through a
-    sink (DESIGN §25). It is None if no sink takes runs.
+    A plan that waits on the operator is `plan.proposed`, for a ticket's plan alone; one the harness approved on its
+    planner's word, with the planner's reason, is `plan.approved`, for a feedback plan too, so the operator hears of it
+    with nothing waiting on them (DESIGN §25). Each names the ticket, the run, and the plan, and no plan text, so
+    nothing of the plan leaves the machine through a sink. It is None if no sink takes runs.
     """
 
-    def build(plan_id: int) -> Event | None:
+    def build(plan_id: int, reason: str | None) -> Event | None:
         if not config.notify.takes(RUNS):
+            return None
+        if reason is not None:
+            approved: PlanApproved = {
+                "ticket": key,
+                "run": run_id,
+                "plan": plan_id,
+                "feedback": feedback,
+                "reason": cut(reason, SUMMARY_LIMIT),
+            }
+            return Event(RUNS, "plan.approved", approved)
+        if feedback:
             return None
         fields: PlanProposed = {"ticket": key, "run": run_id, "plan": plan_id}
         return Event(RUNS, "plan.proposed", fields)
 
     return build
+
+
+def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[str, str | None]) -> Event | None:
+    """Return the `follow_ups.filed` event for the follow-ups run `run_id` of `key` filed, for the run's close.
+
+    It is reported once, when the run records them, as a point event and not an attention item: a follow-up waits on
+    nothing canopy watches, and the operator labels or starts the ones they want worked (DESIGN §18).
+
+    Returns:
+        The event, or None if no sink takes runs or nothing was filed.
+    """
+    if not filed or not config.notify.takes(RUNS):
+        return None
+    fields: FollowUpsFiled = {
+        "ticket": key,
+        "run": run_id,
+        "follow_ups": dict(list(filed.items())[:MAX_FOLLOW_UPS]),
+        "count": len(filed),
+    }
+    return Event(RUNS, "follow_ups.filed", fields)
 
 
 def chore_ended(

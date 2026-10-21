@@ -105,7 +105,16 @@ labels and mergeable state, records each run in `connector_runs`, which `canopy 
 `connector_failed`, and `canopy status` names each source with its last run and the age of its observations;
 `tests/fakes/connector` plays any source. `canopy loop` also polls the sources between ticks every
 `connect.every_minutes`, apart from how it paces ticks (operator, 2026-10-19, ahead of M39): a poll records its runs
-with no tick, raises nothing, and ends no wait. Not yet: the derivation, and canopy's connectors grown to the
-contract, so canopy's own GitHub reader is asked only the PRs, while one is watched. Open for the operator: the
+with no tick, raises nothing, and ends no wait. Built (2026-10-20): the derivation, `loop/phases.py`, after the
+connectors each tick, recording in `derivations` each ticket's candidacy and every §7 row that held for it and each
+unit, or what stale or missing observation it depended on, and at the tick's close the phase the overseer left each
+at; agreement is computed per ticket (`phases.compare`), its counts in the loop's per-tick block and `loop waits`
+line, and `canopy gc --dry-run` counts the rows; each repository's `human_checks` in the map is not CI. Chosen
+conservatively, for the operator to change: a check with no run id or a `ci` cursor that is not a number reads every
+failure as new; a candidate with no PR needs its repositories' branches read fresh, else it is stale, so with canopy's
+own reader, which reads no branches yet, every such ticket is stale; what a PR's own author writes is not review
+feedback; and the comparison takes a ticket's dispatches, waits, skips, and done marks as its decision, its attention
+items only when it has none. Not yet: canopy's connectors grown to the contract, so canopy's own GitHub reader is
+asked only the PRs, while one is watched. Open for the operator: the
 tracker query run in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that
 leaves an observation stale.
