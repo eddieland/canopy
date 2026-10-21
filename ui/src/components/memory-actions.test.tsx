@@ -20,6 +20,8 @@ const ENTRY: MemoryEntry = {
     run_id: 39,
     head: null,
     created_at: '2026-10-08T10:00:00Z',
+    read_count: 0,
+    last_read_at: null,
     use_count: 0,
     used_by: [],
     last_used_at: null,

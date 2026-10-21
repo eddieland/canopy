@@ -50,12 +50,33 @@ export function visibleText(text: string): string {
         .join('')
 }
 
-/** How runs used a memory, `used by 3 runs`, or nothing while no run has relied on it: a row says what happened. */
-export function usedText(entry: Pick<MemoryEntry, 'use_count' | 'last_used_at'>): string | null {
-    if (entry.use_count === 0 || entry.last_used_at === null) {
+/**
+ * How many runs read a memory and how many cited it, `read 6 · cited 1`, or nothing while none has: a row says what
+ * happened. A read is a prompt it was in; a citation is a run's `memory_used`, which a worker may leave unsaid, so the
+ * reads say how far it reached.
+ */
+export function readsText(entry: Pick<MemoryEntry, 'read_count' | 'use_count'>): string | null {
+    if (entry.read_count === 0 && entry.use_count === 0) {
         return null
     }
-    return `used by ${entry.use_count} run${entry.use_count === 1 ? '' : 's'}`
+    return entry.use_count === 0 ? `read ${entry.read_count}` : `read ${entry.read_count} · cited ${entry.use_count}`
+}
+
+/** `readsText` in full, for its hover: `read by 6 runs, last at …; cited by 1, last at …`, each time by `time`. */
+export function readsTitle(
+    entry: Pick<MemoryEntry, 'read_count' | 'last_read_at' | 'use_count' | 'last_used_at'>,
+    time: (at: string) => string,
+): string | undefined {
+    const parts: string[] = []
+    if (entry.last_read_at !== null) {
+        parts.push(
+            `read by ${entry.read_count} run${entry.read_count === 1 ? '' : 's'}, last at ${time(entry.last_read_at)}`,
+        )
+    }
+    if (entry.last_used_at !== null) {
+        parts.push(`cited by ${entry.use_count}, last at ${time(entry.last_used_at)}`)
+    }
+    return parts.length === 0 ? undefined : parts.join('; ')
 }
 
 /**
@@ -119,9 +140,9 @@ export function leftOutText(served: boolean): string {
     return served ? 'left out of the prompt, past its cap' : 'would be left out at use, past its cap'
 }
 
-/** How many of a ticket's notes in force a run relied on, `3 of 4 used by runs`, or nothing while none was. */
+/** How many of a ticket's notes in force a run cited, `3 of 4 cited by runs`, or nothing while none was. */
 export function ticketNotesUsedText({ count, used }: { count: number; used: number }): string | null {
-    return used === 0 ? null : `${used} of ${count} used by runs`
+    return used === 0 ? null : `${used} of ${count} cited by runs`
 }
 
 /**

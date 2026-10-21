@@ -163,9 +163,10 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
     """A memory as the API sends it.
 
     Returns:
-        Its fields, its times as datetimes, the latest runs that relied on it, whether a private ticket's run wrote
-        it, for a lesson what it was promoted from, and which version of its memory it is.
+        Its fields, its times as datetimes, how many runs read it, the latest runs that cited it, whether a private
+        ticket's run wrote it, for a lesson what it was promoted from, and which version of its memory it is.
     """
+    read = memory.reads(ctx.conn, [m.id]).get(m.id, memory.Reads())
     return MemoryEntry(
         id=m.id,
         scope=m.scope.value,
@@ -178,6 +179,8 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
         run_id=m.run_id,
         head=m.head,
         created_at=db.parse_time(m.created_at),
+        read_count=read.count,
+        last_read_at=_time(read.last_at),
         use_count=m.use_count,
         last_used_at=_time(m.last_used_at),
         used_by=memory.used_by(ctx.conn, m.id) if m.use_count else [],

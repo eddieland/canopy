@@ -30,9 +30,10 @@ import {
     leftText,
     hasVersions,
     memoryStand,
+    readsText,
+    readsTitle,
     reviewText,
     tierMode,
-    usedText,
 } from '@/lib/memory'
 import type { MemoryStand, TierModes } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
@@ -238,9 +239,9 @@ function MemoryRow({
                 <Clipped text={entry.key} className="font-mono text-xs" />
                 <span
                     className="truncate text-right text-xs text-muted-foreground"
-                    title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at, clock)}`}
+                    title={readsTitle(entry, (at) => localTime(at, clock))}
                 >
-                    {usedText(entry)}
+                    {readsText(entry)}
                 </span>
                 <Age at={entry.created_at} variant="ago" className="text-right" />
                 <RowLine from="key" className="text-sm">
@@ -454,8 +455,8 @@ function Origin({ origin }: { origin: MemoryOrigin }) {
 }
 
 /**
- * The latest runs that relied on a memory, each a link to its page, and how many more did: those the use count holds
- * past the few named, and runs from before canopy named them. The run whose page it is is left out.
+ * The latest runs that cited a memory as relied on, each a link to its page, and how many more did: those the use count
+ * holds past the few named, and runs from before canopy named them. The run whose page it is is left out.
  */
 function UsedIn({ entry, ownRun }: { entry: MemoryEntry; ownRun: number | undefined }) {
     const runs = entry.used_by.filter((id) => id !== ownRun)
@@ -465,7 +466,7 @@ function UsedIn({ entry, ownRun }: { entry: MemoryEntry; ownRun: number | undefi
     const more = entry.use_count - entry.used_by.length
     return (
         <span>
-            used in{' '}
+            cited in{' '}
             {runs.map((id, i) => (
                 <span key={id}>
                     {i > 0 && ', '}

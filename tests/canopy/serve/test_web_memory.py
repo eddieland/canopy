@@ -124,6 +124,9 @@ def test_a_tickets_memory_is_every_note_and_the_digest_its_next_run_gets(backend
     assert "\u200b" in found["notes"][0]["text"]
     assert found["notes"][2]["use_count"] == 1
     assert found["notes"][2]["last_used_at"] == at(-115)
+    # Read by run 40, when it started, apart from the count of runs that cited it; a note no run read says so.
+    assert (found["notes"][2]["read_count"], found["notes"][2]["last_read_at"]) == (1, at(-75))
+    assert (found["notes"][0]["read_count"], found["notes"][0]["last_read_at"]) == (0, None)
     # It names the run that relied on it; a note no run relied on names none.
     assert (found["notes"][2]["used_by"], found["notes"][0]["used_by"]) == ([40], [])
     assert (found["digest"]["ids"], found["digest"]["served"]) == ([3, 2], True)

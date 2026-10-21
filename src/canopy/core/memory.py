@@ -56,6 +56,8 @@ REVIEW_DAYS = 90
 MAX_LESSONS_DIGEST = 8 * 1024
 # The runs a memory names as having relied on it, the latest first; its use count counts every one.
 USED_BY_SHOWN = 5
+# The memories `reads` asks of the journal at once, well under SQLite's limit on a statement's parameters.
+_READS_BATCH = 500
 # The most proposals or lessons no longer pending or in force a history lists: the latest to leave, enough to look back
 # a few weeks without sending a busy workspace's whole past.
 HISTORY_SHOWN = 50
@@ -866,6 +868,36 @@ def used_by(conn: sqlite3.Connection, memory_id: int, *, limit: int = USED_BY_SH
         .limit(limit),
     )
     return [int(r["run_id"]) for r in rows]
+
+
+@dataclass(frozen=True)
+class Reads:
+    """How many runs' prompts a memory was rendered into, and when the latest of them started (DESIGN §28).
+
+    Every read counts, whether its run cited the memory or not: a worker may rely on a memory and leave `memory_used`
+    unsaid. The memory's `use_count` counts only the runs that cited it as relied on.
+    """
+
+    #: How many runs read it.
+    count: int = 0
+    #: When the latest of them started, which is when its prompt was rendered; None while no run has read it.
+    last_at: str | None = None
+
+
+def reads(conn: sqlite3.Connection, memory_ids: Sequence[int]) -> dict[int, Reads]:
+    """Return how many runs read each of `memory_ids`, and when the latest started; one no run read is left out."""
+    found: dict[int, Reads] = {}
+    for start in range(0, len(memory_ids), _READS_BATCH):
+        rows = sql.execute(
+            conn,
+            sql.select("m.memory_id, count(*) AS n, max(r.started_at) AS last_at")
+            .from_("memory_reads m")
+            .join("runs r ON r.id = m.run_id")
+            .where_in("m.memory_id", memory_ids[start : start + _READS_BATCH])
+            .group_by("m.memory_id"),
+        )
+        found.update({int(r["memory_id"]): Reads(int(r["n"]), str(r["last_at"])) for r in rows})
+    return found
 
 
 def refused_of(rendered: records.RunMemory) -> list[Refused]:
