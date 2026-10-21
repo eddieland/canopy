@@ -1,4 +1,4 @@
-"""`canopy dispatch`, and the detached `canopy _run` it starts."""
+"""`canopy dispatch`, and the detached `canopy _run` it starts; and `canopy _task`, a task's run a tick starts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from canopy.cli.common import CliError, OverseerCommand, leave_the_tick, open_co
 from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, verb
 from canopy.core.vocab import ResumeReason
 from canopy.loop import tools
-from canopy.runs import dispatch, policy, worker
+from canopy.runs import dispatch, policy, task_run, worker
 
 
 @click.command("dispatch", cls=OverseerCommand)
@@ -125,4 +125,19 @@ def cmd_run(click_ctx: click.Context, run_id: int) -> int:
     except worker.WorkerError as e:
         raise CliError(str(e)) from None
     click.echo(f"run {run_id}: {outcome.status}")
+    return 0
+
+
+@click.command("_task", hidden=True)
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.pass_context
+def cmd_task(click_ctx: click.Context, run_id: int) -> int:
+    """Do one run of a task the operator submitted. Started by a tick, detached; not for people or agents."""
+    leave_the_tick()
+    ctx = open_context(click_ctx)
+    try:
+        outcome = task_run.execute(ctx, run_id, out=sys.stdout)
+    except task_run.TaskRunError as e:
+        raise CliError(str(e)) from None
+    click.echo(f"task run {run_id}: {outcome.status}")
     return 0

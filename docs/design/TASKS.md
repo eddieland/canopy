@@ -6,7 +6,8 @@ reads the journal](READING_THE_JOURNAL.md). Next: [The harness decides](HARNESS_
 
 ## 36. One-off tasks
 
-Designed, not built (ROADMAP M61).
+Built in part (ROADMAP M61): submitting, starting, the run, and stopping. Replies, `task.ended`, the report, and
+tickets are designed, not built.
 
 A **task** is one-off work the operator submits in canopy, in their own words, about no ticket: exploring a question in
 the code, trying an approach, or planning the tickets that should follow. A worker runs it once in a worktree of one
@@ -79,8 +80,9 @@ a task's work is private, and a sink's audience may not be.
 
 ### Trust model changes
 
-The PR that builds it proposes them: T1 (a task's text and replies are the operator's, written only through the
-operator's channels; its reports are data; its branch is never pushed with force, whatever `trust.rebase` says), T3
+TRUST_MODEL holds them, but for what tickets and `task.ended` add, which wait for those: T1 (a task's text and replies
+are the operator's, written only through the operator's channels; its reports are data; its branch is never pushed
+with force, whatever `trust.rebase` says), T3
 (`capacity.max_tasks`, one run per task, one run per operator word), and T6 (a task's worker is the private worker,
 which may also open a PR for its own branch and file unlabeled tickets in the project its submission names; the PR's
 draft state and the project are the prompt's rules, a ticket reported outside the project is caught after the run, and,

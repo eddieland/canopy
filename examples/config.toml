@@ -28,6 +28,8 @@ labels = ["agent-ready-yourname"]
 max_workers = 2
 # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
 max_chores = 1
+# Runs of your one-off tasks (`canopy task submit`) at once, within max_workers; 0 starts none (DESIGN §36).
+# max_tasks = 1
 # Slots in each repository's pool. `canopy workspace sync` makes and removes slots to match, and no run grows a pool
 # past it. Unset leaves the pools to treehouse's own max_trees (DESIGN §18).
 # slots_per_repo = 2
@@ -141,6 +143,9 @@ prompt_overrides = "~/.config/canopy/prompts"
 # <clone>/<workspace>/, with its status and approval, commits, and pushes to the clone's upstream (DESIGN §25). Plans
 # hold what planners read of your tickets: keep the repository private. `canopy archive DIR` does the copy by hand.
 # plan_archive = "~/src/plans"
+# Each plan goes with the prompt its planner was given, which carries your messages and standing instructions. Set
+# false to archive plans alone; `canopy archive DIR` copies prompts either way.
+# plan_archive_prompts = true
 
 # Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
 # whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).

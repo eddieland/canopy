@@ -111,7 +111,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
     }
     assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
     found = models()
-    # Read again, as 0068 has every found run read: what was found stays shown while the read is due, fails, or finds
+    # Read again, as 0069 has every found run read: what was found stays shown while the read is due, fails, or finds
     # the session gone.
     ctx.conn.execute("DELETE FROM run_model_reads")
     assert models() == found
@@ -367,6 +367,22 @@ def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona
     # No persona clears it, as `--clear` does.
     assert choose({"agent": "reviewer"}).json()["source"] == "default"
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+
+
+def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    listed = c.get("/api/personas").json()
+    assert listed["reviewer"] == "canopy"
+    got = {p["name"]: p for p in listed["personas"]}
+    assert {"canopy", "skeptic", "minimalist", "explainer"} <= set(got)
+    # Never the file's path, which is the operator's machine's.
+    assert got["canopy"] == {
+        "name": "canopy",
+        "yours": False,
+        "defaults": ["worker", "planner", "reviewer"],
+        "error": None,
+    }
+    assert got["skeptic"]["defaults"] == []
 
 
 def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_does(ctx: Context) -> None:

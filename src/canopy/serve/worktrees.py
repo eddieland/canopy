@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, tasks
 from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
 from canopy.serve import views
 from canopy.serve.schema import Pool, Process, ReviewHold, Worktree, WorktreeState
@@ -70,6 +70,8 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         row = next(r for r in running if int(r["id"]) == run_id)
         by_lease |= {str(s.lease_id): row for s in slots}
     reviews = {str(r["lease_id"]): r for r in db.running_runs(ctx.conn, "review_runs") if r["lease_id"]}
+    # A task's run holds a slot too (DESIGN §36); the page shows its holder, `canopy:task:N`, and no more of it yet.
+    for_tasks = {r.lease_id for r in tasks.running(ctx.conn)}
     root = ctx.workspace.root
     sizes = {repo.name: ctx.config.capacity.slots_for(repo.name) for repo in ctx.workspace.repos}
     cloned = [repo for repo in ctx.workspace.repos if repo.cloned]
@@ -88,25 +90,41 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
             found.append(Pool(repo=repo.name, size=size, error=str(e)))
             continue
         worktrees = [
-            worktree(s, by_lease.get(s.lease_id), reviews.get(s.lease_id), root=root, repo=repo.name) for s in slots
+            worktree(
+                s,
+                by_lease.get(s.lease_id),
+                reviews.get(s.lease_id),
+                root=root,
+                repo=repo.name,
+                task=s.lease_id in for_tasks,
+            )
+            for s in slots
         ]
         found.append(Pool(repo=repo.name, size=size, worktrees=worktrees))
     return found
 
 
-def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *, root: Path, repo: str) -> Worktree:
+def worktree(
+    slot: Slot,
+    run: sqlite3.Row | None,
+    review: sqlite3.Row | None,
+    *,
+    root: Path,
+    repo: str,
+    task: bool = False,
+) -> Worktree:
     """One slot of `repo`'s pool, with the running run or review that holds its lease, if the journal has one.
 
-    Its path is shown from workspace `root` when under it.
+    Its path is shown from workspace `root` when under it. `task` says a running task's run holds it (DESIGN §36).
 
     Returns:
-        The worktree, `working` while a run or review holds it, with a note when its lease is canopy's but no running
-        run holds it, or `canopy workspace sync` does, when a failed seeding holds it, or when it is dirty.
+        The worktree, `working` while a run, review, or task holds it, with a note when its lease is canopy's but no
+        running run holds it, or `canopy workspace sync` does, when a failed seeding holds it, or when it is dirty.
     """
     leased = slot.lease_id != ""
     state: WorktreeState = _STATES.get(slot.status, "broken")
     note = None
-    if run is not None or review is not None:
+    if run is not None or review is not None or task:
         state = "working"
     elif slot.lease_holder == QUARANTINED:
         note = _QUARANTINED.format(repo=repo, name=slot.name)

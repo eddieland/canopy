@@ -588,6 +588,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the personas
+         * @description Every persona a run could get, by name, the operator's in place of canopy's, and `[personas] reviewer`'s.
+         */
+        get: operations["listPersonas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pull-request": {
         parameters: {
             query?: never;
@@ -647,11 +667,12 @@ export type paths = {
         put?: never;
         /**
          * Ask for a PR to be reviewed
-         * @description `canopy start URL --review --notes TEXT`: review a PR the loop does not own, once, at its head (DESIGN §21).
+         * @description `canopy start URL --review --notes TEXT --persona NAME`: review a PR the loop does not own, once, at its head.
          *
          *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
-         *     given the notes. Notes on a PR already requested replace its request's. Refused as the CLI refuses it:
-         *     `reviews_off`, `bad_notes`, `bad_pr`, and `loop_pr`.
+         *     given the notes, once in each persona chosen (DESIGN §21, §31). Notes or personas on a PR already requested replace
+         *     its request's. Refused as the CLI refuses it: `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`,
+         *     `bad_pr`, and `loop_pr`.
          */
         post: operations["startPullRequestReview"];
         delete?: never;
@@ -3398,6 +3419,50 @@ export type components = {
          */
         PersonaAgent: "worker" | "planner" | "reviewer";
         /**
+         * PersonaChoice
+         * @description A persona a run could get, as `canopy personas` lists it (DESIGN §31): what the operator may choose from.
+         */
+        PersonaChoice: {
+            /**
+             * Defaults
+             * @description The agents whose `[personas]` names it, `reviewer` among them when `[personas] reviewers` does.
+             * @default []
+             */
+            defaults: components["schemas"]["PersonaAgent"][];
+            /**
+             * Error
+             * @description Why a run would refuse it, or None when it would render.
+             */
+            error: string | null;
+            /**
+             * Name
+             * @description Its name, which a choice of it names.
+             */
+            name: string;
+            /**
+             * Yours
+             * @description Whether its file is the operator's, from `paths.personas`; False for one canopy ships.
+             */
+            yours: boolean;
+        };
+        /**
+         * PersonaList
+         * @description Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31).
+         */
+        PersonaList: {
+            /**
+             * Personas
+             * @description Each persona once, by name, the operator's in place of canopy's of the same name.
+             * @default []
+             */
+            personas: components["schemas"]["PersonaChoice"][];
+            /**
+             * Reviewer
+             * @description `[personas] reviewer`'s: the persona of a review request's review when the request chooses none.
+             */
+            reviewer: string;
+        };
+        /**
          * PersonaRequest
          * @description A choice of persona for one of a ticket's agents, as `canopy persona KEY NAME [--agent AGENT]` makes it.
          */
@@ -4303,6 +4368,32 @@ export type components = {
              * @description The operator's notes for the reviewer, which its prompt carries; None when the request has none.
              */
             notes: string | null;
+            /**
+             * Personas
+             * @description The personas it is reviewed in, one review each, in the order chosen; none for `[personas] reviewer`'s.
+             * @default []
+             */
+            personas: string[];
+        };
+        /**
+         * ReviewRequestBody
+         * @description A review request's notes and personas, as `canopy start URL --review --notes TEXT --persona NAME` gives them.
+         */
+        ReviewRequestBody: {
+            /**
+             * Notes
+             * @description What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
+             *     blank is none, and leaves an open request's notes as they were.
+             * @default
+             */
+            notes: string;
+            /**
+             * Personas
+             * @description The personas to review it in, one review each, side by side, each one `GET /personas` lists; none is
+             *     `[personas] reviewer`'s, and leaves an open request's personas as they were.
+             * @default []
+             */
+            personas: string[];
         };
         /**
          * ReviewRequested
@@ -4316,19 +4407,6 @@ export type components = {
             already: boolean;
             /** @description The PR's open request. */
             request: components["schemas"]["ReviewRequest"];
-        };
-        /**
-         * ReviewRequestNotes
-         * @description A review request's notes, as `canopy start URL --review --notes TEXT` gives them.
-         */
-        ReviewRequestNotes: {
-            /**
-             * Notes
-             * @description What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
-             *     blank is none, and leaves an open request's notes as they were.
-             * @default
-             */
-            notes: string;
         };
         /**
          * ReviewRequestStopped
@@ -5068,6 +5146,11 @@ export type components = {
              */
             reviews: number | null;
             /**
+             * Tasks
+             * @description The operator's one-off tasks' runs (DESIGN §36).
+             */
+            tasks: number | null;
+            /**
              * Total
              * @description Everything, dry runs included, as the 24 hour and 30 day counters count it.
              */
@@ -5109,10 +5192,10 @@ export type components = {
          */
         SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
         /**
-         * @description A kind of agent run: each tick's overseer, worker runs, plan runs (`plan`, DESIGN §25, old `needs-plan` triage runs among them), chore runs, review runs.
+         * @description A kind of agent run: each tick's overseer, worker runs, plan runs (`plan`, DESIGN §25, old `needs-plan` triage runs among them), chore runs, review runs, the operator's one-off tasks' runs (§36).
          * @enum {string}
          */
-        SpendKind: "overseer" | "workers" | "plans" | "chores" | "reviews";
+        SpendKind: "overseer" | "workers" | "plans" | "chores" | "reviews" | "tasks";
         /**
          * SpendModel
          * @description What one kind's runs that started in the window spent on one model, as each run's session says (DESIGN §13).
@@ -8523,6 +8606,71 @@ export interface operations {
             };
         };
     };
+    listPersonas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaList"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getPullRequest: {
         parameters: {
             query: {
@@ -8707,7 +8855,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["ReviewRequestNotes"] | null;
+                "application/json": components["schemas"]["ReviewRequestBody"] | null;
             };
         };
         responses: {

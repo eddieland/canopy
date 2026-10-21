@@ -315,5 +315,6 @@ code-blocks = false
 [tool.rumdl.per-file-ignores]
 # A worker's last line of output is one JSON object, so the prompt shows it on one line.
 ".agents/prompts/worker-*.md" = ["MD013"]
+".agents/prompts/task.md" = ["MD013"]
 # The guide's screenshot serves this as src/guide/overview.md, so its links name the guide's pages, not files beside it.
 "ui/e2e/guide-specimen.md" = ["MD057"]

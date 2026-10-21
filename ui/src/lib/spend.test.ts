@@ -30,6 +30,7 @@ const NONE: SpendCosts = {
     plans: null,
     chores: null,
     reviews: null,
+    tasks: null,
     total: null,
 }
 

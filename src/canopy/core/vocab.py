@@ -17,7 +17,7 @@ from enum import StrEnum
 
 
 class RunStatus(StrEnum):
-    """A worker run's status, `runs.status` (DESIGN §8)."""
+    """A worker run's status, `runs.status` (DESIGN §8), and a task's run's, `task_runs.status` (§36)."""
 
     RUNNING = "running"
     DONE = "done"

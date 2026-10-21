@@ -1,5 +1,12 @@
--- sha256 of 0068_reread_run_models.sql: 9ff2264de5b2711e4f3ce7559f165ebfbb4d29469f5f7413a6f0aa6660123159
+-- sha256 of 0068_tasks.sql: 776a394a5408d7fca6d5dfce7419277cb3cc420669c58b10c8a71f79235f6cbc
 
--- Creates no table. It deletes the read 0054 seeds, so a read is seeded again for the migrations after it.
-INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at)
-VALUES ('runs', 1, 'found', NULL, 1, 'x');
+INSERT INTO tasks (text, repo, project, channel, submitted_at)
+VALUES ('Find out why the build is slow.', 'repo', 'PROJ', 'cli', 'x');
+
+INSERT INTO task_runs (
+    task_id, tick_id, branch, repo, slot_path, lease_id, lease_holder, base_branch, pool, started_at, status, log_path
+)
+VALUES (
+    (SELECT min(id) FROM tasks), (SELECT min(id) FROM ticks), 'agent/task/1', 'repo', '/pool/1/repo', 'l1',
+    'canopy:task:1', 'main', 'treehouse', 'x', 'done', 'l'
+);

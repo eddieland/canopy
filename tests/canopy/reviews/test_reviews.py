@@ -395,7 +395,7 @@ def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
         ("refused:running", "a worker run for PROJ-1 is running; review its PR once it ends"),
     ]
     assert scenario.refuses(reviews(head(git_pool), f"{PR}0")) == [
-        ("refused:capacity", "1 of 1 workers and reviews are running"),
+        ("refused:capacity", "1 of 1 workers, reviews, and tasks are running"),
     ]
 
 

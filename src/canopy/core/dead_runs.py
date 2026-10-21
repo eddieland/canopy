@@ -1,9 +1,9 @@
 """What every kind of run's reconcile shares (DESIGN §6 step 3): runs whose own process is gone, found and ended.
 
-A run's own process is `_run`, `_chore`, or `_review`, and it is alive while it holds its lifelock (DESIGN §6). The
-agent it starts leads its own process group, so it can outlive that process; it is killed before the run is closed and
-whatever it held goes back. Each kind's reconcile then closes the run its own way: a worker run with its messages and
-slots, a review with its slot, a chore with nothing more.
+A run's own process is `_run`, `_chore`, `_review`, or `_task`, and it is alive while it holds its lifelock (DESIGN
+§6). The agent it starts leads its own process group, so it can outlive that process; it is killed before the run is
+closed and whatever it held goes back. Each kind's reconcile then closes the run its own way: a worker run with its
+messages and slots, a review or a task's run with its slot, a chore with nothing more.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ CRASHED: Mapping[RunTable, AnyRunStatus] = {
     "runs": RunStatus.CRASHED,
     "chore_runs": ChoreRunStatus.CRASHED,
     "review_runs": ReviewRunStatus.CRASHED,
+    "task_runs": RunStatus.CRASHED,
 }
 
 

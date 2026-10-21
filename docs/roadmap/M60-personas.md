@@ -73,4 +73,5 @@ for a persona with no file, and the ticket page's control of it through the same
 `ticket_overrides`, one table of the operator's choices per ticket, agent, and kind, whose `model` kind M58's override
 per ticket can take without a migration. An override whose file has gone refuses the ticket's next run
 `persona_missing`, never falling back to `[personas]`. The run and review pages show each run's persona and digest.
+The reviews page's request form chooses a request's personas, one review each, at the operator's word (2026-10-21).
 Next: the live checks in Accept. Designed 2026-10-19 (DESIGN §31).

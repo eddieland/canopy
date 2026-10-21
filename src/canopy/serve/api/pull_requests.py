@@ -20,8 +20,8 @@ from canopy.serve.schema import (
     Granted,
     PullRequest,
     PullRequestDetail,
+    ReviewRequestBody,
     ReviewRequested,
-    ReviewRequestNotes,
     ReviewRequestStopped,
 )
 
@@ -114,23 +114,29 @@ def grant(url: PrUrl, backend: BackendDep) -> Granted:
     summary="Ask for a PR to be reviewed",
     responses={**REFUSED, **_BAD_URL},
 )
-def start(url: PrUrl, backend: BackendDep, body: ReviewRequestNotes | None = None) -> ReviewRequested:
-    """`canopy start URL --review --notes TEXT`: review a PR the loop does not own, once, at its head (DESIGN §21).
+def start(url: PrUrl, backend: BackendDep, body: ReviewRequestBody | None = None) -> ReviewRequested:
+    """`canopy start URL --review --notes TEXT --persona NAME`: review a PR the loop does not own, once, at its head.
 
     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
-    given the notes. Notes on a PR already requested replace its request's. Refused as the CLI refuses it:
-    `reviews_off`, `bad_notes`, `bad_pr`, and `loop_pr`.
+    given the notes, once in each persona chosen (DESIGN §21, §31). Notes or personas on a PR already requested replace
+    its request's. Refused as the CLI refuses it: `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`,
+    `bad_pr`, and `loop_pr`.
     """
     ref = _pr_ref(url, "start")
     notes = body.notes if body is not None else None
+    chosen = body.personas if body is not None else []
     with backend.open() as ctx:
         try:
-            requested = review_requests.request(ctx.conn, ctx.config, ref, channel=WEB, notes=notes)
+            requested = review_requests.request(ctx.conn, ctx.config, ref, channel=WEB, notes=notes, chosen=chosen)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        shown = pull_requests.review_request(ctx.conn, requested.request)
     noted = requested.request.notes is not None
-    _log.info("review requested", extra={"pr": ref.id, "already": requested.already, "notes": noted, "channel": WEB})
-    return ReviewRequested(request=pull_requests.review_request(requested.request), already=requested.already)
+    _log.info(
+        "review requested",
+        extra={"pr": ref.id, "already": requested.already, "notes": noted, "personas": chosen, "channel": WEB},
+    )
+    return ReviewRequested(request=shown, already=requested.already)
 
 
 @router.post(
@@ -150,9 +156,10 @@ def stop(url: PrUrl, backend: BackendDep) -> ReviewRequestStopped:
             stopped = review_requests.stop(ctx.conn, ref)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        shown = pull_requests.review_request(ctx.conn, stopped.request)
     _log.info("review request stopped", extra={"pr": ref.id, "channel": WEB})
     running = stopped.running.id if stopped.running is not None else None
-    return ReviewRequestStopped(request=pull_requests.review_request(stopped.request), running_review=running)
+    return ReviewRequestStopped(request=shown, running_review=running)
 
 
 def _pr_ref(url: str, verb: str) -> conversation.Ref:

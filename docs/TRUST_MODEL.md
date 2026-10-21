@@ -163,6 +163,18 @@ Controls:
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
+- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
+  channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
+  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so is `canopy stop task:N`. Its text, and the replies a
+  later run takes, are the operator's instructions; what a run reports is data. A task never reaches the overseer: a
+  tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
+  or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
+  branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
+  it, or a PR from it, as a ticket's work. It is never pushed with force, whatever `trust.rebase` says: `_task`'s own
+  push only adds commits, so a branch the worker rewrote and did not push is `unpushed`, and its prompt forbids a
+  forced push. Under `trust.rebase` the private worker's definition still allows its one leased push, so a steered task
+  worker can replace its own branch's history; the run's note then says the branch no longer holds the head it started
+  from, and each earlier run's head stays in the journal.
 - Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
   ticket's later `implement` and `resume` runs read as data, the same exposure as its reports in
   `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
@@ -189,8 +201,8 @@ Controls:
   emphasis in every planner's, reviewer's, or worker's prompt it reaches, below the prompt's obligations, which the
   prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), for one ticket's agent
   or its next run with `canopy persona` or the ticket's page (T8), `canopy start --persona`, or
-  `canopy plan --persona`, or for the review of a PR they requested with `canopy start URL --review --persona` or
-  `canopy persona URL`, each of which refuses inside a tick or a run; and supplies one, in
+  `canopy plan --persona`, or for the review of a PR they requested with `canopy start URL --review --persona`, the
+  reviews page (T8), or `canopy persona URL`, each of which refuses inside a tick or a run; and supplies one, in
   `paths.personas`, also private, or among the files canopy ships; the overseer, a dispatch, ticket text, and labels
   choose none, so no ticket can steer its own review toward a lenient reviewer. A persona changes how an agent writes
   and where it looks hardest, never a guard, the result contract, the tools a definition allows, or what makes a
@@ -263,10 +275,11 @@ still sees only what the branch now holds. A worker's bash still reaches the net
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
-unset, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one that
-works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted
-review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted reviewer's comments
-without a go-ahead; the worker's own check and human review of the PR remain, and those comments were never
+unset, or `canopy task submit` to hand canopy a task in the operator's name, or write the journal file directly: the
+refusal stops a worker that follows injected text naively, not one that works around it. The operator accepted this
+(D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A
+steered overseer can dispatch a `resume` for an untrusted reviewer's comments without a go-ahead; the worker's own
+check and human review of the PR remain, and those comments were never
 instructions to it. A steered overseer can mirror text that was never on the ticket, or
 name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
 stays its source.
@@ -311,6 +324,10 @@ Controls in code, not prompts:
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
+- Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
+  task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which
+  counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
+  later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
 - Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
   `policy.max_plan_attempts` per ticket, never reset, raised only by the operator, in config or per ticket with
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
@@ -466,13 +483,16 @@ Controls:
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
 - With `paths.plan_archive` set (DESIGN §25), each live tick commits every plan, superseded and feedback plans
   included, to that clone of the operator's and pushes it to the clone's upstream: plan text, model-written from what
-  planners read of tickets and repositories, leaves the machine for that remote and no other. The key is private, so a
-  shared workspace file cannot name a remote (T7). The harness, never an agent, does it: no agent runs git there, and
-  `canopy archive` refuses inside a tick or run. It uses only a path that is a clone's own top level, never a
-  directory inside a repository the operator works in, commits only the workspace's own directory there, runs git with
-  hooks off (D107), and never forces a push. Residual: anyone who can read that remote reads every plan, so the
-  operator keeps it private; the clone's own git config, such as its remote or `core.sshCommand`, is the operator's to
-  keep, as their home directory is.
+  planners read of tickets and repositories, leaves the machine for that remote and no other. So does each plan's
+  prompt unless `paths.plan_archive_prompts`, private and on by default, is off: the operator's messages and standing
+  instructions, agent memory's lessons, and the persona that prompt carried, with local paths and repository names.
+  Both keys are private, so a shared workspace file can neither name a remote nor change what goes there (T7). The
+  harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
+  only a path that is a clone's own top level, never a directory inside a repository the operator works in, commits
+  only the workspace's own directory there, runs git with hooks off (D107), and never forces a push. A prompt is
+  exported only from beside its run's log under the state directory, never through a link. Residual: anyone who can
+  read that remote reads every plan and prompt, so the operator keeps it private; the clone's own git config, such as
+  its remote or `core.sshCommand`, is the operator's to keep, as their home directory is.
 - With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
   sent them: its prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the
   GitHub server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker
@@ -494,6 +514,15 @@ Controls:
   merged after it (D044); `policy.max_follow_ups = 0` has workers file none, and the MCP server's own tool selection,
   where it has one, is what takes the tool away. The journal holds the operator's replies and the
   workers' reports, under the operator-only state directory (T2).
+- A task's worker (DESIGN §36) is the private worker: `canopy-worker-private`, run with `runtime.private_worker_cmd`,
+  with that definition's tool lists, so on the tracker only its read tools and the tools that create a ticket, and on
+  GitHub the tools of its PR; a run is refused where the slot's OpenCode config names any of the tracker server's
+  tools, as a private ticket's is. Its prompt says to push only its own branch, to open one PR for it, as a draft, only
+  when the task's text asks for one, and to write nothing to any ticket, existing or new. Those are the prompt's rules,
+  not guards: the PR's draft state and its existence at all are agent judgment, and the create tool the definition
+  allows is a private worker's residual below. Filing unlabeled tickets in the project the submission names is ROADMAP
+  M61's third stage. A task's PR is the operator's like any other: canopy never drives it, and reviews it only when
+  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2).
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
@@ -551,7 +580,9 @@ private ticket, whose worker writes nothing to it. Residual: a private worker ca
 careless one can put what it read, the operator's messages included, into a follow-up's title or body, which the
 tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`, also
 edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same exposure
-the public worker has had, now on private tickets too.
+the public worker has had, now on private tickets too. A task's worker has the same tools, and so the same residual,
+though its prompt files nothing yet; and a steered one can open a PR that is no draft, or one the text did not ask for,
+with what it read in its body, where whoever reads the repository's PRs sees it.
 
 ### T7. Hostile shared config
 
@@ -702,15 +733,15 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, try a chore as a recorded `canopy chore try` does,
   dismiss a chore's or a review's finding or take that
-  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
-  request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
-  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
-  or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
-  proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
-  `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction, drop, send, and stage
-  them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the persona of one of a
-  ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31), ask the loop to
-  read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
+  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a
+  review request on a PR, with its personas, as `canopy start URL --review` and `canopy stop URL` do, pause and
+  resume the loop as `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice`
+  does, ask for, skip, or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a
+  lesson, reject a proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy
+  memory promote`, `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction,
+  drop, send, and stage them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the
+  persona of one of a ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31),
+  ask the loop to read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a
