@@ -7,10 +7,12 @@ seen, as `canopy review show ID` does.
 
 import json
 from pathlib import Path
+from unittest import mock
 
 from canopy.core import db, review_diff
 from canopy.core.vocab import ReviewRunStatus
 from canopy.serve import mock_reviews
+from canopy.serve.api import reviews as reviews_api
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import SECRET, client, signed_in
@@ -105,10 +107,13 @@ def test_a_review_goes_gzipped_to_a_browser_that_takes_it_and_as_it_is_to_one_th
     ]:
         sent = c.get("/api/reviews/4", headers={"accept-encoding": accept})
         assert (sent.headers.get("content-encoding") == "gzip") is gzipped, accept
-    # A review too short to be worth it goes as it is.
-    short = c.get("/api/reviews/3")
-    assert len(short.content) < 1024
-    assert "content-encoding" not in short.headers
+    # A review a byte too short to be worth it goes as it is, and one as long as the bound goes gzipped. The bound is
+    # set from the review's length, so the test holds however long the mock review grows.
+    size = len(c.get("/api/reviews/3", headers={"accept-encoding": "identity"}).content)
+    for bound, gzipped in [(size + 1, False), (size, True)]:
+        with mock.patch.object(reviews_api, "_GZIP_FROM", bound):
+            sent = c.get("/api/reviews/3")
+        assert (sent.headers.get("content-encoding") == "gzip") is gzipped, bound
 
 
 def test_a_review_without_a_diff_has_none_and_a_failed_one_says_why(backend: Backend) -> None:
