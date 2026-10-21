@@ -1,7 +1,8 @@
 """Plans archived to a clone of the operator's own each tick (DESIGN §25): exported, committed, and pushed.
 
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`
-(`plan_export`), commits what changed there and nothing else, and pushes the clone's branch to its upstream. A dry run
+(`plan_export`), commits what changed there and nothing else, under a message naming each plan it adds or changes, and
+pushes the clone's branch to its upstream. A dry run
 only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a
 push that failed is retried each live tick and the operator sees why until one succeeds. A tick writes at most
 `PER_TICK` files, so a long history goes in over several ticks, each commit and push bounded, and the item stays open
@@ -14,9 +15,13 @@ is an item, never a failed tick.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import itertools
+import json
+import operator
+from typing import TYPE_CHECKING, get_args
 
 from canopy.core import hostgit, plan_export
+from canopy.core.vocab import PlanStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -32,6 +37,12 @@ PER_TICK = 1000
 _GIT_TIMEOUT_SECONDS = 60
 # The most of git's own message an item's detail carries.
 _MAX_ERROR = 300
+# The most ticket keys a commit's subject names before it counts the rest.
+_SUBJECT_KEYS = 3
+# How each change `git diff --name-status` reports is headed in a commit's body, in the body's order.
+_CHANGES = {"A": "New", "M": "Changed", "D": "Removed"}
+# The front matter `plan_export.document` opens and closes a file with.
+_FRONT_MATTER = "---"
 
 
 def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool) -> str | None:
@@ -93,7 +104,7 @@ def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
         return git.failed("diff", staged)
     if staged.returncode == 1:
         # Only `name/`: anything else the operator staged in the clone stays staged.
-        committed = git.run("commit", "--quiet", "-m", f"Archive the plans of {name}", "--", name)
+        committed = git.run("commit", "--quiet", "-m", _message(git, name), "--", name)
         if not committed.ok:
             return git.failed("commit", committed)
     if git.has_commits() and git.ahead() != 0:
@@ -102,6 +113,65 @@ def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
             log.warning("plan archive not pushed", extra={"error": pushed.stderr.strip()[:_MAX_ERROR]})
             return git.failed("push", pushed)
     return None
+
+
+def _message(git: _Git, name: str) -> str:
+    """A commit message for what is staged under `name/`: how many plans of which tickets, then each file and its plan.
+
+    Returns:
+        The message; a subject alone when git cannot say what is staged.
+    """
+    staged = git.run("diff", "--cached", "--name-status", "--no-renames", "-z", "--", name)
+    fields = staged.stdout.split("\0")
+    changes = [
+        (change, path.removeprefix(f"{name}/"))
+        for change, path in zip(fields[::2], fields[1::2], strict=False)
+        if change in _CHANGES
+    ]
+    if not staged.ok or not changes:
+        return f"Archive the plans of {name}"
+    keys = list(dict.fromkeys(path.partition("/")[0] for _, path in changes))
+    named = ", ".join(keys[:_SUBJECT_KEYS])
+    if len(keys) > _SUBJECT_KEYS:
+        named += f" and {len(keys) - _SUBJECT_KEYS} more"
+    files = f"{len(changes)} plan{'s' if len(changes) != 1 else ''}"
+    lines = [f"Archive {files} of {name}: {named}"]
+    by_change = sorted(changes, key=lambda change_path: list(_CHANGES).index(change_path[0]))
+    for change, group in itertools.groupby(by_change, key=operator.itemgetter(0)):
+        lines.extend(["", f"{_CHANGES[change]}:"])
+        for _, path in group:
+            described = None if change == "D" else _described(git.clone / name / path)
+            lines.append(f"- {path} ({described})" if described else f"- {path}")
+    return "\n".join(lines) + "\n"
+
+
+def _described(path: Path) -> str | None:
+    """A plan's kind and status, from the front matter its export opens with.
+
+    Only values canopy writes are taken, so nothing else in the file reaches a commit message.
+
+    Returns:
+        Its kind and status, as `feedback plan, approved`; None when the file holds no front matter that names both.
+    """
+    found: dict[str, str] = {}
+    try:
+        with path.open(encoding="utf-8") as f:
+            if f.readline().rstrip("\n") != _FRONT_MATTER:
+                return None
+            for line in f:
+                key, _, value = line.rstrip("\n").partition(": ")
+                if key == _FRONT_MATTER:
+                    break
+                if key in {"kind", "status"}:
+                    decoded: object = json.loads(value)
+                    if isinstance(decoded, str):
+                        found[key] = decoded
+    except (OSError, ValueError):
+        return None
+    kind, status = found.get("kind"), found.get("status")
+    if kind not in get_args(plan_export.Kind.__value__) or status not in set(PlanStatus):
+        return None
+    return f"{kind}, {status}"
 
 
 def _unpushed(git: _Git, name: str) -> str | None:
