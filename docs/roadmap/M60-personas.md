@@ -40,7 +40,7 @@ personas, which the operator adds to or shadows in a private directory.
   `explainer`, for a worker on a team's repository, whose PR says why as well as what, for coworkers new to the code.
 - **Out of scope:** a persona for the overseer or a chore; a persona that names a model; a persona
   per repository in the shared map; the overseer or a ticket's labels choosing one; comparison reports beyond what each
-  run records. Whether a review request of a coworker's PR takes a persona of its own is open (§31).
+  run records.
 - **TRUST_MODEL**, in the PR that builds Stage 2: T1 (only the operator chooses a persona, and its text sits below the
   prompt's obligations, as the standing instructions do), T5 (each run records its persona), T7 (`paths.personas` and
   `[personas]` private), and T8 (the web UI's override write).
@@ -73,5 +73,10 @@ for a persona with no file, and the ticket page's control of it through the same
 `ticket_overrides`, one table of the operator's choices per ticket, agent, and kind, whose `model` kind M58's override
 per ticket can take without a migration. An override whose file has gone refuses the ticket's next run
 `persona_missing`, never falling back to `[personas]`. The run and review pages show each run's persona and digest.
+The operator's choice for one run is built (2026-10-21): `canopy persona KEY NAME --next`,
+`canopy start KEY --persona`, and `canopy plan KEY --persona` choose the persona of a ticket's next worker or planner
+run alone, spent by the dispatch that records it; `canopy start URL --review --persona`, given again for a review in
+each, and `canopy persona URL` choose a review request's, in place of `[personas] reviewer`. The overseer's commands
+take none, as §31 rejects.
 The reviews page's request form chooses a request's personas, one review each, at the operator's word (2026-10-21).
 Next: the live checks in Accept. Designed 2026-10-19 (DESIGN §31).
