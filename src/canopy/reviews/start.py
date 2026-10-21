@@ -36,7 +36,7 @@ HOLDER_KEY = "review:"
 # Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, a PR with the operator's open review
 # request, or a `review.query` match.
 OWN = "own"
-REQUEST = "request"
+REQUEST = review_requests.PURPOSE
 QUERY = "query"
 SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 MAX_PR_URL = 300
