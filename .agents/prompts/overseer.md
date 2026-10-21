@@ -345,7 +345,9 @@ For each new message:
   message, with `--cursor message=` at it and no later, so the next is still new next tick.
 - Approving a feedback plan (`canopy plan` writes `Address items 1 and 3 of feedback plan 4`, perhaps with words of
   their own after): it rides the `resume` that plan's row under Plans says, with `--cursor message=<its id>` and
-  context naming it. The harness gives that worker the items approved; leave the rest of the PR's feedback alone.
+  context naming it. When two new messages approve the same plan, the newer replaced the older: put the cursor at the
+  newer, so the worker sees the approval it acts on. The harness gives that worker the items approved; leave the rest
+  of the PR's feedback alone.
 - Saying to leave the feedback alone: advance `review` past it and `message` to the message with `canopy ticket set`,
   and decide the ticket from what is left.
 - Answering a question or asking for other work: `human_replied`, as an authorized reply is. Dispatch `resume --reason
