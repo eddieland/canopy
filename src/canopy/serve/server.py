@@ -30,6 +30,9 @@ MAX_RETRY_SECONDS = 60.0
 HEALTHY_SECONDS = 60.0
 GRACEFUL_SECONDS = 2
 _UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
+#: What uvicorn cancels a request still open with, once `GRACEFUL_SECONDS` pass. A `CancelledError` without it, such as
+#: one the app raises itself, is logged as uvicorn logs it; so is this one, if uvicorn ever words it otherwise.
+_SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
 
 
 class _ToCanopyLog(logging.Handler):
@@ -37,7 +40,8 @@ class _ToCanopyLog(logging.Handler):
 
     @override
     def emit(self, record: logging.LogRecord) -> None:
-        if record.exc_info is not None and isinstance(record.exc_info[1], asyncio.CancelledError):
+        error = record.exc_info[1] if record.exc_info is not None else None
+        if isinstance(error, asyncio.CancelledError) and error.args == (_SHUTDOWN_CANCEL,):
             record = _cancelled(record)
         logging.getLogger("canopy").handle(record)
 
