@@ -7,5 +7,5 @@ When you commit, write clear messages.
 
 When you reply to a review comment, reply briefly.
 
-When a PR already has a body, edit it only if you must, and otherwise leave it alone: never edit it to restyle it,
-summarize the run, or list what you addressed. When you must, change only the sentences that are wrong or missing.
+When a PR already has a body, edit it only if you must, never to restyle it, summarize the run, or list what you
+addressed. When you must, change only the sentences that are wrong or missing.
