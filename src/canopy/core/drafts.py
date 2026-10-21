@@ -219,7 +219,7 @@ def check_words(text: object, reaction: Reaction | None) -> str:
     """
     if reaction is not None and text in (None, ""):
         return ""
-    return check_text(text, MAX_DRAFT_CHARS, lines=True)
+    return check_text(text, MAX_DRAFT_CHARS)
 
 
 def _target(

@@ -153,6 +153,19 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(scenario: Scenar
     ]
 
 
+def test_a_note_keeps_its_line_breaks_and_each_line_is_quoted(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("private", memory=RECORDING)
+    text = "The lint job fails on a cold cache.\nEvidence: `make lint` twice.\nNext: run it twice."
+    scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": text}]))
+    [note] = memories(scenario.conn)
+    assert note.body == text
+    digest = memory.ticket_digest(scenario.conn, KEY).text
+    assert "\n> The lint job fails on a cold cache.\n> Evidence: `make lint` twice.\n> Next: run it twice." in digest
+    listed = scenario.operator("memory", "list").out
+    assert "\n      The lint job fails on a cold cache.\n      Evidence: `make lint` twice.\n" in listed
+    assert "<U+000A>" not in listed
+
+
 def refusals(conn: sqlite3.Connection, run_id: int) -> list[tuple[str, str | None, str]]:
     rendered = present(memory.run_memory(conn, run_id))
     return [(r.field, r.key, r.why) for r in memory.refused_of(rendered)]

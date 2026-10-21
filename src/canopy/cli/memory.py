@@ -19,12 +19,15 @@ from canopy.cli.params import REPO, TICKET_KEY
 from canopy.cli.render import report_json
 from canopy.core import conversation, db, memory, memory_manage, records
 from canopy.core import memory_search as search
-from canopy.core.memory_text import visible
+from canopy.core.memory_text import quoted
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus
 from canopy.infra import logs
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
+
+#: What each line of a memory's text is printed after, under the line that names it.
+_INDENT = "      "
 
 
 @click.group("memory", cls=Group)
@@ -178,7 +181,7 @@ def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
     if not waiting:
         click.echo("\nNo proposals wait on you.")
     for p in waiting:
-        click.echo(f"\n{_provenance(ctx, p)}\n      {visible(p.body or '')}")
+        click.echo(f"\n{_provenance(ctx, p)}\n{quoted(p.body or '', _INDENT)}")
         if memory_manage.from_private_run(ctx.conn, p):
             click.echo(
                 "      Warning: from a private ticket's run: its text may hold what you kept off the tracker. Promote "
@@ -220,7 +223,7 @@ def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_
         wrong = f"; run {m.wrong_run_id} reported it wrong at {m.wrong_at}" if m.wrong_at is not None else ""
         click.echo(
             f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; review at {m.review_at}; "
-            f"{_use(m)}{wrong}\n      {visible(m.body or '')}"
+            f"{_use(m)}{wrong}\n{quoted(m.body or '', _INDENT)}"
         )
     return 0
 
@@ -352,9 +355,9 @@ def cmd_history(click_ctx: click.Context, memory_id: int) -> int:
         status = m.status if m.why is None else f"{m.status}, {m.why}"
         where = f" for {m.repo}" if m.repo else ""
         made = _made(ctx, m) if m.scope is MemoryScope.LESSON else f"by run {m.run_id} at {m.created_at}"
-        text = visible(m.body) if m.body is not None else "(text deleted)"
+        text = quoted(m.body if m.body is not None else "(text deleted)", _INDENT)
         mark = "  <-" if m.id == memory_id and len(versions) > 1 else ""
-        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m)}{mark}\n      {text}")
+        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m)}{mark}\n{text}")
     return 0
 
 
@@ -433,7 +436,7 @@ def _found(entry: records.Memory) -> str:
         parts.append(f"from run {entry.run_id}")
     if entry.head is not None:
         parts.append(f"against `{entry.head}`")
-    return f"{', '.join(parts)}:\n> {visible(entry.body or '')}"
+    return f"{', '.join(parts)}:\n{quoted(entry.body or '', '> ')}"
 
 
 def _kind(scope: MemoryScope) -> str:
@@ -525,14 +528,14 @@ def _lesson_json(ctx: Context, lesson: records.Memory) -> dict[str, Any]:
 
 def _text(entry: records.Memory) -> str | None:
     """A memory's text with every character that hides text named, or None once it is forgotten."""
-    return visible(entry.body) if entry.body is not None else None
+    return quoted(entry.body, "") if entry.body is not None else None
 
 
 def _line(note: records.Memory) -> str:
     by = f"run {note.run_id}" if note.run_id is not None else "the operator"
     status = note.status if note.why is None else f"{note.status}, {note.why}"
-    text = visible(note.body) if note.body is not None else "(text deleted)"
-    return f"  {note.id}  `{note.key}`  {status}; by {by} at {note.created_at}; {_use(note)}\n      {text}"
+    text = quoted(note.body if note.body is not None else "(text deleted)", _INDENT)
+    return f"  {note.id}  `{note.key}`  {status}; by {by} at {note.created_at}; {_use(note)}\n{text}"
 
 
 def _use(entry: records.Memory) -> str:

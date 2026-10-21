@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, assert_never
 from pydantic import BaseModel, ConfigDict, JsonValue
 
 from canopy.core import contract, db, records, sql
-from canopy.core.memory_text import TextRefused, check_key, check_text, normalized, visible
+from canopy.core.memory_text import TextRefused, check_key, check_text, normalized, quoted
 from canopy.core.vocab import MemoryAuthor, MemoryCited, MemoryMode, MemoryScope, MemoryStatus, RunKind
 from canopy.infra import logs
 
@@ -243,7 +243,7 @@ def memory_contract(modes: Modes) -> str:
             "cause of this ticket's problem you found, `dead-end-` for an approach to it that failed and why, "
             "`check-` for how to reproduce or verify it, such as a test to run; then its subject, as in "
             "`cause-ci-timeout`. A note under a key already written replaces it, so to revise one, keep its key. "
-            "Each text is one line of plain text, at most "
+            "Each text is plain text, line breaks sparingly, at most "
             f"{MAX_NOTE_CHARS} characters, in your own words, in this shape: `<what holds>. Evidence: <a path and "
             "line, a test, a command and its outcome, or a commit>. Next: <what a later run should do or skip>.` "
             "Never ticket, PR, or log text copied in, never a secret, token, or password."
@@ -258,10 +258,10 @@ def memory_contract(modes: Modes) -> str:
             "you saw, and what the repository's own docs, such as its `AGENTS.md`, do not already say. The operator "
             "reads each and may promote it; none reaches a run until then. Give `repo` only for a lesson about one "
             "repository you worked in, and leave it out otherwise. Each key is lowercase words joined by hyphens, "
-            "naming the lesson's subject, as in `tests-need-docker`. Each text is one line of plain text, at most "
-            f"{MAX_PROPOSAL_CHARS} characters, in your own words, never a secret, in this shape: `<what to do or not "
-            "do, as an instruction to any worker>. Why: <what showed it>. When: <the task, path, or step it "
-            "applies to>.`"
+            "naming the lesson's subject, as in `tests-need-docker`. Each text is plain text, line breaks "
+            f"sparingly, at most {MAX_PROPOSAL_CHARS} characters, in your own words, never a secret, in this shape: "
+            "`<what to do or not do, as an instruction to any worker>. Why: <what showed it>. When: <the task, path, "
+            "or step it applies to>.`"
         )
     if modes.ticket_notes is MemoryMode.USE:
         fields.append(
@@ -985,7 +985,7 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
 
 def _lesson_entry(lesson: records.Memory) -> str:
     where = f", for `{lesson.repo}`" if lesson.repo else ""
-    return f"Lesson {lesson.id}, `{lesson.key}`{where}:\n> {visible(lesson.body or '')}"
+    return f"Lesson {lesson.id}, `{lesson.key}`{where}:\n{quoted(lesson.body or '', '> ')}"
 
 
 def _note_entry(note: records.Memory, runs: Mapping[int, sqlite3.Row], order: Sequence[int]) -> str:
@@ -994,4 +994,4 @@ def _note_entry(note: records.Memory, runs: Mapping[int, sqlite3.Row], order: Se
     since = sum(1 for i in order if note.run_id is not None and i > note.run_id)
     ago = f"{since + 1} run{'s' if since else ''} before this one"
     head = f", against `{note.head}`" if note.head else ""
-    return f"Note {note.id}, `{note.key}`, {wrote}, {ago}{head}:\n> {visible(note.body or '')}"
+    return f"Note {note.id}, `{note.key}`, {wrote}, {ago}{head}:\n{quoted(note.body or '', '> ')}"
