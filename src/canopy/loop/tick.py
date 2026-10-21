@@ -335,7 +335,7 @@ def _steps(
     memory_reconcile.run(ctx, log)
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
-    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log), log)
+    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)
     _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).

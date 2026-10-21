@@ -16,20 +16,24 @@ from canopy.loop import connectors
 from canopy.runs import drafted
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from canopy.core import observe
     from canopy.core.context import Context
     from canopy.infra import logs
 
 
-def run(ctx: Context, log: logs.TickAdapter) -> bool:
+def run(ctx: Context, log: logs.TickAdapter) -> Mapping[str, observe.Observed] | None:
     """Run the connectors once outside a tick, and check the drafts the `vcs` run read whole.
 
     Returns:
-        True if it ran; False when a tick held the lock, so this poll is skipped.
+        How each source's run ended, by its name; None when a tick held the lock, so this poll is skipped.
     """
     try:
         with lock.hold(ctx.lock_path):
-            drafted.reconcile(ctx, connectors.run(ctx, None, log), log)
+            ran = connectors.run(ctx, None, log)
+            drafted.reconcile(ctx, ran.read, log)
     except lock.LockBusyError:
         log.info("poll skipped: a tick holds the lock")
-        return False
-    return True
+        return None
+    return ran.observed
