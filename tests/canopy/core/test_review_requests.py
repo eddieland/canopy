@@ -8,11 +8,11 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, review_requests
+from canopy.core import conversation, db, personas, review_requests
 from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
-from tests.canopy.helpers import context, operator
+from tests.canopy.helpers import context, operator, personas_dir
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -98,6 +98,93 @@ def test_a_review_without_a_requests_notes_has_no_section_for_them(
     assert review_requests.open_requests(scenario.conn)[0].notes is None
     reviewed = scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
     assert "## Notes from the operator" not in reviewed.prompt
+
+
+def test_a_request_is_reviewed_in_the_persona_the_operator_chose_for_it(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    # DESIGN §31: the request's persona takes the place of `[personas] reviewer`, for this PR's review alone.
+    scenario.configures(personas={"reviewer": "explainer"})
+    requested = scenario.operator("start", PR, "--review", "--persona", "skeptic").out
+    assert requested.endswith("Nothing is posted on the PR.\nIts review is written in skeptic.\n")
+    assert "  persona: skeptic\n" in scenario.operator("show", PR).out
+    assert (
+        scenario.operator("persona", PR).out == f"{PR}'s review is written in skeptic, from its next: this request's.\n"
+    )
+    skeptic = personas.load(load(requests_env.root, requests_env.user_file), "skeptic")
+    reviewed = scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
+    assert f"## Persona\n\n{skeptic.text}\n" in reviewed.prompt
+    assert (reviewed.row.persona, reviewed.row.persona_digest) == ("skeptic", skeptic.digest)
+    # Another PR's review takes `[personas]`'s.
+    other = "https://github.com/acme/other/pull/13"
+    scenario.operator("start", other, "--review")
+    assert scenario.review(reviews("b" * 40, other), reviewer=reviewer_reports(CLEAN)).row.persona == "explainer"
+
+
+def test_canopy_persona_chooses_or_clears_an_open_requests_persona(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.operator("start", PR, "--review")
+    assert (
+        scenario.operator("persona", PR).out
+        == f"{PR}'s review is written in canopy, from its next: canopy's default.\n"
+    )
+    said = scenario.operator("persona", PR, "minimalist", "--agent", "reviewer").out
+    assert said == f"{PR}'s review is written in minimalist, from its next: this request's.\n"
+    # Asked again with a persona, the request's is replaced, as its notes are.
+    again = scenario.operator("start", PR, "--review", "--persona", "skeptic").out
+    assert again == f"{PR} was already requested for review. Its review is written in skeptic.\n"
+    assert "Its review is written in" not in scenario.operator("start", PR, "--review").out
+    assert review_requests.persona_of(scenario.conn, review_requests.open_requests(scenario.conn)[0].id) == "skeptic"
+    scenario.configures(personas={"reviewer": "explainer"})
+    cleared = scenario.operator("persona", PR, "--clear").out
+    assert cleared == f"{PR}'s review is written in explainer, from its next: [personas].\n"
+    assert scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN)).row.persona == "explainer"
+
+
+def test_a_requests_persona_is_refused_when_unknown_without_a_request_or_inside_a_run(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+) -> None:
+    err = scenario.operator("start", PR, "--review", "--persona", "lenient", code=1).err
+    assert "start refused (unknown_persona): persona lenient has no file among canopy's own" in err
+    assert requests_of(scenario.conn) == []
+    assert "--persona is for a PR's review" in scenario.operator("start", PR, "--persona", "skeptic", code=2).err
+    err = scenario.operator("persona", PR, "skeptic", code=1).err
+    assert f"persona refused (not_requested): {PR} has no open review request" in err
+    assert f"canopy start {PR} --review --persona skeptic" in err
+    assert "has no open review request" in scenario.operator("persona", PR, code=1).err
+    scenario.operator("start", PR, "--review")
+    assert "only a reviewer's persona" in scenario.operator("persona", PR, "skeptic", "--agent", "worker", code=2).err
+    assert "persona refused (unknown_persona)" in scenario.operator("persona", PR, "lenient", code=1).err
+    # No agent chooses a persona, a PR's reviewer's least of all (TRUST_MODEL T1).
+    assert "persona refused (inside_run)" in scenario.overseer("persona", PR, "skeptic", code=1).err
+    assert "persona refused (bad_pr)" in scenario.operator("persona", "repo#12", "skeptic", code=1).err
+    assert scenario.conn.execute("SELECT count(*) FROM review_request_personas").fetchone()[0] == 0
+
+
+def test_a_review_whose_requests_persona_has_no_file_is_refused_and_asks_the_operator(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    yours = personas_dir(requests_env)
+    (yours / "terse.md").write_text("Be terse.\n")
+    scenario.operator("start", PR, "--review", "--persona", "terse")
+    (yours / "terse.md").unlink()
+    reason = (
+        f"{PR}'s review request: persona terse has no file in {yours} or among canopy's own: add it, or name one "
+        f"`canopy personas` lists; or clear it: canopy persona {PR} --clear"
+    )
+    # Never `[personas]`'s instead: the operator chose this one for this PR.
+    refused = scenario.refuses(reviews(head(git_pool), PR))
+    assert refused == [("refused:persona_missing", reason), ("attention:persona_missing", reason)]
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert requests_of(scenario.conn) == [(PR, "cli", None)]
 
 
 def test_notes_are_refused_without_review_or_past_their_bound(requests_env: CanopyEnv, scenario: Scenario) -> None:

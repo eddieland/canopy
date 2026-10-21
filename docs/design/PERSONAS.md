@@ -6,8 +6,8 @@ chooses it. Sections are numbered across the whole design; the [README](README.m
 
 ## 31. Personas
 
-Built (REQUIREMENTS R24, ROADMAP M60): the operator chooses each agent's persona in config, and per ticket from
-`canopy persona` or the ticket's page, and canopy ships a few.
+Built (REQUIREMENTS R24, ROADMAP M60): the operator chooses each agent's persona in config, per ticket from
+`canopy persona` or the ticket's page, and per review request, and canopy ships a few.
 
 A persona is a short Markdown file of voice and emphasis: how an agent writes its plan, its PR, its findings, and its
 comments, and what it weighs most while it works. The operator wants to give planning, reviews, or implementation a
@@ -47,9 +47,10 @@ workspace file can neither supply one nor choose one.
 ### Who chooses
 
 - **The operator alone.** A run's persona is its ticket's override for its agent, else that agent's default in
-  `[personas]`, else `canopy`, fixed when the run starts. The override is set only by the operator, from
-  `canopy persona` or the ticket's page, and refused inside an agent run (T1). The overseer, a dispatch, ticket text,
-  and labels choose none.
+  `[personas]`, else `canopy`, fixed when the run starts. A review of a PR the operator requested (§21) has no ticket:
+  its persona is the request's, else `[personas] reviewer`'s. The override and a request's persona are set only by the
+  operator, from `canopy persona`, `canopy start URL --review`, or the ticket's page, and refused inside an agent run
+  (T1). The overseer, a dispatch, ticket text, and labels choose none.
 - **No silent fallback.** Setting a persona that names no file is refused, and a run whose persona's file is gone, or
   past its bounds, by the time it starts is refused with an attention item, spending no attempt and leasing no slot.
   It never falls back to `canopy`, since a run in a voice nobody chose would read as the chosen one's.
@@ -63,8 +64,3 @@ workspace file can neither supply one nor choose one.
 Rejected: the overseer choosing a persona per dispatch from the operator's set (ticket text could steer it toward a
 lenient reviewer, T1); a persona that also names a model (§13 chooses models on their own, and two settings of one
 model would need a rule for which wins); a persona per repository in the shared map (T7).
-
-### Open
-
-- Whether a review the operator requests of a coworker's PR (§21, Review requests) can take a persona of its own, or
-  only the reviewer's default.

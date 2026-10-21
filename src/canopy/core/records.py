@@ -290,6 +290,17 @@ class ReviewRequest(Row):
 
 
 @dataclass(frozen=True)
+class ReviewRequestPersona(Row):
+    """A persona the operator chose for a review request (DESIGN §31), in place of `[personas] reviewer`."""
+
+    TABLE: ClassVar[str] = "review_request_personas"
+
+    request_id: int
+    #: The persona's name, as `canopy personas` lists it.
+    persona: str
+
+
+@dataclass(frozen=True)
 class PoolSlot(Row):
     """A slot of one of canopy's own pools (DESIGN §18): where it is, and its lease while it has one."""
 

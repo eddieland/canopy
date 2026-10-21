@@ -123,7 +123,7 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     planned = db.decisions_for_tick(ctx.conn, tick_id)
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request, planned=planned)
-        _persona(ctx, request.ticket)
+        _persona(ctx, request)
         return repo
 
 
@@ -140,7 +140,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request)
         # Fixed before the run is recorded, so a persona that cannot be used costs the PR none of its reviews.
-        persona = _persona(ctx, request.ticket)
+        persona = _persona(ctx, request)
         attempt = len(db.review_runs_of(ctx.conn, request.pr)) + 1
         run_id = db.insert_review_run(
             ctx.conn,
@@ -177,10 +177,10 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             raise
 
 
-def _persona(ctx: Context, ticket: str | None) -> personas.Persona:
-    """Return the reviewer's persona, `ticket`'s override else `[personas]`'s, read now (DESIGN §31).
+def _persona(ctx: Context, request: Request) -> personas.Persona:
+    """Return the reviewer's persona, read now: the PR's review request's, the ticket's override, or `[personas]`'s.
 
-    It is never fallen back from.
+    A review request is on a PR the loop does not own, so it has no ticket (DESIGN §31). It is never fallen back from.
 
     Returns:
         The persona.
@@ -189,7 +189,11 @@ def _persona(ctx: Context, ticket: str | None) -> personas.Persona:
         Refusal: `persona_missing` or `bad_persona`, with its attention item, as a worker's dispatch refuses.
     """
     try:
-        return personas.for_run(ctx.conn, ctx.config, "reviewer", ticket)
+        if request.ticket is None:
+            asked = review_requests.persona_for(ctx.conn, ctx.config, request.pr)
+            if asked is not None:
+                return asked
+        return personas.for_run(ctx.conn, ctx.config, "reviewer", request.ticket)
     except personas.PersonaError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 

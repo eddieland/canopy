@@ -188,7 +188,9 @@ Controls:
 - Personas (DESIGN §31, ROADMAP M60) are operator text, as the standing instructions are: a short file of voice and
   emphasis in every planner's, reviewer's, or worker's prompt it reaches, below the prompt's obligations, which the
   prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), or for one ticket's agent
-  with `canopy persona` or the ticket's page (T8), which refuses inside a tick or a run; and supplies one, in
+  with `canopy persona` or the ticket's page (T8), or for the review of a PR they requested with
+  `canopy start URL --review --persona` or `canopy persona URL`, each of which refuses inside a tick or a run; and
+  supplies one, in
   `paths.personas`, also private, or among the files canopy ships; the overseer, a dispatch, ticket text, and labels
   choose none, so no ticket can steer its own review toward a lenient reviewer. A persona changes how an agent writes
   and where it looks hardest, never a guard, the result contract, the tools a definition allows, or what makes a

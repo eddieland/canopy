@@ -7,7 +7,8 @@ refuses inside canopy's own ticks and runs. The overseer names the PR's reposito
 for `review.query`'s matches. The harness ends a request when a review of its PR ends `done` (`db.finish_run`),
 or when `canopy review run` refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed
 first, or is in none of the workspace's repositories (`end`). At most one request per PR is open. A request may carry
-the operator's notes, which the reviewer's prompt carries (`reviews.start`).
+the operator's notes, which the reviewer's prompt carries (`reviews.start`), and the persona its review is written in,
+in place of `[personas] reviewer` (DESIGN §31), which only the operator chooses (`request`, `choose_persona`).
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, records, sql
+from canopy.core import contract, conversation, db, personas, records, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -91,6 +92,38 @@ def latest_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewReque
     )
 
 
+def persona_of(conn: sqlite3.Connection, request_id: int) -> str | None:
+    """Return the persona the operator chose for request `request_id`'s review, or None when they chose none."""
+    found = records.fetch_one(
+        conn,
+        records.ReviewRequestPersona,
+        sql.select("*").from_("review_request_personas").where("request_id = ?", request_id),
+    )
+    return found.persona if found is not None else None
+
+
+def persona_for(conn: sqlite3.Connection, config: Config, pr_url: str) -> personas.Persona | None:
+    """Return the persona the operator chose for the review the PR's open request asks for, read now (DESIGN §31).
+
+    Returns:
+        The persona, read from its file, or None when the PR has no open request or its request chose none, and its
+        review gets `[personas] reviewer`.
+
+    Raises:
+        PersonaError: (`MISSING`) the name has no file, or (`BAD`) its file is one canopy would not put in a prompt;
+            never fallen back from.
+    """
+    found = open_request(conn, pr_url)
+    name = persona_of(conn, found.id) if found is not None else None
+    if name is None:
+        return None
+    try:
+        return personas.load(config, name)
+    except personas.PersonaError as e:
+        clear = f"; or clear it: canopy persona {pr_url} --clear"
+        raise personas.PersonaError(e.guard, f"{pr_url}'s review request: {e.reason}{clear}") from e
+
+
 @dataclass(frozen=True)
 class Requested:
     """What `request` did: the open request, and whether it was already open."""
@@ -106,19 +139,22 @@ def request(
     *,
     channel: str,
     notes: str | None = None,
+    persona: str | None = None,
 ) -> Requested:
     """Ask for the PR `ref` names to be reviewed at its head, through `channel`, with `notes`. Operator only.
 
-    `notes` is what the operator wants the reviewer to know, stripped; blank is none. On a request already open, notes
-    replace its own, and none leaves them as they were. A review already running keeps the prompt it started with.
+    `notes` is what the operator wants the reviewer to know, stripped; blank is none. `persona` is the persona its
+    review is written in, in place of `[personas] reviewer`. On a request already open, notes or a persona replace its
+    own, and none leaves them as they were. A review already running keeps the prompt it started with.
 
     Returns:
         The PR's open request, and whether one was already open.
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `reviews_off` when `capacity.max_reviews` is 0;
-            `bad_notes` for notes over `MAX_NOTES` characters; `bad_pr` for a subject that is not a PR's plain https://
-            URL; `loop_pr` for a PR a ticket's run pushed to, which `review.agent_prs` covers.
+            `bad_notes` for notes over `MAX_NOTES` characters; `unknown_persona` or `bad_persona` for a persona a run
+            could not use; `bad_pr` for a subject that is not a PR's plain https:// URL; `loop_pr` for a PR a ticket's
+            run pushed to, which `review.agent_prs` covers.
         RuntimeError: the request was not there to read back once written.
     """
     conversation.check_operator()
@@ -127,6 +163,8 @@ def request(
     said = (notes or "").strip() or None
     if said is not None and len(said) > MAX_NOTES:
         raise conversation.Refused("bad_notes", f"the notes are {len(said)} characters; the most is {MAX_NOTES}")
+    if persona is not None:
+        personas.check(config, persona)
     url = _pr_url(ref)
     if sql.execute(conn, sql.select("1").from_("ticket_units").where("pr_url = ?", url)).fetchone() is not None:
         raise conversation.Refused(
@@ -139,12 +177,53 @@ def request(
             sql.execute(conn, sql.update("review_requests").set(notes=said).where("id = ?", found.id))
             found = open_request(conn, url)
         if found is not None:
+            if persona is not None:
+                _set_persona(conn, found.id, persona)
             return Requested(request=found, already=True)
         sql.execute(conn, sql.insert("review_requests", pr_url=url, created_at=db.now(), channel=channel, notes=said))
         made = open_request(conn, url)
+        if made is not None and persona is not None:
+            _set_persona(conn, made.id, persona)
     if made is None:
         raise RuntimeError(f"the request for {url} vanished")
     return Requested(request=made, already=False)
+
+
+def choose_persona(
+    conn: sqlite3.Connection,
+    config: Config,
+    ref: conversation.Ref,
+    name: str | None,
+) -> records.ReviewRequest:
+    """Set the persona the PR's open request is reviewed in, or clear it with None (DESIGN §31). Operator only.
+
+    It covers the request's review from the next that starts; one already running keeps the prompt it started with.
+
+    Returns:
+        The PR's open request.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `unknown_persona` or `bad_persona` for a
+            persona a run could not use, `bad_pr` for a subject that is not a PR's URL, and `not_requested` for a PR
+            with no open request.
+    """
+    conversation.check_operator()
+    if name is not None:
+        personas.check(config, name)
+    url = _pr_url(ref)
+    with db.transaction(conn):
+        found = open_request(conn, url)
+        if found is None:
+            raise conversation.Refused(
+                "not_requested",
+                f"{url} has no open review request; ask for one with its persona: canopy start {url} --review "
+                f"--persona {name or 'NAME'}",
+            )
+        if name is None:
+            sql.execute(conn, sql.delete("review_request_personas").where("request_id = ?", found.id))
+        else:
+            _set_persona(conn, found.id, name)
+    return found
 
 
 @dataclass(frozen=True)
@@ -244,6 +323,12 @@ def has_news(run: records.ReviewRun, found: ReviewResult | None) -> bool:
     if run.ended_at is None or found is None or found.verdict is None:
         return False
     return found.verdict == "findings" or run.purpose == PURPOSE
+
+
+def _set_persona(conn: sqlite3.Connection, request_id: int, name: str) -> None:
+    # In place of the request's own, inside the caller's transaction.
+    sql.execute(conn, sql.delete("review_request_personas").where("request_id = ?", request_id))
+    sql.execute(conn, sql.insert("review_request_personas", request_id=request_id, persona=name))
 
 
 def _end(conn: sqlite3.Connection, request_id: int, reason: str) -> None:

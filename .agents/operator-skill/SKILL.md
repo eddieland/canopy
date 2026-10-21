@@ -49,7 +49,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy dismiss chore:NAME ID...` | Keeps findings off the attention list until the chore stops reporting them; `--undo`. |
 | `canopy dismiss review:ID N...` | Holds a review's findings back from workers and the overseer; `--undo`. |
 | `canopy send review:ID N...` | Sends findings to a worker: a reply on the review's ticket, the operator's go-ahead. |
-| `canopy start URL --review` | Reviews another's PR once, at its head; nothing is posted. `--notes TEXT`: what to look at. |
+| `canopy start URL --review` | Reviews another's PR once, at its head; nothing is posted. `--notes TEXT`: what to look at; `--persona NAME`: its voice. |
 | `canopy stop URL` | Ends a PR's review request; a running review finishes. `canopy show URL` shows it and its reviews. |
 | `canopy review show [ID]` | canopy's PR reviews of the last 14 days; with ID, one in full. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
@@ -71,7 +71,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy config commands` | Each agent's command as a run starts it, and the keys it is made of; `--json`. |
 | `canopy agents` | The MCP servers and skills each canopy agent is offered, after OpenCode merges the operator's config; `--json`. |
 | `canopy personas` | Each persona, canopy's and the operator's in `paths.personas`, and the agents `[personas]` gives it; exits 1 when an agent's would refuse. |
-| `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. |
+| `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. A PR's URL sets its open review request's. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |

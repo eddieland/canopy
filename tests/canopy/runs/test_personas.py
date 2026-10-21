@@ -161,9 +161,9 @@ def test_canopy_persona_refuses_an_unknown_persona_and_inside_a_run(scenario: Sc
     err = scenario.overseer("persona", KEY, "skeptic", "--agent", "reviewer", code=1).err
     assert "persona refused (inside_run): CANOPY_TICK_ID is set" in err
     assert scenario.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
-    # A PR takes none: a persona is a ticket's agents'.
+    # A PR's is its review request's, named by its URL alone.
     err = scenario.operator("persona", "repo#7", "skeptic", code=1).err
-    assert "persona refused (unsupported)" in err
+    assert "persona refused (bad_pr)" in err
     assert "give NAME or --clear" in scenario.operator("persona", KEY, "skeptic", "--clear", code=2).err
 
 
