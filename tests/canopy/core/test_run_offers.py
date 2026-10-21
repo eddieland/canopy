@@ -1,14 +1,18 @@
 """What the runtime offered each agent run, asked as the run started and recorded beside it (DESIGN §13)."""
 
+import contextlib
 import json
 import sqlite3
+import threading
+from collections.abc import Iterator, Sequence
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core import run_offers
 from canopy.core.run_models import RunTable
-from canopy.infra import procs
+from canopy.infra import logs, procs
 from canopy.runtime.agents import AgentOffer, ServerOffer
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 
@@ -34,10 +38,49 @@ def test_a_run_keeps_only_what_it_was_offered_and_the_latest_ask(conn: sqlite3.C
 
 
 def test_an_agent_that_could_not_start_still_has_its_ask_recorded(conn: sqlite3.Connection) -> None:
-    runner = procs.SubprocessRunner()
-    with pytest.raises(procs.ProcError), run_offers.probing(conn, "runs", 1, runner, ["agent"], cwd=Path(), env={}):
+    with pytest.raises(procs.ProcError), probing(conn, procs.SubprocessRunner(), ["agent"]):
         raise procs.ProcError("no such directory")
     assert offered(conn, "runs", 1) == (None, "its command runs no `opencode run`", (), ())
+
+
+def test_a_run_that_ends_before_the_runtime_answers_waits_only_so_long(conn: sqlite3.Connection) -> None:
+    answer = threading.Event()
+
+    def slow(args: Sequence[str], **_: object) -> procs.Result:
+        answer.wait(timeout=60)
+        return procs.Result(tuple(args), 1, "", "")
+
+    runner = mock.create_autospec(procs.SubprocessRunner, instance=True, spec_set=True)
+    runner.run.side_effect = slow
+    try:
+        with (
+            mock.patch.object(run_offers, "WAIT_SECONDS", 0.01),
+            probing(conn, runner, ["opencode", "run", "--agent=x"]),
+        ):
+            pass
+    finally:
+        answer.set()
+    assert offered(conn, "runs", 1) == (None, "the runtime had not answered 0.01 seconds after the run ended", (), ())
+
+
+def test_a_journal_that_refuses_the_record_leaves_the_run_its_own_outcome(
+    conn: sqlite3.Connection,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def closes() -> None:
+        conn.close()
+        raise procs.ProcError("no such directory")
+
+    with pytest.raises(procs.ProcError), probing(conn, procs.SubprocessRunner(), ["agent"]):
+        closes()
+    assert "could not record what the run was offered" in caplog.text
+
+
+@contextlib.contextmanager
+def probing(conn: sqlite3.Connection, runner: procs.Runner, argv: Sequence[str]) -> Iterator[None]:
+    """`run_offers.probing` for run 1 of `runs`, in no directory of its own."""
+    with run_offers.probing(conn, "runs", 1, runner, argv, cwd=Path(), env={}, log=logs.for_tick(None)):
+        yield
 
 
 # A pool the worker can push from.

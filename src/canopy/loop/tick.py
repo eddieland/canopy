@@ -590,7 +590,7 @@ def _run_overseer(
         watch = progress.Progress(ctx.conn, "ticks", tick_id, out, log, agent="overseer", fields={})
         env = {TICK_ID_ENV: str(tick_id)}
         try:
-            with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env):
+            with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env, log=log):
                 result = ctx.runner.run(argv, cwd=ctx.repo_root, env=env, timeout=timeout_minutes * 60, on_line=watch)
         except procs.ProcError as e:
             # It printed nothing, so it keeps no output, as a tick whose overseer never ran keeps none.

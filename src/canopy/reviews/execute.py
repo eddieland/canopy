@@ -176,7 +176,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     run_id = run.id
     # The operator's commands refuse inside canopy's own runs (DESIGN §22).
     env = {conversation.RUN_ID_ENV: f"review-{run_id}"}
-    with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env):
+    with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         done = ctx.runner.run(
             argv,
             cwd=cwd,

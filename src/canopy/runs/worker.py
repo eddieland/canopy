@@ -460,7 +460,7 @@ def _run_agent(
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
     # directory; an unsandboxed worker ignores it (DESIGN §8).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
-    with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env):
+    with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         result = ctx.runner.run(
             argv,
             cwd=cwd,

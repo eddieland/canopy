@@ -163,7 +163,7 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     # The operator's commands refuse inside canopy's own runs (DESIGN §22); its history tool reads this chore's runs
     # from this workspace's journal, wherever `cwd` is.
     env = history.run_env(ctx, f"{history.RUN_PREFIX}{run_id}")
-    with run_offers.probing(ctx.conn, "chore_runs", run_id, ctx.runner, argv, cwd=cwd, env=env):
+    with run_offers.probing(ctx.conn, "chore_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         done = ctx.runner.run(
             argv,
             cwd=cwd,

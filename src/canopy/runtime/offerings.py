@@ -44,13 +44,15 @@ class Probe:
         self._thread = threading.Thread(target=self._ask, args=(runner, argv, cwd, env), name="offers", daemon=True)
         self._thread.start()
 
-    def result(self) -> AgentOffer:
-        """Wait for the runtime's answer.
+    def result(self, *, timeout: float) -> AgentOffer:
+        """Wait at most `timeout` seconds for the runtime's answer.
 
         Returns:
-            What the agent is offered, as `offered` says it.
+            What the agent is offered, as `offered` says it; only `error` set when the runtime has not answered yet.
         """
-        self._thread.join()
+        self._thread.join(timeout)
+        if self._thread.is_alive():
+            return AgentOffer("", error=f"the runtime had not answered {timeout:g} seconds after the run ended")
         return self._found
 
     def _ask(self, runner: procs.Runner, argv: Sequence[str], cwd: Path, env: Mapping[str, str]) -> None:

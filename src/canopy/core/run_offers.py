@@ -8,6 +8,7 @@ used or not. So each run's own is recorded beside its tools, by `probing` the ru
 from __future__ import annotations
 
 import contextlib
+import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
@@ -15,14 +16,16 @@ from canopy.core import db, records, sql
 from canopy.runtime import offerings
 
 if TYPE_CHECKING:
-    import sqlite3
     from collections.abc import Iterator, Mapping, Sequence
     from pathlib import Path
 
     from canopy.core.run_models import RunTable
-    from canopy.infra import procs
+    from canopy.infra import logs, procs
     from canopy.runtime.agents import AgentOffer
 
+#: How long a run that has ended waits for the runtime to say what it was offered: the ask started with the run, so
+#: only a run shorter than the ask waits at all.
+WAIT_SECONDS = 60
 # The rows of one run, by its table and id.
 _RUN: Final = "run_table = ? AND run_id = ?"
 
@@ -46,17 +49,23 @@ def probing(
     *,
     cwd: Path,
     env: Mapping[str, str],
+    log: logs.TickAdapter,
 ) -> Iterator[None]:
     """Ask the runtime what the agent `argv` starts is offered while the block runs it, and record the answer after.
 
     The runtime is asked on a thread of its own, started as `argv` starts it, in `cwd` with `env`, so the agent does not
-    wait on it. Leaving the block waits for the answer, then records it on the run, also when the block raises.
+    wait on it. Leaving the block, also by raising, waits for the answer at most `WAIT_SECONDS` and records it on the
+    run. The record is the run's least concern: a journal write that fails is logged, never raised over the run's own
+    outcome.
     """
     probe = offerings.Probe(runner, argv, cwd=cwd, env=env)
     try:
         yield
     finally:
-        record(conn, table, run_id, probe.result())
+        try:
+            record(conn, table, run_id, probe.result(timeout=WAIT_SECONDS))
+        except sqlite3.Error:
+            log.exception("could not record what the run was offered", extra={"run_table": table, "run_id": run_id})
 
 
 def record(conn: sqlite3.Connection, table: RunTable, run_id: int, offer: AgentOffer) -> None:
