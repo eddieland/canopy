@@ -496,7 +496,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await settled(page)
     await page.getByTestId('chore-run-2').getByRole('link', { name: 'chore:deps#2' }).click()
     await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps#2')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps#2 Dependency advisories')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chores' })).toHaveAttribute(
         'data-status',
         'active',
