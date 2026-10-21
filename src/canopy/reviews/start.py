@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, pools, prompts, review_requests
+from canopy.core import contract, db, notice, outbox, personas, pools, prompts, review_requests
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
@@ -45,13 +45,17 @@ _DAY = timedelta(hours=24)
 
 
 class Refusal(Exception):  # noqa: N818  (an outcome the overseer is told about, not an error)
-    """A guard refused the review. `guard` names it in the `refused:<guard>` decision."""
+    """A guard refused the review. `guard` names it in the `refused:<guard>` decision.
 
-    def __init__(self, guard: str, reason: str) -> None:
-        """Name the guard and say why it refused."""
+    `attention` names the attention item the refusal raises, if any: one only the operator can clear.
+    """
+
+    def __init__(self, guard: str, reason: str, *, attention: str | None = None) -> None:
+        """Name the guard and say why it refused, and the attention item the refusal raises, if any."""
         super().__init__(f"{guard}: {reason}")
         self.guard = guard
         self.reason = reason
+        self.attention = attention
 
 
 @dataclass(frozen=True)
@@ -118,7 +122,9 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     """
     planned = db.decisions_for_tick(ctx.conn, tick_id)
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        return _guard(ctx, request, planned=planned)
+        repo = _guard(ctx, request, planned=planned)
+        _persona(ctx)
+        return repo
 
 
 def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) -> Started:
@@ -133,6 +139,8 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request)
+        # Fixed before the run is recorded, so a persona that cannot be used costs the PR none of its reviews.
+        persona = _persona(ctx)
         attempt = len(db.review_runs_of(ctx.conn, request.pr)) + 1
         run_id = db.insert_review_run(
             ctx.conn,
@@ -143,6 +151,8 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             repo=repo,
             purpose=_purpose(ctx.conn, request),
             logs_dir=reviews_dir(ctx),
+            persona=persona.name,
+            persona_digest=persona.digest,
         )
         pool = ctx.pool(repo)
         try:
@@ -160,11 +170,26 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             pool=ctx.config.pools.backend,
         )
         try:
-            return _spawn(ctx, run_id, request, lease, attempt=attempt, context=context)
+            return _spawn(ctx, run_id, request, lease, attempt=attempt, context=context, persona=persona)
         except BaseException:
             with contextlib.suppress(pools.PoolError):
                 pool.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
             raise
+
+
+def _persona(ctx: Context) -> personas.Persona:
+    """Return the reviewer's persona, `[personas]`'s, read now (DESIGN §31). It is never fallen back from.
+
+    Returns:
+        The persona.
+
+    Raises:
+        Refusal: `persona_missing` or `bad_persona`, with its attention item, as a worker's dispatch refuses.
+    """
+    try:
+        return personas.chosen(ctx.config, "reviewer")
+    except personas.PersonaError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
 def _purpose(conn: sqlite3.Connection, request: Request) -> str:
@@ -179,7 +204,14 @@ def _purpose(conn: sqlite3.Connection, request: Request) -> str:
 
 
 def _spawn(
-    ctx: Context, run_id: int, request: Request, lease: pools.Lease, *, attempt: int, context: str | None
+    ctx: Context,
+    run_id: int,
+    request: Request,
+    lease: pools.Lease,
+    *,
+    attempt: int,
+    context: str | None,
+    persona: personas.Persona,
 ) -> Started:
     cfg = ctx.config
     values = {
@@ -206,6 +238,7 @@ def _spawn(
             notice=notice.for_prompt(ctx.conn),
             notes=_notes(ctx.conn, run),
             previous=findings.for_reviewer(ctx.conn, request.pr, before=run_id),
+            persona=persona,
         )
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.

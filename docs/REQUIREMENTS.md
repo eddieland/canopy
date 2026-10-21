@@ -303,12 +303,14 @@ and spend should split by model, so that the canary can be compared.
 
 ### R24. Personas for planning, reviews, and implementation
 
-Planned (M60, §31). Written down 2026-10-19. The operator wants to give planning, reviews, or implementation a flair of
-its own by choosing a persona for the planner, the reviewer, or the workers: a short file of voice and emphasis, chosen
-by the operator alone, by default for each agent and per ticket. A default persona holds canopy's standard personality,
-taken out of the shipped prompts, so a chosen one replaces that voice rather than competing with it. A persona changes
-how an agent writes and what it weighs, never a guard, a contract, or a model. canopy ships a few, and the operator
-adds or shadows them in private config. Each run records which persona it had, so personas can be compared.
+Partial (M60, §31): the default persona, the shipped ones, and a persona per agent in private config are built; the
+override per ticket is planned. Written down 2026-10-19. The operator wants to give planning, reviews, or implementation
+a flair of its own by choosing a persona for the planner, the reviewer, or the workers: a short file of voice and
+emphasis, chosen by the operator alone, by default for each agent and per ticket. A default persona holds canopy's
+standard personality, taken out of the shipped prompts, so a chosen one replaces that voice rather than competing with
+it. A persona changes how an agent writes and what it weighs, never a guard, a contract, or a model. canopy ships a few,
+and the operator adds or shadows them in private config. Each run records which persona it had, so personas can be
+compared.
 
 ## Nice to have
 

@@ -185,6 +185,16 @@ Controls:
   ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers are
   sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal, as it
   could a `notices` row.
+- Personas (DESIGN §31, ROADMAP M60) are operator text, as the standing instructions are: a short file of voice and
+  emphasis in every planner's, reviewer's, or worker's prompt it reaches, below the prompt's obligations, which the
+  prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), and supplies one, in
+  `paths.personas`, also private, or among the files canopy ships; the overseer, a dispatch, ticket text, and labels
+  choose none, so no ticket can steer its own review toward a lenient reviewer. A persona changes how an agent writes
+  and where it looks hardest, never a guard, the result contract, the tools a definition allows, or what makes a
+  review's verdict: the harness validates every result as before. Its file is bounded at 4 KiB and refuses the
+  characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
+  its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
+  a run in canopy's own voice.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -381,7 +391,8 @@ but must be distinguishable:
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
-  loop did and why.
+  loop did and why. Each worker run and review records the persona it ran in (DESIGN §31), by name and a digest of its
+  text as the prompt carried it, so a persona edited between runs splits them.
 - canopy's reviews post nothing the operator has not published (D114). A review of a PR the loop does not own may
   be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
   hash, unmarked, as one comment review on the commit the review read, which approves nothing and resolves no thread.
@@ -517,8 +528,8 @@ workspace's private file, `.canopy/config.toml` under its root. A workspace may 
 shares with a team, so anyone who can push there can change that file, and a checkout of an unreviewed branch of it
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, `notify.cmd`, chores, the review query,
-prompt paths, capacity, queue labels, authorized repliers, or agent memory's tiers, one commit would be enough to run
-commands on operators' machines, raise their spend, or pick who steers their workers.
+prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, or the agents' personas, one commit
+would be enough to run commands on operators' machines, raise their spend, or pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
