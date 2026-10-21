@@ -10,20 +10,19 @@ one database that holds every project's sessions, so any directory finds it. One
 Its stdout is captured through a file, not a pipe. With stderr a pipe too, OpenCode exits having written only what a
 pipe's buffer holds, 64 KiB, and most sessions' exports are longer.
 
-A plugin OpenCode loads may print to stdout too, before the export or after it, and the operator may not be free to
-remove it. The export starts a line, so each line that starts with `{` is read as the start of one JSON value, and the
-first that holds an export is the export.
+A plugin OpenCode loads may print to stdout too, before the export or after it: each line that starts with `{` is read
+as the start of one JSON value, and the first that holds an export is the export (`printed`).
 """
 
 from __future__ import annotations
 
-import json
 import re
 from typing import TYPE_CHECKING, Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from canopy.infra import procs
+from canopy.runtime.opencode import printed as printed_json
 from canopy.runtime.report import MAX_COST_USD, MAX_MODEL_NAME, MAX_MODELS, OTHER_MODELS, ModelUse, SessionModels
 
 if TYPE_CHECKING:
@@ -76,7 +75,7 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
         return SessionModels("failed", error=str(e))
     if printed is None:
         return SessionModels("missing")
-    exported = _parse(printed)
+    exported = printed_json.among(printed, _OBJECT_RE, _Export.model_validate_json)
     if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
     return SessionModels("found", _models(exported.messages))
@@ -105,23 +104,6 @@ def _export(runner: procs.Runner, cwd: Path, session_id: str) -> str | None:
     if NOT_FOUND in result.stderr:
         return None
     raise _FailedError(f"`{COMMAND}` exited {result.returncode}")
-
-
-# The export among what else OpenCode's plugins printed, or None when none of it is one. Not the errors: they quote
-# what was printed.
-def _parse(printed: str) -> _Export | None:
-    try:
-        return _Export.model_validate_json(printed)
-    except ValidationError:
-        pass
-    decoder = json.JSONDecoder()
-    for start in _OBJECT_RE.finditer(printed):
-        try:
-            _, end = decoder.raw_decode(printed, start.start())
-            return _Export.model_validate_json(printed[start.start() : end])
-        except (json.JSONDecodeError, ValidationError):
-            continue
-    return None
 
 
 def _models(messages: tuple[_Message, ...]) -> tuple[ModelUse, ...]:
