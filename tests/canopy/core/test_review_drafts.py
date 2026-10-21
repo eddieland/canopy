@@ -313,9 +313,19 @@ class Stops(procs.SubprocessRunner):
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
     ) -> procs.Result:
         if self.posts:
-            super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line)
+            super().run(
+                args,
+                cwd=cwd,
+                env=env,
+                stdin=stdin,
+                timeout=timeout,
+                on_start=on_start,
+                on_line=on_line,
+                stdout_to_file=stdout_to_file,
+            )
         raise self.error
 
 

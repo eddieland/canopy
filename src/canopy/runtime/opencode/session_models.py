@@ -5,6 +5,9 @@ output, and paths redacted. Each assistant message names the provider and model 
 those are read. OpenCode looks a session up by its id alone, in the one database that holds every project's sessions,
 so any directory finds it. One it does not have it names on stderr, `Session not found: ID`, and exits 1.
 
+Its stdout is captured through a file, not a pipe. With stderr a pipe too, OpenCode exits having written only what a
+pipe's buffer holds, 64 KiB, and most sessions' exports are longer.
+
 A plugin OpenCode loads may print to stdout too, before the export or after it, and the operator may not be free to
 remove it. The export starts a line, so each line that starts with `{` is read as the start of one JSON value, and the
 first that holds an export is the export.
@@ -85,7 +88,8 @@ def _export(runner: procs.Runner, cwd: Path, session_id: str) -> str | None:
         # Read as an option, not the session: no session OpenCode names starts so.
         raise _FailedError("not a session id OpenCode names")
     try:
-        result = runner.run(["opencode", "export", session_id, "--sanitize"], cwd=cwd, timeout=TIMEOUT_SECONDS)
+        argv = ["opencode", "export", session_id, "--sanitize"]
+        result = runner.run(argv, cwd=cwd, timeout=TIMEOUT_SECONDS, stdout_to_file=True)
     except procs.CommandNotFoundError:
         raise _FailedError("opencode is not on PATH") from None
     except procs.ProcError as e:

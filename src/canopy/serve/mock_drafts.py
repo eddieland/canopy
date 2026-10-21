@@ -249,6 +249,7 @@ class GitHub(procs.SubprocessRunner):
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
     ) -> procs.Result:
         """Answer for `canopy-connect-github` and `canopy-post-github`; run anything else. See `procs.Runner.run`.
 
@@ -262,7 +263,16 @@ class GitHub(procs.SubprocessRunner):
             printed = _post(stdin or "{}")
             self._hold_staged(json.loads(stdin or "{}"), printed)
             return procs.Result(tuple(args), 0, printed, "")
-        return super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line)
+        return super().run(
+            args,
+            cwd=cwd,
+            env=env,
+            stdin=stdin,
+            timeout=timeout,
+            on_start=on_start,
+            on_line=on_line,
+            stdout_to_file=stdout_to_file,
+        )
 
     def _hold_staged(self, request: Mapping[str, object], printed: str) -> None:
         """Keep a staged review where the reader reads it, pending under the operator's login, as GitHub would."""
