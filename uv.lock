@@ -121,6 +121,12 @@ source = { editable = "packages/canopy-github" }
 [[package]]
 name = "canopy-jira"
 source = { editable = "packages/canopy-jira" }
+dependencies = [
+    { name = "click" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
 
 [[package]]
 name = "canopy-notify-slack"

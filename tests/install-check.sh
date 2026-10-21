@@ -45,7 +45,8 @@ done
 for program in canopy-connect-github canopy-post-github canopy-connect-jira; do
     [ "$(command -v "$program")" = "$UV_TOOL_BIN_DIR/$program" ] || fail "$program was not installed with canopy"
     usage=$("$program" --help </dev/null) || fail "$program --help failed"
-    echo "$usage" | grep -q "^usage: $program" || fail "$program --help did not print its usage"
+    # argparse's usage line or click's, which capitalizes it.
+    echo "$usage" | grep -qi "^usage: $program" || fail "$program --help did not print its usage"
 done
 # The sandbox wrapper too (DESIGN §24). It refuses to run without a role, naming itself.
 [ "$(command -v canopy-sandbox)" = "$UV_TOOL_BIN_DIR/canopy-sandbox" ] || fail "canopy-sandbox was not installed"

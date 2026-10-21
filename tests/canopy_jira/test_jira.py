@@ -683,10 +683,23 @@ def test_help_never_reads_stdin(capsys: pytest.CaptureFixture[str]) -> None:
         def read(self, size: int | None = -1, /) -> str:
             raise AssertionError("read stdin")
 
-    with pytest.raises(SystemExit) as exit_:
-        connect.run(["--help"], Unread(), io.StringIO())
-    assert exit_.value.code == 0
-    assert "usage: canopy-connect-jira" in capsys.readouterr().out
+    for flag in ("--help", "-h"):
+        assert connect.run([flag], Unread(), io.StringIO()) == 0
+        printed = capsys.readouterr().out
+        assert printed.startswith("Usage: canopy-connect-jira [OPTIONS]")
+        assert "--credentials-file" in printed
+
+
+def test_a_command_line_it_cannot_use_is_a_usage_error_and_sends_nothing(
+    jira: tuple[Jira, str], credentials: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake, url = jira
+    assert connect.run([], io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2
+    assert "Missing option '--site'" in capsys.readouterr().err
+    unknown = ["--site", "acme.atlassian.net", "--credentials-file", str(credentials), "--token", "x"]
+    assert connect.run(unknown, io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2
+    assert "No such option '--token'" in capsys.readouterr().err
+    assert not fake.seen
 
 
 # Jira's rich text

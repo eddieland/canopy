@@ -6,7 +6,7 @@ file of the operator's that nobody else can read, held to the Slack sink's check
 environment, or canopy's config. This module holds the site, the credentials, the client, and the reading of what
 Jira sends: its times and its rich text (Atlassian Document Format).
 
-Stdlib only, importing nothing from canopy.
+Stdlib and click (D025) only, importing nothing from canopy.
 """
 
 from __future__ import annotations

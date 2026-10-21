@@ -22,7 +22,6 @@ credentials file, or stdin is not usable, and nothing was read.
 
 from __future__ import annotations
 
-import argparse
 import itertools
 import operator
 import re
@@ -33,6 +32,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TextIO
+
+import click
 
 from canopy_jira import (
     Client,
@@ -83,37 +84,30 @@ class Request:
     tickets: Sequence[Asked]
 
 
-def run(argv: Sequence[str], stdin: TextIO, stdout: TextIO, *, endpoint_of: Endpoint = endpoint) -> int:
-    """Read what `stdin` names from the site `argv` names, and print what was read on `stdout`.
+@dataclass(frozen=True)
+class Io:
+    """What one run reads its request from, prints to, and sends the site's requests to: the process's, or a test's."""
 
-    `endpoint_of` maps the site's host to the base URL of its REST API.
+    stdin: TextIO
+    stdout: TextIO
+    #: The site's host, to the base URL of its REST API.
+    endpoint_of: Endpoint = endpoint
+
+
+def run(argv: Sequence[str], stdin: TextIO, stdout: TextIO, *, endpoint_of: Endpoint = endpoint) -> int:
+    """Run `canopy-connect-jira` with `argv`: read what `stdin` names, and print what was read on `stdout`.
 
     Returns:
-        The exit code: 0 everything read, 1 something was not, 2 nothing was read.
+        The exit code: 0 everything read, 1 something was not, 2 nothing was read or `argv` is not usable.
     """
-    parser = argparse.ArgumentParser(prog="canopy-connect-jira", description=__doc__.split("\n", 1)[0])
-    parser.add_argument("--site", required=True, help="your Jira Cloud site, such as acme.atlassian.net")
-    parser.add_argument(
-        "--credentials-file",
-        type=Path,
-        default=None,
-        help=f"one line, EMAIL:API_TOKEN, readable by you alone; default: {default_credentials_file()}",
-    )
-    args = parser.parse_args(argv)
     try:
-        host = parse_site(args.site)
-        request = _request(read_input(stdin))
-        email, token = read_credentials(args.credentials_file or default_credentials_file())
-    except InputError as e:
-        _say(str(e))
-        return 2
-    reader = _Reader(Client(endpoint_of(host), email, token), stdout)
-    query = reader.read(request)
-    end: dict[str, object] = {"kind": "end", "tickets": reader.whole}
-    if query is not None:
-        end["query"] = query
-    emit(stdout, end)
-    return 1 if reader.failed else 0
+        found = command.main(
+            args=list(argv), prog_name="canopy-connect-jira", standalone_mode=False, obj=Io(stdin, stdout, endpoint_of)
+        )
+    except click.ClickException as e:
+        e.show()
+        return e.exit_code
+    return found if isinstance(found, int) else 0
 
 
 def main() -> int:
@@ -123,6 +117,37 @@ def main() -> int:
         The exit code.
     """
     return run(sys.argv[1:], sys.stdin, sys.stdout)
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--site", required=True, help="Your Jira Cloud site, such as acme.atlassian.net.")
+@click.option(
+    "--credentials-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help=f"One line, EMAIL:API_TOKEN, readable by you alone. Default: {default_credentials_file()}",
+)
+@click.pass_context
+def command(ctx: click.Context, site: str, credentials_file: Path | None) -> None:
+    """Read Jira Cloud's tickets into canopy's journal: canopy's tracker source for Jira (DESIGN §30).
+
+    The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
+    """
+    io = ctx.find_object(Io) or Io(sys.stdin, sys.stdout)
+    try:
+        host = parse_site(site)
+        request = _request(read_input(io.stdin))
+        email, token = read_credentials(credentials_file or default_credentials_file())
+    except InputError as e:
+        _say(str(e))
+        ctx.exit(2)
+    reader = _Reader(Client(io.endpoint_of(host), email, token), io.stdout)
+    query = reader.read(request)
+    end: dict[str, object] = {"kind": "end", "tickets": reader.whole}
+    if query is not None:
+        end["query"] = query
+    emit(io.stdout, end)
+    ctx.exit(1 if reader.failed else 0)
 
 
 def _request(raw: Mapping[str, object]) -> Request:
@@ -473,4 +498,4 @@ def _chunks[T](values: Sequence[T], size: int) -> Iterator[Sequence[T]]:
 
 
 def _say(message: str) -> None:
-    print(f"canopy-connect-jira: {message}", file=sys.stderr)  # noqa: T201
+    click.echo(f"canopy-connect-jira: {message}", err=True)
