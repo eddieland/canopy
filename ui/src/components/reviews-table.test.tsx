@@ -18,6 +18,7 @@ const REVIEW: ReviewSummary = {
     repo: 'web',
     sha: '3f9c2a1b7d0e',
     ticket_key: 'ABC-101',
+    title: null,
     state: 'done',
     status: 'ok',
     verdict: 'findings',

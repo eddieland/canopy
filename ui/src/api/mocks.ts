@@ -119,6 +119,7 @@ export const mockReviews: ReviewSummary[] = [
         pr_url: 'https://github.com/acme/web/pull/91',
         sha: '9b1d4e7c2a30',
         ticket_key: 'ABC-103',
+        title: 'ABC-103: move billing to v2 and drop the v1 client',
         repo: 'web',
         status: 'running',
         state: 'running',
@@ -139,6 +140,7 @@ export const mockReviews: ReviewSummary[] = [
 export const mockChores: ChoreSummary[] = [
     {
         name: 'deps',
+        title: 'Dependency advisories',
         every_minutes: 360,
         days: ['mon', 'tue', 'wed', 'thu', 'fri'],
         hours: '08:00-18:00',

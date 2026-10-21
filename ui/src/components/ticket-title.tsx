@@ -2,9 +2,9 @@ import { Clipped } from '@/components/tip'
 import { cn } from '@/lib/utils'
 
 /**
- * A ticket's title, as the overseer named it (DESIGN §7): one line in medium weight, so it reads as the row's name
- * beside the key and apart from what a run said, cut to fit with the whole in a `Tip` while it is cut. A ticket with
- * none yet says `untitled`, muted, so its cell is never blank.
+ * A ticket's title, as the overseer named it (DESIGN §7), or a PR's or a chore's: one line in medium weight, so it
+ * reads as the row's name beside the key and apart from what a run said, cut to fit with the whole in a `Tip` while it
+ * is cut. A subject with none yet says `untitled`, muted, so its cell is never blank.
  */
 export function TicketTitle({ title, className }: { title: string | null; className?: string }) {
     if (title === null) {

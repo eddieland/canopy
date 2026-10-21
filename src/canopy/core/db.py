@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Generator, Iterable, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -548,6 +548,18 @@ def set_pr_title(conn: sqlite3.Connection, pr_url: str, title: str) -> None:
             "(pr_url) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at",
         ),
     )
+
+
+def pr_titles(conn: sqlite3.Connection, pr_urls: Collection[str]) -> dict[str, str]:
+    """Return the own title recorded for each of `pr_urls` that has one, by URL."""
+    query = sql.select("pr_url, title").from_("pr_titles").where_in("pr_url", pr_urls)
+    return {str(r[0]): str(r[1]) for r in sql.execute(conn, query)}
+
+
+def ticket_titles(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, str]:
+    """Return the title of each of tickets `keys` the overseer has named, by key."""
+    query = sql.select("key, title").from_("tickets").where_in("key", keys).where("title IS NOT NULL")
+    return {str(r[0]): str(r[1]) for r in sql.execute(conn, query)}
 
 
 def units(conn: sqlite3.Connection, key: str) -> list[records.TicketUnit]:
