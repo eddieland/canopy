@@ -66,7 +66,9 @@ guards, and a refusal is a decision, as every guard's is (§8):
   block left out for its bound; else `unobserved`.
 - A dispatch is refused `stale` while a subject it rests on is stale: a public ticket, a stacked dispatch's blocker's
   PR (§10), and the PR of each unit a `resume` names. A private ticket, which its start record authorizes (§22), a
-  chore, a review, and an unobserved subject are not refused, and an unobserved one's claims stay claims.
+  chore, a review, and an unobserved subject are not refused, and an unobserved one's claims stay claims. A subject
+  whose source keeps failing stays refused until the source recovers, and the operator sees each refusal as a decision
+  (§30, Open).
 
 Principle 1's "before any action that matters, re-read live state" becomes "observed within `connect.max_age_minutes`,
 or no dispatch". The default keeps what step 3 read fresh through the tick's dispatches (§30).
@@ -76,12 +78,10 @@ or no dispatch". The default keeps what step 3 read fresh through the tick's dis
 Each comment, review, review comment, and check run takes the next journal number when a source first observes it, and
 keeps it across later reads of its subject; a canopy review run takes one when it ends. A cursor is such a number, and
 "newer than the cursor" means first observed after it: one order for every kind, so the `review` cursor needs no time
-form (§7). Rejected: the source's ids, which no tracker promises to order, and times, which a pending review's
-submission backdates.
+form (§7). Rejected: the source's ids, which no tracker orders, and times, which a late submission backdates.
 
-CI is observed by head, context, and run, so a re-run at the same head is seen, which resolving a check held for a
-notice needs (§8). A `resume` for `ci` alone is refused `handled` unless it has a failure at a head and context where
-no failure is behind the cursor: a re-run that fails again at the same head is not a new reason (PRIOR_ART, CI newness).
+CI is observed by head, context, and run, so a re-run at the same head is seen (§8). A `resume` for `ci` alone is
+refused `handled` when its only failure repeats one at the same head and context (PRIOR_ART, CI newness).
 
 ### Comments reach the conversation in code
 

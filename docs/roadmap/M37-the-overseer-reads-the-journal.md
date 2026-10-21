@@ -57,17 +57,6 @@ Accept: the tests above pass, and the design (§35) is folded into the sections 
 (MEASUREMENTS) with tool-result tokens per tick at a tenth of the first day's median (about 14k), no MCP call on a tick
 whose observations are fresh, and no action missed over a day, checked against the derivation as in M36.
 
-Status: in progress. Designed 2026-10-21 (DESIGN §35); building waits on M36's measurement and M48's stage 2 check. The
-design settles what the sketch left open: a ticket the query returned that is not a candidate reaches the overseer by
-key only, closing TRUST_MODEL T7's widened-query residual; a candidate's body is in the block until its first unit; the
-query's result replaces the query, so `canopy_queried` is owed only when no source read it; a subject no source covers
-is `unobserved`, keeps today's live read and claims, and is never refused `stale`; a stale subject's live read can mark
-done or raise attention, never dispatch; a `reply` or `review` claim is the cursor the dispatch carries, and an
-untrusted review item needs an operator message after it, carried in the same dispatch; a cursor never passes an item
-the block left out; the journal number is taken at first observation, so a pending review submitted late is still new;
-a `ci` resume is refused `handled` on a red-to-red re-run at the same head, while a held check, never handled, stays
-new; observed comments go into the conversation in code, every one; and the `vcs` request names review requests' PRs.
-Open for the operator: whether a tracker with no connector keeps the live-read procedure, with its provider skill,
-mirror, and label claim, or a `tracker` source is required (recommended: required; the two shipped cover the
-operator's trackers, and the contract is a page of Python for another); and how many new items a subject shows before
-the rest are counted.
+Status: not started. Designed 2026-10-21 (DESIGN §35); the build waits on M36's measurement and M48's stage 2 check.
+Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
+required (recommended: required), and how many new items a subject shows before the rest are counted.
