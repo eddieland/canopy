@@ -161,8 +161,8 @@ cmd = ""
 #                                               # it replaces the whole address, so add base_path if you set one
 
 # Optional: the programs canopy reads GitHub with and posts your approved replies through (DESIGN §29). Unset, the
-# vcs source is canopy's own, which use the token `gh` holds for each PR's host. A tracker source with a post_cmd
-# lets canopy post a ticket's drafts too, as for GitHub Issues.
+# vcs source is canopy's own, which use the token `gh` holds for each PR's and repository's host. A tracker source
+# with a post_cmd lets canopy post a ticket's drafts too, as for GitHub Issues.
 # [connect.sources.github]
 # kind = "vcs"
 # cmd = "canopy-connect-github"
