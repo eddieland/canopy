@@ -549,8 +549,9 @@ class InProcess:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
         on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
     ) -> procs.Result:
-        del cwd, env, timeout, on_start
+        del cwd, env, timeout, on_start, stdout_to_file
         assert args[0] == "canopy-connect-jira"
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stderr(err):
