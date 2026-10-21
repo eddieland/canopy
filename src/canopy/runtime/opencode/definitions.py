@@ -1,7 +1,8 @@
 """canopy's agent definitions in OpenCode's format (DESIGN §13): the bundled files, and what is rendered into them.
 
 canopy ships its agents and skills as OpenCode reads them from a config directory, `agents/<name>.md` and
-`skills/<name>/SKILL.md`. Each agent is a Markdown file whose frontmatter holds its permission rules. What canopy
+`skills/<name>/SKILL.md`, and its plugins beside them, `plugins/<name>.js`: the clock that tells a running agent the
+minutes left (DESIGN §33). Each agent is a Markdown file whose frontmatter holds its permission rules. What canopy
 decides from config, what each agent may do (`canopy.runtime.agents.Rules`), `render` writes at the lines the shipped
 files mark for it:
 
@@ -41,9 +42,10 @@ if TYPE_CHECKING:
 
     from canopy.runtime.agents import McpTools, Rules
 
-#: The directories of a config directory OpenCode reads agents and skills from.
+#: The directories of a config directory OpenCode reads agents, skills, and plugins from.
 AGENTS_SUBDIR = "agents"
 SKILLS_SUBDIR = "skills"
+PLUGINS_SUBDIR = "plugins"
 
 #: A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
 #: rendered into definitions, so nothing else may reach them.
@@ -133,9 +135,13 @@ def agent_names() -> list[str]:
 
 
 def bundled() -> dict[str, bytes]:
-    """Return the bundled agents and skills as a config directory holds them, by relative path, unrendered."""
+    """Return the bundled agents, skills, and plugins as a config directory holds them, by relative path, unrendered."""
     found: dict[str, bytes] = {}
-    for name, root in ((AGENTS_SUBDIR, resources.agents_dir()), (SKILLS_SUBDIR, resources.skills_dir())):
+    for name, root in (
+        (AGENTS_SUBDIR, resources.agents_dir()),
+        (SKILLS_SUBDIR, resources.skills_dir()),
+        (PLUGINS_SUBDIR, resources.plugins_dir()),
+    ):
         for path in _files(root):
             found[f"{name}/{path.relative_to(root).as_posix()}"] = path.read_bytes()
     return found

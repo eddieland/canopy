@@ -78,7 +78,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
   not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts, `actionlint` the GitHub workflows, and
   `zizmor` their security: every action is pinned to a commit, and a finding it allows is ignored inline with a reason.
-  All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
+  All are dev dependencies, so `uv sync` installs them and `make lint` runs them. `make lint` also type-checks the
+  agent plugin's JSDoc with `tsc`, from npm packages in `tests/plugins`, so it needs Node 22.12+ and npm, as `ui/` does.
 - ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
   module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
   Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow `select`.

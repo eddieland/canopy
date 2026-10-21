@@ -15,12 +15,15 @@ READS_MARKER = "  # canopy: tracker reads\n"
 TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER]
 
 
-def test_the_bundled_files_are_the_agents_and_skills_by_their_place_in_a_config_directory() -> None:
+def test_the_bundled_files_are_the_agents_skills_and_plugins_by_their_place_in_a_config_directory() -> None:
     files = definitions.bundled()
     for name in definitions.agent_names():
         assert files[f"agents/{name}.md"] == (resources.agents_dir() / f"{name}.md").read_bytes()
     for skill in resources.skills_dir().iterdir():
         assert files[f"skills/{skill.name}/SKILL.md"] == (skill / "SKILL.md").read_bytes()
+    # OpenCode loads a config directory's `plugins/*.js` (DESIGN §33).
+    assert files["plugins/canopy.js"] == (resources.plugins_dir() / "canopy.js").read_bytes()
+    assert [rel for rel in files if rel.startswith("plugins/")] == ["plugins/canopy.js"]
     assert agents.WORKER in definitions.agent_names()
     assert agents.OVERSEER in definitions.agent_names()
 

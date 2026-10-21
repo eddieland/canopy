@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
+.PHONY: test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
@@ -23,7 +23,8 @@ fmt: ui-fmt ## Run autoformatters (ruff imports and trailing commas, ruff format
 
 # ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
 # zizmor runs offline, so the lint needs no GitHub token and gives the same answer on every machine.
-lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, ec, shellcheck, actionlint, zizmor)
+# tsc checks the JSDoc types of the plugin canopy ships for its agents against the pinned runtime's own (tests/plugins).
+lint: tests/plugins/node_modules ## Lint and type check: ruff, pyrefly, rumdl, ec, shellcheck, actionlint, zizmor, tsc
 	uv run ruff format --check .
 	uv run ruff check .
 	uv run pyrefly check
@@ -32,6 +33,7 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, ec, shel
 	uv run shellcheck $$(git ls-files '*.sh')
 	uv run actionlint
 	uv run zizmor --offline --quiet .
+	npm --prefix tests/plugins exec -- tsc -p tests/plugins
 
 # One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial.
 # A test still running after a minute (the slowest takes ~10s) is hung: faulthandler dumps every thread's stack and
@@ -40,8 +42,17 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, ec, shel
 # COVERAGE=1 also measures coverage and writes coverage.xml, which is how CI's `make check` feeds Codecov.
 PYTEST := uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
 
-test: ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml)
+test: test-plugin ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml)
 	$(PYTEST) $(if $(COVERAGE),--cov --cov-report=xml)
+
+# The plugin canopy ships in its agents' snapshot is plain JavaScript (DESIGN §33), tested with Node's own runner and
+# type-checked by `lint` with the dev-only packages in tests/plugins. The rest of the JavaScript, ui/, is ui-check's.
+tests/plugins/node_modules: tests/plugins/package.json tests/plugins/package-lock.json
+	npm --prefix tests/plugins ci --no-audit --no-fund
+	@touch $@
+
+test-plugin: ## Run the tests of the agent runtime plugin canopy ships (needs Node 22.12+)
+	node --test 'tests/plugins/*.test.mjs'
 
 # Coverage settings live in pyproject.toml ([tool.coverage]). Open htmlcov/index.html for the lines a test never ran.
 coverage: ## Run all tests measuring coverage: a summary, htmlcov/, and coverage.xml

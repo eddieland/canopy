@@ -6,6 +6,7 @@ import signal
 import sys
 import time
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
@@ -395,6 +396,30 @@ def test_a_removed_variable_reaches_no_child_whatever_gives_it(tmp_path: Path) -
         assert "CANOPY_KEPT=1" in lines
         assert not [line for line in lines if line.startswith("CANOPY_GONE=")]
     assert "CANOPY_GONE=inherited" in kept.splitlines()
+
+
+@pytest.mark.parametrize("on_line", [None, print], ids=["captured", "streamed"])
+def test_a_child_with_a_timeout_learns_its_deadline_from_the_clock_that_kills_it(
+    on_line: Callable[[str], None] | None,
+) -> None:
+    # Whatever the inherited environment or `env` says: the deadline is the timeout's (DESIGN §33).
+    with mock.patch.dict(os.environ, {procs.DEADLINE_ENV: "1"}):
+        before = time.time()
+        printed = SubprocessRunner().run(["env"], env={procs.DEADLINE_ENV: "2"}, timeout=600, on_line=on_line).stdout
+        after = time.time()
+    [deadline] = [int(line.split("=", 1)[1]) for line in printed.splitlines() if line.startswith("CANOPY_DEADLINE=")]
+    assert int(before) + 600 <= deadline <= after + 600
+
+
+def test_a_child_without_a_timeout_gets_no_deadline_not_even_its_parents(tmp_path: Path) -> None:
+    with mock.patch.dict(os.environ, {procs.DEADLINE_ENV: "1"}):
+        printed = [
+            SubprocessRunner().run(["env"]).stdout,
+            SubprocessRunner().run(["env"], env={procs.DEADLINE_ENV: "2"}).stdout,
+            *(spawned_output(SubprocessRunner(reparent=r), tmp_path) for r in (False, True)),
+        ]
+    for output in printed:
+        assert not [line for line in output.splitlines() if line.startswith("CANOPY_DEADLINE=")]
 
 
 def test_a_reparented_child_is_never_the_spawners_descendant(tmp_path: Path) -> None:
