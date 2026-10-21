@@ -727,6 +727,8 @@ def insert_run(
     reasons: Sequence[str] = (),
     rendered: Callable[[int], None] | None = None,
     feedback_plan_id: int | None = None,
+    persona: str | None = None,
+    persona_digest: str | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -739,6 +741,8 @@ def insert_run(
     `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
     `feedback_plan_id` is the approved feedback plan a `resume` follows in place of a ticket's plan (DESIGN §32).
+    `persona` and `persona_digest` are the name and text digest of the persona its prompt carries, or None for a kind
+    no persona reaches (DESIGN §31).
 
     Returns:
         The new run's id.
@@ -757,6 +761,8 @@ def insert_run(
             private=int(private),
             plan_id=plan_id,
             feedback_plan_id=feedback_plan_id,
+            persona=persona,
+            persona_digest=persona_digest,
         )
         run_id = _rowid(sql.execute(conn, run))
         sql.execute(conn, sql.update("runs").set(log_path=str(runs_dir / f"{run_id}.log")).where("id = ?", run_id))
@@ -1205,11 +1211,14 @@ def insert_review_run(
     repo: str | None,
     purpose: str,
     logs_dir: Path,
+    persona: str | None = None,
+    persona_digest: str | None = None,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
     `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `request` for a PR the operator
-    asked for, `query` for a `review.query` match.
+    asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
+    persona its prompt carries (DESIGN §31).
 
     Returns:
         The new review run's id.
@@ -1225,6 +1234,8 @@ def insert_review_run(
             purpose=purpose,
             started_at=now(),
             log_path="",
+            persona=persona,
+            persona_digest=persona_digest,
         )
         run_id = _rowid(sql.execute(conn, run))
         log_path = str(logs_dir / f"{run_id}.log")

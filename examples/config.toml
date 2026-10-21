@@ -127,6 +127,16 @@ prompt_overrides = "~/.config/canopy/prompts"
 # run, after the chore's own prompt, such as "name a CI job by its workflow file". Each at most 4 KiB (DESIGN §12).
 # reviewer_instructions = "~/.config/canopy/reviewer-instructions.md"
 # chore_instructions = "~/.config/canopy/chore-instructions.md"
+# Optional: your own personas, each `<name>.md`, at most 4 KiB. One named as canopy's shadows it; `canopy personas`
+# lists them all (DESIGN §31).
+# personas = "~/.config/canopy/personas"
+
+# Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
+# whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).
+# [personas]
+# worker = "canopy"                             # every implement and resume; or "minimalist", "explainer"
+# planner = "canopy"                            # every plan; or "skeptic"
+# reviewer = "canopy"                           # every review; or "skeptic"
 
 [notify]
 # Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.

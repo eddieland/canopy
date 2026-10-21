@@ -451,7 +451,9 @@ def test_a_worker_records_the_session_and_cost_it_reported(scenario: Scenario, g
 
     out = scenario.operator("status").out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
-    assert f"\n    did it\n    session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  log {row['log_path']}\n" in out
+    # And the persona it ran in, by name and the start of its digest (DESIGN §31).
+    said = f"session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  persona canopy {row['persona_digest'][:12]}"
+    assert f"\n    did it\n    {said}  log {row['log_path']}\n" in out
 
 
 def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario: Scenario, git_pool: GitPool) -> None:
@@ -517,7 +519,8 @@ def test_a_worker_without_events_reports_no_session(scenario: Scenario, git_pool
     [said] = [line for line in out.splitlines() if line.startswith("    [2J")]
     assert said == "    [2Jcleared the screen and went on " + "x" * 123 + "..."
     assert len(said) == 4 + 160
-    assert f"\n    no session reported  log {run.row['log_path']}\n" in out
+    persona = f"persona canopy {run.row['persona_digest'][:12]}"
+    assert f"\n    no session reported  {persona}  log {run.row['log_path']}\n" in out
 
 
 def test_status_lists_recent_runs_newest_first(

@@ -6,8 +6,8 @@ chooses it. Sections are numbered across the whole design; the [README](README.m
 
 ## 31. Personas
 
-Built in part (REQUIREMENTS R24, ROADMAP M60): every run gets the shipped `canopy` persona, and choosing another is
-designed, not built.
+Built in part (REQUIREMENTS R24, ROADMAP M60): the operator chooses each agent's persona in config, and canopy ships a
+few; the override per ticket, and the web UI's control of it, are designed, not built.
 
 A persona is a short Markdown file of voice and emphasis: how an agent writes its plan, its PR, its findings, and its
 comments, and what it weighs most while it works. The operator wants to give planning, reviews, or implementation a
@@ -18,12 +18,13 @@ the ticket allows, without copying a prompt to get it (§12, Prompt overrides).
 
 - The planner, the reviewer, and the workers that implement and resume, public and private. Not the overseer, whose
   prompt is policy and is cached across ticks (§13), nor a chore, which writes verdicts rather than
-  prose a person reads.
+  prose a person reads, nor a feedback plan (§32), whose prompt carries none.
 - The prompt's obligations come before it, and the prompt says so, as it does before the standing instructions (§12).
   A persona changes how an agent writes and where it looks hardest. It never changes the authorization check, the
   result contract, commit attribution, the tools a definition allows, or what makes a review's verdict; the harness's
   guards and its validation of the result hold whatever a persona says.
-- One persona per run, bounded in size, so it cannot crowd out the task.
+- One persona per run, bounded in size, so it cannot crowd out the task, and refused if it holds a character that
+  hides text from the operator who reads it, as a lesson is (§28).
 
 ### canopy's own persona
 
@@ -49,9 +50,9 @@ workspace file can neither supply one nor choose one.
   `[personas]`, else `canopy`, fixed when the run starts. The override is set only by the operator, from
   `canopy persona` or the ticket's page, and refused inside an agent run (T1). The overseer, a dispatch, ticket text,
   and labels choose none.
-- **No silent fallback.** Setting a persona that names no file is refused, and a run whose persona's file is gone by
-  the time it starts is refused with an attention item, spending no attempt and leasing no slot. It never falls back
-  to `canopy`, since a run in a voice nobody chose would read as the chosen one's.
+- **No silent fallback.** Setting a persona that names no file is refused, and a run whose persona's file is gone, or
+  past its bounds, by the time it starts is refused with an attention item, spending no attempt and leasing no slot.
+  It never falls back to `canopy`, since a run in a voice nobody chose would read as the chosen one's.
 - **What is recorded is what ran.** Each run and review records its persona's name and a digest of its text, so the
   operator can compare one persona's work with another's, and a persona edited between runs splits them into before
   and after.

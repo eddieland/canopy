@@ -3978,6 +3978,16 @@ export type components = {
              *     or recorded it before canopy kept it.
              */
             peak_context: number | null;
+            /**
+             * Persona
+             * @description The persona it ran in (DESIGN §31); None for a review from before canopy recorded it.
+             */
+            persona: string | null;
+            /**
+             * Persona Digest
+             * @description The sha256 of the persona's text as its prompt carried it, in hex.
+             */
+            persona_digest: string | null;
             /** @description The review run, as the reviews list shows it. */
             review: components["schemas"]["ReviewSummary"];
             /**
@@ -4412,6 +4422,18 @@ export type components = {
              *     or recorded it before canopy kept it.
              */
             peak_context: number | null;
+            /**
+             * Persona
+             * @description The persona it ran in (DESIGN §31); None for a kind no persona reaches, or a run from before canopy recorded
+             *     it.
+             */
+            persona: string | null;
+            /**
+             * Persona Digest
+             * @description The sha256 of the persona's text as its prompt carried it, in hex: two runs with different digests had
+             *     different texts under one name.
+             */
+            persona_digest: string | null;
             /**
              * Private
              * @description Whether it works a ticket started in canopy, whose conversation never reaches the tracker.

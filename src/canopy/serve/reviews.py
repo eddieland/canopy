@@ -96,6 +96,8 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, ctx.workspace.root),
+        persona=row.persona,
+        persona_digest=row.persona_digest,
     )
 
 

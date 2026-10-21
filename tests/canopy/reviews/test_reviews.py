@@ -10,9 +10,10 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, records, review_diff, sql
+from canopy.core import conversation, db, definitions, personas, records, review_diff, sql
 from canopy.core import review_result as result
 from canopy.core.config import load
+from canopy.core.context import Context
 from canopy.core.vocab import ResumeReason, RunKind, SeenKind
 from canopy.infra import procs
 from canopy.loop import attention
@@ -27,6 +28,7 @@ from tests.canopy.helpers import (
     in_tick,
     lifelock_left,
     messages,
+    personas_dir,
     pool_statuses,
     present,
     tools_of,
@@ -35,6 +37,7 @@ from tests.canopy.helpers import (
 )
 from tests.canopy.review_helpers import CLEAN, FINDINGS, PR, head, review_decisions, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
+from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, GitPool, git
 
 
@@ -142,6 +145,36 @@ def test_reviewer_instructions_that_cannot_be_used_cost_the_pr_nothing(
     [(action, reason)] = scenario.refuses(reviews(head(git_pool)))
     assert action == "refused:bad_prompt"
     assert reason.startswith(f"cannot read reviewer instructions {path}: ")
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+
+
+def test_a_review_runs_in_the_reviewers_persona_and_records_it(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, ctx: Context
+) -> None:
+    # DESIGN §31: the reviewer's persona is the operator's choice in [personas], recorded on the run it reached.
+    scenario.configures(personas={"reviewer": "skeptic"})
+    skeptic = personas.load(load(reviewing.root, reviewing.user_file), "skeptic")
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert f"## Persona\n\n{skeptic.text}\n" in reviewed.prompt
+    assert (reviewed.row.persona, reviewed.row.persona_digest) == ("skeptic", skeptic.digest)
+    c, _ = signed_in_client(ctx)
+    got = c.get(f"/api/reviews/{reviewed.id}").json()
+    assert (got["persona"], got["persona_digest"]) == ("skeptic", skeptic.digest)
+
+
+def test_a_review_whose_persona_has_no_file_costs_the_pr_nothing_and_asks_the_operator(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, treehouse_state: Path
+) -> None:
+    yours = personas_dir(reviewing)
+    scenario.configures(personas={"reviewer": "lenient"})
+    reason = (
+        f"[personas] reviewer: persona lenient has no file in {yours} or among canopy's own: add it, or name one "
+        "`canopy personas` lists"
+    )
+    refused = scenario.refuses(reviews(head(git_pool), ticket="PROJ-1"))
+    assert refused == [("refused:persona_missing", reason), ("attention:persona_missing", reason)]
+    assert scenario.attention() == [("PROJ-1", "persona_missing")]
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     assert pool_statuses(treehouse_state) == ["available", "available"]
 

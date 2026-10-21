@@ -86,6 +86,11 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "overseer_instructions = '/tmp/x'"),
         ("paths", "reviewer_instructions = '/tmp/x'"),
         ("paths", "chore_instructions = '/tmp/x'"),
+        # A persona is instructions in every run it reaches, so a shared file neither supplies nor chooses one.
+        ("paths", "personas = '/tmp/x'"),
+        ("personas", "worker = 'canopy'"),
+        ("personas", "planner = 'skeptic'"),
+        ("personas", "reviewer = 'lenient'"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -94,6 +99,19 @@ def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, se
     canopy_env.append_shared(extra)
     with pytest.raises(ConfigError, match="is private"):
         load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("name", ["", "Skeptic", "skeptic.md", "../skeptic", "-x", "a" * 41])
+def test_a_persona_is_named_as_its_file_is(canopy_env: CanopyEnv, name: str) -> None:
+    canopy_env.append_user(f"\n[personas]\nreviewer = '{name}'\n")
+    with pytest.raises(ConfigError, match="must be lowercase words joined by hyphens, at most 40 characters"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_every_agent_writes_in_canopys_voice_until_the_operator_chooses(canopy_env: CanopyEnv) -> None:
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert (cfg.personas.worker, cfg.personas.planner, cfg.personas.reviewer) == ("canopy", "canopy", "canopy")
+    assert cfg.paths.personas is None
 
 
 def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:

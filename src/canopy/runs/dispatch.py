@@ -26,6 +26,7 @@ from canopy.core import (
     memory,
     notice,
     outbox,
+    personas,
     plans,
     pools,
     prompts,
@@ -184,6 +185,8 @@ def start(
             cursors=cursors,
         )
         attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
+        # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
+        persona = _check_persona(ctx, kind)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -198,6 +201,7 @@ def start(
                 context=context,
                 review=review,
                 reasons=reasons,
+                persona=persona,
             )
         except BaseException:
             _return_all(ctx, leases)
@@ -251,6 +255,7 @@ def check(
             cursors=cursors,
         )
         _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons)
+        _check_persona(ctx, kind)
     return plan
 
 
@@ -742,6 +747,28 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
+def _check_persona(ctx: Context, kind: str) -> personas.Persona | None:
+    """Return the persona a `kind` run gets, `[personas]`'s for its agent, read now (DESIGN §31).
+
+    It is never fallen back from: a run in a voice nobody chose would read as the chosen one's. A refusal spends no
+    attempt and leases no slot, and raises an attention item of its guard's name, since only the operator can fix it.
+
+    Returns:
+        The persona, or None for a kind no persona reaches.
+
+    Raises:
+        Refusal: `persona_missing`, when the persona has no file, or `bad_persona`, when its file is one canopy would
+            not put in a prompt.
+    """
+    agent = personas.agent_of(kind)
+    if agent is None:
+        return None
+    try:
+        return personas.chosen(ctx.config, agent)
+    except personas.PersonaError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
+
+
 def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:
     """Refuse a `resume` for CI when the operator set or cleared a notice to workers after this tick read the journal.
 
@@ -920,6 +947,7 @@ def _spawn(
     context: str | None,
     review: str | None = None,
     reasons: Collection[str] = (),
+    persona: personas.Persona | None = None,
 ) -> Started:
     cfg = ctx.config
     branch = plan.branch
@@ -1011,7 +1039,9 @@ def _spawn(
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)
-    prompt, remembered, replied = _render(ctx, key, kind, values, required, repos=plan.repos, private=plan.private)
+    prompt, remembered, replied = _render(
+        ctx, key, kind, values, required, repos=plan.repos, private=plan.private, persona=persona
+    )
 
     run_id = db.insert_run(
         ctx.conn,
@@ -1032,6 +1062,8 @@ def _spawn(
             _record_rendered, ctx, remembered, replied, followed.feedback_plan_id if followed is not None else None
         ),
         feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
+        persona=persona.name if persona is not None else None,
+        persona_digest=persona.digest if persona is not None else None,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
@@ -1130,8 +1162,9 @@ def _render(
     *,
     repos: Collection[str],
     private: bool,
+    persona: personas.Persona | None,
 ) -> tuple[str, memory.Rendered | None, replies.Rendered | None]:
-    """Render the worker prompt, with agent memory's part (§28) and how its comments reach GitHub (§29).
+    """Render the worker prompt, with agent memory's part (§28), how its comments reach GitHub (§29), and its persona.
 
     Returns:
         The prompt; memory's part of it for the run to record, or None when no memory tier reaches the run; and the
@@ -1152,7 +1185,13 @@ def _render(
         required = (*required, *replied.required)
     try:
         prompt = prompts.render_worker(
-            ctx.config, kind, values, required=required, private=private, notice=notice.for_prompt(ctx.conn)
+            ctx.config,
+            kind,
+            values,
+            required=required,
+            private=private,
+            notice=notice.for_prompt(ctx.conn),
+            persona=persona,
         )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e

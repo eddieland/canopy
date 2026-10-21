@@ -428,8 +428,9 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         if r.attention is not None:
-            # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, or a retired
-            # prompt override (DESIGN §8, §14). In a workspace of several, the item is about the unit it holds.
+            # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, a retired
+            # prompt override, or a persona canopy cannot use (DESIGN §8, §14, §31). In a workspace of several, the
+            # item is about the unit it holds.
             db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise Refused(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
@@ -815,6 +816,11 @@ def review_run(ctx: Context, request: ReviewRun) -> str:
             # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
             action = f"{attention.ACTION_PREFIX}review_limit"
             db.record_decision(ctx.conn, tick_id, ticket, action, f"{r.reason}; {grants.hint(pr_key)}", pr=pr_key)
+        if r.attention is not None:
+            # A persona the operator must fix (DESIGN §31): the item is about the PR, or its ticket.
+            db.record_decision(
+                ctx.conn, tick_id, ticket, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, pr=pr_key
+            )
         log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
         raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     on_context = f"; context={context}" if context else ""
