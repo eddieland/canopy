@@ -1850,6 +1850,12 @@ export type components = {
              * @description The agent's summary, line breaks kept and not cut: its result bounded it at 2000 characters.
              */
             summary: string | null;
+            /**
+             * Title
+             * @description The chore's title, as its summary gives it; None when its prompt opens with no heading, or it is no longer
+             *     defined.
+             */
+            title: string | null;
         };
         /**
          * ChoreRunFinding
@@ -1995,6 +2001,11 @@ export type components = {
              * @description The IANA zone `days` and `hours` are in; None for the local time of the machine the loop runs on.
              */
             timezone: string | null;
+            /**
+             * Title
+             * @description The heading its prompt opens with, `# Dependency advisories`, on one line; None when it opens with none.
+             */
+            title: string | null;
             /**
              * When
              * @description The operator's words to the overseer on when a run is worth it.
@@ -4379,6 +4390,11 @@ export type components = {
              * @description The ticket the PR is for, when it is for one.
              */
             ticket_key: string | null;
+            /**
+             * Title
+             * @description The PR's title as the PR pages give it: its own, else its ticket's; None when neither is known.
+             */
+            title: string | null;
             /** @description Its verdict, once it reported one. */
             verdict: components["schemas"]["ReviewVerdict"] | null;
             /** @description The severity of the worst finding it reported, which colors its verdict; None when it reported none. */

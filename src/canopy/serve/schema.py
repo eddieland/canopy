@@ -615,6 +615,8 @@ class ChoreSummary(_Model):
 
     name: str
     """The chore's name, as `chore:NAME` names it."""
+    title: str | None = None
+    """The heading its prompt opens with, `# Dependency advisories`, on one line; None when it opens with none."""
     every_minutes: int
     """The least time between the starts of two runs, in minutes."""
     days: list[str] = []
@@ -672,6 +674,9 @@ class ChoreRunDetail(_Model):
 
     chore: str
     """The chore's name."""
+    title: str | None = None
+    """The chore's title, as its summary gives it; None when its prompt opens with no heading, or it is no longer
+    defined."""
     run: ChoreRun
     """The run, as its chore's page lists it."""
     summary: str | None = None
@@ -1960,6 +1965,8 @@ class ReviewSummary(_Model):
     """The commit it reviewed."""
     ticket_key: str | None = None
     """The ticket the PR is for, when it is for one."""
+    title: str | None = None
+    """The PR's title as the PR pages give it: its own, else its ticket's; None when neither is known."""
     repo: str | None = None
     """The PR's repository, as the workspace names it."""
     status: str

@@ -86,7 +86,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
     }
     return (
         <>
-            <PageHeader parents={<ChoreCrumb name={name} />} title={title} help={HELP}>
+            <PageHeader parents={<ChoreCrumb name={name} />} title={title} subject={data.title} help={HELP}>
                 {choreRunDescription(data.run, data.findings.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">

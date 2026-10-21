@@ -150,11 +150,21 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
         A summary of each, in their order.
     """
     seen = db.seen_among(conn, SeenKind.REVIEW, [str(row.id) for row in rows])
-    return [summary(row, seen=str(row.id) in seen) for row in rows]
+    # A PR's title as its pages give it: its own, else its ticket's.
+    own = db.pr_titles(conn, {row.pr_url for row in rows})
+    tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
+    return [
+        summary(
+            row,
+            seen=str(row.id) in seen,
+            title=ticket_title(own.get(row.pr_url)) or ticket_title(tickets.get(row.ticket_key or "")),
+        )
+        for row in rows
+    ]
 
 
-def summary(row: records.ReviewRun, *, seen: bool) -> ReviewSummary:
-    """One review run's row, as the reviews list shows it, `seen` when the operator has seen it.
+def summary(row: records.ReviewRun, *, seen: bool, title: str | None) -> ReviewSummary:
+    """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
@@ -166,6 +176,7 @@ def summary(row: records.ReviewRun, *, seen: bool) -> ReviewSummary:
         pr_url=row.pr_url,
         sha=row.sha,
         ticket_key=row.ticket_key or None,
+        title=title,
         repo=row.repo or None,
         status=row.status,
         state=_review_state(row.status),

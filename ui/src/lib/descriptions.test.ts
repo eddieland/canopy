@@ -17,6 +17,7 @@ const REVIEW: ReviewSummary = {
     pr_url: 'https://github.com/acme/web/pull/88',
     sha: `9b2f4c61${'3'.repeat(32)}`,
     ticket_key: 'ABC-099',
+    title: null,
     repo: 'web',
     status: 'done',
     state: 'done',

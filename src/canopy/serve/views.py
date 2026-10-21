@@ -99,6 +99,7 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Sequence
 
+    from canopy.core.config import Chore
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
@@ -116,6 +117,8 @@ CHORE_RUNS = 10
 TICKS = 50
 TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
+# The most of a chore's prompt read for its title: its first line, cut here.
+_CHORE_TITLE_READ = 500
 # The windows the spend figures cover: the last day and the last 30.
 SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
@@ -979,6 +982,7 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
     latest = state.latest_ended
     return ChoreSummary(
         name=state.name,
+        title=_chore_title(defined),
         every_minutes=defined.every_minutes,
         days=list(defined.days),
         hours=defined.hours,
@@ -1006,6 +1010,20 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
             month=_chore_spent(conn, state.name, now, SPEND_MONTH_HOURS),
         ),
     )
+
+
+def _chore_title(chore: Chore) -> str | None:
+    """The heading a chore's prompt opens with, `# Dependency advisories`, as the chore's title.
+
+    Returns:
+        The heading's text on one line, or None when the prompt's first line is no `# ` heading or cannot be read.
+    """
+    try:
+        with chore.prompt.open(encoding="utf-8") as f:
+            first = f.readline(_CHORE_TITLE_READ)
+    except (OSError, UnicodeDecodeError):
+        return None
+    return ticket_title(first.removeprefix("# ")) if first.startswith("# ") else None
 
 
 def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int) -> ChoreSpendWindow:
@@ -1080,8 +1098,10 @@ def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | N
         return None
     stored = contract.stored_object(row.result_json)
     parsed = chore_result.stored(row.result_json) if row.status is ChoreRunStatus.OK else None
+    defined = chore_view.defined(ctx.config, ctx.workspace).get(name)
     return ChoreRunDetail(
         chore=name,
+        title=_chore_title(defined) if defined is not None else None,
         run=chore_run(row, ctx.workspace.root),
         summary=lines(str(stored.get("summary") or "")) or None,
         note=lines(str(stored.get("harness") or "")) or None,

@@ -132,6 +132,8 @@ describe('SubjectRunsTable', () => {
         expect(row.getByRole('link', { name: 'ABC-103' })).toBeDefined()
         expect(row.getByRole('link', { name: 'acme/web#91' })).toBeDefined()
         expect(row.getByText('review')).toBeDefined()
+        // Titled as a worker's row is: by its PR's title, its own or else its ticket's.
+        expect(row.getByText('ABC-103: move billing to v2 and drop the v1 client')).toBeDefined()
         expect(row.getByText('at 9b1d4e7')).toBeDefined()
         expect(row.getByText('2 findings')).toBeDefined()
 
@@ -153,10 +155,24 @@ describe('SubjectRunsTable', () => {
         expect(number.getAttribute('title')).toBe('chore:deps#3')
         expect(row.getByRole('link', { name: 'chore:deps' }).getAttribute('href')).toBe('/chores/deps')
         expect(row.getByText('chore')).toBeDefined()
+        expect(row.getByText('Dependency advisories')).toBeDefined()
 
         fireEvent.click(screen.getByRole('button', { name: 'Show 1 earlier run' }))
         const earlier = within(screen.getByTestId('earlier-chore-runs-deps'))
         expect(earlier.getByRole('link', { name: '#2' })).toBeDefined()
         expect(earlier.getByText("One advisory touches web's lockfile.")).toBeDefined()
+    })
+
+    it('says untitled for a review or a chore with no title, so its title cell is never blank', async () => {
+        const [review] = mockReviews as [ReviewSummary]
+        const [deps] = mockChores as [ChoreSummary]
+        const groups = subjectRuns({
+            runs: [],
+            reviews: [{ ...review, title: null }],
+            chores: [{ ...deps, title: null }],
+        })
+        await renderRouted(<SubjectRunsTable groups={groups} />, { client: client() })
+        expect(within(screen.getByTestId('review-5')).getByText('untitled')).toBeDefined()
+        expect(within(screen.getByTestId('chore-run-deps-2')).getByText('untitled')).toBeDefined()
     })
 })

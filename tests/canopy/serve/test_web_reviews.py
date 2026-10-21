@@ -33,6 +33,18 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     assert [(r["worst"], r["worst_count"]) for r in listed] == [("major", 1), (None, 0), (None, 0), ("blocking", 1)]
 
 
+def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(backend: Backend) -> None:
+    with backend.open() as ctx:
+        ctx.conn.execute("DELETE FROM pr_titles WHERE pr_url IN (?, ?)", (mock_reviews.PR_91, mock_reviews.PR_12))
+    listed = client(None, backend).get("/api/reviews").json()
+    assert [(r["id"], r["title"]) for r in listed] == [
+        (4, "ABC-099: debounce the search box by 250 ms"),
+        (3, "Move billing to the v2 API"),  # ABC-103's, its PR having reported none
+        (2, None),  # no title of its own, and no ticket
+        (1, "ABC-099: debounce the search box by 250 ms"),
+    ]
+
+
 def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_again_if_it_fails(
     backend: Backend,
     tmp_path: Path,

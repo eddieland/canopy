@@ -80,7 +80,7 @@ export const RUNS_OF_WORD: Record<RunsOf, string> = {
 export type SubjectRuns =
     | ({ of: 'worker' } & TicketRuns)
     | { of: 'review'; latest: ReviewSummary; earlier: ReviewSummary[] }
-    | { of: 'chore'; chore: string; latest: ChoreRun; earlier: ChoreRun[] }
+    | { of: 'chore'; chore: string; title: string | null; latest: ChoreRun; earlier: ChoreRun[] }
 
 /** Everything that runs an agent, as the runs page reads it: the worker runs, the review runs, and the chores. */
 export interface EveryRun {
@@ -117,7 +117,7 @@ export function subjectRuns({ runs, reviews = [], chores = [] }: EveryRun): Subj
                 return []
             }
             const earlier = c.running !== null && c.latest !== null ? [c.latest] : []
-            return [{ of: 'chore', chore: c.name, latest, earlier } as const]
+            return [{ of: 'chore', chore: c.name, title: c.title, latest, earlier } as const]
         }),
     ]
     return groups.toSorted(byLatest)

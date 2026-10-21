@@ -239,8 +239,8 @@ def seed(directory: Path) -> Backend:
     user_file = directory / "config" / "config.toml"
     chores = user_file.parent / "chores"
     chores.mkdir(parents=True)
-    for name in (CHORE, "build-health"):
-        (chores / f"{name}.md").write_text(f"Check {name} for the mock workspace.\n")
+    for name, title in ((CHORE, "Dependency advisories"), ("build-health", "Build health")):
+        (chores / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
     user_file.write_text(_USER_TOML.replace("{chores}", str(chores)))
     ws = workspace.load(root)
     cfg = config.load(root, user_file)

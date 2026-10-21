@@ -54,6 +54,19 @@ def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(back
     assert deps["latest_note_id"] == 8
 
 
+def test_a_chore_is_titled_by_the_heading_its_prompt_opens_with(backend: Backend) -> None:
+    c = client(None, backend)
+    assert [ch["title"] for ch in c.get("/api/chores").json()] == ["Build health", "Dependency advisories"]
+    assert c.get("/api/chores/deps/runs/2").json()["title"] == "Dependency advisories"
+    with backend.open() as ctx:
+        health, deps = ctx.config.chores["build-health"].prompt, ctx.config.chores["deps"].prompt
+    health.write_text("Check the builds.\n# Not the first line\n")
+    deps.write_text("#  Dependency   advisories  \n")
+    assert [ch["title"] for ch in c.get("/api/chores").json()] == [None, "Dependency advisories"]
+    deps.unlink()
+    assert [ch["title"] for ch in c.get("/api/chores").json()] == [None, None]
+
+
 def test_a_chore_and_its_run_say_how_many_findings_it_did_not_list(backend: Backend) -> None:
     with backend.open() as ctx:
         ctx.conn.execute(
