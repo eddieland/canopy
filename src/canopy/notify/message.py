@@ -13,7 +13,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import quote
 
 from canopy.core import contract, db, records, sql
@@ -58,6 +58,17 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         return _line(f"{text}: {' '.join(extras)}" if extras else text)
     if kind == "plan.proposed":
         return f"? {f.get('ticket')} plan {f.get('plan')} waits on your approval: canopy show {f.get('ticket')}"
+    if kind == "follow_ups.filed":
+        given = f.get("follow_ups")
+        filed: dict[str, object] = cast("dict[str, object]", given) if isinstance(given, dict) else {}
+        named = [f"{k} ({v})" if v else str(k) for k, v in filed.items()]
+        count = f.get("count")
+        if isinstance(count, int) and count > len(named):
+            named.append(f"{count - len(named)} more")
+        return _line(
+            f"? {f.get('ticket')} run {f.get('run')} filed follow-ups {', '.join(named) or '-'}: "
+            "label or `canopy start` each one you want worked"
+        )
     if kind == "chore.ended":
         findings = f.get("findings") or 0
         text = f"< chore:{f.get('chore')} run {f.get('run')} ended {f.get('status')} ({findings} findings)"
@@ -105,7 +116,7 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
     """
     f = fields
     match kind:
-        case "run.started" | "run.ended" if f.get("run"):
+        case "run.started" | "run.ended" | "follow_ups.filed" if f.get("run"):
             return page(ui, "runs", f["run"])
         case "plan.proposed" if f.get("ticket"):
             return page(ui, "tickets", f["ticket"], "plan")

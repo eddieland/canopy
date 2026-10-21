@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import feedback_plans, plans
+from canopy.core import db, feedback_plans, plans
 from canopy.core.config import load
 from canopy.core.vocab import PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
 from tests.canopy.helpers import (
@@ -96,6 +96,9 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
 
     approved = scenario.operator("plan", KEY, "--approve")
     assert f"Feedback plan {plan.id} of {KEY}, covering 2 items, is approved whole" in approved.out
+    # A reply on the ticket after the approval asks for no change of the plan approved.
+    scenario.operator("reply", KEY, "Thanks.")
+    assert feedback_plans.changes_asked(conn, present(db.get_ticket(conn, KEY))) is None
     resume = scenario.run(RESUME, worker=pushes())
     assert resume.status == RunStatus.DONE
     assert resume.row["feedback_plan_id"] == plan.id

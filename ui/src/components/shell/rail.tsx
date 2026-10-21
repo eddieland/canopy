@@ -177,18 +177,19 @@ function Under({ children }: { children: string }) {
 }
 
 /**
- * Under what is working: what the last 24 hours and the last 30 days cost. Either opens the spend page over its own
- * window: the 24 hours by the hour, or the 30 days by the day.
+ * Under what is working, on one line: what the last 24 hours and the last 30 days cost, each after its window's name,
+ * which stands for the block's label. Either opens the spend page over its own window: the 24 hours by the hour, or
+ * the 30 days by the day. A cost too long for both to share the line puts the 30 days under the 24 hours.
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
     return (
-        <RailSection label="Spent" testId="rail-spend">
-            <div className="grid grid-cols-2 gap-2 px-2.5">
+        <section aria-label="Spent" className={SECTION} data-testid="rail-spend">
+            <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 px-2.5">
                 <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours: the day by hour" hours={24} />
                 <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days: the month by day" days={30} />
             </div>
-        </RailSection>
+        </section>
     )
 }
 
@@ -262,6 +263,9 @@ function FooterLink({
     )
 }
 
+// A block of the rail's room: a hairline above, and the space either side of it.
+const SECTION = 'mx-2 mt-3 border-t pt-3'
+
 /** A block of the rail: a hairline above, a label, and what it holds. */
 function RailSection({
     label,
@@ -279,7 +283,7 @@ function RailSection({
     return (
         <section
             aria-label={label}
-            className={cn('mx-2 mt-3 border-t pt-3 transition-opacity', stale && 'opacity-60')}
+            className={cn(SECTION, 'transition-opacity', stale && 'opacity-60')}
             data-stale={stale || undefined}
             data-testid={testId}
         >
@@ -292,7 +296,10 @@ function RailSection({
     )
 }
 
-/** One window's cost, a dash when nothing in it reported one, opening the spend page over `hours` or `days`. */
+/**
+ * One window's name and its cost, a dash when nothing in it reported one, opening the spend page over `hours` or
+ * `days`.
+ */
 function Spent({
     window,
     label,
@@ -311,18 +318,18 @@ function Spent({
         <Link
             to="/spend"
             search={{ days, hours }}
-            className="-mx-1 flex flex-col rounded-sm px-1 hover:bg-surface-raised"
+            className="-mx-1 flex items-baseline gap-1.5 rounded-sm px-1 hover:bg-surface-raised"
             title={hint}
             data-testid={`rail-spend-link-${label}`}
         >
+            <span className="panel-label">{label}</span>
             {window === undefined ? (
-                <Skeleton className="h-5 w-14" />
+                <Skeleton className="h-4 w-12 self-center" />
             ) : (
-                <span className="readout text-sm text-foreground" data-testid={`rail-spend-${label}`}>
+                <span className="readout text-xs text-foreground" data-testid={`rail-spend-${label}`}>
                     <Cost usd={cost} />
                 </span>
             )}
-            <span className="text-2xs text-muted-foreground">{label}</span>
         </Link>
     )
 }

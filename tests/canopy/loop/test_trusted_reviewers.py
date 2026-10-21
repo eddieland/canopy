@@ -106,7 +106,7 @@ def test_with_nobody_trusted_the_resume_worker_is_told_so(scenario: Scenario, gi
     )
     prompt = scenario.run(resume, worker=pushes()).prompt
     assert "Trusted reviewers: none (every reviewer's feedback needs the operator's go-ahead)." in prompt
-    assert "## Messages from the operator\n\nNo messages from the operator.\n" in prompt
+    assert "## Messages from the operator" not in prompt
 
 
 def test_a_reply_on_a_public_ticket_needs_a_ticket_canopy_knows(scenario: Scenario) -> None:
@@ -169,4 +169,4 @@ def test_forgetting_a_ticket_leaves_its_operator_messages_behind(scenario: Scena
     assert conversation.has_operator_messages(scenario.conn, KEY)
     scenario.operator("forget", KEY)
     assert not conversation.has_operator_messages(scenario.conn, KEY)
-    assert conversation.prompt_operator_messages(scenario.conn, KEY) == "No messages from the operator."
+    assert conversation.prompt_operator_messages(scenario.conn, KEY) is None

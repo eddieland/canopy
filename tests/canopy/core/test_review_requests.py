@@ -85,13 +85,13 @@ def test_the_reviewer_is_handed_the_requests_notes(
     assert requests_of(conn) == [(PR, "cli", "reviewed")]
 
 
-def test_a_review_without_a_requests_notes_is_told_there_are_none(
+def test_a_review_without_a_requests_notes_has_no_section_for_them(
     requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
     scenario.operator("start", PR, "--review")
     assert review_requests.open_requests(scenario.conn)[0].notes is None
     reviewed = scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
-    assert "## Notes from the operator\n\nNone.\n" in reviewed.prompt
+    assert "## Notes from the operator" not in reviewed.prompt
 
 
 def test_notes_are_refused_without_review_or_past_their_bound(requests_env: CanopyEnv, scenario: Scenario) -> None:

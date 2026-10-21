@@ -5,6 +5,7 @@ import os
 import shutil
 import time
 from collections.abc import Iterable
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 from unittest import mock
 
@@ -813,6 +814,8 @@ def test_the_reviewer_is_sent_githubs_issue_reads_only_when_they_are_the_tickets
     expected = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(shipped, tool)}
     assert sent == (expected if issues else expected - GITHUB_ISSUE_READS)
     assert {"github_pull_request_read", "github_get_commit", "github_list_commits"} <= sent
+    # Nor what only filing or labelling an issue needs: it writes nothing.
+    assert not {"github_list_issue_types", "github_list_issue_fields", "github_get_label"} & sent
 
 
 @pytest.mark.parametrize(
@@ -840,6 +843,67 @@ def test_with_no_tracker_tools_known_the_reviewer_is_rendered_as_shipped() -> No
     # Nothing is rendered, as for the overseer: with no names to allow again, a pattern could take a read it needs.
     bundled = (resources.agents_dir() / f"{agents.REVIEWER}.md").read_text()
     assert opencode_definitions.render_reviewer_reads(bundled, None, "linear") == bundled
+
+
+def test_the_chore_may_call_exactly_the_jira_read_tools(canopy_env: CanopyEnv) -> None:
+    # As the reviewer: OpenCode sends none of the server's other tools, Confluence's among them, and a write no pattern
+    # names fails closed under the wildcard deny (TRUST_MODEL T6).
+    ruleset = _ruleset(canopy_env, agents.CHORE)
+    jira = config.DEFAULT_TRACKER_TOOLS["jira"]
+    reads = {f"{jira.server}_{read}" for read in jira.allowed}
+    tools = (*reads, *(f"{jira.server}_{write}" for write in JIRA_WRITES), "atlassian_getConfluencePage")
+    assert {tool for tool in tools if not _opencode_disabled(ruleset, tool)} == reads
+
+
+@pytest.mark.parametrize("provider", ["jira", "github"])
+def test_the_chore_is_sent_githubs_reads_whatever_the_tracker(canopy_env: CanopyEnv, provider: str) -> None:
+    # Its prompt is the operator's, which may read GitHub's issues even when they are not the tickets.
+    _set_provider(canopy_env, provider)
+    sent = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(_ruleset(canopy_env, agents.CHORE), tool)}
+    shipped = _opencode_ruleset((resources.agents_dir() / f"{agents.CHORE}.md").read_text())
+    assert sent == {tool for tool in GITHUB_TOOLS if not _opencode_disabled(shipped, tool)}
+    assert sent >= GITHUB_ISSUE_READS
+
+
+#: The tracker's tools each agent's prompt names, by provider: a run must be sent each.
+JIRA = config.DEFAULT_TRACKER_TOOLS["jira"]
+JIRA_READS = frozenset(f"{JIRA.server}_{read}" for read in JIRA.allowed)
+PROMPT_TRACKER_TOOLS: dict[tuple[str, str], AbstractSet[str]] = {
+    (agents.OVERSEER, "jira"): JIRA_READS,
+    (agents.WORKER, "jira"): JIRA_READS
+    | {
+        f"atlassian_{tool}" for tool in ("addCommentToJiraIssue", "editJiraIssue", "createJiraIssue", "createIssueLink")
+    },
+    (agents.PRIVATE_WORKER, "jira"): JIRA_READS | {"atlassian_createJiraIssue"},
+    (agents.REVIEWER, "jira"): JIRA_READS,
+    (agents.PLANNER, "jira"): JIRA_READS,
+    (agents.CHORE, "jira"): JIRA_READS,
+    (agents.OVERSEER, "github"): GITHUB_ISSUE_READS,
+    (agents.WORKER, "github"): GITHUB_ISSUE_READS | {"github_issue_write"},
+    (agents.PRIVATE_WORKER, "github"): GITHUB_ISSUE_READS | {"github_issue_write"},
+    (agents.REVIEWER, "github"): GITHUB_ISSUE_READS,
+    (agents.PLANNER, "github"): GITHUB_ISSUE_READS,
+    (agents.CHORE, "github"): GITHUB_ISSUE_READS,
+}
+#: GitHub's tools each agent's prompt names for its PRs, whatever the tracker.
+PROMPT_GITHUB_TOOLS: dict[str, AbstractSet[str]] = {
+    agents.OVERSEER: OVERSEER_GITHUB_READS,
+    agents.WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
+    agents.PRIVATE_WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
+    agents.REVIEWER: {"github_pull_request_read", "github_get_commit", "github_list_commits"},
+    agents.PLANNER: {"github_pull_request_read"},
+    agents.CHORE: {"github_pull_request_read", "github_list_pull_requests", "github_get_commit", "github_list_tags"},
+}
+
+
+@pytest.mark.parametrize(("agent", "provider"), sorted(PROMPT_TRACKER_TOOLS))
+def test_each_agent_is_sent_each_tool_its_prompt_names(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    # The rules leave out every tool no prompt asks for; a run that lost one its prompt names would fail on it, with
+    # `tool not found`. On defaults, workers drafting their PR replies.
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    named = PROMPT_TRACKER_TOOLS[agent, provider] | PROMPT_GITHUB_TOOLS[agent]
+    assert sorted(tool for tool in named if _opencode_disabled(ruleset, tool)) == []
 
 
 #: GitHub's tools the planner may call when the tracker is GitHub: its reads of issues and PRs,

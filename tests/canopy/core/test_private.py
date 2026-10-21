@@ -224,7 +224,7 @@ def test_a_stop_that_commits_before_the_runs_insert_wins(
     scenario.operator("start", KEY)
     real = conversation.prompt_conversation
 
-    def stop_meanwhile(c: sqlite3.Connection, key: str) -> str:
+    def stop_meanwhile(c: sqlite3.Connection, key: str) -> str | None:
         # The operator stops the ticket after the dispatch planned the run and before it inserts it.
         conversation.stop(scenario.env.journal(), conversation.Ref("ticket", key), channel="cli")
         return real(c, key)

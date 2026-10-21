@@ -189,11 +189,11 @@ Controls:
   of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
   may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
   run's validated result names, only for a key new to the journal and, as far as the key's text shows it, in the
-  parent's project, and asks the operator about it (`follow_up_filed`); nothing dispatches it until it carries a queue
-  label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
+  parent's project, and tells the operator of it once (`follow_ups.filed`); nothing dispatches it until it carries a
+  queue label or the operator starts it, as any ticket. A follow-up's own runs file none. Accepted gap: `_run` checks a
   reported key's text only (D003), so a worker can record a ticket it did not file, one a stranger filed in the same
-  project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the attention
-  item names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it
+  project; on GitHub every key is `GH-N`, so the project check keeps out nothing. That changes only what the event
+  names: the operator decides on each, as on any ticket. A worker can still add a queue label to a ticket it
   reaches, as it always could; every label check is agent judgment, and review of every PR is the backstop.
 - The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
   operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
@@ -456,9 +456,10 @@ Controls:
   read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit or subagent tools, a
   shell that runs `canopy chore history` alone, which reads its own chore's earlier runs and writes nothing, and
-  denies MCP write tools by name. The agents example chores come with, `canopy-introspect` and
-  `canopy-memory-tickets`, which `canopy chore install` copies into the workspace's state directory for a chore's
-  `cmd` to name, are the same with a shell for canopy's read-only commands as well: `canopy health --json`,
+  denies MCP write tools by name. Off a GitHub tracker, the tracker's server is denied whole but its read tools, allowed
+  by name, as for the reviewer. The agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`,
+  which `canopy chore install` copies into the workspace's state directory for a chore's `cmd` to name, are the same,
+  but for that rendering, with a shell for canopy's read-only commands as well: `canopy health --json`,
   `canopy spend --json`, `canopy decisions`, `canopy show` of a run or a chore, and `opencode mcp list`; and
   `canopy memory lessons`, `proposals`, and `list`. None of those writes, and the memory commands that do refuse inside
   any run.

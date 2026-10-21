@@ -1,20 +1,20 @@
 # Each bundled prompt, agent definition, and skill's size in characters. This is a record, not a limit: grow or shrink
 # a prompt as the work needs, and update its number here in the same PR, so the diff shows by how much.
 # tests/canopy/test_prompt_sizes.py names the line to update; `make prompt-sizes` prints the sizes, with tokens.
-"agents/canopy-chore.md" = 2223
+"agents/canopy-chore.md" = 2810
 "agents/canopy-overseer.md" = 4298
 "agents/canopy-planner.md" = 4032
-"agents/canopy-reviewer.md" = 3559
+"agents/canopy-reviewer.md" = 3789
 "agents/canopy-worker-private.md" = 6728
 "agents/canopy-worker.md" = 5325
 "personas/canopy.md" = 652
-"prompts/overseer.md" = 50298
-"prompts/reviewer.md" = 6512
-"prompts/worker-feedback-plan.md" = 6502
-"prompts/worker-implement-private.md" = 6772
-"prompts/worker-implement.md" = 7288
-"prompts/worker-plan.md" = 8031
-"prompts/worker-resume-private.md" = 8712
-"prompts/worker-resume.md" = 9517
+"prompts/overseer.md" = 50630
+"prompts/reviewer.md" = 6614
+"prompts/worker-feedback-plan.md" = 6658
+"prompts/worker-implement-private.md" = 6920
+"prompts/worker-implement.md" = 7486
+"prompts/worker-plan.md" = 8187
+"prompts/worker-resume-private.md" = 8883
+"prompts/worker-resume.md" = 9737
 "skills/tracker-github/SKILL.md" = 4184
 "skills/tracker-jira/SKILL.md" = 3411

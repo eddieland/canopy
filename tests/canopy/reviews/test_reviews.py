@@ -616,9 +616,11 @@ def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
     )
 
 
-def test_a_resume_without_a_review_says_so(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_a_resume_without_a_review_has_no_section_for_one(
+    reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
     scenario.run(worker=pushes())
-    assert "## canopy's review\n\nNone.\n" in scenario.run(resume(), worker=pushes()).prompt
+    assert "## canopy's review" not in scenario.run(resume(), worker=pushes()).prompt
 
 
 def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
@@ -757,7 +759,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
 
 def previous_review(prompt: str) -> str:
     """The `## The previous review` section of a reviewer's prompt, its framing left out."""
-    return prompt.split("## The previous review\n\n", 1)[1].split("\n\nThis, when there is one,", 1)[0]
+    return prompt.split("## The previous review\n\n", 1)[1].split("\n\nThis is canopy's own last review", 1)[0]
 
 
 def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_dismissed(
@@ -765,11 +767,12 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
 ) -> None:
     sha = head(git_pool)
     first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS))
-    assert previous_review(first.prompt) == "None."
+    # A PR's first review has none, so its prompt has no section for one.
+    assert "## The previous review" not in first.prompt
     scenario.operator("dismiss", f"review:{first.id}", "2")
     # Another PR's review reaches none of this PR's.
     other = scenario.review(reviews(sha, f"{PR}0"), reviewer=reviewer_reports(CLEAN))
-    assert previous_review(other.prompt) == "None."
+    assert "## The previous review" not in other.prompt
 
     # A commit origin does not have: the run fails, so the next review still reads the first.
     second = scenario.review(reviews("b" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))

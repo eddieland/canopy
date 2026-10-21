@@ -93,7 +93,6 @@ HARNESS_REASONS = frozenset(
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
         follow_ups.REASON,
-        follow_ups.FILED,
     }
 )
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage

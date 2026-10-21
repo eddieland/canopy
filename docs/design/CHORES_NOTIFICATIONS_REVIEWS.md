@@ -134,9 +134,10 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 ### Events
 
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
-worker started or ended, a plan proposed, §25), `chores` (§19), `reviews` (§21), and `loop` (ticks failing and
-recovering, a sink failing). Each carries only bounded fields, its text on one line. `plan.proposed` never carries the
-plan's text. `run.ended` carries a `blocked` run's question, since the needs-human label is not an attention item.
+worker started or ended, a plan proposed, §25, follow-ups filed, §18), `chores` (§19), `reviews` (§21), and `loop`
+(ticks failing and recovering, a sink failing). Each carries only bounded fields, its text on one line. `plan.proposed`
+never carries the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human label is not an
+attention item.
 
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
 net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,
@@ -295,9 +296,11 @@ findings are not.
 The operator asks for one review of a coworker's PR at its head; asking again after a push reviews the new head. A
 request is a journal fact, at most one open per PR, ended by a `done` review, by the overseer finding the PR merged,
 closed, or in no cloned repository, or by the operator. A request may carry the operator's notes, which its reviewer's
-prompt carries; a prompt override that drops them fails to render. Starting work on a coworker's PR is refused, so a
-review never turns into work on someone else's branch. Requests are refused inside a run: a request authorizes a review
-as `review.query` does, so an agent steered by a PR's text could otherwise aim the operator's spend at any PR (T1).
+prompt carries; a prompt override that drops them fails to render. A requested review is the overseer's first start of
+a tick, ahead of every worker and every other review, since the operator asked for it by hand. Starting work on a
+coworker's PR is refused, so a review never turns into work on someone else's branch. Requests are refused inside a
+run: a request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise aim the
+operator's spend at any PR (T1).
 
 ### Reading reviews
 

@@ -192,7 +192,7 @@ def _spawn(
         "LOW_IMPACT": cfg.review.low_impact.strip() or "None: never report `low`.",
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(grants.limit(ctx.conn, cfg, request.pr)),
-        "CONTEXT": context or "None.",
+        "CONTEXT": context or None,
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
         "CONTRACT": result.CONTRACT,
     }

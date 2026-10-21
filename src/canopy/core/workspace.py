@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import re
 import tomllib
-from dataclasses import dataclass
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 
@@ -39,6 +40,8 @@ REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
 MAX_SUMMARY = 200
+#: The longest name of a check a repository's `human_checks` lists: a connector's longest (DESIGN §30).
+MAX_CHECK_NAME = 200
 # Where a repository's `branch_url` puts a branch's name.
 BRANCH_NAME = "{branch}"
 # A GitHub clone URL as `git clone` takes it: https (credentials allowed, and dropped), scp-style SSH, or ssh://, with
@@ -67,6 +70,12 @@ def url_error(value: str) -> str | None:
     return None
 
 
+def _check_name(value: str) -> str:
+    if not value.strip() or len(value) > MAX_CHECK_NAME or not value.isprintable():
+        raise ValueError(f"must be a check's name: printable, 1 to {MAX_CHECK_NAME} characters")
+    return value
+
+
 def _url(value: str) -> str:
     error = url_error(value)
     if error is not None:
@@ -88,6 +97,8 @@ class _RepoTable(_Table):
     # A branch's page on the repository's host, with {branch} where its name goes: the web UI links branches there
     # (DESIGN §18). Unset means the one `url` gives on GitHub, if any; empty means no link.
     branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] | None = None
+    # The checks that are not CI: contexts that stay pending until a person acts (DESIGN §30).
+    human_checks: tuple[Annotated[StrictStr, AfterValidator(_check_name)], ...] = ()
 
 
 class _Map(_Table):
@@ -104,6 +115,8 @@ class Repo:
     url: str | None = None
     summary: str = ""
     branch_url: str = ""
+    #: The contexts that are not CI, by name: each stays pending until a person acts (DESIGN §30).
+    human_checks: AbstractSet[str] = field(default_factory=frozenset[str])
 
     @property
     def cloned(self) -> bool:
@@ -247,6 +260,7 @@ def load(root: Path) -> Workspace:
             url=table.url,
             summary=table.summary,
             branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
+            human_checks=frozenset(table.human_checks),
         )
         for name, table in sorted(parsed.repos.items())
     )
