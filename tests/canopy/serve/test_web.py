@@ -96,6 +96,8 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
     [due] = run_models.due(ctx.conn, limit=1)
     run_models.record(ctx.conn, due, ModelsRead.FAILED, error="the runtime timed out")
     assert models() == {"status": "failed", "models": [], "error": "the runtime timed out"}
+    run_models.record(ctx.conn, due, ModelsRead.MISSING)
+    assert models()["status"] == "missing"
     used = [ModelUse("anthropic/claude-x", replies=3, cost_usd=0.1), ModelUse("openai/gpt-y", replies=2, cost_usd=0.4)]
     run_models.record(ctx.conn, due, ModelsRead.FOUND, used)
     # The most costly first, as `canopy spend` splits a kind's cost.
@@ -108,8 +110,15 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         "error": None,
     }
     assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
+    found = models()
+    # Read again, as 0069 has every found run read: what was found stays shown while the read is due, fails, or finds
+    # the session gone.
+    ctx.conn.execute("DELETE FROM run_model_reads")
+    assert models() == found
+    run_models.record(ctx.conn, due, ModelsRead.FAILED, error="the runtime timed out")
+    assert models() == found
     run_models.record(ctx.conn, due, ModelsRead.MISSING)
-    assert models()["status"] == "missing"
+    assert models() == found
 
 
 def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
