@@ -11,12 +11,17 @@ kept so, or the last `skill` rule matching its name denies it.
 An MCP server's tools are not listed without connecting to it, so a server is judged by a name none of its tools has,
 `<server>_` and a NUL: a rule that matches that name matches every tool of the server. A later rule that could match
 only some of them, one naming the server's prefix or starting with a wildcard, makes its reach `some`.
+
+What one run is offered is asked with the words its own command starts OpenCode with, `opencode run` and what follows
+it swapped for each debug command: a debug command loads the plugins of the config where it starts, so it runs inside
+whatever wraps the agent, a sandbox among them, and with the config directory the command points OpenCode at.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, TypeAdapter, ValidationError
@@ -27,12 +32,15 @@ from canopy.runtime.opencode.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from pathlib import Path
 
 #: How long one of OpenCode's debug commands may take: each starts OpenCode, which reads its config and its plugins.
 TIMEOUT_SECONDS = 120
 #: OpenCode's tool that loads a skill, and the permission its rules name.
 SKILL = "skill"
+# The words that start OpenCode, as canopy's debug commands run it.
+_OPENCODE = ("opencode",)
+# An agent's name, as one path component could hold it.
+_AGENT_RE = re.compile(r"[a-z][a-z0-9-]*")
 # What OpenCode makes of a server's name in its tools' names: anything but a letter, a digit, `_`, or `-` is `_`.
 _UNSAFE_RE = re.compile(r"[^a-zA-Z0-9_-]")
 # The regex characters OpenCode escapes in a pattern before it reads `*` and `?` as wildcards.
@@ -85,20 +93,41 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
         The servers and skills OpenCode has, and what each agent is offered of them; with `error` set, and nothing
         else, when the servers or the skills could not be listed, and an agent's `error` set when its rules could not.
     """
-    env = {CONFIG_DIR_ENV: str(definitions_dir)}
+    ask = _Ask(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)})
     try:
-        config = _read(_run(runner, ("debug", "config"), cwd, env), _Config.model_validate_json, "debug config")
-        listed = _read(_run(runner, ("debug", SKILL), cwd, env), _SKILLS.validate_json, "debug skill")
+        config, skills = ask.listed()
     except _FailedError as e:
         return Offerings(error=str(e))
     servers = tuple(config.mcp)
-    skills = tuple(sorted({s.name for s in listed}))
     return Offerings(
         servers=servers,
         disabled_servers=tuple(name for name, server in config.mcp.items() if not server.enabled),
         skills=skills,
-        agents=tuple(_offer(runner, agent, cwd=cwd, env=env, servers=servers, skills=skills) for agent in agents),
+        agents=tuple(_offer(ask, agent, servers=servers, skills=skills) for agent in agents),
     )
+
+
+def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str]) -> AgentOffer:
+    """Ask OpenCode what the agent `argv` runs is offered, started as `argv` starts it, in `cwd` with `env`.
+
+    Returns:
+        The servers its config turns on, each with the agent's reach, and the skills it is offered; with `error` set,
+        and nothing else, when `argv` runs no `opencode run` with an agent, or OpenCode could not say.
+    """
+    words = tuple(argv)
+    start = next((i for i, w in enumerate(words[:-1]) if Path(w).name == "opencode" and words[i + 1] == "run"), None)
+    if start is None:
+        return AgentOffer("", error="its command runs no `opencode run`")
+    agent = _agent(words[start + 2 :])
+    if agent is None:
+        return AgentOffer("", error="its command names no agent")
+    ask = _Ask(runner, words[: start + 1], cwd, env)
+    try:
+        config, skills = ask.listed()
+    except _FailedError as e:
+        return AgentOffer(agent, error=str(e))
+    servers = tuple(name for name, server in config.mcp.items() if server.enabled)
+    return _offer(ask, agent, servers=servers, skills=skills)
 
 
 def matches(text: str, pattern: str) -> bool:
@@ -116,20 +145,53 @@ def matches(text: str, pattern: str) -> bool:
     return re.fullmatch(escaped, text, re.DOTALL) is not None
 
 
-def _run(runner: procs.Runner, args: Sequence[str], cwd: Path, env: Mapping[str, str]) -> str:
-    command = f"opencode {' '.join(args)}"
-    try:
-        result = runner.run(["opencode", *args], cwd=cwd, env=env, timeout=TIMEOUT_SECONDS)
-    except procs.CommandNotFoundError:
-        raise _FailedError("opencode is not on PATH") from None
-    except procs.ProcError as e:
-        raise _FailedError(f"`{command}` could not start: {e}") from None
-    if result.timed_out:
-        raise _FailedError(f"`{command}` took over {TIMEOUT_SECONDS} seconds")
-    if not result.ok:
-        # Not what it printed: an error about the config may quote a value of it, and an agent reads this.
-        raise _FailedError(f"`{command}` exited {result.returncode}; run it to see why")
-    return result.stdout
+# The agent `opencode run`'s arguments name, read word by word: the prompt is one word, so its text names none.
+def _agent(args: Sequence[str]) -> str | None:
+    for i, word in enumerate(args):
+        if word == "--agent" or word.startswith("--agent="):
+            name = word.removeprefix("--agent=") if "=" in word else (args[i + 1] if i + 1 < len(args) else "")
+            return name if _AGENT_RE.fullmatch(name) else None
+    return None
+
+
+class _Ask:
+    """OpenCode's debug commands, each started with `launcher`, the words that start OpenCode, in `cwd` with `env`."""
+
+    def __init__(self, runner: procs.Runner, launcher: Sequence[str], cwd: Path, env: Mapping[str, str]) -> None:
+        self.runner = runner
+        self.launcher = launcher
+        self.cwd = cwd
+        self.env = env
+
+    def listed(self) -> tuple[_Config, tuple[str, ...]]:
+        """Return OpenCode's resolved config and every skill it finds, by name, sorted.
+
+        Raises:
+            _FailedError: either could not be read.
+        """
+        config = _read(self.run("debug", "config"), _Config.model_validate_json, "debug config")
+        listed = _read(self.run("debug", SKILL), _SKILLS.validate_json, "debug skill")
+        return config, tuple(sorted({s.name for s in listed}))
+
+    def run(self, *args: str) -> str:
+        """Return what the debug command `args` printed.
+
+        Raises:
+            _FailedError: it could not start, timed out, or failed.
+        """
+        command = f"opencode {' '.join(args)}"
+        try:
+            result = self.runner.run([*self.launcher, *args], cwd=self.cwd, env=self.env, timeout=TIMEOUT_SECONDS)
+        except procs.CommandNotFoundError:
+            raise _FailedError(f"{self.launcher[0]} is not on PATH") from None
+        except procs.ProcError as e:
+            raise _FailedError(f"`{command}` could not start: {e}") from None
+        if result.timed_out:
+            raise _FailedError(f"`{command}` took over {TIMEOUT_SECONDS} seconds")
+        if not result.ok:
+            # Not what it printed: an error about the config may quote a value of it, and an agent reads this.
+            raise _FailedError(f"`{command}` exited {result.returncode}; run it to see why")
+        return result.stdout
 
 
 def _read[T](stdout: str, validate: Callable[[str], T], command: str) -> T:
@@ -140,17 +202,9 @@ def _read[T](stdout: str, validate: Callable[[str], T], command: str) -> T:
         raise _FailedError(f"`opencode {command}` printed what canopy cannot read") from None
 
 
-def _offer(
-    runner: procs.Runner,
-    agent: str,
-    *,
-    cwd: Path,
-    env: Mapping[str, str],
-    servers: Sequence[str],
-    skills: Sequence[str],
-) -> AgentOffer:
+def _offer(ask: _Ask, agent: str, *, servers: Sequence[str], skills: Sequence[str]) -> AgentOffer:
     try:
-        printed = _run(runner, ("debug", "agent", agent), cwd, env)
+        printed = ask.run("debug", "agent", agent)
         rules = _read(printed, _Agent.model_validate_json, "debug agent").permission
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))

@@ -566,6 +566,45 @@ class RunModel(Row):
 
 
 @dataclass(frozen=True)
+class RunOffer(Row):
+    """canopy's ask of the runtime, as an agent run started, of what it offered the run (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_offers"
+
+    run_table: str
+    run_id: int
+    #: The agent the run's command runs; None when it names none.
+    agent: str | None
+    #: canopy's words for why the runtime could not say; None when it said.
+    error: str | None
+    asked_at: str
+
+
+@dataclass(frozen=True)
+class RunOfferedServer(Row):
+    """One MCP server the runtime offered an agent run (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_offered_servers"
+
+    run_table: str
+    run_id: int
+    server: str
+    #: `all` of its tools, or only `some`.
+    reach: str
+
+
+@dataclass(frozen=True)
+class RunOfferedSkill(Row):
+    """One skill the runtime offered an agent run (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_offered_skills"
+
+    run_table: str
+    run_id: int
+    skill: str
+
+
+@dataclass(frozen=True)
 class ObservedPr(Row):
     """A PR as canopy's GitHub reader last read it whole (DESIGN §29)."""
 
