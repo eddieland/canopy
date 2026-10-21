@@ -4,7 +4,8 @@ import re
 import sqlite3
 import typing
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from importlib.metadata import version
 from pathlib import Path
 from unittest import mock
@@ -24,6 +25,8 @@ from tests.conftest import Journals
 # the companion's name, which is the one conflict worth having.
 COMPANIONS = Path(__file__).parent / "migrations"
 HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
+#: The tables a migration means to delete rows of, by its version: 0068 deletes the found reads, to read them again.
+DELETES: Mapping[int, AbstractSet[str]] = {68: frozenset({"run_model_reads"})}
 
 
 def companion(number: int) -> str:
@@ -92,9 +95,9 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journ
     """Applied one at a time to a journal with a row in every table, no migration loses a row, a column, or a value.
 
     A migration may add rows, as 0003's backfill does, and columns. One that means to drop or rewrite what it finds
-    says so here. Each table is seeded from the companion of the migration that creates it, so each later migration
-    runs against a journal with something in it: a rebuilt table or a new constraint fails on rows, not on an empty
-    journal.
+    says so in `DELETES`. Each table is seeded from the companion of the migration that creates it, so each later
+    migration runs against a journal with something in it: a rebuilt table or a new constraint fails on rows, not on an
+    empty journal.
     """
     migrations = tmp_path / "migrations"
     migrations.mkdir()
@@ -109,7 +112,8 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journ
             now_columns, now_rows = after[table]
             assert set(columns) <= set(now_columns), f"{m.path.name} dropped columns of {table}"
             kept = Counter(tuple(row[now_columns.index(c)] for c in columns) for row in now_rows.elements())
-            assert rows - kept == Counter(), f"{m.path.name} lost or changed rows of {table}"
+            if table not in DELETES.get(m.version, frozenset()):
+                assert rows - kept == Counter(), f"{m.path.name} lost or changed rows of {table}"
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         conn.executescript(companion(m.version))
@@ -533,3 +537,19 @@ def test_the_reviews_that_had_ended_are_taken_as_seen(tmp_path: Path, journals: 
     seen = records.fetch_all(conn, records.Seen, sql.select("*").from_("seen"))
     assert seen == [records.Seen(SeenKind.REVIEW, "1", "2026-10-01T00:00:00Z", None)]
     assert db.seen_among(conn, SeenKind.REVIEW, ["1", "2"]) == {"1"}
+
+
+def test_runs_whose_models_were_found_are_read_again_and_keep_their_models(tmp_path: Path, journals: Journals) -> None:
+    """0068 makes each found run due again, for the variant its models served at; missing and failed reads stay."""
+    conn = journal_at(journals, tmp_path, 67)
+    conn.executemany(
+        "INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at) VALUES (?, ?, ?, ?, 1, 'x')",
+        [("runs", 1, "found", None), ("runs", 2, "missing", None), ("ticks", 3, "failed", "exited 1")],
+    )
+    conn.execute(
+        "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES ('runs', 1, 'a/x', 2, 0.5)",
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(67)
+    reads = conn.execute("SELECT run_table, run_id, status FROM run_model_reads ORDER BY run_id").fetchall()
+    assert [tuple(r) for r in reads] == [("runs", 2, "missing"), ("ticks", 3, "failed")]
+    assert [tuple(r) for r in conn.execute("SELECT run_id, model FROM run_models")] == [(1, "a/x")]

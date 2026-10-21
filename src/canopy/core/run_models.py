@@ -99,14 +99,20 @@ def record(
     *,
     error: str | None = None,
 ) -> None:
-    """Record how reading `run`'s session ended, and the models it found, in place of any read before."""
+    """Record how reading `run`'s session ended, and the models it found, in place of any read before.
+
+    A session found missing whose models were read before keeps them, as found: the runtime dropped what canopy read.
+    """
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("run_models").where("run_table = ? AND run_id = ?", run.run_table, run.run_id))
-        sql.execute_many(
-            conn,
-            sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
-            [(run.run_table, run.run_id, m.model, m.replies, m.cost_usd) for m in models],
-        )
+        if status is ModelsRead.MISSING and of_run(conn, run.run_table, run.run_id):
+            status = ModelsRead.FOUND
+        else:
+            sql.execute(conn, sql.delete("run_models").where("run_table = ? AND run_id = ?", run.run_table, run.run_id))
+            sql.execute_many(
+                conn,
+                sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
+                [(run.run_table, run.run_id, m.model, m.replies, m.cost_usd) for m in models],
+            )
         sql.execute(
             conn,
             sql.insert(
