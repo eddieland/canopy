@@ -38,7 +38,7 @@ class OverseerState(TypedDict):
     repositories: list[RepositoryState]
     tickets: list[TicketState]
     stopped: list[str]
-    recently_done: list[DoneTicket]
+    recently_done: list[str]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
     notices: NotRequired[list[NoticeState]]
@@ -166,13 +166,6 @@ class LeasedSlot(TypedDict):
     leased_at: str | None
 
 
-class DoneTicket(TypedDict):
-    """A ticket marked done lately, and when (DESIGN §7): one the query may still find open, since humans close it."""
-
-    key: str
-    done_at: str
-
-
 class CapacityState(TypedDict):
     """How many workers may run, are running, and may still start."""
 
@@ -245,7 +238,7 @@ def state_block(
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
     `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22), and the tickets
-    marked done; `recently_done` names those marked done lately, with when, so the overseer leaves out one the
+    marked done; `recently_done` names by key those marked done lately, so the overseer leaves out one the
     tracker still shows open (DESIGN §7). `units` are each ticket's units, and `run_slots` and `run_reasons` each
     running or latest run's slots and, for a `resume`, its reasons, by run id (DESIGN §8). `attempts`, `grants`, and
     `ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
@@ -368,8 +361,9 @@ def state_block(
         "tickets": [ticket_summary(t) for t in tickets],
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
-        # Tickets marked done lately: owed no decision while the tracker still shows them open (DESIGN §7).
-        "recently_done": [{"key": str(t["key"]), "done_at": str(t["done_at"])} for t in recently_done],
+        # Tickets marked done lately that the query still finds: owed no decision while the tracker shows them open
+        # (DESIGN §7). Keys alone, since the overseer only leaves them out.
+        "recently_done": [str(t["key"]) for t in recently_done],
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
         **({"reviews": reviews} if reviews is not None else {}),

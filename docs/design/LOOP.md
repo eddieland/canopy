@@ -198,9 +198,9 @@ found; a ticket the operator starts is in the block already.
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
 and has no phase: the overseer marks it done (decision `done`, rationale `closed`), whatever its labels, branch, or PR,
 unless a worker is running for it, which it waits out. A PR still open on a closed ticket is the operator's, like the
-tracker transition. `recently_done` names each ticket marked done in the last 30 days for any other reason, and the
-overseer records nothing for it, so a merged ticket a human has not closed yet costs nothing each tick. `canopy forget`
-clears the done mark (§22).
+tracker transition. `recently_done` names each ticket marked done in the last 30 days for any other reason that the
+last query still returned, and the overseer records nothing for it, so a merged ticket a human has not closed yet costs
+nothing each tick. `canopy forget` clears the done mark (§22).
 
 ## 8. Dispatch and the worker contract
 
