@@ -165,6 +165,13 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         ("workers", "bash", 4, 119, 279_000),
     ]
     assert found["tools"][0]["est_tokens"] == 325_000 // 4
+    # What each kind spent on each model, the most costly first, its runs no session named a model for last.
+    assert [(m["kind"], m["model"], m["runs"], m["replies"]) for m in found["models"]][1:4] == [
+        ("workers", "anthropic/claude-sonnet-4-5", 3, 186),
+        ("workers", "anthropic/claude-opus-4-1", 1, 23),
+        ("workers", None, 5, 0),
+    ]
+    assert found["models"][2]["cost_usd"] == pytest.approx(1.65)
 
     assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default
     assert c.get("/api/spend/breakdown", params={"days": 0}).status_code == 422

@@ -107,5 +107,6 @@ The sandbox's templates share OpenCode's data directory, so sandboxed runs are f
 their parent's export. Built (2026-10-20): the read, from `opencode export --sanitize` after each live tick, five
 runs a tick at most, a failed read tried again a day later up to three reads, and `canopy spend`'s split by model.
 Built (2026-10-21): the web UI's run, tick, chore run, and review run pages, and the runs list, name each run's models,
-each with its share of the cost when there are several, or why none is named yet. Not built yet: the model shown in
+each with its share of the cost when there are several, or why none is named yet; and the spend page splits each
+kind's cost by model, as `canopy spend` does. Not built yet: the model shown in
 `canopy status`, and the choosing itself.

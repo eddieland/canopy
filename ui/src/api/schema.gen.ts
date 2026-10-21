@@ -4839,6 +4839,13 @@ export type components = {
              */
             idle_ticks: components["schemas"]["Tick"][];
             /**
+             * Models
+             * @description What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
+             *     plans, chores, reviews, each kind's models the most costly first, and its runs no session named a model for last.
+             * @default []
+             */
+            models: components["schemas"]["SpendModel"][];
+            /**
              * Per Day
              * @description Every day in it, or every hour, oldest first, those with nothing spent included.
              */
@@ -4973,6 +4980,36 @@ export type components = {
          * @enum {string}
          */
         SpendKind: "overseer" | "workers" | "plans" | "chores" | "reviews";
+        /**
+         * SpendModel
+         * @description What one kind's runs that started in the window spent on one model, as each run's session says (DESIGN §13).
+         */
+        SpendModel: {
+            /**
+             * Cost Usd
+             * @description What the sessions priced those replies at, in US dollars; for the runs no session named a model for, what the
+             *     runs reported, None when none did.
+             */
+            cost_usd: number | null;
+            /** @description The kind of run; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Model
+             * @description As `provider/model`, as the runtime names it; None for the kind's runs no session named a model for: not read
+             *     yet, no longer kept, failed to read, or making no model call.
+             */
+            model: string | null;
+            /**
+             * Replies
+             * @description How many replies it wrote; 0 for the runs no session named a model for.
+             */
+            replies: number;
+            /**
+             * Runs
+             * @description How many of those runs it wrote a reply of: a run on two models counts under each.
+             */
+            runs: number;
+        };
         /**
          * SpendPullRequest
          * @description What the runs that pushed to one PR and the review runs of it, started in the window, cost.

@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdownRange } from '@/api/queries'
-import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
+import type { SpendBreakdown, SpendDay, SpendModel, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -52,8 +52,8 @@ interface SpendSearch {
 const HELP =
     'What agent runs cost each day, or each hour of the last 24, as the runtime reported it: the overseer, idle ' +
     "ticks' part of it apart, and the workers, plans, chores, and reviews it started; beside it, the tickets the " +
-    "loop marked done, and what each ticket's and PR's own runs cost; and which " +
-    "tools put the most into the runs' context. As canopy spend --days N prints it."
+    "loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each model; and " +
+    "which tools put the most into the runs' context. As canopy spend --days N prints it."
 
 // What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
@@ -65,6 +65,12 @@ const RETURNED_HINT =
     'The characters its calls returned, output or error: each later model call of the run reads them again'
 const EST_TOKENS_HINT =
     "The characters over 4, an estimate: the runtime does not say which of a model call's tokens a tool returned"
+
+// What a model's runs count, and why a kind's runs can have no model named, on hover.
+const MODEL_RUNS_HINT = 'The runs it wrote a reply of: a run on two models counts under each'
+const NO_MODEL_HINT =
+    "Runs whose sessions named no model: not read yet, as a tick reads a few ended runs' sessions; no longer kept by " +
+    'the runtime; failed to read; or making no model call. Their cost is what the runs reported'
 
 // The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
 // rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
@@ -191,6 +197,18 @@ function SpendPage() {
                             )}
                         </Panel>
                     </div>
+                    <Panel data-testid="spend-models">
+                        <PanelHeader label="By model">
+                            <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
+                                {data === undefined ? '' : modelCount(data.models)}
+                            </span>
+                        </PanelHeader>
+                        {data === undefined ? (
+                            <PanelSkeleton rows={4} className="min-h-32" />
+                        ) : (
+                            <Models models={data.models} span={span} />
+                        )}
+                    </Panel>
                     <Panel data-testid="spend-tools">
                         <PanelHeader label="By tool">
                             <span className="readout text-xs text-muted-foreground">{data?.tools.length ?? ''}</span>
@@ -633,6 +651,72 @@ function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]
             </table>
         </PanelScroll>
     )
+}
+
+/**
+ * What each kind spent on each model, as its runs' sessions say: the kinds in `canopy spend`'s order, each kind's
+ * models the most costly first, and its runs no session named a model for last, muted. Until a tick has read any
+ * run's session, says so rather than list only those.
+ */
+function Models({ models, span }: { models: SpendModel[]; span: string }) {
+    if (models.length === 0) {
+        return <Empty size="panel">no run started in these {span}</Empty>
+    }
+    if (models.every((m) => m.model === null)) {
+        return (
+            <Empty size="panel">
+                no run&apos;s model read in these {span} yet: a tick reads a few ended runs&apos; sessions
+            </Empty>
+        )
+    }
+    return (
+        <PanelScroll label="Spend by model" className="max-h-96 px-3 pb-3">
+            <table className="w-full border-collapse text-sm" data-testid="spend-model-table">
+                <thead className={PADDED_HEAD}>
+                    <tr className="text-right">
+                        <th className="panel-label pb-1.5 text-left font-normal">model</th>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">kind</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal" title={MODEL_RUNS_HINT}>
+                            runs
+                        </th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">replies</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
+                    </tr>
+                </thead>
+                <tbody className="font-mono text-xs">
+                    {models.map((m) => (
+                        <tr key={`${m.kind} ${m.model ?? ''}`} className="text-right" data-testid="spend-model">
+                            <th
+                                scope="row"
+                                className="w-full max-w-0 py-0.5 text-left font-normal"
+                                title={m.model === null ? NO_MODEL_HINT : undefined}
+                            >
+                                {m.model === null ? (
+                                    <None reason="no session named one" className="block truncate font-sans" />
+                                ) : (
+                                    <Clipped text={m.model} className="block font-sans font-medium" />
+                                )}
+                            </th>
+                            <td className="pl-3 text-left text-muted-foreground">{m.kind}</td>
+                            <td className="readout pl-3">{m.runs}</td>
+                            <td className={cn('readout pl-3', m.model === null && 'text-muted-foreground')}>
+                                {m.model === null ? '–' : m.replies}
+                            </td>
+                            <td className="readout pl-3">
+                                <Cost usd={m.cost_usd} />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </PanelScroll>
+    )
+}
+
+/** How many models the window's runs were served by, each counted once whatever kinds it served. */
+function modelCount(models: SpendModel[]): number | string {
+    const named = new Set(models.flatMap((m) => (m.model === null ? [] : [m.model])))
+    return named.size === 0 ? '' : named.size
 }
 
 /**
