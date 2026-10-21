@@ -160,12 +160,12 @@ between you and them.
 ## The reviews page
 
 [Reviews](/reviews) lists every review, newest first: its verdict, its ticket, how big the change is (`low impact`,
-`normal impact`, `high impact`), the PR and commit, the persona it wrote in (`as skeptic`), and what it cost. A PR you
-had reviewed in several personas gets a row for each, so that last part is how you tell the skeptic from the minimalist.
-A verdict reads `clean`, or counts the findings with the worst among them, such as `3 findings, 1 major`. A finding is
-`blocking`, `major`, or `minor`. With no review
-yet, it points you to **Review a PR** above the list, which works with the defaults, and to `review.agent_prs` and
-`review.query`, which have the loop review PRs on its own.
+`normal impact`, `high impact`), the PR and commit, the persona it wrote in (`as skeptic`, where the list has room for
+it), and what it cost. A PR you had reviewed in several personas gets a row for each, and the persona is how you tell
+the skeptic from the minimalist. A verdict reads `clean`, or counts the findings with the worst among them, such as
+`3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. With no review yet, it points you to **Review a
+PR** above the list, which works with the defaults, and to `review.agent_prs` and `review.query`, which have the loop
+review PRs on its own.
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
 verdict, commit, or cost because nothing has read it yet. Once a tick starts its review, the review's own row takes its
