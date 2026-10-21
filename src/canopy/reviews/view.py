@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import db, personas, review_requests
+from canopy.core import db, personas, review_requests, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import grants
@@ -101,12 +101,12 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
     """Return the state block's `reviews`, or None when reviews are off: then the block has no such key."""
     if not review_requests.reviews_on(conn, config):
         return None
-    runs = db.review_runs_since(conn, db.format_time(now - RECENT))
+    runs = review_runs.review_runs_since(conn, db.format_time(now - RECENT))
     by_pr: dict[str, list[records.ReviewRun]] = {}
     for run in runs:
         by_pr.setdefault(run.pr_url, []).append(run)
     prs = [_pr_summary(conn, config, url) for url in list(by_pr)[:MAX_PRS]]
-    started_today = len(db.review_runs_since(conn, db.format_time(now - timedelta(hours=24))))
+    started_today = len(review_runs.review_runs_since(conn, db.format_time(now - timedelta(hours=24))))
     return {
         "agent_prs": config.review.agent_prs,
         "query": config.review.query.strip() or None,
@@ -134,7 +134,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
 
 def _requested(conn: sqlite3.Connection, request: records.ReviewRequest) -> RequestedPR:
     url = request.pr_url
-    runs = db.review_runs_of(conn, url)
+    runs = review_runs.review_runs_of(conn, url)
     granted = grants.granted(conn, url)
     return {
         "url": url,
@@ -146,7 +146,7 @@ def _requested(conn: sqlite3.Connection, request: records.ReviewRequest) -> Requ
 
 
 def _pr_summary(conn: sqlite3.Connection, config: Config, url: str) -> ReviewedPR:
-    runs = db.review_runs_of(conn, url)
+    runs = review_runs.review_runs_of(conn, url)
     granted = grants.granted(conn, url)
     ticket = next((r.ticket_key for r in runs if r.ticket_key), None)
     latest = runs[0]
@@ -182,7 +182,7 @@ def _latest(
     for run in reviews:
         stored = result.stored(run.result_json)
         # The operator's dismissals hold a finding back from workers and from the overseer alike (DESIGN §21).
-        dismissed = db.review_dismissals(conn, run.id)
+        dismissed = review_runs.review_dismissals(conn, run.id)
         findings: list[result.Finding] = stored.findings if stored is not None else []
         kept.extend(f.title for i, f in enumerate(findings, 1) if i not in dismissed)
         dismissed_count += len(dismissed)

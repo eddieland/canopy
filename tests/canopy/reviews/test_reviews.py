@@ -10,7 +10,18 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, personas, records, review_diff, run_models, sql
+from canopy.core import (
+    conversation,
+    db,
+    definitions,
+    personas,
+    pr_list,
+    records,
+    review_diff,
+    review_runs,
+    run_models,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.core.context import Context
@@ -80,10 +91,10 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         before = time.time()
         assert main(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py")[1:]) == 0
         deadline = time.monotonic() + 30
-        row = db.get_review_run(conn, 1)
+        row = review_runs.get_review_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
             time.sleep(0.05)
-            row = db.get_review_run(conn, 1)
+            row = review_runs.get_review_run(conn, 1)
         after = time.time()
         assert row is not None
         assert row.status == "done", Path(row.log_path).read_text()
@@ -477,7 +488,7 @@ def test_a_review_records_the_prs_own_title(reviewing: CanopyEnv, scenario: Scen
     scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports({**FINDINGS, "pr_title": "Retry the\n  queue"}))
     # A result without one, as an older override prints, records none.
     scenario.review(reviews(head(git_pool), f"{PR}0"), reviewer=reviewer_reports(CLEAN))
-    titles = {str(r["url"]): r["pr_title"] for r in db.pull_requests(scenario.conn, 10)}
+    titles = {str(r["url"]): r["pr_title"] for r in pr_list.pull_requests(scenario.conn, 10)}
     assert titles == {PR: "Retry the queue", f"{PR}0": None}  # on one line
 
 
@@ -896,7 +907,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     ]:
         assert f"dismiss refused ({guard})" in scenario.operator("dismiss", *args, code=1).err
     # Several are dismissed together or not at all.
-    assert db.review_dismissals(conn, review_id) == frozenset()
+    assert review_runs.review_dismissals(conn, review_id) == frozenset()
 
     dismissed = scenario.operator("dismiss", ref, "2")
     assert f"{ref} finding 2 is dismissed: no worker or tick acts on it." in dismissed.out
@@ -928,7 +939,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     # Undo hands it back.
     undone = scenario.operator("dismiss", ref, "1", "--undo")
     assert "is no longer dismissed: a resume hands it to the worker again." in undone.out
-    assert db.review_dismissals(conn, review_id) == frozenset({2})
+    assert review_runs.review_dismissals(conn, review_id) == frozenset({2})
 
 
 def previous_review(prompt: str) -> str:

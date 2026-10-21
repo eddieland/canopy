@@ -23,6 +23,7 @@ from canopy.core import (
     db,
     drafts,
     feedback_plans,
+    follow_ups,
     memory,
     notice,
     outbox,
@@ -1135,7 +1136,7 @@ def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
         What a follow-up is, the bound, the repositories it may name, and the result field; or why it files none.
     """
     limit = ctx.config.policy.max_follow_ups
-    parent = db.get_follow_up(ctx.conn, key)
+    parent = follow_ups.get_follow_up(ctx.conn, key)
     if parent is not None:
         return prompts.no_follow_ups(f"{key} is itself a follow-up of {parent.parent_key}, and a follow-up files none")
     if limit == 0:

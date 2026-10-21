@@ -6,7 +6,7 @@ import threading
 from collections.abc import Sequence
 from pathlib import Path
 
-from canopy.core import db, pools, workspace
+from canopy.core import db, pools, review_runs, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, TickStatus
 from canopy.serve import mock
@@ -37,11 +37,11 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
         (run_id, "/pool/1", "lease-run", f"canopy:{KEY}", "main"),
     )
     tick_id = db.start_tick(ctx.conn, dry_run=False)
-    review_id = db.insert_review_run(
+    review_id = review_runs.insert_review_run(
         ctx.conn, tick_id=tick_id, pr_url="https://example.test/pr/3", sha="abc", ticket=None, repo=None,
         purpose="query", logs_dir=ctx.state_dir / "reviews",
     )  # fmt: skip
-    db.set_review_slot(
+    review_runs.set_review_slot(
         ctx.conn,
         review_id,
         slot=Path("/pool/2"),

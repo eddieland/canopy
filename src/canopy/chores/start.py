@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING
 
 from canopy.chores import history
 from canopy.core import chore_result as result
+from canopy.core import chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
-from canopy.core import conversation, db, notice, outbox, prompts
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
@@ -139,8 +139,8 @@ def launch(ctx: Context, *, tick_id: int | None, state: view.ChoreState, body: s
         RuntimeError: the chore run's row was gone right after it was inserted.
     """
     name = state.name
-    run_id = db.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=runs_dir(ctx, name))
-    run = db.get_chore_run(ctx.conn, run_id)
+    run_id = chore_runs.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=runs_dir(ctx, name))
+    run = chore_runs.get_chore_run(ctx.conn, run_id)
     if run is None:
         raise RuntimeError(f"chore run {run_id} vanished")
     try:

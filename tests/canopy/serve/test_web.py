@@ -11,7 +11,7 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, pause, run_models
+from canopy.core import config, conversation, db, pause, review_runs, run_models
 from canopy.core.context import Context
 from canopy.core.vocab import ModelsRead, Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
@@ -399,7 +399,7 @@ def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_doe
     ended_run(ctx, KEY, "implement")
     db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase=Phase.REVIEW_PENDING)
     tick_id = db.start_tick(ctx.conn, dry_run=False)
-    db.insert_review_run(
+    review_runs.insert_review_run(
         ctx.conn,
         tick_id=tick_id,
         pr_url=pr,
@@ -633,7 +633,7 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
     second = running_run(ctx, KEY)
     running_run(ctx, "PROJ-2")  # another ticket's
     tick_id = db.start_tick(ctx.conn, dry_run=False)
-    review = db.insert_review_run(
+    review = review_runs.insert_review_run(
         ctx.conn,
         tick_id=tick_id,
         pr_url="https://github.com/acme/web/pull/1",

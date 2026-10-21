@@ -9,7 +9,7 @@ from typing import ClassVar
 
 import pytest
 
-from canopy.core import db, records, sql
+from canopy.core import chore_runs, db, records, review_runs, sql
 from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus, StartStatus, TickStatus
 from tests.canopy.helpers import in_tick, present
 from tests.conftest import Journals
@@ -170,29 +170,29 @@ def test_a_flag_that_is_not_0_or_1_is_refused(conn: sqlite3.Connection) -> None:
 
 
 def test_a_vocabulary_column_reads_as_its_member(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
+    run_id = chore_runs.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
     db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, "{}")
-    run = present(db.get_chore_run(conn, run_id))
+    run = present(chore_runs.get_chore_run(conn, run_id))
     assert run.status is ChoreRunStatus.OK
 
 
 def test_a_value_the_vocabulary_does_not_hold_is_refused(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
+    run_id = chore_runs.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
     conn.execute("UPDATE chore_runs SET status = 'done' WHERE id = ?", (run_id,))
     with pytest.raises(records.RowError, match=r"^chore_runs\.status holds 'done', which is not a ChoreRunStatus$"):
-        db.get_chore_run(conn, run_id)
+        chore_runs.get_chore_run(conn, run_id)
 
 
 def test_columns_reads_a_typed_row_and_a_sqlite_row_alike(conn: sqlite3.Connection, tmp_path: Path) -> None:
-    run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
-    typed = present(db.get_chore_run(conn, run_id))
+    run_id = chore_runs.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
+    typed = present(chore_runs.get_chore_run(conn, run_id))
     untyped = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
     assert {k: records.columns(typed)[k] for k in untyped.keys()} == dict(untyped)  # noqa: SIM118
 
 
 def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.Connection, tmp_path: Path) -> None:
     with in_tick(conn) as tick_id:
-        run_id = db.insert_review_run(
+        run_id = review_runs.insert_review_run(
             conn,
             tick_id=tick_id,
             pr_url=PR,
@@ -202,7 +202,7 @@ def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.C
             purpose="request",
             logs_dir=tmp_path,
         )
-    [run] = db.review_runs_of(conn, PR)
+    [run] = review_runs.review_runs_of(conn, PR)
     assert (run.id, run.status, run.pool) == (run_id, ReviewRunStatus.RUNNING, PoolKind.TREEHOUSE)
     assert isinstance(run.status, ReviewRunStatus)
     assert isinstance(run.pool, PoolKind)

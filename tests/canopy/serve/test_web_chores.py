@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from canopy.chores import start
-from canopy.core import chore_view, conversation, db
+from canopy.core import chore_runs, chore_view, conversation, db
 from canopy.serve import mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import json_block
@@ -254,7 +254,7 @@ def test_a_try_from_the_mock_records_a_run_with_no_tick_and_refuses_a_chore_alre
     detail = c.get("/api/chores/deps").json()
     assert detail["chore"]["running"]["id"] == tried["run_id"]
     with backend.open() as ctx:
-        row = db.get_chore_run(ctx.conn, tried["run_id"])
+        row = chore_runs.get_chore_run(ctx.conn, tried["run_id"])
     assert row is not None
     assert (row.tick_id, row.status) == (None, "running")
 

@@ -13,7 +13,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import contract, conversation, db, review_diff, review_requests
+from canopy.core import contract, conversation, db, review_diff, review_requests, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus, SeenKind
 from canopy.serve.schema import (
@@ -59,7 +59,7 @@ def reviews(ctx: Context) -> list[ReviewSummary]:
     Returns:
         At most `RECENT_REVIEWS` runs, each as the reviews list shows it.
     """
-    return summaries(ctx.conn, db.recent_review_runs(ctx.conn, RECENT_REVIEWS))
+    return summaries(ctx.conn, review_runs.recent_review_runs(ctx.conn, RECENT_REVIEWS))
 
 
 def requested(ctx: Context) -> list[RequestedReview]:
@@ -81,11 +81,11 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         The run with its ticket's title, summary, harness note, findings, the diff it reviewed if that was kept, and
         every review run of the same PR; or None.
     """
-    row = db.get_review_run(ctx.conn, run_id)
+    row = review_runs.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
     stored = result.stored(row.result_json)
-    dismissed = db.review_dismissals(ctx.conn, run_id)
+    dismissed = review_runs.review_dismissals(ctx.conn, run_id)
     note = contract.stored_object(row.result_json).get("harness")
     kept = review_diff.path_for(row.log_path)
     found = review_diff.read(kept)
@@ -102,7 +102,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         else [],
         diff=diff,
         diff_removed_after_days=removed_after(ctx.conn, kept, row.ended_at, "run_files_days"),
-        runs=summaries(ctx.conn, db.review_runs_of(ctx.conn, row.pr_url)),
+        runs=summaries(ctx.conn, review_runs.review_runs_of(ctx.conn, row.pr_url)),
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
@@ -127,7 +127,7 @@ def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     Returns:
         The transcript, its status saying whether the run recorded a session and whether its log could be read.
     """
-    row = db.get_review_run(ctx.conn, run_id)
+    row = review_runs.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
     log = Path(row.log_path)
@@ -141,7 +141,7 @@ def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
         The tail, without control characters, or a `no_output` status when the log is missing or not a regular file;
         None if there is no such run.
     """
-    row = db.get_review_run(ctx.conn, run_id)
+    row = review_runs.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
     log = Path(row.log_path)

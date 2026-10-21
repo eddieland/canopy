@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import execute, history, start
+from canopy.core import chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_view as view
-from canopy.core import conversation, db, notice, outbox, prompts
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.runtime import stdout
@@ -112,8 +112,8 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
         if running is not None:
             raise RunningError(f"chore run {running['id']} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
-        run_id = db.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=start.runs_dir(ctx, name))
-        run = db.get_chore_run(ctx.conn, run_id)
+        run_id = chore_runs.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=start.runs_dir(ctx, name))
+        run = chore_runs.get_chore_run(ctx.conn, run_id)
         if run is None:
             raise TrialError(f"chore run {run_id} vanished")
         log_path = Path(run.log_path)
@@ -177,7 +177,7 @@ def run_recorded(ctx: Context, recorded: Recorded) -> execute.Outcome:
         execute.ChoreError: the run is not this process's to do, for example because reconcile closed it.
     """
     try:
-        run = db.get_chore_run(ctx.conn, recorded.run_id)
+        run = chore_runs.get_chore_run(ctx.conn, recorded.run_id)
         if run is None:
             raise execute.ChoreError(f"no chore run {recorded.run_id}")
         # Opened as `spawn` opens a detached run's log: appended, readable only by the operator, never through a link.

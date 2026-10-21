@@ -268,7 +268,7 @@ def test_a_key_another_run_recorded_first_is_named_as_refused(scenario: Scenario
             runs_dir=runs,
         )
         with db.transaction(scenario.conn):
-            db.record_follow_up(scenario.conn, FOLLOW_UP, KEY, first, None)
+            follow_ups.record_follow_up(scenario.conn, FOLLOW_UP, KEY, first, None)
         scenario.conn.execute(
             "UPDATE runs SET result_json = ? WHERE id = ?",
             (json.dumps({"summary": "did it"}), second),

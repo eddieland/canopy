@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, records, review_drafts, sql
+from canopy.core import conversation, db, records, review_drafts, review_runs, sql
 from canopy.core.config import notify_words
 from canopy.core.memory_text import TextRefused
 from canopy.core.review_drafts import Comment, Version
@@ -58,7 +58,7 @@ def find(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft:
         Refused: (`unknown`) there is no such review run; (`no_draft`) it has none: it did not end `done`, or it is of
             one of the loop's own PRs, whose findings go to a worker instead.
     """
-    if db.get_review_run(conn, run_id) is None:
+    if review_runs.get_review_run(conn, run_id) is None:
         raise conversation.Refused("unknown", f"there is no review run {run_id}")
     found = review_drafts.of_review(conn, run_id) or review_drafts.make(conn, run_id)
     if found is None:
@@ -135,7 +135,7 @@ def add_comment(conn: sqlite3.Connection, run_id: int, location: str, text: str,
     conversation.check_operator()
     words = _checked(text)
     find(conn, run_id)
-    run = db.get_review_run(conn, run_id)
+    run = review_runs.get_review_run(conn, run_id)
     diff = review_drafts.diff_of(run) if run is not None else None
     if diff is None:
         raise conversation.Refused("no_diff", f"review run {run_id} keeps no diff to put a comment on")
@@ -255,7 +255,7 @@ def publish(
     conversation.check_operator()
     expire_claims(conn, config)
     draft = find(conn, run_id)
-    run = db.get_review_run(conn, run_id)
+    run = review_runs.get_review_run(conn, run_id)
     if run is None or not review_drafts.draftable(conn, run):
         raise conversation.Refused(
             "not_ours",

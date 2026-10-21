@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Annotated, Self
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from canopy.core import chore_result as result
-from canopy.core import config, contract, conversation, db
+from canopy.core import chore_runs, config, contract, conversation
 from canopy.core.memory_text import visible
 from canopy.infra import logs
 from canopy.infra.text import one_line
@@ -199,7 +199,7 @@ def check_reader(conn: sqlite3.Connection, name: str, environ: Mapping[str, str]
 
 def listed(conn: sqlite3.Connection, name: str, limit: int, before: int | None = None) -> list[records.ChoreRun]:
     """Return chore `name`'s runs, newest first: at most `limit`, and only those before run id `before` if given."""
-    return db.chore_runs(conn, name, limit, before=before)
+    return chore_runs.chore_runs(conn, name, limit, before=before)
 
 
 def run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun:
@@ -211,7 +211,7 @@ def run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun
     Raises:
         Refused: (`unknown`) no run of the chore has that id.
     """
-    run = db.get_chore_run(conn, run_id)
+    run = chore_runs.get_chore_run(conn, run_id)
     if run is None or run.chore != name:
         raise Refused("unknown", f"chore {name} has no run {run_id}")
     return run
@@ -228,7 +228,7 @@ def _own_chore(conn: sqlite3.Connection, run_env_value: str) -> str | None:
     number = run_env_value.removeprefix(RUN_PREFIX)
     if number == run_env_value or not number.isdigit():
         return None
-    run = db.get_chore_run(conn, int(number))
+    run = chore_runs.get_chore_run(conn, int(number))
     return run.chore if run is not None else None
 
 

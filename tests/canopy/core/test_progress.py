@@ -5,7 +5,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from canopy.core import db, progress
+from canopy.core import chore_runs, db, progress
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs
 from tests.canopy.helpers import in_tick, present
@@ -44,7 +44,7 @@ def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_
     tmp_path: Path,
 ) -> None:
     with in_tick(conn) as tick_id:
-        run_id = db.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=tmp_path)
+        run_id = chore_runs.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=tmp_path)
         watch = progress.Progress(
             conn,
             "chore_runs",
@@ -55,7 +55,7 @@ def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_
             fields={},
         )
         watch(STEP)
-        run = present(db.get_chore_run(conn, run_id))
+        run = present(chore_runs.get_chore_run(conn, run_id))
         assert (run.session_id, run.cost_usd) == ("ses_live", 0.25)
 
         # A tick that ended is not written to by an overseer still printing: what it cost is recorded as it ended.
