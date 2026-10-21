@@ -82,7 +82,7 @@ Read from OpenCode 1.19.3's source (2026-10-16), and read again before stage 2. 
 ### What changes elsewhere, in stage 2
 
 The overseer's prompt and definition, §6, §13, §22, TRUST_MODEL T1 and T7, and D020 and D081. D124 already holds that
-canopy serves MCP itself, over stdio only, to the overseer only. M37 retires mirroring, and with it the `mirror` tool.
+canopy serves MCP itself, over stdio only, to the overseer only. §35 retires mirroring, and with it the `mirror` tool.
 
 ### Open
 
