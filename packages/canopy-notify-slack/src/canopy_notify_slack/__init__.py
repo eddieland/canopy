@@ -11,8 +11,9 @@ Text from the journal, which agents and org members wrote, is escaped for Slack'
 cannot mention a person or `@channel`, or show one link and point at another. The page of canopy's web UI the message
 gives an item or event, while the loop serves one, is linked after it under the sink's own word, `open`.
 
-With `--channel` and `--threads`, what is about one ticket, chore, or review goes in its own thread, a new one each
-day, recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest goes in the channel.
+With `--channel` and `--threads`, what is about one ticket or review goes in its own thread, a new one each day,
+recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest, a chore's results among
+it, goes in the channel.
 Each thread starts with a post of the same shape, naming what it is about, and everything about it is a reply.
 A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
 question: then it is shown in the channel too.
@@ -696,6 +697,8 @@ BROADCASTS: Mapping[str, str] = {
     "blocked": "a run that ended blocked, waiting on an answer",
 }
 
+#: What a chore's findings' attention items name as their ticket, before the chore's name.
+_CHORE = "chore:"
 # A message's `ts`, which names it to reply in its thread.
 _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 
@@ -905,10 +908,10 @@ def post_threaded(
 ) -> tuple[bool, str]:
     """Post `message` as `split` divides it, recording in `threads` each thread it starts and each post it makes.
 
-    What is about a ticket, a chore, or a review's PR goes in its thread for the day, which a post of its own starts in
-    the channel, naming what the thread is about, before the first item. A reply stays in its thread, unless it holds
-    one of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. The rest, loop events and the
-    digest among it, is posted in the channel first, with the header.
+    What is about a ticket or a review's PR goes in its thread for the day, which a post of its own starts in the
+    channel, naming what the thread is about, before the first item. A reply stays in its thread, unless it holds one
+    of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. The rest, loop events, chores'
+    results, and the digest among it, is posted in the channel first, with the header.
 
     Returns:
         Whether Slack accepted every post, and its reply to the last one tried. The first refused post ends the
@@ -948,8 +951,8 @@ def post_threaded(
 def _starter(part: Part, message: Mapping[str, object], day: str) -> tuple[str, list[Block]]:
     """The post that starts `part`'s thread for `day`: what the thread is about, the same shape for every thread.
 
-    A header names the ticket and its title, the chore, or the review; a line under it the repository, the day, and a
-    review's PR. Everything about it that day, the first item included, is a reply under it.
+    A header names the ticket and its title, or the review; a line under it the repository, the day, and a review's
+    PR. Everything about it that day, the first item included, is a reply under it.
 
     Returns:
         The text for notifications, and the blocks.
@@ -971,9 +974,9 @@ def _starter(part: Part, message: Mapping[str, object], day: str) -> tuple[str, 
 def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -> list[Part]:
     """Divide `message` into posts: the channel's first, then a thread's each, in the order the message names them.
 
-    An item goes in its ticket's thread, a chore's run in `chore:NAME`'s (where its findings' attention items go too),
-    and a review's run in its PR's; anything else, such as a loop event, a repository's attention item, or the digest,
-    in the channel. An item whose fingerprint is in `skip` is left out, and so is a post left with nothing.
+    An item goes in its ticket's thread, and a review's run in its PR's; anything else, such as a loop event, a chore's
+    run or its findings' attention items, a repository's attention item, or the digest, in the channel. An item whose
+    fingerprint is in `skip` is left out, and so is a post left with nothing.
 
     Returns:
         The posts, each with at least one item.
@@ -1007,11 +1010,13 @@ def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -
 
 def _thread(item: Mapping[str, object]) -> str | None:
     kind = item.get("kind")
-    if kind == "chore.ended":
-        return f"chore:{item['chore']}" if item.get("chore") else None
     if kind == "review.ended":
         return f"review:{item['pr']}" if item.get("pr") else None
-    return str(item["ticket"]) if item.get("ticket") else None
+    ticket = item.get("ticket")
+    # A chore's results stay in the channel: the operator reads them as they come, not in a thread of their own.
+    if kind == "chore.ended" or not ticket or str(ticket).startswith(_CHORE):
+        return None
+    return str(ticket)
 
 
 def _fingerprint(item: object) -> str:
@@ -1086,7 +1091,7 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
     parser.add_argument(
         "--threads",
         action="store_true",
-        help="with --channel, post each ticket's, chore's, and review's messages in its own thread, a new one each day",
+        help="with --channel, post each ticket's and review's messages in its own thread, a new one each day",
     )
     parser.add_argument(
         "--broadcast",

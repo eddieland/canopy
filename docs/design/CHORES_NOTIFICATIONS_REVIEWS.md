@@ -193,9 +193,9 @@ text runs nothing.
   must be the operator's, unreadable by group and others; it is never in canopy's config, argv, journal, or logs. A
   token must be a bot token, since a user token acts as the operator with all its scopes. A post counts as delivered
   only when Slack's reply says `ok`.
-- With `--threads` it threads posts by ticket, chore, or PR, a new thread each day, each started by a post of the
-  same shape naming what it is about, with every item a reply under it. The threads are the sink's own state, never in
-  canopy's journal; a retry after a partial delivery posts only the rest.
+- With `--threads` it threads posts by ticket or PR, a new thread each day, each started by a post of the same shape
+  naming what it is about, with every item a reply under it; chores' results stay in the channel. The threads are the
+  sink's own state, never in canopy's journal; a retry after a partial delivery posts only the rest.
 - Journal text is escaped for Slack markup and every text object is `verbatim`, so no `@here`, mention, or disguised
   link gets through. A web UI page canopy sent is linked under the sink's own word, `open`, only if it is a plain URL.
 

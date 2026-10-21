@@ -568,7 +568,7 @@ def _starts(subject: str, *more: str) -> list[str]:
     return [f"# {subject}", "canopy · api · updates from 2026-09-24 in the thread", *more]
 
 
-def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Threaded, tmp_path: Path) -> None:
+def test_threads_hold_tickets_and_reviews_for_a_day_chores_stay_out(threaded: _Threaded, tmp_path: Path) -> None:
     first = [
         _run("PROJ-1", 1),
         {"id": 2, "kind": "chore.ended", "chore": "deps", "run": 2, "status": "done", "findings": 0},
@@ -576,20 +576,27 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
         {"id": 4, "kind": "review.ended", "pr": "https://x.test/pr/9", "ticket": "PROJ-1", "run": 4, "status": "done"},
     ]
     assert threaded(_delivery("2026-09-24T12:30:00Z", first)) == 0
-    # The channel's own post first, with its header. Then each thread, in the order named: a post of the same shape
-    # starts it, naming what it is about, and its first item is a reply under it.
+    # The channel's own post first, with its header, the chore's run among it. Then each thread, in the order named:
+    # a post of the same shape starts it, naming what it is about, and its first item is a reply under it.
     assert _posts() == [
-        (None, False, ["# canopy · api", "1 event", ":white_check_mark: *The loop recovered* after 3 failed ticks"]),
+        (
+            None,
+            False,
+            [
+                "# canopy · api",
+                "2 events",
+                ":white_check_mark: *chore:deps* · run 2 ended *done* · 0 findings",
+                ":white_check_mark: *The loop recovered* after 3 failed ticks",
+            ],
+        ),
         (None, False, _starts("PROJ-1")),
         (
             "1790.000002",
             False,
             [":arrow_forward: *PROJ-1* · implement run 1 started\nattempt 1 of 3 on `agent/PROJ-1`"],
         ),
-        (None, False, _starts("chore:deps")),
-        ("1790.000004", False, [":white_check_mark: *chore:deps* · run 2 ended *done* · 0 findings"]),
         (None, False, _starts("review of PROJ-1", "<https://x.test/pr/9>")),
-        ("1790.000006", False, [":white_check_mark: *PROJ-1* · review run 4 ended *done*\n<https://x.test/pr/9>"]),
+        ("1790.000004", False, [":white_check_mark: *PROJ-1* · review run 4 ended *done*\n<https://x.test/pr/9>"]),
     ]
 
     _Api.received.clear()
@@ -601,17 +608,15 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(threaded: _Th
     added = [{"ticket": "chore:deps", "reason": "lodash", "detail": "CVE"}]
     assert threaded(_delivery("2026-09-24T12:31:00Z", later, added)) == 0
     # The same day: replies in each thread, none shown in the channel unasked, and PROJ-2's thread started. The
-    # chore's thread first: attention items come before events.
+    # chore's finding and run go in the channel's post, which comes first.
     assert [(ts, shown) for ts, shown, _ in _posts()] == [
-        ("1790.000004", False),
+        (None, False),
         ("1790.000002", False),
         (None, False),
         ("1790.000003", False),
     ]
-    assert _posts()[0][2] == [
-        ":bell: *chore:deps* · lodash\nCVE",
-        ":x: *chore:deps* · run 6 ended *failed* · 1 finding",
-    ]
+    assert ":bell: *chore:deps* · lodash\nCVE" in _posts()[0][2]
+    assert ":x: *chore:deps* · run 6 ended *failed* · 1 finding" in _posts()[0][2]
 
     _Api.received.clear()
     assert threaded(_delivery("2026-09-26T12:30:00Z", [_run("PROJ-1", 8, "done")])) == 0
