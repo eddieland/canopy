@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Megaphone, Pencil, TimerReset, X } from 'lucide-react'
+import { Megaphone, MegaphoneOff, Pencil, TimerReset } from 'lucide-react'
 import { useState } from 'react'
 
 import { clearNotice, setNotice, showLoop } from '@/api/mutations'
@@ -126,7 +126,7 @@ export function NoticeBanner() {
                             clear.mutate()
                         }}
                     >
-                        <X />
+                        <MegaphoneOff />
                         Clear
                     </Button>
                 </div>
