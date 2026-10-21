@@ -332,6 +332,14 @@ def _persona_name(value: str) -> str:
     return value
 
 
+def _distinct_personas(value: tuple[str, ...]) -> tuple[str, ...]:
+    # A persona named twice would review each commit twice in one voice.
+    twice = sorted({name for name in value if value.count(name) > 1})
+    if twice:
+        raise ValueError(f"names {', '.join(twice)} more than once")
+    return value
+
+
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
@@ -865,6 +873,9 @@ class Personas(Section):
     planner: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
     #: Every review.
     reviewer: Annotated[PersonaName, Scope.PRIVATE] = DEFAULT_PERSONA
+    #: The personas each of the loop's own PRs is reviewed in at a commit, one review each, in place of `reviewer`'s
+    #: one; none leaves it to `reviewer`. Each review counts against `policy.max_reviews_per_pr`.
+    reviewers: Annotated[tuple[PersonaName, ...], Scope.PRIVATE, AfterValidator(_distinct_personas)] = ()
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).

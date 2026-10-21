@@ -880,6 +880,7 @@ def agent_persona(found: personas.Next) -> AgentPersona:
         source=found.source,
         error=found.error,
         once=found.once,
+        several=list(found.several),
     )
 
 

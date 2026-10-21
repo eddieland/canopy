@@ -5,12 +5,15 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import db, review_requests
+from canopy.core import db, personas, review_requests
 from canopy.core import review_result as result
+from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import grants
+from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
 
     from canopy.core import records
     from canopy.core.config import Config
@@ -40,7 +43,12 @@ class RunningReview(TypedDict):
 
 
 class LatestReview(TypedDict):
-    """A PR's latest review run. `findings` are the titles of those the operator did not dismiss."""
+    """A PR's latest review run. `findings` are the titles of those the operator did not dismiss.
+
+    Of one of the loop's own PRs reviewed in each persona of `[personas] reviewers` (DESIGN §31), a `done` one stands
+    for every persona's latest `done` review of its commit together: their kept findings, the gravest impact, and the
+    time the last of them ended.
+    """
 
     run_id: int
     sha: str
@@ -62,6 +70,9 @@ class ReviewedPR(TypedDict):
     review_runs: int
     granted: NotRequired[int]
     latest: LatestReview
+    #: Only one of the loop's own PRs under `[personas] reviewers` has it: the personas with no `done` review of
+    #: `latest`'s commit yet, which the commit waits on.
+    owed: NotRequired[list[str]]
 
 
 class RequestedPR(TypedDict):
@@ -94,7 +105,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
     by_pr: dict[str, list[records.ReviewRun]] = {}
     for run in runs:
         by_pr.setdefault(run.pr_url, []).append(run)
-    prs = [_pr_summary(conn, url) for url in list(by_pr)[:MAX_PRS]]
+    prs = [_pr_summary(conn, config, url) for url in list(by_pr)[:MAX_PRS]]
     started_today = len(db.review_runs_since(conn, db.format_time(now - timedelta(hours=24))))
     return {
         "agent_prs": config.review.agent_prs,
@@ -134,36 +145,64 @@ def _requested(conn: sqlite3.Connection, request: records.ReviewRequest) -> Requ
     }
 
 
-def _pr_summary(conn: sqlite3.Connection, url: str) -> ReviewedPR:
+def _pr_summary(conn: sqlite3.Connection, config: Config, url: str) -> ReviewedPR:
     runs = db.review_runs_of(conn, url)
     granted = grants.granted(conn, url)
+    ticket = next((r.ticket_key for r in runs if r.ticket_key), None)
+    latest = runs[0]
+    chosen: list[str] = personas.reviewers_of(conn, config, ticket) if ticket is not None else []
+    # Each persona's latest `done` review of the latest's commit, which a `done` latest stands for together (§31).
+    newest = {r.persona: r for r in reversed(runs) if r.sha == latest.sha and r.status is ReviewRunStatus.DONE}
+    together = [newest[p] for p in dict.fromkeys([latest.persona, *chosen]) if p in newest] if chosen else []
     return {
         "url": url,
-        "ticket": next((r.ticket_key for r in runs if r.ticket_key), None),
+        "ticket": ticket,
         "review_runs": len(runs),
         # Only a PR the operator granted more reviews has the key: its limit is the policy's plus this.
         **({"granted": granted} if granted else {}),
-        "latest": _latest(conn, runs[0]),
+        "latest": _latest(conn, latest, together),
+        **({"owed": review_start.owed_by(runs, latest.sha, chosen)} if chosen else {}),
     }
 
 
-def _latest(conn: sqlite3.Connection, latest: records.ReviewRun) -> LatestReview:
-    stored = result.stored(latest.result_json)
-    # The operator's dismissals hold a finding back from workers and from the overseer alike (DESIGN §21).
-    dismissed = db.review_dismissals(conn, latest.id)
-    findings: list[result.Finding] = stored.findings if stored is not None else []
+#: How grave each impact is, for the gravest of reviews read together.
+_IMPACTS = ("low", "normal", "high")
+
+
+def _latest(
+    conn: sqlite3.Connection,
+    latest: records.ReviewRun,
+    together: Sequence[records.ReviewRun] = (),
+) -> LatestReview:
+    reviews = together if latest.status is ReviewRunStatus.DONE and together else [latest]
+    kept: list[str] = []
+    dismissed_count = 0
+    verdicts: list[str] = []
+    impacts: list[str] = []
+    for run in reviews:
+        stored = result.stored(run.result_json)
+        # The operator's dismissals hold a finding back from workers and from the overseer alike (DESIGN §21).
+        dismissed = db.review_dismissals(conn, run.id)
+        findings: list[result.Finding] = stored.findings if stored is not None else []
+        kept.extend(f.title for i, f in enumerate(findings, 1) if i not in dismissed)
+        dismissed_count += len(dismissed)
+        if stored is not None and stored.verdict is not None:
+            verdicts.append(stored.verdict)
+        if stored is not None and stored.impact is not None:
+            impacts.append(stored.impact)
+    ended = max((r.ended_at for r in reviews if r.ended_at is not None), default=None)
     return {
         "run_id": latest.id,
         "sha": latest.sha,
         "status": latest.status,
-        "verdict": stored.verdict if stored is not None else None,
-        "impact": stored.impact if stored is not None else None,
-        "findings": [f.title for i, f in enumerate(findings, 1) if i not in dismissed],
-        "dismissed_findings": len(dismissed),
+        "verdict": ("findings" if "findings" in verdicts else verdicts[0]) if verdicts else None,
+        "impact": max(impacts, key=_IMPACTS.index) if impacts else None,
+        "findings": kept,
+        "dismissed_findings": dismissed_count,
         "started_at": latest.started_at,
-        "ended_at": latest.ended_at,
+        "ended_at": ended,
         # The review's time for the `review` cursor, which takes whole seconds only (DESIGN §7).
-        "reviewed_at": _to_second(latest.ended_at),
+        "reviewed_at": _to_second(ended),
     }
 
 

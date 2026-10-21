@@ -140,14 +140,14 @@ def running(conn: sqlite3.Connection, kind: str = "implement") -> int:
     return int(cur.lastrowid or 0)
 
 
-def reviewed(conn: sqlite3.Connection, findings: int) -> None:
-    """A review run of PR's head that ended done, with `findings` findings."""
+def reviewed(conn: sqlite3.Connection, findings: int, persona: str | None = None) -> None:
+    """A review run of PR's head that ended done, with `findings` findings, in `persona`."""
     found = [{"severity": "major", "title": f"Finding {n}"} for n in range(1, findings + 1)]
     result = {"status": "done", "verdict": "findings" if found else "clean", "impact": "normal", "findings": found}
     conn.execute(
         "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, ended_at, status, result_json, "
-        "log_path) VALUES (?, ?, ?, ?, ?, ?, 'done', ?, 'x')",
-        (a_tick(conn), PR, HEAD, KEY, FRESH, FRESH, json.dumps(result)),
+        "log_path, persona, persona_digest) VALUES (?, ?, ?, ?, ?, ?, 'done', ?, 'x', ?, ?)",
+        (a_tick(conn), PR, HEAD, KEY, FRESH, FRESH, json.dumps(result), persona, persona and "x"),
     )
 
 
@@ -302,6 +302,22 @@ def test_each_row_of_the_phase_table(
     found = derived(canopy_env)
     assert found == snapshot
     assert any(case in d.phases for d in found), f"{case} did not hold"
+
+
+def test_a_head_is_review_pending_until_each_of_personas_reviewers_has_reviewed_it(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # DESIGN §31: under `[personas] reviewers`, a head waits on a `done` review in each persona.
+    reviewers = {"personas": {"reviewers": ["skeptic", "explainer"]}}
+    canopy_env.configure(canopy_env.user_file, {"review": {"agent_prs": True}, **reviewers})
+    green(canopy_env, observed)
+    reviewed(observed, findings=0, persona="skeptic")
+    observed.commit()
+    assert any(phases.Phase.REVIEW_PENDING in d.phases for d in derived(canopy_env))
+    reviewed(observed, findings=0, persona="explainer")
+    observed.commit()
+    assert not any(phases.Phase.REVIEW_PENDING in d.phases for d in derived(canopy_env))
 
 
 def test_a_closed_ticket_has_no_phase(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:

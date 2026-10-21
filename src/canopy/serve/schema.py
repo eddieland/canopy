@@ -455,6 +455,8 @@ class AgentPersona(_Model):
     """Why its next run would be refused rather than run in it, such as a file gone since; None when it would run."""
     once: str | None = None
     """The persona the operator chose for its next run alone, in place of `persona`; None when they chose none."""
+    several: list[str] = []
+    """For the reviewer: each persona the ticket's PRs are reviewed in, one review each, from `[personas] reviewers`."""
 
 
 class PersonaRequest(_Model):

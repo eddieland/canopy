@@ -174,7 +174,10 @@ def show(key: str, found: Sequence[personas.Next]) -> list[str]:
     """
     lines = [f"{key}'s personas, from each agent's next run:"]
     for n in found:
-        lines.append(f"  {n.agent:<8}  {n.name}  ({SOURCES[n.source]})")
+        if n.several:
+            lines.append(f"  {n.agent:<8}  {', '.join(n.several)}  ([personas] reviewers: one review each)")
+        else:
+            lines.append(f"  {n.agent:<8}  {n.name}  ({SOURCES[n.source]})")
         if n.once is not None:
             lines.append(f"    its next run alone: {n.once}")
         if n.error is not None:
@@ -205,5 +208,10 @@ def render(config: Config) -> tuple[list[str], bool]:
         f"({personas.MISSING})."
         for agent in missing
     )
-    refused = bool(missing) or any(p.error is not None and p.defaults for p in found)
+    gone = [name for name in config.personas.reviewers if name not in listed]
+    lines.extend(
+        f"[personas] reviewers names {name}, which has no file: its reviews refuse ({personas.MISSING})."
+        for name in gone
+    )
+    refused = bool(missing or gone) or any(p.error is not None and p.defaults for p in found)
     return lines, refused
