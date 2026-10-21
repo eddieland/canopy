@@ -55,6 +55,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "draft": ("drafts", "draft_group"),
     "dispatch": ("runs", "cmd_dispatch"),
     "_run": ("runs", "cmd_run"),
+    "task": ("tasks", "task_group"),
+    "_task": ("runs", "cmd_task"),
     "decide": ("journal", "cmd_decide"),
     "queried": ("journal", "cmd_queried"),
     "attention": ("journal", "cmd_attention"),

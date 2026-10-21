@@ -163,6 +163,18 @@ Controls:
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
+- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
+  channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
+  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so is `canopy stop task:N`. Its text, and the replies a
+  later run takes, are the operator's instructions; what a run reports is data. A task never reaches the overseer: a
+  tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
+  or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
+  branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
+  it, or a PR from it, as a ticket's work. It is never pushed with force, whatever `trust.rebase` says: `_task`'s own
+  push only adds commits, so a branch the worker rewrote and did not push is `unpushed`, and its prompt forbids a
+  forced push. Under `trust.rebase` the private worker's definition still allows its one leased push, so a steered task
+  worker can replace its own branch's history; the run's note then says the branch no longer holds the head it started
+  from, and each earlier run's head stays in the journal.
 - Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
   ticket's later `implement` and `resume` runs read as data, the same exposure as its reports in
   `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
@@ -263,10 +275,11 @@ still sees only what the branch now holds. A worker's bash still reaches the net
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
-unset, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one that
-works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted
-review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted reviewer's comments
-without a go-ahead; the worker's own check and human review of the PR remain, and those comments were never
+unset, or `canopy task submit` to hand canopy a task in the operator's name, or write the journal file directly: the
+refusal stops a worker that follows injected text naively, not one that works around it. The operator accepted this
+(D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A
+steered overseer can dispatch a `resume` for an untrusted reviewer's comments without a go-ahead; the worker's own
+check and human review of the PR remain, and those comments were never
 instructions to it. A steered overseer can mirror text that was never on the ticket, or
 name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
 stays its source.
@@ -311,6 +324,10 @@ Controls in code, not prompts:
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
+- Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
+  task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which
+  counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
+  later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
 - Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
   `policy.max_plan_attempts` per ticket, never reset, raised only by the operator, in config or per ticket with
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
@@ -497,6 +514,15 @@ Controls:
   merged after it (D044); `policy.max_follow_ups = 0` has workers file none, and the MCP server's own tool selection,
   where it has one, is what takes the tool away. The journal holds the operator's replies and the
   workers' reports, under the operator-only state directory (T2).
+- A task's worker (DESIGN §36) is the private worker: `canopy-worker-private`, run with `runtime.private_worker_cmd`,
+  with that definition's tool lists, so on the tracker only its read tools and the tools that create a ticket, and on
+  GitHub the tools of its PR; a run is refused where the slot's OpenCode config names any of the tracker server's
+  tools, as a private ticket's is. Its prompt says to push only its own branch, to open one PR for it, as a draft, only
+  when the task's text asks for one, and to write nothing to any ticket, existing or new. Those are the prompt's rules,
+  not guards: the PR's draft state and its existence at all are agent judgment, and the create tool the definition
+  allows is a private worker's residual below. Filing unlabeled tickets in the project the submission names is ROADMAP
+  M61's third stage. A task's PR is the operator's like any other: canopy never drives it, and reviews it only when
+  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2).
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
@@ -554,7 +580,9 @@ private ticket, whose worker writes nothing to it. Residual: a private worker ca
 careless one can put what it read, the operator's messages included, into a follow-up's title or body, which the
 tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`, also
 edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same exposure
-the public worker has had, now on private tickets too.
+the public worker has had, now on private tickets too. A task's worker has the same tools, and so the same residual,
+though its prompt files nothing yet; and a steered one can open a PR that is no draft, or one the text did not ask for,
+with what it read in its body, where whoever reads the repository's PRs sees it.
 
 ### T7. Hostile shared config
 

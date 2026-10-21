@@ -259,6 +259,69 @@ class ReviewRun(Row):
 
 
 @dataclass(frozen=True)
+class Task(Row):
+    """A one-off task the operator submitted (DESIGN §36): their text, where it runs, and whether they stopped it."""
+
+    TABLE: ClassVar[str] = "tasks"
+
+    id: int
+    #: The operator's words: the task's instruction.
+    text: str
+    #: The repository it runs in, by its name in the map.
+    repo: str
+    #: The tracker project its tickets may go in; None for none.
+    project: str | None
+    #: `cli` or `web`: where the operator submitted it.
+    channel: str
+    submitted_at: str
+    #: When the operator stopped it; None while it is not stopped.
+    stopped_at: str | None
+
+
+@dataclass(frozen=True)
+class TaskRun(Row):
+    """A run of a task's worker (DESIGN §36): the slot it leased, its branch, how it ended, and the head it pushed."""
+
+    TABLE: ClassVar[str] = "task_runs"
+
+    id: int
+    task_id: int
+    #: The tick that started it.
+    tick_id: int
+    #: `<branch_prefix>task/<id>`.
+    branch: str
+    repo: str
+    slot_path: str
+    lease_id: str
+    lease_holder: str
+    base_branch: str
+    pool: PoolKind
+    #: What the slot's `.git` file held when the run started, before any git step; None until `_task` reads it, or
+    #: when it was not a file.
+    git_link: bytes | None
+    pid: int | None
+    agent_pid: int | None
+    started_at: str
+    ended_at: str | None
+    status: RunStatus
+    result_json: str | None
+    #: The commit its branch was at on origin when it ended; None when nothing was pushed.
+    head: str | None
+    log_path: str
+    session_id: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    tokens_peak_context: int | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    definitions_digest: str | None
+
+
+@dataclass(frozen=True)
 class Start(Row):
     """The operator's start of a subject worked privately (DESIGN §22): the authorization, written only by them."""
 

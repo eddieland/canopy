@@ -20,14 +20,15 @@ in order:
    and record the tick with the canopy version running it. Its id tags all logs. Migrations wait while any detached
    run's own process is alive, since it writes the old schema; a journal with migrations this canopy does not know is
    refused (D068).
-3. **Reconcile local state.** A run, chore run, or review run whose own process is gone is marked `crashed`, what is
-   left of its agent killed, and its slots returned. A slot leased under canopy's prefix with no live run is returned,
-   in every pool (§18). Memory proposals expire (§28). Each source that reads runs its connector once, and what it
-   read whole replaces what the journal held; a source that fails changes nothing and the tick goes on (§30). Drafts
-   are checked against what the `vcs` run read (§29). Capacity is `max_workers` less the running runs and review runs.
-   If the pool cannot be read or a return fails, the tick fails and the overseer does not run. The tick records the
-   newest journal message it could read, which marks what was acknowledged (§22) and what idle pacing compares
-   against, and records the harness's own attention items (§14).
+3. **Reconcile local state.** A run of any kind whose own process is gone is marked `crashed`, what is left of its
+   agent killed, and its slots returned. A slot leased under canopy's prefix with no live run is returned, in every
+   pool (§18). Memory proposals expire (§28). A live tick starts the operator's queued tasks (§36). Each source that
+   reads runs its connector once, and what it read whole replaces what the journal held; a source that fails changes
+   nothing and the tick goes on (§30). Drafts are checked against what the `vcs` run read (§29). Capacity is
+   `max_workers` less the running runs, review runs, and task runs. If the pool cannot be read or a return fails, the
+   tick fails and the overseer does not run. The tick records the newest journal message it could read, which marks
+   what was acknowledged (§22) and what idle pacing compares against, and records the harness's own attention items
+   (§14).
 4. **Render the state block**, the overseer's whole message: one JSON object holding what the overseer needs to decide
    every ticket not done or stopped, ordered from what changes rarely to what changes every tick so the provider can
    cache it. The overseer's prompt is its agent definition's system prompt (§13), not part of the block. The block

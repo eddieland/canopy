@@ -234,6 +234,8 @@ class DigestSpend(TypedDict):
     plans: float | None
     chores: float | None
     reviews: float | None
+    #: The operator's one-off tasks' runs (DESIGN §36).
+    tasks: float | None
 
 
 class DigestJson(TypedDict):
@@ -326,6 +328,7 @@ class Digest:
                 "plans": self.costs.plans,
                 "chores": self.costs.chores,
                 "reviews": self.costs.reviews,
+                "tasks": self.costs.tasks,
             },
             "lines": self.lines(),
         }
@@ -340,7 +343,13 @@ def _spend_line(costs: spend.Costs) -> str:
     overseer = None
     if costs.overseer is not None:
         overseer = f"overseer {_usd(costs.overseer)}" + (f" (idle {_usd(costs.idle)})" if costs.idle else "")
-    kinds = [("workers", costs.workers), ("plans", costs.plans), ("chores", costs.chores), ("reviews", costs.reviews)]
+    kinds = [
+        ("workers", costs.workers),
+        ("plans", costs.plans),
+        ("chores", costs.chores),
+        ("reviews", costs.reviews),
+        ("tasks", costs.tasks),
+    ]
     parts = [overseer] if overseer is not None else []
     parts += [f"{name} {_usd(usd)}" for name, usd in (*kinds, ("dry runs", costs.dry_run)) if usd is not None]
     return f"  spent: {_usd(total)} ({', '.join(parts)})"

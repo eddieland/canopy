@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import conversation, db, feedback_plans, plans, pools
+from canopy.core import conversation, db, feedback_plans, plans, pools, tasks
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -343,7 +343,8 @@ def state_block(
             "stacking": config.policy.stacking,
         },
         # The overseer runs at the workspace root, which is not a repository: each repository's leased slots stand in
-        # for its own `treehouse status` (DESIGN §18).
+        # for its own `treehouse status` (DESIGN §18). A task's slot is left out: the overseer sees nothing of a task
+        # but the capacity its run holds (DESIGN §36).
         "repositories": [
             {
                 "name": r.name,
@@ -354,6 +355,7 @@ def state_block(
                 "leased_slots": [
                     {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": s.leased_at}
                     for s in leased.get(r.name, [])
+                    if not tasks.held_by_task(s.lease_holder)
                 ],
             }
             for r in workspace.repos

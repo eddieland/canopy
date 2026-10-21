@@ -83,6 +83,7 @@ const KIND_LABEL = {
     plans: 'plan runs',
     chores: 'chore runs',
     reviews: 'review runs',
+    tasks: 'task runs',
 } as const
 
 // The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
