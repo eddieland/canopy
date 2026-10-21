@@ -8,16 +8,13 @@ drafts it covers are checked after it.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe, review_drafts_manage, sql
-from canopy.core.config import GITHUB_READER, notify_words
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
 
 if TYPE_CHECKING:
-    from canopy.core.config import Source
     from canopy.core.context import Context
     from canopy.infra import logs
 
@@ -34,13 +31,6 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> frozenset[s
     for name, source in ctx.config.connect.named().items():
         kind = SourceKind(source.kind)
         request = tracker_request(ctx) if kind is SourceKind.TRACKER else vcs_request(ctx)
-        if kind is SourceKind.VCS and own_reader(source):
-            # canopy's own reader speaks only §29's request, `prs`, and refuses one that names none, until M36 grows
-            # it to the whole contract; asked more, every tick's run would read less than asked and raise
-            # `connector_failed`.
-            request = observe.Request(prs=request.prs)
-            if not request.prs:
-                continue
         started = db.now()
         try:
             observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
@@ -57,16 +47,6 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> frozenset[s
         if kind is SourceKind.VCS:
             read = observed.whole.prs
     return read
-
-
-def own_reader(source: Source) -> bool:
-    """Whether `source` runs canopy's own GitHub reader, `canopy-connect-github`, which reads only `prs` so far.
-
-    Returns:
-        True if its command is the reader's.
-    """
-    words = notify_words(source.cmd)
-    return bool(words) and Path(words[0]).name == GITHUB_READER
 
 
 def tracker_request(ctx: Context) -> observe.Request:

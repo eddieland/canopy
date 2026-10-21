@@ -111,14 +111,21 @@ unit, or what stale or missing observation it depended on, and at the tick's clo
 at; agreement is computed per ticket (`phases.compare`), its counts in the loop's per-tick block and `loop waits`
 line, and `canopy gc --dry-run` counts the rows; each repository's `human_checks` in the map is not CI. Chosen
 conservatively, for the operator to change: a check with no run id or a `ci` cursor that is not a number reads every
-failure as new; a candidate with no PR needs its repositories' branches read fresh, else it is stale, so with canopy's
-own reader, which reads no branches yet, every such ticket is stale; what a PR's own author writes is not review
-feedback; and the comparison takes a ticket's dispatches, waits, skips, and done marks as its decision, its attention
-items only when it has none, and the `running` its dispatch left it at as the row that allowed the dispatch. Built
+failure as new; a candidate with no PR needs its repositories' branches read fresh, else it is stale; what a PR's
+own author writes is not review feedback; and the comparison takes a ticket's dispatches, waits, skips, and done marks
+as its decision, its attention items only when it has none, and the `running` its dispatch left it at as the row that
+allowed the dispatch. Built
 (2026-10-21): `canopy-connect-jira`, the `tracker` source for Jira Cloud, a workspace member (`packages/canopy-jira`)
 speaking the whole contract: the query paged to its end, each watched ticket with its comments since canopy's newest and
 each label's time from its changelog, and every blocker those name; tested against a stand-in for Jira's REST API and
-through canopy's own validation, not yet against a real site (S56). Not yet: canopy's GitHub reader grown to the
-contract, so it is asked only the PRs, while one is watched. Open for the operator: the tracker query run in code
-(Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that leaves an observation
-stale.
+through canopy's own validation, not yet against a real site (S56). Built (2026-10-21): canopy's GitHub reader,
+`canopy-connect-github`, grown to the whole contract, so a tick and a poll send it the whole request whether or not a
+PR is watched: each PR many to a GraphQL query, with its labels, mergeable state, and every context at its head paged
+past 100, each map repository's branches under the prefix, and the review query to its last page; tested against the
+stand-in for GitHub's GraphQL API and through canopy's own validation, not yet against GitHub (S57). Chosen
+conservatively, for the operator to change: a context named twice at a head is its newest check run; a link canopy
+would refuse is left off a check rather than refusing its PR; a PR with more than 100 labels, or a repository with more
+than 1,000 branches under the prefix, is not read whole; a host `gh` holds no token for leaves only its own PRs and
+repositories unread; and the review query runs on each host the map's repositories are on, or on github.com when the
+map names none. Open for the operator: the tracker query run in code (Proposed 2026-10-15), and whether one failed
+run raises `connector_failed` or only one that leaves an observation stale.

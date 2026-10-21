@@ -18,8 +18,6 @@ world. Authority stays with the source (§4 principle 1, §22): an observation s
 what is true now. Nothing yet reads an observation to decide anything but the derivation, which only the operator and
 the measurement read.
 
-Not yet built: canopy's GitHub reader grown to this contract. `canopy-connect-jira` speaks it whole.
-
 ### Sources
 
 There is at most one source of each kind, `tracker` and `vcs`, each a command run with no shell (§20) under a timeout.
@@ -75,10 +73,6 @@ subject for a source. The tick goes on and loses nothing, since the overseer sti
 follows. The loop's polls between ticks run the same sources the same way, record their runs with no tick, and raise
 nothing (§6).
 
-Until `canopy-connect-github` is grown to the contract, it reads only §29's PRs and refuses a request naming none, so a
-tick or a poll sends it only the PRs, and runs it only while one is watched: asked more, every run would read less
-than asked and raise `connector_failed`. An operator's own `vcs` source is sent the whole request.
-
 ### The derivation, in shadow
 
 D008 moves a rule from the prompt into code one at a time, each checked against the `decisions` corpus first; applied
@@ -109,10 +103,12 @@ CI: it does not hold a unit at `ci_running`, make it `ci_red`, or have to pass.
 
 ### canopy's connectors
 
-Each is a uv workspace member importing nothing from canopy, as §29's programs are (§5). `canopy-connect-github`,
-§29's reader, is the `vcs` connector, and given a repository, a `tracker` connector for GitHub Issues, with `gh`'s
-token. `canopy-connect-jira` reads Jira Cloud with credentials from an operator-only file held to the Slack sink's
-checks (§20), sent only to the site the operator names, and never in config, argv, journal, or logs.
+Each is a uv workspace member importing nothing from canopy, as §29's programs are (§5), and speaks the whole
+contract. `canopy-connect-github`, §29's reader, is the `vcs` connector, and given a repository, a `tracker` connector
+for GitHub Issues, with `gh`'s token for the host a PR's URL or a repository's clone URL names. It reads every watched
+PR many to a GraphQL query, not a call per PR, which would cost many times the overseer's reads (MEASUREMENTS
+2026-10-15). `canopy-connect-jira` reads Jira Cloud with credentials from an operator-only file held to the Slack
+sink's checks (§20), sent only to the site the operator names, and never in config, argv, journal, or logs.
 
 Rejected: the harness calling the APIs (D003, TRUST_MODEL T2: the process that holds the journal and enforces the
 guards never opens a connection or reads a token); an agent as the connector (a model run as a poll, against §4
