@@ -622,6 +622,36 @@ class Scenario:
         assert exited == 0, reviewed
         return reviewed
 
+    def reviews_each(self, command: list[str], *, reviewer: Worker | None = None) -> list[Reviewed]:
+        """Start the reviews `command`, a `reviews(...)`, starts in a tick of its own, one in each persona chosen for
+        the PR, side by side, then do each in this process in turn, its reviewer doing `reviewer`.
+
+        Returns:
+            The review runs, closed, in the order they started.
+        """
+        assert command[:3] == ["canopy", "review", "run"], command
+        done: list[Reviewed] = []
+        with ExitStack() as stack:
+            if reviewer is not None:
+                stack.enter_context(reviewer)
+            with in_tick(self.conn) as tick_id:
+                exited = main(command[1:], runner=InlineRunner())
+                if exited != 0:
+                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
+                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
+                started = self.conn.execute("SELECT id FROM review_runs WHERE tick_id = ? ORDER BY id", (tick_id,))
+                ids = [int(r[0]) for r in started]
+            for run_id in ids:
+                argv = ["_review", str(run_id)]
+                exited, printed = _printing(lambda argv=argv: main(argv, runner=InlineRunner()))
+                row = present(db.get_review_run(self.conn, run_id))
+                reviewed = Reviewed(row, self.env.state_dir / "reviews" / f"{run_id}.prompt", printed)
+                self.story.append(str(reviewed) if exited == 0 else f"{reviewed}, and `canopy _review` exits {exited}")
+                assert exited == 0, reviewed
+                done.append(reviewed)
+        return done
+
     def starts_review(self, command: list[str], *, reviewer: Worker | None = None) -> Reviewing:
         """Start the review `command`, a `reviews(...)`, in a tick of its own, and hold its reviewer at work, the
         reviewer set to do `reviewer`, a `reviewer_reports(...)`, once the test lets it go on.

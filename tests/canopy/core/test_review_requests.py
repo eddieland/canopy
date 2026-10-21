@@ -139,7 +139,7 @@ def test_canopy_persona_chooses_or_clears_an_open_requests_persona(
     again = scenario.operator("start", PR, "--review", "--persona", "skeptic").out
     assert again == f"{PR} was already requested for review. Its review is written in skeptic.\n"
     assert "Its review is written in" not in scenario.operator("start", PR, "--review").out
-    assert review_requests.persona_of(scenario.conn, review_requests.open_requests(scenario.conn)[0].id) == "skeptic"
+    assert review_requests.personas_of(scenario.conn, review_requests.open_requests(scenario.conn)[0].id) == ["skeptic"]
     scenario.configures(personas={"reviewer": "explainer"})
     cleared = scenario.operator("persona", PR, "--clear").out
     assert cleared == f"{PR}'s review is written in explainer, from its next: [personas].\n"
@@ -186,6 +186,83 @@ def test_a_review_whose_requests_persona_has_no_file_is_refused_and_asks_the_ope
     assert refused == [("refused:persona_missing", reason), ("attention:persona_missing", reason)]
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     assert requests_of(scenario.conn) == [(PR, "cli", None)]
+
+
+def test_a_request_in_several_personas_is_reviewed_once_in_each_side_by_side(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.configures(capacity={"max_reviews": 2})
+    out = scenario.operator("start", PR, "--review", "--persona", "skeptic", "--persona", "explainer").out
+    assert out.endswith("It is reviewed once in each of skeptic, explainer, side by side.\n")
+    assert "  personas: skeptic, explainer\n" in scenario.operator("show", PR).out
+    said = scenario.operator("persona", PR).out
+    assert said == f"{PR} is reviewed once in each of skeptic, explainer, side by side: this request's.\n"
+    # One `review run`: both start in its tick, the second while the first is still at work.
+    both = scenario.reviews_each(reviews(head(git_pool), PR), reviewer=reviewer_reports(FINDINGS))
+    assert [(r.row.persona, r.status, r.row.tick_id) for r in both] == [
+        ("skeptic", "done", both[0].row.tick_id),
+        ("explainer", "done", both[0].row.tick_id),
+    ]
+    # The request ends once each persona has had its review.
+    assert requests_of(scenario.conn) == [(PR, "cli", "reviewed")]
+    # Each review keeps a draft of its own, and is named by its persona.
+    hashes = {scenario.operator("review", "draft", str(r.id)).out.splitlines()[0] for r in both}
+    assert len(hashes) == 2
+    listed = scenario.operator("review", "show").out
+    assert all(f"{r.id}  " in listed and f"  in {r.row.persona}" in listed for r in both)
+    assert f"review run {both[0].id} of {PR} at {head(git_pool)}, in skeptic" in (
+        scenario.operator("review", "show", str(both[0].id)).out
+    )
+    assert "  in explainer\n" in scenario.operator("show", PR).out
+
+
+def test_a_persona_is_reviewed_once_per_commit_and_waits_on_room_for_its_review(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.configures(capacity={"max_reviews": 1})
+    scenario.operator("start", PR, "--review", "--persona", "skeptic", "--persona", "explainer")
+    sha = head(git_pool)
+    first = scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN))
+    assert first.row.persona == "skeptic"
+    # One slot: explainer's review waits, and the request with it.
+    actions = [d.action for d in db.decisions_for_tick(scenario.conn, first.row.tick_id)]
+    assert actions == ["dispatch:review", "refused:review_capacity"]
+    assert requests_of(scenario.conn) == [(PR, "cli", None)]
+    # At the same commit, skeptic's review is done: the next starts explainer's alone, and that ends the request.
+    second = scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN))
+    assert second.row.persona == "explainer"
+    assert requests_of(scenario.conn) == [(PR, "cli", "reviewed")]
+    # Asked again at a head each persona reviewed: the refusal answers it.
+    scenario.operator("start", PR, "--review", "--persona", "explainer", "--persona", "skeptic")
+    [(action, reason)] = scenario.refuses(reviews(sha, PR))
+    assert action == "refused:reviewed"
+    assert reason.startswith(f"each persona chosen for this PR (explainer, skeptic) has reviewed {sha[:12]}")
+    assert requests_of(scenario.conn)[-1] == (PR, "cli", "reviewed")
+    # A persona that has not reviewed this commit is owed one, though another persona has.
+    scenario.operator("start", PR, "--review", "--persona", "minimalist")
+    assert scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN)).row.persona == "minimalist"
+
+
+def test_each_personas_review_counts_against_the_prs_limit(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.configures(capacity={"max_reviews": 2})
+    scenario.configures("workspace", policy={"max_reviews_per_pr": 1})
+    scenario.operator("start", PR, "--review", "--persona", "skeptic", "--persona", "explainer")
+    [one] = scenario.reviews_each(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
+    assert one.row.persona == "skeptic"
+    actions = [d.action for d in db.decisions_for_tick(scenario.conn, one.row.tick_id)]
+    assert actions == ["dispatch:review", "refused:review_limit"]
+    assert (
+        "several are for a PR's reviews"
+        in scenario.operator("start", "PROJ-1", "--persona", "skeptic", "--persona", "explainer", code=2).err
+    )
 
 
 def test_notes_are_refused_without_review_or_past_their_bound(requests_env: CanopyEnv, scenario: Scenario) -> None:

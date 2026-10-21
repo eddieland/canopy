@@ -48,10 +48,10 @@ workspace file can neither supply one nor choose one.
 
 - **The operator alone.** A run's persona is the one chosen for its agent's next run alone, else its ticket's
   override for its agent, else that agent's default in `[personas]`, else `canopy`, fixed when the run starts; the
-  dispatch that records the run spends a next run's choice. A review of a PR the operator requested (§21) has no
-  ticket: its persona is the request's, else `[personas] reviewer`'s. Each is set only by the operator, from
-  `canopy persona`, `canopy start`, `canopy plan`, or the ticket's page, and refused inside an agent run (T1). The
-  overseer, a dispatch, ticket text, and labels choose none.
+  dispatch that records the run spends a next run's choice. A review of a PR the operator requested (§21) has no ticket:
+  its persona is the request's, else `[personas] reviewer`'s, and a request may name several, for one review in each
+  (§21). Each is set only by the operator, from `canopy persona`, `canopy start`, `canopy plan`, or the ticket's page,
+  and refused inside an agent run (T1). The overseer, a dispatch, ticket text, and labels choose none.
 - **No silent fallback.** Setting a persona that names no file is refused, and a run whose persona's file is gone, or
   past its bounds, by the time it starts is refused with an attention item, spending no attempt and leasing no slot.
   It never falls back to `canopy`, since a run in a voice nobody chose would read as the chosen one's.

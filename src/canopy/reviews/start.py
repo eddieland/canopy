@@ -1,8 +1,9 @@
 """`canopy review run`: guards, a slot, the reviewer's prompt, and the detached `canopy _review` (DESIGN §21).
 
-A review is keyed by its PR and commit. The guards hold one `done` review per commit, a per-PR limit (the policy's plus
-the operator's grants, `grants.py`), a daily limit, and `max_reviews` within `max_workers`, whatever the overseer asks
-for. A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`.
+A review is keyed by its PR and commit, and by its persona when the operator chose several for the PR (`due`, §31).
+The guards hold one `done` review per commit, a per-PR limit (the policy's plus the operator's grants, `grants.py`),
+which each review counts against, a daily limit, and `max_reviews` within `max_workers`, whatever the overseer asks for.
+A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`.
 """
 
 from __future__ import annotations
@@ -12,7 +13,8 @@ import json
 import re
 import sys
 from collections.abc import Collection, Iterable
-from dataclasses import dataclass
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -66,6 +68,10 @@ class Request:
     sha: str
     ticket: str | None
     repo: str | None
+    #: The persona this review is written in, one the operator chose for the PR (`due`); None for the reviewer's own.
+    persona: str | None = None
+    #: Every persona the operator chose for the PR, each reviewed on its own: reviews in them run side by side.
+    among: AbstractSet[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -109,6 +115,38 @@ def holder(run_id: int) -> str:
         The holder the pool records on the lease.
     """
     return pools.holder_for(f"{HOLDER_KEY}{run_id}")
+
+
+def due(ctx: Context, request: Request) -> list[Request]:
+    """Return the reviews `request` starts now: one in each persona the operator chose for the PR still owed one.
+
+    A PR with no persona chosen for it gets one review, in its reviewer's persona (`_persona`). A persona is owed a
+    review until it has a `done` one of this commit, or one since the operator's request was made (DESIGN §31).
+
+    Returns:
+        The reviews, each naming its persona and every persona chosen for the PR, in the order the operator chose them;
+        `request` alone when no persona is chosen.
+
+    Raises:
+        Refusal: (`reviewed`) personas were chosen, and each has had its review.
+    """
+    found = review_requests.open_request(ctx.conn, request.pr) if request.ticket is None else None
+    chosen: list[str] = review_requests.personas_of(ctx.conn, found.id) if found is not None else []
+    if found is None or not chosen:
+        return [request]
+    done = [r for r in db.review_runs_of(ctx.conn, request.pr) if r.status is ReviewRunStatus.DONE]
+    owed = [
+        name
+        for name in chosen
+        if not any(r.persona == name and (r.sha == request.sha or r.started_at >= found.created_at) for r in done)
+    ]
+    if not owed:
+        raise Refusal(
+            "reviewed",
+            f"each persona chosen for this PR ({', '.join(chosen)}) has reviewed {request.sha[:12]} or has since the "
+            "request; one review per commit per persona",
+        )
+    return [replace(request, persona=name, among=frozenset(chosen)) for name in owed]
 
 
 def check(ctx: Context, *, tick_id: int, request: Request) -> str:
@@ -178,7 +216,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
 
 
 def _persona(ctx: Context, request: Request) -> personas.Persona:
-    """Return the reviewer's persona, read now: the PR's review request's, the ticket's override, or `[personas]`'s.
+    """Return the reviewer's persona, read now: the one `due` named, the ticket's override, or `[personas]`'s.
 
     A review request is on a PR the loop does not own, so it has no ticket (DESIGN §31). It is never fallen back from.
 
@@ -189,10 +227,8 @@ def _persona(ctx: Context, request: Request) -> personas.Persona:
         Refusal: `persona_missing` or `bad_persona`, with its attention item, as a worker's dispatch refuses.
     """
     try:
-        if request.ticket is None:
-            asked = review_requests.persona_for(ctx.conn, ctx.config, request.pr)
-            if asked is not None:
-                return asked
+        if request.persona is not None:
+            return review_requests.load_persona(ctx.config, request.pr, request.persona)
         return personas.for_run(ctx.conn, ctx.config, "reviewer", request.ticket)
     except personas.PersonaError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
@@ -336,10 +372,18 @@ def _check_running(
     Raises:
         Refusal: (`running`) a review of the PR is running or planned, or a worker on its ticket is.
     """
-    running = next((r for r in db.running_runs(ctx.conn, "review_runs") if r["pr_url"] == request.pr), None)
+    # Reviews in the personas chosen for the PR run side by side, each blocking only another in its own persona.
+    running = next(
+        (
+            r
+            for r in db.running_runs(ctx.conn, "review_runs")
+            if r["pr_url"] == request.pr and (r["persona"] == request.persona or r["persona"] not in request.among)
+        ),
+        None,
+    )
     if running is not None:
         raise Refusal("running", f"review run {running['id']} of this PR is running")
-    if any(d.pr == request.pr for d in planned_reviews):
+    if not request.among and any(d.pr == request.pr for d in planned_reviews):
         raise Refusal("running", "this dry run already reviewed this PR")
     if request.ticket is None:
         return
@@ -363,14 +407,24 @@ def _check_limits(
     """
     cfg = ctx.config
     runs = db.review_runs_of(ctx.conn, request.pr)
-    done = next((r for r in runs if r.sha == request.sha and r.status is ReviewRunStatus.DONE), None)
+    done = next(
+        (
+            r
+            for r in runs
+            if r.sha == request.sha
+            and r.status is ReviewRunStatus.DONE
+            and (request.persona is None or r.persona == request.persona)
+        ),
+        None,
+    )
     if done is not None:
         # The PR may be out of the state block's window by now, so the refusal says what the review found.
         stored = result.stored(done.result_json)
         found = f" ({stored.verdict}, impact {stored.impact})" if stored is not None else ""
         raise Refusal(
             "reviewed",
-            f"review run {done.id} already reviewed {request.sha[:12]}{found}; one review per commit",
+            f"review run {done.id} already reviewed {request.sha[:12]}{found}; one review per commit"
+            + (f" per persona, and it was in {request.persona}" if request.persona is not None else ""),
         )
     limit = grants.limit(ctx.conn, cfg, request.pr)
     if len(runs) >= limit:

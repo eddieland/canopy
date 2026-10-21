@@ -766,13 +766,13 @@ def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Sc
     [line] = scenario.operator("review", "show").out.splitlines()
     assert line.startswith(f"{run_id}  ")
     # New to the operator until they read it in full (DESIGN §22).
-    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}  new")
+    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}  in canopy  new")
     shown = scenario.operator("review", "show", str(run_id)).out
-    assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}\ndone, started ")
+    assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}, in canopy\ndone, started ")
     assert "\x1b" not in shown
     assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
     scenario.operator("review", "show", "99", code=1)
-    assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}\n")
+    assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}  in canopy\n")
 
 
 def test_a_review_keeps_its_commits_diff_for_the_web_ui(

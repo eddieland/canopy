@@ -95,6 +95,7 @@ def listed(conn: sqlite3.Connection, since: str) -> list[str]:
         verdict = f"{stored.verdict}, {len(stored.findings)} findings{kept}, impact {stored.impact}" if stored else "-"
         fresh = review_requests.has_news(run, stored) and str(run.id) not in seen
         line = f"{run.id}  {run.started_at}  {run.status}  {verdict}  {run.pr_url} @ {run.sha[:7]}"
+        line += f"  in {run.persona}" if run.persona else ""
         found.append(f"{line}  new" if fresh else line)
     return found
 
@@ -111,7 +112,7 @@ def described(conn: sqlite3.Connection, run_id: int) -> str:
     stored = result.stored(run.result_json)
     ticket = f" ({run.ticket_key})" if run.ticket_key else ""
     lines = [
-        f"review run {run_id} of {run.pr_url}{ticket} at {run.sha}",
+        f"review run {run_id} of {run.pr_url}{ticket} at {run.sha}{f', in {run.persona}' if run.persona else ''}",
         f"{run.status}, started {run.started_at}, ended {run.ended_at or 'not yet'}",
     ]
     note = contract.stored_object(run.result_json).get("harness")

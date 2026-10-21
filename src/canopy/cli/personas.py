@@ -155,12 +155,13 @@ def _pr_persona(ctx: Context, ref: conversation.Ref, name: str | None, *, clear:
     found = review_requests.open_request(ctx.conn, ref.id)
     if found is None:
         raise CliError(f"{ref} has no open review request; ask for one with `canopy start {ref} --review`")
-    chosen = review_requests.persona_of(ctx.conn, found.id)
+    chosen = review_requests.personas_of(ctx.conn, found.id)
+    if len(chosen) > 1:
+        click.echo(f"{ref} is reviewed once in each of {', '.join(chosen)}, side by side: this request's.")
+        return 0
     configured = ctx.config.personas.reviewer
-    source = (
-        "this request's" if chosen is not None else SOURCES["config" if configured != personas.DEFAULT else "default"]
-    )
-    click.echo(f"{ref}'s review is written in {chosen or configured}, from its next: {source}.")
+    source = "this request's" if chosen else SOURCES["config" if configured != personas.DEFAULT else "default"]
+    click.echo(f"{ref}'s review is written in {chosen[0] if chosen else configured}, from its next: {source}.")
     return 0
 
 

@@ -223,14 +223,14 @@ Controls:
   reach only a later reviewer of the PR whose text steered it, which reads that text anyway; the worst it does is lead
   that review to miss a defect, as a steered reviewer already could by reporting clean.
   `review.query` authorizes a review, and only the operator writes it (private, T7). A review request (`canopy start
-  URL --review`, ROADMAP M42) authorizes one review of one PR the same way: a journal fact made only through the
-  operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
-  so an agent steered by a PR's text cannot point the reviewer, and the operator's spend, at another PR. The overseer
-  names the repository the review runs in, as it does for `review.query`'s matches, and can end a request, as `merged`,
-  `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a steered overseer ending a
-  request early costs a review, never adds one; the PR's page shows who ended it and why. Reviews live in the journal
-  (D114): nothing on a PR is one but a version of a review of someone else's PR the operator published (DESIGN §34),
-  which the loop reads as no review of its own.
+  URL --review`, ROADMAP M42) authorizes one review of one PR the same way, or one in each persona it names: a journal
+  fact made only through the operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID`
+  or `CANOPY_RUN_ID` is set, so an agent steered by a PR's text cannot point the reviewer, and the operator's spend, at
+  another PR. The overseer names the repository the review runs in, as it does for `review.query`'s matches, and can end
+  a request, as `merged`, `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a
+  steered overseer ending a request early costs a review, never adds one; the PR's page shows who ended it and why.
+  Reviews live in the journal (D114): nothing on a PR is one but a version of a review of someone else's PR the operator
+  published (DESIGN §34), which the loop reads as no review of its own.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -294,7 +294,8 @@ Controls in code, not prompts:
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
 - A tick that cannot acquire the lock exits immediately.
-- Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
+- Reviews: one `done` review per commit, or per commit and persona for a request naming several (DESIGN §31), each
+  counting toward `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
   per PR with `canopy grant`), `capacity.max_reviews_per_day`, and
   `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
