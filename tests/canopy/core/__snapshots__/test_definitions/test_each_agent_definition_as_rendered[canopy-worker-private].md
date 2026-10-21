@@ -147,9 +147,5 @@ permission:
   "*add_issue_comment*": deny
 ---
 
-The system prompt is supplied by the harness at invocation time via the
-`{prompt}` argument to `opencode run`. Keep this body minimal so the agent does
-not act without a rendered prompt:
-
-If you were started without a "# canopy private worker" prompt, print
-`no prompt supplied` and exit.
+Your task is the prompt canopy starts this run with. If it is not a "# canopy private worker" prompt,
+print `no prompt supplied` and exit.
