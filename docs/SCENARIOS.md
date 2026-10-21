@@ -333,6 +333,14 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
   comments, authors as account ids, text as Jira shows it. Label a ticket the query returns past its first 100: expect
   it in the run's query result. Then `chmod 644` the file: expect the next run failed, naming the file, the
   observations kept.
+- **S57. GitHub read by canopy's own reader** (M36). With `gh` logged in and no `[connect.sources]` of kind `vcs`,
+  in a workspace whose map names a GitHub repository with a PR of the loop's open and a branch under
+  `trust.branch_prefix` with none, set `review.query` and run `canopy tick --dry-run`. Expect `canopy status` to name
+  `github` with an `ok` run; `observed_prs` the PR's labels and a `mergeable_state` GitHub's page agrees with;
+  `observed_checks` every context at its head, check runs and commit statuses alike, with no combined status, past 100
+  where a PR has more; `observed_branches` the branch; the run's review query result the PRs GitHub's search shows;
+  and the derivation no longer counting the PR-less ticket stale for its branches. Point the map at a repository on
+  a host `gh` is not logged in to: expect a `partial` run naming it, and the other repositories still read.
 
 ## Measurements
 

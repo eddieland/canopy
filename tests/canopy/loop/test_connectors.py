@@ -254,21 +254,27 @@ def test_the_default_vcs_source_is_canopys_own_reader_and_reads_each_watched_pr(
     assert (check.pr_url, check.status, check.head_sha) == (PR, CheckStatus.IN_PROGRESS, "abc1234")
 
 
-def test_canopys_own_reader_is_asked_only_the_prs_and_not_run_while_none_is_watched(
+def test_canopys_own_reader_is_asked_the_whole_request_each_tick_with_or_without_a_pr(
     scenario: Scenario,
     github_state: Path,
 ) -> None:
     scenario.seen("PROJ-1")
     scenario.configures("private", review={"query": "is:pr review-requested:@me"})
+    github_state.write_text(json.dumps({"prs": {PR: {}}, "branches": {"repo": {"agent/PROJ-1": "abc1234"}}}))
     ticked = scenario.tick(*waits("PROJ-1"))
     assert ticked.tick.status == "ok"
-    assert (runs(scenario), reads(github_state), scenario.attention()) == ([], [], [])
+    [asked] = reads(github_state)
+    assert (asked["prs"], [r["name"] for r in asked["repositories"]]) == ([], ["repo"])
+    assert (asked["branch_prefix"], asked["review_query"]) == ("agent/", "is:pr review-requested:@me")
+    [run] = runs(scenario)
+    assert (run.source, run.status) == ("github", "ok")
+    [branch] = records.fetch_all(scenario.conn, records.ObservedBranch, sql.frag("SELECT * FROM observed_branches"))
+    assert (branch.repository, branch.name) == ("repo", "agent/PROJ-1")
 
     db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
     scenario.tick(*waits("PROJ-1"))
-    assert reads(github_state) == [{"prs": [PR]}]
-    [run] = runs(scenario)
-    assert (run.source, run.status) == ("github", "ok")
+    assert reads(github_state)[-1]["prs"] == [PR]
+    assert [r.status for r in runs(scenario)] == ["ok", "ok"]
     assert scenario.attention() == []
 
 

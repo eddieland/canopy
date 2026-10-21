@@ -6,7 +6,7 @@ import json
 import os
 import re
 import threading
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,10 +16,16 @@ from unittest import mock
 import canopy_github
 import pytest
 from canopy_github import connect, post
+from canopy_github import read as read_module
+from canopy_github import repository as repository_module
 
-from tests.conftest import executable
+from canopy.core import config, observe, records, sql
+from canopy.core.vocab import CheckStatus, ConnectorRunStatus, MergeState
+from canopy.infra import logs, procs
+from tests.conftest import CanopyEnv, executable
 
 PR = "https://github.com/acme/api/pull/7"
+HEAD = "9b2f4c6e1a7d"
 PAGE = 2
 
 
@@ -61,6 +67,31 @@ class Pull:
     node: str
     reviews: list[Review] = field(default_factory=list)
     threads: list[Thread] = field(default_factory=list)
+    labels: list[str] = field(default_factory=list)
+    # Each context at the head as GitHub's rollup lists it, a CheckRun's or a StatusContext's fields; None for a head
+    # nothing has written a check or a status on.
+    contexts: list[dict[str, Any]] | None = None
+    state: str = "OPEN"
+    merge_state: str = "CLEAN"
+
+
+def run(name: str, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", id_: int = 1) -> dict[str, Any]:
+    """A check run as the rollup lists it."""
+    url = f"https://github.com/acme/api/actions/runs/{id_}/job/{id_}"
+    return {
+        "__typename": "CheckRun",
+        "name": name,
+        "status": status,
+        "conclusion": conclusion,
+        "databaseId": id_,
+        "detailsUrl": url,
+        "url": f"https://github.com/acme/api/runs/{id_}",
+    }
+
+
+def status(context: str, state: str, url: str | None = "https://ci.example.com/build/1") -> dict[str, Any]:
+    """A commit status as the rollup lists it."""
+    return {"__typename": "StatusContext", "context": context, "state": state, "targetUrl": url}
 
 
 @dataclass
@@ -71,6 +102,11 @@ class Fake:
     """
 
     pulls: dict[tuple[str, str, int], Pull] = field(default_factory=dict)
+    # Each repository's branches, by owner and name: a branch's name to its head's sha.
+    branches: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
+    # What a search returns, by its query: PRs' and issues' URLs; and the count it reports, when not their number.
+    searches: dict[str, list[str]] = field(default_factory=dict)
+    search_count: int | None = None
     issues: dict[tuple[str, str, int], str] = field(default_factory=dict)
     issue_comments: list[tuple[str, str]] = field(default_factory=list)
     # The login the token is for; empty for a reply that has none.
@@ -100,16 +136,35 @@ class Fake:
         match = re.match(r"\s*(?:query|mutation)\s+(\w+)", document)
         assert match, document
         op = match.group(1)
-        if op in {"PullRequest", "Threads", "PullRequestId"}:
+        if op == "PullRequests":
+            return self.pull_requests(variables)
+        if op in {"Threads", "PullRequestId"}:
             pull = self.pulls.get((variables["owner"], variables["name"], variables["number"]))
             if pull is None:
                 return {"data": {"repository": {"pullRequest": None}}, "errors": [{"message": "not found"}]}
             if op == "PullRequestId":
                 return {"data": {"repository": {"pullRequest": {"id": pull.node}}}}
-            if op == "PullRequest":
-                return {"data": {"repository": {"pullRequest": self.pr_node(pull, variables["after"])}}}
             threads = page([self.thread_node(t) for t in pull.threads], variables["after"])
             return {"data": {"repository": {"pullRequest": {"reviewThreads": threads}}}}
+        if op == "Reviews":
+            pull = self.pull_by_node(variables["id"])
+            return {"data": {"node": {"reviews": page(self.review_nodes(pull), variables["after"])}}}
+        if op == "Contexts":
+            pull = self.pull_by_node(variables["id"].removeprefix("C_"))
+            contexts = page(pull.contexts or [], variables["after"])
+            return {"data": {"node": {"statusCheckRollup": {"contexts": contexts}}}}
+        if op == "Branches":
+            found = self.branches.get((variables["owner"], variables["name"]))
+            if found is None:
+                return {"data": {"repository": None}, "errors": [{"type": "NOT_FOUND", "message": "no repository"}]}
+            # GitHub matches a ref's name against the query more loosely than a prefix.
+            nodes = [{"name": n, "target": {"oid": sha}} for n, sha in found.items() if variables["prefix"] in n]
+            return {"data": {"repository": {"refs": page(nodes, variables["after"])}}}
+        if op == "Search":
+            urls = self.searches.get(variables["query"], [])
+            nodes = [{"url": u} if "/pull/" in u else {} for u in urls]
+            count = len(urls) if self.search_count is None else self.search_count
+            return {"data": {"search": {"issueCount": count, **page(nodes, variables["after"])}}}
         if op == "ThreadComments":
             thread = next(t for p in self.pulls.values() for t in p.threads if t.id == variables["id"])
             comments = page([self.comment_node(c) for c in thread.comments], variables["after"])
@@ -209,8 +264,42 @@ class Fake:
             return {"data": {"addComment": {"commentEdge": {"node": node}}}}
         raise AssertionError(f"unexpected operation {op}")
 
-    def pr_node(self, pull: Pull, after: str | None) -> dict[str, Any]:
-        reviews = [
+    def pull_requests(self, variables: dict[str, Any]) -> Mapping[str, Any]:
+        """A batch: each PR under its alias, `p0` and on, with its owner, name, and number in `o0`, `n0`, `k0`."""
+        data: dict[str, Any] = {}
+        errors: list[dict[str, Any]] = []
+        i = 0
+        while f"o{i}" in variables:
+            pull = self.pulls.get((variables[f"o{i}"], variables[f"n{i}"], variables[f"k{i}"]))
+            data[f"p{i}"] = {"pullRequest": None if pull is None else self.pr_node(pull)}
+            if pull is None:
+                errors.append({"type": "NOT_FOUND", "path": [f"p{i}", "pullRequest"], "message": "no such PR"})
+            i += 1
+        return {"data": data, **({"errors": errors} if errors else {})}
+
+    def pr_node(self, pull: Pull) -> dict[str, Any]:
+        rollup = None if pull.contexts is None else {"contexts": page(pull.contexts, None)}
+        labels = [{"name": name} for name in pull.labels]
+        return {
+            "id": pull.node,
+            "url": PR,
+            "number": 7,
+            "state": pull.state,
+            "isDraft": False,
+            "headRefOid": HEAD,
+            "baseRefName": "main",
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": pull.merge_state,
+            "author": {"login": "me"},
+            # A page of labels holds 100, as the reader asks, so a PR with more has another page.
+            "labels": {"nodes": labels[:100], "pageInfo": {"hasNextPage": len(labels) > 100, "endCursor": "100"}},
+            "reviews": page(self.review_nodes(pull), None),
+            "reviewThreads": page([self.thread_node(t) for t in pull.threads], None),
+            "commits": {"nodes": [{"commit": {"id": f"C_{pull.node}", "oid": HEAD, "statusCheckRollup": rollup}}]},
+        }
+
+    def review_nodes(self, pull: Pull) -> list[dict[str, Any]]:
+        return [
             {
                 "id": r.node,
                 "fullDatabaseId": str(r.id),
@@ -223,18 +312,6 @@ class Fake:
             }
             for r in pull.reviews
         ]
-        return {
-            "id": pull.node,
-            "url": PR,
-            "number": 7,
-            "state": "OPEN",
-            "isDraft": False,
-            "headRefOid": "9b2f4c6e1a7d",
-            "baseRefName": "main",
-            "mergeable": "MERGEABLE",
-            "author": {"login": "me"},
-            "reviews": page(reviews, after),
-        }
 
     def thread_node(self, thread: Thread) -> dict[str, Any]:
         return {
@@ -366,7 +443,13 @@ def github() -> Generator[tuple[Fake, str]]:
         yield fake, url
 
 
-def read(url: str, request: object, hosts: list[str] | None = None) -> tuple[int, list[dict[str, Any]], str]:
+def read(
+    url: str,
+    request: object,
+    hosts: list[str] | None = None,
+    *,
+    token_of: Callable[[str], str] = lambda _: "t",
+) -> tuple[int, list[dict[str, Any]], str]:
     out, err = io.StringIO(), io.StringIO()
 
     def endpoint_of(host: str) -> str:
@@ -375,7 +458,7 @@ def read(url: str, request: object, hosts: list[str] | None = None) -> tuple[int
         return url
 
     with contextlib.redirect_stderr(err):
-        code = connect.run([], io.StringIO(json.dumps(request)), out, endpoint_of=endpoint_of, token_of=lambda _: "t")
+        code = connect.run([], io.StringIO(json.dumps(request)), out, endpoint_of=endpoint_of, token_of=token_of)
     return code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue()
 
 
@@ -413,7 +496,9 @@ def test_the_reader_prints_a_prs_reviews_and_threads_then_its_end(github: tuple[
         "state": "open",
         "draft": False,
         "mergeable": "mergeable",
+        "mergeable_state": "clean",
         "author": "me",
+        "labels": [],
     }
     assert review["state"] == "commented"
     assert review["body"] == "A few things."
@@ -439,21 +524,115 @@ def test_the_reader_reads_every_page(github: tuple[Fake, str]) -> None:
     pull.threads.append(
         Thread(id="PRRT_3", path="a.py", line=1, comments=[Comment(id=n, body="x") for n in (601, 602, 603)]),
     )
+    pull.contexts = [run(f"job-{n}", id_=n) for n in range(1, 6)]
     _, lines, _ = read(url, {"prs": [PR]})
     ids = [line["id"] for line in lines if line["kind"] == "review"]
     assert ids == [101, 102, 103, 501, 502, 503, 601, 602, 603]
-    assert "ThreadComments" in fake.ops()
+    assert [line["name"] for line in lines if line["kind"] == "check"] == [f"job-{n}" for n in range(1, 6)]
+    assert {"Reviews", "Threads", "ThreadComments", "Contexts"} <= set(fake.ops())
+
+
+def test_a_prs_line_carries_its_labels_and_mergeable_state(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.labels, pull.merge_state, pull.state = ["agent", "needs-human"], "BEHIND", "MERGED"
+    _, [pr, *_], _ = read(url, {"prs": [PR]})
+    assert (pr["labels"], pr["mergeable_state"], pr["state"]) == (["agent", "needs-human"], "behind", "merged")
+
+
+def test_a_pr_with_more_labels_than_its_line_carries_is_not_read_whole(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.pulls["acme", "api", 7].labels = [f"l{n}" for n in range(101)]
+    code, lines, err = read(url, {"prs": [PR]})
+    assert (code, lines) == (1, [{"kind": "end", "prs": []}])
+    assert "more than 100 labels" in err
+
+
+def test_each_context_at_the_head_is_a_check_whatever_wrote_it(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.pulls["acme", "api", 7].contexts = [
+        run("build", id_=11),
+        run("lint", status="IN_PROGRESS", conclusion=None, id_=12),
+        status("deploy/approval", "PENDING"),
+        status("ci/legacy", "ERROR", url="http://ci.example.com/1"),
+        status("ci/new", "EXPECTED", url=None),
+    ]
+    _, lines, _ = read(url, {"prs": [PR]})
+    checks = [line for line in lines if line["kind"] == "check"]
+    assert [{k: v for k, v in c.items() if k not in {"kind", "pr", "head_sha"}} for c in checks] == [
+        {
+            "name": "build",
+            "status": "completed",
+            "conclusion": "success",
+            "run_id": 11,
+            "url": "https://github.com/acme/api/actions/runs/11/job/11",
+        },
+        {
+            "name": "lint",
+            "status": "in_progress",
+            "conclusion": None,
+            "run_id": 12,
+            "url": "https://github.com/acme/api/actions/runs/12/job/12",
+        },
+        {
+            "name": "deploy/approval",
+            "status": "pending",
+            "conclusion": None,
+            "run_id": None,
+            "url": "https://ci.example.com/build/1",
+        },
+        # A link canopy would refuse is left out, so the PR is still read whole.
+        {"name": "ci/legacy", "status": "completed", "conclusion": "error", "run_id": None, "url": None},
+        {"name": "ci/new", "status": "pending", "conclusion": None, "run_id": None, "url": None},
+    ]
+    assert {(c["pr"], c["head_sha"]) for c in checks} == {(PR, HEAD)}
+
+
+def test_a_check_named_twice_is_its_newest_run(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.pulls["acme", "api", 7].contexts = [
+        run("build", conclusion="SUCCESS", id_=9),
+        run("build", conclusion="FAILURE", id_=5),
+        run("test", id_=3),
+    ]
+    _, lines, _ = read(url, {"prs": [PR]})
+    checks = [(line["name"], line["conclusion"], line["run_id"]) for line in lines if line["kind"] == "check"]
+    assert checks == [("build", "success", 9), ("test", "success", 3)]
+
+
+def test_the_prs_are_read_many_to_a_query(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    others = [f"https://github.com/acme/api/pull/{n}" for n in (8, 9)]
+    for n in (8, 9):
+        fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
+    _, lines, _ = read(url, {"prs": [PR, *others]})
+    assert lines[-1]["prs"] == [PR, *others]
+    assert fake.ops().count("PullRequests") == 1
+    fake.seen.clear()
+    with mock.patch.object(read_module, "BATCH", 2):
+        _, lines, _ = read(url, {"prs": [PR, *others]})
+    assert lines[-1]["prs"] == [PR, *others]
+    assert fake.ops().count("PullRequests") == 2
 
 
 def test_a_pr_not_read_whole_prints_nothing_and_is_left_off_the_end(github: tuple[Fake, str]) -> None:
-    _, url = github
+    fake, url = github
     missing = "https://github.com/acme/api/pull/8"
     code, lines, err = read(url, {"prs": [missing, PR]})
     assert code == 1
     assert lines[0]["kind"] == "pr"
     assert all(line.get("pr", line.get("url")) != missing for line in lines[:-1])
     assert lines[-1] == {"kind": "end", "prs": [PR]}
-    assert f"cannot read {missing}" in err
+    assert f"cannot read {missing}: GitHub refused it: no such PR" in err
+    assert fake.ops().count("PullRequests") == 1, "the PR it read came in the same query"
+
+
+def test_a_query_github_refuses_whole_reads_none_of_its_prs(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["PullRequests"] = "500"
+    code, lines, err = read(url, {"prs": [PR]})
+    assert (code, lines) == (1, [{"kind": "end", "prs": []}])
+    assert "HTTP 502" in err
 
 
 def test_the_reader_asks_each_prs_own_host(github: tuple[Fake, str]) -> None:
@@ -466,16 +645,150 @@ def test_the_reader_asks_each_prs_own_host(github: tuple[Fake, str]) -> None:
     assert lines[-1]["prs"] == [PR, "https://ghe.example.com/acme/web/pull/3"]
 
 
+def test_a_host_gh_holds_no_token_for_leaves_its_subjects_unread_and_reads_the_rest(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.branches["acme", "web"] = {"agent/PROJ-2": "c0ffee1"}
+
+    def token_of(host: str) -> str:
+        if host == "ghe.example.com":
+            raise canopy_github.InputError("gh is not logged in to ghe.example.com")
+        return "t"
+
+    request = {
+        "prs": ["https://ghe.example.com/acme/web/pull/3", PR],
+        "repositories": [{"name": "web", "url": "https://ghe.example.com/acme/web.git"}],
+        "branch_prefix": "agent/",
+    }
+    code, lines, err = read(url, request, token_of=token_of)
+    assert code == 1
+    assert lines[-1] == {"kind": "end", "prs": [PR], "repositories": []}
+    assert "cannot read repository web: gh is not logged in to ghe.example.com" in err
+
+
+# Branches
+
+
+def test_each_repository_prints_its_branches_under_the_prefix(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.branches["acme", "api"] = {
+        "main": "aaaaaaa",
+        "agent/PROJ-1-fix": "bbbbbbb",
+        "agent/PROJ-2": "ccccccc",
+        "old-agent/PROJ-3": "ddddddd",
+        "agent/PROJ-4": "eeeeeee",
+    }
+    fake.branches["acme", "web"] = {}
+    request = {
+        "repositories": [
+            {"name": "api", "url": "git@github.com:acme/api.git"},
+            {"name": "web", "url": "https://github.com/acme/web"},
+        ],
+        "branch_prefix": "agent/",
+    }
+    code, lines, _ = read(url, request)
+    assert code == 0
+    assert lines == [
+        {"kind": "branch", "repository": "api", "name": "agent/PROJ-1-fix", "head_sha": "bbbbbbb"},
+        {"kind": "branch", "repository": "api", "name": "agent/PROJ-2", "head_sha": "ccccccc"},
+        {"kind": "branch", "repository": "api", "name": "agent/PROJ-4", "head_sha": "eeeeeee"},
+        {"kind": "end", "prs": [], "repositories": ["api", "web"]},
+    ]
+    assert fake.ops().count("Branches") == 3, "api's branches came on two pages"
+
+
+def test_a_repository_it_cannot_read_is_left_off_the_end_and_the_rest_are_read(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.branches["acme", "api"] = {"agent/PROJ-1": "bbbbbbb"}
+    request = {
+        "repositories": [
+            {"name": "lab", "url": "https://gitlab.com/acme/tools/lab.git"},
+            {"name": "bare"},
+            {"name": "gone", "url": "https://github.com/acme/gone"},
+            {"name": "api", "url": "https://github.com/acme/api"},
+        ],
+        "branch_prefix": "agent/",
+    }
+    code, lines, err = read(url, request)
+    assert code == 1
+    assert lines[-1] == {"kind": "end", "prs": [], "repositories": ["api"]}
+    assert (
+        "cannot read repository lab: its clone URL 'https://gitlab.com/acme/tools/lab.git' names no repository" in err
+    )
+    assert "cannot read repository bare" in err
+    assert "cannot read repository gone: GitHub refused it: no repository" in err
+
+
+def test_a_repository_with_more_branches_than_the_bound_is_not_read(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.branches["acme", "api"] = {f"agent/PROJ-{n}": "bbbbbbb" for n in range(3)}
+    request = {"repositories": [{"name": "api", "url": "https://github.com/acme/api"}], "branch_prefix": "agent/"}
+    with mock.patch.object(repository_module, "MAX_BRANCHES", 2):
+        code, lines, err = read(url, request)
+    assert (code, lines) == (1, [{"kind": "end", "prs": [], "repositories": []}])
+    assert "more than 2 branches under agent/" in err
+
+
+# The review query
+
+
+def test_the_review_query_names_the_prs_it_returns_on_the_repositories_host(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.branches["acme", "api"] = {}
+    others = [f"https://github.com/acme/web/pull/{n}" for n in (4, 5)]
+    fake.searches["is:pr review-requested:@me"] = [PR, "https://github.com/acme/api/issues/12", *others, PR]
+    hosts: list[str] = []
+    request = {
+        "review_query": "is:pr review-requested:@me",
+        "repositories": [{"name": "api", "url": "https://github.com/acme/api"}],
+        "branch_prefix": "agent/",
+    }
+    code, lines, _ = read(url, request, hosts)
+    assert code == 0
+    assert lines == [{"kind": "end", "prs": [], "repositories": ["api"], "review_query": [PR, *others]}]
+    assert hosts == ["github.com"]
+
+
+def test_a_review_query_alone_runs_on_github_com(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.searches["is:pr"] = [PR]
+    hosts: list[str] = []
+    code, lines, _ = read(url, {"review_query": "is:pr"}, hosts)
+    assert (code, lines, hosts) == (0, [{"kind": "end", "prs": [], "review_query": [PR]}], ["github.com"])
+
+
+def test_a_review_query_that_matches_more_than_github_returns_is_not_read(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.searches["is:pr"], fake.search_count = [PR], 1001
+    code, lines, err = read(url, {"review_query": "is:pr"})
+    assert (code, lines) == (1, [{"kind": "end", "prs": []}])
+    assert "it matches 1001, more than the 1000 GitHub returns" in err
+
+
+# The request
+
+
+def test_an_empty_request_reads_nothing_and_ends(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    code, lines, _ = read(url, {"query": "project = PROJ", "tickets": [{"key": "PROJ-1"}]})
+    assert (code, lines) == (0, [{"kind": "end", "prs": []}])
+    assert not fake.seen
+
+
 @pytest.mark.parametrize(
     ("request_", "message"),
     [
-        ({}, "must name the PRs"),
-        ({"prs": []}, "must name the PRs"),
+        ({"prs": PR}, "prs must be a list"),
         ({"prs": ["http://github.com/acme/api/pull/7"]}, "is not a PR's URL"),
         ({"prs": ["https://github.com/acme/api/pull/7/files"]}, "is not a PR's URL"),
         ({"prs": ["https://github.com/acme/api/issues/7"]}, "is not a PR's URL"),
         ({"prs": ["https://user@github.com/acme/api/pull/7"]}, "is not a PR's URL"),
-        ({"prs": [PR] * 101}, "at most 100"),
+        ({"prs": [PR] * 1001}, "at most 1000"),
+        ({"repositories": {"name": "api"}, "branch_prefix": "agent/"}, "repositories must be a list"),
+        ({"repositories": ["api"], "branch_prefix": "agent/"}, "is not a repository"),
+        ({"repositories": [{"name": "-api"}], "branch_prefix": "agent/"}, "is not a repository's name"),
+        ({"repositories": [{"name": "api"}]}, "need the branch prefix"),
+        ({"repositories": [{"name": "api"}], "branch_prefix": "agent/ x"}, "need the branch prefix"),
+        ({"review_query": " "}, "review query must be a string that is not blank"),
     ],
 )
 def test_the_reader_refuses_what_it_cannot_use(github: tuple[Fake, str], request_: object, message: str) -> None:
@@ -485,6 +798,86 @@ def test_the_reader_refuses_what_it_cannot_use(github: tuple[Fake, str], request
     assert not lines
     assert message in err
     assert not fake.seen
+
+
+# What canopy records of it
+
+
+def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_env: CanopyEnv) -> None:
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.labels, pull.merge_state = ["agent"], "BLOCKED"
+    pull.contexts = [run("build", id_=11), status("deploy/approval", "PENDING"), run("lint", id_=12)]
+    fake.branches["acme", "api"] = {"agent/PROJ-1": "bbbbbbb", "agent/PROJ-2": "ccccccc", "main": "aaaaaaa"}
+    fake.searches["is:pr"] = [PR]
+    conn = canopy_env.journal()
+    request = observe.Request(
+        prs=[PR],
+        repositories=[observe.Repository("api", "https://github.com/acme/api.git")],
+        branch_prefix="agent/",
+        review_query="is:pr",
+    )
+
+    found = observe.observe(
+        conn,
+        config.load(canopy_env.root, canopy_env.user_file),
+        InProcess(url),
+        config.Source(kind="vcs", cmd="canopy-connect-github"),
+        request,
+        log=logs.for_tick(None),
+    )
+
+    assert (found.status, found.refused, found.missed) == (ConnectorRunStatus.OK, {}, None)
+    assert found.recorded == {"pr": 1, "check": 3, "review": 4, "branch": 2}
+    assert found.review_query_result == [PR]
+    [pr] = records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))
+    assert (json.loads(pr.labels), pr.mergeable_state, pr.head_sha) == (["agent"], MergeState.BLOCKED, HEAD)
+    checks = records.fetch_all(conn, records.ObservedCheck, sql.select("*").from_("observed_checks").order_by("name"))
+    assert [(c.name, c.status, c.run_id) for c in checks] == [
+        ("build", CheckStatus.COMPLETED, 11),
+        ("deploy/approval", CheckStatus.PENDING, None),
+        ("lint", CheckStatus.COMPLETED, 12),
+    ]
+    branches = records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches"))
+    assert sorted((b.repository, b.name) for b in branches) == [("api", "agent/PROJ-1"), ("api", "agent/PROJ-2")]
+
+
+@dataclass(frozen=True)
+class InProcess:
+    """A runner that runs the reader in this process against the stand-in at `url`, as canopy would run it."""
+
+    url: str
+
+    def run(
+        self,
+        args: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        stdin: str | None = None,
+        timeout: float | None = None,
+        on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
+        stdout_to_file: bool = False,
+    ) -> procs.Result:
+        del cwd, env, timeout, on_start, stdout_to_file
+        assert args[0] == "canopy-connect-github"
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = connect.run(
+                args[1:],
+                io.StringIO(stdin or ""),
+                out,
+                endpoint_of=lambda _: self.url,
+                token_of=lambda _: "t",
+            )
+        for line in out.getvalue().splitlines(keepends=True):
+            if on_line is not None:
+                on_line(line)
+        return procs.Result(tuple(args), code, out.getvalue(), err.getvalue())
+
+    def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
+        raise AssertionError(f"a connector is run, never spawned: {args}, {cwd}, {log_path}")
 
 
 def test_endpoints_are_github_coms_api_host_or_the_servers_own() -> None:

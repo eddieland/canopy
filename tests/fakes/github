@@ -82,10 +82,6 @@ def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
     prs = state.get("prs", {})
     whole = []
     asked = request.get("prs", [])
-    if not asked:
-        # The real reader refuses a request that names no PR.
-        print('canopy-connect-github: stdin must name the PRs to read: {"prs": ["https://..."]}', file=sys.stderr)
-        return 2
     for url in asked:
         if url not in prs or url in state.get("unread", []):
             print(f"canopy-connect-github: cannot read {url}", file=sys.stderr)

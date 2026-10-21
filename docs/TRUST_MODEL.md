@@ -271,8 +271,8 @@ Controls:
   The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
   operator-only file of its own, never from canopy's config, argv, journal, or logs. The GitHub reader and poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
-  issue's URL names, when they run, only once `gh` names that host as one it is logged in to, and send it only to that
-  host's API, following no redirect; canopy never reads it. Lint bans network
+  issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
+  is logged in to, and send it only to that host's API, following no redirect; canopy never reads it. Lint bans network
   modules in the harness (`urllib.request`, `http.client`, `socket`) and any import of these programs, so the process
   that holds the journal and enforces the guards never opens a connection or reads a token or a sink's secret.
 

@@ -1,9 +1,9 @@
 """canopy's GitHub programs (DESIGN §29): `canopy-connect-github` reads, `canopy-post-github` writes.
 
 canopy runs them as commands, never imports them, so the harness holds no token and opens no connection (TRUST_MODEL
-T2, D003). Each reads the token `gh` holds for the host its PR's URL names, when it runs, and talks to that host's
-GraphQL API, so GitHub Enterprise works as github.com does. This module holds what both share: reading a PR's or an
-issue's URL, the token, the GraphQL client, and the JSON lines they print.
+T2, D003). Each reads the token `gh` holds for the host its PR's URL or repository's clone URL names, when it runs,
+and talks to that host's GraphQL API, so GitHub Enterprise works as github.com does. This module holds what both
+share: reading a PR's or an issue's URL and a clone URL, the token, the GraphQL client, and the JSON lines they print.
 
 Stdlib only, importing nothing from canopy.
 """
@@ -15,7 +15,7 @@ import re
 import subprocess
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, TextIO, override
 
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from email.message import Message
 
 TIMEOUT_SECONDS = 30
+#: The media type that names the preview a PR's `mergeStateStatus` was introduced under.
+MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY = 8000
 # How much of GitHub's reply an error quotes.
@@ -32,6 +34,13 @@ _NAME = r"[A-Za-z0-9_.-]{1,100}"
 _NUMBER = r"[1-9][0-9]{0,9}"
 _PR = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/pull/({_NUMBER})")
 _ISSUE = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/issues/({_NUMBER})")
+# A clone URL as `git clone` takes it: https, scp-style SSH, or ssh://, with an optional `.git` and trailing slash. An
+# SSH URL's port is the SSH server's, not the API's, so it is not part of the host.
+_HOST_NAME = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?"
+_CLONE = re.compile(
+    rf"(?:https://({_HOST})/|ssh://git@({_HOST_NAME})(?::[0-9]{{1,5}})?/|git@({_HOST_NAME}):)"
+    rf"({_NAME})/({_NAME}?)(?:\.git)?/?",
+)
 
 # The host a token is for, to the GraphQL endpoint to send it to; and the host to the token.
 Endpoint = Callable[[str], str]
@@ -65,6 +74,33 @@ class Ref:
     owner: str
     name: str
     number: int
+
+
+@dataclass(frozen=True)
+class Repository:
+    """A repository canopy names, and where its clone URL says it is on GitHub."""
+
+    #: canopy's name for it, which its `branch` lines carry.
+    name: str
+    host: str
+    owner: str
+    repo: str
+
+
+def parse_repository(name: str, url: object) -> Repository:
+    """Read where a repository is from its clone URL: `https://HOST/OWNER/REPO`, `git@HOST:OWNER/REPO`, or `ssh://`.
+
+    Returns:
+        The repository.
+
+    Raises:
+        InputError: `url` is not such a URL.
+    """
+    match = _CLONE.fullmatch(url) if isinstance(url, str) else None
+    if match is None or match[5] in {".", ".."}:
+        raise InputError(f"its clone URL {url!r} names no repository on a GitHub host")
+    host = next(h for h in match.groups()[:3] if h is not None)
+    return Repository(name=name, host=host.lower(), owner=match[4], repo=match[5])
 
 
 def parse_pr(url: object) -> Ref:
@@ -168,7 +204,7 @@ class Client:
         self._opener = urllib.request.build_opener(_NoRedirect())
 
     def query(self, document: str, variables: Mapping[str, object]) -> Mapping[str, object]:
-        """Send one query or mutation.
+        """Send one query or mutation, which GitHub must answer whole.
 
         Returns:
             The reply's `data`.
@@ -176,11 +212,26 @@ class Client:
         Raises:
             GitHubError: GitHub refused it, answered with errors, or could not be reached.
         """
+        reply = self.ask(document, variables)
+        if reply.errors:
+            raise GitHubError(refusal(reply.errors), certain=True, types=error_types(reply.errors))
+        return reply.data
+
+    def ask(self, document: str, variables: Mapping[str, object]) -> Reply:
+        """Send one query, which GitHub may answer in part: an error about one field leaves the rest of `data`.
+
+        Returns:
+            The reply's `data`, and its errors.
+
+        Raises:
+            GitHubError: GitHub refused it whole, or could not be reached.
+        """
         payload = json.dumps({"query": document, "variables": dict(variables)}).encode()
         headers = {
             "Authorization": f"bearer {self._token}",
             "Content-Type": "application/json",
-            "Accept": "application/json",
+            # A PR's `mergeStateStatus` was a preview; asking for it names the preview, which GitHub otherwise ignores.
+            "Accept": f"{MERGE_INFO_PREVIEW}, application/json",
             "User-Agent": "canopy-github",
         }
         request = urllib.request.Request(self._url, data=payload, headers=headers, method="POST")  # noqa: S310
@@ -199,11 +250,38 @@ class Client:
             raise GitHubError(f"GitHub's reply is not JSON: {reply[:_MAX_REPLY]}", certain=False) from e
         body = obj(parsed, "reply")
         errors = items(body.get("errors"))
-        if errors:
-            messages = "; ".join(str(e.get("message")) for e in errors)
-            types = tuple(t for e in errors if isinstance(t := e.get("type"), str))
-            raise GitHubError(f"GitHub refused it: {messages[:_MAX_REPLY]}", certain=True, types=types)
-        return obj(body.get("data"), "data")
+        data = body.get("data")
+        if errors and not isinstance(data, dict):
+            raise GitHubError(refusal(errors), certain=True, types=error_types(errors))
+        return Reply(obj(data, "data"), tuple(errors))
+
+
+@dataclass(frozen=True)
+class Reply:
+    """GitHub's answer to one query: its `data`, and the errors that left parts of it out."""
+
+    data: Mapping[str, object]
+    #: Each error as GitHub sent it; one about a field names it in its `path`.
+    errors: Sequence[Mapping[str, object]] = ()
+
+
+def refusal(errors: Iterable[Mapping[str, object]]) -> str:
+    """What GitHub's errors say, for a `GitHubError`.
+
+    Returns:
+        Their messages, quoted only so far.
+    """
+    messages = "; ".join(str(e.get("message")) for e in errors)
+    return f"GitHub refused it: {messages[:_MAX_REPLY]}"
+
+
+def error_types(errors: Iterable[Mapping[str, object]]) -> tuple[str, ...]:
+    """The types GitHub's errors name, such as `NOT_FOUND`.
+
+    Returns:
+        The types, in order.
+    """
+    return tuple(t for e in errors if isinstance(t := e.get("type"), str))
 
 
 def client_for(host: str, endpoint_of: Endpoint, token_of: Token) -> Client:
@@ -220,7 +298,11 @@ def pages(fetch: Callable[[str | None], Mapping[str, object]]) -> Iterator[Mappi
 
     Yields:
         Each node, in order.
+
+    Raises:
+        GitHubError: The pages never end: GitHub sent a page's cursor twice.
     """
+    seen: set[str] = set()
     cursor: str | None = None
     while True:
         page = fetch(cursor)
@@ -229,7 +311,19 @@ def pages(fetch: Callable[[str | None], Mapping[str, object]]) -> Iterator[Mappi
         after = info.get("endCursor")
         if info.get("hasNextPage") is not True or not isinstance(after, str):
             return
+        if after in seen:
+            raise GitHubError("its pages never end: GitHub sent a page's cursor twice", certain=True)
+        seen.add(after)
         cursor = after
+
+
+def more(first: Mapping[str, object], fetch: Callable[[str], Mapping[str, object]]) -> Iterator[Mapping[str, object]]:
+    """Each node of a connection whose first page is in hand, the rest fetched by `fetch(cursor)` as `pages` does.
+
+    Returns:
+        The nodes, in order, as `pages` yields them.
+    """
+    return pages(lambda after: first if after is None else fetch(after))
 
 
 def obj(value: object, what: str) -> Mapping[str, object]:
