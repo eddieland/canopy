@@ -418,6 +418,7 @@ class Behavior(TypedDict, total=False):
     sleep: float  # seconds it waits before the result line, to run into a timeout
     session: str  # the `sessionID` on each event, with `--format json`
     step_cost: str  # each model call's cost, verbatim JSON, so a test can make it invalid
+    errors: str  # a JSON list, each the `error` of an `error` event it prints at the end, with `--format json`
 
 
 # The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
@@ -427,6 +428,7 @@ BEHAVIOR_SETTINGS = {
     "sleep": "SLEEP",
     "session": "SESSION",
     "step_cost": "STEP_COST",
+    "errors": "ERRORS",
 }
 
 
