@@ -1,13 +1,16 @@
 """Plans exported into a directory of the operator's, each with what the journal records of it (DESIGN §25).
 
-`export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/<run>.md`,
-the path its file has under the state directory: a front matter of its row, then its file as it stands now. The row is
-what a copy of `plans/` alone would lose: whether the plan was approved, by whom, and as which hash.
+`export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/`: a front
+matter of its row, then its file as it stands now. The row is what a copy of `plans/` alone would lose: whether the plan
+was approved, by whom, and as which hash. The file's name says which plan it is and where it stands, so a listing reads
+without opening one: its run, its status, then its title as a slug (`name`), as `412-approved-export-reports-as-csv.md`.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
-and a git repository at `dest` sees a change only where there is one. Nothing in `dest` is ever removed, and a plan
-whose file is missing or no plan is left as it was exported before, if it was. A file is written under a temporary
-name, then renamed into place, so no reader sees half of one and a link at its name is replaced, never followed.
+and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
+name: the export writes the new name, then removes the plan's file under any name it had before, and nothing else, so
+git sees a rename. A plan whose file is missing or no plan is left as it was exported before, if it was. A file is
+written under a temporary name, then renamed into place, so no reader sees half of one and a link at its name is
+replaced, never followed.
 
 A history of thousands of plans is exported each tick, so an export reads only what may have changed: for each plan it
 found exported as it stands, it keeps a fingerprint of its row and of both files' stat in the state directory, and
@@ -23,13 +26,16 @@ import hashlib
 import itertools
 import json
 import os
+import re
 import secrets
 import stat
 import time
+import unicodedata
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Self
 
 from canopy.core import plans, records, sql
+from canopy.core.vocab import PlanStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -44,8 +50,12 @@ SEEN_DIR = "plan-exports"
 _DIR_MODE = 0o700
 _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
-# Bumped whenever `document` changes, so every plan exported before is read and compared again.
-_FORMAT = 1
+# Bumped whenever `document` or `name` changes, so every plan exported before is read and compared again.
+_FORMAT = 2
+# The most characters of a title a file's name carries.
+_MAX_SLUG = 60
+# What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
+_HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
 # same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
 _SETTLED_NS = 2_000_000_000
@@ -73,6 +83,8 @@ class Exported:
     skipped: Sequence[Skipped]
     #: How many plans it left unchecked, having written its `limit` of files first.
     left: int = 0
+    #: The files it removed, relative to `dest`: each a plan's earlier name, the plan now under a new one.
+    removed: Sequence[str] = dataclasses.field(default_factory=list[str])
 
 
 class ExportError(Exception):
@@ -85,8 +97,8 @@ def export(conn: sqlite3.Connection, state_dir: Path, dest: Path, *, limit: int 
     With `limit`, stop once that many files are written; the plans after them are left for the next export.
 
     Returns:
-        The files written, how many were already as they stand, the plans whose files are not plans, and how many
-        plans `limit` left unchecked.
+        The files written and removed, how many were already as they stand, the plans whose files are not plans, and
+        how many plans `limit` left unchecked.
 
     Raises:
         ExportError: `dest`, or a ticket's directory in it, is a link or not a directory, or a file could not be
@@ -100,42 +112,48 @@ def export(conn: sqlite3.Connection, state_dir: Path, dest: Path, *, limit: int 
         ),
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
-    written: list[str] = []
-    skipped: list[Skipped] = []
-    unchanged = 0
+    tally = _Tally()
     checked = 0
     # Before any file is read: one changed after this is never taken as settled.
     settled_before = time.time_ns() - _SETTLED_NS
     with _dest_dir(dest) as dest_fd, _Seen.of(state_dir, dest) as seen:
         for key, group in itertools.groupby(rows, key=lambda kind_row: kind_row[1].ticket_key):
-            if limit is not None and len(written) >= limit:
+            if limit is not None and len(tally.written) >= limit:
                 break
             source_dir = plans.dir_for(state_dir, key)
             with _source_dir(source_dir) as source_fd, _ticket_dir(dest_fd, dest / key) as dir_fd:
+                dirs = _Dirs(key, source_dir, source_fd, dest / key, dir_fd, _list(dir_fd))
                 for kind, row in group:
-                    if limit is not None and len(written) >= limit:
+                    if limit is not None and len(tally.written) >= limit:
                         break
                     checked += 1
-                    name = plans.file_name(row.run_id)
-                    # Each stat before its file is read, so a change after the read shows on the next export.
-                    source_stat = None if source_fd is None else _stat(name, source_fd)
-                    if seen.matches(f"{key}/{name}", kind, row, source_stat, _stat(name, dir_fd)):
-                        unchanged += 1
-                        continue
-                    reading = plans.read(source_dir / name)
-                    if reading.text is None:
-                        # A reading without text always says why; "unreadable" only satisfies the type.
-                        skipped.append(Skipped(kind, key, row.run_id, reading.problem or "unreadable"))
-                        continue
-                    data = document(kind, row, reading.text)
-                    held = _held(dir_fd, name, data)
-                    if held is None:
-                        _write(dir_fd, dest / key / name, data)
-                        written.append(f"{key}/{name}")
-                    else:
-                        unchanged += 1
-                        seen.record(f"{key}/{name}", kind, row, source_stat, held, settled_before=settled_before)
-    return Exported(written=written, unchanged=unchanged, skipped=skipped, left=len(rows) - checked)
+                    _export_plan(kind, row, dirs, seen, tally, settled_before=settled_before)
+    return Exported(
+        written=tally.written,
+        unchanged=tally.unchanged,
+        skipped=tally.skipped,
+        left=len(rows) - checked,
+        removed=tally.removed,
+    )
+
+
+def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str:
+    """A plan's file name in an export: its run, its status, `feedback` for a feedback plan, and its title's slug.
+
+    The title is the plan's first `# ` heading, less the `Plan: KEY` the planner opens it with. A plan is model text
+    (TRUST_MODEL T1), so its slug holds only lowercase letters, digits, and single hyphens, and is cut short; a plan
+    with no title past that prefix has none in its name.
+
+    Returns:
+        The name, as `412-approved-export-reports-as-csv.md`.
+    """
+    parts = [str(row.run_id), row.status.value]
+    if kind == "feedback plan":
+        parts.append("feedback")
+    slug = _slug(_title(text, row.ticket_key))
+    if slug:
+        parts.append(slug)
+    return "-".join(parts) + ".md"
 
 
 def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> bytes:
@@ -154,6 +172,121 @@ def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) ->
             lines.append(f"{field.name}: {json.dumps(value)}\n")
     lines.extend([_FRONT_MATTER, "\n", text])
     return "".join(lines).encode("utf-8")
+
+
+@dataclass(frozen=True)
+class _Dirs:
+    """Where one ticket's plans are read from, under the state directory, and exported to."""
+
+    key: str
+    source: Path
+    #: The source directory's descriptor, to stat its files; None when it could not be opened.
+    source_fd: int | None
+    dest: Path
+    dest_fd: int
+    #: The names in `dest` as the ticket's export began.
+    listing: Sequence[str]
+
+
+@dataclass
+class _Tally:
+    """What an export has done so far, kept as it goes."""
+
+    written: list[str] = dataclasses.field(default_factory=list[str])
+    removed: list[str] = dataclasses.field(default_factory=list[str])
+    skipped: list[Skipped] = dataclasses.field(default_factory=list[Skipped])
+    unchanged: int = 0
+
+
+def _export_plan(
+    kind: Kind,
+    row: records.Plan | records.FeedbackPlan,
+    dirs: _Dirs,
+    seen: _Seen,
+    tally: _Tally,
+    *,
+    settled_before: int,
+) -> None:
+    """Export one plan into its ticket's directory, unless it is there as it stands, and remove its earlier names.
+
+    Raises:
+        ExportError: its file could not be written, or an earlier one removed.
+    """
+    plan = f"{dirs.key}/{row.run_id}"
+    source_name = plans.file_name(row.run_id)
+    # Every name this plan's file has in `dest`: one, unless its status or title changed since.
+    names = [n for n in dirs.listing if _is_name_of(row.run_id, n)]
+    # Each stat before its file is read, so a change after the read shows on the next export.
+    source_stat = None if dirs.source_fd is None else _stat(source_name, dirs.source_fd)
+    if len(names) == 1:
+        exported = _stat(names[0], dirs.dest_fd)
+        if seen.matches(plan, kind, row, source=source_stat, exported_name=names[0], exported=exported):
+            tally.unchanged += 1
+            return
+    reading = plans.read(dirs.source / source_name)
+    if reading.text is None:
+        # A reading without text always says why; "unreadable" only satisfies the type.
+        tally.skipped.append(Skipped(kind, dirs.key, row.run_id, reading.problem or "unreadable"))
+        return
+    exported_name = name(kind, row, reading.text)
+    data = document(kind, row, reading.text)
+    held = _held(dirs.dest_fd, exported_name, data)
+    if held is None:
+        _write(dirs.dest_fd, dirs.dest / exported_name, data)
+        tally.written.append(f"{dirs.key}/{exported_name}")
+    else:
+        tally.unchanged += 1
+    # Only once the plan is in place under its name, so a failed write leaves it under the earlier one.
+    for earlier in names:
+        if earlier != exported_name:
+            _remove(dirs.dest_fd, dirs.dest / earlier)
+            tally.removed.append(f"{dirs.key}/{earlier}")
+    if held is not None:
+        seen.record(
+            plan,
+            kind,
+            row,
+            source=source_stat,
+            exported_name=exported_name,
+            exported=held,
+            settled_before=settled_before,
+        )
+
+
+def _title(text: str, key: str) -> str:
+    """The plan's title: its first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
+
+    Returns:
+        The title, or "" when the plan has no such heading or nothing past its prefix.
+    """
+    heading = next((line[2:] for line in text.splitlines() if line.startswith("# ")), "")
+    title = _HEADING_PREFIX.sub("", heading.strip().rstrip("#").strip(), count=1)
+    # The key alone, never the start of a longer one: `PROJ-1` stays in `PROJ-12`.
+    return re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+
+
+def _slug(title: str) -> str:
+    """`title` in lowercase ASCII letters and digits, each run of anything else one hyphen, at most `_MAX_SLUG` long.
+
+    Returns:
+        The slug, cut at a hyphen where it is too long; "" when nothing of the title is a letter or digit.
+    """
+    ascii_title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_title.lower()).strip("-")
+    if len(slug) > _MAX_SLUG:
+        cut = slug[: _MAX_SLUG + 1]
+        slug = cut[: cut.rfind("-")] if "-" in cut else slug[:_MAX_SLUG]
+    return slug
+
+
+def _is_name_of(run_id: int, file_name: str) -> bool:
+    """Whether `file_name` is one an export could have given the plan of run `run_id`, now or in an earlier format.
+
+    Returns:
+        True for `<run>.md`, and for `<run>-<status>.md` with anything `name` adds after the status.
+    """
+    statuses = "|".join(s.value for s in PlanStatus)
+    return re.fullmatch(rf"{run_id}(?:-(?:{statuses})(?:-[a-z0-9]+)*)?\.md", file_name) is not None
 
 
 class _Seen:
@@ -189,43 +322,46 @@ class _Seen:
 
     def matches(
         self,
-        name: str,
+        plan: str,
         kind: Kind,
         row: records.Plan | records.FeedbackPlan,
+        *,
         source: os.stat_result | None,
+        exported_name: str,
         exported: os.stat_result | None,
     ) -> bool:
-        """Whether `name` was found exported as it stands, and neither its row nor either file changed since.
+        """Whether `plan`, `KEY/RUN`, was found exported as it stands under `exported_name`, and nothing changed since.
 
         Returns:
-            False when either file is missing, or nothing was kept for `name`.
+            False when either file is missing, or nothing was kept for `plan`.
         """
-        kept = self.fingerprints.get(name)
+        kept = self.fingerprints.get(plan)
         return (
             kept is not None
             and source is not None
             and exported is not None
-            and (kept == _fingerprint(kind, row, source, exported))
+            and (kept == _fingerprint(kind, row, source, exported_name, exported))
         )
 
     def record(
         self,
-        name: str,
+        plan: str,
         kind: Kind,
         row: records.Plan | records.FeedbackPlan,
-        source: os.stat_result | None,
-        exported: os.stat_result,
         *,
+        source: os.stat_result | None,
+        exported_name: str,
+        exported: os.stat_result,
         settled_before: int,
     ) -> None:
-        """Keep that `name` was found exported as it stands, unless a file changed too recently to tell by its stat.
+        """Keep that `plan` was found exported as it stands, unless a file changed too recently to tell by its stat.
 
         A plan's file that could not be statted before it was read is not kept either.
         """
         if source is not None and all(max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in (source, exported)):
-            fingerprint = _fingerprint(kind, row, source, exported)
-            self.changed |= self.fingerprints.get(name) != fingerprint
-            self.fingerprints[name] = fingerprint
+            fingerprint = _fingerprint(kind, row, source, exported_name, exported)
+            self.changed |= self.fingerprints.get(plan) != fingerprint
+            self.fingerprints[plan] = fingerprint
 
     def save(self) -> None:
         """Write the fingerprints if any changed. A file that cannot be written costs the next export its reads only."""
@@ -248,7 +384,7 @@ def _load(path: Path) -> dict[str, str]:
     """The fingerprints kept at `path`.
 
     Returns:
-        Each exported file's fingerprint by its name under `dest`; none when the file is missing, unreadable, not
+        Each plan's fingerprint by its `KEY/RUN`; none when the file is missing, unreadable, not
         canopy's, or from another format.
     """
     try:
@@ -265,16 +401,18 @@ def _fingerprint(
     kind: Kind,
     row: records.Plan | records.FeedbackPlan,
     source: os.stat_result,
+    exported_name: str,
     exported: os.stat_result,
 ) -> str:
-    """A plan's row and the stat of its file and its export, as one digest.
+    """A plan's row, the stat of its file, and the name and stat of its export, as one digest.
 
     Returns:
         The digest, hex.
     """
     stats = [(s.st_dev, s.st_ino, s.st_mode, s.st_size, s.st_mtime_ns, s.st_ctime_ns) for s in (source, exported)]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
-    return hashlib.blake2b(repr((_FORMAT, kind, row, stats)).encode(), digest_size=16).hexdigest()
+    digested = (_FORMAT, kind, row, exported_name, stats)
+    return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
 @contextlib.contextmanager
@@ -340,6 +478,35 @@ def _source_dir(path: Path) -> Iterator[int | None]:
         yield dir_fd
     finally:
         os.close(dir_fd)
+
+
+def _list(dir_fd: int) -> list[str]:
+    """The names in the directory `dir_fd`.
+
+    Returns:
+        Its names, in no order.
+
+    Raises:
+        ExportError: it cannot be listed.
+    """
+    try:
+        return os.listdir(dir_fd)
+    except OSError as e:
+        raise ExportError(f"a ticket's directory could not be listed: {e.strerror}") from None
+
+
+def _remove(dir_fd: int, path: Path) -> None:
+    """Remove `path`, whose directory is `dir_fd`: the name itself, never what a link there names.
+
+    Raises:
+        ExportError: it could not be removed.
+    """
+    try:
+        os.unlink(path.name, dir_fd=dir_fd)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        raise ExportError(f"{path} was not removed: {e.strerror}") from None
 
 
 def _stat(name: str, dir_fd: int) -> os.stat_result | None:

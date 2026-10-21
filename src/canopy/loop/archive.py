@@ -75,8 +75,13 @@ def _archive(ctx: Context, git: _Git, name: str, log: logs.TickAdapter) -> str |
     except plan_export.ExportError as e:
         log.warning("plans not archived", extra={"error": str(e)})
         return f"plans were not exported to {git.clone}: {e}"
-    if exported.written:
-        extra = {"written": len(exported.written), "left": exported.left, "clone": str(git.clone)}
+    if exported.written or exported.removed:
+        extra = {
+            "written": len(exported.written),
+            "removed": len(exported.removed),
+            "left": exported.left,
+            "clone": str(git.clone),
+        }
         log.info("plans archived", extra=extra)
     failure = _commit_and_push(git, name, log)
     if failure is None and exported.left:

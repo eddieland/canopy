@@ -81,8 +81,10 @@ record or through a link, and shows a missing file as missing, never as an empty
 (§24); a plan's event to sinks (§20) carries none of its text.
 
 `canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
-of theirs, each under a front matter of its row, since status and approval live only in the journal. It rewrites a
-file only when its plan or row changed and removes nothing, so the directory can be a repository the operator pushes.
+of theirs, each under a front matter of its row, since status and approval live only in the journal, and named for its
+run, status, and title, so a listing reads without opening a plan. It rewrites a file only when its plan or row changed,
+and removes only a plan's own earlier name when its status or title moved it, so the directory can be a repository the
+operator pushes and git sees a rename.
 With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, commits that
 directory alone, and pushes to the clone's upstream, never forcing; `archive_unpushed` stays open while the archive is
 not all there, so a failed push is retried each tick. A tick writes at most a thousand files, so a long history goes in

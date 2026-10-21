@@ -29,6 +29,12 @@ def front_matter(path: Path) -> tuple[dict[str, object], str]:
     return {k: json.loads(v) for k, v in keys.items()}, text.removeprefix("\n")
 
 
+def file_of(dest: Path, key: str, run_id: int) -> Path:
+    """The one file exported for the plan of run `run_id`, whatever its status and title name it."""
+    [path] = (dest / key).glob(f"{run_id}-*.md")
+    return path
+
+
 def feedback_plan(conn: sqlite3.Connection, state_dir: Path, text: str) -> int:
     """Write and record a feedback plan for `KEY`, covering no items. Returns its run's id."""
     run_id = plan_run(conn, state_dir)
@@ -39,19 +45,25 @@ def feedback_plan(conn: sqlite3.Connection, state_dir: Path, text: str) -> int:
 def test_every_plan_is_exported_with_its_row(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
     first = proposed(conn, state_dir)
     plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
-    second = proposed(conn, state_dir, "# Second\n")
+    second = proposed(conn, state_dir, f"# Plan: {KEY} Export reports as CSV\n")
     other = proposed(conn, state_dir, "# Other's\n", key="PROJ-2")
-    feedback = feedback_plan(conn, state_dir, "# Feedback\n")
+    feedback = feedback_plan(conn, state_dir, f"# Feedback plan: {KEY} Export reports as CSV\n")
     dest = tmp_path / "archive"
 
     exported = plan_export.export(conn, state_dir, dest)
 
+    # Each named for its run, its status, and its title, less the planner's `Plan: KEY`; PLAN's title is that alone.
     assert exported == plan_export.Exported(
-        written=[f"{KEY}/{first}.md", f"{KEY}/{second}.md", f"{KEY}/{feedback}.md", f"PROJ-2/{other}.md"],
+        written=[
+            f"{KEY}/{first}-superseded.md",
+            f"{KEY}/{second}-proposed-export-reports-as-csv.md",
+            f"{KEY}/{feedback}-proposed-feedback-export-reports-as-csv.md",
+            f"PROJ-2/{other}-proposed-other-s.md",
+        ],
         unchanged=0,
         skipped=[],
     )
-    meta, text = front_matter(dest / KEY / f"{first}.md")
+    meta, text = front_matter(dest / KEY / f"{first}-superseded.md")
     [row, _] = plans.history(conn, KEY)
     assert text == PLAN
     assert meta == {
@@ -67,13 +79,17 @@ def test_every_plan_is_exported_with_its_row(conn: sqlite3.Connection, state_dir
         "approved_at": row.approved_at,
         "approved_channel": "cli",
     }
-    meta, text = front_matter(dest / KEY / f"{feedback}.md")
-    assert (meta["kind"], meta["status"], text) == ("feedback plan", "proposed", "# Feedback\n")
+    meta, text = front_matter(file_of(dest, KEY, feedback))
+    assert (meta["kind"], meta["status"], text) == (
+        "feedback plan",
+        "proposed",
+        f"# Feedback plan: {KEY} Export reports as CSV\n",
+    )
     # Operator-only, as the plans it copies.
     assert dest.stat().st_mode & 0o777 == 0o700
     assert (dest / KEY).stat().st_mode & 0o777 == 0o700
-    assert (dest / KEY / f"{first}.md").stat().st_mode & 0o777 == 0o600
-    assert sorted(p.name for p in (dest / KEY).iterdir()) == sorted(f"{r}.md" for r in (first, second, feedback))
+    assert file_of(dest, KEY, first).stat().st_mode & 0o777 == 0o600
+    assert len(list((dest / KEY).iterdir())) == 3
 
 
 def test_an_export_rewrites_only_what_changed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
@@ -84,15 +100,76 @@ def test_an_export_rewrites_only_what_changed(conn: sqlite3.Connection, state_di
 
     assert plan_export.export(conn, state_dir, dest) == plan_export.Exported(written=[], unchanged=2, skipped=[])
 
-    # The operator edits a plan, then approves it: its file and its row change, the other plan does neither.
+    # The operator edits a plan's title, then approves it: each moves it to a new name, and only its earlier one goes.
     plans.path_for(state_dir, KEY, first).write_text("# Edited\n")
-    assert plan_export.export(conn, state_dir, dest).written == [f"{KEY}/{first}.md"]
+    exported = plan_export.export(conn, state_dir, dest)
+    assert (exported.written, exported.removed) == (
+        [f"{KEY}/{first}-proposed-edited.md"],
+        [f"{KEY}/{first}-proposed.md"],
+    )
     plans.approve(conn, state_dir, KEY, channel="web", dispatch_lock=state_dir / DISPATCH_LOCK)
     exported = plan_export.export(conn, state_dir, dest)
-    assert (exported.written, exported.unchanged) == ([f"{KEY}/{first}.md"], 1)
-    meta, text = front_matter(dest / KEY / f"{first}.md")
+    assert (exported.written, exported.removed, exported.unchanged) == (
+        [f"{KEY}/{first}-approved-edited.md"],
+        [f"{KEY}/{first}-proposed-edited.md"],
+        1,
+    )
+    assert [p.name for p in (dest / KEY).iterdir()] == [f"{first}-approved-edited.md"]
+    meta, text = front_matter(dest / KEY / f"{first}-approved-edited.md")
     assert (meta["status"], meta["approved_channel"], text) == ("approved", "web", "# Edited\n")
-    assert front_matter(dest / "PROJ-2" / f"{second}.md")[0]["status"] == "proposed"
+    assert front_matter(dest / "PROJ-2" / f"{second}-proposed.md")[0]["status"] == "proposed"
+
+
+def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    run_id = proposed(conn, state_dir)
+    dest = tmp_path / "archive"
+    (dest / KEY).mkdir(parents=True)
+    # As an export before names carried a status wrote it, and as an export cut short by a failed removal left one.
+    (dest / KEY / f"{run_id}.md").write_text("old\n")
+    (dest / KEY / f"{run_id}-approved-old-title.md").write_text("old\n")
+    # Not names an export gives this plan: another run's, and the operator's own.
+    kept = [f"{run_id}0-proposed.md", f"{run_id}-notes.md", f"{run_id}-proposed.txt", "README.md"]
+    for name in kept:
+        (dest / KEY / name).write_text("theirs\n")
+
+    exported = plan_export.export(conn, state_dir, dest)
+
+    assert exported.written == [f"{KEY}/{run_id}-proposed.md"]
+    assert sorted(exported.removed) == [f"{KEY}/{run_id}-approved-old-title.md", f"{KEY}/{run_id}.md"]
+    assert sorted(p.name for p in (dest / KEY).iterdir()) == sorted([*kept, f"{run_id}-proposed.md"])
+
+
+@pytest.mark.parametrize(
+    ("heading", "slug"),
+    [
+        (f"# Plan: {KEY} Export reports as CSV", "-export-reports-as-csv"),
+        (f"# Plan: {KEY.lower()}: Export reports, as CSV #", "-export-reports-as-csv"),
+        ("# Café crème: ../../etc/passwd", "-cafe-creme-etc-passwd"),
+        ("# Plan", ""),
+        ("# Plan the migration", "-plan-the-migration"),
+        (f"# Plan: {KEY}2 Next", f"-{KEY.lower()}2-next"),
+        (f"# Plan: {KEY}", ""),
+        ("# 日本語", ""),
+        ("## Goal", ""),
+        ("# " + "word " * 30, "-" + "-".join(["word"] * 12)),
+    ],
+)
+def test_a_name_carries_a_slug_of_the_title(heading: str, slug: str) -> None:
+    plan = records.Plan(
+        id=1,
+        ticket_key=KEY,
+        run_id=7,
+        created_at="2026-10-21T00:00:00Z",
+        status=PlanStatus.PROPOSED,
+        sha256="ab",
+        size=3,
+        approved_sha256=None,
+        approved_at=None,
+        approved_channel=None,
+        approved_reason=None,
+        effort=None,
+    )
+    assert plan_export.name("plan", plan, f"{heading}\n\n## Goal\n") == f"7-proposed{slug}.md"
 
 
 @pytest.fixture
@@ -122,16 +199,20 @@ def test_a_plan_found_as_it_stands_is_not_read_again(conn: sqlite3.Connection, s
     # A plan's file, its row, or the file exported from it changing is each read again, and only that plan.
     plans.path_for(state_dir, KEY, first).write_text("# Edited\n")
     exported, read = reads(conn, state_dir, dest)
-    assert (exported.written, read) == ([f"{KEY}/{first}.md"], 1)
+    assert (exported.written, read) == ([f"{KEY}/{first}-proposed-edited.md"], 1)
     plan_export.export(conn, state_dir, dest)
     plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     exported, read = reads(conn, state_dir, dest)
-    assert (exported.written, read) == ([f"{KEY}/{first}.md"], 1)
+    assert (exported.written, read) == ([f"{KEY}/{first}-approved-edited.md"], 1)
     plan_export.export(conn, state_dir, dest)
-    (dest / "PROJ-2" / f"{second}.md").write_text("The operator's edit.\n")
+    (dest / "PROJ-2" / f"{second}-proposed.md").write_text("The operator's edit.\n")
     exported, read = reads(conn, state_dir, dest)
-    assert (exported.written, read) == ([f"PROJ-2/{second}.md"], 1)
-    assert front_matter(dest / "PROJ-2" / f"{second}.md")[1] == PLAN
+    assert (exported.written, read) == ([f"PROJ-2/{second}-proposed.md"], 1)
+    assert front_matter(dest / "PROJ-2" / f"{second}-proposed.md")[1] == PLAN
+    # A copy of the plan under another of its names is read, and removed.
+    (dest / "PROJ-2" / f"{second}.md").write_text("A stray copy.\n")
+    exported, read = reads(conn, state_dir, dest)
+    assert (exported.removed, read) == ([f"PROJ-2/{second}.md"], 1)
 
     # Fingerprints that cannot be read are none: every plan is read again.
     [kept] = (state_dir / plan_export.SEEN_DIR).iterdir()
@@ -159,13 +240,13 @@ def test_a_limit_leaves_the_rest_for_the_next_export(conn: sqlite3.Connection, s
     dest = tmp_path / "archive"
 
     assert plan_export.export(conn, state_dir, dest, limit=2) == plan_export.Exported(
-        written=[f"{KEY}/{first}.md", f"{KEY}/{second}.md"],
+        written=[f"{KEY}/{first}-superseded.md", f"{KEY}/{second}-proposed-second.md"],
         unchanged=0,
         skipped=[],
         left=1,
     )
     assert plan_export.export(conn, state_dir, dest, limit=2) == plan_export.Exported(
-        written=[f"PROJ-2/{other}.md"],
+        written=[f"PROJ-2/{other}-proposed.md"],
         unchanged=2,
         skipped=[],
     )
@@ -187,7 +268,7 @@ def test_a_plan_whose_file_is_gone_is_skipped_and_nothing_exported_is_removed(
         unchanged=0,
         skipped=[plan_export.Skipped("plan", KEY, run_id, "missing")],
     )
-    assert front_matter(dest / KEY / f"{run_id}.md")[1] == PLAN
+    assert front_matter(dest / KEY / f"{run_id}-proposed.md")[1] == PLAN
     assert (dest / "README.md").read_text() == "The operator's own.\n"
 
 
@@ -199,15 +280,17 @@ def test_a_link_in_the_export_is_never_followed(conn: sqlite3.Connection, state_
     target = elsewhere / "target.md"
     target.write_text("untouched\n")
     (dest / KEY).mkdir(parents=True)
-    (dest / KEY / f"{run_id}.md").symlink_to(target)
+    (dest / KEY / f"{run_id}-proposed.md").symlink_to(target)
+    (dest / KEY / f"{run_id}-approved.md").symlink_to(target)
 
-    # A link at the file's name is replaced by the file.
-    assert plan_export.export(conn, state_dir, dest).written == [f"{KEY}/{run_id}.md"]
-    assert not (dest / KEY / f"{run_id}.md").is_symlink()
+    # A link at the file's name is replaced by the file, and one at an earlier name removed, never what it names.
+    exported = plan_export.export(conn, state_dir, dest)
+    assert (exported.written, exported.removed) == ([f"{KEY}/{run_id}-proposed.md"], [f"{KEY}/{run_id}-approved.md"])
+    assert not (dest / KEY / f"{run_id}-proposed.md").is_symlink()
     assert target.read_text() == "untouched\n"
 
     # A link at the ticket's directory refuses the export.
-    (dest / KEY / f"{run_id}.md").unlink()
+    (dest / KEY / f"{run_id}-proposed.md").unlink()
     (dest / KEY).rmdir()
     (dest / KEY).symlink_to(elsewhere)
     with pytest.raises(plan_export.ExportError, match="is not a directory canopy can export into"):
@@ -249,11 +332,11 @@ def test_canopy_archive_exports_and_says_what_it_did(
 
     assert operator("archive", str(dest)) == 0
     assert capsys.readouterr().out.splitlines() == [
-        f"wrote {KEY}/{run_id}.md",
+        f"wrote {KEY}/{run_id}-proposed.md",
         f"skipped PROJ-2's plan of run {gone}: its file is missing",
         f"Exported 1 plan to {dest}; 0 unchanged, 1 skipped.",
     ]
-    assert front_matter(dest / KEY / f"{run_id}.md")[1] == PLAN
+    assert front_matter(dest / KEY / f"{run_id}-proposed.md")[1] == PLAN
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
