@@ -18,11 +18,12 @@ const NONE_REQUESTED: RequestedReview[] = []
 
 /**
  * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket,
- * its impact, its PR and the commit it read, cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR
- * are left out, as `RunsTable` leaves out a ticket on the ticket's page. The reviews page passes the PRs the operator
- * asked to have reviewed that no review of has started yet as `requested`, a row each, before the runs, or after them
- * with `requestedLast`: what comes next is the newest end of the list. A review whose result is new to the operator
- * (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said `new` on hover and to a screen reader.
+ * its impact, its PR, the commit it read and the persona it wrote in, cost, and when. On a PR's own page
+ * (`pr={false}`) the ticket and the PR are left out, as `RunsTable` leaves out a ticket on the ticket's page. The
+ * reviews page passes the PRs the operator asked to have reviewed that no review of has started yet as `requested`, a
+ * row each, before the runs, or after them with `requestedLast`: what comes next is the newest end of the list. A
+ * review whose result is new to the operator (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said
+ * `new` on hover and to a screen reader.
  */
 export function ReviewsTable({
     reviews,
@@ -84,6 +85,15 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             </span>
         </Tip>
     )
+    // A PR reviewed in several personas side by side has a row for each, told apart by this. On a narrow list it gives
+    // way before the PR's name does: it is cut first, and left out where the column has no room for it.
+    const persona = review.persona !== null && (
+        <Tip fact="The persona it wrote in">
+            <span className="readout hidden min-w-0 shrink-[999] truncate text-xs text-muted-foreground @3xl:inline">
+                as {review.persona}
+            </span>
+        </Tip>
+    )
     return (
         <ListRow
             kind={pr ? 'review' : 'own-review'}
@@ -117,9 +127,13 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
                 <span className="flex min-w-0 items-center gap-3">
                     <PullRequestLink url={review.pr_url} />
                     {sha}
+                    {persona}
                 </span>
             ) : (
-                sha
+                <span className="flex min-w-0 items-center gap-3">
+                    {sha}
+                    {persona}
+                </span>
             )}
             <Cost usd={review.cost_usd} className="text-right text-xs text-muted-foreground" />
             <Age variant="span" started={review.started_at} ended={review.ended_at} className="text-right" />

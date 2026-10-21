@@ -27,6 +27,7 @@ const REVIEW: ReviewSummary = {
     worst_count: 1,
     impact: 'high',
     cost_usd: 0.31,
+    persona: 'skeptic',
     started_at: '2026-10-08T11:00:00Z',
     ended_at: '2026-10-08T11:04:00Z',
     news: true,
@@ -91,6 +92,13 @@ describe('ReviewsTable', () => {
         expect(tipOf(screen.getByText('3f9c2a1'))).toBe('3f9c2a1b7d0e')
     })
 
+    it('names the persona each review wrote in, and nothing for one from before canopy recorded it', async () => {
+        await renderReviews([REVIEW, { ...REVIEW, id: 5, persona: null }])
+        const named = within(screen.getByTestId('review-4')).getByText('as skeptic')
+        expect(tipOf(named)).toBe('The persona it wrote in')
+        expect(within(screen.getByTestId('review-5')).queryByText(/^as /u)).toBeNull()
+    })
+
     it('says why a PR canopy only reviews has no ticket', async () => {
         await renderReviews([{ ...REVIEW, ticket_key: null }])
         expect(screen.getByText('none').title).toBe('none: canopy only reviews it')
@@ -101,6 +109,7 @@ describe('ReviewsTable', () => {
         const row = within(screen.getByTestId('pull-request-review-4'))
         expect(row.getAllByRole('link').map((link) => link.textContent)).toEqual(['review:4'])
         expect(row.getByText('at 3f9c2a1')).toBeDefined()
+        expect(row.getByText('as skeptic')).toBeDefined()
     })
 
     it('marks a review whose result the operator has not seen new, and no other', async () => {

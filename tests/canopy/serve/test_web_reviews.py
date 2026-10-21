@@ -31,6 +31,8 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     # Its worst finding, which colors its verdict, and how many are that bad, which its verdict says: none for a clean
     # review or one that reported nothing.
     assert [(r["worst"], r["worst_count"]) for r in listed] == [("major", 1), (None, 0), (None, 0), ("blocking", 1)]
+    # The persona each wrote in, which tells apart the reviews of one commit in several (DESIGN §31).
+    assert [r["persona"] for r in listed] == ["skeptic", "canopy", "canopy", "canopy"]
 
 
 def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(backend: Backend) -> None:
