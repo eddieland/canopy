@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from canopy.core import personas
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.schema import PersonaList
+from canopy.serve.persona_schema import PersonaList
 
 TAG = "personas"
 router = APIRouter(tags=[TAG])

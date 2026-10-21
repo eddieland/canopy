@@ -34,9 +34,7 @@ from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
-from canopy.serve.guard import MAX_BODY_BYTES, host_name
-from canopy.serve.options import ServeOptions
-from canopy.serve.schema import (
+from canopy.serve.event_schema import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
@@ -47,10 +45,12 @@ from canopy.serve.schema import (
     StreamEnding,
     StreamEvent,
     TicketChanged,
-    TicketSummary,
     TicketsUpdated,
     TickUpdated,
 )
+from canopy.serve.guard import MAX_BODY_BYTES, host_name
+from canopy.serve.options import ServeOptions
+from canopy.serve.schema import TicketSummary
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present

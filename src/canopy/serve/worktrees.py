@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from canopy.core import conversation, db, tasks
 from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
 from canopy.serve import views
-from canopy.serve.schema import Pool, Process, ReviewHold, Worktree, WorktreeState
+from canopy.serve.worktree_schema import Pool, Process, ReviewHold, Worktree, WorktreeState
 
 if TYPE_CHECKING:
     import sqlite3

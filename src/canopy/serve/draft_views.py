@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, drafts, drafts_manage, records, sql
 from canopy.core.vocab import DraftKind
-from canopy.serve.schema import Draft, DraftKindName, DraftStanceName, DraftStatusName, ReactionName
+from canopy.serve.draft_schema import Draft, DraftKindName, DraftStanceName, DraftStatusName, ReactionName
 
 if TYPE_CHECKING:
     import sqlite3

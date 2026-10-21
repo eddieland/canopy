@@ -9,21 +9,9 @@ from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TicketKey, not_found, ticket_ref
-from canopy.serve.schema import (
-    AgentPersona,
-    ForgetRequest,
-    Forgot,
-    Granted,
-    GrantRequest,
-    PersonaRequest,
-    Replied,
-    ReplyRequest,
-    Started,
-    Stopped,
-    StopRequest,
-    TicketDetail,
-    TicketSummary,
-)
+from canopy.serve.persona_schema import AgentPersona, PersonaRequest
+from canopy.serve.schema import Granted, Replied, ReplyRequest, TicketSummary
+from canopy.serve.ticket_schema import ForgetRequest, Forgot, GrantRequest, Started, Stopped, StopRequest, TicketDetail
 
 TAG = "tickets"
 router = APIRouter(tags=[TAG])

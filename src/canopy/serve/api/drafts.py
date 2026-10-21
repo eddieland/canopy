@@ -18,15 +18,15 @@ from canopy.infra import logs
 from canopy.serve import threads
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found
-from canopy.serve.schema import (
+from canopy.serve.draft_schema import (
     Draft,
     DraftDropRequest,
     DraftEditRequest,
     DraftSendRequest,
     DraftsSent,
-    ErrorResponse,
     PullRequestThreads,
 )
+from canopy.serve.schema import ErrorResponse
 
 TAG = "review replies"
 router = APIRouter(tags=[TAG])
