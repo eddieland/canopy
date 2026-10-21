@@ -107,6 +107,45 @@ def test_each_plans_prompt_goes_beside_it(scenario: Scenario, clone: Path, upstr
     )
 
 
+def test_a_name_changed_in_case_alone_is_renamed_where_git_ignores_case(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+) -> None:
+    run_id = prompted(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+    # As an archive on macOS holds the prompt an earlier canopy wrote in lowercase.
+    git("config", "core.ignorecase", "true", cwd=clone)
+    (clone / name / KEY).mkdir(parents=True)
+    (clone / name / KEY / f"{run_id}-prompt.md").write_text(PLAN_PROMPT)
+    git("add", "--all", cwd=clone)
+    git("commit", "--quiet", "-m", "Earlier", cwd=clone)
+
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROMPT.md", f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert git("show", "--name-status", "--format=", "main", cwd=upstream).splitlines() == [
+        f"R100\t{name}/{KEY}/{run_id}-prompt.md\t{name}/{KEY}/{run_id}-PROMPT.md",
+        f"A\t{name}/{KEY}/{run_id}-PROPOSED.md",
+    ]
+
+
+def test_what_the_operator_staged_in_the_clone_stays_staged(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+) -> None:
+    run_id = proposed(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+    (clone / "README.md").write_text("Our plans.\n")
+    git("add", "README.md", cwd=clone)
+
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert git("diff", "--cached", "--name-only", cwd=clone) == "README.md"
+
+
 def test_prompts_off_archives_plans_alone(scenario: Scenario, clone: Path, upstream: Path) -> None:
     scenario.configures(paths={"plan_archive_prompts": False})
     run_id = prompted(scenario.conn, scenario.env.state_dir)

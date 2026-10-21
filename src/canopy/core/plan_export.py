@@ -92,7 +92,8 @@ class Exported:
     skipped: Sequence[Skipped]
     #: How many plans it left unchecked, having written its `limit` of files first.
     left: int = 0
-    #: The files it removed, relative to `dest`: each a plan's earlier name, the plan now under a new one.
+    #: The files it removed, relative to `dest`: each a plan's or prompt's earlier name, the file now under a new one.
+    #: On a filesystem that ignores case, a name that differs in case alone names the new file, so is gone, not removed.
     removed: Sequence[str] = dataclasses.field(default_factory=list[str])
 
 
@@ -271,7 +272,8 @@ def _export_plan(
     # Each stat before its file is read, so a change after the read shows on the next export.
     source_stat = None if dirs.source_fd is None else _stat(source_name, dirs.source_fd)
     prompt_stats = None if prompt is None else _prompt_stats(prompt, row.run_id, dirs.dest_fd)
-    if len(names) == 1:
+    # A prompt still under the name earlier exports gave it is renamed, so read as if no fingerprint were kept.
+    if len(names) == 1 and (prompt is None or _earlier_prompt_name(row.run_id) not in dirs.listing):
         exported = _stat(names[0], dirs.dest_fd)
         if seen.matches(
             plan,
@@ -369,8 +371,7 @@ def _export_prompt(prompt: _Prompt, run_id: int, dirs: _Dirs, tally: _Tally) -> 
     if held is None:
         _write(dirs.dest_fd, dirs.dest / exported_name, data)
         tally.written.append(f"{dirs.key}/{exported_name}")
-    # The name earlier exports gave it, in lowercase.
-    earlier = f"{run_id}-prompt.md"
+    earlier = _earlier_prompt_name(run_id)
     _remove_earlier([earlier] if earlier in dirs.listing else [], exported_name, dirs, tally)
     return None if held is None else (source, held)
 
@@ -382,10 +383,28 @@ def _remove_earlier(names: Iterable[str], exported_name: str, dirs: _Dirs, tally
         ExportError: one could not be removed.
     """
     for earlier in names:
-        # A filesystem that ignores case finds the new file under an earlier name that differs in case alone.
-        if earlier != exported_name and not _same_file(dirs.dest_fd, earlier, exported_name):
+        if earlier == exported_name:
+            continue
+        first, second = _stat(earlier, dirs.dest_fd), _stat(exported_name, dirs.dest_fd)
+        # Never removed on a guess that the two differ: a name that cannot be statted is left for the next export.
+        if first is None or second is None:
+            continue
+        # A filesystem that ignores case finds the new file under an earlier name that differs in case alone. That
+        # name is gone all the same, and said to be, so a git index that ignores case can be told.
+        if not os.path.samestat(first, second):
             _remove(dirs.dest_fd, dirs.dest / earlier)
-            tally.removed.append(f"{dirs.key}/{earlier}")
+        elif earlier.casefold() != exported_name.casefold():
+            continue
+        tally.removed.append(f"{dirs.key}/{earlier}")
+
+
+def _earlier_prompt_name(run_id: int) -> str:
+    """The name earlier exports gave the prompt of run `run_id`, in lowercase.
+
+    Returns:
+        The name, as `412-prompt.md`.
+    """
+    return f"{run_id}-prompt.md"
 
 
 def _title(text: str, key: str) -> str:
@@ -707,16 +726,6 @@ def _read_regular(path: Path) -> tuple[os.stat_result, bytes] | None:
             return found, f.read()
         except OSError:
             return None
-
-
-def _same_file(dir_fd: int, name: str, other: str) -> bool:
-    """Whether `name` and `other` in the directory `dir_fd` are one file, as on a filesystem that ignores case.
-
-    Returns:
-        True when both stat, without following a link, as the same file.
-    """
-    first, second = _stat(name, dir_fd), _stat(other, dir_fd)
-    return first is not None and second is not None and os.path.samestat(first, second)
 
 
 def _write(dir_fd: int, path: Path, data: bytes) -> None:

@@ -164,10 +164,15 @@ def test_a_name_that_is_the_plans_own_file_is_not_removed(
     # As a filesystem that ignores case shows the plan's file, and its prompt, under the names an export gave before.
     (dest / KEY / f"{run_id}-proposed.md").hardlink_to(dest / KEY / f"{run_id}-PROPOSED.md")
     (dest / KEY / f"{run_id}-prompt.md").hardlink_to(dest / KEY / f"{run_id}-PROMPT.md")
+    # Another name for the same file that differs by more than case is not one an earlier export left.
+    (dest / KEY / f"{run_id}-Approved.md").hardlink_to(dest / KEY / f"{run_id}-PROPOSED.md")
 
     exported = plan_export.export(conn, state_dir, dest)
 
-    assert (exported.written, exported.removed, exported.unchanged) == ([], [], 1)
+    # Said to be gone, as such a filesystem would have it, but not removed, which would remove the file itself.
+    assert (exported.written, exported.unchanged) == ([], 1)
+    assert exported.removed == [f"{KEY}/{run_id}-proposed.md", f"{KEY}/{run_id}-prompt.md"]
+    assert (dest / KEY / f"{run_id}-proposed.md").exists()
     assert front_matter(dest / KEY / f"{run_id}-PROPOSED.md")[1] == PLAN
 
 
@@ -244,6 +249,33 @@ def test_a_prompt_exported_in_lowercase_is_renamed(conn: sqlite3.Connection, sta
 
     assert (exported.written, exported.removed) == ([f"{KEY}/{run_id}-PROMPT.md"], [f"{KEY}/{run_id}-prompt.md"])
     assert sorted(p.name for p in (dest / KEY).iterdir()) == [f"{run_id}-PROMPT.md", f"{run_id}-PROPOSED.md"]
+    # Back beside its new name, as an older canopy might write it, it goes even where the plan is as it stands.
+    (dest / KEY / f"{run_id}-prompt.md").write_text(PLAN_PROMPT)
+    exported = plan_export.export(conn, state_dir, dest)
+    assert (exported.written, exported.removed) == ([], [f"{KEY}/{run_id}-prompt.md"])
+
+
+def test_an_earlier_name_that_cannot_be_statted_is_left(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    run_id = proposed(conn, state_dir)
+    dest = tmp_path / "archive"
+    (dest / KEY).mkdir(parents=True)
+    (dest / KEY / f"{run_id}-Proposed.md").write_text("old\n")
+    real_stat = os.stat
+
+    def stat(path: str, **kwargs: object) -> os.stat_result:
+        if path == f"{run_id}-Proposed.md":
+            raise PermissionError(path)
+        return real_stat(path, **kwargs)  # pyrefly: ignore[bad-argument-type]
+
+    with mock.patch.object(os, "stat", side_effect=stat):
+        exported = plan_export.export(conn, state_dir, dest)
+
+    assert (exported.written, exported.removed) == ([f"{KEY}/{run_id}-PROPOSED.md"], [])
+    assert (dest / KEY / f"{run_id}-Proposed.md").read_text() == "old\n"
 
 
 def test_prompts_off_exports_plans_alone(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
