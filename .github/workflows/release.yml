@@ -162,12 +162,56 @@ jobs:
           name: release-notes
           path: release-notes
 
+      # A codename, for fun: an alliterative adjective and animal, as Ubuntu names its releases. It means nothing.
+      # It is picked from the version's numbers alone, so a rerun gives the same one and v0.2.0rc1 shares v0.2.0's.
+      - name: Name the release
+        id: codename
+        run: |
+          words=(
+            "agile amber artful|aardvark alpaca axolotl"
+            "bashful bouncy breezy|badger beaver bison"
+            "cheeky cosmic curious|capybara cormorant cuttlefish"
+            "dapper dizzy dreamy|dingo dormouse dugong"
+            "eager earnest elegant|echidna eel egret"
+            "fearless fluffy frisky|fennec ferret flamingo"
+            "gallant gentle giddy|gecko gibbon gnu"
+            "hasty hearty humble|hedgehog heron hippo"
+            "idle intrepid itchy|ibex ibis iguana"
+            "jazzy jolly jumpy|jackal jellyfish jerboa"
+            "keen kindly knobbly|kakapo kiwi koala"
+            "lanky lucky lumpy|lemur llama lobster"
+            "mellow merry mighty|manatee marmot moose"
+            "nifty nimble noble|narwhal newt numbat"
+            "odd orderly outlandish|ocelot octopus okapi"
+            "peppy plucky prickly|pangolin platypus puffin"
+            "quick quiet quirky|quail quokka quoll"
+            "rowdy rumpled rustic|raccoon raven roadrunner"
+            "sleepy snappy sprightly|sloth squid stoat"
+            "tidy toasty tubby|tapir tortoise toucan"
+            "unflappable unruly upbeat|uakari urchin urial"
+            "valiant velvety vexed|vicuna vole vulture"
+            "wily wistful wobbly|walrus wombat wren"
+            "yappy yawning youthful|yak yellowhammer"
+            "zany zesty zippy|zebra zebu zorilla"
+          )
+          version=$(grep -Eo '^[0-9.]*[0-9]' <<<"${TAG#v}" || true)
+          n=$(cksum <<<"${version:-$TAG}" | cut -d' ' -f1)
+          IFS='|' read -r adjectives animals <<<"${words[n % ${#words[@]}]}"
+          read -ra adjectives <<<"$adjectives"
+          read -ra animals <<<"$animals"
+          n=$((n / ${#words[@]}))
+          adjective=${adjectives[n % ${#adjectives[@]}]}
+          animal=${animals[n / ${#adjectives[@]} % ${#animals[@]}]}
+          echo "name=${adjective^} ${animal^}" >>"$GITHUB_OUTPUT"
+          echo "$TAG is ${adjective^} ${animal^}"
+
       # A tag with a letter after its numbers, such as v0.2.0rc1, is a pre-release. A rerun, or a manual run for a
       # tag that already has a release, replaces that release's notes and leaves the rest as it was.
       - name: Create the release, or replace its notes
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIOUS: ${{ needs.notes.outputs.previous }}
+          CODENAME: ${{ steps.codename.outputs.name }}
         run: |
           notes=release-notes/notes.md
           if [ -s "$notes" ]; then
@@ -191,6 +235,6 @@ jobs:
             if [[ "${TAG#v}" =~ [a-z] ]]; then
               prerelease=(--prerelease)
             fi
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG ($CODENAME)" \
               "${source[@]}" "${prerelease[@]}"
           fi
