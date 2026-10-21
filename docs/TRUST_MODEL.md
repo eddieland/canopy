@@ -343,8 +343,10 @@ Controls now:
   chosen by the committed `.worktreeinclude` or the operator's own (`paths.worktree_include`, private).
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
-  configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
-  that link; a canary like the desk's checks the reads (DESIGN §21).
+  configuration from the checkout. The shipped `canopy-reviewer` cannot edit, and reads only through that link; a
+  canary like the desk's checks the reads (DESIGN §21). It and the planner run one command, `git merge-base`, which
+  prints commit ids and runs no other program; every other command, and git with a global option such as `-c`, is
+  denied.
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
@@ -368,7 +370,10 @@ Controls now:
   through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
 
-Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one
+Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. OpenCode matches
+a command's words, not its redirections or leading variable assignments, so an unsandboxed reviewer or planner that a
+PR or ticket steers can still truncate any file the operator owns by redirecting `git merge-base` to it, and set git's
+variables for it; that is why no command that diffs, pages, or fetches is allowed them. A sandboxed one
 shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
 git and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`,
 so two runs can pass files through it. A filter driver the operator's own git config defines still runs on whatever a
@@ -430,12 +435,12 @@ Controls:
   whole. A ticket's body is text the worker wrote, so a steered worker can publish what it read in one, as it can in a
   comment.
 - The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
-  path but that file's name, and it has no shell, web, or subagent tools. Its definition is rendered
-  as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are
-  allowed, never the private worker's create or PR tools even where that list names them, and other servers' write
-  tools are denied by name. A plan is refused (`no_read_tools`) when no read tools
-  are known, and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the
-  worktrees linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
+  path but that file's name, it has no web or subagent tools, and its shell runs only `git merge-base` (T4). Its
+  definition is rendered as the private worker's is, so the tracker's MCP server is denied by a wildcard and only
+  `tracker.read_tools` are allowed, never the private worker's create or PR tools even where that list names them,
+  and other servers' write tools are denied by name. A plan is refused (`no_read_tools`) when no read tools are known,
+  and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the worktrees
+  linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
   into an operator-only file under the state directory (T2), and never sends it to the tracker, public ticket or
   private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
   still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and

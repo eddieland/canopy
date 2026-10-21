@@ -14,7 +14,13 @@ mode: primary
 # canopy: temperature
 permission:
   edit: deny
-  bash: deny
+  # One command, `git merge-base`, to find where a branch left its base: it prints commit ids and runs no other program.
+  # Nothing else, as OpenCode checks only a command's words: a redirection or a leading variable assignment is not
+  # matched, so a command allowed here can still truncate a file it redirects to, and `git diff` would run whatever
+  # `GIT_EXTERNAL_DIFF` names. The pattern names no global option, so `-C`, `-c`, and `--git-dir` stay denied.
+  bash:
+    "*": deny
+    "git merge-base *": allow
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny
