@@ -11,23 +11,21 @@ from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, memory, memory_manage, memory_search
 from canopy.core.vocab import MemoryCited, MemoryMode, MemoryScope
-from canopy.serve.schema import (
+from canopy.serve.memory_schema import (
     MemoryDigest,
     MemoryEntry,
     MemoryFound,
     MemoryHistory,
-    MemoryModeName,
     MemoryOrigin,
     MemoryOverview,
     MemoryProposal,
     MemoryRefusal,
-    MemoryState,
-    MemoryTier,
     RunMemory,
     RunMemoryModes,
     TicketMemory,
     TicketNotes,
 )
+from canopy.serve.schema import MemoryModeName, MemoryState, MemoryTier
 
 if TYPE_CHECKING:
     from datetime import datetime

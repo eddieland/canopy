@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db, review_requests
 from canopy.serve import threads
+from canopy.serve.review_schema import PullRequest, PullRequestDetail, ReviewRequest
 from canopy.serve.reviews import summaries
-from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail, ReviewRequest
+from canopy.serve.schema import CostTotal
 from canopy.serve.views import decision, limit, run
 
 if TYPE_CHECKING:

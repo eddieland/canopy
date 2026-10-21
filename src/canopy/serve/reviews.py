@@ -16,19 +16,16 @@ from typing import TYPE_CHECKING, assert_never
 from canopy.core import contract, conversation, db, review_diff, review_requests
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus, SeenKind
-from canopy.serve.schema import (
+from canopy.serve.review_schema import (
     DiffFile,
     DiffHunk,
     DiffLine,
     FindingSeverity,
-    RawOutput,
     RequestedReview,
     ReviewDetail,
     ReviewDiff,
     ReviewFinding,
     ReviewSummary,
-    RunState,
-    Transcript,
 )
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 from canopy.serve.views import lines, models_served, new_tokens, shown_path, ticket_title
@@ -38,6 +35,8 @@ if TYPE_CHECKING:
 
     from canopy.core import records
     from canopy.core.context import Context
+    from canopy.serve.schema import RunState
+    from canopy.serve.transcript_schema import RawOutput, Transcript
 
 # How many review runs the reviews list carries, newest first.
 RECENT_REVIEWS = 100

@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from canopy.core import search
 from canopy.serve import search_views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.schema import SearchResults
+from canopy.serve.search_schema import SearchResults
 
 TAG = "search"
 router = APIRouter(tags=[TAG])

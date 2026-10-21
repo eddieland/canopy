@@ -8,7 +8,7 @@ from canopy.core import conversation
 from canopy.infra import logs
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
-from canopy.serve.schema import SeenMarked, SeenRequest
+from canopy.serve.review_schema import SeenMarked, SeenRequest
 
 TAG = "seen"
 router = APIRouter(tags=[TAG])

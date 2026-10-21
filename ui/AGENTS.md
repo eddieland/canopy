@@ -63,7 +63,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   `.oxlintrc.json`); a public member of an exported class needs one too, which the lint does not check.
 - **No hand-written memoization.** The compiler memoizes. `useMemo`, `useCallback`, and `memo` are banned by the lint.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
-- **Types come from the server.** API types are generated from `src/canopy/serve/schema.py`. To change a shape,
+- **Types come from the server.** API types are generated from the pydantic models in
+  `src/canopy/serve/schema.py`, the shared ones, and in each feature's `*_schema.py` beside it. To change a shape,
   change the pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
 - **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees. Server pushes arrive

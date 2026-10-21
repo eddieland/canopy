@@ -28,8 +28,8 @@ from canopy.core import (
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, RunStatus
 from canopy.serve import draft_views, memory_views
+from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
-    AgentPersona,
     AttentionItem,
     Capacity,
     Comment,
@@ -44,21 +44,16 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
-    PersonaChoice,
-    RawOutput,
     Run,
     RunActivity,
     RunsSince,
     RunState,
     ServedModel,
     StartStatus,
-    TicketDetail,
-    TicketForget,
     TicketSummary,
-    Transcript,
-    Unit,
     WorkerNotice,
 )
+from canopy.serve.ticket_schema import TicketDetail, TicketForget, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
@@ -69,6 +64,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
+    from canopy.serve.transcript_schema import RawOutput, Transcript
 
 # How many runs that ended the runs list carries, after the running ones.
 RECENT_RUNS = 50
