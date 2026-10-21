@@ -241,6 +241,15 @@ Controls:
   steered overseer ending a request early costs a review, never adds one; the PR's page shows who ended it and why.
   Reviews live in the journal (D114): nothing on a PR is one but a version of a review of someone else's PR the operator
   published (DESIGN §34), which the loop reads as no review of its own.
+- The reviewer and the planner read git history through canopy's own read-only tools (DESIGN §27), never a shell. The
+  runtime matches a command's words, not its redirections or a leading variable assignment, so a git allowed in bash
+  could overwrite a file the operator owns or run any program, steered by the most hostile text the loop reads, and
+  canopy cannot tell whether a run is sandboxed (D118). The tools' server is named in a review's or a plan's
+  environment alone, with the checkouts it may read, which canopy sets per run; an argument picks one of those by name,
+  never a path. Each revision and path is checked before git runs, git reads objects alone with all a repository's
+  config or a commit's attributes could make it run turned off, and what it returns is bounded, every hidden character
+  named. The reviewer's and the planner's definitions allow each tool by exact name; every other definition denies
+  them, and workers keep their shell.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -358,7 +367,9 @@ Controls now:
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
-  that link; a canary like the desk's checks the reads (DESIGN §21).
+  that link; a canary like the desk's checks the reads (DESIGN §21). Its git tools, and the planner's, run git in a
+  checkout on the agent's behalf with hooks, the filesystem monitor, external diff and textconv drivers, pagers,
+  signature checks, and transports off, and read its objects, never its files (DESIGN §27).
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy

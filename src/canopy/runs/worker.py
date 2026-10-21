@@ -38,6 +38,7 @@ from canopy.core import (
     drafts,
     feedback_plans,
     follow_ups,
+    git_reads,
     hostgit,
     memory,
     observe,
@@ -462,6 +463,9 @@ def _run_agent(
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
     # directory; an unsandboxed worker ignores it (DESIGN §8).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
+        # The planner has no shell: its git tools read its worktrees, by their links' names in its desk (DESIGN §27).
+        env |= git_reads.run_env(dict(trees), cwd=ctx.workspace.root)
     with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         result = ctx.runner.run(
             argv,

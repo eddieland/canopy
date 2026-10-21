@@ -10,7 +10,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, plans
+from canopy.core import conversation, db, git_reads, plans
 from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
 from canopy.runs import policy
@@ -20,6 +20,7 @@ from tests.canopy.helpers import (
     QUESTION,
     InlineRunner,
     agent_runs,
+    calls,
     commands_run,
     decisions,
     in_tick,
@@ -78,6 +79,30 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert plan.size == len(TEXT.encode())
     # Its report is the planner's summary, as any run's.
     assert [(m.kind, m.body) for m in db.run_messages(conn, run.id)] == [("report", "planned it")]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_planner_reads_its_worktrees_history_through_its_git_tools(scenario: Scenario) -> None:
+    """DESIGN §27: each by its link's name in the desk, the one checkout canopy named, and no shell."""
+    reads = [
+        calls("canopy_git_log", range="HEAD", limit=1, checkout="repo"),
+        calls("canopy_git_show", rev="HEAD", path="."),
+        calls("canopy_git_show", rev="HEAD", path=".", checkout="api"),
+    ]
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, tools=reads))
+    assert run.status == RunStatus.DONE, Path(run.row["log_path"]).read_text()
+    [planner] = agent_runs(scenario.agent_log)
+    [slot] = [s.slot_path for s in db.run_slots(scenario.conn, run.id)]
+    assert json.loads(planner["env"][git_reads.CHECKOUTS_ENV]) == {"repo": str(Path(slot).absolute())}
+    assert git_reads.SERVER in json.loads(planner["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]
+    logged, root, other = planner["tools"]
+    assert not logged["error"], logged["text"]
+    assert logged["text"].startswith("commit ")
+    assert not root["error"], root["text"]
+    assert (other["error"], other["text"]) == (
+        True,
+        "git read refused (unknown_checkout): no checkout 'api': this run reads repo",
+    )
 
 
 def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(

@@ -52,7 +52,8 @@ Write the plan as markdown to `/workspace/desks/PROJ-1/.canopy-new-plan.md` with
 - `## Risks`: what the changes could break, and what to watch in review.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
-function bodies.
+function bodies. Your `canopy_git_*` tools read each repository's history, its name as `checkout`: `merge-base` and
+`diff` for what the PR changed from its base branch, `log` for its commits, and `show` for a file at another commit.
 
 If `/workspace/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces. The operator's messages below that came after it
 say what to change. Keep the rest, and write the whole plan again.

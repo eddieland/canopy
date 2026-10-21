@@ -5,12 +5,13 @@ socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, 
 `notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
 with its own async stack and HTTP transports, for these few methods.
 
-It serves in one of two modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
+It serves in one of three modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
 command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
 time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
 (`CHORE`, `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy
 chore history` also reads; it lists and serves it only where CANOPY_RUN_ID names a chore's run, and serves nothing of
-the overseer's.
+the overseer's. A review's or a plan's (`git_mode`, `canopy _mcp --git`) are read-only git in the checkouts its run's
+environment names (`core.git_reads`); it opens no workspace, and lists them only where that environment names some.
 
 A refusal or an invalid argument is a tool error, `isError`, with the text the command prints, and the server goes on.
 It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
@@ -31,7 +32,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
 from canopy.chores import history
-from canopy.core import config, context, conversation, db
+from canopy.core import config, context, conversation, db, git_reads
 from canopy.infra import logs
 from canopy.loop import tools
 
@@ -197,9 +198,61 @@ CHORE_TOOLS = (
 )
 
 
+def git_tools(runner: procs.Runner) -> tuple[Tool, ...]:
+    """A review's or a plan's git tools, each run with `runner` in the checkouts its run's environment names.
+
+    Returns:
+        The tools, which the runtime names `canopy_git_diff` and so on (their server is `git_reads.SERVER`).
+    """
+
+    def served[R: git_reads.MergeBase | git_reads.Diff | git_reads.Log | git_reads.Show](
+        name: str,
+        description: str,
+        request: type[R],
+        do: Callable[[procs.Runner, R, Mapping[str, str]], str],
+    ) -> Tool:
+        def call(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: ARG001  (it reads no workspace)
+            asked = request.model_validate(arguments)
+            try:
+                return do(runner, asked, os.environ)
+            except git_reads.Refused as r:
+                raise tools.Refused(str(r)) from None
+
+        return Tool(name, description, request, call)
+
+    return (
+        served(
+            git_reads.MERGE_BASE,
+            "The commit where two revisions' histories meet, such as where a branch leaves its base.",
+            git_reads.MergeBase,
+            git_reads.merge_base,
+        ),
+        served(
+            git_reads.DIFF,
+            "The diff between two commits, each file's count of changed lines first; with paths, only theirs. For a "
+            "branch's own changes, diff from its merge base with its base.",
+            git_reads.Diff,
+            git_reads.diff,
+        ),
+        served(
+            git_reads.LOG,
+            "The commits of a range, newest first, with their authors, dates, and messages; with paths, only those "
+            "that touch them.",
+            git_reads.Log,
+            git_reads.log,
+        ),
+        served(
+            git_reads.SHOW,
+            "A file as it was at a commit, or a directory's entries there.",
+            git_reads.Show,
+            git_reads.show,
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class Mode:
-    """What the server serves: the overseer's verbs, or a chore its history."""
+    """What the server serves: the overseer's verbs, a chore its history, or a review or a plan read-only git."""
 
     #: The tools it lists and serves.
     tools: Sequence[Tool]
@@ -207,10 +260,11 @@ class Mode:
     refusal: Callable[[Opener], str | None]
 
 
-def run_stdio(runner: procs.Runner, *, chore: bool = False) -> int:
+def run_stdio(runner: procs.Runner, *, chore: bool = False, git: bool = False) -> int:
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
 
-    `chore` serves a chore's run its history (`CHORE`), from the workspace its run names; else the overseer's verbs.
+    `chore` serves a chore's run its history (`CHORE`), from the workspace its run names; `git` a review's or a plan's
+    run its git tools (`git_mode`); else the overseer's verbs.
 
     The protocol keeps its own copy of stdout; the process's stdout and stderr then go nowhere, so nothing a call
     prints, and no warning or traceback, reaches the runtime's pipes.
@@ -232,7 +286,8 @@ def run_stdio(runner: procs.Runner, *, chore: bool = False) -> int:
     root = os.environ.get(history.WORKSPACE_ENV) if chore else None
     start = Path(root) if root else Path.cwd()
     with contextlib.suppress(BrokenPipeError), out:
-        serve(sys.stdin.buffer, write, lambda: opened(runner, start), CHORE if chore else OVERSEER)
+        mode = CHORE if chore else git_mode(runner) if git else OVERSEER
+        serve(sys.stdin.buffer, write, lambda: opened(runner, start), mode)
     return 0
 
 
@@ -446,10 +501,32 @@ def _chore_refusal(opener: Opener) -> str | None:
     return None
 
 
+def _git_refusal(opener: Opener) -> str | None:  # noqa: ARG001  (it reads no workspace)
+    """Say why no git tool is served now: the run's environment names no checkout.
+
+    Returns:
+        Why, as a refusal says it, or None when they are served.
+    """
+    try:
+        git_reads.checkouts(os.environ)
+    except git_reads.Refused as r:
+        return str(r)
+    return None
+
+
 #: The overseer's verbs, served inside a running tick and never inside a run.
 OVERSEER = Mode(TOOLS, _overseer_refusal)
 #: A chore's history, served inside that chore's run alone.
 CHORE = Mode(CHORE_TOOLS, _chore_refusal)
+
+
+def git_mode(runner: procs.Runner) -> Mode:
+    """A review's or a plan's git tools, run with `runner`, served where its run's environment names checkouts.
+
+    Returns:
+        The mode.
+    """
+    return Mode(git_tools(runner), _git_refusal)
 
 
 def _inside_run() -> str:

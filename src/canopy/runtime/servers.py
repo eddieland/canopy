@@ -1,9 +1,9 @@
 """How the runtime is told of one of canopy's own MCP servers, for one agent's run (DESIGN §27).
 
-A chore's run alone is given a server today, the one that serves it its own history (§19): its process's environment
-names it, and turns off whatever in the runtime would hide MCP tools. That environment would pass to every process the
-run's tree starts, so a run canopy starts removes `VARIABLES` first. Which variables those are, and the form of the
-entry, are the implementation's.
+A chore's run is given the server that serves it its own history (§19), and a review's or a plan's the one that serves
+it read-only git: its process's environment names it, and turns off whatever in the runtime would hide MCP tools. That
+environment would pass to every process the run's tree starts, so a run canopy starts removes `VARIABLES` first. Which
+variables those are, and the form of the entry, are the implementation's.
 """
 
 from __future__ import annotations

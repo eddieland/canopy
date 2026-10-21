@@ -1,14 +1,14 @@
 """Helpers the review tests share: a reviewer's reports, a review run in this process, and a commit to review (§21)."""
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Unpack
 
 from canopy.cli.main import main
 from canopy.core import db
-from tests.canopy.helpers import Behavior, InlineRunner, in_tick, present, reported, scripted
+from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
@@ -51,10 +51,15 @@ def review(*args: str, sha: str, pr: str = PR) -> list[str]:
 
 
 @contextmanager
-def reviewer_reports(report: object, *commands: list[str], **behavior: Unpack[Behavior]) -> Iterator[None]:
-    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string, after running `commands` if
-    given."""
-    with scripted("REVIEWER", reported(report, commands), behavior):
+def reviewer_reports(
+    report: object,
+    *commands: list[str],
+    tools: Sequence[Called] = (),
+    **behavior: Unpack[Behavior],
+) -> Iterator[None]:
+    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string, after making the calls
+    `tools` names and running `commands`, if given."""
+    with scripted("REVIEWER", reported(report, commands, tools), behavior):
         yield
 
 

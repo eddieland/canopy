@@ -3,10 +3,11 @@
 # Rules follow D021: the last matching rule wins, and `deny` is enforced under `opencode run`. Scalars are used where a
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The planner writes one file, its plan, and nothing else anywhere (DESIGN §25, TRUST_MODEL T1, T6). It reads the
-# worktrees linked from its desk with OpenCode's read, list, glob, and grep tools, and the ticket with the tracker's
-# read tools only. canopy renders this file into its definitions directory with the tracker's MCP server and tools from
-# the operator's config (`tracker.mcp_server`, `tracker.read_tools`), at the marked line below, as for
-# canopy-worker-private. As shipped it names none, and dispatch refuses a plan then (`no_read_tools`).
+# worktrees linked from its desk with OpenCode's read, list, glob, and grep tools, their history with canopy's git
+# tools, and the ticket with the tracker's read tools only. canopy renders this file into its definitions directory
+# with the tracker's MCP server and tools from the operator's config (`tracker.mcp_server`, `tracker.read_tools`), at
+# the marked line below, as for canopy-worker-private. As shipped it names none, and dispatch refuses a plan then
+# (`no_read_tools`).
 description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
 mode: primary
 permission:
@@ -92,6 +93,12 @@ permission:
   "atlassian_searchJiraIssuesUsingJql": allow
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
   "canopy_chore_history": deny
+  # canopy's tools that read its worktrees' history and write nothing (DESIGN §27), each allowed by exact name, never
+  # by a pattern another server's tool could match: last, so no pattern above, such as `*merge*`, closes one.
+  "canopy_git_merge-base": allow
+  "canopy_git_diff": allow
+  "canopy_git_log": allow
+  "canopy_git_show": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker: plan" prompt, print

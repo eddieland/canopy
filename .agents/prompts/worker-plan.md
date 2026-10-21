@@ -27,6 +27,8 @@ The workspace map, `MAP.md`, on what each repository owns and how they depend on
 The tracker is {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it first, and
 skip any of its steps that write to the ticket. Read the ticket and its comments, the map, the code the ticket
 touches, and each repository's rules for a change (its `AGENTS.md`, `CONTRIBUTING.md`, and the like) and build files.
+Your `canopy_git_*` tools read each repository's history, its name as `checkout`: `log` for how code came to be, `show`
+for a file at another commit, and `merge-base` and `diff` for what a branch changed.
 
 Then write a plan a later worker can follow without asking you anything. That worker reads the ticket and the code too,
 in a fresh session; only your plan tells it what you decided, and why. Give signatures, names, and test assertions, not
