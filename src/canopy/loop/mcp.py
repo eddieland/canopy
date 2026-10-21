@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, Validat
 from canopy.chores import history
 from canopy.core import config, context, conversation, db, git_tools
 from canopy.infra import logs
-from canopy.loop import tools
+from canopy.loop import chore_tools, review_tools, tools
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
@@ -143,27 +143,32 @@ TOOLS = (
     tool(
         "review-run",
         "Start a review of a PR at a commit, if its guards allow one now. A dry run checks them and starts nothing.",
-        tools.ReviewRun,
-        tools.review_run,
+        review_tools.ReviewRun,
+        review_tools.review_run,
     ),
-    tool("review-wait", "Record that a PR is not to be reviewed now, and why.", tools.ReviewWait, tools.review_wait),
+    tool(
+        "review-wait",
+        "Record that a PR is not to be reviewed now, and why.",
+        review_tools.ReviewWait,
+        review_tools.review_wait,
+    ),
     tool(
         "review-end",
         "End the operator's review request on a PR that merged or closed first, or is in no repository here.",
-        tools.ReviewEnd,
-        tools.review_end,
+        review_tools.ReviewEnd,
+        review_tools.review_end,
     ),
     tool(
         "chore-run",
         "Start a run of a chore, if its guards allow one now. A dry run checks them and starts nothing.",
-        tools.ChoreRun,
-        tools.chore_run,
+        chore_tools.ChoreRun,
+        chore_tools.chore_run,
     ),
     tool(
         "chore-wait",
         "Record that a chore is due but should not run now, and why.",
-        tools.ChoreWait,
-        tools.chore_wait,
+        chore_tools.ChoreWait,
+        chore_tools.chore_wait,
     ),
 )
 

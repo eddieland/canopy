@@ -15,7 +15,7 @@ from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated, verb
 from canopy.core import conversation, workspace
 from canopy.core.config import ConfigError
 from canopy.infra import logs, procs
-from canopy.loop import tools
+from canopy.loop import chore_tools
 
 
 @click.group("chore", cls=Group)
@@ -33,7 +33,7 @@ def chore_group() -> None:
 @click.pass_context
 def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> int:
     """Start a run of chore NAME, if its guards allow one now."""
-    return verb(click_ctx, tools.chore_run, tools.ChoreRun, name=name, context=context)
+    return verb(click_ctx, chore_tools.chore_run, chore_tools.ChoreRun, name=name, context=context)
 
 
 @chore_group.command("wait", cls=OverseerCommand)
@@ -42,7 +42,7 @@ def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> i
 @click.pass_context
 def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
     """Record that chore NAME is due but should not run now, and why."""
-    return verb(click_ctx, tools.chore_wait, tools.ChoreWait, name=name, rationale=rationale)
+    return verb(click_ctx, chore_tools.chore_wait, chore_tools.ChoreWait, name=name, rationale=rationale)
 
 
 @chore_group.command("try")
