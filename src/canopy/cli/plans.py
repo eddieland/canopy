@@ -78,7 +78,7 @@ def cmd_plan(click_ctx: click.Context, ref: str, *, approve: bool, skip: bool, p
 def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
     """Export every plan into DIR, superseded and feedback plans included, each with what the journal records of it.
 
-    Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-approved-export-reports-as-csv.md, as its
+    Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-Approved-export-reports-as-csv.md, as its
     file stands now under a front matter of its status, hashes, and approval. A file is rewritten only when its plan
     changed, and removed only when its plan moved to a new name, so DIR can be a clone of a repository of yours that
     you commit and push. Plans hold what the planners read of your tickets: keep that
