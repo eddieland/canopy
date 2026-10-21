@@ -6,7 +6,8 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 
 ## 32. Plans before feedback runs
 
-Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole, and the guards.
+Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole, the guards, and planning
+again.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from
@@ -29,7 +30,9 @@ canopy's review findings (§21), a failed check, a conflict with the base, a blo
 authorized reply on the ticket. Fixing CI is part of `resume` (§8), so one plan, and one run, covers a round's
 comments and its red CI together, and a round of red CI alone waits on its plan too. A worker's comments and the
 replies the operator sent through canopy (§29) are not items. A review item's id is the one the `vcs` source observed
-(§29, §30), so a plan's item, a draft's thread, and an observed comment share it.
+(§29, §30), so a plan's item, a draft's thread, and an observed comment share it. A review thread is one item, its
+other comments replies given beside it, so an answer such as the PR author's "won't do" informs the item's proposal
+rather than becoming work of its own.
 
 Feedback no longer splits by reviewer: the plan shows each item's author and whether `trust.trusted_reviewers` lists
 them, so the operator weighs it, and `untrusted_review` is not raised for an item a feedback plan covers.
@@ -67,14 +70,17 @@ replies would go out unseen.
 
 ### Planning again
 
-A feedback plan records what it was written against: the PR's head, the newest item it covers, and each check's
-conclusion at that head. While it waits, the harness marks it stale, in code, when what the connectors observe (§30)
-shows the head moved, an item arrived, or a check's conclusion changed. A stale plan is planned again once the PR has
-had no new item for `policy.feedback_quiet_minutes`, and a re-plan inside that quiet period is refused in code, so a
-reviewer's burst of comments makes one new plan, not one each, and a bot's stream of them spends a bounded number of
-plan runs (T3). The new plan carries the old one, the operator's edits and comments on it, and what changed, and
-supersedes it; a plan run already running is not stopped. Approving a stale plan is refused `stale` the first time,
-naming what changed; approving it again approves it, and what changed waits for the next plan.
+A feedback plan records what it was written against: the PR's head, each check's conclusion at that head, and each
+item and reply it was given, by id with a hash of its body, never its text. While it waits, the harness marks it stale,
+in code, with a reason for each change, when what the connectors observe (§30) shows the head moved, a check's
+conclusion changed, an item or a reply arrived, or an item it covers was edited or its thread resolved. A stale plan is
+planned again once the PR has had no new item, reply, head, or check conclusion for `policy.feedback_quiet_minutes`,
+each timed from when it was made or canopy first saw it, and a re-plan inside that quiet period is refused in code, so a
+burst of comments or pushes makes one new plan, and a bot's stream of them a bounded number (T3). The new plan carries
+the old one, the operator's edits and comments on it, and what changed, and supersedes it; a plan run already running is
+not stopped. Approving a stale plan is refused `stale` the first time, naming what changed; approving it again approves
+it, and what changed waits for the next plan: what is new since the last plan's record, with what a failed `resume`
+handed back and what no plan covered.
 
 ### The overseer's part
 

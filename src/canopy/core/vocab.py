@@ -198,6 +198,15 @@ class Proposal(StrEnum):
     LEAVE = "leave"
 
 
+class MoveKind(StrEnum):
+    """What moved on a waiting feedback plan's PR, `feedback_plan_moves.kind` (DESIGN §32, Planning again)."""
+
+    #: The PR's head.
+    HEAD = "head"
+    #: A check's conclusion at the head.
+    CHECK = "check"
+
+
 class PlanSetting(StrEnum):
     """A ticket's own plan setting, `tickets.plan_setting` (DESIGN §25): it overrides `policy.plan`; NULL is unset."""
 

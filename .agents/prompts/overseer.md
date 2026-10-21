@@ -426,6 +426,10 @@ the operator asks for, approves, or skips one (`canopy plan`).
   feedback plan, and the CLI refuses it otherwise (`unplanned`). All feedback is planned alike, from trusted or
   untrusted reviewers, red checks, a conflict, or a merged blocker, so raise no `untrusted_review` then. Where the
   phase table's action would be such a `resume`, the rows below decide instead.
+- A stale feedback plan: whatever the phase, when `feedback_plan.newest.status` is `proposed`, `blocked` and
+  `changes_asked` are false, and `newest.stale` and `newest.quiet_passed` are true, its PR changed under it and has been
+  quiet since: `dispatch feedback-plan` again over the plan's `repos`, with no `--reason` or `--cursor`. The new plan
+  replaces it.
 
 Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read under `plan` or `feedback_plan`:
 
@@ -433,14 +437,14 @@ Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read
 |---|---|---|
 | `blocked`: its latest run asked a question the operator has not answered | phase `needs_human`, `wait`. The harness lists the question (`awaiting_reply`), on a public ticket too: never comment on the ticket about it | `wait`, as for a ticket's plan |
 | `newest` null, or `superseded` (a ticket's plan) or `spent` (a feedback plan) | the ticket otherwise `ready`: `dispatch plan`, phase `ready`. With new operator messages (such as a blocked plan's answer), `--cursor message=<the newest one's id>` and their ids in the context | `dispatch feedback-plan` over the repositories the `resume` would name, with the context it would get and no `--reason` or `--cursor`; the phase from the table |
-| `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `attention plan_review --detail 'plan <id> waits: canopy show <KEY>, then canopy plan <KEY> --approve or canopy reply <KEY>'`. Dispatch nothing: no slot is held while they read | the same, with `--detail 'feedback plan <id> for <the PR> waits: canopy plan <KEY> --approve or canopy reply <KEY>'` |
+| `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `attention plan_review --detail 'plan <id> waits: canopy show <KEY>, then canopy plan <KEY> --approve or canopy reply <KEY>'`. Dispatch nothing: no slot is held while they read | the same, with `--detail 'feedback plan <id> for <the PR> waits: canopy plan <KEY> --approve or canopy reply <KEY>'`. A stale one is planned again once its quiet period passes (above) |
 | `newest.status` `proposed`, `changes_asked` true | phase `plan_proposed`; `dispatch plan` again, with `--cursor message=<the newest message's id>` and the message ids in the context: the planner reads them and the plan it replaces | `dispatch feedback-plan` again, with `--cursor message=<the newest message's id>` |
 | `newest.status` `approved` | the phase from the table; `ready` dispatches `implement`, whose worker reads the plan. A newer operator message does not undo it: it rides the `implement` | the `resume` the table says, with its reasons and cursors, over the plan's `repos`: it follows the plan and spends it, so the next round needs a new plan |
 
 At `plan.limit`, or a unit's limit for feedback plans, record `attempt_limit` instead (step 4), naming `plan` or
 `feedback-plan`. If the CLI refuses an `implement` or `resume` as `plan_changed`, because the approved plan's file
 changed, record `canopy attention <KEY> plan_changed --detail '<the refusal>'`, and dispatch nothing else for the
-ticket until it is gone.
+ticket until it is gone. A `feedback-plan` refused `quiet` is recorded as its plan still waiting.
 
 ## Private tickets
 

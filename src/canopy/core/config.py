@@ -517,6 +517,9 @@ class Policy(Section):
     #: planner's approval and not the operator's (DESIGN §25). Private: it loosens the operator's gate on plans, so only
     #: the operator's own files turn it on (TRUST_MODEL T7).
     planner_may_approve: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: How long a stale feedback plan waits after the newest item or reply on its PRs before it is planned again
+    #: (DESIGN §32): a burst of comments makes one plan, and a bot's stream of them a bounded number (TRUST_MODEL T3).
+    feedback_quiet_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 10
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 

@@ -110,7 +110,14 @@ def _approve(ctx: Context, key: str) -> None:
 
 
 def _approve_feedback(ctx: Context, key: str) -> None:
-    plan = feedback_plans.approve(ctx.conn, ctx.state_dir, key, channel=CLI, dispatch_lock=ctx.dispatch_lock_path)
+    plan = feedback_plans.approve(
+        ctx.conn,
+        ctx.state_dir,
+        key,
+        trust=ctx.config.trust,
+        channel=CLI,
+        dispatch_lock=ctx.dispatch_lock_path,
+    )
     logs.for_tick(None).info("feedback plan approved", extra={"ticket": key, "feedback_plan": plan.id, "channel": CLI})
     path = plans.path_for(ctx.state_dir, key, plan.run_id)
     covered = len(feedback_plans.items(ctx.conn, plan.id))

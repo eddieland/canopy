@@ -40,6 +40,7 @@ from canopy.core.vocab import (
     MemoryStatus,
     MergeState,
     ModelsRead,
+    MoveKind,
     Phase,
     PlanEffort,
     PlanSetting,
@@ -352,6 +353,66 @@ class FeedbackPlan(Row):
     approved_reason: str | None
     #: How much work the plan is for its worker, as its planner judged; None when it gave no estimate.
     effort: PlanEffort | None
+    #: The SHA-256 of what changed that an approval of it, stale, was last refused for: approving again approves it.
+    stale_shown: str | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlanPr(Row):
+    """A PR a feedback plan read, and its head then (DESIGN §32, Planning again)."""
+
+    TABLE: ClassVar[str] = "feedback_plan_prs"
+
+    plan_id: int
+    pr_url: str
+    head_sha: str | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlanCheck(Row):
+    """A named check at the head a feedback plan read, and its conclusion then, None while it had none."""
+
+    TABLE: ClassVar[str] = "feedback_plan_checks"
+
+    plan_id: int
+    pr_url: str
+    name: str
+    conclusion: CheckConclusion | None
+
+
+@dataclass(frozen=True)
+class FeedbackPlanMove(Row):
+    """A waiting feedback plan's PR's head or check: its value now, and when canopy saw it take that value (§32)."""
+
+    TABLE: ClassVar[str] = "feedback_plan_moves"
+
+    plan_id: int
+    pr_url: str
+    kind: MoveKind
+    #: A check's name; "" for the head.
+    name: str
+    #: The head's sha, or the check's conclusion; "" for none.
+    value: str
+    #: When the harness first saw it take `value`, since it last held another.
+    seen_at: str
+
+
+@dataclass(frozen=True)
+class FeedbackPlanSeen(Row):
+    """A review or review comment a feedback plan was given, by id and its body's hash, never its text."""
+
+    TABLE: ClassVar[str] = "feedback_plan_seen"
+
+    plan_id: int
+    pr_url: str
+    item: ReviewItem
+    item_id: int
+    thread_id: str | None
+    author: str | None
+    #: The SHA-256, hex, of its body as the plan's read observed it: an edit after changes it.
+    body_sha256: str
+    #: For a reply, given beside the item it answers: that item's id; None for an item.
+    answers: int | None
 
 
 @dataclass(frozen=True)

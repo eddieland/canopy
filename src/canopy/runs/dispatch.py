@@ -22,6 +22,7 @@ from canopy.core import (
     conversation,
     db,
     drafts,
+    feedback_items,
     feedback_plans,
     memory,
     notice,
@@ -652,16 +653,16 @@ def _check_feedback_plan(ctx: Context, key: str, *, slug: str | None, base: str 
 
     Raises:
         Refusal: a base is given (`bad_base`), or a slug (`bad_slug`); feedback plans are off (`feedback_plan_off`); a
-            unit has no branch (`no_branch`) or no PR (`bad_plan`); the ticket's feedback plan waits on the operator,
-            or its approval waits for its resume (`bad_plan`); or (`no_read_tools`) no tracker read tools are known
-            for the planner.
+            unit has no branch (`no_branch`) or no PR (`bad_plan`); the ticket's feedback plan waits on the operator
+            with nothing changed, or its approval waits for its resume (`bad_plan`); it is stale, but inside the quiet
+            period on its PRs (`quiet`); or (`no_read_tools`) no tracker read tools are known for the planner.
     """
     if base is not None:
         raise Refusal(
             "bad_base",
             "a feedback plan reads the PR's head and starts from no other branch; leave out --base",
         )
-    refused = feedback_plans.dispatch_refusal(ctx.conn, ctx.config.policy, key)
+    refused = feedback_plans.dispatch_refusal(ctx.conn, ctx.config, key, now=datetime.now(UTC))
     if refused is not None:
         raise Refusal(*refused)
     branch = _branch(ctx, key, policy.FEEDBACK_PLAN, slug, repos)
@@ -1040,7 +1041,8 @@ def _spawn(
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {
-            "ITEMS_FILE": feedback_plans.ITEMS,
+            "ITEMS_FILE": feedback_items.ITEMS,
+            "CHANGES_FILE": feedback_items.CHANGES,
             "MAX_ITEMS": str(feedback_plans.MAX_ITEMS),
             "MAX_REPLY": f"{feedback_plans.MAX_REPLY:,}",
             "PULL_REQUESTS": ", ".join(f"`{prs[s.repo or '']}`" for s in slots),

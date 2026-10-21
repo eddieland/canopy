@@ -305,8 +305,10 @@ Controls in code, not prompts:
 - Feedback plans (DESIGN §32): a feedback plan run holds its unit's slot within `capacity.max_workers`, has the
   worker's timeout, and counts toward `policy.max_feedback_plan_attempts` per unit (6 by default), never reset, raised
   only by the operator, in config or with `canopy grant KEY feedback-plan`. A new one is refused while the ticket's
-  feedback plan waits on the operator with no change asked, or its approval waits for its `resume`, so a stream of
-  comments from a bot spends a bounded number of plan runs. The quiet period before a re-plan is not built yet.
+  feedback plan waits on the operator with no change asked and nothing changed on its PR, or its approval waits for its
+  `resume`; a stale one is planned again only once its PR has had no new item, reply, head, or check conclusion for
+  `policy.feedback_quiet_minutes` (10 by default; a repository may only raise it), refused `quiet` before then, in code.
+  So a stream of comments or pushes from a bot spends a bounded number of plan runs.
 - Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
   repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.

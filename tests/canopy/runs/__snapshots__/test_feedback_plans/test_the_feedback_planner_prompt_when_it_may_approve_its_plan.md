@@ -20,11 +20,18 @@ Before any other work, read PROJ-1 through the tracker. If it is closed, or carr
 
 ## The feedback
 
-`/workspace/desks/PROJ-1/.canopy-feedback.json` holds each item of feedback on these pull requests that no earlier plan covered, as canopy
-read them from GitHub just before you started: a JSON list, each item with its `id`, `pr`, whether it is a `review` or
-a review `comment`, `author`, whether that author is `trusted`, whether it is a `bot`, a review's `state`, a comment's
-`path`, `line`, and whether it is `outdated`, and its `body`. The operator trusts `alice`, and weighs who
-wrote each item when they read your plan; you plan every item the same way, trusted or not.
+`/workspace/desks/PROJ-1/.canopy-feedback.json` holds each item of feedback on these pull requests that no earlier plan covered, or that
+changed since one did, as canopy read them from GitHub just before you started: a JSON list, each item with its `id`,
+`pr`, whether it is a `review` or a review `comment`, `author`, whether that author is the PR's (`pr_author`) or
+`trusted`, whether it is a `bot`, a review's `state`, a comment's `path`, `line`, and whether it is `outdated`, and its
+`body`. A comment's thread is one item, its other comments its `replies`, each with its author and body. A reply
+answers its item and asks for no work of its own: the PR author's "won't do" or the reviewer's "never mind" can make
+the item `leave` or `decline`. The operator trusts `alice`, and weighs who wrote each item when they read
+your plan; you plan every item the same way, trusted or not.
+
+If `/workspace/desks/PROJ-1/.canopy-feedback-changes.json` exists, it lists what changed on the pull requests since the plan this one replaces: a
+moved head, a check's new conclusion, a new item, a reply naming the item it `answers`, an edited item, or a resolved
+thread, each by id and never with its text, which the items file holds.
 
 Failed checks, a conflict with the base branch, and a merged blocker are part of this round too, though they reach you
 through the context below, not the file: plan for them in the same plan.
@@ -55,7 +62,8 @@ Every claim about the code is one you read at the PR's head, not one you guessed
 function bodies.
 
 If `/workspace/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces. The operator's messages below that came after it
-say what to change. Keep the rest, and write the whole plan again.
+say what to change, and the changes file what changed on the pull requests since. Keep the rest, and write the whole
+plan again.
 
 ## Instructions versus data
 
@@ -88,8 +96,8 @@ The operator lets you say that this plan needs no review. canopy then approves i
 Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
 when `.canopy-new-plan.md` holds one. `items` lists each item you cover, at most 100, by the `id` the feedback file
 gives it, with what you propose, and for a `change` or a `decline` the reply you would draft to its author, in at most
-4,000 characters. Name only ids the file gives: canopy leaves out any other. An item you leave out is planned
-next time. The summary is your report to the operator: what the plan proposes, in a paragraph.
+4,000 characters. Name only items' ids the file gives, never a reply's: canopy leaves out any other. An item
+you leave out is planned next time. The summary is your report to the operator: what the plan proposes, in a paragraph.
 
 With `done`, `effort` is how much work the changes the plan proposes are for the worker that makes them: `small`, a
 change in one place that the items and the code make plain; `medium`, changes across a few files along patterns the

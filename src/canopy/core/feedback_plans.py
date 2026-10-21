@@ -5,71 +5,46 @@ file is a plan's file (`plans.path_for`): the same operator-only directory, name
 once and read bounded, never through a link. The journal's `feedback_plans` row holds what canopy decides by, its
 status, the file's hash as written, and the hash the operator approved; `feedback_plan_items` holds the items its
 result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29). The repositories a
-plan covers are its run's slots. A ticket has at most one feedback plan that is not superseded.
+plan covers are its run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A ticket has at
+most one feedback plan that is not superseded.
 
 Under `policy.feedback_plan = "approve"`, every `resume` but one whose only reason is `no_pr` waits on an approved
 feedback plan that no `resume` has spent (`resume_refusal`), and the `resume` that starts on it spends it (`spend`), in
 the transaction that inserts that run: one approval goes ahead once. Approving is the operator's verb, every
 channel's, refused inside canopy's own runs, and holds the dispatch lock, as approving a ticket's plan does; under
 `policy.planner_may_approve`, `record` approves a plan its planner says needs no review as the planner's (§25).
+
+A waiting plan whose PRs changed since it saw them is stale (`feedback_items.changes`): it is planned again once the
+quiet period on its PRs passed, and approving it is refused `stale` once, naming what changed (DESIGN §32, Planning
+again).
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, drafts, plans, records, replies, sql
+from canopy.core import conversation, db, feedback_items, plans, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import (
-    PlanEffort,
-    PlanStatus,
-    Proposal,
-    ResumeReason,
-    ReviewItem,
-    ReviewState,
-    RunKind,
-    RunStatus,
-)
+from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
     import sqlite3
+    from datetime import datetime
     from pathlib import Path
 
     from canopy.core.config import Config, Policy, Trust
+    from canopy.core.feedback_items import Offered
 
-#: The file in a feedback planner's desk that holds its PRs' items, as the `vcs` source observed them: data to it.
-ITEMS = ".canopy-feedback.json"
 #: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
 MAX_ITEMS = 100
 #: A drafted reply's bound, in characters, as a draft's (DESIGN §29).
 MAX_REPLY = replies.MAX_DRAFT_CHARS
 #: The most refused ids a run's harness note names one by one.
 _MAX_NAMED = 10
-
-
-@dataclass(frozen=True)
-class Offered:
-    """A review or review comment on one of a plan's PRs, as the `vcs` source observed it: one item it may cover."""
-
-    pr_url: str
-    item: ReviewItem
-    id: int
-    author: str | None
-    #: Whether `trust.trusted_reviewers` names its author: shown to the operator, and never a gate (DESIGN §32).
-    trusted: bool
-    bot: bool
-    state: ReviewState | None
-    created_at: str | None
-    url: str | None
-    path: str | None
-    line: int | None
-    outdated: bool | None
-    #: Its text, cut as a mirrored comment's is: model or human text, data to the planner, whoever wrote it.
-    body: str
 
 
 @dataclass(frozen=True)
@@ -108,124 +83,6 @@ def needed(policy: Policy, reasons: Collection[str]) -> bool:
         feedback to plan.
     """
     return policy.feedback_plan == "approve" and set(reasons) != {ResumeReason.NO_PR}
-
-
-def offered(conn: sqlite3.Connection, trust: Trust, key: str, prs: Sequence[str]) -> list[Offered]:
-    """Return each item on `prs` a feedback plan of `key` may cover, as the journal's latest whole read holds them.
-
-    That is every review with text or asking for changes, and every comment on a thread not resolved, but those the
-    operator sent through canopy (DESIGN §29), comments carrying a worker's marks (D069), pending reviews, and the items
-    an earlier plan of the ticket covered that a `resume` went ahead on. Feedback is not split by reviewer: the trust
-    of each item's author is shown, not used (DESIGN §32).
-
-    Returns:
-        The items, by PR in the order given, then oldest first.
-    """
-    sent = drafts.sent_by_pr(conn)
-    handled = _handled(conn, key)
-    found: list[Offered] = []
-    for pr in prs:
-        rows = records.fetch_all(
-            conn,
-            records.ObservedReview,
-            sql.select("*").from_("observed_reviews").where("pr_url = ?", pr).order_by("created_at, item, id"),
-        )
-        by_pr = sent.get(pr, {})
-        for row in rows:
-            if _skipped(row, trust, by_pr) or (pr, row.item, row.id) in handled:
-                continue
-            found.append(
-                Offered(
-                    pr_url=pr,
-                    item=row.item,
-                    id=row.id,
-                    author=row.author,
-                    trusted=row.author is not None and row.author in trust.trusted_reviewers,
-                    bot=row.bot,
-                    state=row.state,
-                    created_at=row.created_at,
-                    url=row.url,
-                    path=row.path,
-                    line=row.line,
-                    outdated=row.outdated,
-                    body=row.body,
-                ),
-            )
-    return found
-
-
-def _skipped(row: records.ObservedReview, trust: Trust, sent: Mapping[str, Sequence[int]]) -> bool:
-    """Whether an observed row is no item for a plan.
-
-    Returns:
-        True for the operator's own reply, a worker's, a pending review, a comment on a resolved thread, or a review
-        that says nothing of its own.
-    """
-    if row.item is ReviewItem.COMMENT:
-        return row.id in sent.get("comments", ()) or bool(row.resolved) or _marked(row.body, trust)
-    if row.id in sent.get("reviews", ()) or row.state is ReviewState.PENDING:
-        return True
-    return (not row.body.strip() and row.state is not ReviewState.CHANGES_REQUESTED) or _marked(row.body, trust)
-
-
-def _marked(body: str, trust: Trust) -> bool:
-    """Whether `body` carries a worker's marks (D069).
-
-    Returns:
-        True when it carries every mark the operator set, and there is one.
-    """
-    prefix, suffix = trust.comment_prefix, trust.comment_suffix
-    if not prefix and not suffix:
-        return False
-    return body.lstrip().startswith(prefix) and body.rstrip().endswith(suffix)
-
-
-def _handled(conn: sqlite3.Connection, key: str) -> set[tuple[str, ReviewItem, int]]:
-    """The items an earlier feedback plan of `key` covered, whose approval a `resume` went ahead on.
-
-    The approval is spent when the `resume` is recorded, before its worker does anything, so an item counts as handled
-    only while that run works or once it ended `done` or `blocked`. A resume that failed, crashed, timed out, was
-    stopped, or never started hands its items back to the next plan, rather than dropping them unseen.
-
-    Returns:
-        Each by its PR, kind, and observed id.
-    """
-    rows = records.fetch_all(
-        conn,
-        records.FeedbackPlanItem,
-        sql.select("i.*")
-        .from_("feedback_plan_items i")
-        .join("feedback_plans p ON p.id = i.plan_id")
-        .join("runs r ON r.id = p.spent_run_id")
-        .where("p.ticket_key = ?", key)
-        .where_in("r.status", (RunStatus.RUNNING, RunStatus.DONE, RunStatus.BLOCKED)),
-    )
-    return {(r.pr_url, r.item, r.item_id) for r in rows}
-
-
-def items_file(items: Sequence[Offered]) -> str:
-    """Return the desk's items file: each item as JSON, its text among its fields, all of it data to the planner."""
-    return json.dumps(
-        [
-            {
-                "id": o.id,
-                "pr": o.pr_url,
-                "item": str(o.item),
-                "author": o.author,
-                "trusted": o.trusted,
-                "bot": o.bot,
-                "state": None if o.state is None else str(o.state),
-                "created_at": o.created_at,
-                "url": o.url,
-                "path": o.path,
-                "line": o.line,
-                "outdated": o.outdated,
-                "body": o.body,
-            }
-            for o in items
-        ],
-        indent=1,
-    )
 
 
 def match(offered: Sequence[Offered], named: Sequence[Named]) -> Matched:
@@ -267,18 +124,20 @@ def record(
     written: plans.Written,
     kept: Sequence[tuple[Offered, Named]],
     *,
+    snapshot: feedback_items.Snapshot,
     event: Callable[[int, str | None], db.Event | None] | None = None,
     no_review: str | None = None,
     effort: PlanEffort | None = None,
 ) -> records.FeedbackPlan:
     """Record the feedback plan run `run_id` wrote for `key`, after its file, as `proposed`, with its items.
 
-    It supersedes the ticket's current feedback plan, waiting, approved, or spent. `no_review` is its planner's reason
-    for saying the plan needs no review, under `policy.planner_may_approve`: the plan is then recorded `approved` as
-    the planner wrote it, the planner's approval (`plans.PLANNER`), unless it replaces one no `resume` has spent, which
-    waited on the operator or was approved by them (DESIGN §32). `event` builds its event from its id and that reason
-    when it held, recorded in the same transaction (§20). `effort` is its planner's estimate of the work, kept to show
-    beside it.
+    It supersedes the ticket's current feedback plan, waiting, approved, or spent. `snapshot` is what the run's read saw
+    of its PRs, recorded with it, so what changed on them since can be told (DESIGN §32, Planning again). `no_review` is
+    its planner's reason for saying the plan needs no review, under `policy.planner_may_approve`: the plan is then
+    recorded `approved` as the planner wrote it, the planner's approval (`plans.PLANNER`), unless it replaces one no
+    `resume` has spent, which waited on the operator or was approved by them (DESIGN §32). `event` builds its event from
+    its id and that reason when it held, recorded in the same transaction (§20). `effort` is its planner's
+    estimate of the work, kept to show beside it.
 
     Returns:
         The plan's row.
@@ -317,6 +176,7 @@ def record(
                 for number, (o, n) in enumerate(kept, start=1)
             ],
         )
+        feedback_items.record(conn, plan.id, snapshot)
         built = event(plan.id, reason) if event is not None else None
         if built is not None:
             db.record_event(conn, built)
@@ -483,27 +343,108 @@ def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
     return row is not None
 
 
-def dispatch_refusal(conn: sqlite3.Connection, policy: Policy, key: str) -> tuple[str, str] | None:
+def dispatch_refusal(conn: sqlite3.Connection, config: Config, key: str, *, now: datetime) -> tuple[str, str] | None:
     """Return the guard and reason that refuse a feedback plan run for `key` now, or None (DESIGN §32).
 
-    Only with feedback plans on; and not while the ticket's current feedback plan waits on the operator with no change
-    asked, nor while one approved waits for its `resume`: a new plan then would spend a plan run for nothing the
-    operator asked for, and supersede what they may be reading.
+    Only with feedback plans on; and not while one approved waits for its `resume`, nor while the ticket's current
+    feedback plan waits on the operator with no change asked and nothing changed on its PRs since: a new plan then
+    would spend a plan run for nothing, and supersede what they may be reading. A stale plan is planned again only once
+    the quiet period on its PRs has passed, so a burst of comments makes one plan, not one each (TRUST_MODEL T3).
 
     Returns:
-        `feedback_plan_off` or `bad_plan` with why, or None.
+        `feedback_plan_off`, `bad_plan`, or `quiet` with why, or None.
     """
-    if policy.feedback_plan != "approve":
+    if config.policy.feedback_plan != "approve":
         return "feedback_plan_off", 'policy.feedback_plan is not "approve": a resume goes ahead without a plan'
     plan = current(conn, key)
     if plan is None or plan.spent_run_id is not None:
         return None
-    ticket = db.get_ticket(conn, key)
-    if plan.status is PlanStatus.PROPOSED and (ticket is None or changes_asked(conn, ticket) is None):
-        return "bad_plan", f"feedback plan {plan.id} of {key} waits on the operator, who has asked for no change"
     if plan.status is PlanStatus.APPROVED:
         return "bad_plan", f"feedback plan {plan.id} of {key} is approved: dispatch the resume that follows it"
+    return _waiting_refusal(conn, config, plan, now)
+
+
+def _waiting_refusal(
+    conn: sqlite3.Connection,
+    config: Config,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> tuple[str, str] | None:
+    """Return why a waiting feedback plan is not planned again now, or None when it may be.
+
+    Returns:
+        `bad_plan` while the operator asked for no change and nothing changed on its PRs, `quiet` while it is stale but
+        inside the quiet period on them, or None.
+    """
+    key = plan.ticket_key
+    ticket = db.get_ticket(conn, key)
+    if ticket is not None and changes_asked(conn, ticket) is not None:
+        return None
+    found = stale(conn, config, plan, now)
+    if not found.changes:
+        why = "who has asked for no change, and nothing changed on its PRs since it was written"
+        return "bad_plan", f"feedback plan {plan.id} of {key} waits on the operator, {why}"
+    if not found.quiet_passed(now) and found.quiet_until is not None:
+        minutes = config.policy.feedback_quiet_minutes
+        why = f"its PRs had a new item or reply less than {minutes} minutes ago"
+        after = db.format_time(found.quiet_until)
+        return "quiet", f"feedback plan {plan.id} of {key} is stale, but {why}: plan it again after {after}"
     return None
+
+
+@dataclass(frozen=True)
+class Stale:
+    """What changed on a feedback plan's PRs since it saw them, and when the quiet period on them ends (DESIGN §32)."""
+
+    #: Each change, with its reason; empty while the plan is not stale.
+    changes: Sequence[feedback_items.Change]
+    #: `policy.feedback_quiet_minutes` after the newest item or reply on its PRs; None when they have none with a time.
+    quiet_until: datetime | None
+
+    def quiet_passed(self, now: datetime) -> bool:
+        """Whether the quiet period on the plan's PRs has passed at `now`.
+
+        Returns:
+            True once it ended, or when there is none.
+        """
+        return self.quiet_until is None or now >= self.quiet_until
+
+
+def stale(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> Stale:
+    """Compare `plan` with what the connectors observe of its PRs now, in code (DESIGN §32, Planning again).
+
+    The quiet period runs from the newest item or reply on its PRs, or from when the harness first saw the head or
+    check conclusion they moved to, the newer: a stream of pushes or a flapping check holds a re-plan as a stream of
+    comments does (TRUST_MODEL T3).
+
+    Returns:
+        What changed, and when the quiet period on its PRs ends.
+    """
+    changes = feedback_items.changes(conn, config.trust, plan)
+    made = feedback_items.newest(conn, config.trust, feedback_items.prs_of(conn, plan.id))
+    moved = feedback_items.moved_at(conn, plan.id, changes, now)
+    latest = max((t for t in (made, moved) if t is not None), default=None)
+    quiet = None if latest is None else latest + timedelta(minutes=config.policy.feedback_quiet_minutes)
+    return Stale(changes=changes, quiet_until=quiet)
+
+
+def note_moves(conn: sqlite3.Connection, config: Config) -> None:
+    """Record each waiting feedback plan's PR's head and checks, each value timed from when it was first seen.
+
+    Call each tick after the connectors read, so the quiet period runs from the newest move (`stale`). Nothing is
+    recorded with feedback plans off.
+    """
+    if config.policy.feedback_plan != "approve":
+        return
+    waiting = records.fetch_all(
+        conn,
+        records.FeedbackPlan,
+        sql.select("*").from_("feedback_plans").where("status = ? AND spent_run_id IS NULL", PlanStatus.PROPOSED),
+    )
+    now = db.now()
+    with db.transaction(conn):
+        for plan in waiting:
+            feedback_items.record_values(conn, plan.id, feedback_items.prs_of(conn, plan.id), now)
 
 
 def approve(
@@ -511,10 +452,15 @@ def approve(
     state_dir: Path,
     key: str,
     *,
+    trust: Trust,
     channel: str,
     dispatch_lock: Path,
 ) -> records.FeedbackPlan:
     """Approve the ticket's current feedback plan, whole, as its file stands now, recording its hash (DESIGN §32).
+
+    A waiting plan that is stale is refused once for what changed on its PRs since it was written, which the refusal
+    names and records; approving it again, with nothing more changed, approves it, and what changed waits for the next
+    plan (DESIGN §32, Planning again). `trust` tells a worker's comments and the operator's sent replies from feedback.
 
     Returns:
         The approved plan's row.
@@ -522,48 +468,67 @@ def approve(
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_plan` while a feedback plan run for the
             ticket is running, when it has no current feedback plan, when a `resume` already went ahead on it, when it
-            is approved and its file has not changed since, or when its file is missing, unreadable, or no plan.
+            is approved and its file has not changed since, or when its file is missing, unreadable, or no plan; or
+            `stale` the first time a waiting plan is approved after its PRs changed, naming what changed.
     """
     conversation.check_operator()
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
-        running = db.running_run_of(conn, key)
-        if running is not None and running.kind == RunKind.FEEDBACK_PLAN:
-            raise Refused(
-                "bad_plan",
-                f"feedback plan run {running.id} for {key} is running; wait for it, then decide on it",
+        plan, sha256 = _approvable(conn, state_dir, key)
+        changed = feedback_items.changes(conn, trust, plan) if plan.status is PlanStatus.PROPOSED else []
+        shown = feedback_items.digest(changed)
+        if changed and plan.stale_shown != shown:
+            # Recorded, and committed with the transaction before the refusal, so approving again approves it.
+            sql.execute(conn, sql.update("feedback_plans").set(stale_shown=shown).where("id = ?", plan.id))
+        else:
+            [approved] = records.fetch_all(
+                conn,
+                records.FeedbackPlan,
+                sql.update("feedback_plans")
+                .set(
+                    status=PlanStatus.APPROVED,
+                    approved_sha256=sha256,
+                    approved_at=db.now(),
+                    approved_channel=channel,
+                    approved_reason=None,
+                )
+                .where("id = ?", plan.id)
+                .returning("*"),
             )
-        plan = current(conn, key)
-        if plan is None:
-            raise Refused("bad_plan", f"{key} has no feedback plan waiting to be approved")
-        if plan.spent_run_id is not None:
-            raise Refused("bad_plan", f"run {plan.spent_run_id} went ahead on feedback plan {plan.id} of {key} already")
-        path = plans.path_for(state_dir, key, plan.run_id)
-        reading = plans.read(path)
-        if plan.status is PlanStatus.APPROVED and reading.sha256 == plan.approved_sha256:
-            raise Refused(
-                "bad_plan",
-                f"feedback plan {plan.id} of {key} is approved, and its file has not changed since",
-            )
-        if reading.problem is not None:
-            raise Refused(
-                "bad_plan",
-                f"feedback plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved",
-            )
-        [approved] = records.fetch_all(
-            conn,
-            records.FeedbackPlan,
-            sql.update("feedback_plans")
-            .set(
-                status=PlanStatus.APPROVED,
-                approved_sha256=reading.sha256,
-                approved_at=db.now(),
-                approved_channel=channel,
-                approved_reason=None,
-            )
-            .where("id = ?", plan.id)
-            .returning("*"),
+            return approved
+    why = f"feedback plan {plan.id} of {key} is stale: {feedback_items.said(changed)}"
+    raise Refused("stale", f"{why}. Approve it again to approve it as it is; what changed waits for the next plan")
+
+
+def _approvable(conn: sqlite3.Connection, state_dir: Path, key: str) -> tuple[records.FeedbackPlan, str]:
+    """The ticket's current feedback plan, if the operator may approve it, and its file's hash as it stands now.
+
+    Returns:
+        The plan's row, and the hash.
+
+    Raises:
+        Refused: (`bad_plan`) as `approve` says.
+    """
+    running = db.running_run_of(conn, key)
+    if running is not None and running.kind == RunKind.FEEDBACK_PLAN:
+        raise Refused(
+            "bad_plan",
+            f"feedback plan run {running.id} for {key} is running; wait for it, then decide on it",
         )
-    return approved
+    plan = current(conn, key)
+    if plan is None:
+        raise Refused("bad_plan", f"{key} has no feedback plan waiting to be approved")
+    if plan.spent_run_id is not None:
+        raise Refused("bad_plan", f"run {plan.spent_run_id} went ahead on feedback plan {plan.id} of {key} already")
+    path = plans.path_for(state_dir, key, plan.run_id)
+    reading = plans.read(path)
+    if plan.status is PlanStatus.APPROVED and reading.sha256 == plan.approved_sha256:
+        raise Refused("bad_plan", f"feedback plan {plan.id} of {key} is approved, and its file has not changed since")
+    if reading.problem is not None or reading.sha256 is None:
+        raise Refused(
+            "bad_plan",
+            f"feedback plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved",
+        )
+    return plan, reading.sha256
 
 
 def waiting(conn: sqlite3.Connection, key: str) -> bool:
@@ -621,6 +586,11 @@ class NewestFeedbackPlan(TypedDict):
     repos: list[str]
     #: Whether a `resume` went ahead on its approval, which it spent: the next round needs a plan of its own.
     spent: bool
+    #: Whether it waits on the operator and its PRs changed since it was written, as the harness computed this tick;
+    #: false once it is approved, since feedback after an approval waits for the next plan (DESIGN §32).
+    stale: bool
+    #: Whether the quiet period on its PRs has passed, so a stale plan may be planned again.
+    quiet_passed: bool
 
 
 class FeedbackPlanState(TypedDict):
@@ -644,11 +614,14 @@ def state_section(
     *,
     attempts: Mapping[str, int],
     limits: Mapping[str, int],
+    now: datetime,
 ) -> FeedbackPlanState | None:
     """Return a ticket's feedback plan for the overseer's state block, or None when feedback plans do not touch it.
 
     With `policy.feedback_plan` off, a ticket that never had a feedback plan run has no `feedback_plan` key, so the
     block is as it was before feedback plans (DESIGN §32). `attempts` and `limits` are its units', by repository.
+    Whether its newest plan is stale, and the quiet period on its PRs passed at `now`, is computed here, after the
+    tick's connectors read, so the overseer compares no times.
     """
     key = ticket.key
     on = config.policy.feedback_plan == "approve"
@@ -678,17 +651,23 @@ def state_section(
         "needed": on,
         "attempts": dict(attempts),
         "limits": dict(limits),
-        "newest": None
-        if newest is None
-        else {
-            "id": newest.id,
-            "status": newest.status,
-            "created_at": newest.created_at,
-            "repos": list(repos(conn, newest)),
-            "spent": newest.spent_run_id is not None,
-        },
+        "newest": None if newest is None else _newest(conn, config, newest, now),
         "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
+    }
+
+
+def _newest(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> NewestFeedbackPlan:
+    waits = plan.status is PlanStatus.PROPOSED
+    found = stale(conn, config, plan, now) if waits else Stale(changes=(), quiet_until=None)
+    return {
+        "id": plan.id,
+        "status": plan.status,
+        "created_at": plan.created_at,
+        "repos": list(repos(conn, plan)),
+        "spent": plan.spent_run_id is not None,
+        "stale": bool(found.changes),
+        "quiet_passed": found.quiet_passed(now),
     }
 
 

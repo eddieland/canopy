@@ -90,6 +90,19 @@ harness note; migration 0053's `feedback_plans` and `feedback_plan_items`, with 
 place of the ticket's plan, its prompt naming the approved items by id; a new feedback plan refused while one waits
 with no change asked, or its approval waits for its `resume`; `canopy plan KEY --approve` approving it whole; the state
 block's `feedback_plan`, only under `approve` or once a ticket had a feedback plan run, and the overseer's rows for it;
-and TRUST_MODEL T1, T3, and T7. Left: re-planning when a plan goes stale and the quiet period, approval by item and its
-operator message, the PR page's threads view and T8's web approval, drafts starting from the plan, the plan that
-changes nothing, and failed checks and conflicts as items with ids of their own.
+and TRUST_MODEL T1, T3, and T7. Built 2026-10-20, against the fakes, planning again: migration 0063's snapshot of
+what each plan saw (each PR's head, each check's conclusion there, and each item and reply it was given, by id with
+its body's hash); staleness computed in code from it, with a reason per change (a moved head, a changed check, a new
+item, a reply on a thread named as answering its item and marked when the PR's author or a trusted reviewer wrote it,
+an edit to a covered item, a resolved covered thread), and the state block's `stale` and `quiet_passed`;
+`policy.feedback_quiet_minutes` (10), from the newest item, reply, head, or check conclusion, a head or conclusion
+timed from when canopy first saw it (migration 0063's `feedback_plan_moves`), a re-plan of a stale plan inside it
+refused `quiet`, after it allowed, its desk carrying the old plan and a file of what changed; approving a stale plan
+refused `stale` once, naming what changed; a thread one item, its other comments given beside it as replies; and the
+next round what is new since the last plan's snapshot, with the items a failed `resume` handed back. Settled for it,
+open to the operator: the PR's author is `observed_prs.author`, and the operator's own reply on GitHub counts as
+feedback; any edit to a covered item makes its plan stale; an approved plan not yet spent is not planned again; a reply
+on the ticket plans nothing again; and snapshots are kept with their plan. A changed check makes a plan stale from the
+`vcs` connector's `check` lines, which canopy's own reader reports since it grew to the connector contract (M36). Left:
+approval by item and its operator message, the PR page's threads view and T8's web approval, drafts starting from the
+plan, the plan that changes nothing, and failed checks and conflicts as items with ids of their own.
