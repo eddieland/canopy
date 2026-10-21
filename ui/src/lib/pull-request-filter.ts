@@ -1,9 +1,10 @@
 import type { PullRequest, RequestedReview, ReviewSummary } from '@/api/types'
 import { pullRequestLabel } from '@/lib/pull-request-label'
+import { inRepos, reposIn, reposWords } from '@/lib/repo-filter'
 
 /**
- * The pull requests and reviews pages' filters (DESIGN.md, the PR and review filters): the repository a PR is in
- * (`?repo=`), and words its row holds (`?q=`). Both go over the list the server sent.
+ * The pull requests and reviews pages' filters (DESIGN.md, the PR and review filters): the repositories a PR may be in
+ * (`?repo=`, `repoListOf`), and words its row holds (`?q=`). Both go over the list the server sent.
  */
 
 /** The longest text filter kept: longer than any PR, ticket, and title a row shows. */
@@ -13,7 +14,7 @@ export const PR_QUERY_MAX = 200
 export interface PullRequestFilter {
     /** Words each shown row holds. */
     q?: string | undefined
-    /** The repository each shown row's PR is in. */
+    /** The repositories, as `?repo=` keeps them, one of which each shown row's PR is in. */
     repo?: string | undefined
 }
 
@@ -26,50 +27,46 @@ export function prQueryOf(raw: unknown): string | undefined {
     return text.trim() === '' ? undefined : text
 }
 
-/** A `?repo=` as a repository's name, which the workspace map holds to lowercase letters, digits, and hyphens. */
-export function prRepoOf(raw: unknown): string | undefined {
-    return typeof raw === 'string' && /^[a-z0-9-]{1,64}$/u.test(raw) ? raw : undefined
-}
-
 /**
- * The repositories a list's rows are in, by name, each a chip to filter by: the one `selected` too, so a `?repo=` no
- * row is in still shows as chosen.
+ * The repositories a list's rows are in, by name, each one to filter by: those `?repo=` chooses too, so one no row is
+ * in still shows as chosen, and can be taken away.
  */
-export function reposOf(rows: Iterable<{ repo: string | null }>, selected: string | undefined): string[] {
+export function reposOf(rows: Iterable<{ repo: string | null }>, chosen: string | undefined): string[] {
     const repos = new Set<string>()
     for (const row of rows) {
         if (row.repo !== null) {
             repos.add(row.repo)
         }
     }
-    if (selected !== undefined) {
-        repos.add(selected)
+    for (const repo of reposIn(chosen)) {
+        repos.add(repo)
     }
     return [...repos].toSorted()
 }
 
 /**
- * Whether the pull requests page shows a PR: it is in `repo`, and its name, URL, repository, ticket's key and title, or
- * own title holds every word of `q`, in any case and anywhere in a word, so `web#88` finds acme/web#88.
+ * Whether the pull requests page shows a PR: it is in one of `repo`'s repositories, and its name, URL, repository,
+ * ticket's key and title, or own title holds every word of `q`, in any case and anywhere in a word, so `web#88` finds
+ * acme/web#88.
  */
 export function pullRequestShown(
     pr: Pick<PullRequest, 'url' | 'repo' | 'ticket_key' | 'ticket_title' | 'title'>,
     filter: PullRequestFilter,
 ): boolean {
     const words = `${prWords(pr.url, pr.repo)} ${pr.ticket_key ?? ''} ${pr.ticket_title ?? ''} ${pr.title ?? ''}`
-    return inRepo(pr.repo, filter.repo) && holdsEvery(words, filter.q)
+    return inRepos(pr.repo, filter.repo) && holdsEvery(words, filter.q)
 }
 
 /**
- * Whether the reviews page shows a review: its PR is in `repo`, and its PR's name or URL, repository, ticket, or
- * commit holds every word of `q`.
+ * Whether the reviews page shows a review: its PR is in one of `repo`'s repositories, and its PR's name or URL,
+ * repository, ticket, or commit holds every word of `q`.
  */
 export function reviewShown(
     review: Pick<ReviewSummary, 'pr_url' | 'repo' | 'ticket_key' | 'sha'>,
     filter: PullRequestFilter,
 ): boolean {
     const words = `${prWords(review.pr_url, review.repo)} ${review.ticket_key ?? ''} ${review.sha}`
-    return inRepo(review.repo, filter.repo) && holdsEvery(words, filter.q)
+    return inRepos(review.repo, filter.repo) && holdsEvery(words, filter.q)
 }
 
 /**
@@ -80,9 +77,9 @@ export function requestShown(request: Pick<RequestedReview, 'pr_url'>, filter: P
     return filter.repo === undefined && holdsEvery(prWords(request.pr_url, null), filter.q)
 }
 
-/** What a filtered list says of the filter that left nothing: ` in api with “retry”`. */
+/** What a filtered list says of the filter that left nothing: ` in api or web with “retry”`. */
 export function filterWords(filter: PullRequestFilter): string {
-    const repo = filter.repo === undefined ? '' : ` in ${filter.repo}`
+    const repo = filter.repo === undefined ? '' : ` in ${reposWords(filter.repo)}`
     const q = filter.q === undefined ? '' : ` with “${filter.q.trim()}”`
     return `${repo}${q}`
 }
@@ -97,10 +94,6 @@ export function countText(shown: number | undefined, total: number | undefined, 
 
 function prWords(url: string, repo: string | null) {
     return `${pullRequestLabel(url)} ${url} ${repo ?? ''}`
-}
-
-function inRepo(repo: string | null, chosen: string | undefined) {
-    return chosen === undefined || repo === chosen
 }
 
 function holdsEvery(text: string, query: string | undefined) {

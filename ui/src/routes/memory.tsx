@@ -21,6 +21,7 @@ import { MemoryBand, MemoryDigestFold, MemoryPurge, MemoryRows, ProposalFacts } 
 import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { OrderToggle } from '@/components/order-toggle'
+import { RepoFilter } from '@/components/repo-picker'
 import { ListRow } from '@/components/rows'
 import { RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -35,13 +36,13 @@ import {
     MEMORY_QUERY_MAX,
     MEMORY_SHOWS,
     memoryQueryOf,
-    memoryRepoOf,
     memoryShowOf,
     memoryShown,
     shownCount,
     ticketNotesShown,
 } from '@/lib/memory-filter'
 import type { MemoryFilter, MemoryShow } from '@/lib/memory-filter'
+import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
 import { rowLineFrom } from '@/lib/rows'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -61,7 +62,7 @@ interface MemorySearch {
  * rejected, and a lesson renewed or forgotten, from its row, as `canopy memory` does, while `memory.proposals` is on
  * (ROADMAP M52). What every run is served of the lessons is folded under them, since it is the prompt's, not a queue.
  * Under every panel, `canopy memory purge`, the CLI's alone, copies.
- * `?q=` keeps what holds every word, `?repo=` the proposals and lessons for a repository's runs, and `?show=` the
+ * `?q=` keeps what holds every word, `?repo=` the proposals and lessons for its repositories' runs, and `?show=` the
  * lessons that stand so, over what the page already read; `?history=true` reads and lists the latest proposals and
  * lessons no longer pending or in force too.
  */
@@ -69,7 +70,7 @@ export const Route = createFileRoute('/memory')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
     validateSearch: (search: Record<string, unknown>): MemorySearch => ({
         q: memoryQueryOf(search['q']),
-        repo: memoryRepoOf(search['repo']),
+        repo: repoListOf(search['repo']),
         show: memoryShowOf(search['show']),
         history: search['history'] === true ? true : undefined,
     }),
@@ -516,8 +517,8 @@ function TicketNotesPanel({
 
 /**
  * The page's filter, over every panel: a field for words, kept in `?q=` as the tickets page keeps its own, narrowing
- * as the operator types and replacing the history entry; a chip for each repository, kept in `?repo=`; and the toggle
- * that lists what is no longer pending or in force.
+ * as the operator types and replacing the history entry; a picker of the workspace's repositories, kept in `?repo=`
+ * and replacing it too (`RepoFilter`); and the toggle that lists what is no longer pending or in force.
  */
 function FilterBar({ repos }: { repos: string[] }) {
     const filter = Route.useSearch()
@@ -529,6 +530,10 @@ function FilterBar({ repos }: { repos: string[] }) {
         setSeen(filter.q)
         setValue(filter.q ?? '')
     }
+
+    const chosen = reposIn(filter.repo)
+    // Those chosen that the workspace map no longer names are offered too, so each can be taken away.
+    const offered = [...new Set([...repos, ...chosen])].toSorted()
 
     function find(text: string) {
         const q = memoryQueryOf(text)
@@ -554,17 +559,14 @@ function FilterBar({ repos }: { repos: string[] }) {
                 clearLabel="Clear the filter"
                 className="min-w-64 flex-1 basis-80"
             />
-            {repos.length > 1 && (
-                <nav aria-label="Filter by repository" className="flex flex-wrap items-center gap-1">
-                    <FilterLink change={{ repo: undefined }} selected={filter.repo === undefined}>
-                        every repository
-                    </FilterLink>
-                    {repos.map((r) => (
-                        <FilterLink key={r} change={{ repo: r }} selected={filter.repo === r}>
-                            {r}
-                        </FilterLink>
-                    ))}
-                </nav>
+            {offered.length > 1 && (
+                <RepoFilter
+                    repos={offered}
+                    chosen={chosen}
+                    onChoose={(next) =>
+                        void navigate({ search: (prev) => ({ ...prev, repo: repoListFrom(next) }), replace: true })
+                    }
+                />
             )}
             <HistoryToggle />
         </search>
@@ -598,7 +600,7 @@ function isFiltered(filter: MemoryFilter): boolean {
 /** What a panel's empty list says of the filter that left nothing: ` with “billing” for web`. */
 function filterWords(filter: MemoryFilter): string {
     const q = filter.q === undefined ? '' : ` with “${filter.q.trim()}”`
-    const repo = filter.repo === undefined ? '' : ` for ${filter.repo}`
+    const repo = filter.repo === undefined ? '' : ` for ${reposWords(filter.repo)}`
     return `${q}${repo}`
 }
 

@@ -1,11 +1,12 @@
 import type { MemoryEntry, TicketNotes } from '@/api/types'
 import { memoryStand } from '@/lib/memory'
 import type { TierModes } from '@/lib/memory'
+import { reposIn } from '@/lib/repo-filter'
 
 /**
  * The memory page's filters (DESIGN.md, Agent memory), over what the page already read: words a memory's key, text,
- * ticket, or repository holds, or a ticket's key or title (`?q=`); the repository whose runs a proposal or lesson is
- * for (`?repo=`); and a lesson's standing (`?show=`).
+ * ticket, or repository holds, or a ticket's key or title (`?q=`); the repositories whose runs a proposal or lesson
+ * may be for (`?repo=`, `repoListOf`); and a lesson's standing (`?show=`).
  */
 
 /** The lesson standings the page filters by: what calls for the operator. */
@@ -24,7 +25,7 @@ export const MEMORY_FOUND_MAX = 50
 export interface MemoryFilter {
     /** Words each shown memory or ticket holds. */
     q: string | undefined
-    /** The repository whose runs each shown proposal or lesson is for. */
+    /** The repositories, as `?repo=` keeps them, one of whose runs each shown proposal or lesson is for. */
     repo: string | undefined
     /** The standing each shown lesson has. */
     show: MemoryShow | undefined
@@ -44,15 +45,10 @@ export function memoryQueryOf(raw: unknown): string | undefined {
     return text.trim() === '' ? undefined : text
 }
 
-/** A `?repo=` as a repository's name, which the workspace map holds to lowercase letters, digits, and hyphens. */
-export function memoryRepoOf(raw: unknown): string | undefined {
-    return typeof raw === 'string' && /^[a-z0-9-]{1,64}$/u.test(raw) ? raw : undefined
-}
-
 /**
  * Whether the page shows a proposal or lesson: its key, text, ticket, or repository holds every word of `q`, in any
- * case; it is for `repo`'s runs, which a lesson for every repository is too; and, for a lesson, it stands as `show`
- * says, under the tiers' `modes`.
+ * case; it is for the runs of one of `repo`'s repositories, which a lesson for every repository is too; and, for a
+ * lesson, it stands as `show` says, under the tiers' `modes`.
  */
 export function memoryShown(
     entry: Pick<MemoryEntry, 'key' | 'text' | 'ticket_key' | 'repo' | 'status' | 'wrong_run_id' | 'review_at'>,
@@ -63,7 +59,7 @@ export function memoryShown(
     const words = `${entry.key} ${entry.text ?? ''} ${entry.ticket_key ?? ''} ${entry.repo ?? ''}`
     return (
         holdsEvery(words, filter.q) &&
-        (filter.repo === undefined || entry.repo === null || entry.repo === filter.repo) &&
+        (filter.repo === undefined || entry.repo === null || reposIn(filter.repo).includes(entry.repo)) &&
         (filter.show === undefined || memoryStand(entry, now, modes.lessons) === filter.show)
     )
 }

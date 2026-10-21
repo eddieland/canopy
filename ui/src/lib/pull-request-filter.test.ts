@@ -8,7 +8,6 @@ import {
     filterWords,
     PR_QUERY_MAX,
     prQueryOf,
-    prRepoOf,
     pullRequestShown,
     reposOf,
     requestShown,
@@ -37,23 +36,14 @@ describe('prQueryOf', () => {
     })
 })
 
-describe('prRepoOf', () => {
-    it('keeps a repository name and drops anything else', () => {
-        expect(prRepoOf('web')).toBe('web')
-        expect(prRepoOf('web-2')).toBe('web-2')
-        expect(prRepoOf('Web')).toBeUndefined()
-        expect(prRepoOf('../web')).toBeUndefined()
-        expect(prRepoOf(['web'])).toBeUndefined()
-    })
-})
-
 describe('reposOf', () => {
-    it('names each repository a row is in once, sorted, and the one chosen', () => {
+    it('names each repository a row is in once, sorted, and those chosen', () => {
         expect(reposOf([{ repo: 'web' }, { repo: null }, { repo: 'api' }, { repo: 'web' }], undefined)).toEqual([
             'api',
             'web',
         ])
         expect(reposOf([{ repo: 'web' }], 'mobile')).toEqual(['mobile', 'web'])
+        expect(reposOf([{ repo: 'web' }], 'api,web')).toEqual(['api', 'web'])
     })
 })
 
@@ -62,8 +52,9 @@ describe('pullRequestShown', () => {
         expect(pullRequestShown(pr, {})).toBe(true)
     })
 
-    it('keeps a PR in the chosen repository and leaves out one in another, or in none', () => {
+    it('keeps a PR in a chosen repository and leaves out one in another, or in none', () => {
         expect(pullRequestShown(pr, { repo: 'web' })).toBe(true)
+        expect(pullRequestShown(pr, { repo: 'api,web' })).toBe(true)
         expect(pullRequestShown(pr, { repo: 'api' })).toBe(false)
         expect(pullRequestShown({ ...pr, repo: null }, { repo: 'web' })).toBe(false)
     })
@@ -112,6 +103,7 @@ describe('filterWords', () => {
         expect(filterWords({})).toBe('')
         expect(filterWords({ repo: 'api' })).toBe(' in api')
         expect(filterWords({ repo: 'api', q: ' retry ' })).toBe(' in api with “retry”')
+        expect(filterWords({ repo: 'api,web' })).toBe(' in api or web')
     })
 })
 

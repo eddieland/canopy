@@ -268,15 +268,15 @@ Rules:
   is off, a muted `xs` line says purge deletes many memories' text from the shell alone, then `canopy memory purge` in
   monospace with a `Copyable` that copies the verb alone, never an option, so a paste purges nothing until the operator
   names what, then its options (`MemoryPurge`), since purge is the one memory verb the page leaves to the CLI. Over all
-  three, a filter field and a chip for each repository narrow the page (`?q=`, `?repo=`, `src/lib/memory-filter.ts`), as
-  the tickets filters do: a word in a memory's key, text, ticket, or
+  three, a filter field and a repository picker (`RepoFilter`) narrow the page (`?q=`, `?repo=`,
+  `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
   repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
   through `canopy memory search`'s operator search (`GET /api/memory/search`, every word, as the rows above hold them,
   but each a whole word, its English endings aside, where a row's may be part of one), listed under the tickets as
   Notes that say it, each with its verbs, counted in the header as `N notes found`, and `50+` with a muted `the best 50`
-  beside the label at the server's cap; while a repository chip is on, Ticket notes says it is not narrowed by one,
-  since a note is read by its own ticket's runs in any repository; a lesson for every repository is kept under any
-  repository's chip.
+  beside the label at the server's cap; while a repository is chosen, Ticket notes says it is not narrowed by one,
+  since a note is read by its own ticket's runs in any repository; a lesson for every repository is kept whichever are
+  chosen.
   While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
   filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
   `OrderToggle`, oldest first by default, which is the nearest to lapsing. A single `history` chip at the end of the
@@ -319,25 +319,25 @@ Rules:
   lesson names what it was promoted from, as the CLI does, and when a run reported it wrong. **Edit and promote** (or
   `Promote` under a note) opens its form in place of that line, on the surface with a hairline: the lesson's words in a
   field, starting as the source's own, with their count against the bound in the readout at its corner (in
-  `status-failed` past it, when the button is disabled); the repositories whose runs read it as a segmented control,
-  `every repository` first for a source that names none; a muted line naming the lesson in force under its key that it
-  would replace, as plain `MemoryText`, reserved while the lessons are read; the CLI's warning in `status-blocked` while
-  the text is still a private ticket's run's own words; and `Promote memory:5` with a ghost `Cancel`. **Forget** asks
-  for the memory's ref typed out, in the same form as a ticket's Forget asks for its key (`ForgetForm`). A row can leave
-  once its verb is done, so what it did is said once, in the CLI's words, under the panel's header or band, and only a
-  refusal stays under the row, but one saying the memory changed under it (`not_pending`, `forgotten`, `unknown`,
-  decided from the attention list or the CLI), which reads memory again, so its row may leave, and is said under the
-  list too; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal` item
-  lists its proposals with `Promote as written`, which saves at once, but for those two, and `Reject`; a
-  `lesson_review`, its lessons due with `Renew` alone. **Edit** opens its form in place of the lesson's line, the
-  promote form's fields (`LessonFields`), its repositories `every repository` first, then the lesson's own, then the
-  rest; a muted line saying the version it replaces stays in the lesson's versions; and `Edit memory:8` with a ghost
-  `Cancel`, disabled until the words or the repository change. A memory with more than one version says `version 2`
-  on its line of where it came from, and a lesson edited `edited from memory:8`; under that, `Show versions`, a
-  `Disclosure`, opens its versions, read only then: a list with a hairline at its left edge, newest first, each a
-  line of `v2`, its ref, its status word, its repository's chip, how it was made, its age, and `this row` on the row's
-  own, then its words as `MemoryText`, muted once out of force, with a ghost `Forget` under each out of force that
-  keeps its text wherever the row has verbs.
+  `status-failed` past it, when the button is disabled); the repository whose runs read it as a repository picker of
+  one (`RepoSelect`), `every repository` first for a source that names none; a muted line naming the lesson in force
+  under its key that it would replace, as plain `MemoryText`, reserved while the lessons are read; the CLI's warning
+  in `status-blocked` while the text is still a private ticket's run's own words; and `Promote memory:5` with a ghost
+  `Cancel`. **Forget** asks for the memory's ref typed out, in the same form as a ticket's Forget asks for its key
+  (`ForgetForm`). A row can leave once its verb is done, so what it did is said once, in the CLI's words, under the
+  panel's header or band, and only a refusal stays under the row, but one saying the memory changed under it
+  (`not_pending`, `forgotten`, `unknown`, decided from the attention list or the CLI), which reads memory again, so its
+  row may leave, and is said under the list too; proposals all decided from the page say so in the accent. On the
+  attention list, a `memory_proposal` item lists its proposals with `Promote as written`, which saves at once, but for
+  those two, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone. **Edit** opens its form in place of
+  the lesson's line, the promote form's fields (`LessonFields`), its repositories `every repository` first, then the
+  lesson's own, then the rest; a muted line saying the version it replaces stays in the lesson's versions; and `Edit
+  memory:8` with a ghost `Cancel`, disabled until the words or the repository change. A memory with more than one
+  version says `version 2` on its line of where it came from, and a lesson edited `edited from memory:8`; under that,
+  `Show versions`, a `Disclosure`, opens its versions, read only then: a list with a hairline at its left edge, newest
+  first, each a line of `v2`, its ref, its status word, its repository's chip, how it was made, its age, and `this row`
+  on the row's own, then its words as `MemoryText`, muted once out of force, with a ghost `Forget` under each out of
+  force that keeps its text wherever the row has verbs.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never
@@ -764,9 +764,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   newest by activity, not the whole journal.
 - **The PR and review filters** narrow the pull requests and reviews lists as the tickets filters do
   (`src/lib/pull-request-filter.ts`, `PullRequestFilterBar`): under the header, a search field (`?q=`) keeps the rows
-  whose PR, repository, or ticket holds every word (a PR's titles too, a review's commit), and beside it a chip for each
-  repository the list's rows are in (`?repo=`), shown while there is more than one. A review requested but not yet
-  started has no repository until a tick reads it, so a chosen repository leaves it out.
+  whose PR, repository, or ticket holds every word (a PR's titles too, a review's commit), and beside it a repository
+  picker (`RepoFilter`) of the repositories the list's rows are in (`?repo=`), shown while there is more than one. A
+  review requested but not yet started has no repository until a tick reads it, so a chosen repository leaves it out.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
@@ -1317,6 +1317,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
+- **A choice of repositories** is a repository picker (`src/components/repo-picker.tsx`), never a chip or a segment for
+  each, since a workspace may have dozens: an outline `sm` button in monospace `text-xs` saying what is chosen
+  (`every repository`, in `muted-foreground` while it narrows nothing; a name; two; then `3 repositories`), opening a
+  list on `surface` under a field that keeps the names holding what is typed (cmdk, through
+  `src/components/ui/command.tsx` alone). A filter (`RepoFilter`) takes several: a check in the accent marks each one
+  chosen, picking one keeps the list open, `every repository` heads it and clears them, and what was chosen as it
+  opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
+  (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
+  them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in
   the CLI's words, or its refusal in

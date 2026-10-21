@@ -16,8 +16,9 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { countText, filterWords, prQueryOf, prRepoOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
+import { countText, filterWords, prQueryOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
+import { repoListOf } from '@/lib/repo-filter'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText, verdictTone } from '@/lib/reviews'
 import { fitColumn } from '@/lib/rows'
@@ -26,13 +27,13 @@ import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
 
 /**
- * Every PR the journal knows, most recent activity first, whoever's it is. `?repo=` keeps the PRs in that repository,
+ * Every PR the journal knows, most recent activity first, whoever's it is. `?repo=` keeps the PRs in its repositories,
  * and `?q=` those whose name, ticket, or title holds every word.
  */
 export const Route = createFileRoute('/pull-requests/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
     validateSearch: (search: Record<string, unknown>): PullRequestFilter => ({
-        repo: prRepoOf(search['repo']),
+        repo: repoListOf(search['repo']),
         q: prQueryOf(search['q']),
     }),
     component: PullRequestsPage,

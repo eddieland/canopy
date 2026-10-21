@@ -75,19 +75,20 @@ memory in use never share a label, so you never mistake one for the other.
   screen it sits beside the other two.
 
 Above the panels, a filter field narrows all three as you type: a word in a memory's key, its text, its ticket, or its
-repository, or in a ticket's key or title. The repository chips keep the proposals and lessons for that repository's
-runs, a lesson for every repository included, since those runs read it too. While lessons are in use, the Lessons header
-has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
-keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. For what notes say, the page
-runs `canopy memory search` for you, the same search your shell gets, and lists the notes that hold every word under
-the tickets, as the rows above hold them, so a note is found by what it says, not only by its ticket. One difference:
-the rows match part of a word and the search matches whole ones, endings aside, so `time` keeps a row about a timeout
-but finds no note that only says `timeout`, while `retry` finds one that says `retries`. The count in the Ticket notes
-header counts those notes while you search. It stops at the best fifty, and says so; another word narrows them faster
-than scrolling would. The repository chips don't narrow Ticket notes: a note is read by its own ticket's runs,
-whatever the repository. The **history** chip at the end of the filter bar lists what's no longer pending or in force
-under each panel: proposals rejected, lapsed, promoted, or forgotten, and lessons replaced or forgotten, the latest
-fifty of each, so you can see what happened to the one you rejected last week.
+repository, or in a ticket's key or title. The repository picker beside it keeps the proposals and lessons for the
+runs of the repositories you check, as many as you like, a lesson for every repository included, since those runs read
+it too. Its list has a search box, so a workspace of forty repositories is a few keystrokes, not a wall of buttons.
+While lessons are in use, the Lessons header has `due` and `wrong` chips for the ones that need you. All of it lives
+in the URL, so a filtered page is a link you can keep. The proposals flip between oldest first, the nearest to lapsing,
+and newest first. For what notes say, the page runs `canopy memory search` for you, the same search your shell gets, and
+lists the notes that hold every word under the tickets, as the rows above hold them, so a note is found by what it says,
+not only by its ticket. One difference: the rows match part of a word and the search matches whole ones, endings aside,
+so `time` keeps a row about a timeout but finds no note that only says `timeout`, while `retry` finds one that says
+`retries`. The count in the Ticket notes header counts those notes while you search. It stops at the best fifty, and
+says so; another word narrows them faster than scrolling would. The repository picker doesn't narrow Ticket notes: a
+note is read by its own ticket's runs, whatever the repository. The **history** chip at the end of the filter bar lists
+what's no longer pending or in force under each panel: proposals rejected, lapsed, promoted, or forgotten, and lessons
+replaced or forgotten, the latest fifty of each, so you can see what happened to the one you rejected last week.
 
 ## Reading a memory
 
@@ -146,9 +147,10 @@ as at `use`, so you can build up your lessons before any is served. None of them
 lessons off, the page shows only Ticket notes, and each note still has Forget.
 
 - **Edit and promote** opens the lesson to be: the proposal's words, which you can rewrite (usually an improvement),
-  held to the same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you
-  pick another; a note's lesson is for every repository unless you pick one. Before you save, the form names the lesson
-  in force under the same key, if there is one, since yours replaces it.
+  held to the same 600 characters, and the repository whose runs read it, picked from a list you can search. A
+  proposal keeps its own repository unless you pick another; a note's lesson is for every repository unless you pick
+  one. Before you save, the form names the lesson in force under the same key, if there is one, since yours replaces
+  it.
 - **Promote as written**, the first button, promotes the proposal at once, in its own words and for its own repository,
   as `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form. A proposal from a
   private ticket's run never promotes in one click: its one promote button is **Promote**, in place of both, which opens

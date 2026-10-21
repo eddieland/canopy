@@ -103,6 +103,10 @@
           {
             "name": "radix-ui",
             "message": "Use a wrapper from src/components/ui/, or add one there; only it imports Radix (ui/AGENTS.md)."
+          },
+          {
+            "name": "cmdk",
+            "message": "Use the Command wrapper in src/components/ui/command.tsx; only it imports cmdk (ui/AGENTS.md)."
           }
         ],
         "patterns": [

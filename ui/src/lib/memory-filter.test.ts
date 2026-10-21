@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-    foundCount,
-    memoryQueryOf,
-    memoryRepoOf,
-    memoryShowOf,
-    memoryShown,
-    shownCount,
-    ticketNotesShown,
-} from './memory-filter'
+import { foundCount, memoryQueryOf, memoryShowOf, memoryShown, shownCount, ticketNotesShown } from './memory-filter'
 
 const NOW = Date.parse('2026-10-08T12:00:00Z')
 const USE = { ticket_notes: 'use', lessons: 'use' } as const
@@ -30,9 +22,11 @@ describe('memoryShown', () => {
         expect(memoryShown(LESSON, { ...NONE, q: 'billing mobile' }, NOW, USE)).toBe(false)
     })
 
-    it('keeps a memory for the repository, and one for every repository too', () => {
+    it('keeps a memory for one of the repositories, and one for every repository too', () => {
         expect(memoryShown(LESSON, { ...NONE, repo: 'web' }, NOW, USE)).toBe(true)
+        expect(memoryShown(LESSON, { ...NONE, repo: 'api,web' }, NOW, USE)).toBe(true)
         expect(memoryShown(LESSON, { ...NONE, repo: 'api' }, NOW, USE)).toBe(false)
+        expect(memoryShown(LESSON, { ...NONE, repo: 'api,mobile' }, NOW, USE)).toBe(false)
         expect(memoryShown({ ...LESSON, repo: null }, { ...NONE, repo: 'api' }, NOW, USE)).toBe(true)
     })
 
@@ -63,9 +57,6 @@ describe('the search params', () => {
         expect(memoryShowOf('pending')).toBeUndefined()
         expect(memoryQueryOf('  ')).toBeUndefined()
         expect(memoryQueryOf('x'.repeat(300))).toHaveLength(200)
-        expect(memoryRepoOf('web')).toBe('web')
-        expect(memoryRepoOf('Web')).toBeUndefined()
-        expect(memoryRepoOf(3)).toBeUndefined()
     })
 })
 
