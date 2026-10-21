@@ -261,7 +261,9 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await expect(control).not.toContainText('paused')
 })
 
-test('settings sets a notice to workers, every page shows it, and its banner clears it', async ({ page }) => {
+test('settings sets a notice to workers, every page shows it, and its banner edits, renews, and clears it', async ({
+    page,
+}) => {
     await page.goto('settings')
     await expect(page.getByTestId('worker-notice')).toHaveCount(0)
     const set = page.getByTestId('notice-set')
@@ -278,6 +280,21 @@ test('settings sets a notice to workers, every page shows it, and its banner cle
     // The notice is the journal's: another page reads it back, as the next dispatch does.
     await page.goto('runs')
     await expect(banner).toBeVisible()
+
+    // Edit opens its words in place; saving sets the edited notice in place of the old one.
+    await banner.getByRole('button', { name: 'Edit' }).click()
+    const words = page.getByTestId('notice-edit-text')
+    await expect(words).toHaveValue('Artifactory is down: CI builds will likely fail.')
+    await words.fill('Artifactory is back, but slow.')
+    await page.getByTestId('notice-edit-set').click()
+    await expect(words).toHaveCount(0)
+    await expect(banner).toContainText('Notice to workers: Artifactory is back, but slow.')
+
+    // Renew sets it again from now, for the hour it was set for.
+    await banner.getByRole('button', { name: 'Renew' }).click()
+    await expect(banner).toContainText('Notice to workers: Artifactory is back, but slow.')
+    await page.reload()
+    await expect(banner).toContainText('Notice to workers: Artifactory is back, but slow.')
     await banner.getByRole('button', { name: 'Clear' }).click()
     await expect(banner).toHaveCount(0)
     await page.reload()
