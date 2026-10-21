@@ -23,7 +23,7 @@ from canopy.core import conversation, db, records, review_drafts, review_drafts_
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
-from canopy.loop import tools
+from canopy.loop import review_tools
 from canopy.reviews import execute, findings, view
 
 if TYPE_CHECKING:
@@ -55,7 +55,16 @@ def cmd_review_run(
     context: str | None,
 ) -> int:
     """Start a review of the PR at URL, at commit SHA, if its guards allow one now."""
-    return verb(click_ctx, tools.review_run, tools.ReviewRun, pr=pr, sha=sha, ticket=ticket, repo=repo, context=context)
+    return verb(
+        click_ctx,
+        review_tools.review_run,
+        review_tools.ReviewRun,
+        pr=pr,
+        sha=sha,
+        ticket=ticket,
+        repo=repo,
+        context=context,
+    )
 
 
 @review_group.command("wait", cls=OverseerCommand)
@@ -70,7 +79,7 @@ def cmd_review_run(
 @click.pass_context
 def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, rationale: str) -> int:
     """Record that the PR at URL is not to be reviewed now, and why."""
-    return verb(click_ctx, tools.review_wait, tools.ReviewWait, pr=pr, ticket=ticket, rationale=rationale)
+    return verb(click_ctx, review_tools.review_wait, review_tools.ReviewWait, pr=pr, ticket=ticket, rationale=rationale)
 
 
 @review_group.command("end", cls=OverseerCommand)
@@ -79,7 +88,7 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
 @click.pass_context
 def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
     """End the operator's review request on the PR at URL: it merged or closed first, or is in no repository here."""
-    return verb(click_ctx, tools.review_end, tools.ReviewEnd, pr=pr, reason=reason)
+    return verb(click_ctx, review_tools.review_end, review_tools.ReviewEnd, pr=pr, reason=reason)
 
 
 @review_group.command("show")

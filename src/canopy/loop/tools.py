@@ -7,6 +7,10 @@ and call its verb, so a tool and its command cannot drift apart.
 
 A verb returns the text its command prints. A request that does not validate is what the command calls misuse, exit
 2; a guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either way the text is the same.
+
+This module holds what every verb shares, the bounds, the `Request` base, and the running tick, and the ticket's verbs:
+dispatch, decide, queried, attention, ticket set, and mirror. A feature's own verbs are in a module of their own, the
+reviews' in `loop.review_tools` and the chores' in `loop.chore_tools`.
 """
 
 from __future__ import annotations
@@ -30,13 +34,11 @@ from pydantic import (
 )
 from pydantic_core import PydanticUndefined
 
-from canopy.chores import start as chore_start
-from canopy.core import chore_view, config, contract, conversation, db, memory, review_requests, vocab
+from canopy.core import config, contract, conversation, db, memory, vocab
 from canopy.core.vocab import ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
 from canopy.loop import attention, duties
 from canopy.reviews import findings, grants
-from canopy.reviews import start as review_start
 from canopy.runs import dispatch, policy
 
 if TYPE_CHECKING:
@@ -63,8 +65,6 @@ MAX_TITLE = 80
 MAX_PR_URL = 300
 #: What `decide` records.
 DECIDE_ACTIONS = ("wait", "skip", "done")
-#: The decision `review end` records: the overseer ended a review request no review of could answer.
-END_ACTION = "review:end"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
 
@@ -196,7 +196,7 @@ def cursor(name: str, cursor_id: str) -> tuple[str, str]:
     return name, cursor_id
 
 
-def _matching(pattern: re.Pattern[str], what: str) -> AfterValidator:
+def matching(pattern: re.Pattern[str], what: str) -> AfterValidator:
     """Refuse a string that does not match `pattern` in full.
 
     Returns:
@@ -211,7 +211,13 @@ def _matching(pattern: re.Pattern[str], what: str) -> AfterValidator:
     return AfterValidator(check)
 
 
-def _one_of(what: str, values: Sequence[str]) -> AfterValidator:
+def one_of(what: str, values: Sequence[str]) -> AfterValidator:
+    """Refuse a string that is not one of `values`.
+
+    Returns:
+        A validator that passes one of them through and names the choices otherwise.
+    """
+
     def check(value: str) -> str:
         if value not in values:
             raise ValueError(f"invalid {what} {value!r}: choose from {', '.join(values)}")
@@ -251,7 +257,7 @@ def _known_kind(value: object) -> object:
     return value
 
 
-def _required(*names: str) -> Callable[[JsonDict], None]:
+def required(*names: str) -> Callable[[JsonDict], None]:
     """List `names` in a request's schema as required, though the request takes them left out.
 
     A field left out is a guard's refusal, which the decisions record as the command's is; the schema still tells the
@@ -276,11 +282,11 @@ def _required(*names: str) -> Callable[[JsonDict], None]:
 #: A cursor's name: comment and message are a ticket's, review and ci a unit's.
 CursorName = Literal["comment", "message", "review", "ci"]
 #: A ticket key, such as PROJ-123.
-Key = Annotated[str, _matching(KEY_RE, "ticket key"), Field(description="A ticket key, such as PROJ-123.")]
+Key = Annotated[str, matching(KEY_RE, "ticket key"), Field(description="A ticket key, such as PROJ-123.")]
 #: A repository's name in the workspace's map.
 Repo = Annotated[
     str,
-    _matching(config.REPO_NAME_RE, "repository name"),
+    matching(config.REPO_NAME_RE, "repository name"),
     Field(description="A repository's name in the map."),
 ]
 #: Free text for the journal, stripped and cut to `MAX_TEXT`.
@@ -299,7 +305,9 @@ Cursors = Annotated[
 ]
 
 
-class _Request(BaseModel):
+class Request(BaseModel):
+    """The base of every verb's request, whose fields are the verb's MCP schema."""
+
     # An unknown field is refused: a misspelled one would otherwise be dropped without a word. A number is taken for a
     # string, as a tracker's ids are often sent: a comment's id, a check run's.
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True, coerce_numbers_to_str=True)
@@ -308,11 +316,11 @@ class _Request(BaseModel):
 # The verbs, each its request, then its function.
 
 
-class Dispatch(_Request):
+class Dispatch(Request):
     """A worker started on a ticket."""
 
     # `repos` left out is the dispatch guard's refusal, recorded as the command's is, so the request takes it.
-    model_config = ConfigDict(json_schema_extra=_required("repos"))
+    model_config = ConfigDict(json_schema_extra=required("repos"))
 
     #: The ticket.
     key: Key
@@ -340,7 +348,7 @@ class Dispatch(_Request):
     ] = ()
     #: implement only: the short name of the work, in its branch.
     slug: Annotated[
-        Annotated[str, _matching(dispatch.SLUG_RE, "slug")] | None,
+        Annotated[str, matching(dispatch.SLUG_RE, "slug")] | None,
         Field(description=f"implement only: short name for the work; default {dispatch.DEFAULT_SLUG!r}."),
     ] = None
     #: Another ticket's branch to stack on.
@@ -480,7 +488,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
     return f"dispatched {kind} for {key}: {rationale}"
 
 
-class Decide(_Request):
+class Decide(Request):
     """A decision about a ticket, or a tick-wide skip."""
 
     #: The ticket; none only for a tick-wide skip.
@@ -535,7 +543,7 @@ def decide(ctx: Context, request: Decide) -> str:
     return f"recorded {request.action} for {request.key or 'this tick'}"
 
 
-class Queried(_Request):
+class Queried(Request):
     """That this tick ran the tracker query, naming each open ticket it returned."""
 
     #: Each open ticket the query returned; none when it returned none.
@@ -570,13 +578,13 @@ def queried(ctx: Context, request: Queried) -> str:
     return f"recorded the query: {len(found)} open ticket(s)"
 
 
-class Attention(_Request):
+class Attention(Request):
     """An attention item about a ticket, or about a PR the loop reviews."""
 
     #: The ticket; none for a PR with no ticket, named by `pr`.
     key: Annotated[Key | None, Field(description="The ticket; omit it for a PR with no ticket, named by pr.")] = None
     #: Why the operator is needed, as a word.
-    reason: Annotated[str, _matching(REASON_RE, "reason"), Field(description="Why, as lowercase_with_underscores.")]
+    reason: Annotated[str, matching(REASON_RE, "reason"), Field(description="Why, as lowercase_with_underscores.")]
     #: What the operator needs to know.
     detail: Annotated[Text, Field(description="What the operator needs to know, shown on the attention list.")]
     #: The repository of the ticket's unit the item is about, in a workspace of several.
@@ -616,7 +624,7 @@ def attend(ctx: Context, request: Attention) -> str:
     return f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}"
 
 
-class TicketSet(_Request):
+class TicketSet(Request):
     """A ticket's phase, cursors, done flag, or title, or a unit's phase and cursors."""
 
     #: The ticket.
@@ -630,7 +638,7 @@ class TicketSet(_Request):
     phase: Annotated[
         Annotated[
             str,
-            _one_of("phase", SETTABLE_PHASES),
+            one_of("phase", SETTABLE_PHASES),
             WithJsonSchema({"type": "string", "enum": list(SETTABLE_PHASES)}),
         ]
         | None,
@@ -706,7 +714,7 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
     return f"updated {key if request.repo is None else attention.subject(key, unit)}{note}"
 
 
-class Mirror(_Request):
+class Mirror(Request):
     """A tracker comment, copied into a ticket's conversation in the journal for the operator to read."""
 
     #: What the comment is on: a ticket key, REPO#N, or a PR's URL.
@@ -769,255 +777,6 @@ def mirror(ctx: Context, request: Mirror) -> str:
         cut = ", truncated" if mirrored.truncated else ""
         return f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})"
     return f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded"
-
-
-class ReviewRun(_Request):
-    """A review of a PR at a commit."""
-
-    # `repo` left out is the review guard's refusal, recorded as the command's is, so the request takes it.
-    model_config = ConfigDict(json_schema_extra=_required("repo"))
-
-    #: The PR's URL, as an opaque string: the review's guards check it, and a refusal records it.
-    pr: Annotated[str, Field(description="The PR's https:// URL.")]
-    #: The full head commit read on the PR just now.
-    sha: Annotated[str, Field(description="The full head commit you read on the PR just now.")]
-    #: The ticket of one of the loop's own PRs.
-    ticket: Annotated[Key | None, Field(description="The ticket of one of the loop's own PRs.")] = None
-    #: The PR's repository, by its name in the map.
-    repo: Annotated[
-        Repo | None,
-        WithJsonSchema({"type": "string"}),
-        Field(description="The PR's repository, by its name in the map. Required."),
-    ] = None
-    #: What the reviewer should look at first. Never quoted text.
-    context: Annotated[Text | None, Field(description="What the reviewer should look at first. Never quoted text.")] = (
-        None
-    )
-
-
-def review_run(ctx: Context, request: ReviewRun) -> str:
-    """Start a review of a PR at a commit, if its guards allow one now; in a dry run, check them and start nothing.
-
-    A PR the operator chose several personas for gets a review in each still owed one, side by side (DESIGN §31): a
-    guard that refuses one after the first leaves it and the rest to a later tick.
-
-    Returns:
-        What the command prints.
-
-    Raises:
-        Refused: Outside a running tick, or a guard refused the review, which is recorded.
-    """
-    current = running_tick(ctx)
-    asked = review_start.Request(pr=request.pr, sha=request.sha, ticket=request.ticket, repo=request.repo)
-    try:
-        due = review_start.due(ctx, asked)
-    except review_start.Refusal as r:
-        _record_refused(ctx, current, asked, r)
-        raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    said: list[str] = []
-    for i, one in enumerate(due):
-        try:
-            said.append(_review_one(ctx, current, one, request.context))
-        except review_start.Refusal as r:
-            if i == 0:
-                _record_refused(ctx, current, one, r)
-                raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-            # The reviews started stand; this one and the rest wait on a tick with room for them.
-            db.record_decision(ctx.conn, current.id, one.ticket, f"refused:{r.guard}", r.reason, pr=one.pr)
-            said.append(f"{one.persona}'s review waits ({r.guard}): {r.reason}")
-            break
-    return "\n".join(said)
-
-
-def _review_one(ctx: Context, current: records.Tick, one: review_start.Request, context: str | None) -> str:
-    """Start one review, or in a dry run check its guards, and record the decision.
-
-    Returns:
-        What the command prints of it.
-
-    Raises:
-        Refusal: a guard refused it.
-    """
-    tick_id = current.id
-    in_persona = f" in {one.persona}" if one.persona is not None else ""
-    on_context = f"; context={context}" if context else ""
-    if current.dry_run:
-        review_start.check(ctx, tick_id=tick_id, request=one)
-        rationale = truncate(f"dry run: not dispatched; would review {one.sha}{in_persona}{on_context}")
-        db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
-        return f"dry run: recorded review of {one.pr}{in_persona}; nothing was started"
-    started = review_start.start(ctx, tick_id=tick_id, request=one, context=context)
-    rationale = truncate(f"review run {started.run_id}: {one.sha} in {started.slot}{in_persona}{on_context}")
-    db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
-    logs.for_tick(tick_id).info(
-        "review started",
-        extra={"pr": one.pr, "review_run_id": started.run_id, "pid": started.pid, "persona": one.persona},
-    )
-    return f"started review of {one.pr}{in_persona}: run {started.run_id}"
-
-
-def _record_refused(
-    ctx: Context,
-    current: records.Tick,
-    asked: review_start.Request,
-    r: review_start.Refusal,
-) -> None:
-    """Record a refused review, and what it leaves for the operator: an answered request, or an attention item."""
-    tick_id, pr, ticket = current.id, asked.pr, asked.ticket
-    log = logs.for_tick(tick_id)
-    # A malformed URL is recorded cut short; the refusal says what was wrong with it.
-    pr_key = pr if len(pr) <= review_start.MAX_PR_URL else pr[: review_start.MAX_PR_URL]
-    db.record_decision(ctx.conn, tick_id, ticket, f"refused:{r.guard}", r.reason, pr=pr_key)
-    if r.guard == "reviewed" and not current.dry_run and review_requests.answered(ctx.conn, pr):
-        # The head already has a `done` review: that answers a `once` request, which no new review would end.
-        log.info("review request answered", extra={"pr": pr_key})
-    if r.guard == "review_limit":
-        # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
-        action = f"{attention.ACTION_PREFIX}review_limit"
-        db.record_decision(ctx.conn, tick_id, ticket, action, f"{r.reason}; {grants.hint(pr_key)}", pr=pr_key)
-    if r.attention is not None:
-        # A persona the operator must fix (DESIGN §31): the item is about the PR, or its ticket.
-        db.record_decision(ctx.conn, tick_id, ticket, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, pr=pr_key)
-    log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
-
-
-class ReviewWait(_Request):
-    """That a PR is not to be reviewed now, and why."""
-
-    #: The PR.
-    pr: PrUrl
-    #: The ticket of one of the loop's own PRs.
-    ticket: Annotated[Key | None, Field(description="The ticket of one of the loop's own PRs.")] = None
-    #: Why not now.
-    rationale: Annotated[Text, Field(description="Why not now, such as checks still running, or a draft.")]
-
-
-def review_wait(ctx: Context, request: ReviewWait) -> str:
-    """Record that a PR is not to be reviewed now, and why.
-
-    Returns:
-        What the command prints.
-
-    Raises:
-        Refused: Outside a running tick, or reviews are off.
-    """
-    current = running_tick(ctx)
-    if not review_requests.reviews_on(ctx.conn, ctx.config):
-        raise Refused("reviews are off: no [review] agent_prs or query, and no open review request")
-    db.record_decision(ctx.conn, current.id, request.ticket, "wait", request.rationale, pr=request.pr)
-    return f"recorded wait for {request.pr}"
-
-
-class ReviewEnd(_Request):
-    """The end of the operator's review request on a PR, which no review of could answer."""
-
-    #: The requested PR.
-    pr: PrUrl
-    #: What the overseer read: the PR merged or closed first, or is in no repository here.
-    reason: Annotated[
-        str,
-        _one_of("reason", review_requests.OVERSEER_REASONS),
-        WithJsonSchema({"type": "string", "enum": list(review_requests.OVERSEER_REASONS)}),
-        Field(description="What you read: it merged or closed first, or is in no repository here."),
-    ]
-
-
-def review_end(ctx: Context, request: ReviewEnd) -> str:
-    """End the operator's review request on a PR; in a dry run, record it and end nothing.
-
-    Returns:
-        What the command prints.
-
-    Raises:
-        Refused: Outside a running tick, or there is no open request to end, which is recorded.
-    """
-    current = running_tick(ctx)
-    tick_id, dry_run, pr, reason = current.id, current.dry_run, request.pr, request.reason
-    try:
-        review_requests.end(ctx.conn, pr, reason, dry_run=dry_run)
-    except conversation.Refused as r:
-        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, pr=pr)
-        raise Refused(f"review end refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    if dry_run:
-        db.record_decision(ctx.conn, tick_id, None, END_ACTION, f"dry run: not ended; {reason}", pr=pr)
-        return f"dry run: recorded the end of {pr}'s review request; nothing was ended"
-    db.record_decision(ctx.conn, tick_id, None, END_ACTION, reason, pr=pr)
-    logs.for_tick(tick_id).info("review request ended", extra={"pr": pr, "reason": reason})
-    return f"ended the review request on {pr}: {reason}"
-
-
-#: A chore's name, as the operator's config names it.
-Chore = Annotated[str, _matching(config.CHORE_NAME_RE, "chore name"), Field(description="The chore's name.")]
-
-
-class ChoreRun(_Request):
-    """A run of one of the operator's chores."""
-
-    #: The chore.
-    name: Chore
-    #: What the chore should look at. Never quoted text.
-    context: Annotated[
-        Text | None,
-        Field(description="What the chore should look at: a PR, a job name. Never quoted text."),
-    ] = None
-
-
-def chore_run(ctx: Context, request: ChoreRun) -> str:
-    """Start a run of a chore, if its guards allow one now; in a dry run, check them and start nothing.
-
-    Returns:
-        What the command prints.
-
-    Raises:
-        Refused: Outside a running tick, or a guard refused the run, which is recorded.
-    """
-    current = running_tick(ctx)
-    tick_id, name, context = current.id, request.name, request.context
-    log = logs.for_tick(tick_id)
-    try:
-        if current.dry_run:
-            chore_start.check(ctx, tick_id=tick_id, name=name)
-            started = None
-        else:
-            started = chore_start.start(ctx, tick_id=tick_id, name=name, context=context)
-    except chore_start.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
-        log.info("chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
-        raise Refused(f"chore run refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    on_context = f"; context={context}" if context else ""
-    if started is None:
-        rationale = truncate(f"dry run: not dispatched{on_context}")
-        db.record_decision(ctx.conn, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
-        return f"dry run: recorded chore run {name}; nothing was started"
-    rationale = truncate(f"chore run {started.run_id}{on_context}")
-    db.record_decision(ctx.conn, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
-    log.info("chore run started", extra={"chore": name, "chore_run_id": started.run_id, "pid": started.pid})
-    return f"started chore {name}: run {started.run_id}"
-
-
-class ChoreWait(_Request):
-    """That a chore is due but should not run now, and why."""
-
-    #: The chore.
-    name: Chore
-    #: Why it should not run now.
-    rationale: Annotated[Text, Field(description="Why it should not run now, in your own words.")]
-
-
-def chore_wait(ctx: Context, request: ChoreWait) -> str:
-    """Record that a chore is due but should not run now, and why.
-
-    Returns:
-        What the command prints.
-
-    Raises:
-        Refused: Outside a running tick, or no chore of that name is configured here.
-    """
-    current = running_tick(ctx)
-    if request.name not in chore_view.configured(ctx.config, ctx.workspace):
-        raise Refused(f"no chore named {request.name!r} is configured for this workspace")
-    db.record_decision(ctx.conn, current.id, None, "wait", request.rationale, chore=request.name)
-    return f"recorded wait for {attention.CHORE_PREFIX}{request.name}"
 
 
 # The running tick, which every verb but `ticket set` needs (D020).
