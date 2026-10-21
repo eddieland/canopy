@@ -3,7 +3,6 @@ its pages read what `canopy show` and `canopy status` print, and `canopy loop` s
 
 import dataclasses
 import json
-import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -35,7 +34,7 @@ from tests.canopy.helpers import (
     running_run,
 )
 from tests.canopy.scenario_helpers import raises
-from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, refused, signed_in_client
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, free_port, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 
@@ -663,12 +662,6 @@ def test_a_message_is_acknowledged_by_the_latest_ok_tick_that_read_it(ctx: Conte
     assert c.get("/api/tick").json()["acknowledged"] == 0  # still running
     db.finish_tick(ctx.conn, read, TickStatus.OK, "resumed")
     assert c.get("/api/tick").json()["acknowledged"] == replied
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
 
 
 def serve_on(env: CanopyEnv, port: int, extra: str = "") -> None:
