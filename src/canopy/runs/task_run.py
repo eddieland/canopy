@@ -269,7 +269,8 @@ def _run_agent(
     """Run the private worker's command in the slot with the task's prompt, for the worker's timeout.
 
     The private worker's definition is the one that writes nothing to a ticket (DESIGN §22), so the slot's config must
-    name none of the tracker server's tools either. The session and cost the runtime reported are recorded at once.
+    name none of the tracker server's tools either. The session, cost, and tool calls the runtime reported are recorded
+    at once.
 
     Returns:
         The agent's process and the text its result line is read from.
@@ -314,11 +315,18 @@ def _run_agent(
     out.write(f"\n--- worker stderr ---\n{done.stderr}\n")
     out.write(f"--- worker exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
-    # Also after a timeout: whatever it printed before the kill names its session and what it had spent. Its tool calls
-    # are not rolled up: the journal's tools table names the run tables of tickets', chores', and reviews' runs.
+    # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = stdout.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "task_runs", run.id, output.session_id, output.usage, digest=snapshot.name)
+        db.set_run_report(
+            ctx.conn,
+            "task_runs",
+            run.id,
+            output.session_id,
+            output.usage,
+            digest=snapshot.name,
+            tools=output.tools,
+        )
     return done, output.text
 
 

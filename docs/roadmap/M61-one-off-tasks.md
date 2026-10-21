@@ -61,6 +61,4 @@ Status: in progress. Designed 2026-10-21 (DESIGN §36). Stage 1 is built but for
 overseer, under `max_tasks` within `max_workers`; `canopy _task`, its push checked and never forced, and its head kept;
 reconcile; the overseer's capacity, and `task/` branches out of every ticket's work; spend and health; the loop's wait
 ended by a submission; and TRUST_MODEL T1, T3, and T6. Left of stage 1: a run's report and question as messages naming
-their run, built with stage 2's conversation, which reads them. Task runs' models are read as other runs' are; their
-tool calls are not rolled up yet, since `run_tools`'s `run_table` check does not name `task_runs`, and the web UI's
-spend page counts their cost only in its total.
+their run, built with stage 2's conversation, which reads them.

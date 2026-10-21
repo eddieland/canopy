@@ -62,9 +62,9 @@ type KindKey = 'model_kind' | 'tool_kind'
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     'What agent runs cost each day, or each hour of the last 24, as the runtime reported it: the overseer, idle ' +
-    "ticks' part of it apart, and the workers, plans, chores, and reviews it started; beside it, the tickets the " +
-    "loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each model; and " +
-    "which tools put the most into the runs' context. As canopy spend --days N prints it."
+    "ticks' part of it apart, the workers, plans, chores, and reviews it started, and your tasks' runs; beside it, " +
+    "the tickets the loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each " +
+    "model; and which tools put the most into the runs' context. As canopy spend --days N prints it."
 
 // What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
@@ -99,7 +99,7 @@ const KIND_LABEL = {
 
 // The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
 // columns read.
-const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'plans', 'chores', 'reviews', 'dry_run'] as const
+const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry_run'] as const
 
 // The chart's axis names every day of up to a week, and every fifth day or hour past that, back from the latest.
 const AXIS_ALL = 7
@@ -345,7 +345,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-4 @3xl:grid-cols-8">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-3 @4xl:grid-cols-9">
                 {cells.map(({ label, hint, usd, testId }) => (
                     <div key={testId} className="flex flex-col gap-0.5">
                         <dt className="panel-label" title={hint}>
@@ -357,7 +357,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     </div>
                 ))}
             </dl>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-4 @3xl:grid-cols-8">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-3 @4xl:grid-cols-9">
                 <div className="flex flex-col gap-0.5">
                     <dt
                         className="panel-label"

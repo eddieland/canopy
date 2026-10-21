@@ -68,6 +68,7 @@
     --spend-plans: oklch(0.6 0.11 235);
     --spend-chores: oklch(0.6 0.14 55);
     --spend-reviews: oklch(0.55 0.18 330);
+    --spend-tasks: oklch(0.58 0.13 115);
     --spend-dry-run: oklch(0.6 0.02 275);
 
     /* A transcript's context chart (src/components/context-chart.tsx), as fills: what a model call carried from the
@@ -150,6 +151,7 @@
     --spend-plans: oklch(0.72 0.12 235);
     --spend-chores: oklch(0.78 0.13 55);
     --spend-reviews: oklch(0.72 0.16 330);
+    --spend-tasks: oklch(0.8 0.14 115);
     --spend-dry-run: oklch(0.6 0.02 270);
 
     --context-carried: oklch(0.58 0.035 270);
@@ -344,6 +346,7 @@
     --color-spend-plans: var(--spend-plans);
     --color-spend-chores: var(--spend-chores);
     --color-spend-reviews: var(--spend-reviews);
+    --color-spend-tasks: var(--spend-tasks);
     --color-spend-dry-run: var(--spend-dry-run);
     --color-context-carried: var(--context-carried);
     --color-context-added: var(--context-added);
