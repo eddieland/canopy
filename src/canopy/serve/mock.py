@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from canopy.core import chore_view, config, conversation, db, plans, pools, sql, workspace
 from canopy.core.context import db_path
 from canopy.core.items import Item
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import OverrideKind, RunKind, RunStatus
 from canopy.infra import logs, resources
 from canopy.serve import mock_drafts, mock_reviews
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -112,6 +112,9 @@ _LODASH = {
 }
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
+#: The made-up digests of the personas runs and reviews wrote in.
+_CANOPY_DIGEST = "c4a0f1e2d3b4a5968778695a4b3c2d1e0f1a2b3c4d5e6f708192a3b4c5d6e7f8"
+_SKEPTIC_DIGEST = "5e7a1c2b3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
 
 
 def at(minutes: int) -> str:
@@ -274,8 +277,36 @@ def seed(directory: Path) -> Backend:
             _memory(ctx.conn)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
+            _personas(ctx.conn)
     _transcripts(ws.state_dir)
     return backend
+
+
+def _personas(conn: sqlite3.Connection) -> None:
+    """The personas the runs and reviews wrote in (DESIGN §31).
+
+    canopy's own, but ABC-099's reviewer, whom the operator set to `skeptic` from its page before its latest review.
+    """
+    sql.execute(
+        conn,
+        sql.update("runs")
+        .set(persona="canopy", persona_digest=_CANOPY_DIGEST)
+        .where_in("kind", [RunKind.IMPLEMENT, RunKind.RESUME, RunKind.PLAN]),
+    )
+    sql.execute(conn, sql.update("review_runs").set(persona="canopy", persona_digest=_CANOPY_DIGEST).everything())
+    sql.execute(conn, sql.update("review_runs").set(persona="skeptic", persona_digest=_SKEPTIC_DIGEST).where("id = 4"))
+    sql.execute(
+        conn,
+        sql.insert(
+            "ticket_overrides",
+            ticket_key="ABC-099",
+            agent="reviewer",
+            kind=OverrideKind.PERSONA,
+            value="skeptic",
+            channel="web",
+            set_at=at(-60),
+        ),
+    )
 
 
 def _attention(ctx: Context) -> list[Item]:

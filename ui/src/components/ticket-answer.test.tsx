@@ -40,6 +40,8 @@ const DETAIL: TicketDetail = {
     decisions: [],
     cost: { runs: 0, reviews: 0, priced: 0, cost_usd: null },
     drafts: [],
+    personas: [],
+    persona_names: [],
 }
 
 // Every reply sent, each recorded as a new message answering the question.

@@ -205,6 +205,15 @@ class PlanSetting(StrEnum):
     SKIP = "skip"
 
 
+class OverrideKind(StrEnum):
+    """What the operator chose for one of a ticket's agents, `ticket_overrides.kind` (DESIGN §31, §13)."""
+
+    #: The persona its runs write in (DESIGN §31).
+    PERSONA = "persona"
+    #: The model its runs use (DESIGN §13, ROADMAP M58): reserved, set by nothing yet.
+    MODEL = "model"
+
+
 class StartStatus(StrEnum):
     """Whether the operator's start of a subject stands, `starts.status` (DESIGN §22).
 

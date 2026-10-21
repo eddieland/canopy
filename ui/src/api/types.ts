@@ -59,6 +59,8 @@ export type Forgot = Schemas['Forgot']
 export type Limit = Schemas['Limit']
 /** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */
 export type Granted = Schemas['Granted']
+/** The persona one of a ticket's agents writes in at its next run, and where that comes from (DESIGN §31). */
+export type AgentPersona = Schemas['AgentPersona']
 /** What trying a chore started: its recorded run, going on in the background (DESIGN §19). */
 export type ChoreTried = Schemas['ChoreTried']
 /** The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended. */

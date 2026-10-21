@@ -180,8 +180,8 @@ in full leaves it new, which is the point of a list of things you haven't read.
 ## A review's page
 
 At the top, the reviewer's summary, since that's the answer you came for, then its verdict, the PR (with its other
-reviews, if any, on a line under it), the commit it read, and when its run ended, with a link to the run. The status is
-the line under the title. Then its
+reviews, if any, on a line under it), the persona the reviewer wrote in, the commit it read, and when its run ended,
+with a link to the run. The status is the line under the title. Then its
 findings, each linking to where it sits, and the diff, a panel per file, with each finding pinned under the line it
 names. A finding about a file the diff doesn't touch waits in a panel of its own after the files. A long diff shows the
 lines around each finding at first, with folds that open the rest.

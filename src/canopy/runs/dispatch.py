@@ -186,7 +186,7 @@ def start(
         )
         attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
         # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
-        persona = _check_persona(ctx, kind)
+        persona = _check_persona(ctx, key, kind)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -255,7 +255,7 @@ def check(
             cursors=cursors,
         )
         _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons)
-        _check_persona(ctx, kind)
+        _check_persona(ctx, key, kind)
     return plan
 
 
@@ -774,8 +774,8 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
-def _check_persona(ctx: Context, kind: str) -> personas.Persona | None:
-    """Return the persona a `kind` run gets, `[personas]`'s for its agent, read now (DESIGN §31).
+def _check_persona(ctx: Context, key: str, kind: str) -> personas.Persona | None:
+    """Return the persona a `kind` run for `key` gets, the ticket's override else `[personas]`'s, read now (DESIGN §31).
 
     It is never fallen back from: a run in a voice nobody chose would read as the chosen one's. A refusal spends no
     attempt and leases no slot, and raises an attention item of its guard's name, since only the operator can fix it.
@@ -791,7 +791,7 @@ def _check_persona(ctx: Context, kind: str) -> personas.Persona | None:
     if agent is None:
         return None
     try:
-        return personas.chosen(ctx.config, agent)
+        return personas.for_run(ctx.conn, ctx.config, agent, key)
     except personas.PersonaError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 

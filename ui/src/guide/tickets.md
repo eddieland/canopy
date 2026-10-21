@@ -34,7 +34,8 @@ ticket's comments stay on the tracker, and a reply you send from here stays in c
 Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
-  repository), and what the ticket has cost so far.
+  repository), what the ticket has cost so far, and the persona each of its agents writes in next. See
+  [Choosing a persona](#choosing-a-persona).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
@@ -89,3 +90,19 @@ more run; for several at once, run that command with `--runs N`.
 
 A grant dispatches nothing by itself. It raises the limit, and the next tick decides whether to use it. If the last
 two resumes for the same red check failed the same way, read their transcripts before you buy a third.
+
+## Choosing a persona
+
+A persona is the voice a run writes in: how a worker words its PR, how a planner lays out its plan, how hard a
+reviewer presses. At the foot of **Work**, each of the ticket's agents has its own row: its workers (implement and
+resume), its planner, and its reviewer, each with the persona its next run gets and where that comes from: this
+ticket's override, `[personas]` in your config, or canopy's default.
+
+Open a row's menu and pick a persona to set this ticket's override, as `canopy persona KEY NAME --agent AGENT` does.
+It holds for every run of that agent on this ticket until you pick **Clear the override**, which hands the choice back
+to your config. Set a skeptic on the one ticket whose reviews you want harder, and leave the rest alone. The menu lists
+what `canopy personas` does: canopy's own, and yours in `paths.personas`.
+
+A persona changes voice, never a guard. If its file is gone by the time a run starts, that run is refused rather than
+run in some other voice, its row says why in red, and the ticket lands on your attention list. Put the file back, or
+pick another.

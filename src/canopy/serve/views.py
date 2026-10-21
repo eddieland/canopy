@@ -23,6 +23,7 @@ from canopy.core import (
     items,
     notice,
     pause,
+    personas,
     plans,
     records,
     run_models,
@@ -34,6 +35,7 @@ from canopy.core.vocab import ChoreRunStatus, ModelsRead, RunStatus
 from canopy.runtime import entries, transcript
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
+    AgentPersona,
     AttentionItem,
     Capacity,
     ChoreDetail,
@@ -860,7 +862,18 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
         cost=_ticket_cost(ctx.conn, key),
         drafts=draft_views.of_ticket(ctx.conn, key),
+        personas=[agent_persona(n) for n in personas.next_for(ctx.conn, ctx.config, key)],
+        persona_names=[p.name for p in personas.listed(ctx.config)],
     )
+
+
+def agent_persona(found: personas.Next) -> AgentPersona:
+    """The persona one of a ticket's agents writes in at its next run, as the API sends it.
+
+    Returns:
+        The agent, its persona, where that comes from, and why its run would refuse it, if it would.
+    """
+    return AgentPersona(agent=found.agent, persona=found.name, source=found.source, error=found.error)
 
 
 def forget(found: records.Forget) -> TicketForget:

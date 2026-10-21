@@ -121,3 +121,76 @@ def test_status_and_the_web_api_show_the_persona_a_run_had(scenario: Scenario) -
         assert views.run(run.row, ctx.workspace.root).persona == "explainer"
     finally:
         ctx.conn.close()
+
+
+def test_a_tickets_override_reaches_every_run_of_its_agent_until_cleared(scenario: Scenario, git_pool: GitPool) -> None:
+    # Set before canopy has seen the ticket: the override is a fact of its own, on the ticket and agent.
+    said = scenario.operator("persona", KEY, "minimalist").out
+    assert said == f"{KEY}'s worker runs write in minimalist from their next run: this ticket's override.\n"
+    plan = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    assert plan.row["persona"] == "canopy"
+    scenario.operator("plan", KEY, "--skip")
+    assert scenario.run(worker=pushes()).row["persona"] == "minimalist"
+    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "minimalist"
+    # No other ticket's runs.
+    assert scenario.run(dispatches("PROJ-2")).row["persona"] == "canopy"
+    said = scenario.operator("persona", KEY, "--clear").out
+    assert said == f"{KEY}'s worker runs write in canopy from their next run: canopy's default.\n"
+    assert scenario.run(RESUME, worker=pushes()).row["persona"] == "canopy"
+
+
+def test_an_override_takes_the_place_of_the_agents_persona_in_config(scenario: Scenario) -> None:
+    scenario.configures(personas={"planner": "skeptic"})
+    scenario.operator("persona", KEY, "explainer", "--agent", "planner")
+    out = scenario.operator("persona", KEY).out
+    assert out == (
+        f"{KEY}'s personas, from each agent's next run:\n"
+        "  worker    canopy  (canopy's default)\n"
+        "  planner   explainer  (this ticket's override)\n"
+        "  reviewer  canopy  (canopy's default)\n"
+    )
+    assert scenario.run(PLAN, worker=planner_does(plan=TEXT)).row["persona"] == "explainer"
+    said = scenario.operator("persona", KEY, "--agent", "planner", "--clear").out
+    assert said == f"{KEY}'s planner runs write in skeptic from their next run: [personas].\n"
+
+
+def test_canopy_persona_refuses_an_unknown_persona_and_inside_a_run(scenario: Scenario) -> None:
+    err = scenario.operator("persona", KEY, "lenient", code=1).err
+    assert "persona refused (unknown_persona): persona lenient has no file among canopy's own" in err
+    # No agent chooses a persona, its own ticket's least of all (TRUST_MODEL T1).
+    err = scenario.overseer("persona", KEY, "skeptic", "--agent", "reviewer", code=1).err
+    assert "persona refused (inside_run): CANOPY_TICK_ID is set" in err
+    assert scenario.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+    # A PR takes none: a persona is a ticket's agents'.
+    err = scenario.operator("persona", "repo#7", "skeptic", code=1).err
+    assert "persona refused (unsupported)" in err
+    assert "give NAME or --clear" in scenario.operator("persona", KEY, "skeptic", "--clear", code=2).err
+
+
+def test_an_override_whose_persona_file_was_removed_refuses_the_tickets_next_run(
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
+) -> None:
+    yours = personas_dir(scenario.env)
+    (yours / "terse.md").write_text("Be terse.\n")
+    scenario.operator("persona", KEY, "terse")
+    assert scenario.run(worker=pushes()).row["persona"] == "terse"
+    (yours / "terse.md").unlink()
+    reason = (
+        f"{KEY}'s worker override: persona terse has no file in {yours} or among canopy's own: add it, or name one "
+        f"`canopy personas` lists; or clear it: canopy persona {KEY} --clear"
+    )
+    # Never [personas]' persona instead: the operator chose this one for this ticket.
+    assert scenario.refuses(RESUME) == [("refused:persona_missing", reason), ("attention:persona_missing", reason)]
+    assert scenario.attention() == [(KEY, "persona_missing")]
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    shown = scenario.operator("persona", KEY).out.splitlines()
+    assert shown[1:3] == [
+        "  worker    terse  (this ticket's override)",
+        (
+            f"    its runs refuse: persona terse has no file in {yours} or among canopy's own: add it, or name one "
+            "`canopy personas` lists"
+        ),
+    ]

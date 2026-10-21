@@ -39,6 +39,10 @@ type LimitKind = Annotated[
     Literal["implement", "resume", "review"],
     Field(description="What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs."),
 ]
+type PersonaAgent = Annotated[
+    Literal["worker", "planner", "reviewer"],
+    Field(description="One of a ticket's agents a persona reaches (DESIGN §31): `worker` for implement and resume."),
+]
 type StartStatus = Annotated[
     Literal["started", "stopped"],
     Field(description="Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22)."),
@@ -431,6 +435,33 @@ class TicketDetail(_Model):
     drafts: list[Draft] = []
     """Its own drafts (DESIGN §29), the comments its runs would have posted on it, the newest run's first; at most
     10."""
+    personas: list[AgentPersona] = []
+    """The persona each of its agents writes in at its next run (DESIGN §31): its workers', its planner's, and its
+    reviewer's, in that order."""
+    persona_names: list[str] = []
+    """Every persona a run could get, by name, as `canopy personas` lists them: what the operator may choose from."""
+
+
+class AgentPersona(_Model):
+    """The persona one of a ticket's agents writes in at its next run, and where that choice comes from (DESIGN §31)."""
+
+    agent: PersonaAgent
+    """The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`."""
+    persona: str
+    """The persona's name."""
+    source: Literal["ticket", "config", "default"]
+    """Where it comes from: the ticket's override, `[personas]` in config, or canopy's own default."""
+    error: str | None = None
+    """Why its next run would be refused rather than run in it, such as a file gone since; None when it would run."""
+
+
+class PersonaRequest(_Model):
+    """A choice of persona for one of a ticket's agents, as `canopy persona KEY NAME [--agent AGENT]` makes it."""
+
+    agent: PersonaAgent = "worker"
+    """The agent to choose for."""
+    persona: Annotated[str | None, Field(max_length=40)] = None
+    """The persona's name, one `persona_names` holds; None clears the override, as `--clear` does."""
 
 
 class PlanSummary(_Model):

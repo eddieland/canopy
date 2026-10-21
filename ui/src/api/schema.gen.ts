@@ -1274,6 +1274,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tickets/{key}/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose a persona for one of a ticket's agents
+         * @description `canopy persona KEY NAME --agent AGENT`, or with no `persona` `--clear` (DESIGN §31).
+         *
+         *     It covers every run of that agent for the ticket, from its next, until cleared. A name with no file is refused
+         *     `unknown_persona`, and a file canopy would not put in a prompt `bad_persona`.
+         */
+        post: operations["chooseTicketPersona"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets/{key}/plan": {
         parameters: {
             query?: never;
@@ -1591,6 +1614,30 @@ export type paths = {
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
+        /**
+         * AgentPersona
+         * @description The persona one of a ticket's agents writes in at its next run, and where that choice comes from (DESIGN §31).
+         */
+        AgentPersona: {
+            /** @description The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`. */
+            agent: components["schemas"]["PersonaAgent"];
+            /**
+             * Error
+             * @description Why its next run would be refused rather than run in it, such as a file gone since; None when it would run.
+             */
+            error: string | null;
+            /**
+             * Persona
+             * @description The persona's name.
+             */
+            persona: string;
+            /**
+             * Source
+             * @description Where it comes from: the ticket's override, `[personas]` in config, or canopy's own default.
+             * @enum {string}
+             */
+            source: "ticket" | "config" | "default";
+        };
         /**
          * AttentionItem
          * @description One item on the attention list (DESIGN §14): what needs the operator, and since when.
@@ -3324,6 +3371,27 @@ export type components = {
          * @enum {string}
          */
         PauseChannel: "loop" | "cli" | "web";
+        /**
+         * @description One of a ticket's agents a persona reaches (DESIGN §31): `worker` for implement and resume.
+         * @enum {string}
+         */
+        PersonaAgent: "worker" | "planner" | "reviewer";
+        /**
+         * PersonaRequest
+         * @description A choice of persona for one of a ticket's agents, as `canopy persona KEY NAME [--agent AGENT]` makes it.
+         */
+        PersonaRequest: {
+            /**
+             * @description The agent to choose for.
+             * @default worker
+             */
+            agent: components["schemas"]["PersonaAgent"];
+            /**
+             * Persona
+             * @description The persona's name, one `persona_names` holds; None clears the override, as `--clear` does.
+             */
+            persona?: string | null;
+        };
         /**
          * PlanAction
          * @description The operator's word on a ticket's plan: `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`.
@@ -5588,6 +5656,19 @@ export type components = {
              * @description Its conversation: the latest 100 messages, oldest first.
              */
             messages: components["schemas"]["Message"][];
+            /**
+             * Persona Names
+             * @description Every persona a run could get, by name, as `canopy personas` lists them: what the operator may choose from.
+             * @default []
+             */
+            persona_names: string[];
+            /**
+             * Personas
+             * @description The persona each of its agents writes in at its next run (DESIGN §31): its workers', its planner's, and its
+             *     reviewer's, in that order.
+             * @default []
+             */
+            personas: components["schemas"]["AgentPersona"][];
             /**
              * Runs
              * @description Its latest runs, newest first.
@@ -11047,6 +11128,96 @@ export interface operations {
             };
             /** @description No such ticket. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chooseTicketPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPersona"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

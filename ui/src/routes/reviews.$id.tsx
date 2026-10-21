@@ -11,6 +11,7 @@ import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
 import { Field, Fields } from '@/components/fields'
+import { PersonaField } from '@/components/persona-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
@@ -172,6 +173,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                     )}
                 </Field>
                 <TicketField ticketKey={review.ticket_key} title={detail.ticket_title} />
+                <PersonaField persona={detail.persona} digest={detail.persona_digest} />
                 <Field label="commit" mono>
                     <Copyable text={review.sha} label="commit">
                         <span title={review.sha}>{shortSha(review.sha)}</span>

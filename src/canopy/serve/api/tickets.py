@@ -1,19 +1,21 @@
-"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget, grant."""
+"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget, grant, persona."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation
+from canopy.core import conversation, personas
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TicketKey, not_found, ticket_ref
 from canopy.serve.schema import (
+    AgentPersona,
     ForgetRequest,
     Forgot,
     Granted,
     GrantRequest,
+    PersonaRequest,
     Replied,
     ReplyRequest,
     Started,
@@ -147,3 +149,28 @@ def grant(key: TicketKey, body: GrantRequest, backend: BackendDep) -> Granted:
         extra={"ticket": ref.id, "repo": granted.repo, "kind": body.kind, "runs": 1, "channel": WEB},
     )
     return Granted(kind=body.kind, repo=granted.repo, runs=granted.runs, limit=granted.limit)
+
+
+@router.post(
+    "/tickets/{key}/personas",
+    operation_id="chooseTicketPersona",
+    summary="Choose a persona for one of a ticket's agents",
+    responses=REFUSED,
+)
+def persona(key: TicketKey, body: PersonaRequest, backend: BackendDep) -> AgentPersona:
+    """`canopy persona KEY NAME --agent AGENT`, or with no `persona` `--clear` (DESIGN §31).
+
+    It covers every run of that agent for the ticket, from its next, until cleared. A name with no file is refused
+    `unknown_persona`, and a file canopy would not put in a prompt `bad_persona`.
+    """
+    ref = ticket_ref(key, "persona")
+    with backend.open() as ctx:
+        try:
+            now = personas.choose(ctx.conn, ctx.config, ref.id, body.agent, body.persona, channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "persona chosen" if body.persona is not None else "persona cleared",
+        extra={"ticket": ref.id, "agent": body.agent, "persona": body.persona, "channel": WEB},
+    )
+    return views.agent_persona(now)

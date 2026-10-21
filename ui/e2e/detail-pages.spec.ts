@@ -25,6 +25,20 @@ test("a run's state, kind, ticket, and title are each said once above its transc
     )
 })
 
+test("a run's and a review's pages show the persona each wrote in, with the start of its digest", async ({ page }) => {
+    await page.goto('runs/39')
+    await settled(page)
+    await expect(page.getByRole('definition').filter({ hasText: /^canopy c4a0f1e2d3b4$/u })).toBeVisible()
+    // ABC-099's reviewer was set to skeptic from its page; its latest review wrote in it.
+    await page.goto('reviews/4')
+    await settled(page)
+    await expect(page.getByRole('definition').filter({ hasText: /^skeptic 5e7a1c2b3d4e$/u })).toBeVisible()
+    await page.goto('tickets/ABC-099')
+    await settled(page)
+    await expect(page.getByRole('button', { name: 'reviewer persona: skeptic' })).toBeVisible()
+    await expect(page.getByTestId('ticket-personas')).toContainText("this ticket's override")
+})
+
 test("a chore run's chore is the trail's link alone, and a tick's output path the Output panel's", async ({ page }) => {
     await page.goto('chores/deps/runs/2')
     await settled(page)

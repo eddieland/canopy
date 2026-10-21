@@ -8,6 +8,7 @@ import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
+import { PersonaField } from '@/components/persona-field'
 import { FoldPanel } from '@/components/fold-panel'
 import { MemoryKinds } from '@/components/memory'
 import { ModelsField } from '@/components/models-field'
@@ -141,6 +142,7 @@ function RunPanel({
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
+                <PersonaField persona={run.persona} digest={run.persona_digest} />
                 {run.models !== null && <ModelsField models={run.models} />}
                 <Field label="branch" mono>
                     {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}

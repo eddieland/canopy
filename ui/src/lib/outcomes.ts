@@ -1,5 +1,6 @@
 import { ApiError } from '@/api/client'
 import type {
+    AgentPersona,
     ChoreTried,
     ConfigReload,
     Dismissed,
@@ -95,6 +96,19 @@ export function forgotText(key: string, forgot: Forgot): string {
         'Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and the ' +
         'ticket cannot start over.'
     )
+}
+
+/** Where an agent's persona comes from, in the words `canopy persona KEY` uses. */
+export const PERSONA_SOURCES: Record<AgentPersona['source'], string> = {
+    ticket: "this ticket's override",
+    config: '[personas]',
+    default: "canopy's default",
+}
+
+/** What choosing or clearing a ticket's persona did, as `canopy persona` says it. */
+export function personaText(ticketKey: string, now: AgentPersona): string {
+    const source = PERSONA_SOURCES[now.source]
+    return `${ticketKey}'s ${now.agent} runs write in ${now.persona} from their next run: ${source}.`
 }
 
 /**

@@ -6,8 +6,8 @@ chooses it. Sections are numbered across the whole design; the [README](README.m
 
 ## 31. Personas
 
-Built in part (REQUIREMENTS R24, ROADMAP M60): the operator chooses each agent's persona in config, and canopy ships a
-few; the override per ticket, and the web UI's control of it, are designed, not built.
+Built (REQUIREMENTS R24, ROADMAP M60): the operator chooses each agent's persona in config, and per ticket from
+`canopy persona` or the ticket's page, and canopy ships a few.
 
 A persona is a short Markdown file of voice and emphasis: how an agent writes its plan, its PR, its findings, and its
 comments, and what it weighs most while it works. The operator wants to give planning, reviews, or implementation a

@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    AgentPersona,
     ChoreTried,
     ConfigReload,
     Dismissed,
@@ -71,6 +72,20 @@ export async function stopTicket(key: string, now: boolean): Promise<Stopped> {
 /** `canopy forget`, with the key as the operator typed it: the server refuses `not_confirmed` unless it matches. */
 export async function forgetTicket(key: string, confirm: string): Promise<Forgot> {
     return unwrap(await api.POST('/api/tickets/{key}/forget', { params: { path: { key } }, body: { confirm } }))
+}
+
+/**
+ * `canopy persona KEY NAME --agent AGENT`, or with `persona` null `--clear`: the persona the agent's runs for the
+ * ticket write in, from its next run until cleared (DESIGN §31).
+ */
+export async function chooseTicketPersona(
+    key: string,
+    agent: AgentPersona['agent'],
+    persona: string | null,
+): Promise<AgentPersona> {
+    return unwrap(
+        await api.POST('/api/tickets/{key}/personas', { params: { path: { key } }, body: { agent, persona } }),
+    )
 }
 
 /**

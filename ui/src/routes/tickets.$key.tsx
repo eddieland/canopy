@@ -24,6 +24,7 @@ import { Chip, Word } from '@/components/status'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
+import { TicketPersonas } from '@/components/ticket-personas'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -164,6 +165,13 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
+                    {/* Who its runs write as, from the next: yours to choose, here or with `canopy persona`. */}
+                    <TicketPersonas
+                        ticketKey={ticket.key}
+                        personas={detail.personas}
+                        names={detail.persona_names}
+                        className="border-t"
+                    />
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}

@@ -187,7 +187,8 @@ Controls:
   could a `notices` row.
 - Personas (DESIGN §31, ROADMAP M60) are operator text, as the standing instructions are: a short file of voice and
   emphasis in every planner's, reviewer's, or worker's prompt it reaches, below the prompt's obligations, which the
-  prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), and supplies one, in
+  prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), or for one ticket's agent
+  with `canopy persona` or the ticket's page (T8), which refuses inside a tick or a run; and supplies one, in
   `paths.personas`, also private, or among the files canopy ships; the overseer, a dispatch, ticket text, and labels
   choose none, so no ticket can steer its own review toward a lenient reviewer. A persona changes how an agent writes
   and where it looks hardest, never a guard, the result contract, the tools a definition allows, or what makes a
@@ -683,8 +684,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
   proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
   `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction, drop, send, and stage
-  them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), ask the loop to read its config files
-  again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
+  them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the persona of one of a
+  ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31), ask the loop to
+  read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a
