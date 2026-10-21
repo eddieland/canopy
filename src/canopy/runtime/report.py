@@ -119,8 +119,8 @@ class AgentOutput:
     session_id: str | None = None
     usage: Usage | None = None
     tools: tuple[ToolUse, ...] = ()
-    #: The last error the runtime reported in the session, on one line, or None when it reported none.
-    error: str | None = None
+    #: Each distinct error the runtime reported in the session, on one line, in the order it reported them.
+    errors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

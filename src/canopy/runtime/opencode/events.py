@@ -12,8 +12,10 @@ per line. canopy reads four kinds of event and one field of every event, each va
   and the characters of what they returned are what each tool put into the run's context. A call of the `skill` tool
   is counted under the skill it loaded, `skill:<name>`, so spend says which skills an agent uses, not only that it
   used one.
-- `error`: the session failed, its `error` a name and a message. The last one is why a failed run ended, as far as the
-  runtime says; OpenCode's own log has the detail of one it did not expect, under its `ref`.
+- `error`: the session failed, its `error` a name and a message. Each distinct one is kept, in order: OpenCode prints
+  one when it gives up after its own retries, and one for a context overflow it then compacts and goes on from, so the
+  last is what ended the run and an earlier one may be its cause. OpenCode's own log has the detail of one it did not
+  expect, under its `ref`.
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
@@ -133,7 +135,7 @@ def read(stdout: str) -> AgentOutput:
     Returns:
         `stdout` as it is, as both the text and the final message, when it holds no event. Otherwise the events' text
         parts joined by newlines, the last of them, the first valid session id, the steps' total usage, or None for
-        usage when a step could not be read, the tool calls rolled up by tool, and the last error the runtime reported.
+        usage when a step could not be read, the tool calls rolled up by tool, and the errors the runtime reported.
     """
     texts: list[str] = []
     tally = Tally()
@@ -151,11 +153,11 @@ def read(stdout: str) -> AgentOutput:
     if not events:
         return AgentOutput(stdout, stdout)
     last = texts[-1] if texts else ""
-    return AgentOutput("\n".join(texts), last, tally.session_id, tally.usage, tally.tools, tally.error)
+    return AgentOutput("\n".join(texts), last, tally.session_id, tally.usage, tally.tools, tally.errors)
 
 
 class Tally:
-    """The session, usage, tools, and error of an agent's events, added one at a time as it prints them, as `read` does.
+    """An agent's session, usage, tools, and errors, added one event at a time as it prints them, as `read` reports.
 
     So a running agent's session and what it has spent so far are what `read` would say of what it printed so far.
     """
@@ -163,9 +165,8 @@ class Tally:
     def __init__(self) -> None:
         """Start with no event: no session, nothing spent, no tool called, and no error."""
         self.session_id: str | None = None
-        #: The last error the runtime reported, on one line (`SessionError.describe`).
-        self.error: str | None = None
         self._calls: list[Call] = []
+        self._errors: list[str] = []
         self._complete = True
         self._tools = report.Tools()
 
@@ -180,10 +181,12 @@ class Tally:
             return
         if event["type"] == ERROR:
             try:
-                self.error = SessionError.model_validate(event.get("error")).describe()
+                said = SessionError.model_validate(event.get("error")).describe()
             except ValidationError:
                 # One canopy cannot read still says the session failed.
-                self.error = ERROR
+                said = ERROR
+            if said not in self._errors:
+                self._errors.append(said)
             return
         if event["type"] != STEP_FINISH:
             return
@@ -200,6 +203,11 @@ class Tally:
     def usage(self) -> Usage | None:
         """The steps' total usage so far, or None when a step could not be read."""
         return report.total(self._calls) if self._complete else None
+
+    @property
+    def errors(self) -> tuple[str, ...]:
+        """Each distinct error the runtime reported so far, on one line (`SessionError.describe`), in order."""
+        return tuple(self._errors)
 
     @property
     def tools(self) -> tuple[ToolUse, ...]:

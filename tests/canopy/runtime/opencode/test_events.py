@@ -118,15 +118,15 @@ def error(value: object) -> str:
     return json.dumps({"type": "error", "timestamp": 1, "sessionID": "ses_abc123", "error": value})
 
 
-def test_the_last_error_is_reported_on_one_line() -> None:
-    """As OpenCode prints an error it did not expect: its ref says where its own log has the detail."""
+def test_each_distinct_error_is_reported_on_one_line_in_order() -> None:
+    """As OpenCode prints an error it did not expect, its ref says where its own log has the detail."""
+    overflow = {"name": "ContextOverflowError", "data": {"message": "too long"}}
     server = {"name": "UnknownError", "data": {"message": "Unexpected server error.\nCheck logs.", "ref": "err_ccf1"}}
-    lines = [
-        text("Reading the state."),
-        error({"name": "APIError", "data": {"message": "rate limited"}}),
-        error(server),
-    ]
-    assert events.read("\n".join(lines)).error == "UnknownError: Unexpected server error. Check logs. (err_ccf1)"
+    lines = [text("Reading the state."), error(overflow), text("Compacted."), error(overflow), error(server)]
+    assert events.read("\n".join(lines)).errors == (
+        "ContextOverflowError: too long",
+        "UnknownError: Unexpected server error. Check logs. (err_ccf1)",
+    )
 
 
 @pytest.mark.parametrize(
@@ -140,12 +140,12 @@ def test_the_last_error_is_reported_on_one_line() -> None:
     ],
 )
 def test_an_error_says_what_it_gives(value: object, said: str) -> None:
-    assert events.read(error(value)).error == said
+    assert events.read(error(value)).errors == (said,)
 
 
 def test_output_with_no_error_event_reports_none() -> None:
-    assert events.read(f"error\n{RESULT}\n").error is None
-    assert events.read("\n".join([text(RESULT), step()])).error is None
+    assert events.read(f"error\n{RESULT}\n").errors == ()
+    assert events.read("\n".join([text(RESULT), step()])).errors == ()
 
 
 def tool(name: object, status: str = "completed", **state: object) -> str:

@@ -293,17 +293,30 @@ def test_an_overseer_failure_names_the_error_the_runtime_reported(
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
     server = {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}}
-    failed = scenario.tick(result="", exit_code=exit_code, error=json.dumps(server), dry_run=True, code=1)
+    failed = scenario.tick(result="", exit_code=exit_code, errors=json.dumps([server]), dry_run=True, code=1)
     assert (failed.tick.status, failed.tick.summary) == (
         "overseer_failed",
         f"{failure}; the runtime reported UnknownError: Unexpected server error. (err_ccf1)",
     )
 
 
+@pytest.mark.parametrize(
+    ("names", "reported"), [("ABC", "A; then B; then C"), ("ABCDE", "A; then 3 more; then E"), ("ABAB", "A; then B")]
+)
+def test_an_overseer_failure_names_each_distinct_error_the_first_and_last_past_three(
+    scenario: Scenario, names: str, reported: str
+) -> None:
+    """The first error may be the cause, and the last ended the run (OpenCode goes on after a context overflow)."""
+    with_events(scenario.env, "canopy-overseer")
+    errors = json.dumps([{"name": name} for name in names])
+    failed = scenario.tick(result="", exit_code=1, errors=errors, dry_run=True, code=1)
+    assert failed.tick.summary == f"overseer exited 1; the runtime reported {reported}"
+
+
 def test_an_overseer_that_ends_its_tick_after_an_error_is_ok(scenario: Scenario) -> None:
     """The runtime's error is named only for a tick that failed: a session that recovered from it did its work."""
     with_events(scenario.env, "canopy-overseer")
-    ticked = scenario.tick(error=json.dumps({"name": "APIError"}), dry_run=True)
+    ticked = scenario.tick(errors=json.dumps([{"name": "ContextOverflowError"}]), dry_run=True)
     assert ticked.tick.status == "ok"
 
 
