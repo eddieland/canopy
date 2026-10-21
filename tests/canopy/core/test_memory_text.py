@@ -69,9 +69,10 @@ def test_ordinary_notes_pass(text: str) -> None:
     assert check_text(text, 400) == text
 
 
-def test_a_text_keeps_its_line_breaks_and_tabs() -> None:
+def test_a_text_keeps_its_line_breaks_and_tabs_and_shows_them_as_written() -> None:
     text = "Run the tests twice.\nEvidence: the first run\tfails on a cold cache."
     assert check_text(text, 400) == text
+    assert quoted(text, "> ") == "> Run the tests twice.\n> Evidence: the first run\tfails on a cold cache."
 
 
 def test_a_text_is_trimmed_and_bounded() -> None:
@@ -102,7 +103,7 @@ def test_quoted_text_puts_the_prefix_before_each_line_and_names_the_rest(text: s
     assume("<U+" not in text)
     shown = quoted(text, "> ")
     assert all(line.startswith("> ") for line in shown.split("\n"))
-    assert not any(hidden_char(c) and c != "\n" for c in shown)
+    assert not any(hidden_char(c) and c not in "\n\t" for c in shown)
     lines = [line.removeprefix("> ") for line in shown.split("\n")]
     assert re.sub(r"<U\+([0-9A-F]{4,6})>", lambda m: chr(int(m.group(1), 16)), "\n".join(lines)) == text
 

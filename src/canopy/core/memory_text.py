@@ -138,12 +138,14 @@ def visible(text: str) -> str:
 
 
 def quoted(text: str, prefix: str) -> str:
-    """Return `text` with `prefix` before each of its lines, every other hidden character named as `visible` names it.
+    """Return `text` with `prefix` before each of its lines, its tabs kept, every other hidden character named.
+
+    Line feeds and tabs are what `check_text` lets a text hold, so they show as written, as the web UI shows them.
 
     Returns:
-        Each line of `text`, split at its line feeds alone, after `prefix` and through `visible`, joined by line feeds.
+        Each line of `text`, split at its line feeds alone, after `prefix`, each run between tabs through `visible`.
     """
-    return "\n".join(prefix + visible(line) for line in text.split("\n"))
+    return "\n".join(prefix + "\t".join(map(visible, line.split("\t"))) for line in text.split("\n"))
 
 
 def _random(word: str) -> bool:
