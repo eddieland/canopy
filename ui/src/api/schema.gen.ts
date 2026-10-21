@@ -1637,6 +1637,12 @@ export type components = {
              */
             persona: string;
             /**
+             * Several
+             * @description For the reviewer: each persona the ticket's PRs are reviewed in, one review each, from `[personas] reviewers`.
+             * @default []
+             */
+            several: string[];
+            /**
              * Source
              * @description Where it comes from: the ticket's override, `[personas]` in config, or canopy's own default.
              * @enum {string}

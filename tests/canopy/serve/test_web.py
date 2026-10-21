@@ -344,6 +344,7 @@ def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona
         "source": "ticket",
         "error": None,
         "once": None,
+        "several": [],
     }
     ended_run(ctx, KEY, "implement")
     got = c.get(f"/api/tickets/{KEY}").json()

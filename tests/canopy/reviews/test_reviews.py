@@ -1077,3 +1077,95 @@ def test_a_review_is_new_to_the_operator_until_they_see_it(
     assert conversation.see(scenario.conn, [ref], channel="web") == []
     assert new() == []
     running.finishes()
+
+
+def test_the_loops_own_pr_is_reviewed_once_in_each_of_its_reviewers(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    # DESIGN §31: `[personas] reviewers` reviews each commit of the loop's own PRs once in each, side by side.
+    scenario.configures(personas={"reviewers": ["skeptic", "explainer"]}, capacity={"max_reviews": 2})
+    sha = head(git_pool)
+    both = scenario.reviews_each(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    assert [(r.row.persona, r.status) for r in both] == [("skeptic", "done"), ("explainer", "done")]
+    [(action, reason)] = scenario.refuses(reviews(sha, ticket="PROJ-1"))
+    assert action == "refused:reviewed"
+    assert reason.startswith(f"each persona chosen for this PR (skeptic, explainer) has reviewed {sha[:12]};")
+    # The ticket's override chooses one persona, whose one review the next commit gets.
+    scenario.operator("persona", "PROJ-1", "minimalist", "--agent", "reviewer")
+    assert scenario.operator("persona", "PROJ-1", "--agent", "reviewer").out.splitlines()[1] == (
+        "  reviewer  minimalist  (this ticket's override)"
+    )
+    [one] = scenario.reviews_each(reviews("b" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    assert one.row.persona == "minimalist"
+    # A PR the loop does not own takes `[personas] reviewer`'s one.
+    other = "https://github.com/acme/api/pull/8"
+    assert scenario.review(reviews(sha, other), reviewer=reviewer_reports(CLEAN)).row.persona == "canopy"
+
+
+def test_a_commit_waits_on_each_reviewer_and_counts_each_review_against_the_limit(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.configures(personas={"reviewers": ["skeptic", "explainer"]})
+    sha = head(git_pool)
+    first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
+    assert first.row.persona == "skeptic"
+    # One review slot: explainer's waits, and the overseer sees the commit still owed it. Its overseer, played
+    # whole, decides nothing, so the tick leaves PROJ-1's duty undone.
+    actions = [d.action for d in db.decisions_for_tick(scenario.conn, first.row.tick_id)]
+    assert actions == ["dispatch:review", "refused:review_capacity"]
+    scenario.tick(dry_run=True, code=1)
+    [pr] = scenario.state()["reviews"]["prs"]
+    assert (pr["latest"]["run_id"], pr["owed"]) == (first.id, ["explainer"])
+    second = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
+    assert second.row.persona == "explainer"
+    # Reviewed in each: the commit's reviews read as one, their findings together, at the time the last ended.
+    scenario.tick(dry_run=True, code=1)
+    [pr] = scenario.state()["reviews"]["prs"]
+    assert pr["owed"] == []
+    assert (pr["latest"]["run_id"], pr["latest"]["verdict"]) == (second.id, "findings")
+    assert pr["latest"]["findings"] == ["retry never stops", "retry never stops"]
+    assert pr["latest"]["ended_at"] == max(str(first.row.ended_at), str(second.row.ended_at))
+    # Each review counted: at a limit of two, the next commit gets none.
+    scenario.configures("workspace", policy={"max_reviews_per_pr": 2})
+    assert [a for a, _ in scenario.refuses(reviews("b" * 40, ticket="PROJ-1"))] == [
+        "refused:review_limit",
+        "attention:review_limit",
+    ]
+
+
+def test_a_resume_addresses_the_findings_of_each_reviewer_of_its_commit(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.configures(personas={"reviewers": ["skeptic", "explainer"]}, capacity={"max_reviews": 2})
+    sha = head(git_pool)
+    skeptic, explainer = scenario.reviews_each(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
+    scenario.run(worker=pushes())
+    resumed = scenario.run(resume(explainer.id), worker=pushes())
+    section = resumed.prompt.split("## canopy's review\n\n", 1)[1]
+    assert f"canopy's review run {explainer.id} of {PR} at commit `{sha}`, in explainer, found these" in section
+    assert f"canopy's review run {skeptic.id} of {PR} at commit `{sha}`, in skeptic, found these" in section
+    # A persona's review whose findings the operator dismissed adds nothing.
+    scenario.operator("dismiss", f"review:{skeptic.id}", "1")
+    again = scenario.run(resume(explainer.id), worker=pushes())
+    assert f"review run {skeptic.id} " not in again.prompt.split("## canopy's review\n\n", 1)[1]
+
+
+def test_personas_reviewers_names_each_persona_once_and_canopy_personas_lists_them(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+) -> None:
+    scenario.configures(personas={"reviewers": ["skeptic", "skeptic"]})
+    assert "personas.reviewers: Value error, names skeptic more than once" in scenario.operator("personas", code=2).err
+    scenario.configures(personas={"reviewers": ["skeptic", "lenient"]})
+    printed = scenario.operator("personas", code=1).out
+    assert "  skeptic  canopy's; the default for reviewer\n" in printed
+    assert "[personas] reviewers names lenient, which has no file: its reviews refuse (persona_missing).\n" in printed
+    assert "  reviewer  skeptic, lenient  ([personas] reviewers: one review each)\n" in (
+        scenario.operator("persona", "PROJ-1").out
+    )

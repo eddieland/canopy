@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation, db, observe, plans, records, sql
+from canopy.core import conversation, db, observe, personas, plans, records, sql
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -40,6 +40,7 @@ from canopy.core.vocab import (
     TicketState,
 )
 from canopy.loop import attention
+from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
 
 if TYPE_CHECKING:
@@ -541,7 +542,7 @@ class _World:
         phases.extend(self._feedback(key, pr, unit))
         if passed and not approved:
             phases.append(Phase.GREEN_UNREVIEWED)
-            if self.ctx.config.review.agent_prs and not self._reviewed(url, pr.head_sha):
+            if self.ctx.config.review.agent_prs and not self._reviewed(key, url, pr.head_sha):
                 phases.append(Phase.REVIEW_PENDING)
         if approved:
             phases.append(Phase.APPROVED)
@@ -609,20 +610,27 @@ class _World:
             self._review_runs[url] = db.review_runs_of(self.ctx.conn, url)
         return self._review_runs[url]
 
-    # Whether canopy's reviewer reviewed the PR's head commit: a run on it that ended `done` (DESIGN §21).
-    def _reviewed(self, url: str, sha: str | None) -> bool:
-        return any(r.sha == sha and r.status is ReviewRunStatus.DONE for r in self._runs_of(url))
+    # Whether canopy's reviewer reviewed the PR's head commit: a run on it that ended `done` (DESIGN §21), in each
+    # persona of `[personas] reviewers` when it names any (§31).
+    def _reviewed(self, key: str, url: str, sha: str | None) -> bool:
+        runs = self._runs_of(url)
+        chosen = personas.reviewers_of(self.ctx.conn, self.ctx.config, key)
+        if chosen:
+            return sha is not None and not review_start.owed_by(runs, sha, chosen)
+        return any(r.sha == sha and r.status is ReviewRunStatus.DONE for r in runs)
 
-    # Whether the head's review has findings the operator did not dismiss, and ended after the `review` cursor.
+    # Whether a review of the head has findings the operator did not dismiss, and ended after the `review` cursor: its
+    # latest, or each persona's when several review it (§31).
     def _findings(self, pr: records.ObservedPr, cursor: datetime | None) -> bool:
         done = [r for r in self._runs_of(pr.url) if r.sha == pr.head_sha and r.status is ReviewRunStatus.DONE]
-        if not done:
+        latest = {r.persona: r for r in reversed(done)}.values()
+        return any(self._kept_findings(r) and _newer(r.ended_at, cursor) for r in latest)
+
+    def _kept_findings(self, run: records.ReviewRun) -> bool:
+        stored = result.stored(run.result_json)
+        if stored is None:
             return False
-        latest = done[0]
-        stored = result.stored(latest.result_json)
-        if stored is None or not _newer(latest.ended_at, cursor):
-            return False
-        dismissed = db.review_dismissals(self.ctx.conn, latest.id)
+        dismissed = db.review_dismissals(self.ctx.conn, run.id)
         return any(i not in dismissed for i in range(1, len(stored.findings) + 1))
 
 
