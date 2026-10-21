@@ -755,7 +755,8 @@ def finish_run(
     with transaction(conn):
         closed = _close_run(conn, table, run_id, status, result_json)
         if closed and table == "review_runs" and status == "done":
-            its_pr = sql.select("pr_url").from_("review_runs").where("id = ?", run_id)
+            # A revision of a review's draft is no review: it answers no request (DESIGN §34).
+            its_pr = sql.select("pr_url").from_("review_runs").where("id = ? AND revises IS NULL", run_id)
             sql.execute(
                 conn,
                 sql.update("review_requests")
@@ -765,7 +766,8 @@ def finish_run(
                 .where(
                     "NOT EXISTS (SELECT 1 FROM review_request_personas p WHERE p.request_id = review_requests.id "
                     "AND NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.pr_url = review_requests.pr_url "
-                    "AND r.persona = p.persona AND r.status = 'done' AND r.started_at >= review_requests.created_at))",
+                    "AND r.persona = p.persona AND r.status = 'done' AND r.revises IS NULL "
+                    "AND r.started_at >= review_requests.created_at))",
                 ),
             )
         if closed and event is not None:

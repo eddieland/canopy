@@ -7,7 +7,9 @@ take a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's UR
 --review`, `stop URL`) through `canopy.core.review_requests`, for a task (`stop task:N`) through `canopy.core.tasks`
 (`cli/tasks.py`), `grant` through `canopy.runs.policy`, or `canopy.reviews.grants`
 for a PR's reviews, `pause` and `resume` through `canopy.core.pause`, and `notice` through `canopy.core.notice`; all
-ten refuse inside canopy's own ticks and runs, `notice` only when it sets or clears one.
+ten refuse inside canopy's own ticks and runs, `notice` only when it sets or clears one. On `review:ID`, `reply` notes
+what a revision of the review's draft should change, and `grant` allows its draft more revisions, both through
+`canopy.core.review_drafts_manage` (DESIGN §34), which refuses inside runs too.
 """
 
 from __future__ import annotations
@@ -35,7 +37,9 @@ from canopy.core import (
     plan_threads,
     plans,
     prompts,
+    review_drafts_manage,
     review_requests,
+    review_revisions,
     review_runs,
 )
 from canopy.core.vocab import PlanStatus, RunKind
@@ -340,19 +344,22 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a ticket or a task, or note something to a chore, with TEXT or, without it, stdin.
+    """Answer a ticket or a task, note to a chore, or ask for a revision of a review's draft, with TEXT or stdin.
 
     On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
     an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
     never reaches the ticket. On `task:N` it is your next instruction to the task, answering its run's question if one
     asked: the next tick starts its next run, on its branch, with the conversation so far, and a waiting loop wakes.
     On `chore:NAME` it is a note the chore's next runs read, such as a finding to leave out until a date; the loop does
-    not wake for it.
+    not wake for it. On `review:ID` it says what to change in that review's draft: the next tick revises it with an
+    agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
     body = text if text is not None else sys.stdin.read()
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.REVIEW:
+        return _note_review(ctx, subject, body)
     try:
         chores = chore_view.defined(ctx.config, ctx.workspace)
         replied = conversation.reply(ctx.conn, subject, body, channel=CLI, chores=chores)
@@ -366,6 +373,20 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
     if subject.kind == conversation.TASK:
         tasks_cli.replied(ctx, int(subject.id))
+    return 0
+
+
+def _note_review(ctx: Context, subject: Ref, body: str) -> int:
+    run_id = int(subject.id)
+    try:
+        noted = review_drafts_manage.note(ctx.conn, ctx.config, run_id, body, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"reply refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("review draft noted", extra={"review_run_id": run_id, "note": noted.id})
+    click.echo(
+        f"Recorded note {noted.id} on review run {run_id}'s draft, at version {noted.after_version}. The next tick "
+        "revises it, unless you change the draft first; `canopy review draft` shows the version it makes.",
+    )
     return 0
 
 
@@ -416,7 +437,12 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 @click.argument(
     "kind",
     type=click.Choice(
-        [*(str(k) for k in (*policy.UNIT_GRANT_KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND, str(policy.RETIRED)],
+        [
+            *(str(k) for k in (*policy.UNIT_GRANT_KINDS, *policy.TICKET_GRANT_KINDS)),
+            grants.KIND,
+            review_revisions.KIND,
+            str(policy.RETIRED),
+        ],
     ),
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
@@ -426,14 +452,19 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository, or a PR more reviews.
 
     For a ticket at its attempt limit that you want the loop to keep working, or, with REF a PR's URL and KIND
-    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. A `plan` is the ticket's, in no one
-    repository, so it takes no --repo. Every run still counts toward the limit; this raises that unit's, ticket's, or
-    PR's limit, and only from your shell. The next tick decides whether to use it.
+    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again, or with REF `review:ID` and KIND
+    `revision`, a review's draft past `policy.max_revisions_per_draft` that you want revised again. A `plan` is the
+    ticket's, in no one repository, so it takes no --repo. Every run still counts toward the limit; this raises that
+    unit's, ticket's, PR's, or draft's limit, and only from your shell. The next tick decides whether to use it.
     """
     subject = _ref(ref, "grant")
-    if (subject.kind == conversation.PR) != (kind == grants.KIND):
+    if (subject.kind == conversation.REVIEW) != (kind == review_revisions.KIND):
+        raise CliError(f"grant refused (bad_kind): {_revision_mismatch(subject, kind)}")
+    if subject.kind != conversation.REVIEW and (subject.kind == conversation.PR) != (kind == grants.KIND):
         raise CliError(f"grant refused (bad_kind): {_grant_mismatch(subject, kind)}")
     ctx = open_context(click_ctx)
+    if kind == review_revisions.KIND:
+        return _grant_revisions(ctx, subject, repo=repo, runs=runs)
     if kind == grants.KIND:
         return _grant_reviews(ctx, subject, repo=repo, runs=runs)
     if kind in policy.TICKET_GRANT_KINDS:
@@ -457,6 +488,27 @@ def _grant_mismatch(subject: Ref, kind: str) -> str:
     if kind == grants.KIND:
         return f"{subject} is a ticket; `review` takes the PR's URL: `canopy grant <URL> review`"
     return f"{subject} is a PR, which takes only `review`; {kind} takes a ticket key"
+
+
+def _revision_mismatch(subject: Ref, kind: str) -> str:
+    if kind == review_revisions.KIND:
+        return f"{subject} is not a review; `revision` takes one: `canopy grant review:ID revision`"
+    return f"{subject} is a review, which takes only `revision`"
+
+
+def _grant_revisions(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -> int:
+    if repo is not None:
+        raise CliError("grant refused (bad_repo): a draft's revision limit is its own; leave out --repo")
+    try:
+        granted = review_drafts_manage.grant_revisions(ctx.conn, ctx.config, int(subject.id), runs=runs)
+    except conversation.Refused as r:
+        raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("revisions granted", extra={"review_run_id": int(subject.id), "runs": runs})
+    click.echo(
+        f"{subject}'s draft has had {granted.runs} revisions, and may now have {granted.limit}. "
+        "A note on it asks the next tick for one.",
+    )
+    return 0
 
 
 def _grant_ticket(ctx: Context, subject: Ref, kind: str, *, repo: str | None, runs: int) -> int:

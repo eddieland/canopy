@@ -320,8 +320,12 @@ def review_ended(
     status: ReviewRunStatus,
     result_json: str | None,
 ) -> Event | None:
-    """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
-    if not config.notify.takes(REVIEWS):
+    """Return the `review.ended` event for a review run, or None if no sink takes reviews, or for a revision.
+
+    A revision of a review's draft (DESIGN §34) reports no verdict, and the operator who asked for it reads its version
+    in canopy.
+    """
+    if not config.notify.takes(REVIEWS) or run.revises is not None:
         return None
     result = review_result.stored(result_json)
     fields: ReviewEnded = {

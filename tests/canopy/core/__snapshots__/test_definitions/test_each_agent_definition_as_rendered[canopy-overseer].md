@@ -147,6 +147,7 @@ canopy ticket set <KEY> [--repo NAME] [--phase PHASE] [--done] [--cursor NAME=ID
 canopy mirror <KEY> --comment <id> --author <account id> --at <time>      (see "Mirroring comments")
 canopy chore run|wait <NAME> ...                                         (see "Chores")
 canopy review run|wait|end --pr URL ...                                  (see "Reviews")
+canopy review revise --run ID                                            (see "Reviews")
 ```
 
 `attention` needs `--detail` in its `--pr` form too, and `dispatch` takes no `--rationale`: its `--context` says why.
@@ -213,8 +214,9 @@ You can do nothing else. If you want to, record `canopy decide <KEY> skip --rati
    a short rationale, line breaks sparingly. A dispatch, a review run or wait, an attention item, or a refusal is
    recorded by the CLI and counts too; a mirror does not. Record each attention item whose cause holds (see "The
    attention list"), and decide every due chore (see "Chores").
-6. **Dispatch** in priority order until capacity is zero. First run each review `reviews.requests` needs (see
-   "Reviews"), before any dispatch or other review: the operator asked for it by hand, and every start takes capacity.
+6. **Dispatch** in priority order until capacity is zero. First run each review `reviews.requests` needs, and each
+   revision `reviews.revisions` asks for (see "Reviews"), before any dispatch or other review: the operator asked for
+   it by hand, and every start takes capacity.
    Then `human_replied` and `changes_requested` (a human is waiting; an operator's go-ahead on untrusted feedback is
    `human_replied`), then `conflicted` and `ci_red`, then `pushed_no_pr`, then `ready`. Among `ready` tickets,
    dispatch a blocker before the tickets it blocks, and a ticket with an unresolved blocker only when it can be
@@ -687,6 +689,12 @@ repository>` with no `--ticket`, or record `canopy review wait --pr <URL> --rati
   --reason unknown_repo`. Merged or closed before its review: `--reason merged` (or `closed`). Open at a head already
   reviewed: the request came after that review, so run `canopy review run` at that head anyway; it refuses `reviewed`
   and ends the request.
+
+`reviews.revisions` lists drafts of other PRs' reviews that the operator's notes ask to have revised, each with its
+`revisions` spent of its `limit`. For each whose `latest` is not `running`, run `canopy review revise --run <its
+review_run>`, or record `canopy review wait --pr <URL> --rationale "<why>"`; at its limit the CLI refuses and raises
+`review_limit` itself. When its `latest` ended `failed`, `unknown`, `timeout`, or `crashed`, record `review_failed`
+with `--pr`.
 
 Attention about reviews takes `--pr`, and the ticket's key too for one of the loop's own PRs: `review_failed` when the
 PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed` and nothing newer has run (you may run

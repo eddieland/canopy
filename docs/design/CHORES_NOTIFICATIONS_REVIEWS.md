@@ -238,9 +238,10 @@ enough that the operator wants its findings first; kept in the journal, it needs
 verdict leaves the machine only as a notification (§20), so no automation can let a PR skip a human reviewer on it; that
 waits on a bot identity (ROADMAP, deferred).
 
-Every review key is private (§12) except `policy.max_reviews_per_pr`, a shared limit the repository may only tighten
-(TRUST_MODEL T7). With no source of reviews or no review capacity, nothing about reviews reaches the overseer and no
-review starts. `review.query` authorizes, unlike `tracker.query` (§17): without an author filter it reviews other
+Every review key is private (§12) except `policy.max_reviews_per_pr` and §34's `policy.max_revisions_per_draft`,
+shared limits the repository may only tighten (TRUST_MODEL T7). With no source of reviews or no review capacity,
+nothing about reviews reaches the overseer and no review starts; a note asking a revision is a source of one (§34).
+`review.query` authorizes, unlike `tracker.query` (§17): without an author filter it reviews other
 people's PRs in the operator's name, which is the operator's choice (TRUST_MODEL §7). `review.low_impact` says in plain
 language which changes the reviewer may call `low`; without it, none. Reviews touch TRUST_MODEL T1 (what the reviewer
 writes is data; `review.query` and requests authorize), T3 (review limits are controls in code), T4 (nothing runs from

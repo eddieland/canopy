@@ -1,4 +1,4 @@
-"""The operator's verbs on a review's draft (DESIGN §34, Publishing): editing it, and publishing or staging a version.
+"""The operator's verbs on a review's draft (DESIGN §34): editing it, noting what to revise, and publishing or staging.
 
 Each refuses inside canopy's ticks and runs (`conversation.check_operator`): an agent that could publish could post as
 the operator on any PR their query matches. The CLI's `canopy review` commands call these functions, and the web UI is
@@ -11,6 +11,10 @@ refuses posts nothing. A draft publishes one version, at most once: a publish cl
 whose post ends without saying whether it submitted is `unconfirmed`, never posted again by canopy until a whole read
 of its PR settles it. So is one whose publish stopped before the post said how it ended: at once when it raised, and
 once its claim outlives the post command's timeout when the process holding it was killed (`expire_claims`).
+
+A note asks for a revision (`review_revisions`): the next tick's overseer starts one while the note is newer than the
+draft's newest version. Notes are the reviser's only instructions, so only the operator writes one, and a note past
+the draft's revision limit, or while a revision runs, is refused; the operator grants a draft more revisions.
 
 Staging is publishing without the submit: the version waits in a pending review for the operator to submit on GitHub,
 and is `staged` until a whole read finds that review submitted, or gone.
@@ -25,7 +29,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, records, review_drafts, review_runs, sql
+from canopy.core import conversation, db, records, review_drafts, review_revisions, review_runs, sql
 from canopy.core.config import notify_words
 from canopy.core.memory_text import TextRefused
 from canopy.core.review_drafts import Comment, Version
@@ -151,6 +155,92 @@ def add_comment(conn: sqlite3.Connection, run_id: int, location: str, text: str,
     return _change(conn, run_id, channel, f"added a comment on {at[0]}:{at[1]}", added)
 
 
+def note(
+    conn: sqlite3.Connection,
+    config: Config,
+    run_id: int,
+    text: str,
+    *,
+    channel: str,
+) -> records.ReviewDraftNote:
+    """Record the operator's note on review run `run_id`'s draft: what a revision should change (DESIGN §34).
+
+    The next tick's overseer starts a revision while the note is newer than the draft's newest version; a version made
+    first, the operator's own edit among them, answers it. The note is the reviser's instruction, and the operator's
+    alone.
+
+    Returns:
+        The note recorded.
+
+    Raises:
+        Refused: (`inside_run`); (`unknown`); (`no_draft`); (`not_ours`) a ticket's unit holds the PR now; a status past
+            edits, named for it; (`bad_body`) empty or past the operator's bound; (`no_diff`) the diff the draft's
+            comments sit on is gone; (`revising`) a revision of it runs; (`revision_limit`) it has had its revisions.
+    """
+    conversation.check_operator()
+    words = text.strip()
+    if not words:
+        raise conversation.Refused("bad_body", "the note is empty")
+    if len(words) > conversation.MAX_OPERATOR:
+        raise conversation.Refused(
+            "bad_body",
+            f"the note is {len(words)} characters; the most is {conversation.MAX_OPERATOR}",
+        )
+    draft = find(conn, run_id)
+    run = review_runs.get_review_run(conn, run_id)
+    if run is None or not review_drafts.draftable(conn, run):
+        raise conversation.Refused(
+            "not_ours",
+            f"{draft.pr_url} is one of the loop's own PRs now: it publishes no review",
+        )
+    if review_drafts.diff_of(run) is None:
+        raise conversation.Refused(
+            "no_diff",
+            f"the diff review run {run_id} read is gone, so its draft is no longer publishable",
+        )
+    with db.transaction(conn):
+        draft = review_drafts.get(conn, draft.id) or draft
+        _check_open(draft)
+        _check_not_revising(conn, draft)
+        spent = len(review_runs.revision_runs_of(conn, draft.id))
+        most = review_revisions.limit(conn, config, draft.id)
+        if spent >= most:
+            raise conversation.Refused(
+                "revision_limit",
+                f"review run {run_id}'s draft has had {spent} revisions and its limit is {most}; "
+                f"{review_revisions.hint(run_id)}",
+            )
+        return review_revisions.add_note(conn, draft.id, words, channel=channel)
+
+
+@dataclass(frozen=True)
+class Granted:
+    """What `grant_revisions` recorded: the draft's revisions, and its limit with the grant counted."""
+
+    runs: int
+    limit: int
+
+
+def grant_revisions(conn: sqlite3.Connection, config: Config, run_id: int, *, runs: int) -> Granted:
+    """Grant review run `run_id`'s draft `runs` more revisions than `policy.max_revisions_per_draft` allows.
+
+    Every revision still counts (D030): a grant raises one draft's limit and resets nothing.
+
+    Returns:
+        The draft's revisions, and its limit for them with the grant counted.
+
+    Raises:
+        Refused: (`inside_run`); (`unknown`); (`no_draft`).
+    """
+    conversation.check_operator()
+    draft = find(conn, run_id)
+    # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
+    with db.transaction(conn):
+        review_revisions.add_grant(conn, draft.id, runs)
+        spent = len(review_runs.revision_runs_of(conn, draft.id))
+        return Granted(runs=spent, limit=review_revisions.limit(conn, config, draft.id))
+
+
 def _checked(text: str) -> str:
     """The operator's text, held to the bounds the reviewer's is (DESIGN §34).
 
@@ -248,7 +338,8 @@ def publish(
 
     Raises:
         Refused: (`inside_run`); (`unknown`); (`no_draft`); (`not_ours`) a ticket's unit holds the PR now; a status that
-            cannot publish, named for it: a draft publishes once; (`stale`) the version is not the newest; (`empty`)
+            cannot publish, named for it: a draft publishes once; (`revising`) a revision of it runs; (`stale`) the
+            version is not the newest; (`empty`)
             it would post nothing; (`no_diff`) the diff its comments sit on is gone; (`staged`) the PR holds a review
             the operator staged; (`no_post`) no command posts there.
     """
@@ -262,6 +353,7 @@ def publish(
             f"{draft.pr_url} is one of the loop's own PRs now: it publishes no review",
         )
     _check_publishable(draft)
+    _check_not_revising(conn, draft)
     current = _check_seen(conn, draft, seen)
     if not current.body and not current.comments:
         raise conversation.Refused("empty", f"version {current.number} of review run {run_id}'s draft posts nothing")
@@ -304,6 +396,20 @@ def _check_publishable(draft: records.ReviewDraft) -> None:
             raise conversation.Refused("publishing", f"{where} is being posted now")
         case _:
             assert_never(draft.status)
+
+
+def _check_not_revising(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
+    """Refuse while a revision of the draft runs: its version may be the newest before the post ends.
+
+    Raises:
+        Refused: (`revising`) a revision of it is running.
+    """
+    revising = review_revisions.running(conn, draft.id)
+    if revising is not None:
+        raise conversation.Refused(
+            "revising",
+            f"review run {revising.id} is revising review run {draft.review_run_id}'s draft; wait for it to end",
+        )
 
 
 def _check_seen(conn: sqlite3.Connection, draft: records.ReviewDraft, seen: str) -> Version:

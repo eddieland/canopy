@@ -1,7 +1,7 @@
-"""A review's result contract (DESIGN §21): the last line of the reviewer's stdout, validated before anything reads it.
+"""A review's result contract (DESIGN §21), and a revision's (§34): the agent's last line, validated before use.
 
-The reviewer reads the most hostile text the loop meets, so everything it reports is untrusted and bounded. A result
-that does not validate is `unknown`.
+The reviewer and the reviser read the most hostile text the loop meets, so everything they report is untrusted and
+bounded. A result that does not validate is `unknown`.
 """
 
 from __future__ import annotations
@@ -18,6 +18,9 @@ MAX_TITLE = 200
 MAX_LOCATION = 300
 MAX_DETAIL = 1000
 MAX_FINDINGS = 20
+#: A revised version's bounds: a draft's text and comments, as `replies` bounds them (it imports too much for here).
+MAX_REVISED_TEXT = 4000
+MAX_REVISED_COMMENTS = 30
 
 
 class Finding(BaseModel):
@@ -76,10 +79,46 @@ def stored(result_json: object) -> ReviewResult | None:
     return contract.stored(ReviewResult, result_json)
 
 
+class RevisedComment(BaseModel):
+    """One comment of a revised version: where it goes, and its text."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    #: `path:line` on the commit's side of the diff the review kept; a comment elsewhere goes in the body under it.
+    location: Annotated[StrictStr, one_line, bounded(MAX_LOCATION)]
+    text: Annotated[StrictStr, bounded(MAX_REVISED_TEXT)]
+
+
+class RevisionResult(BaseModel):
+    """A revision's result (DESIGN §34): the new version of a review's draft if `done`; if `failed`, why, in `body`.
+
+    It is what would post, written from the PR's text and the operator's notes: untrusted until the operator publishes.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    status: Literal["done", "failed"]
+    body: Annotated[StrictStr, bounded(MAX_REVISED_TEXT)] = ""
+    comments: Annotated[list[RevisedComment], Field(max_length=MAX_REVISED_COMMENTS)] = []
+
+
+def parse_revision(stdout: str) -> RevisionResult | None:
+    """Parse `stdout`'s result line (DESIGN §13) as a revision's result. None if it is missing or invalid.
+
+    Returns:
+        The validated result, or None if `stdout` has no result line or its last one does not validate.
+    """
+    return contract.last_line(RevisionResult, stdout)
+
+
 CONTRACT = (
     '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",'
     '"summary":"a paragraph, line breaks sparingly",'
     '"pr_title":"the PR\'s title as it stands",'
     '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
     '"detail":"what is wrong and why"}]}'
+)
+REVISION_CONTRACT = (
+    '{"status":"done|failed","body":"the review\'s body, or why you could not revise",'
+    '"comments":[{"location":"path:line","text":"the comment"}]}'
 )

@@ -306,7 +306,8 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     if found is not None:
         return found
     run = review_runs.get_review_run(conn, run_id)
-    if run is None or run.status is not ReviewRunStatus.DONE or not draftable(conn, run):
+    # A revision is no review: its result is a version of the draft it revises (`review_revisions`), not a draft.
+    if run is None or run.revises is not None or run.status is not ReviewRunStatus.DONE or not draftable(conn, run):
         return None
     stored = review_result.stored(run.result_json)
     if stored is None:

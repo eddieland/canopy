@@ -56,6 +56,7 @@ TOOL_NAMES = [
     "review-run",
     "review-wait",
     "review-end",
+    "review-revise",
     "chore-run",
     "chore-wait",
 ]
@@ -490,6 +491,12 @@ REFUSALS = [
         f"review end refused (not_requested): {PR} has no open request; the refusal was recorded",
         1,
         id="review-end",
+    ),
+    pytest.param(
+        Verb("review-revise", {"run": 99}, ["review", "revise", "--run", "99"]),
+        "revision refused (unknown): there is no review run 99 with a draft to revise",
+        1,
+        id="review-revise",
     ),
     pytest.param(
         Verb("chore-run", {"name": "nope"}, ["chore", "run", "nope"]),

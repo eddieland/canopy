@@ -57,5 +57,9 @@ more are refused; a published review is not followed onto the next commit; the l
 publishable while its diff is kept. Built 2026-10-21: the review's page shows the draft as it would post, each
 comment on its line of the diff, and edits it (body, comment, drop, add on a line) and publishes or stages it through
 the same functions as the CLI, from the web channel behind T8's guards, with Playwright; TRUST_MODEL T8 changed with
-it. Left: revisions on the operator's note (a review run at the same commit, its limit per draft, TRUST_MODEL T3), and
-the live Accept.
+it. Built 2026-10-22: revisions on the operator's note, `canopy reply review:ID`, which the overseer starts from the
+state block with `canopy review revise` as a review run at the reviewed commit, under the review guards and its own
+`policy.max_revisions_per_draft` (3, shared and only lowered, raised with `canopy grant review:ID revision`), its
+result line made a new version; TRUST_MODEL T1, T3, T5, and T6 changed with it. The operator's choices taken there: a
+note is refused while a revision runs and at the limit, and a revision whose draft the operator changed while it ran
+makes no version. Left: asking for a revision from the review's page (T8), and the live Accept.

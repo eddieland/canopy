@@ -12,7 +12,7 @@ import contextlib
 import json
 import re
 import sys
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Iterator
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -230,27 +230,49 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             persona_digest=persona.digest,
             persona_text=persona.text,
         )
-        pool = ctx.pool(repo)
-        try:
-            lease = pool.lease(f"{HOLDER_KEY}{run_id}")
-        except pools.PoolError as e:
-            review_runs.delete_review_run(ctx.conn, run_id)
-            raise Refusal("no_slot", str(e)) from e
-        review_runs.set_review_slot(
-            ctx.conn,
-            run_id,
-            slot=lease.path,
-            lease_id=lease.lease_id,
-            lease_holder=lease.lease_holder,
-            base_branch=_base(ctx.conn, request.pr) or lease.base_branch,
-            pool=ctx.config.pools.backend,
-        )
-        try:
-            return _spawn(ctx, run_id, request, lease, attempt=attempt, context=context, persona=persona)
-        except BaseException:
-            with contextlib.suppress(pools.PoolError):
-                pool.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
-            raise
+        lease = lease_slot(ctx, run_id, repo, base=_base(ctx.conn, request.pr))
+        with returned_on_failure(ctx, repo, lease):
+            prompt = _prompt(ctx, run_id, request, lease, attempt=attempt, context=context, persona=persona)
+            return spawn(ctx, run_id, lease, prompt)
+
+
+def lease_slot(ctx: Context, run_id: int, repo: str, *, base: str | None) -> pools.Lease:
+    """Lease a slot in `repo`'s pool for review run `run_id`, which may be a revision, and record it on the run.
+
+    `base` is the branch the PR merges into, recorded as the run's base; the pool's, the lease's, when None.
+
+    Returns:
+        The lease.
+
+    Raises:
+        Refusal: (`no_slot`) the pool has none to lease; the run, which never started, is forgotten.
+    """
+    try:
+        lease = ctx.pool(repo).lease(f"{HOLDER_KEY}{run_id}")
+    except pools.PoolError as e:
+        review_runs.delete_review_run(ctx.conn, run_id)
+        raise Refusal("no_slot", str(e)) from e
+    review_runs.set_review_slot(
+        ctx.conn,
+        run_id,
+        slot=lease.path,
+        lease_id=lease.lease_id,
+        lease_holder=lease.lease_holder,
+        base_branch=base or lease.base_branch,
+        pool=ctx.config.pools.backend,
+    )
+    return lease
+
+
+@contextlib.contextmanager
+def returned_on_failure(ctx: Context, repo: str, lease: pools.Lease) -> Iterator[None]:
+    """Return `lease`'s slot to `repo`'s pool if the block raises: nothing started holds it."""
+    try:
+        yield
+    except BaseException:
+        with contextlib.suppress(pools.PoolError):
+            ctx.pool(repo).return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+        raise
 
 
 def _base(conn: sqlite3.Connection, pr: str) -> str | None:
@@ -312,7 +334,7 @@ def _purpose(conn: sqlite3.Connection, request: Request) -> str:
     return REQUEST if review_requests.open_request(conn, request.pr) is not None else QUERY
 
 
-def _spawn(
+def _prompt(
     ctx: Context,
     run_id: int,
     request: Request,
@@ -321,7 +343,16 @@ def _spawn(
     attempt: int,
     context: str | None,
     persona: personas.Persona,
-) -> Started:
+) -> str:
+    """Render the reviewer's prompt for review run `run_id`.
+
+    Returns:
+        The prompt.
+
+    Raises:
+        Refusal: (`bad_prompt`) it does not render; the run, which never started, is forgotten.
+        RuntimeError: The run is not in the journal, which its caller just recorded.
+    """
     cfg = ctx.config
     run = review_runs.get_review_run(ctx.conn, run_id)
     if run is None:
@@ -354,6 +385,22 @@ def _spawn(
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
         review_runs.delete_review_run(ctx.conn, run_id)
         raise Refusal("bad_prompt", str(e)) from e
+    return prompt
+
+
+def spawn(ctx: Context, run_id: int, lease: pools.Lease, prompt: str) -> Started:
+    """Write review run `run_id`'s prompt and start its detached `canopy _review`, which may do a revision.
+
+    Returns:
+        The run's id, the pid of its `canopy _review`, and its slot.
+
+    Raises:
+        Refusal: (`spawn_failed`) it could not start; the run is closed `crashed`, and the caller returns the slot.
+        RuntimeError: The run is not in the journal, which its caller just recorded.
+    """
+    run = review_runs.get_review_run(ctx.conn, run_id)
+    if run is None:
+        raise RuntimeError(f"review run {run_id} vanished")
     try:
         logs.write_private(prompt_file(ctx, run_id), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
@@ -367,7 +414,7 @@ def _spawn(
             run_id,
             ReviewRunStatus.CRASHED,
             note,
-            event=outbox.review_ended(cfg, run, ReviewRunStatus.CRASHED, note),
+            event=outbox.review_ended(ctx.config, run, ReviewRunStatus.CRASHED, note),
         )
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "review_runs", run_id, pid)
@@ -403,14 +450,26 @@ def _guard(ctx: Context, request: Request, *, planned: Collection[records.Decisi
             "reviews are off: no [review] agent_prs or query and no open review request, or capacity.max_reviews is 0",
         )
     _check_shape(request)
-    repo = _check_repo(ctx, request.repo)
+    repo = check_repo(ctx, request.repo)
     _check_ours(ctx, request, repo)
-    planned = planned or []
-    planned_reviews = [d for d in planned if d.action == DISPATCH_ACTION]
-    planned_runs = [d for d in planned if d.action.startswith("dispatch:") and d.action != DISPATCH_ACTION]
+    planned_reviews, planned_runs = split_planned(planned or [])
     _check_running(ctx, request, planned_reviews, planned_runs)
     _check_limits(ctx, request, planned_reviews, planned_runs)
     return repo
+
+
+def split_planned(
+    planned: Iterable[records.Decision],
+) -> tuple[list[records.Decision], list[records.Decision]]:
+    """A dry run's dispatches this tick: its reviews and revisions, and its worker runs, each counted as running.
+
+    Returns:
+        The reviews and revisions, then the worker runs.
+    """
+    decided = list(planned)
+    reviews = [d for d in decided if d.action == DISPATCH_ACTION]
+    runs = [d for d in decided if d.action.startswith("dispatch:") and d.action != DISPATCH_ACTION]
+    return reviews, runs
 
 
 def _check_ours(ctx: Context, request: Request, repo: str) -> None:
@@ -467,7 +526,7 @@ def _check_limits(
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
 ) -> None:
-    """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order.
+    """`reviewed` and `review_limit`, then `check_room`'s, in that order.
 
     Raises:
         Refusal: the commit already has a `done` review, the PR has used its reviews, the day's reviews are used, or
@@ -497,8 +556,23 @@ def _check_limits(
     limit = grants.limit(ctx.conn, cfg, request.pr)
     if len(runs) >= limit:
         raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")
+    check_room(ctx, planned_reviews, planned_runs)
+
+
+def check_room(
+    ctx: Context,
+    planned_reviews: Collection[records.Decision],
+    planned_runs: Collection[records.Decision],
+) -> None:
+    """`daily_limit`, `review_capacity`, and `capacity`, in that order: what holds a review and a revision alike.
+
+    Raises:
+        Refusal: the day's review runs, revisions among them, are used, or the review runs or the workers and reviews
+            together fill their capacity.
+    """
+    cfg = ctx.config
     since = db.format_time(datetime.now(UTC) - _DAY)
-    today = len(review_runs.review_runs_since(ctx.conn, since)) + len(planned_reviews)
+    today = len(review_runs.review_runs_since(ctx.conn, since, revisions=True)) + len(planned_reviews)
     if today >= cfg.capacity.max_reviews_per_day:
         per_day = cfg.capacity.max_reviews_per_day
         raise Refusal("daily_limit", f"{today} review runs started in the last 24 hours; the limit is {per_day}")
@@ -526,7 +600,7 @@ def _check_shape(request: Request) -> None:
         raise Refusal("bad_pr", f"--ticket must match {KEY_RE.pattern}")
 
 
-def _check_repo(ctx: Context, repo: str | None) -> str:
+def check_repo(ctx: Context, repo: str | None) -> str:
     """`unknown_repo`: the PR's repository must be named, in the map, and cloned.
 
     Returns:

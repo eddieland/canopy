@@ -3,7 +3,7 @@
 # Rules follow D021: the last matching rule wins, and `deny` is enforced under `opencode run`. Scalars are used where a
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The reviewer reads a PR and writes nothing anywhere: its result line is the review (DESIGN §21, D114, TRUST_MODEL T4,
-# T6). It starts in a directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads
+# T6). A revision of a review's draft runs as it, and its result line is the new version (DESIGN §34). It starts in a directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads
 # outside that directory are denied, as for a desk's links (the reviewer canary in tests/canopy/test_opencode_canary.py
 # checks it).
 # Its temperature is rendered at the marked line from `runtime.review_temperature`, unless that is -1: the reviewer is
@@ -101,5 +101,5 @@ permission:
   "canopy_chore_history": deny
 ---
 
-Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" prompt, print
-`no prompt supplied` and exit.
+Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" or "# canopy reviser" prompt,
+print `no prompt supplied` and exit.
