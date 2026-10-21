@@ -38,6 +38,7 @@ from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.infra.text import printable
+from canopy.loop import archive
 from canopy.notify import deliver
 from canopy.runs import drafted
 
@@ -92,6 +93,7 @@ HARNESS_REASONS = frozenset(
         "repo_missing",
         *HALTS,
         connector_runs.FAILED_REASON,
+        archive.REASON,
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
         follow_ups.REASON,

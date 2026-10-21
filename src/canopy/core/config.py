@@ -846,6 +846,10 @@ class Paths(Section):
     #: The operator's personas, each `<name>.md`: one shadows a shipped persona of its name, any other adds to them
     #: (DESIGN §31).
     personas: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: A clone of the operator's own repository, at its top level: each live tick exports every plan of the workspace
+    #: into `<it>/<workspace>/`, commits, and pushes to its upstream (DESIGN §25). Private, since it sends every plan's
+    #: text where it points (TRUST_MODEL T6).
+    plan_archive: Annotated[UserPath | None, Scope.PRIVATE] = None
 
 
 class Personas(Section):
