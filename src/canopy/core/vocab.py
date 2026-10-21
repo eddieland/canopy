@@ -55,8 +55,25 @@ class ReviewRunStatus(StrEnum):
     CRASHED = "crashed"
 
 
+class TaskRunStatus(StrEnum):
+    """A task run's status, `task_runs.status` (DESIGN §36): a worker run's, as the private worker ends one."""
+
+    RUNNING = "running"
+    DONE = "done"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+    #: The worker's last line was not a valid result.
+    UNKNOWN = "unknown"
+    #: The worker committed work the harness could not find on the task's branch, and could not push itself.
+    UNPUSHED = "unpushed"
+    CRASHED = "crashed"
+    TIMEOUT = "timeout"
+    #: The operator stopped the task (`canopy stop task:N`).
+    STOPPED = "stopped"
+
+
 # Any run table's status, for the lifecycle every run table shares (`db.finish_run`).
-type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus
+type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus | TaskRunStatus
 
 
 class TickStatus(StrEnum):

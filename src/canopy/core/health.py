@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, spend, sql
-from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TickStatus
+from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TaskRunStatus, TickStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -40,6 +40,16 @@ _FAILED: dict[Kind, frozenset[str]] = {
     "plans": _WORKER_FAILED,
     "chores": frozenset(ChoreRunStatus) - {ChoreRunStatus.RUNNING, ChoreRunStatus.OK},
     "reviews": frozenset(ReviewRunStatus) - {ReviewRunStatus.RUNNING, ReviewRunStatus.DONE},
+    # A task run fails as a worker does: a question or the operator's stop is no failure (DESIGN §36).
+    "tasks": frozenset(
+        {
+            TaskRunStatus.FAILED,
+            TaskRunStatus.UNKNOWN,
+            TaskRunStatus.UNPUSHED,
+            TaskRunStatus.CRASHED,
+            TaskRunStatus.TIMEOUT,
+        },
+    ),
 }
 # Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
 # `review`), its status, when it started, what it was about, its note, and its cost. A plan run is a row of `runs`, a
@@ -62,6 +72,10 @@ _ROWS: Mapping[Kind, sql.Select] = {
     "reviews": sql.select(
         "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd",
     ).from_("review_runs"),
+    # A task run's subject is its task's number, never a ticket.
+    "tasks": sql.select(
+        "id, 'task' AS what, status, started_at, CAST(task_id AS TEXT) AS subject, result_json AS note, cost_usd",
+    ).from_("task_runs"),
 }
 
 
@@ -86,8 +100,9 @@ class Failure:
     """One run of the window that ended in a failed status (`Outcome.failed`), for `canopy show` to read whole.
 
     `id` is the tick's for the overseer and the run's otherwise (`canopy decisions ID`, `canopy show run:ID`).
-    `subject` is the worker's ticket or the review's PR, None for a tick or a chore. `note` is the tick's summary or
-    the result's harness note or summary, on one line and cut to `NOTE_LIMIT`: agents wrote some of it, so it is data.
+    `subject` is the worker's ticket, the review's PR, or the task run's task number, None for a tick or a chore.
+    `note` is the tick's summary or the result's harness note or summary, on one line and cut to `NOTE_LIMIT`: agents
+    wrote some of it, so it is data.
     """
 
     kind: Kind

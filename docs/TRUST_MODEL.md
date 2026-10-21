@@ -163,6 +163,16 @@ Controls:
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
+- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
+  channel that authenticated the operator: `canopy task submit` in the operator's shell, which refuses as `inside_run`
+  when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as do `canopy stop task:N` and the commands that print a task's
+  text, `canopy task list` and `canopy show task:N`. Its text is the operator's instruction, which the harness renders
+  into its worker's prompt itself; its replies will be too. The tick starts a task in code, before the overseer runs:
+  the overseer never sees a task's text and decides nothing about one, so no tracker or PR text can start, steer, or
+  stop one. What its runs report is data, kept in the task's conversation, and reaches no other prompt. Its branch,
+  `<branch_prefix>task/N`, a shape no ticket's branch takes, is verified as a ticket's is, and the harness never pushes
+  it with force, whatever `trust.rebase` says; its prompt forbids force too. Residual: under `trust.rebase` the private
+  worker's definition allows a push with a lease, so only the prompt keeps a task's worker from one.
 - Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
   ticket's later `implement` and `resume` runs read as data, the same exposure as its reports in
   `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
@@ -326,6 +336,11 @@ Controls in code, not prompts:
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.
   None of them starts a run: each waits for a human's label or start, so the bounds only keep the operator's list
   short.
+- Tasks (DESIGN §36): at most `capacity.max_tasks` task runs at once (1 by default, and a workspace file may only lower
+  it), within `capacity.max_workers`, which counts worker, review, and task runs together, so tasks cannot starve
+  tickets; one run per task at a time, which the journal refuses too; the worker's timeout. Each run follows one word
+  of the operator's, the submission (and later a reply), so a run that fails is never retried. A task the guards hold
+  waits for a later tick, and a dry tick starts none.
 
 ### T4. Damage to the operator's machine
 
@@ -484,6 +499,15 @@ Controls:
   merged after it (D044); `policy.max_follow_ups = 0` has workers file none, and the MCP server's own tool selection,
   where it has one, is what takes the tool away. The journal holds the operator's replies and the
   workers' reports, under the operator-only state directory (T2).
+- A one-off task's worker (DESIGN §36) is the private worker, run with `private_worker_cmd` and its definition, so it
+  reaches the tracker as a private ticket's does: its read tools, its create tools, and on GitHub its PR tools; the run
+  is refused where the worktree's OpenCode config names any of that server's tools, and while no tracker tools are
+  known no task starts. It works in one slot of the repository its submission names, and pushes only its own branch,
+  `<branch_prefix>task/N`, which push verification holds it to. It may open one PR for that branch, a draft, only when
+  the task's text asks: the draft state is the prompt's rule, not a guard. Its prompt says to write nothing to any
+  ticket and, until tasks may file tickets in the project their submission names, to file none. Its report and question
+  go to the journal, in the task's conversation under the operator-only state directory (T2); no notification event
+  carries them.
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
@@ -541,7 +565,9 @@ private ticket, whose worker writes nothing to it. Residual: a private worker ca
 careless one can put what it read, the operator's messages included, into a follow-up's title or body, which the
 tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`, also
 edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same exposure
-the public worker has had, now on private tickets too.
+the public worker has had, now on private tickets too. A task's worker has the same tools, so a steered one can do the
+same, filing a ticket though its prompt says to file none, or editing an issue; and a task's draft PR, its branch, and
+its commits show the work, as a private ticket's do.
 
 ### T7. Hostile shared config
 

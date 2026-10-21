@@ -45,20 +45,26 @@ CURSOR_COLUMNS: Mapping[str, LiteralString] = {**TICKET_CURSORS, **UNIT_CURSORS}
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
-# The tables of detached runs (DESIGN §6): workers', chores', and reviews'. Each has the same lifecycle,
+# The tables of detached runs (DESIGN §6): workers', chores', reviews', and tasks'. Each has the same lifecycle,
 # written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
 # report, and its close. A table name in SQL comes from here, never from input.
-type RunTable = Literal["runs", "chore_runs", "review_runs"]
+type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs"]
 # The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
-type ProgressTable = Literal["ticks", "chore_runs"]
-RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs")
+type ProgressTable = Literal["ticks", "chore_runs", "task_runs"]
+RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
-RUN_NOUNS: Mapping[RunTable, str] = {"runs": "run", "chore_runs": "chore run", "review_runs": "review run"}
+RUN_NOUNS: Mapping[RunTable, str] = {
+    "runs": "run",
+    "chore_runs": "chore run",
+    "review_runs": "review run",
+    "task_runs": "task run",
+}
 AGENT_PID: Mapping[RunTable, LiteralString] = {
     "runs": "worker_pid",
     "chore_runs": "agent_pid",
     "review_runs": "agent_pid",
+    "task_runs": "agent_pid",
 }
 
 
@@ -232,7 +238,7 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
 
     Raises:
-        MigrationError: A run, chore run, or review run is `running` and its process is alive.
+        MigrationError: A run, chore run, review run, or task run is `running` and its process is alive.
     """
     live: list[str] = []
     # Every table of detached runs: each process writes its own row when it ends.
@@ -339,7 +345,7 @@ def previous_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None
 
 
 def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
-    """Whether any run, chore run, or review run started or ended after `since`, a time the journal wrote (§6).
+    """Whether any run, chore run, review run, or task run started or ended after `since`, a time the journal wrote.
 
     Returns:
         True if at least one did.
@@ -354,7 +360,7 @@ def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
 
 
 def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
-    """Whether any run, chore run, or review run ended after `since`, a time the journal wrote (§6).
+    """Whether any run, chore run, review run, or task run ended after `since`, a time the journal wrote (§6).
 
     Returns:
         True if at least one did.
@@ -630,6 +636,7 @@ _RUN_SELECT: Mapping[RunTable, sql.Select] = {
     "runs": _RUNS,
     "chore_runs": sql.select("r.*").from_("chore_runs r"),
     "review_runs": sql.select("r.*").from_("review_runs r"),
+    "task_runs": sql.select("r.*").from_("task_runs r"),
 }
 
 
@@ -986,7 +993,7 @@ def set_progress(
     *,
     usage: Usage | None = None,
 ) -> None:
-    """Record what a running tick's overseer or chore run's agent has reported so far (§6, §19).
+    """Record what a running tick's overseer, chore run's agent, or task run's worker has reported so far (§6, §19).
 
     Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
     """
@@ -1074,14 +1081,14 @@ def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, in
 def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
     """What every agent run that started at or after `since` cost; None when none of them reported one (§13).
 
-    Worker runs, chore runs, review runs, and each tick's overseer: every table an agent run records on.
+    Worker runs, chore runs, review runs, task runs, and each tick's overseer: every table an agent run records on.
 
     Returns:
         The total cost in US dollars, or None when no such run reported one.
     """
     tables: tuple[RunTable | Literal["ticks"], ...] = (*RUN_TABLES, "ticks")
     costs = [sql.select("SUM(cost_usd)").from_(table).where("started_at >= ?", since) for table in tables]
-    row = sql.execute(conn, sql.select("({}), ({}), ({}), ({})", *costs)).fetchone()
+    row = sql.execute(conn, sql.select("({}), ({}), ({}), ({}), ({})", *costs)).fetchone()
     parts = [float(v) for v in row if v is not None]
     return sum(parts) if parts else None
 
@@ -1717,11 +1724,13 @@ def insert_message(
     answers: int | None = None,
     submission: str | None = None,
     comment: Comment | None = None,
+    task_run_id: int | None = None,
 ) -> int:
     """Record a message and return its id.
 
-    A submission already recorded for the subject records nothing new: its message's id is returned instead. So does a
-    tracker comment already mirrored for the subject.
+    A worker's message names its run, `run_id`, or a task run's its task run, `task_run_id` (DESIGN §36). A submission
+    already recorded for the subject records nothing new: its message's id is returned instead. So does a tracker
+    comment already mirrored for the subject.
 
     Returns:
         The id of the new message, or of the one already recorded for the submission or comment.
@@ -1755,6 +1764,7 @@ def insert_message(
         author=comment.author if comment else None,
         commented_at=comment.at if comment else None,
         truncated=int(comment.truncated) if comment else 0,
+        task_run_id=task_run_id,
     )
     return _rowid(sql.execute(conn, message))
 

@@ -598,6 +598,8 @@ class Capacity(Section):
     # Review runs at once, within max_workers, and started in any 24 hours; 0 turns reviews off (DESIGN §21).
     max_reviews: Annotated[Count, Scope.PRIVATE] = 1
     max_reviews_per_day: Annotated[Count, Scope.PRIVATE] = 20
+    #: Task runs at once, within max_workers, so tickets are not starved; 0 starts no task (DESIGN §36).
+    max_tasks: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
     # Slots in each repository's pool, in a workspace: `canopy workspace sync` creates and removes slots to match, and
     # no lease grows a pool past it. None leaves the pools unmanaged, as treehouse's own `max_trees` has them. Names in
     # `repo_slots` need not be in this workspace's map: the user file serves every workspace (DESIGN §18).

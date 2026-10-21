@@ -6,7 +6,8 @@ reads the journal](READING_THE_JOURNAL.md). Next: [The harness decides](HARNESS_
 
 ## 36. One-off tasks
 
-Designed, not built (ROADMAP M61).
+Built in part (ROADMAP M61): submitting, starting, the run, and stopping. The conversation (replies, `blocked`'s
+`awaiting_reply`, `task.ended`), the report, and the tickets a task files are designed, not built.
 
 A **task** is one-off work the operator submits in canopy, in their own words, about no ticket: exploring a question in
 the code, trying an approach, or planning the tickets that should follow. A worker runs it once in a worktree of one

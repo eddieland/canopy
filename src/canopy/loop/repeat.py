@@ -7,7 +7,8 @@ loops on one state dir would run the overseer twice as often.
 How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
 never past a harness gate (DESIGN §6, Idle pacing); it does not read what a tick cost (ROADMAP, Deferred). The
 operator's acts since the last tick read the journal end the wait early (DESIGN §22): a message to a ticket, such as a
-`canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set or cleared. With idle
+`canopy reply`; a ticket started or stopped; a task submitted or stopped; attempts or reviews granted; a notice to
+workers set or cleared. With idle
 pacing on, a run ending after the tick read the journal does too. A config reload does not: it applies at the wait's
 next step and leaves its deadline as it was. Nothing but the operator asking for a tick now, with `TICK_NOW_KEY` on a
 terminal or from the web UI (`tick_now`), starts a tick sooner than `loop.min_gap_minutes` after the last one ended:
@@ -54,7 +55,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from canopy.core import config, db, notice, pause
+from canopy.core import config, db, notice, pause, tasks
 from canopy.infra import lock, logfmt, logs, procs, resources
 from canopy.loop import attention, duties, models, pacing, phases, poll, reread, tick, tick_now
 
@@ -99,7 +100,7 @@ _STATUS_STYLES = {
 
 _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
-    "starts": "a ticket started or stopped; next tick in ",
+    "starts": "a ticket or task started or stopped; next tick in ",
     "grant": "a grant; next tick in ",
     "notice": "a notice to workers set or cleared; next tick in ",
     "run": "a run ended; next tick in ",
@@ -596,17 +597,17 @@ def _gap_seconds(ctx: Context) -> float:
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
-    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, or a notice to
-    workers set or cleared, after `since`. A note to a chore waits for the chore's next run, and a config reload waits
-    for the next tick.
+    A message to a ticket newer than `seen`; a ticket started or stopped, a task submitted or stopped, attempts or
+    reviews granted, or a notice to workers set or cleared, after `since`. A note to a chore waits for the chore's next
+    run, and a config reload waits for the next tick.
 
     Returns:
-        The first of those that happened, or None.
+        The first of those that happened, or None. A task's submission or stop wakes the wait as a start or stop does.
     """
     conn = settings.ctx.conn
     if db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen:
         return "message"
-    if db.starts_moved_after(conn, since):
+    if db.starts_moved_after(conn, since) or tasks.moved_after(conn, since):
         return "starts"
     if db.granted_after(conn, since):
         return "grant"
@@ -668,7 +669,7 @@ def _log_woken(
     if woken == "message":
         log.info("an operator message ended the wait", extra={"after_message": seen})
     elif woken == "starts":
-        log.info("a ticket started or stopped ended the wait", extra={"after": since})
+        log.info("a ticket or task started or stopped ended the wait", extra={"after": since})
     elif woken == "grant":
         log.info("a grant ended the wait", extra={"after": since})
     elif woken == "notice":
@@ -728,7 +729,7 @@ def _live_runs(conn: sqlite3.Connection) -> list[str]:
     """Every table's running runs whose own process is alive, as the operator reads them.
 
     Returns:
-        A label for each run, workers first, then chores, then reviews, oldest first within each.
+        A label for each run, workers first, then chores, reviews, and tasks, oldest first within each.
     """
     return [
         _run_label(table, r)
@@ -746,6 +747,8 @@ def _run_label(table: db.RunTable, row: sqlite3.Row) -> str:
             return f"chore {row['chore']}"
         case "review_runs":
             return f"review {row['ticket_key'] or row['pr_url']}"
+        case "task_runs":
+            return f"task:{row['task_id']}"
         case _:
             assert_never(table)
 
