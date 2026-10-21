@@ -42,6 +42,13 @@ SAFE_FLAGS = (
     "-c",
     "protocol.ext.allow=never",
 )
+#: Flags that refuse every transport, a repository's own `protocol.<name>.allow` included, for git that must reach
+#: nothing: the agents' read-only git (`git_reads`), where a read that would fetch a missing object fails instead.
+NO_TRANSPORT = (
+    "-c",
+    "protocol.allow=never",
+    *(arg for name in ("file", "git", "ssh", "http", "https", "ext") for arg in ("-c", f"protocol.{name}.allow=never")),
+)
 # git's automatic maintenance, as config keys and values: `maintenance.auto` for what a fetch or a commit starts, and
 # `gc.auto` for `gc --auto`, which older git runs instead. Run in the background on a pool's shared git directory, it
 # packs refs and prunes while other slots' runs use them; on CI it pruned a worktree `git worktree add` had not yet

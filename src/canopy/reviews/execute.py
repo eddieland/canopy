@@ -21,6 +21,7 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    git_reads,
     hostgit,
     outbox,
     pools,
@@ -186,8 +187,12 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         extra={"review_run_id": run.id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
     run_id = run.id
-    # The operator's commands refuse inside canopy's own runs (DESIGN §22).
-    env = {conversation.RUN_ID_ENV: f"review-{run_id}"}
+    # The operator's commands refuse inside canopy's own runs (DESIGN §22). Its git tools read the checkout alone, by
+    # its link's name (DESIGN §27).
+    env = {
+        conversation.RUN_ID_ENV: f"review-{run_id}",
+        **git_reads.run_env({start.CHECKOUT_LINK: slot}, cwd=ctx.workspace.root),
+    }
     with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         done = ctx.runner.run(
             argv,

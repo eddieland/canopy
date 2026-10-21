@@ -40,12 +40,23 @@ runtime dependency with its own async stack and HTTP transports, for the few met
 - A run a tool starts is never the server's descendant, since OpenCode kills those when the overseer's run ends; it is
   reparented, as a `canopy dispatch` run is today.
 
-A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server named `canopy_chore` in a chore run's
-inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's
-history (§19), the request and text `canopy chore history` has, refused for any other chore. It lists nothing where
-`CANOPY_RUN_ID` names no chore's run, and serves none of the overseer's tools. The chore's definition allows the tool by
-exact name and denies bash; every other definition denies it. Each run canopy starts drops the variables that name a
-server, so none passes below the run it was given to.
+A chore trials it first (ROADMAP M48, stage 1b), and the reviewer and the planner read git through it. Each such run is
+given a server of its own, in its inline config alone, which serves none of the overseer's tools:
+
+- `canopy _mcp --chore`, named `canopy_chore`, serves a chore's run one tool, `history`, which it sees as
+  `canopy_chore_history`: its own chore's history (§19), the request and text `canopy chore history` has, refused for
+  any other chore. It lists nothing where `CANOPY_RUN_ID` names no chore's run.
+- `canopy _mcp --git`, named `canopy_git`, serves a review's or a plan's run read-only git in place of a shell, which
+  workers keep: `merge-base`, `diff`, `log`, and `show`, in the checkouts canopy names in the run's environment by
+  their links' names, one of which an argument picks, never a path. A revision is a name with `~N` or `^N` at most,
+  resolved to a commit first; a path stays inside the checkout. git reads objects alone, with hooks, the filesystem
+  monitor, external diff and textconv, pagers, signature checks, transports, and inherited git variables off, and its
+  output is bounded. Rejected: git allowed by pattern in bash, since the runtime matches a command's words, not its
+  redirections or a leading variable assignment.
+
+The definition of the run a server is for allows each of its tools by exact name and denies bash; every other
+definition denies them. Each run canopy starts drops the variables that name a server, so none passes below the run it
+was given to.
 
 ### The tools
 
@@ -88,8 +99,8 @@ Read from OpenCode 1.19.3's source (2026-10-16), and read again before stage 2. 
 
 ### What changes elsewhere, in stage 2
 
-The overseer's prompt and definition, §6, §13, §22, TRUST_MODEL T1 and T7, and D020 and D081. D124 already holds that
-canopy serves MCP itself, over stdio only, to the overseer only. §35 retires mirroring, and with it the `mirror` tool.
+The overseer's prompt and definition, §6, §13, §22, TRUST_MODEL T1 and T7, and D020 and D081. §35 retires mirroring,
+and with it the `mirror` tool.
 
 ### Open
 

@@ -53,6 +53,9 @@ permission:
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
   # chore's, allowed by exact name: last, so no pattern above closes it.
   "canopy_chore_history": allow
+  # canopy's tools that read a checkout's history (DESIGN §27) are the reviewer's and the planner's: last, so no rule
+  # above reopens one.
+  "canopy_git_*": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it does not end in a "## Run" section from canopy,

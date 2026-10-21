@@ -10,7 +10,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, personas, records, review_diff, run_models, sql
+from canopy.core import conversation, db, definitions, git_reads, personas, records, review_diff, run_models, sql
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.core.context import Context
@@ -21,6 +21,7 @@ from canopy.reviews import grants
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
+    calls,
     canopy,
     decisions,
     granted_meanwhile,
@@ -502,6 +503,41 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
     assert "inside" in names
     assert "outside" not in names
     assert "up" not in names
+
+
+@pytest.mark.usefixtures("reviewing")
+def test_a_reviewer_reads_the_checkouts_history_through_its_git_tools(
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """DESIGN §27: the server its inline config names reads the checkout canopy named, never one an argument names."""
+    sha = feature_commit(git_pool, tmp_path)
+    main = head(git_pool)
+    reads = [
+        calls("canopy_git_merge-base", base="origin/main", head="HEAD"),
+        calls("canopy_git_diff", base=main, head=sha),
+        calls("canopy_git_log", range=f"{main}..HEAD"),
+        calls("canopy_git_show", rev="HEAD", path="retry.py"),
+        calls("canopy_git_show", rev="HEAD", path="../../.canopy/config.toml"),
+        calls("canopy_git_log", range="HEAD", checkout="../.."),
+    ]
+    reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN, tools=reads))
+    assert reviewed.status == "done", reviewed.printed.out
+    [reviewer] = agent_runs(scenario.agent_log)
+    slot = Path(present(reviewed.row.slot_path))
+    assert json.loads(reviewer["env"][git_reads.CHECKOUTS_ENV]) == {"checkout": str(slot)}
+    entry = json.loads(reviewer["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"][git_reads.SERVER]
+    assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--git"], str(scenario.env.root.absolute()))
+    fork, diffed, logged, shown, outside, elsewhere = reviewer["tools"]
+    assert (fork["text"], fork["error"]) == (main, False)
+    assert "+while True:" in diffed["text"]
+    assert logged["text"].startswith(f"commit {sha}\n")
+    assert (shown["text"], shown["error"]) == ("while True:\n    call()", False)
+    assert outside["error"]
+    assert "leaves the checkout" in outside["text"]
+    assert elsewhere["error"]
+    assert "(unknown_checkout): no checkout '../..'" in elsewhere["text"]
 
 
 @pytest.mark.parametrize("phase", ["review_pending", "review_findings"])

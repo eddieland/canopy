@@ -18,7 +18,9 @@ This is review 1 of at most 3 of this PR.
 2. Read as much of the checkout as you need to judge the diff: the code it calls and that calls it, the tests, and
    the repository's own docs (`AGENTS.md`, `CONTRIBUTING.md`, `REVIEW.md`, and the like). Hold the change to those
    rules as they stood before it: when the diff edits one of those docs, judge the rest of the change by the version it
-   replaces, and report an edit that loosens a rule the rest of the change then relies on.
+   replaces, and report an edit that loosens a rule the rest of the change then relies on. Your `canopy_git_*` tools
+   read the checkout's history: `merge-base` and `diff` for the change from where it leaves its base branch (such as
+   `origin/main`), `log` for how code came to be, and `show` for a file at another commit.
 3. Look for defects the change introduces, not style: wrong behavior, missed cases, security problems, broken
    contracts, missing tests for new behavior, and anything the repository's own docs name as a rule. A defect counts
    when the diff adds it, or makes code that was already wrong reachable or worse. These are not findings: a defect the

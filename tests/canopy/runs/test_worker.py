@@ -18,7 +18,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions, run_models
+from canopy.core import config, db, definitions, git_reads, run_models
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -84,8 +84,12 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -> None:
-    """A server of canopy's is given to one run alone (DESIGN §27): a run started below it does not inherit it."""
-    given = servers.env("canopy_chore", ["canopy", "_mcp", "--chore"], cwd=scenario.env.root)
+    """A server of canopy's is given to one run alone (DESIGN §27): a run started below it does not inherit it, and a
+    worker, which keeps its shell, is given none of its own: not the git tools a plan's run is."""
+    given = {
+        **servers.env("canopy_chore", ["canopy", "_mcp", "--chore"], cwd=scenario.env.root),
+        **git_reads.run_env({"checkout": scenario.env.root}, cwd=scenario.env.root),
+    }
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)

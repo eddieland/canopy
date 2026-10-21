@@ -170,8 +170,8 @@ Agent definitions ship in `agents/`:
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels, follow-ups), GitHub (open and
   update a PR, read reviews and checks); merge, review submission, closing, transition, delete, fork, API file and
   branch writes, and other agents or workflow runs denied by name (D084).
-- `canopy-reviewer`: no edits, shell, or subagents; MCP read tools only (§21): of the tracker's server, its read tools
-  by name, and of GitHub, issue reads only when they are the tickets.
+- `canopy-reviewer`: no edits, shell, or subagents, but canopy's read-only git tools (§27); MCP read tools only (§21):
+  of the tracker's server, its read tools by name, and of GitHub, issue reads only when they are the tickets.
 - `canopy-chore`: no edits or subagents, and no shell but its own history; MCP write tools denied by name, and of the
   tracker's server, its read tools only, by name (§19).
 

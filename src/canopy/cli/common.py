@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, override
 
 import click
 
-from canopy.core import context, conversation
+from canopy.core import context, conversation, git_reads
 from canopy.runtime import servers
 
 if TYPE_CHECKING:
@@ -64,9 +64,10 @@ def leave_the_tick() -> None:
     """Drop from this process's environment what a run must not inherit, for a detached run.
 
     The run must not act as the overseer of the tick that started it (D020), nor pass on to its agent a server of
-    canopy's that the process tree it was started from was given (DESIGN §27): its agent gets its own, if any.
+    canopy's that the process tree it was started from was given (DESIGN §27), or the checkouts its git tools read:
+    its agent gets its own, if any.
     """
-    for name in (conversation.TICK_ID_ENV, *servers.VARIABLES):
+    for name in (conversation.TICK_ID_ENV, *servers.VARIABLES, git_reads.CHECKOUTS_ENV):
         os.environ.pop(name, None)
 
 

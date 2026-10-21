@@ -16,7 +16,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, git_reads
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import procs
@@ -26,10 +26,12 @@ from tests.canopy.helpers import (
     LABEL,
     LIST_TOOLS,
     MCP_OPENING,
+    History,
     InlineRunner,
     ancestors,
     chore_reports,
     chore_toml,
+    history_repo,
     in_run,
     in_tick,
     mcp_session,
@@ -38,7 +40,7 @@ from tests.canopy.helpers import (
     tool_call,
     worker_does,
 )
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, executable, git
 
 #: One of the loop's own PRs, PROJ-1's in `repo`, which reviews are on for.
 PR = "https://github.com/acme/api/pull/7"
@@ -825,6 +827,109 @@ def test_canopy_mcp_spawns_through_an_intermediate() -> None:
     assert (given.reparent, given.unset) == (True, {"SECRET"})
     assert fake is inline
     assert mcp_cli.cmd_mcp.hidden
+
+
+# A review's or a plan's run: `canopy _mcp --git` serves it read-only git in its checkouts alone (DESIGN §27).
+
+#: The git tools, by name, as the reviewer's and the planner's definitions allow each one.
+GIT_TOOLS = ["merge-base", "diff", "log", "show"]
+
+
+def checkouts(repo: History) -> dict[str, str]:
+    """A review's run's environment: it reads `repo`, its one checkout."""
+    return {git_reads.CHECKOUTS_ENV: json.dumps({"checkout": str(repo.root)})}
+
+
+def test_a_review_or_a_plan_is_served_its_git_tools_alone(tmp_path: Path) -> None:
+    repo = history_repo(tmp_path / "repo")
+    with in_run("review-1"), mock.patch.dict(os.environ, checkouts(repo)):
+        served = mcp_session(
+            LIST_TOOLS,
+            tool_call("merge-base", base="main", head="feature"),
+            tool_call("show", rev="feature", path="src/retry.py"),
+            tool_call("log", range="main..feature", paths=["src"]),
+            tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
+            git=True,
+        )
+    assert served.listed() == GIT_TOOLS
+    assert served.said(2) == (repo.first, False)
+    assert served.said(3) == ("while True:\n    call()", False)
+    assert served.said(4).text.startswith(f"commit {repo.feature}\n")
+    # None of the overseer's verbs is served to a review or a plan, whatever it asks.
+    assert served.responses[5]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    schema = served.responses[1]["result"]["tools"][2]["inputSchema"]
+    assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
+    assert schema["properties"]["limit"]["maximum"] == git_reads.MAX_LIMIT
+    assert schema["properties"]["paths"]["maxItems"] == git_reads.MAX_PATHS
+    assert "$ref" not in json.dumps(served.responses[1])
+    # The overseer's server serves no git, and the git server none of the overseer's verbs, inside a tick or out.
+    assert mcp_session(LIST_TOOLS).listed() == []
+
+
+def test_no_git_tool_is_served_where_the_run_names_no_checkout() -> None:
+    with in_run("review-1"), mock.patch.dict(os.environ):
+        os.environ.pop(git_reads.CHECKOUTS_ENV, None)
+        served = mcp_session(LIST_TOOLS, tool_call("log", range="HEAD"), git=True)
+    assert served.listed() == []
+    refusal = "git read refused (no_checkouts): CANOPY_GIT_CHECKOUTS is unset: these tools serve a review's or a plan's"
+    assert served.said(2) == (f"{refusal} run alone", True)
+
+
+def test_a_git_tool_refuses_an_argument_it_does_not_take(tmp_path: Path) -> None:
+    repo = history_repo(tmp_path / "repo")
+    refused = [
+        ("diff", {"base": "-p", "head": "HEAD"}, "base: '-p' starts with '-': a revision is never an option"),
+        ("diff", {"base": "main", "head": "HEAD", "paths": ["/etc/passwd"]}, "paths.0: '/etc/passwd' is absolute"),
+        ("show", {"rev": "HEAD", "path": "../../etc/passwd"}, "path: '../../etc/passwd' leaves the checkout"),
+        ("show", {"rev": "HEAD:README.md", "path": "."}, "rev: 'HEAD:README.md' is not a revision canopy takes"),
+        ("log", {"range": "HEAD", "limit": git_reads.MAX_LIMIT + 1}, "limit: Input should be less than or equal to"),
+        ("log", {"range": "HEAD", "colour": "blue"}, "colour: Extra inputs are not permitted"),
+        ("log", {"range": "HEAD", "checkout": "web"}, "(unknown_checkout): no checkout 'web': this run reads checkout"),
+        ("merge-base", {"base": "nope", "head": "HEAD"}, "(unknown_revision): nope names no commit in checkout"),
+    ]
+    with in_run("review-1"), mock.patch.dict(os.environ, checkouts(repo)):
+        served = mcp_session(*(tool_call(name, **arguments) for name, arguments, _ in refused), git=True)
+    for n, (_, _, refusal) in enumerate(refused, 1):
+        said = served.said(n)
+        assert said.error
+        assert refusal in said.text, said.text
+
+
+def test_the_git_server_inherits_nothing_that_would_choose_another_repository_or_a_program(tmp_path: Path) -> None:
+    repo = history_repo(tmp_path / "repo")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    git("init", "--quiet", cwd=empty)
+    fired = tmp_path / "fired"
+    external = str(executable(tmp_path / "external", f"#!/bin/sh\necho ran >> {fired}\n"))
+    inherited = {
+        "GIT_DIR": str(empty / ".git"),
+        "GIT_EXTERNAL_DIFF": external,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "diff.external",
+        "GIT_CONFIG_VALUE_0": external,
+    }
+    with in_run("review-1"), mock.patch.dict(os.environ, {**checkouts(repo), **inherited}):
+        served = mcp_session(tool_call("diff", base="main", head="feature"), git=True)
+    said = served.said(1)
+    assert not said.error, said.text
+    assert "+while True:" in said.text
+    assert not fired.exists()
+
+
+def test_the_git_server_takes_the_runner_main_is_given_and_none_of_gits_variables(tmp_path: Path) -> None:
+    with (
+        mock.patch.object(mcp, "run_stdio", autospec=True, return_value=0) as served,
+        mock.patch.dict(os.environ, {"GIT_DIR": str(tmp_path)}),
+    ):
+        assert main(["_mcp", "--git"], runner=procs.SubprocessRunner(unset=["SECRET"])) == 0
+        assert main(["_mcp", "--chore", "--git"]) == 2
+    [((given,), kwargs)] = served.call_args_list
+    assert kwargs == {"git": True}
+    assert isinstance(given, procs.SubprocessRunner)
+    # It starts no run, so it reparents nothing; git inherits neither what `main`'s runner removes nor GIT_DIR.
+    assert not given.reparent
+    assert {"SECRET", "GIT_DIR"} <= given.unset
 
 
 @contextlib.contextmanager

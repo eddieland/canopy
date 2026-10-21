@@ -5,7 +5,7 @@
 # The reviewer reads a PR and writes nothing anywhere: its result line is the review (DESIGN §21, D114, TRUST_MODEL T4,
 # T6). It starts in a directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads
 # outside that directory are denied, as for a desk's links (the reviewer canary in tests/canopy/test_opencode_canary.py
-# checks it).
+# checks it). It reads the checkout's history through canopy's git tools, allowed last.
 # Its temperature is rendered at the marked line from `runtime.review_temperature`, unless that is -1: the reviewer is
 # meant to run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
 # request that sets one.
@@ -76,6 +76,12 @@ permission:
   "*get_label*": deny
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
   "canopy_chore_history": deny
+  # canopy's tools that read the checkout's history and write nothing (DESIGN §27), each allowed by exact name, never
+  # by a pattern another server's tool could match: last, so no pattern above, such as `*merge*`, closes one.
+  "canopy_git_merge-base": allow
+  "canopy_git_diff": allow
+  "canopy_git_log": allow
+  "canopy_git_show": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" prompt, print
