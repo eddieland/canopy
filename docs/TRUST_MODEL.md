@@ -440,6 +440,15 @@ Controls:
   private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
   still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
+- With `paths.plan_archive` set (DESIGN §25), each live tick commits every plan, superseded and feedback plans
+  included, to that clone of the operator's and pushes it to the clone's upstream: plan text, model-written from what
+  planners read of tickets and repositories, leaves the machine for that remote and no other. The key is private, so a
+  shared workspace file cannot name a remote (T7). The harness, never an agent, does it: no agent runs git there, and
+  `canopy archive` refuses inside a tick or run. It uses only a path that is a clone's own top level, never a
+  directory inside a repository the operator works in, commits only the workspace's own directory there, runs git with
+  hooks off (D107), and never forces a push. Residual: anyone who can read that remote reads every plan, so the
+  operator keeps it private; the clone's own git config, such as its remote or `core.sshCommand`, is the operator's to
+  keep, as their home directory is.
 - With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
   sent them: its prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the
   GitHub server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker

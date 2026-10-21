@@ -88,6 +88,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "chore_instructions = '/tmp/x'"),
         # A persona is instructions in every run it reaches, so a shared file neither supplies nor chooses one.
         ("paths", "personas = '/tmp/x'"),
+        # Every plan's text is pushed where it points.
+        ("paths", "plan_archive = '/tmp/x'"),
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),

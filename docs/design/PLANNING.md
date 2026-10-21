@@ -83,6 +83,9 @@ record or through a link, and shows a missing file as missing, never as an empty
 `canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
 of theirs, each under a front matter of its row, since status and approval live only in the journal. It rewrites a
 file only when its plan or row changed and removes nothing, so the directory can be a repository the operator pushes.
+With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, commits that
+directory alone, and pushes to the clone's upstream, never forcing; `archive_unpushed` stays open while the archive is
+not all there, so a failed push is retried each tick. A dry run only reads the clone (TRUST_MODEL T6).
 
 ### Commenting on a plan
 

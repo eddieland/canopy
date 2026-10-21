@@ -130,6 +130,10 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: your own personas, each `<name>.md`, at most 4 KiB. One named as canopy's shadows it; `canopy personas`
 # lists them all (DESIGN §31).
 # personas = "~/.config/canopy/personas"
+# Optional: a clone of a private repository of yours. Each live tick copies every plan of the workspace into
+# <clone>/<workspace>/, with its status and approval, commits, and pushes to the clone's upstream (DESIGN §25). Plans
+# hold what planners read of your tickets: keep the repository private. `canopy archive DIR` does the copy by hand.
+# plan_archive = "~/src/plans"
 
 # Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
 # whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).
