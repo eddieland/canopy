@@ -106,3 +106,15 @@ def test_a_tick_reads_at_most_a_few_sessions_the_newest_first(opencode_state: Pa
     assert [argv[1] for argv, _ in exports(opencode_state)] == ["ses_6", "ses_5", "ses_4", "ses_3", "ses_2"]
     assert models.attribute(ctx, logs.for_tick(None)) == 2
     assert models.attribute(ctx, logs.for_tick(None)) == 0
+
+
+def test_an_export_longer_than_a_pipe_holds_is_read_whole(opencode_state: Path, ctx: Context) -> None:
+    ctx.conn.execute(
+        "INSERT INTO ticks (started_at, ended_at, dry_run, status, session_id) VALUES (?, ?, 0, 'ok', 'ses_big')",
+        ("2026-10-01T00:00:00.000Z", "2026-10-01T00:01:00.000Z"),
+    )
+    # Far past the 64 KiB a pipe holds, which the fake, as OpenCode does, would cut it to.
+    sessions(opencode_state, ses_big=[("anthropic", "claude-x", 0.5)] * 1000)
+    assert models.attribute(ctx, logs.for_tick(None)) == 1
+    assert reads(ctx.conn) == [("ticks", 1, "found", None, 1)]
+    assert [(m.model, m.replies) for m in run_models.of_run(ctx.conn, "ticks", 1)] == [("anthropic/claude-x", 1000)]
