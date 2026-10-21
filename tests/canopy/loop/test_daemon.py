@@ -42,7 +42,7 @@ def test_start_detaches_the_loop_and_stop_ends_it(daemon_env: CanopyEnv, capsys:
     assert out.startswith("canopy daemon started, pid ")
     assert str(log) in out
     assert lock.held(daemon_env.state_dir / repeat.LOCK_FILE_NAME)
-    _until(lambda: "tick 1  ok" in log.read_text())  # the loop's own plain output, one block per tick
+    _until(lambda: 'msg="tick ended" tick=1 status=ok ' in log.read_text())  # the loop's log, in logfmt
 
     assert main(["daemon", "status"]) == 0
     assert "canopy daemon: running, pid " in capsys.readouterr().out
