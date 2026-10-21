@@ -1,11 +1,11 @@
 """Plans archived to a clone of the operator's own each tick (DESIGN §25): exported, committed, and pushed.
 
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`
-(`plan_export`), commits what changed there and nothing else, and pushes the clone's branch to its upstream. A dry run
-only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a
-push that failed is retried each live tick and the operator sees why until one succeeds. A tick writes at most
-`PER_TICK` files, so a long history goes in over several ticks, each commit and push bounded, and the item stays open
-until it all has.
+(`plan_export`), commits what changed there and nothing else, under a message naming each plan it adds or changes, and
+pushes the clone's branch to its upstream. A dry run only reads the clone. Either way the tick raises `archive_unpushed`
+while the archive is not all on its upstream, so a push that failed is retried each live tick and the operator sees why
+until one succeeds. A tick writes at most `PER_TICK` files, so a long history goes in over several ticks, each commit
+and push bounded, and the item stays open until it all has.
 
 The path must be a clone's own top level, never a directory inside a repository, which could be one the operator works
 in. git runs as the harness always runs it (D107), and the push never forces. Nothing here raises: an archive that fails
@@ -14,6 +14,8 @@ is an item, never a failed tick.
 
 from __future__ import annotations
 
+import itertools
+import operator
 from typing import TYPE_CHECKING
 
 from canopy.core import hostgit, plan_export
@@ -32,6 +34,10 @@ PER_TICK = 1000
 _GIT_TIMEOUT_SECONDS = 60
 # The most of git's own message an item's detail carries.
 _MAX_ERROR = 300
+# The most ticket keys a commit's subject names before it counts the rest.
+_SUBJECT_KEYS = 3
+# How each change `git diff --name-status` reports is headed in a commit's body, in the body's order.
+_CHANGES = {"A": "New", "M": "Changed", "R": "Changed", "D": "Removed"}
 
 
 def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool) -> str | None:
@@ -98,7 +104,7 @@ def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
         return git.failed("diff", staged)
     if staged.returncode == 1:
         # Only `name/`: anything else the operator staged in the clone stays staged.
-        committed = git.run("commit", "--quiet", "-m", f"Archive the plans of {name}", "--", name)
+        committed = git.run("commit", "--quiet", "-m", _message(git, name), "--", name)
         if not committed.ok:
             return git.failed("commit", committed)
     if git.has_commits() and git.ahead() != 0:
@@ -107,6 +113,54 @@ def _commit_and_push(git: _Git, name: str, log: logs.TickAdapter) -> str | None:
             log.warning("plan archive not pushed", extra={"error": pushed.stderr.strip()[:_MAX_ERROR]})
             return git.failed("push", pushed)
     return None
+
+
+def _message(git: _Git, name: str) -> str:
+    """A commit message for what is staged under `name/`: how many plans of which tickets, then each file.
+
+    A plan's file is named for its run, status, and title (`plan_export.name`), so the file's name says what each plan
+    is, and a plan whose status changed shows as its rename.
+
+    Returns:
+        The message; a subject alone when git cannot say what is staged.
+    """
+    # Renames asked for here, whatever the operator's config says, so a plan renamed for its status is one change.
+    staged = git.run("diff", "--cached", "--name-status", "--find-renames", "-z", "--", name)
+    changes = _changes(staged.stdout, name)
+    if not staged.ok or not changes:
+        return f"Archive the plans of {name}"
+    keys = list(dict.fromkeys(path.partition("/")[0] for _, path, _ in changes))
+    named = ", ".join(keys[:_SUBJECT_KEYS])
+    if len(keys) > _SUBJECT_KEYS:
+        named += f" and {len(keys) - _SUBJECT_KEYS} more"
+    lines = [f"Archive {len(changes)} plan{'s' if len(changes) != 1 else ''} of {name}: {named}"]
+    headings = list(dict.fromkeys(_CHANGES.values()))
+    by_heading = sorted(changes, key=lambda change: headings.index(change[0]))
+    for heading, group in itertools.groupby(by_heading, key=operator.itemgetter(0)):
+        lines.extend(["", f"{heading}:"])
+        for _, path, was in group:
+            lines.append(f"- {path} (was {was.rpartition('/')[2]})" if was else f"- {path}")
+    return "\n".join(lines) + "\n"
+
+
+def _changes(listed: str, name: str) -> list[tuple[str, str, str | None]]:
+    """The changes `git diff --name-status -z` listed under `name/`, in git's order.
+
+    Returns:
+        Each change's heading in `_CHANGES`, its path, and a rename's earlier path, both relative to `name/`; a copy or
+        a change of type is headed as changed.
+    """
+    fields = iter(listed.split("\0"))
+    changes: list[tuple[str, str, str | None]] = []
+    for status in fields:
+        if not status:
+            break
+        # A rename or a copy names its earlier path, then its path; any other change names its path alone.
+        was = next(fields, "") if status[0] in {"R", "C"} else None
+        path = next(fields, "")
+        heading = _CHANGES.get(status[0], _CHANGES["M"])
+        changes.append((heading, path.removeprefix(f"{name}/"), was and was.removeprefix(f"{name}/")))
+    return changes
 
 
 def _unpushed(git: _Git, name: str) -> str | None:
