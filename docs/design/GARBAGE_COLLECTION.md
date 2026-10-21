@@ -26,6 +26,7 @@ third column says, and §6, §11, §12, §18, and §22 describe canopy as it is;
 | `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | never | `canopy gc --caches` |
 | A run's lock, object directory, desk, and review checkout | one per run | when the run ends, or by reconcile | unchanged |
 | `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) | unchanged |
+| `plan-exports/<digest>.json`, what an export last found as it stands (§25) | a line per plan, per destination | never | unchanged |
 | Notification events | each event | after 7 days once every sink has passed them (§20) | unchanged |
 | Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | never; `canopy memory forget` and `purge` delete its text | text deleted after `memory_days`, the row kept |
 

@@ -388,9 +388,30 @@ def path_for(state_dir: Path, key: str, run_id: int) -> Path:
     Raises:
         ValueError: `key` is not a ticket key, so it might hold a path separator or `..`.
     """
+    return dir_for(state_dir, key) / file_name(run_id)
+
+
+def dir_for(state_dir: Path, key: str) -> Path:
+    """Where the plans written for `key` are kept. Built from the key, never read from a row.
+
+    Returns:
+        `<state_dir>/plans/<key>`. The directory may not exist.
+
+    Raises:
+        ValueError: `key` is not a ticket key, so it might hold a path separator or `..`.
+    """
     if len(key) > MAX_KEY or KEY_RE.fullmatch(key) is None:
         raise ValueError(f"{key[:MAX_KEY]!r} is not a ticket key")
-    return state_dir / DIR_NAME / key / f"{run_id}.md"
+    return state_dir / DIR_NAME / key
+
+
+def file_name(run_id: int) -> str:
+    """The name of the plan the run `run_id` wrote, in its ticket's directory.
+
+    Returns:
+        `<run_id>.md`.
+    """
+    return f"{run_id}.md"
 
 
 def write(state_dir: Path, key: str, run_id: int, text: str) -> Written:
