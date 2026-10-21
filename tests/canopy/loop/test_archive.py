@@ -9,7 +9,7 @@ import pytest
 from canopy.core import plans, workspace
 from canopy.core.context import DISPATCH_LOCK
 from canopy.loop import archive, attention
-from tests.canopy.helpers import KEY, PLAN, proposed, waits
+from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, prompted, proposed, waits
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import git
 
@@ -91,6 +91,30 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
         f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}-Approved.md (was {first}-Proposed.md)"
     )
+
+
+def test_each_plans_prompt_goes_beside_it(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    run_id = prompted(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-Proposed.md", f"{name}/{KEY}/{run_id}-prompt.md"]
+    assert git("show", f"main:{name}/{KEY}/{run_id}-prompt.md", cwd=upstream) == PLAN_PROMPT.strip()
+    assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
+        f"Archive 1 plan and 1 prompt of {name}: {KEY}\n\n"
+        f"New:\n- {KEY}/{run_id}-Proposed.md\n- {KEY}/{run_id}-prompt.md"
+    )
+
+
+def test_prompts_off_archives_plans_alone(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    scenario.configures(paths={"plan_archive_prompts": False})
+    run_id = prompted(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-Proposed.md"]
 
 
 def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Path, upstream: Path) -> None:

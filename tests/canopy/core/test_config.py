@@ -90,6 +90,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "personas = '/tmp/x'"),
         # Every plan's text is pushed where it points.
         ("paths", "plan_archive = '/tmp/x'"),
+        # Turning prompts back on would push the operator's messages to a remote they chose for plans alone.
+        ("paths", "plan_archive_prompts = true"),
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),

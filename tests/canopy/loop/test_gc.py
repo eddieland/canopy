@@ -13,10 +13,10 @@ from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli import gc as gc_cli
 from canopy.cli.main import main
-from canopy.core import conversation, db
+from canopy.core import conversation, db, plans
 from canopy.infra import lock, logs
 from canopy.loop import attention, gc
-from tests.canopy.helpers import KEY, earlier
+from tests.canopy.helpers import KEY, PLAN, earlier
 from tests.conftest import CanopyEnv
 
 MIB = 1024 * 1024
@@ -118,6 +118,20 @@ def test_a_runs_kept_diffs_are_its_run_files(canopy_env: CanopyEnv, capsys: pyte
     kinds = dry_run(capsys)
     assert removes(kinds["run files"]) == (4, 181, 4, 181)
     assert removes(kinds["unrecorded files"])[0] == 0
+
+
+def test_a_plans_prompt_is_kept_with_its_plan(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    """The archive says what each plan's planner was given (DESIGN §25), so its prompt is kept as long as the plan."""
+    now = datetime.now(UTC)
+    conn = canopy_env.journal()
+    old = run(conn, canopy_env, tick(conn, earlier(now, 10)), earlier(now, 40))
+    plans.record(conn, KEY, int(old.stem), plans.write(canopy_env.state_dir, KEY, int(old.stem), PLAN))
+    conn.commit()
+
+    kinds = dry_run(capsys)
+
+    # The log goes; the prompt stays.
+    assert removes(kinds["run files"]) == (2, 110, 1, 100)
 
 
 def test_retention_of_zero_keeps_a_kind_forever(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

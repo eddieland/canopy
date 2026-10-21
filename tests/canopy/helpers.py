@@ -32,6 +32,8 @@ from tests.conftest import CanopyEnv, Journals
 KEY = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
 PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
+#: The prompt `prompted` gives its plan's planner.
+PLAN_PROMPT = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
 # The branch an `implement` of KEY with slug `work` pushes.
 BRANCH = f"agent/{KEY}-work"
 # The label the test operator's tickets carry (`user_toml`), and the arguments of an `implement` dispatch of one.
@@ -288,6 +290,18 @@ def proposed(conn: sqlite3.Connection, state_dir: Path, text: str = PLAN, key: s
     """Write and record a plan for `key`, as `_run` does once a plan run ends `done`. Returns its run's id."""
     run_id = plan_run(conn, state_dir, key)
     plans.record(conn, key, run_id, plans.write(state_dir, key, run_id, text))
+    return run_id
+
+
+def plan_prompt(conn: sqlite3.Connection, run_id: int) -> Path:
+    """Where a plan run's prompt is: beside its log, as dispatch writes it."""
+    return Path(present(db.get_run(conn, run_id))["log_path"]).with_suffix(".prompt")
+
+
+def prompted(conn: sqlite3.Connection, state_dir: Path, prompt: str = PLAN_PROMPT, key: str = KEY) -> int:
+    """Write and record a plan for `key`, its planner's prompt beside its run's log. Returns its run's id."""
+    run_id = proposed(conn, state_dir, key=key)
+    plan_prompt(conn, run_id).write_text(prompt)
     return run_id
 
 
