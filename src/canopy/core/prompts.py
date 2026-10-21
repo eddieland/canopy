@@ -591,7 +591,8 @@ def render_worker(
     `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
     its own check. `{{STANDING_SECTION}}` comes from the config, not `values`, and with `paths.worker_instructions`
     set every prompt must carry it, or `{{STANDING_INSTRUCTIONS}}`, the text alone. `{{PERSONA}}` is `persona`'s
-    text, `personas.DEFAULT`'s when it is None, and a prompt must carry it unless that is the persona (DESIGN §31).
+    text, `personas.DEFAULT`'s when it is None and the prompt carries the placeholder, and a prompt must carry it
+    unless that is the persona (DESIGN §31).
     `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
     from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
@@ -599,7 +600,15 @@ def render_worker(
     prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
     `{{NOTICE}}`: with one, every prompt must carry it.
     """
-    persona = persona or _default_persona(config)
+    if kind == RunKind.PLAN:
+        name, base = WORKER[kind], REQUIRED_PLAN
+    elif kind == RunKind.FEEDBACK_PLAN:
+        name, base = FEEDBACK_PLAN, REQUIRED_FEEDBACK_PLAN
+    elif private:
+        name, base = WORKER_PRIVATE[kind], REQUIRED_PRIVATE
+    else:
+        name, base = WORKER[kind], REQUIRED_WORKER
+    persona = persona or _default_persona(config, name)
     values = {
         # Agent memory's parts (DESIGN §28): empty unless dispatch rendered them, so with memory off every prompt is
         # the same bytes as before it existed.
@@ -608,7 +617,7 @@ def render_worker(
         "PLAN_REVIEW": "",
         **values,
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
-        "PERSONA": persona.text,
+        "PERSONA": persona.text if persona is not None else "",
         "NOTICE": notice,
         "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
@@ -620,13 +629,7 @@ def render_worker(
     required = (*pr_skill, *rebase, *noticed, *_persona_required(persona), *required)
     standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
     one_of = (*standing, *((_required_attribution(config),) if kind in COMMITS else ()))
-    if kind == RunKind.PLAN:
-        return render(config, WORKER[kind], values, required=(*REQUIRED_PLAN, *required), one_of=one_of)
-    if kind == RunKind.FEEDBACK_PLAN:
-        return render(config, FEEDBACK_PLAN, values, required=(*REQUIRED_FEEDBACK_PLAN, *required), one_of=one_of)
-    if private:
-        return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
-    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)
+    return render(config, name, values, required=(*base, *required), one_of=one_of)
 
 
 def render_reviewer(
@@ -651,14 +654,14 @@ def render_reviewer(
     Returns:
         The rendered prompt.
     """
-    persona = persona or _default_persona(config)
+    persona = persona or _default_persona(config, REVIEWER)
     values = {
         **values,
         **_standing_values(reviewer_instructions(config), "reviewer"),
         "NOTICE": notice,
         "NOTES": notes or None,
         "PREVIOUS_REVIEW": previous or None,
-        "PERSONA": persona.text,
+        "PERSONA": persona.text if persona is not None else "",
     }
     standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
@@ -781,18 +784,28 @@ def _required_attribution(config: Config) -> tuple[str, ...]:
     return REQUIRED_TRAILER if custom else ()
 
 
-def _default_persona(config: Config) -> personas.Persona:
-    """Return `personas.DEFAULT`, for a prompt rendered with no persona chosen: a kind no persona reaches, or a test.
+def _default_persona(config: Config, name: str) -> personas.Persona | None:
+    """Return `personas.DEFAULT` for prompt file `name`, rendered with no persona chosen, if it carries `{{PERSONA}}`.
+
+    A prompt without the placeholder, such as a feedback plan's, uses no persona, so it reads none: an unusable
+    persona file must not refuse a run whose prompt never takes it in.
+
+    Returns:
+        The persona, or None when the prompt does not carry the placeholder.
 
     Raises:
-        PromptError: Its file, the operator's or canopy's, cannot be used.
+        PromptError: The prompt carries it, and the persona's file, the operator's or canopy's, cannot be used.
     """
+    text = prompt_path(config, name).read_text(encoding="utf-8")
+    if f"{{{{{REQUIRED_PERSONA[0]}}}}}" not in text:
+        return None
     try:
         return personas.load(config, personas.DEFAULT)
     except personas.PersonaError as e:
         raise PromptError(e.reason) from e
 
 
-def _persona_required(persona: personas.Persona) -> tuple[str, ...]:
-    # What a prompt must carry for `persona`: nothing for canopy's own voice, which an override may already hold.
-    return () if persona.name == personas.DEFAULT else REQUIRED_PERSONA
+def _persona_required(persona: personas.Persona | None) -> tuple[str, ...]:
+    # What a prompt must carry for `persona`: nothing for canopy's own voice, which an override may already hold, or
+    # for none at all.
+    return () if persona is None or persona.name == personas.DEFAULT else REQUIRED_PERSONA

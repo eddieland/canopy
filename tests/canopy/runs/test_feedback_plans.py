@@ -17,6 +17,7 @@ from tests.canopy.helpers import (
     commands_run,
     comment,
     github_has,
+    personas_dir,
     plan_file,
     planner_does,
     present,
@@ -252,6 +253,20 @@ def test_the_state_block_carries_the_feedback_plan_only_while_feedback_plans_tou
         "changes_asked": False,
         "blocked": False,
     }
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_feedback_plan_takes_no_persona_so_an_unusable_one_refuses_it_not(
+    scenario: Scenario, github_state: Path
+) -> None:
+    # DESIGN §31: a feedback plan's prompt carries no persona, so a `canopy.md` of the operator's that canopy will not
+    # use leaves it be, while it refuses a worker's run, whose prompt takes it in.
+    with_a_pr(scenario)
+    (personas_dir(scenario.env) / "canopy.md").write_text("Be kind.\u200b\n")
+    run = present(db.get_run(scenario.conn, planned(scenario, github_state)))
+    assert (run["persona"], run["persona_digest"]) == (None, None)
+    [(refused, _), (raised, _)] = scenario.refuses(dispatches("PROJ-2"))
+    assert (refused, raised) == ("refused:bad_persona", "attention:bad_persona")
 
 
 @pytest.mark.usefixtures("git_pool")
