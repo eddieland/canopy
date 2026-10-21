@@ -160,7 +160,9 @@ def _pr_persona(ctx: Context, ref: conversation.Ref, name: str | None, *, clear:
         click.echo(f"{ref} is reviewed once in each of {', '.join(chosen)}, side by side: this request's.")
         return 0
     configured = ctx.config.personas.reviewer
-    source = "this request's" if chosen else SOURCES["config" if configured != personas.DEFAULT else "default"]
+    source = (
+        "this request's" if chosen else SOURCES["config" if configured != personas.DEFAULTS["reviewer"] else "default"]
+    )
     click.echo(f"{ref}'s review is written in {chosen[0] if chosen else configured}, from its next: {source}.")
     return 0
 

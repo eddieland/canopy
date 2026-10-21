@@ -178,12 +178,12 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
     # DESIGN §31: the operator's override for one ticket's reviewer, which a review of a PR with no ticket never takes.
     scenario.operator("persona", "PROJ-1", "skeptic", "--agent", "reviewer")
     no_ticket = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
-    assert no_ticket.row.persona == "canopy"
+    assert no_ticket.row.persona == "eddie"
     of_ticket = scenario.review(reviews("b" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
     assert of_ticket.row.persona == "skeptic"
     scenario.operator("persona", "PROJ-1", "--agent", "reviewer", "--clear")
     again = scenario.review(reviews("c" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
-    assert again.row.persona == "canopy"
+    assert again.row.persona == "eddie"
 
 
 def test_a_review_whose_persona_has_no_file_costs_the_pr_nothing_and_asks_the_operator(
@@ -212,7 +212,9 @@ def test_a_reviewer_override_without_the_placeholder_fails_closed_once_instructi
     git_pool: GitPool,
     instructed: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
-    # An override written before the placeholder existed keeps serving an operator who sets no instructions.
+    # An override written before the placeholder existed keeps serving an operator who sets no instructions, in
+    # canopy's voice, which it may already hold (DESIGN §31).
+    scenario.configures(personas={"reviewer": "canopy"})
     if instructed:
         reviewer_instructions(scenario, "Be brief.")
     overrides = reviewing.user_file.parent / "prompts"
@@ -646,7 +648,7 @@ def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
     (overrides / "reviewer.md").write_text("Review {{PR_URL}}\n")
     [(action, reason)] = scenario.refuses(reviews(head(git_pool)))
     assert action == "refused:bad_prompt"
-    assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}")
+    assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}, {{PERSONA}}")
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     assert pool_statuses(treehouse_state) == ["available", "available"]
 
@@ -775,13 +777,13 @@ def test_the_operator_reads_reviews_in_canopy(reviewing: CanopyEnv, scenario: Sc
     [line] = scenario.operator("review", "show").out.splitlines()
     assert line.startswith(f"{run_id}  ")
     # New to the operator until they read it in full (DESIGN §22).
-    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}  in canopy  new")
+    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}  in eddie  new")
     shown = scenario.operator("review", "show", str(run_id)).out
-    assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}, in canopy\ndone, started ")
+    assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}, in eddie\ndone, started ")
     assert "\x1b" not in shown
     assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
     scenario.operator("review", "show", "99", code=1)
-    assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}  in canopy\n")
+    assert scenario.operator("review", "show").out.endswith(f"{PR} @ {sha[:7]}  in eddie\n")
 
 
 def test_a_review_keeps_its_commits_diff_for_the_web_ui(
@@ -943,6 +945,8 @@ def test_a_reviewer_override_without_the_previous_review_serves_only_a_prs_first
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
+    # Without `{{PERSONA}}`, it serves reviews only in canopy's own voice (DESIGN §31).
+    scenario.configures(personas={"reviewer": "canopy"})
     overrides = reviewing.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "reviewer.md").write_text("Review {{PR_URL}} at {{SHA}} in {{CHECKOUT}}.\n")
@@ -1110,7 +1114,7 @@ def test_the_loops_own_pr_is_reviewed_once_in_each_of_its_reviewers(
     assert one.row.persona == "minimalist"
     # A PR the loop does not own takes `[personas] reviewer`'s one.
     other = "https://github.com/acme/api/pull/8"
-    assert scenario.review(reviews(sha, other), reviewer=reviewer_reports(CLEAN)).row.persona == "canopy"
+    assert scenario.review(reviews(sha, other), reviewer=reviewer_reports(CLEAN)).row.persona == "eddie"
 
 
 def test_a_commit_waits_on_each_reviewer_and_counts_each_review_against_the_limit(

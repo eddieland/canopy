@@ -121,6 +121,7 @@ def test_an_operators_persona_adds_to_canopys_and_shadows_one_of_its_name(canopy
     assert personas.find(cfg, "Not A Name") is None
     assert [(p.name, p.yours, p.shadows) for p in personas.listed(cfg)] == [
         ("canopy", False, False),
+        ("eddie", False, False),
         ("explainer", False, False),
         ("minimalist", False, False),
         ("skeptic", True, True),
@@ -202,8 +203,9 @@ def test_canopy_personas_lists_each_where_it_comes_from_and_whose_default_it_is(
     (yours / "terse.md").write_text("Be terse.\n")
     scenario.configures(personas={"reviewer": "skeptic", "planner": "skeptic"})
     assert scenario.operator("personas").out == (
-        "Personas (5):\n"
+        "Personas (6):\n"
         "  canopy  canopy's; the default for worker\n"
+        "  eddie  canopy's\n"
         "  explainer  canopy's\n"
         "  minimalist  canopy's\n"
         f"  skeptic  yours, {yours / 'skeptic.md'}, in place of canopy's; the default for planner, reviewer\n"

@@ -112,7 +112,7 @@ def test_a_persona_is_named_as_its_file_is(canopy_env: CanopyEnv, name: str) -> 
 
 def test_every_agent_writes_in_canopys_voice_until_the_operator_chooses(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert (cfg.personas.worker, cfg.personas.planner, cfg.personas.reviewer) == ("canopy", "canopy", "canopy")
+    assert (cfg.personas.worker, cfg.personas.planner, cfg.personas.reviewer) == ("canopy", "canopy", "eddie")
     assert cfg.paths.personas is None
 
 
