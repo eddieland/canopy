@@ -151,6 +151,140 @@ class ReviewDiff(Model):
     """A bound left something out."""
 
 
+type ReviewDraftStatusName = Annotated[
+    Literal["waiting", "publishing", "unconfirmed", "staged", "published"],
+    Field(
+        description="Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; "
+        "`staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.",
+    ),
+]
+type ReviewDraftAuthorName = Annotated[
+    Literal["reviewer", "reviser", "operator"],
+    Field(description="Who wrote a version of a review's draft: the review, a revision, or the operator."),
+]
+
+
+class ReviewDraftComment(Model):
+    """One comment of a review's draft, on a line of the diff the review kept: the reviewer's text until published."""
+
+    number: int
+    """Its number in the version, from 1: how an edit or a drop names it."""
+    path: str
+    """The file it is on."""
+    line: int
+    """The line it is on, in the commit's file, on the diff's new side."""
+    text: str
+    """Its text, as the version holds it: plain text here, untrusted until the operator publishes it."""
+    finding: int | None = None
+    """The review's finding it was made from, by number; None for one the operator added."""
+    file: int | None = None
+    """The index of its file in the diff; None once the diff is gone."""
+    diff_line: int | None = None
+    """Its line on the diff's new side; None once the diff is gone."""
+
+
+class ReviewDraftVersion(Model):
+    """One version of a review's draft, as its history lists it."""
+
+    number: int
+    """The version's number, from 1."""
+    hash: str
+    """The name a publish carries: its body's and its comments' hash."""
+    author: ReviewDraftAuthorName
+    """Who wrote it."""
+    channel: str | None = None
+    """For the operator's, where they wrote it: `cli` or `web`."""
+    change: str
+    """What made it, in the harness's words."""
+    created_at: datetime
+    """When it was made."""
+
+
+class ReviewDraft(Model):
+    """A review of a PR the loop does not own as the comment review it would post (DESIGN §34), at its newest version.
+
+    What it holds is exactly what would post: the body as the review's, each comment on its line. Its text is the
+    reviewer's, written from the PR's, until the operator publishes it.
+    """
+
+    status: ReviewDraftStatusName
+    """Where it stands."""
+    why: str | None = None
+    """The harness's words for its latest change of status, such as why a publish posted nothing."""
+    version: int
+    """Its newest version's number."""
+    hash: str
+    """That version's hash, which a publish carries, so what posts is what the page showed."""
+    author: ReviewDraftAuthorName
+    """Who wrote that version."""
+    channel: str | None = None
+    """For the operator's version, where they wrote it."""
+    change: str
+    """What made that version, in the harness's words."""
+    refused: list[str]
+    """What canopy left out as it made that version, and why, in the harness's words."""
+    body: str
+    """The review's body: plain text here, empty for comments alone."""
+    comments: list[ReviewDraftComment]
+    """Its comments, in the order they post."""
+    max_comments: int
+    """How many comments a version may carry; an addition past it is refused."""
+    versions: list[ReviewDraftVersion]
+    """Every version, oldest first."""
+    moved_head: str | None = None
+    """The PR's head when canopy last read it, when that is past the commit the review read: its comments would show
+    as outdated there. None when canopy has not read the PR, or its head is that commit."""
+    published_at: datetime | None = None
+    """When it was published; None until it is."""
+    published_url: str | None = None
+    """The review's URL on GitHub, once published."""
+
+
+class ReviewDraftBodyRequest(Model):
+    """A new body for a review's draft, as `canopy review edit RUN --body --text TEXT` takes it."""
+
+    text: Annotated[str, Field(max_length=8000)]
+    """The body, empty to post the comments alone. Bounded again in code, as the reviewer's text is."""
+
+
+class ReviewDraftCommentRequest(Model):
+    """A comment's new text, as `canopy review edit RUN --comment N --text TEXT` takes it."""
+
+    text: Annotated[str, Field(min_length=1, max_length=8000)]
+    """The comment's text. Bounded again in code, as the reviewer's text is."""
+
+
+class ReviewDraftAddRequest(Model):
+    """A comment to add on a line of the diff the review kept, as `canopy review edit RUN --add PATH:LINE` takes it."""
+
+    path: Annotated[str, Field(min_length=1, max_length=1000)]
+    """The file, by its path in the diff."""
+    line: Annotated[int, Field(ge=1)]
+    """The line, on the diff's new side."""
+    text: Annotated[str, Field(min_length=1, max_length=8000)]
+    """The comment's text. Bounded again in code, as the reviewer's text is."""
+
+
+class ReviewDraftPublishRequest(Model):
+    """A publish of a review's draft, as `canopy review publish RUN HASH [--submit]` takes it."""
+
+    hash: Annotated[str, Field(min_length=12, max_length=12, pattern=r"^[0-9a-f]+$")]
+    """The hash of the version the page showed: any other version is refused `stale`."""
+    submit: bool = False
+    """Submit it on GitHub now, as `--submit` does, rather than leave it pending for the operator to submit there."""
+
+
+class ReviewDraftPublished(Model):
+    """What a publish did, as `canopy review publish` reports it: the draft as it now stands."""
+
+    draft: ReviewDraft
+    """The draft: published, staged, unconfirmed, or waiting again."""
+    published: int
+    """The version it posted, or tried to."""
+    failed: str | None = None
+    """Why nothing was posted, in the harness's words; None when it posted, staged, or may have."""
+
+
 class ReviewDetail(Model):
     """One review run in full: its summary, findings, the diff they sit on, and the PR's other review runs."""
 
@@ -173,6 +307,9 @@ class ReviewDetail(Model):
     """Retention removed the diff, this many days after the review ended (DESIGN §26); None when it did not."""
     sendable: bool = False
     """Whether its findings can be sent to a worker: a `done` review of one of the loop's own PRs (DESIGN §21)."""
+    draft: ReviewDraft | None = None
+    """Its draft of a review on the PR, for a review of a PR the loop does not own (DESIGN §34); None for one of the
+    loop's own PRs, one that did not end `done`, or one from before drafts were kept."""
     runs: list[ReviewSummary]
     """Every review run of the same PR, newest first, this one included."""
     new_tokens: int | None = None

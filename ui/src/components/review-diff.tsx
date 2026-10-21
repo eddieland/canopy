@@ -1,13 +1,14 @@
-import { ChevronDown, ListFilter } from 'lucide-react'
+import { ChevronDown, ListFilter, Plus } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import type { DiffFile, DiffLine, ReviewDiff } from '@/api/types'
+import type { DiffFile, DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
 import { CodeTokens } from '@/components/code-tokens'
 import { Disclosure } from '@/components/disclosure'
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
 import { Panel, PanelHeader } from '@/components/panel'
+import { DraftCommentCard, NewCommentCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,8 @@ import {
     shownAtFirst,
 } from '@/lib/review-folds'
 import type { Piece, Span } from '@/lib/review-folds'
+import { editable, placeReviewCards } from '@/lib/review-drafts'
+import type { Adding, ReviewCard } from '@/lib/review-drafts'
 import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
@@ -52,27 +55,62 @@ export interface Wanted {
 
 /**
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
- * header when the diff does not show its line (`DiffPanels`). `wanted` is the file of the finding whose link in the
- * findings list the operator last followed.
+ * header when the diff does not show its line (`DiffPanels`). `wanted` is the file of the finding or comment whose link
+ * the operator last followed. A review with a draft (DESIGN §34) has each of its comments' cards on its line too, after
+ * the findings there; while the draft waits, the + beside a line's number opens a new comment's form under it.
  */
 export function ReviewDiffPanels({
     run,
     diff,
     placed,
+    draft = null,
     wanted = null,
 }: {
     run: number
     diff: ReviewDiff
     placed: Placed<Numbered>
+    draft?: ReviewDraft | null
     wanted?: Wanted | null
 }) {
+    const [adding, setAdding] = useState<Adding | null>(null)
+    const open = draft !== null && editable(draft)
+    const cards = placeReviewCards(placed, draft?.comments ?? [], open ? adding : null)
+    const add = (file: number, line: number) => {
+        const path = diff.files[file]?.path
+        if (path !== undefined) {
+            setAdding({ file, path, line })
+        }
+    }
+    const renderCard = (card: ReviewCard) => {
+        switch (card.kind) {
+            case 'finding': {
+                return <FindingCard key={`finding-${card.numbered.n}`} run={run} numbered={card.numbered} />
+            }
+            case 'comment': {
+                return (
+                    draft !== null && (
+                        <DraftCommentCard
+                            key={`comment-${card.comment.number}`}
+                            run={run}
+                            comment={card.comment}
+                            draft={draft}
+                        />
+                    )
+                )
+            }
+            case 'new': {
+                return <NewCommentCard key="new" run={run} adding={card.adding} onDone={() => setAdding(null)} />
+            }
+        }
+    }
     return (
         <DiffPanels
             diff={diff}
-            placed={placed}
-            cards={['finding', 'findings']}
+            placed={cards}
+            cards={draft === null ? ['finding', 'findings'] : ['note', 'notes']}
             wanted={wanted}
-            renderCard={(f) => <FindingCard key={f.n} run={run} numbered={f} />}
+            renderCard={renderCard}
+            onAdd={open ? add : undefined}
         />
     )
 }
@@ -85,7 +123,8 @@ export function ReviewDiffPanels({
  * first (`DIFF_BUDGET`), and says so above its first file. Above the files, a menu of their types hides the files of
  * those the operator unticks, every type ticked at first; and each file's panel folds away whole on its header's
  * disclosure. A `wanted` file, one the operator followed a link to a card on, comes back into view: its type ticked
- * and its panel open. Each new object shows it again, so following the same link twice works twice.
+ * and its panel open. Each new object shows it again, so following the same link twice works twice. With `onAdd`, each
+ * line on the new side has a + beside its number, which `onAdd` hears with the file's index and the line.
  */
 export function DiffPanels<T>({
     diff,
@@ -93,12 +132,14 @@ export function DiffPanels<T>({
     cards,
     renderCard,
     wanted = null,
+    onAdd,
 }: {
     diff: ReviewDiff
     placed: Placed<T>
     cards: readonly [string, string]
     renderCard: (item: T) => ReactNode
     wanted?: Wanted | null
+    onAdd?: (file: number, line: number) => void
 }) {
     const first = shownAtFirst(diff.files, placed.lines)
     const total = diff.files.reduce((sum, file) => sum + lineCount(file), 0)
@@ -154,6 +195,7 @@ export function DiffPanels<T>({
                             }
                             open={!folded.has(i)}
                             onOpenChange={(open) => setFolded((was) => (open ? without(was, i) : new Set([...was, i])))}
+                            onAdd={onAdd === undefined ? undefined : (line) => onAdd(i, line)}
                         />
                     ),
             )}
@@ -235,6 +277,7 @@ function FilePanel<T>({
     onShow,
     open,
     onOpenChange,
+    onAdd,
 }: {
     file: DiffFile
     first: Span[]
@@ -246,6 +289,7 @@ function FilePanel<T>({
     onShow: (span: Span) => void
     open: boolean
     onOpenChange: (open: boolean) => void
+    onAdd: ((line: number) => void) | undefined
 }) {
     // The lines the operator opened, drawn with those the page draws at first, which follow the review as it changes:
     // a running review's findings arrive when it ends, and each brings its lines into view, folded or not, as a thread
@@ -253,7 +297,7 @@ function FilePanel<T>({
     const shown = opened.reduce((spans, span) => reveal(spans, span), first)
     const highlighted = useHighlight(file)
     const rows = pieces(file, shown).flatMap((piece) =>
-        pieceRows(piece, { file, highlighted, onLine, show: onShow, renderCard }),
+        pieceRows(piece, { file, highlighted, onLine, show: onShow, renderCard, add: onAdd }),
     )
     const count = onFile.length + [...(onLine?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
     const body = onFile.length > 0 || rows.length > 0
@@ -302,12 +346,14 @@ function pieceRows<T>(
         onLine,
         show,
         renderCard,
+        add,
     }: {
         file: DiffFile
         highlighted: (CodeToken[] | undefined)[][] | undefined
         onLine: Map<number, T[]> | undefined
         show: (span: Span) => void
         renderCard: (item: T) => ReactNode
+        add: ((line: number) => void) | undefined
     },
 ): ReactNode[] {
     switch (piece.kind) {
@@ -324,10 +370,19 @@ function pieceRows<T>(
         case 'lines': {
             const lines = file.hunks[piece.hunk]?.lines.slice(piece.from, piece.to) ?? []
             return lines.map((line, k) => {
-                const cards = line.new !== null && line.kind !== 'del' ? onLine?.get(line.new) : undefined
+                const at = line.kind === 'del' ? null : line.new
+                const cards = at === null ? undefined : onLine?.get(at)
                 return (
                     <Fragment key={`line-${piece.hunk}-${piece.from + k}`}>
-                        <Line line={line} tokens={highlighted?.[piece.hunk]?.[piece.from + k]} />
+                        <Line
+                            line={line}
+                            tokens={highlighted?.[piece.hunk]?.[piece.from + k]}
+                            add={
+                                add === undefined || at === null
+                                    ? undefined
+                                    : { label: `Comment on ${file.path}:${at}`, pick: () => add(at) }
+                            }
+                        />
                         {cards !== undefined && (
                             <tr>
                                 <td colSpan={4} className="border-y bg-surface p-0">
@@ -367,11 +422,44 @@ function Fold({ span, onShow }: { span: Span; onShow: () => void }) {
     )
 }
 
-function Line({ line, tokens }: { line: DiffLine; tokens: CodeToken[] | undefined }) {
+/**
+ * One line of a hunk. `add`, on a line of the new side, puts a + beside its number, shown while the row is hovered or
+ * the button focused, which starts a comment on it.
+ */
+function Line({
+    line,
+    tokens,
+    add,
+}: {
+    line: DiffLine
+    tokens: CodeToken[] | undefined
+    add?: { label: string; pick: () => void }
+}) {
     return (
-        <tr className={LINE_TINT[line.kind]} data-kind={line.kind}>
+        <tr className={cn('group', LINE_TINT[line.kind])} data-kind={line.kind}>
             <td className="w-12 px-2 text-right text-muted-foreground tabular-nums select-none">{line.old ?? ''}</td>
-            <td className="w-12 px-2 text-right text-muted-foreground tabular-nums select-none">{line.new ?? ''}</td>
+            <td className="w-12 px-2 text-right text-muted-foreground tabular-nums select-none">
+                {add === undefined ? (
+                    (line.new ?? '')
+                ) : (
+                    <span className="flex items-center justify-between gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={add.label}
+                            title={add.label}
+                            onClick={add.pick}
+                            className={cn(
+                                '-ml-1.5 size-4 text-accent opacity-0',
+                                'group-hover:opacity-100 focus-visible:opacity-100',
+                            )}
+                        >
+                            <Plus />
+                        </Button>
+                        {line.new}
+                    </span>
+                )}
+            </td>
             <td aria-hidden className={cn('w-4 select-none', LINE_MARK[line.kind])}>
                 {MARK[line.kind]}
             </td>

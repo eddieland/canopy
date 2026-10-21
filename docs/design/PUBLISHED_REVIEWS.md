@@ -7,8 +7,8 @@ journal](READING_THE_JOURNAL.md).
 
 ## 34. Publishing a review
 
-Built in part (ROADMAP M43): the draft, its versions, and publishing and staging from the CLI. Revising with an
-agent, and the review page's controls, are designed, not built. Each part changes D114 and TRUST_MODEL as it is built
+Built in part (ROADMAP M43): the draft, its versions, and publishing and staging from the CLI and the review's page.
+Revising with an agent is designed, not built. Each part changes D114 and TRUST_MODEL as it is built
 (Trust model changes).
 
 §21's reviews post nothing (D114), and §29's drafts answer threads on the loop's own PRs. This section says what

@@ -30,6 +30,7 @@ export const ROUTES = [
     'reviews',
     'reviews/4',
     'reviews/4/run',
+    'reviews/5',
     'chores',
     'chores/deps',
     'chores/deps/runs/2',

@@ -1367,7 +1367,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its
   Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
   Stop did goes under it (`Notice`).
-- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
+- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posting nothing itself (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
   once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
   with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the
@@ -1420,6 +1420,19 @@ sliver beside four others; and its axis names short call numbers without measuri
   every finding is that bad); the review's link; its ticket
   (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`) and the commit's
   first 7 characters, then cost and age. A review's page colors its verdict the same way.
+- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, sits under the
+  findings: a `Draft review` panel, its status chip (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`,
+  publishing as running, the rest plain, since nothing waits on a draft) and its version and hash in muted monospace at
+  the header's end; a muted line saying it is what would post, word for word, on which commit, and what made the
+  version; a `status-blocked` line when the PR's head has moved past that commit; the body as `MemoryText` with a ghost
+  `xs` `edit`; its comments as rows linking to their cards; every version in muted monospace, the newest in the
+  foreground; and in its foot an outline `Start the review on GitHub`, which stages it, with a `Submit it on GitHub now`
+  checkbox that turns it into a default `Publish version N`, each with its command on hover. Staged or published, the
+  foot says so with a link to GitHub instead. Each comment's card (`DraftCommentCard`, `surface`, an `accent/40` border
+  to tell it from a finding's `surface-raised`) sits under its line after the findings there, with ghost `xs` `edit` and
+  `drop`. While the draft waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`),
+  shown on the row's hover or its focus, which opens a new comment's form under the line. Each form is a `Textarea` with
+  its count against 4,000, as a draft's.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does (a pulsing dot and `run:N`), then its latest review (its state's dot unless a
   run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted) and `requested` while

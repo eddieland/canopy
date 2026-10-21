@@ -362,6 +362,57 @@ test("a review's findings are sent to a worker from its list, as a reply on its 
     await expect(page.getByText("Address findings 1 and 3 of canopy's review run 4")).toBeVisible()
 })
 
+test("a coworker's PR's review is edited as a draft on its page and published, as canopy review publish does", async ({
+    page,
+}) => {
+    // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock_reviews.py).
+    await page.goto('reviews/5')
+    const draft = page.getByTestId('review-draft')
+    await expect(draft).toContainText('version 1,')
+    const comments = page.getByTestId('draft-comment')
+    await expect(comments).toHaveCount(2)
+
+    await draft.getByTestId('draft-body').getByRole('button', { name: 'edit' }).click()
+    await draft.getByRole('textbox', { name: 'In your words' }).fill('One thing to fix before this goes in.')
+    await draft.getByRole('button', { name: 'Save' }).click()
+    await expect(draft.getByRole('status')).toHaveText(
+        /^Review run 5's draft is version 2 now, hash [0-9a-f]{12}: edited the body\.$/u,
+    )
+    await expect(draft.getByTestId('draft-body')).toContainText('One thing to fix before this goes in.')
+
+    // Each comment is edited and dropped on its card, at its line of the diff.
+    const first = comments.filter({ hasText: 'Comment 1' })
+    await first.getByRole('button', { name: 'edit' }).click()
+    await first.getByRole('textbox', { name: 'In your words' }).fill('Raise once the attempts run out.')
+    await first.getByRole('button', { name: 'Save' }).click()
+    await expect(first).toContainText('Raise once the attempts run out.')
+    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'drop' }).click()
+    await expect(comments).toHaveCount(1)
+
+    // A comment of the operator's own, on any line of the diff.
+    await page.getByRole('button', { name: 'Comment on api/upstream.py:14' }).click()
+    const form = page.getByRole('form', { name: 'Comment on api/upstream.py:14' })
+    await form.getByRole('textbox', { name: 'In your words' }).fill('Cap the delay?')
+    await form.getByRole('button', { name: 'Save' }).click()
+    await expect(comments).toHaveCount(2)
+    await expect(comments.filter({ hasText: 'Cap the delay?' })).toContainText('yours')
+    await expect(draft).toContainText('version 5,')
+    await expect(draft.getByTestId('draft-versions')).toContainText('added a comment on api/upstream.py:14')
+
+    // Staged by default; ticked, canopy submits it. The mock answers for canopy's GitHub programs: it posts nowhere.
+    await expect(draft.getByRole('button', { name: 'Start the review on GitHub' })).toBeVisible()
+    await draft.getByRole('checkbox', { name: 'Submit it on GitHub now' }).click()
+    await draft.getByRole('button', { name: 'Publish version 5' }).click()
+    await expect(draft.getByRole('status')).toContainText(
+        "Published version 5 of review run 5's draft: https://github.com/acme/api/pull/14#pullrequestreview-",
+    )
+    await expect(draft.getByTestId('draft-published')).toBeVisible()
+    // A draft publishes once: nothing on the page changes it now.
+    await expect(draft.getByRole('button')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Comment on /u })).toHaveCount(0)
+    await expect(comments.getByRole('button')).toHaveCount(0)
+})
+
 test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
     await page.goto('tickets/ABC-100')
     const limits = page.getByTestId('grant-limits')
