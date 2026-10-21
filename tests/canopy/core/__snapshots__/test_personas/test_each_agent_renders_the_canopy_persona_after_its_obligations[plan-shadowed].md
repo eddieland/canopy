@@ -1,8 +1,8 @@
 ## Obligations
 
-- Never write to the ticket or anywhere else: no comments, labels, edits, or state changes, through any tool. The plan
-  stays in canopy.
-- Never open, change, or comment on a PR. Write no file but `.canopy-new-plan.md`, and run no commands.
+- Never write to the ticket or anywhere else, through any tool: no comments, labels, edits, or state changes. Never
+  open, change, or comment on a PR. The plan stays in canopy.
+- Write no file but `.canopy-new-plan.md`, and run no commands.
 - Time limit: 45 minutes. Leave time to write the plan.
 
 ## Persona
