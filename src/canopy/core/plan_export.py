@@ -13,8 +13,12 @@ git sees a rename. A plan whose file is missing or no plan is left as it was exp
 written under a temporary name, then renamed into place, so no reader sees half of one and a link at its name is
 replaced, never followed.
 
+Beside each plan goes the prompt its planner was given, unless `prompts` is off: `<run>-prompt.md`, its bytes as canopy
+wrote them beside the run's log. It never changes, so its name never does. A plan whose run has no prompt there, as one
+from before prompts were kept, has none exported, and one exported before is left.
+
 A history of thousands of plans is exported each tick, so an export reads only what may have changed: for each plan it
-found exported as it stands, it keeps a fingerprint of its row and of both files' stat in the state directory, and
+found exported as it stands, it keeps a fingerprint of its row and of every file's stat in the state directory, and
 next time skips a plan whose fingerprint still matches with a stat of each file and no read (`_Seen`). With `limit`,
 it stops once it has written that many files, so a long history goes in over several exports.
 """
@@ -33,6 +37,7 @@ import stat
 import time
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 
 from canopy.core import plans, records, sql
@@ -41,7 +46,6 @@ from canopy.core.vocab import PlanStatus
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterator, Mapping, Sequence
-    from pathlib import Path
 
 #: Which of a ticket's plans a file is: the plan before its implement (§25), or one before a resume (§32).
 type Kind = Literal["plan", "feedback plan"]
@@ -55,6 +59,8 @@ _FRONT_MATTER = "---\n"
 _FORMAT = 3
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
+# A prompt's name in an export, `<run>-prompt.md`: never a plan's, which always has a status after its run.
+_PROMPT_NAME_RE = re.compile(r"\d+-prompt\.md")
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
 _HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
@@ -92,10 +98,18 @@ class ExportError(Exception):
     """A plan could not be written into `dest`: a ticket's directory there is a link, or a write failed."""
 
 
-def export(conn: sqlite3.Connection, state_dir: Path, dest: Path, *, limit: int | None = None) -> Exported:
+def export(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    dest: Path,
+    *,
+    limit: int | None = None,
+    prompts: bool = True,
+) -> Exported:
     """Export every plan and feedback plan in the journal into `dest`, made operator-only if it is missing.
 
-    With `limit`, stop once that many files are written; the plans after them are left for the next export.
+    With `limit`, stop once that many files are written; the plans after them are left for the next export. With
+    `prompts`, each plan's prompt goes beside it.
 
     Returns:
         The files written and removed, how many were already as they stand, the plans whose files are not plans, and
@@ -113,6 +127,7 @@ def export(conn: sqlite3.Connection, state_dir: Path, dest: Path, *, limit: int 
         ),
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
+    prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
     tally = _Tally()
     checked = 0
     # Before any file is read: one changed after this is never taken as settled.
@@ -128,7 +143,8 @@ def export(conn: sqlite3.Connection, state_dir: Path, dest: Path, *, limit: int 
                     if limit is not None and len(tally.written) >= limit:
                         break
                     checked += 1
-                    _export_plan(kind, row, dirs, seen, tally, settled_before=settled_before)
+                    prompt = None if prompt_paths is None else _Prompt(prompt_paths.get(row.run_id))
+                    _export_plan(kind, row, dirs, seen, tally, prompt=prompt, settled_before=settled_before)
     return Exported(
         written=tally.written,
         unchanged=tally.unchanged,
@@ -155,6 +171,24 @@ def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str
     if slug:
         parts.append(slug)
     return "-".join(parts) + ".md"
+
+
+def prompt_name(run_id: int) -> str:
+    """The name of the prompt of run `run_id` in an export.
+
+    Returns:
+        The name, as `412-prompt.md`.
+    """
+    return f"{run_id}-prompt.md"
+
+
+def is_prompt(file_name: str) -> bool:
+    """Whether `file_name` in an export is a plan's prompt rather than a plan.
+
+    Returns:
+        True for a name `prompt_name` gives.
+    """
+    return _PROMPT_NAME_RE.fullmatch(file_name) is not None
 
 
 def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> bytes:
@@ -189,6 +223,18 @@ class _Dirs:
     listing: Sequence[str]
 
 
+@dataclass(frozen=True)
+class _Prompt:
+    """A plan run's prompt, to export beside its plan."""
+
+    #: Where it is, under the state directory; None when the run has none canopy can export.
+    path: Path | None
+
+
+#: The stat of a plan run's prompt and of the file exported from it, each None where it is missing.
+type _PromptStats = tuple[os.stat_result | None, os.stat_result | None]
+
+
 @dataclass
 class _Tally:
     """What an export has done so far, kept as it goes."""
@@ -206,12 +252,15 @@ def _export_plan(
     seen: _Seen,
     tally: _Tally,
     *,
+    prompt: _Prompt | None,
     settled_before: int,
 ) -> None:
     """Export one plan into its ticket's directory, unless it is there as it stands, and remove its earlier names.
 
+    With `prompt`, its run's prompt goes beside it too, unless that is there as it stands.
+
     Raises:
-        ExportError: its file could not be written, or an earlier one removed.
+        ExportError: its file, or its prompt, could not be written, or an earlier one removed.
     """
     plan = f"{dirs.key}/{row.run_id}"
     source_name = plans.file_name(row.run_id)
@@ -219,9 +268,18 @@ def _export_plan(
     names = [n for n in dirs.listing if _is_name_of(row.run_id, n)]
     # Each stat before its file is read, so a change after the read shows on the next export.
     source_stat = None if dirs.source_fd is None else _stat(source_name, dirs.source_fd)
+    prompt_stats = None if prompt is None else _prompt_stats(prompt, row.run_id, dirs.dest_fd)
     if len(names) == 1:
         exported = _stat(names[0], dirs.dest_fd)
-        if seen.matches(plan, kind, row, source=source_stat, exported_name=names[0], exported=exported):
+        if seen.matches(
+            plan,
+            kind,
+            row,
+            source=source_stat,
+            exported_name=names[0],
+            exported=exported,
+            prompt=prompt_stats,
+        ):
             tally.unchanged += 1
             return
     reading = plans.read(dirs.source / source_name)
@@ -245,7 +303,9 @@ def _export_plan(
         if earlier != exported_name and not _same_file(dirs.dest_fd, earlier, exported_name):
             _remove(dirs.dest_fd, dirs.dest / earlier)
             tally.removed.append(f"{dirs.key}/{earlier}")
-    if held is not None:
+    prompt_held = None if prompt is None else _export_prompt(prompt, row.run_id, dirs, tally)
+    # Kept only when the plan, and its prompt if it has one, were found as they stand.
+    if held is not None and (prompt is None or prompt_held is not None):
         seen.record(
             plan,
             kind,
@@ -253,8 +313,66 @@ def _export_plan(
             source=source_stat,
             exported_name=exported_name,
             exported=held,
+            prompt=prompt_held,
             settled_before=settled_before,
         )
+
+
+def _prompt_paths(conn: sqlite3.Connection, state_dir: Path) -> dict[int, Path]:
+    """Where each plan run's prompt is: beside its log, as the run wrote it, and only inside the state directory.
+
+    Returns:
+        The path of each plan run's prompt, by its run's id; a run whose log is outside the state directory has none.
+    """
+    planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
+    runs = sql.select("id, log_path").from_("runs").where("id IN ({})", planned)
+    root = os.path.realpath(state_dir)
+    # Resolved once for each directory: every plan run logs to the same one.
+    inside: dict[Path, bool] = {}
+    paths: dict[int, Path] = {}
+    for r in sql.execute(conn, runs):
+        prompt = Path(r["log_path"]).with_suffix(".prompt")
+        if prompt.parent not in inside:
+            inside[prompt.parent] = Path(os.path.realpath(prompt.parent)).is_relative_to(root)
+        if inside[prompt.parent]:
+            paths[int(r["id"])] = prompt
+    return paths
+
+
+def _prompt_stats(prompt: _Prompt, run_id: int, dest_fd: int) -> _PromptStats:
+    """The stat of a plan run's prompt and of its export, neither read.
+
+    Returns:
+        Each stat, None where its file is missing; the prompt's also where it is not a regular file, as
+        `_export_prompt` finds it, so a fingerprint taken there matches.
+    """
+    source = None if prompt.path is None else _lstat(prompt.path)
+    if source is not None and not stat.S_ISREG(source.st_mode):
+        source = None
+    return source, _stat(prompt_name(run_id), dest_fd)
+
+
+def _export_prompt(prompt: _Prompt, run_id: int, dirs: _Dirs, tally: _Tally) -> _PromptStats | None:
+    """Export a plan run's prompt beside its plan, unless it is there as it stands or the run has none.
+
+    Returns:
+        The stat of the prompt and of its export, each taken before it was read, when nothing was written; None when
+        the prompt was written.
+
+    Raises:
+        ExportError: it could not be written.
+    """
+    exported_name = prompt_name(run_id)
+    found = None if prompt.path is None else _read_regular(prompt.path)
+    if found is None:
+        return None, _stat(exported_name, dirs.dest_fd)
+    source, data = found
+    held = _held(dirs.dest_fd, exported_name, data) if exported_name in dirs.listing else None
+    if held is None:
+        _write(dirs.dest_fd, dirs.dest / exported_name, data)
+        tally.written.append(f"{dirs.key}/{exported_name}")
+        return None
+    return source, held
 
 
 def _title(text: str, key: str) -> str:
@@ -334,18 +452,21 @@ class _Seen:
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result | None,
+        prompt: _PromptStats | None,
     ) -> bool:
         """Whether `plan`, `KEY/RUN`, was found exported as it stands under `exported_name`, and nothing changed since.
 
+        `prompt` is the stat of its prompt and of that prompt's export, None while prompts are not exported.
+
         Returns:
-            False when either file is missing, or nothing was kept for `plan`.
+            False when either of the plan's files is missing, or nothing was kept for `plan`.
         """
         kept = self.fingerprints.get(plan)
         return (
             kept is not None
             and source is not None
             and exported is not None
-            and (kept == _fingerprint(kind, row, source, exported_name, exported))
+            and (kept == _fingerprint(kind, row, source, exported_name, exported, prompt=prompt))
         )
 
     def record(
@@ -357,14 +478,18 @@ class _Seen:
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result,
+        prompt: _PromptStats | None,
         settled_before: int,
     ) -> None:
         """Keep that `plan` was found exported as it stands, unless a file changed too recently to tell by its stat.
 
         A plan's file that could not be statted before it was read is not kept either.
         """
-        if source is not None and all(max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in (source, exported)):
-            fingerprint = _fingerprint(kind, row, source, exported_name, exported)
+        stats = [source, exported, *(prompt or ())]
+        if source is not None and all(
+            max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in stats if s is not None
+        ):
+            fingerprint = _fingerprint(kind, row, source, exported_name, exported, prompt=prompt)
             self.changed |= self.fingerprints.get(plan) != fingerprint
             self.fingerprints[plan] = fingerprint
 
@@ -408,16 +533,28 @@ def _fingerprint(
     source: os.stat_result,
     exported_name: str,
     exported: os.stat_result,
+    *,
+    prompt: _PromptStats | None,
 ) -> str:
-    """A plan's row, the stat of its file, and the name and stat of its export, as one digest.
+    """A plan's row, the stat of its file, the name and stat of its export, and those of its prompt, as one digest.
 
     Returns:
         The digest, hex.
     """
-    stats = [(s.st_dev, s.st_ino, s.st_mode, s.st_size, s.st_mtime_ns, s.st_ctime_ns) for s in (source, exported)]
+    stats = [_identity(s) for s in (source, exported)]
+    prompt_stats = None if prompt is None else [None if s is None else _identity(s) for s in prompt]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
-    digested = (_FORMAT, kind, row, exported_name, stats)
+    digested = (_FORMAT, kind, row, exported_name, stats, prompt_stats)
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
+
+
+def _identity(s: os.stat_result) -> tuple[int, ...]:
+    """What of a file's stat changes when the file does.
+
+    Returns:
+        Its device, inode, mode, size, and times.
+    """
+    return (s.st_dev, s.st_ino, s.st_mode, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
 
 
 @contextlib.contextmanager
@@ -524,6 +661,39 @@ def _stat(name: str, dir_fd: int) -> os.stat_result | None:
         return os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
     except OSError:
         return None
+
+
+def _lstat(path: Path) -> os.stat_result | None:
+    """Stat `path`, a link itself rather than what it names.
+
+    Returns:
+        Its stat, or None when it cannot be had.
+    """
+    try:
+        return path.lstat()
+    except OSError:
+        return None
+
+
+def _read_regular(path: Path) -> tuple[os.stat_result, bytes] | None:
+    """Read `path` whole when it is a regular file, never through a link.
+
+    Returns:
+        Its stat, taken before it was read, and its bytes; None when it is missing, a link, not a regular file, or
+        unreadable.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        found = os.fstat(f.fileno())
+        if not stat.S_ISREG(found.st_mode):
+            return None
+        try:
+            return found, f.read()
+        except OSError:
+            return None
 
 
 def _same_file(dir_fd: int, name: str, other: str) -> bool:

@@ -226,7 +226,8 @@ def _logged(conn: sqlite3.Connection, table: db.RunTable, cutoff: str, *suffixes
 def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
     """Each worker run's log, its prompt, and the diffs it kept, with the lifelock it holds while it lives.
 
-    A run under `approve` keeps a diff and its head for each repository it leased (DESIGN §29).
+    A run under `approve` keeps a diff and its head for each repository it leased (DESIGN §29). A run that wrote a
+    plan keeps its prompt as long as the plan, forever, so the plan's archive can say what its planner was given (§25).
 
     Returns:
         What each run owns, oldest first.
@@ -235,12 +236,21 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
     slots = sql.select("run_id, repo").from_("run_slots").where("repo IS NOT NULL").order_by("run_id, repo")
     for r in sql.execute(conn, slots):
         repos.setdefault(int(r["run_id"]), []).append(str(r["repo"]))
+    planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
+    planned_ids = {int(r[0]) for r in sql.execute(conn, planned)}
     owned: list[_Owned] = []
     for r in sql.execute(conn, sql.select("id, ended_at, log_path").from_("runs").order_by("id")):
         log = Path(r["log_path"])
         kept = [review_diff.run_path_for(log, repo) for repo in repos.get(int(r["id"]), [])]
-        paths = (log, log.with_suffix(".prompt"), *kept, *(p.with_suffix(".head") for p in kept))
-        owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=procs.lifelock(log)))
+        prompt = log.with_suffix(".prompt")
+        lifelock = procs.lifelock(log)
+        if int(r["id"]) in planned_ids:
+            # A cutoff of "" is one no time is before: kept forever.
+            owned.append(_Owned((prompt,), r["ended_at"], "", lifelock=lifelock))
+            paths = (log, *kept, *(p.with_suffix(".head") for p in kept))
+        else:
+            paths = (log, prompt, *kept, *(p.with_suffix(".head") for p in kept))
+        owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=lifelock))
     return owned
 
 

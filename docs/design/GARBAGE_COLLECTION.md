@@ -13,7 +13,7 @@ third column says, and §6, §11, §12, §18, and §22 describe canopy as it is;
 
 | What | Grows by | Removed today | Removed by M47 |
 | --- | --- | --- | --- |
-| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | never | after `run_files_days` |
+| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | never | after `run_files_days`; a plan run's prompt never |
 | `ticks/<id>.log`, `.prompt` | one pair per tick | never | after `tick_files_days` (a tick not `ok`: `run_files_days`) |
 | `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | never | after `run_files_days` |
 | `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | never | after `run_files_days` |
@@ -36,7 +36,7 @@ third column says, and §6, §11, §12, §18, and §22 describe canopy as it is;
   over all time, and a guard that history can reset is not a guard (D030, D086).
 - Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, the web UI's record of
   its writes, and the overseer's own decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22); plan
-  files, the operator's to remove (§25).
+  files, the operator's to remove, and their runs' prompts, which the plan archive carries (§25).
 - Anything a live run uses, or a run's lifelock holds; remote branches, which `canopy gc` lists and deletes none of,
   since deleting one is outward-facing and may lose work (§22); and what is not canopy's: a chore's working
   directory (§19), ignored files in a pool slot (§18), the runtime's own data.
