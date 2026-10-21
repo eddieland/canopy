@@ -45,7 +45,7 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | `npm test -- <files>` | the Vitest files named |
 | `npm run fmt` | format with oxfmt |
 | `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
-| `npm run test:e2e -- <specs>` | build, then Playwright against the build served by FastAPI; every spec when none is named |
+| `npm run test:e2e -- <specs>` | build, then Playwright against the build served by FastAPI; every spec if none named |
 
 With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium.
 
