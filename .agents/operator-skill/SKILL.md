@@ -71,6 +71,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
 | `canopy config commands` | Each agent's command as a run starts it, rendered from the templates, and the keys it is made of; `--json`. |
 | `canopy agents` | The MCP servers and skills each of canopy's agents is offered, after OpenCode merges the operator's config; `--json`. |
+| `canopy personas` | Each persona, canopy's and the operator's in `paths.personas`, and the agents `[personas]` gives it; exits 1 when an agent's would refuse. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up an example chore canopy ships, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |

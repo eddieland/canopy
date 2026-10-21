@@ -79,15 +79,6 @@ class _Step(_Part):
     tokens: _Tokens | None = None
 
 
-class _ErrorData(_Part):
-    message: StrictStr | None = None
-
-
-class _Error(_Part):
-    name: StrictStr | None = None
-    data: _ErrorData | None = None
-
-
 def read(lines: Iterable[str], session_id: str) -> Iterator[Entry | None]:
     """Read `session_id`'s events from `lines`, in order, as entries, each with the model call it came from.
 
@@ -171,8 +162,8 @@ def _entry(event: Mapping[str, object]) -> Entry | None:
         tokens = Tokens(t.input, t.output, t.reasoning, t.cache.read, t.cache.write) if t is not None else None
         cost = float(step.cost) if step.cost is not None else None
         return Step(at, entries.line(step.reason or "") or None, cost, tokens)
-    if kind == "error":
-        error = _Error.model_validate(event.get("error"))
+    if kind == events.ERROR:
+        error = events.SessionError.model_validate(event.get("error"))
         message = error.data.message if error.data is not None and error.data.message else ""
         return Error(at, entries.line(error.name or "error"), entries.cut(message, MAX_TEXT)[0])
     return None

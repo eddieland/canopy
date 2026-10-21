@@ -418,6 +418,7 @@ class Behavior(TypedDict, total=False):
     sleep: float  # seconds it waits before the result line, to run into a timeout
     session: str  # the `sessionID` on each event, with `--format json`
     step_cost: str  # each model call's cost, verbatim JSON, so a test can make it invalid
+    errors: str  # a JSON list, each the `error` of an `error` event it prints at the end, with `--format json`
 
 
 # The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
@@ -427,6 +428,7 @@ BEHAVIOR_SETTINGS = {
     "sleep": "SLEEP",
     "session": "SESSION",
     "step_cost": "STEP_COST",
+    "errors": "ERRORS",
 }
 
 
@@ -507,6 +509,18 @@ def with_events(env: CanopyEnv, agent: str) -> None:
 def with_rebase(env: CanopyEnv) -> None:
     """Let workers rebase and push with a lease, never merging a base in (`[trust] rebase`)."""
     env.append_user("\n[trust]\nrebase = true\n")
+
+
+def personas_dir(env: CanopyEnv) -> Path:
+    """The operator's personas directory (DESIGN §31), made, and set as `paths.personas` in the user file.
+
+    Returns:
+        The directory, where a test writes the operator's persona files.
+    """
+    path = env.user_file.parent / "personas"
+    path.mkdir(parents=True, exist_ok=True)
+    env.configure(env.user_file, {"paths": {"personas": str(path)}})
+    return path
 
 
 def approve_policy(env: CanopyEnv) -> None:

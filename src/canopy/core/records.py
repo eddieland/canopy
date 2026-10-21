@@ -249,6 +249,9 @@ class ReviewRun(Row):
     tokens_first_cache_write: int | None
     definitions_digest: str | None
     pool: PoolKind
+    #: The persona it ran in, and the sha256 of its text (DESIGN §31); None for a review from before canopy recorded it.
+    persona: str | None
+    persona_digest: str | None
 
 
 @dataclass(frozen=True)
@@ -824,6 +827,10 @@ class Run(Row):
     plan_id: int | None
     #: The feedback plan this run wrote, or the approved one its `resume` follows (DESIGN §32).
     feedback_plan_id: int | None
+    #: The persona it ran in, and the sha256 of its text (DESIGN §31); None for a kind no persona reaches, and for a
+    #: run from before canopy recorded it.
+    persona: str | None
+    persona_digest: str | None
 
 
 @dataclass(frozen=True)

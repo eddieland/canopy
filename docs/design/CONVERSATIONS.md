@@ -76,10 +76,12 @@ lowering the policy lowers it too. A grant resets no count (D030) and dispatches
 
 ### What the operator has seen
 
-A result is **new** to the operator until they see it in any channel: a review that ended with a verdict, on its page,
-with `canopy review show ID`, or marked from the reviews list. The journal keeps the mark by the subject's reference, so
-every channel agrees on what is new, and another kind of subject joins by its own (Open, below). A mark authorizes
-nothing and no agent reads it; only the operator writes one, so an agent cannot hide a result by marking it seen.
+A result is **new** to the operator until they see it in any channel: a review that ended with findings, or with any
+verdict when they requested it, on its page, with `canopy review show ID`, or marked from the reviews list. A clean
+review the loop started on its own is never new, so routine reviews do not bury the ones to read. The journal keeps
+the mark by the subject's reference, so every channel agrees on what is new, and another kind of subject joins by its
+own (Open, below). A mark authorizes nothing and no agent reads it; only the operator writes one, so an agent cannot
+hide a result by marking it seen.
 
 ### Tracker comments in the journal
 

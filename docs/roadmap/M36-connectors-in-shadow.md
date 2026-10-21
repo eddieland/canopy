@@ -114,7 +114,7 @@ conservatively, for the operator to change: a check with no run id or a `ci` cur
 failure as new; a candidate with no PR needs its repositories' branches read fresh, else it is stale, so with canopy's
 own reader, which reads no branches yet, every such ticket is stale; what a PR's own author writes is not review
 feedback; and the comparison takes a ticket's dispatches, waits, skips, and done marks as its decision, its attention
-items only when it has none. Not yet: canopy's connectors grown to the contract, so canopy's own GitHub reader is
-asked only the PRs, while one is watched. Open for the operator: the
-tracker query run in code (Proposed 2026-10-15), and whether one failed run raises `connector_failed` or only one that
-leaves an observation stale.
+items only when it has none, and the `running` its dispatch left it at as the row that allowed the dispatch. Not
+yet: canopy's connectors grown to the contract, so canopy's own GitHub reader is asked only the PRs, while one is
+watched. Open for the operator: the tracker query run in code (Proposed 2026-10-15), and whether one failed run raises
+`connector_failed` or only one that leaves an observation stale.

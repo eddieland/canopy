@@ -96,6 +96,8 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, ctx.workspace.root),
+        persona=row.persona,
+        persona_digest=row.persona_digest,
     )
 
 
@@ -160,6 +162,7 @@ def summary(row: records.ReviewRun, *, seen: bool) -> ReviewSummary:
         started_at=db.parse_time(row.started_at),
         ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
         cost_usd=row.cost_usd,
+        news=review_requests.has_news(row, stored),
         seen=seen,
     )
 

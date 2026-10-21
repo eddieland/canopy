@@ -39,7 +39,7 @@ from canopy.runs import drafted, policy, reconcile
 from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from canopy.core import records
     from canopy.core.context import Context
@@ -57,6 +57,8 @@ MIB = 1024 * 1024
 # has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
 # lists it for as long once more.
 RECENTLY_DONE_DAYS = 30
+#: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
+MAX_ERRORS_NAMED = 3
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
@@ -524,7 +526,8 @@ def _run_overseer(
     again when the overseer ends, failed or not.
 
     Returns:
-        Why it failed, None on success, and what it cost if the runtime reported it.
+        Why it failed, with the errors the runtime reported unless it timed out, None on success, and what it cost if
+        the runtime reported it.
     """
     # The runtime reads the repository's config too: it must not define an agent of canopy's (D044).
     failure = project_config.refusal([ctx.repo_root])
@@ -572,8 +575,22 @@ def _run_overseer(
         failure = f"overseer's final message has no {DONE_LINE} line"
     else:
         return None, output.usage
+    # What the runtime said is why it ended; after a timeout, canopy ended it.
+    if output.errors and not result.timed_out:
+        failure = f"{failure}; the runtime reported {_reported(output.errors)}"
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure, output.usage
+
+
+def _reported(errors: Sequence[str]) -> str:
+    """`errors`, the runtime's, in order: the first, which may be the cause, and the last, which ended the run, always.
+
+    Returns:
+        Each error joined by `; then `, the middle ones counted instead past `MAX_ERRORS_NAMED`.
+    """
+    if len(errors) > MAX_ERRORS_NAMED:
+        errors = [errors[0], f"{len(errors) - 2} more", errors[-1]]
+    return "; then ".join(errors)
 
 
 def _done(message: str) -> bool:

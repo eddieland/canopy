@@ -9,11 +9,11 @@ import { mockReviews } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { ReviewSummary } from '@/api/types'
 
-import { hasResult, isNew, unseenOf, unseenText, useMarkSeen, useSeesReview, worstOf } from './seen-reviews'
+import { isNew, unseenOf, unseenText, useMarkSeen, useSeesReview, worstOf } from './seen-reviews'
 
 const RUNNING = mockReviews[0] as ReviewSummary
 
-// A review run that ended with `fields`: a clean verdict, not seen, unless they say otherwise.
+// A review run that ended with `fields`: a clean verdict the operator asked for, not seen, unless they say otherwise.
 function ended(id: number, fields: Partial<ReviewSummary> = {}): ReviewSummary {
     return {
         ...RUNNING,
@@ -22,6 +22,7 @@ function ended(id: number, fields: Partial<ReviewSummary> = {}): ReviewSummary {
         state: 'done',
         verdict: 'clean',
         ended_at: '2026-10-08T12:05:00Z',
+        news: true,
         seen: false,
         ...fields,
     }
@@ -61,12 +62,14 @@ function withReviews(reviews: ReviewSummary[]) {
 }
 
 describe('isNew', () => {
-    it('is new once ended with a verdict and not seen; a review running, or with no verdict, has no result', () => {
-        expect(hasResult(RUNNING)).toBe(false)
+    it('is new while it has a result to read and is not seen; nothing else is', () => {
         expect(isNew(RUNNING)).toBe(false)
         expect(isNew(ended(6))).toBe(true)
         expect(isNew(ended(6, { seen: true }))).toBe(false)
-        expect(isNew(ended(6, { state: 'failed', status: 'unknown', verdict: null }))).toBe(false)
+        // The server says which have a result to read: none for a run with no verdict, or a clean review the loop
+        // started on its own.
+        expect(isNew(ended(6, { state: 'failed', status: 'unknown', verdict: null, news: false }))).toBe(false)
+        expect(isNew(ended(6, { news: false }))).toBe(false)
     })
 
     it('lists the new ones in order, and none before the list arrives', () => {

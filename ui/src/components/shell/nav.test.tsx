@@ -19,10 +19,11 @@ const ITEMS: AttentionItem[] = [
     { ...WAITING, id: 'a3', reason: 'finding', finding: true, chore: 'deps', ticket_key: null },
 ]
 
-// A review run that ended with `fields`.
+// A review run that ended with `fields`: a result to read, not seen, unless they say otherwise.
 function ended(id: number, fields: Partial<ReviewSummary>): ReviewSummary {
     const running = mockReviews[0] as ReviewSummary
-    return { ...running, id, status: 'ok', state: 'done', ended_at: '2026-10-08T12:05:00Z', seen: false, ...fields }
+    const done = { status: 'ok', state: 'done', ended_at: '2026-10-08T12:05:00Z', news: true, seen: false } as const
+    return { ...running, id, ...done, ...fields }
 }
 
 const TIER: MemoryState['lessons'] = { mode: 'record', words: 'recording', band: 'Recording only.' }
@@ -139,11 +140,13 @@ describe('Nav', () => {
     })
 
     it("counts the reviews new to the operator beside Reviews, in their worst finding's color", async () => {
-        // Review 3 was seen; 6 and 7 ended since, and 8 still runs.
+        // Review 3 was seen; 6 and 7, which the operator asked for, ended since, and 8 still runs. Review 5 was clean
+        // and the loop started it on its own: it has nothing to read, so it is not counted.
         const reviews = [
-            ended(8, { state: 'running', status: 'running', ended_at: null, verdict: null }),
+            ended(8, { state: 'running', status: 'running', ended_at: null, verdict: null, news: false }),
             ended(7, { verdict: 'clean' }),
             ended(6, { verdict: 'findings', findings: 2, worst: 'major', worst_count: 1 }),
+            ended(5, { verdict: 'clean', news: false }),
             ended(3, { verdict: 'findings', findings: 1, worst: 'blocking', worst_count: 1, seen: true }),
         ]
         await renderNav({ at: '/runs', items: [], reviews })
