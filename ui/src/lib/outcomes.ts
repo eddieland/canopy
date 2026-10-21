@@ -16,6 +16,8 @@ import type {
     PlanChanged,
     Replied,
     ReviewDismissed,
+    ReviewDraft,
+    ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
     ReviewSent,
@@ -170,6 +172,42 @@ export function reviewSentText(sent: ReviewSent): string {
         return `${head} went to ${to}: the next tick reads it as your go-ahead.`
     }
     return `${head} already went to ${to}.`
+}
+
+/** What a change to review run `run`'s draft did, as `canopy review edit` says it: its version and hash now. */
+export function reviewDraftEditedText(run: number, draft: ReviewDraft): string {
+    return `Review run ${run}'s draft is version ${draft.version} now, hash ${draft.hash}: ${draft.change}.`
+}
+
+/**
+ * What a publish of review run `run`'s draft did, as `canopy review publish` says it: published, with where; staged,
+ * with where to submit it; perhaps posted, which a read of the PR settles; or not published, and why.
+ */
+export function reviewDraftPublishedText(run: number, prUrl: string, published: ReviewDraftPublished): string {
+    const { draft } = published
+    const version = `version ${published.published} of review run ${run}'s draft`
+    switch (draft.status) {
+        case 'published': {
+            return `Published ${version}: ${draft.published_url ?? prUrl}`
+        }
+        case 'staged': {
+            return `Staged ${version} in a pending review on ${prUrl}; submit or delete it at ${prUrl}/files`
+        }
+        case 'unconfirmed': {
+            return (
+                `${capitalized(version)} may have been posted: the post ended without saying. A read of the PR ` +
+                'settles it; canopy posts it no other time.'
+            )
+        }
+        case 'waiting':
+        case 'publishing': {
+            return `${capitalized(version)} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+        }
+    }
+}
+
+function capitalized(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 /** What an edit of a draft did, as `canopy draft edit` says it: the text is the operator's now, named by its hash. */

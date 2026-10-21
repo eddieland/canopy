@@ -303,7 +303,7 @@ class GitHub(procs.SubprocessRunner):
                         observed_at=db.now(),
                     ),
                 )
-                for line in (line for line in lines if line["kind"] == "comment"):
+                for line in (line for line in lines if line["kind"] == "comment" and "comment" in line):
                     answered = (
                         sql.select(
                             "pr_url, 'comment', ?, 'op', 0, ?, ?, ?, ?, thread_id, path, line, side, outdated, "
@@ -437,7 +437,11 @@ def _post(stdin: str) -> str:
             if "reaction" in r
         )
         texts = [r for r in replies if "text" in r]
-        if texts or request.get("body") is not None:
+        raw_comments = request.get("comments")
+        comments: list[object] = (
+            [c for c in raw_comments if isinstance(c, dict)] if isinstance(raw_comments, list) else []
+        )
+        if texts or comments or request.get("body") is not None:
             review = 4_102_000_000 + made
             lines.append({"kind": "pending", "review": f"PRR_mock{review}", "id": review})
             for reply in texts:
@@ -445,6 +449,10 @@ def _post(stdin: str) -> str:
                 posted = 2_469_000_000 + (answered if isinstance(answered, int) else 0) % 1_000_000
                 url = f"{pr}#discussion_r{posted}"
                 lines.append({"kind": "comment", "comment": answered, "id": posted, "url": url})
+            # A review of a commit canopy reviewed (DESIGN §34): each comment starts a thread of its own.
+            for index in range(1, len(comments) + 1):
+                posted = 2_471_000_000 + made + index
+                lines.append({"kind": "comment", "index": index, "id": posted, "url": f"{pr}#discussion_r{posted}"})
             if request.get("submit") is False:
                 lines.append({"kind": "end", "submitted": False, "staged": True})
                 return "".join(json.dumps(line) + "\n" for line in lines)

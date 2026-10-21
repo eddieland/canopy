@@ -230,8 +230,8 @@ names; you can dismiss it or send it to a worker. A chore's reaches the attentio
 
 ### Review
 
-A fresh agent's adversarial read of one PR at one commit, in one persona. canopy keeps it to itself: nothing reaches
-the PR unless you publish its draft, word for word, with `canopy review publish`. See
+A fresh agent's adversarial read of one PR at one commit, in one persona. canopy keeps it to itself and posts nothing
+of it on its own; on a PR the loop doesn't own it's also a draft of your review, posted only when you publish it. See
 [Pull requests and reviews](pull-requests#when-canopy-reviews).
 
 ### Review limit

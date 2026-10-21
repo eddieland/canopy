@@ -189,6 +189,14 @@ export type PullRequestDetail = Schemas['PullRequestDetail']
 export type ReviewDetail = Schemas['ReviewDetail']
 /** One finding, with the file and new-side line it falls on in the diff, when the diff shows them. */
 export type ReviewFinding = Schemas['ReviewFinding']
+/** A review of a PR the loop does not own as the comment review it would post (DESIGN §34), at its newest version. */
+export type ReviewDraft = Schemas['ReviewDraft']
+/** One comment of a review's draft, on a line of the diff the review kept. */
+export type ReviewDraftComment = Schemas['ReviewDraftComment']
+/** One version of a review's draft, as its history lists it. */
+export type ReviewDraftVersion = Schemas['ReviewDraftVersion']
+/** What a publish of a review's draft did: the draft as it now stands, and why nothing posted, if nothing did. */
+export type ReviewDraftPublished = Schemas['ReviewDraftPublished']
 /** How much a finding holds the merge: `blocking`, `major`, or `minor`. */
 export type FindingSeverity = Schemas['FindingSeverity']
 /** The reviewed commit's diff: the PR's own text, untrusted and bounded. */

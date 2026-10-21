@@ -214,7 +214,7 @@ test("each ticket's and PR's own runs, the costliest first, open their pages bes
     await expect(tickets.first().locator('td').nth(1)).toHaveText('$3.50')
 
     const prs = page.getByTestId('spend-pull-request-table').getByTestId('spend-pull-request')
-    await expect(prs).toHaveCount(4)
+    await expect(prs).toHaveCount(5)
     await expect(prs.last()).toContainText('none')
     await prs.first().getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)

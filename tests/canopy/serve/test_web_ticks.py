@@ -158,6 +158,7 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         ("https://github.com/acme/web/pull/91", "ABC-103", "review_pending"),
         ("https://github.com/acme/web/pull/86", "ABC-100", None),
         ("https://github.com/acme/api/pull/12", None, None),  # only reviewed
+        ("https://github.com/acme/api/pull/14", None, None),  # only reviewed, at no cost reported
     ]
     # Which tools put the most into context: the overseer's PR reads, then the workers' shell calls.
     assert [(t["kind"], t["tool"], t["runs"], t["calls"], t["result_chars"]) for t in found["tools"]][:2] == [

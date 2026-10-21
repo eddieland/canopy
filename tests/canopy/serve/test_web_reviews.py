@@ -22,18 +22,25 @@ from tests.canopy.web_helpers import SECRET, client, signed_in
 def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> None:
     listed = client(None, backend).get("/api/reviews").json()
     assert [(r["id"], r["pr_url"], r["state"], r["verdict"], r["findings"]) for r in listed] == [
+        (5, mock_reviews.PR_14, "done", "findings", 3),
         (4, mock_reviews.PR_88, "done", "findings", 3),
         (3, mock_reviews.PR_91, "failed", None, 0),
         (2, mock_reviews.PR_12, "done", "clean", 0),
         (1, mock_reviews.PR_88, "done", "findings", 1),
     ]
-    assert (listed[0]["sha"], listed[0]["ticket_key"], listed[0]["repo"]) == (mock_reviews.SHA_88, "ABC-099", "web")
-    assert listed[2]["ticket_key"] is None  # a PR review.query matched, with no ticket
+    assert (listed[1]["sha"], listed[1]["ticket_key"], listed[1]["repo"]) == (mock_reviews.SHA_88, "ABC-099", "web")
+    assert listed[3]["ticket_key"] is None  # a PR review.query matched, with no ticket
     # Its worst finding, which colors its verdict, and how many are that bad, which its verdict says: none for a clean
     # review or one that reported nothing.
-    assert [(r["worst"], r["worst_count"]) for r in listed] == [("major", 1), (None, 0), (None, 0), ("blocking", 1)]
+    assert [(r["worst"], r["worst_count"]) for r in listed] == [
+        ("major", 1),
+        ("major", 1),
+        (None, 0),
+        (None, 0),
+        ("blocking", 1),
+    ]
     # The persona each wrote in, which tells apart the reviews of one commit in several (DESIGN §31).
-    assert [r["persona"] for r in listed] == ["skeptic", "canopy", "canopy", "canopy"]
+    assert [r["persona"] for r in listed] == ["canopy", "skeptic", "canopy", "canopy", "canopy"]
 
 
 def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(backend: Backend) -> None:
@@ -281,7 +288,7 @@ def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backe
     def seen() -> list[tuple[int, bool]]:
         return [(r["id"], r["seen"]) for r in c.get("/api/reviews").json()]
 
-    assert seen() == [(4, True), (3, True), (2, False), (1, True)]
+    assert seen() == [(5, True), (4, True), (3, True), (2, False), (1, True)]
     assert c.get("/api/reviews/2").json()["review"]["seen"] is False
     assert c.post("/api/seen", json={"refs": ["review:2"]}, headers={"origin": headers["origin"]}).status_code == 403
     assert c.post("/api/seen", json={"refs": []}, headers=headers).status_code == 422
@@ -299,7 +306,7 @@ def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backe
     for ref, guard in [(f"review:{running}", "running"), ("review:99", "unknown"), ("ABC-099", "unsupported")]:
         refused = c.post("/api/seen", json={"refs": ["review:2", ref]}, headers=headers)
         assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
-    assert seen()[3] == (2, False)
+    assert seen()[4] == (2, False)
 
     marked = c.post("/api/seen", json={"refs": ["review:2", "review:4", "review:2"]}, headers=headers).json()
     assert marked == {"refs": ["review:2", "review:4"], "new": ["review:2"]}
@@ -328,3 +335,24 @@ def test_a_diff_retention_removed_says_after_how_many_days(backend: Backend) -> 
         review_diff.path_for(present(review_runs.get_review_run(ctx.conn, 4)).log_path).unlink()
     found = c.get("/api/reviews/4").json()
     assert (found["diff"], found["diff_removed_after_days"]) == (None, 30)
+
+
+def test_the_mock_drafts_a_review_of_a_coworkers_pr_and_its_poster_publishes_it(backend: Backend) -> None:
+    """Carol's PR's review is a draft (DESIGN §34): two comments on its diff, a finding in the body, posted nowhere."""
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+    draft = c.get("/api/reviews/5").json()["draft"]
+    assert (draft["status"], draft["version"]) == ("waiting", 1)
+    assert [(m["path"], m["line"], m["finding"], m["file"]) for m in draft["comments"]] == [
+        ("api/upstream.py", 15, 1, 0),
+        ("api/upstream.py", 9, 2, 0),
+    ]
+    assert "No test stops the backoff" in draft["body"]
+    # The clean review has one too, its summary alone; one of the loop's own PRs has none.
+    assert c.get("/api/reviews/2").json()["draft"]["comments"] == []
+    assert c.get("/api/reviews/4").json()["draft"] is None
+    published = c.post("/api/reviews/5/draft/publish", json={"hash": draft["hash"], "submit": True}, headers=headers)
+    assert published.status_code == 200, published.text
+    done = published.json()["draft"]
+    assert done["status"] == "published"
+    assert done["published_url"].startswith(f"{mock_reviews.PR_14}#pullrequestreview-")

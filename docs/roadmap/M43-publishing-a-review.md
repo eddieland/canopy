@@ -54,5 +54,8 @@ refused `inside_run`, stale, a second time, past its kept diff, or on a PR a tic
 stage wait for a whole read. D114 and TRUST_MODEL §6, T1, T5, and T6 changed with it. The operator's choices taken:
 staging is the default and only `--submit` submits; a version carries at most 30 comments, as one run's drafts, and
 more are refused; a published review is not followed onto the next commit; the loop's own PRs publish none; a draft is
-publishable while its diff is kept. Left: revisions on the operator's note (a review run at the same commit, its limit
-per draft, TRUST_MODEL T3), the review page's editing and publishing with Playwright (T8), and the live Accept.
+publishable while its diff is kept. Built 2026-10-21: the review's page shows the draft as it would post, each
+comment on its line of the diff, and edits it (body, comment, drop, add on a line) and publishes or stages it through
+the same functions as the CLI, from the web channel behind T8's guards, with Playwright; TRUST_MODEL T8 changed with
+it. Left: revisions on the operator's note (a review run at the same commit, its limit per draft, TRUST_MODEL T3), and
+the live Accept.

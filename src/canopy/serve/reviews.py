@@ -1,7 +1,8 @@
 """The reviews canopy keeps, as the web UI shows them (DESIGN §21): a shadow PR review, posted nowhere (D114).
 
 Reads only; dismissing a finding goes through `canopy.core.conversation`, as `canopy dismiss review:ID` does, and so
-does marking one seen, as its page does (`api/seen.py`).
+does marking one seen, as its page does (`api/seen.py`). A review of a PR the loop does not own carries its draft
+(`review_draft_views`, DESIGN §34), which posts only what the operator publishes.
 Everything a review holds is untrusted: the reviewer read the PR, the diff is the PR's own text, and its transcript and
 log are the reviewer's output. Text goes out with
 control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING, assert_never
 from canopy.core import contract, conversation, db, review_diff, review_requests, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus, SeenKind
+from canopy.serve import review_draft_views
 from canopy.serve.review_schema import (
     DiffFile,
     DiffHunk,
@@ -95,6 +97,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         diff_removed_after_days=removed_after(ctx.conn, kept, row.ended_at, "run_files_days"),
         runs=summaries(ctx.conn, review_runs.review_runs_of(ctx.conn, row.pr_url)),
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
+        draft=review_draft_views.of_review(ctx.conn, row, found),
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, ctx.workspace.root),
