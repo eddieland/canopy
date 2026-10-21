@@ -3,6 +3,7 @@ import { CopyButton } from '@/components/copy-button'
 import { FoldPanel } from '@/components/fold-panel'
 import { LinkedText } from '@/components/linked-text'
 import { Empty, Panel, PanelHeader, PanelScroll } from '@/components/panel'
+import { removedAfter } from '@/lib/retention'
 import { byteSize } from '@/lib/ticks'
 
 /**
@@ -21,16 +22,20 @@ export function PromptPanel({ transcript }: { transcript: Transcript | undefined
             </Panel>
         )
     }
-    const { prompt } = transcript
+    const { prompt, removed_after_days: removed } = transcript
     if (prompt === null) {
         return (
             <Panel data-testid="prompt">
                 <PanelHeader label="Prompt">
                     <span
                         className="readout text-xs text-muted-foreground"
-                        title="canopy kept no prompt beside this log: it was never written, or is gone"
+                        title={
+                            removed === null
+                                ? 'canopy kept no prompt beside this log: it was never written, or is gone'
+                                : 'your [retention] keeps a prompt as long as its log, once it ends'
+                        }
                     >
-                        none kept
+                        {removed === null ? 'none kept' : removedAfter(removed)}
                     </span>
                 </PanelHeader>
             </Panel>

@@ -12,8 +12,16 @@ afterEach(() => {
 })
 
 // A transcript with no events, as a run that died before its first has: the prompt is still kept.
-function transcript(prompt: TranscriptPrompt | null): Transcript {
-    return { session_id: null, status: 'no_log', entries: [], prompt, truncated: false, unreadable: 0 }
+function transcript(prompt: TranscriptPrompt | null, removed: number | null = null): Transcript {
+    return {
+        session_id: null,
+        status: 'no_log',
+        entries: [],
+        prompt,
+        truncated: false,
+        unreadable: 0,
+        removed_after_days: removed,
+    }
 }
 
 // What the panel shows of the prompt, once open.
@@ -47,6 +55,14 @@ describe('PromptPanel', () => {
         expect(screen.getByText('Prompt')).toBeDefined()
         expect(screen.getByText('none kept')).toBeDefined()
         expect(screen.queryByRole('button', { name: 'Show prompt' })).toBeNull()
+    })
+
+    it('says after how many days retention removed it, with its log', () => {
+        render(<PromptPanel transcript={transcript(null, 7)} />)
+        expect(screen.getByText('removed after 7 days').title).toBe(
+            'your [retention] keeps a prompt as long as its log, once it ends',
+        )
+        expect(screen.queryByText('none kept')).toBeNull()
     })
 
     it('holds its header while the transcript is read', () => {

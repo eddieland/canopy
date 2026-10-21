@@ -39,7 +39,16 @@ const FAILED: TranscriptEntry[] = [
 ]
 
 function transcript(entries: TranscriptEntry[] = FAILED, fields: Partial<Transcript> = {}): Transcript {
-    return { session_id: 'ses_40', status: 'read', entries, prompt: null, truncated: false, unreadable: 0, ...fields }
+    return {
+        session_id: 'ses_40',
+        status: 'read',
+        entries,
+        prompt: null,
+        truncated: false,
+        unreadable: 0,
+        removed_after_days: null,
+        ...fields,
+    }
 }
 
 // A run's page, as far as this field goes: the Run panel's field over the transcript, sharing how it is shown.

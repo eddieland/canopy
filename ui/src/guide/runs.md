@@ -96,6 +96,11 @@ When a worker did something baffling, start here: more often than not, it did wh
 definition and the runtime's own system prompt come first and aren't in it, since no file records them. A prompt over
 1 MiB shows its first 1 MiB, marked `cut`, and a run whose prompt file is gone says `none kept`.
 
+Nothing here lasts forever. Once a day the loop removes the log, prompt, and diffs of runs that ended longer ago than
+your `[retention]` keeps them, 30 days unless you say otherwise, and an old run's page then says `removed after 30
+days` where its transcript, prompt, and output were. The row stays, with its cost, status, and summary: canopy forgets
+the transcript, never that the run happened. `canopy gc --dry-run` shows what the next pass will take.
+
 Under the prompt, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
 stderr, and how it exited. The transcript shows only the session's events, so a run that died in `pnpm install`, or
 crashed before its first event, has an empty transcript and its whole story here. **Show output** opens it at its end,

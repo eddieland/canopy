@@ -47,6 +47,10 @@ tick that seems stuck can be watched being stuck. A tick that kept no output fil
 transcript's header says why, once. **Pretty** lays each event out on its own lines. The output opens at its end,
 where the errors are, since that's usually why you're reading it.
 
+A tick keeps those files for 7 days by default, and one that didn't close `ok` keeps them as long as a run does, 30,
+since those are the ones you come back to debug. After that your `[retention]` removes them, and the page says
+`removed after 7 days` where they were; the decisions stay forever.
+
 ## The spend page
 
 [Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **24 hours**, **7 days**, or **30
