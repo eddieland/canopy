@@ -53,9 +53,9 @@ DONE_LINE = "CANOPY_TICK_DONE"
 CANOPY_CHECK = ("canopy", "--version")
 CANOPY_CHECK_TIMEOUT_SECONDS = 60
 MIB = 1024 * 1024
-# How long a ticket marked done stays in the state block's `recently_done`, so the overseer leaves it out while a human
-# has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
-# lists it for as long once more.
+# How long a ticket marked done stays in the state block's `recently_done` while the query still finds it, so the
+# overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is read
+# again and marked done again, which lists it for as long once more.
 RECENTLY_DONE_DAYS = 30
 #: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
 MAX_ERRORS_NAMED = 3
@@ -183,7 +183,10 @@ def _render(
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
     planned = _plans(ctx, tickets)
-    recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
+    # Only those the query still finds open: one a human closed will not come back from it (DESIGN §7).
+    found = duties.last_queried(ctx.conn)
+    since = db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))
+    recently_done = [t for t in db.recently_done(ctx.conn, since) if str(t["key"]) in found]
     chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
     shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
     block = state.state_block(
