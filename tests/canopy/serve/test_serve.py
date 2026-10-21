@@ -26,7 +26,8 @@ from starlette.types import Message, Receive, Scope, Send
 
 from canopy.core import conversation, db
 from canopy.core.context import Context, db_path
-from canopy.serve import live, mock_reviews, secret, views
+from canopy.infra import logs
+from canopy.serve import live, mock_reviews, secret, server, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.__main__ import main
 from canopy.serve.api import session
@@ -53,7 +54,7 @@ from canopy.serve.schema import (
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present
-from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, signed_in
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, free_port, signed_in
 from tests.conftest import Journals
 
 INDEX = """<!doctype html>
@@ -754,6 +755,78 @@ def test_a_client_leaving_a_stream_mid_send_logs_no_error(ui: Path, backend: Bac
         finally:
             uvicorn_log.removeHandler(errors)
     assert [r.getMessage() for r in errors.records if r.levelno >= logging.ERROR] == []
+
+
+def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info(ui: Path, backend: Backend) -> None:
+    """uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception:
+    in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped."""
+    options = ServeOptions(ui_dir=ui, mock=True, mock_event_seconds=0.05, port=free_port())
+    sessions = Sessions(None, port=options.port, base_path="", hosts=options.hosts)
+    web = server.WebServer(create_app(options, backend, sessions), options, logs.for_tick(None))
+    handler = _Records()
+    canopy_log = logging.getLogger("canopy")
+    opened = threading.Event()
+
+    def holds_a_stream() -> None:
+        with (
+            suppress(httpx2.RemoteProtocolError),
+            httpx2.stream("GET", f"http://127.0.0.1:{options.port}/api/events", timeout=10) as response,
+        ):
+            for _ in response.iter_lines():
+                opened.set()
+
+    client_thread = threading.Thread(target=holds_a_stream, daemon=True)
+    canopy_log.addHandler(handler)
+    try:
+        with mock.patch.object(server, "GRACEFUL_SECONDS", 0.1):
+            web.start()
+            try:
+                deadline = time.monotonic() + 10
+                while not web.started and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                client_thread.start()
+                assert opened.wait(10), "the stream never opened"
+            finally:
+                web.stop()
+                if client_thread.is_alive():
+                    client_thread.join(10)
+    finally:
+        canopy_log.removeHandler(handler)
+    assert not [r for r in handler.records if r.exc_info and isinstance(r.exc_info[1], asyncio.CancelledError)]
+    [cancelled] = [r for r in handler.records if r.getMessage() == "web UI request cancelled as the server stopped"]
+    assert cancelled.levelno == logging.INFO
+
+
+@pytest.mark.parametrize(
+    ("error", "level"),
+    [
+        pytest.param(
+            asyncio.CancelledError("Task cancelled, timeout graceful shutdown exceeded"),
+            logging.INFO,
+            id="shutdown",
+        ),
+        pytest.param(asyncio.CancelledError(), logging.ERROR, id="cancelled by the app"),
+        pytest.param(
+            ValueError("Task cancelled, timeout graceful shutdown exceeded"),
+            logging.ERROR,
+            id="not a cancel",
+        ),
+    ],
+)
+def test_only_uvicorns_cancel_at_shutdown_reaches_canopy_log_at_info(error: BaseException, level: int) -> None:
+    """Any other exception, a `CancelledError` the app raises itself among them, keeps its level and traceback."""
+    handler = _Records()
+    canopy_log = logging.getLogger("canopy")
+    record = logging.LogRecord("uvicorn.error", logging.ERROR, __file__, 1, "Exception in ASGI application\n", (), None)
+    record.exc_info = (type(error), error, None)
+    canopy_log.addHandler(handler)
+    try:
+        server._ToCanopyLog().emit(record)  # noqa: SLF001  (the handler uvicorn's records reach canopy's log through)
+    finally:
+        canopy_log.removeHandler(handler)
+    [handed] = handler.records
+    assert handed.levelno == level
+    assert (handed.exc_info is None) == (level == logging.INFO)
 
 
 _READ = live._Reader.read  # noqa: SLF001  (the stream's reads, on its own thread)

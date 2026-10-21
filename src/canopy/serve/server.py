@@ -3,11 +3,13 @@
 uvicorn installs signal handlers only on the main thread, so in this one it installs none and the loop's own handle
 Ctrl-C (DESIGN §6). It logs nothing to the terminal, where the loop draws its output: its warnings and errors go to
 canopy's log. `stop` sets uvicorn's `should_exit`, which ends the server within `GRACEFUL_SECONDS` even with streams
-open.
+open: uvicorn cancels each request still open then, and logs its `CancelledError` as an exception, which reaches
+canopy's log as a line at INFO, since the server stopping as asked is no error.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
@@ -28,6 +30,9 @@ MAX_RETRY_SECONDS = 60.0
 HEALTHY_SECONDS = 60.0
 GRACEFUL_SECONDS = 2
 _UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
+#: What uvicorn cancels a request still open with, once `GRACEFUL_SECONDS` pass. A `CancelledError` without it, such as
+#: one the app raises itself, is logged as uvicorn logs it; so is this one, if uvicorn ever words it otherwise.
+_SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
 
 
 class _ToCanopyLog(logging.Handler):
@@ -35,6 +40,9 @@ class _ToCanopyLog(logging.Handler):
 
     @override
     def emit(self, record: logging.LogRecord) -> None:
+        error = record.exc_info[1] if record.exc_info is not None else None
+        if isinstance(error, asyncio.CancelledError) and error.args == (_SHUTDOWN_CANCEL,):
+            record = _cancelled(record)
         logging.getLogger("canopy").handle(record)
 
 
@@ -112,3 +120,9 @@ class WebServer:
             self._log.info("web UI server restarting", extra={"after_seconds": delay})
             self._stopping.wait(delay)
             delay = min(delay * 2, MAX_RETRY_SECONDS)
+
+
+def _cancelled(record: logging.LogRecord) -> logging.LogRecord:
+    # One line at INFO, without the traceback, which says only where the request was waiting.
+    fields = {"levelno": logging.INFO, "levelname": "INFO", "args": (), "exc_info": None, "exc_text": None}
+    return logging.makeLogRecord({**vars(record), **fields, "msg": "web UI request cancelled as the server stopped"})
