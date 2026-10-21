@@ -22,6 +22,9 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; a chore must not reach them.
   task: deny
+  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
+  skill:
+    "canopy": deny
   # A chore reads the tracker and writes nothing to it (TRUST_MODEL T6). At the marked line canopy renders, off a GitHub
   # tracker, the tracker's server denied by a wildcard and each of its read tools allowed by name: OpenCode sends no
   # other tool of it, and a write no pattern names fails closed (D021). GitHub's issue reads stay, as the chore's prompt
