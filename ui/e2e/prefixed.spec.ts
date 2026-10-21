@@ -604,7 +604,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(page.getByTestId('plan-card')).toContainText('superseded')
 })
 
-// The mock's lessons are recording (canopy/serve/mock.py, `_memory`): a promoted lesson is served to no run.
+// The mock's lessons are recording (canopy/serve/mock_memory.py): a promoted lesson is served to no run.
 test("a proposal is promoted in the operator's words and another rejected from the memory page", async ({ page }) => {
     await page.goto('memory')
     const proposals = page.getByTestId('memory-proposals')
