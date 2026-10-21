@@ -1,4 +1,4 @@
-"""End to end: `canopy tick --dry-run` against the fake treehouse and a fake overseer that calls the real `canopy`."""
+"""End to end: `canopy tick --dry-run` against the fake treehouse and a fake overseer that calls canopy's real tools."""
 
 import errno
 import json
@@ -16,9 +16,11 @@ from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import lock, logs, procs
-from canopy.loop import attention, duties, tick
+from canopy.loop import attention, duties, mcp, tick
 from tests.canopy.helpers import (
+    LABEL,
     agent_runs,
+    calls,
     canopy,
     in_tick,
     only_tick,
@@ -30,27 +32,33 @@ from tests.canopy.helpers import (
     waits,
     with_events,
 )
-from tests.canopy.scenario_helpers import Scenario, Ticked, dispatches, raises, sets_phase
+from tests.canopy.scenario_helpers import Scenario, Ticked, sets_phase
 from tests.conftest import CanopyEnv, executable
 
 
 def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_state: Path) -> None:
     env = scenario.env
     ticked = scenario.tick(
-        *waits("PROJ-1", rationale="checks pending"),
-        sets_phase("PROJ-1", Phase.CI_RUNNING, repo="repo", cursor="ci=run-1"),
-        dispatches("PROJ-2"),
-        raises("PROJ-3", "needs_reviewer", "https://example.test/pr/3"),
-        canopy("decide", "PROJ-4;rm", "wait", "--rationale", "bad key"),
+        calls("canopy_decide", key="PROJ-1", action="wait", rationale="checks pending"),
+        calls("canopy_ticket-set", key="PROJ-1", repo="repo", phase="ci_running", cursors={"ci": "run-1"}),
+        calls("canopy_dispatch", key="PROJ-2", kind="implement", label=LABEL, repos=["repo"]),
+        calls("canopy_attention", key="PROJ-3", reason="needs_reviewer", detail="https://example.test/pr/3"),
+        calls("canopy_decide", key="PROJ-4;rm", action="wait", rationale="bad key"),
         dry_run=True,
     )
     assert ticked.printed.out.startswith("tick 1: ok: dry run; 4 decisions")
 
     [run] = agent_runs(scenario.agent_log)
-    commands = run["commands"]
-    assert isinstance(commands, list)
-    assert commands[0]["argv"] == ["canopy", "queried"]  # the query was due, and found nothing
-    assert [c["returncode"] for c in commands] == [0, 0, 0, 0, 0, 2], commands
+    assert run["commands"] == []  # it ran no command: it acted through its tools alone (DESIGN §27)
+    made = run["tools"]
+    assert isinstance(made, list)
+    assert [c["name"] for c in made] == [
+        f"canopy_{name}" for name in ("queried", "decide", "ticket-set", "dispatch", "attention", "decide")
+    ]
+    assert made[0]["arguments"] == {"keys": []}  # the query was due, and found nothing
+    # A refusal is a tool error naming the field, and the overseer goes on: nothing recorded it.
+    assert [c["error"] for c in made] == [False] * 5 + [True], made
+    assert made[-1]["text"].startswith("key: invalid ticket key 'PROJ-4;rm'")
     argv = run["argv"]
     assert isinstance(argv, list)
     assert argv[:3] == ["run", "--agent", "canopy-overseer"]
@@ -67,7 +75,14 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     assert '"labels":["agent-ready-tester"]' in state
     assert run["cwd"] == str(env.root)
     snapshot = definitions.ensure(env.state_dir, config.load(env.root))
-    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
+    # Its tools: canopy's own server, in the inline config of its process alone, and code mode, which hides them, off.
+    server = {"type": "local", "command": list(mcp.COMMAND), "cwd": str(env.root), "enabled": True, "timeout": 900_000}
+    assert run["env"] == {
+        "CANOPY_TICK_ID": "1",
+        "OPENCODE_CONFIG_DIR": str(snapshot),
+        "OPENCODE_CONFIG_CONTENT": json.dumps({"mcp": {"canopy": server}}),
+        "OPENCODE_EXPERIMENTAL_CODE_MODE": "false",
+    }
     assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
     conn = scenario.conn
@@ -400,7 +415,7 @@ def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(scenario
     failed = scenario.tick(dry_run=True, code=1)
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == "overseer_failed"
-    assert f"defines one of canopy's agents ({config})" in failed.tick.summary
+    assert f"defines one of canopy's agents or its MCP server `canopy` ({config})" in failed.tick.summary
     assert not scenario.agent_log.exists()
 
 
@@ -478,41 +493,37 @@ def test_a_tick_that_raises_closes_error_naming_it(scenario: Scenario) -> None:
 
 
 @contextmanager
-def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
-    """Until the block ends, the `canopy` on PATH, where the overseer would find it, runs `script`, and is the only one.
-
-    The only one: exec reports a missing interpreter as a missing file, so a PATH search goes on to the next `canopy`.
-    """
-    bin_dir = tmp_path / "broken-bin"
-    bin_dir.mkdir()
-    launcher = bin_dir / "canopy"
-    executable(launcher, script)
-    others = [d for d in os.environ["PATH"].split(os.pathsep) if d and not (Path(d) / "canopy").exists()]
-    with mock.patch.dict(os.environ, {"PATH": os.pathsep.join([str(bin_dir), *others])}):
+def broken_server(tmp_path: Path, script: str | None) -> Iterator[None]:
+    """Until the block ends, the server of the overseer's tools is `script`, or an interpreter that is gone if None."""
+    server = tmp_path / "broken-server"
+    if script is not None:
+        executable(server, script)
+    with mock.patch.object(mcp, "COMMAND", (str(server),)):
         yield
 
 
 @pytest.mark.parametrize(
     ("script", "summary"),
     [
-        # A launcher whose environment is gone: its interpreter no longer exists (MEASUREMENTS 2026-10-12, F1).
-        ("#!/nonexistent/venv/bin/python\n", "`canopy` does not start for the overseer: command not found: canopy"),
-        (
-            "#!/bin/sh\necho 'no module named canopy' >&2\nexit 1\n",
-            "`canopy --version` exited 1: no module named canopy",
-        ),
+        # An interpreter that is gone, as a launcher's is once its environment is (MEASUREMENTS 2026-10-12, F1).
+        (None, "`canopy _mcp` does not start for the overseer: command not found: {server}"),
+        ("#!/bin/sh\necho 'no module named canopy' >&2\nexit 1\n", "`canopy _mcp` exited 1: no module named canopy"),
+        ("#!/bin/sh\necho 'not a server'\n", "`canopy _mcp` did not answer initialize: not a server"),
     ],
+    ids=["gone", "fails", "no-answer"],
 )
-def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
+def test_a_server_that_cannot_start_closes_the_tick_without_the_overseer(
     scenario: Scenario,
     tmp_path: Path,
-    script: str,
+    script: str | None,
     summary: str,
 ) -> None:
     scenario.tick(dry_run=True)  # an `ok` tick, whose list the failed one leaves standing
-    with broken_canopy(tmp_path, script):
+    summary = summary.format(server=tmp_path / "broken-server")
+    with broken_server(tmp_path, script):
         broken = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
-    assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
+    # The overseer ran for the first tick alone: one that started would have no tools, so could record nothing.
+    assert len(agent_runs(scenario.agent_log)) == 1
 
     assert [(t.tick.status, t.tick.summary) for t in broken] == [("canopy_unavailable", summary)] * 2
     assert scenario.attention() == [(None, "canopy_unavailable")]
@@ -521,7 +532,7 @@ def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
     assert item.since == broken[0].decisions[0].created_at  # open since the first tick of the streak
     assert "canopy_unavailable" in (scenario.env.state_dir / "attention.md").read_text()
 
-    # Once `canopy` works again, the next tick runs the overseer and the item is gone.
+    # Once the server starts again, the next tick runs the overseer and the item is gone.
     scenario.tick(dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
@@ -622,9 +633,9 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
     db.record_decision(conn, earlier, "PROJ-2", "attention:worker_failed", "run 3 ended failed")
     db.record_decision(conn, earlier, None, "attention:chore_failed", "it failed", chore="nightly")
     db.finish_tick(conn, earlier, TickStatus.OK, "")
-    # The latest tick found `canopy` broken: its item is listed, but the harness raised it, not the overseer.
+    # The latest tick found the tools' server broken: its item is listed, but the harness raised it, not the overseer.
     broken = db.start_tick(conn, dry_run=True)
-    db.record_decision(conn, broken, None, "attention:canopy_unavailable", "`canopy --version` exited 1")
+    db.record_decision(conn, broken, None, "attention:canopy_unavailable", "`canopy _mcp` exited 1")
     db.finish_tick(conn, broken, TickStatus.CANOPY_UNAVAILABLE, "")
     since = [r[0] for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
 

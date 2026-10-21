@@ -5,7 +5,9 @@ the operator replies, and the test checks what canopy did. The `scenario` fixtur
 functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, `skips_tick`,
 and `waits` from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
 `helpers.py` with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's
-flags spelled as keywords.
+flags spelled as keywords. Those moves run the overseer's commands; a tick's move may instead be a call of one of
+canopy's tools, `calls("canopy_decide", key=..., ...)` from `helpers.py`, made through the server as the overseer makes
+it.
 
     def test_a_red_check_resumes_the_branch(scenario: Scenario, git_pool: GitPool) -> None:
         scenario.run(worker=pushes())
@@ -153,6 +155,7 @@ from tests.canopy.helpers import (
     TICK_DONE,
     WORKER_DONE,
     Behavior,
+    Called,
     InlineRunner,
     Script,
     blocked_result,
@@ -483,7 +486,7 @@ class Scenario:
 
     def tick(
         self,
-        *commands: list[str],
+        *moves: list[str] | Called,
         worker: Worker | None = None,
         workers: Mapping[str, Script] | None = None,
         dry_run: bool = False,
@@ -493,7 +496,10 @@ class Scenario:
         result: str = TICK_DONE,
         **overseer: Unpack[Behavior],
     ) -> Ticked:
-        """Run one tick, `canopy tick`, its overseer running `commands`, and wait for each run it dispatches to end.
+        """Run one tick, `canopy tick`, its overseer making `moves`, and wait for each run it dispatches to end.
+
+        A move is a command it runs, such as `dispatches(...)`, or a call of one of canopy's tools, `calls(...)`: it
+        makes every call first, then runs every command.
 
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
@@ -507,11 +513,13 @@ class Scenario:
         """
         argv = ["tick", "--dry-run"] if dry_run else ["tick"]
         recorded = "skip" if queried is None else json.dumps(list(queried))
+        commands = [move for move in moves if not isinstance(move, Called)]
+        tools = [move for move in moves if isinstance(move, Called)]
         with ExitStack() as stack:
-            stack.enter_context(overseer_does(*commands, result=result, queried=recorded, **overseer))
+            stack.enter_context(overseer_does(*commands, tools=tools, result=result, queried=recorded, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
-            stack.enter_context(_each_ticket(worker, workers or {}, commands))
+            stack.enter_context(_each_ticket(worker, workers or {}, moves))
             if hold:
                 stack.enter_context(self._held())
             exited, printed = _printing(lambda: main(argv))
@@ -1024,9 +1032,17 @@ def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
 
 
 @contextmanager
-def _each_ticket(worker: Worker | None, workers: Mapping[str, Script], commands: Iterable[list[str]]) -> Iterator[None]:
-    # Each ticket a command dispatches, and each `workers` names, gets its script made for it; a run reads its own.
-    dispatched = [command[2] for command in commands if command[:2] == ["canopy", "dispatch"]]
+def _each_ticket(
+    worker: Worker | None,
+    workers: Mapping[str, Script],
+    moves: Iterable[list[str] | Called],
+) -> Iterator[None]:
+    # Each ticket a move dispatches, and each `workers` names, gets its script made for it; a run reads its own.
+    dispatched = [
+        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
+        for move in moves
+        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
+    ]
     every = worker if isinstance(worker, Script) else None
     made = {
         key: script.for_ticket(key)

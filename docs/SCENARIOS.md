@@ -33,8 +33,10 @@ any OpenCode upgrade, and before relying on a permission they check.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.
-- **S4. A heredoc `canopy` command** (M19). Confirmed in OpenCode's source (1.18.35), not in a run. Check that the
-  overseer's `canopy *` rule admits `canopy mirror` fed by a heredoc.
+- **S56. The overseer's tools** (M48). Run a tick on the pinned OpenCode. Expect its transcript to show `canopy_*`
+  tool calls and no `bash`, every duty met through them, and a worker it dispatches offered no `canopy_*` tool. After
+  an upgrade, check too that `OPENCODE_EXPERIMENTAL_CODE_MODE=false` still turns code mode off, and that a tool call
+  still waits as long as the entry's `timeout`.
 - **S44. The token split** (M33). Confirmed in OpenCode's source (1.19.3), not in a run. canopy's new tokens add a
   `step_finish`'s `output` and `reasoning` (`runtime/opencode/events.py`), which holds only while `output` leaves
   reasoning out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the
@@ -409,3 +411,8 @@ Retired 2026-10-19. Split runs are gone, replaced by follow-ups (M46).
 
 - **S2. The splitter's MCP name patterns** (M8). The splitter's definition is gone.
 - **S15. A split on request** (M8). A reply asking for a split is now guidance to the ticket's next run.
+
+Retired 2026-10-20. The overseer has no shell; it mirrors through a tool (M48).
+
+- **S4. A heredoc `canopy` command** (M19). No heredoc is left to admit: a comment's body is a field of the `mirror`
+  tool.

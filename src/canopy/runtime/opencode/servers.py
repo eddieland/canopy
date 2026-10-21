@@ -27,13 +27,18 @@ CODE_MODE_ENV = "OPENCODE_EXPERIMENTAL_CODE_MODE"
 VARIABLES = frozenset({INLINE_CONFIG_ENV, CODE_MODE_ENV})
 
 
-def env(server: str, command: Sequence[str], *, cwd: Path) -> dict[str, str]:
+def env(server: str, command: Sequence[str], *, cwd: Path, timeout_seconds: int | None = None) -> dict[str, str]:
     """The environment that gives a run local MCP server `server`, run as `command` in `cwd`.
+
+    `timeout_seconds`, when given, bounds each request OpenCode makes of it, a tool call included; OpenCode's own
+    default is a minute, and an overseer's dispatch can wait longer than that on a lease.
 
     Returns:
         The variables to set on the run's process: the server in its inline config, and code mode off.
     """
-    entry = {"type": "local", "command": list(command), "cwd": str(cwd), "enabled": True}
+    entry: dict[str, object] = {"type": "local", "command": list(command), "cwd": str(cwd), "enabled": True}
+    if timeout_seconds is not None:
+        entry["timeout"] = timeout_seconds * 1000
     return {INLINE_CONFIG_ENV: json.dumps({"mcp": {server: entry}}), CODE_MODE_ENV: "false"}
 
 

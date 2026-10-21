@@ -90,14 +90,15 @@ permission:
   "*list_issue_types*": deny
   "*list_issue_fields*": deny
   "*get_label*": deny
+  # canopy's own tools, the overseer's and a chore's history, are theirs alone (DESIGN §19, §27): denied by pattern,
+  # before the exceptions below.
+  "canopy_*": deny
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
-  # pattern, so none above, such as `*merge*`, closes one.
+  # pattern, so none above, such as `*merge*` or `canopy_*`, closes one.
   "canopy_git_merge-base": allow
   "canopy_git_diff": allow
   "canopy_git_log": allow
   "canopy_git_show": allow
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
-  "canopy_chore_history": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" prompt, print

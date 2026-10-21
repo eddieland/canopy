@@ -313,8 +313,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     }
   ],
   "mirror": {
-    "max_per_tick": 100,
-    "body_delimiter": "CANOPY_BODY_0123456789abcdef"
+    "max_per_tick": 100
   },
   "query_due": false,
   "tick_id": 2,

@@ -156,7 +156,10 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws_scenario: Scenari
     assert ws_scenario.run(dispatches(repo="api", slug="login"), worker=login).kind == RunKind.IMPLEMENT
     # The first implement named the branch; a later one adds a unit on the same branch, and may not rename it.
     assert ws_scenario.refuses(dispatches(repo="web", slug="other")) == [
-        ("refused:bad_slug", "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug"),
+        (
+            "refused:bad_slug",
+            "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out slug (--slug)",
+        ),
     ]
     ws_scenario.run(dispatches(repo="web", slug="login"), worker=login)
     ws_scenario.run(ci_fix("api"), worker=login)
@@ -209,7 +212,7 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
         assert decisions(conn, tick_id) == [
             (
                 "refused:bad_slug",
-                "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug",
+                "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out slug (--slug)",
             ),
         ]
 

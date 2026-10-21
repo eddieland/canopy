@@ -160,13 +160,13 @@ implementation bound in its place. No interface: one runtime at a time.
 
 Agent definitions ship in `agents/`:
 
-- `canopy-overseer`: read-only tools plus bash restricted to `canopy *`, `treehouse status*`, and the commands the
+- `canopy-overseer`: read-only tools plus canopy's own tools, each allowed by name (§27); no shell but the commands the
   operator names in `runtime.allow_bash` (private, T7), nothing outside the workspace, one command per bash call.
-  canopy renders those last of its bash rules, since the last match wins and its definition is merged after the
-  operator's runtime config, and refuses one that runs a command it is given or is the loop's own (TRUST_MODEL T1).
-  Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and loses every decision not yet
-  recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and branches, and of issues only when
-  they are the tickets.
+  canopy renders those last of its bash rules, after the deny of every other command, since the last match wins and
+  its definition is merged after the operator's runtime config, and refuses one that runs a command it is given or is
+  the loop's own (TRUST_MODEL T1). Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and
+  loses every decision not yet recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and
+  branches, and of issues only when they are the tickets.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels, follow-ups), GitHub (open and
   update a PR, read reviews and checks); merge, review submission, closing, transition, delete, fork, API file and
   branch writes, and other agents or workflow runs denied by name (D084).
@@ -174,6 +174,9 @@ Agent definitions ship in `agents/`:
   by name, and of GitHub, issue reads only when they are the tickets.
 - `canopy-chore`: no edits or subagents, and no shell but its own history; MCP write tools denied by name, and of the
   tracker's server, its read tools only, by name (§19).
+
+Every definition but the overseer's denies canopy's own tools, `canopy_*`; a chore's then allows its history, and the
+reviewer's and the planner's canopy's read-only git tools, each by exact name (§27).
 
 None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 A tool an agent never calls is denied whole, since the runtime sends every schema it allows on every call and none it
@@ -290,13 +293,13 @@ says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the o
 raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswered question (§22, §25, §36),
 `repo_missing` for a mapped repository with no clone (§18), `connector_failed` about the workspace, one item naming
 every source whose run that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick
-whose `canopy --version` or free-disk check failed (§6 step 5). Follow-ups a run filed are an event, not an item: the
-sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has decided
-on one. It raises `follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not record, until
-the ticket is done or forgotten (§18).
+whose check of the overseer's tools or free disk failed (§6 step 5). Follow-ups a run filed are an event, not an item:
+the sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has
+decided on one. It raises `follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not
+record, until the ticket is done or forgotten (§18).
 
-**Recorded by the overseer.** The overseer records an item with `canopy attention <KEY> <reason> --detail ...`, every
-tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
+**Recorded by the overseer.** The overseer records an item with its `attention` tool (§27), with a reason and a detail,
+every tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
 decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
 `skipped` tick leaves the previous list standing; `canopy_unavailable` or `disk_low` is added to it while it is the
 latest tick's. The state block lists the overseer's open items (§6 step 4), so it records each again until it sees the
@@ -318,8 +321,8 @@ open item is never notified twice, and an item that returns after going away is 
   records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.
 - treehouse unavailable or failing in reconcile: the tick closes `reconcile_failed`; the overseer does not run.
-- `canopy --version` fails from the overseer's environment: the tick closes `canopy_unavailable`, the overseer does not
-  run, and the item of that name stays until a tick ends otherwise (§6 step 5).
+- The server of the overseer's tools does not answer `initialize`: the tick closes `canopy_unavailable`, the overseer
+  does not run, and the item of that name stays until a tick ends otherwise (§6 step 5).
 - Too little free disk: the tick closes `disk_low` the same way. Runs already going keep going; none starts until a
   tick finds the space.
 - Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.

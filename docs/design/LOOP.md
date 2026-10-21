@@ -35,21 +35,20 @@ in order:
    lists the overseer's own open attention items, without their detail, which may quote a comment: an item stays open
    only while every tick records it again (MEASUREMENTS 2026-10-13). Rejected: a harness that keeps an item until the
    overseer resolves it, which leaves an item standing whenever the overseer forgets one.
-5. **Check the disk and `canopy`, then run the overseer.** If the state directory's or the workspace's filesystem has
-   less than `loop.min_free_disk_mib` free, the tick records `attention:disk_low` and closes `disk_low`: the overseer
-   and the runs it would start are what fill a disk, and a full one can kill the loop mid-write. Reconcile has run, so
-   what frees space still does. If `canopy` as the overseer would find it does not run, the tick records
-   `attention:canopy_unavailable` and closes `canopy_unavailable` without running an overseer that could record
-   nothing (MEASUREMENTS 2026-10-12). Rejected: putting this canopy's launcher first on the overseer's PATH, which
-   overrides the operator's.
+5. **Check the disk and the overseer's tools, then run the overseer.** If the state directory's or the workspace's
+   filesystem has less than `loop.min_free_disk_mib` free, the tick records `attention:disk_low` and closes
+   `disk_low`: the overseer and the runs it would start are what fill a disk, and a full one can kill the loop
+   mid-write. Reconcile has run, so what frees space still does. If the server of the overseer's tools (§27), started
+   as the runtime would start it, does not answer `initialize`, the tick records `attention:canopy_unavailable` and
+   closes `canopy_unavailable` without running an overseer that could record nothing (MEASUREMENTS 2026-10-12).
 
-   Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set; the overseer's commands refuse
-   unless it names a running tick (D020). Its output goes to a log only the operator can read, never to the journal. It
-   succeeded if it exited 0 and a line of its final message (§13) is exactly `CANOPY_TICK_DONE`, which catches a run
-   that exits 0 short of the last step; otherwise the tick closes `overseer_failed`. A successful run that recorded a
-   tick-wide skip, such as the tracker's MCP being down, closes the tick `skipped`, which leaves the attention list
-   standing, so an outage does not resolve and re-raise every item. What it started before the skip stands: an outage
-   of one server does not hold work that needs nothing from it (§15).
+   Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its
+   environment alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the
+   operator can read, never to the journal. It succeeded if it exited 0 and a line of its final message (§13) is
+   exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise the tick closes
+   `overseer_failed`. A successful run that recorded a tick-wide skip, such as the tracker's MCP being down, closes the
+   tick `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise every item.
+   What it started before the skip stands: an outage of one server does not hold work that needs nothing from it (§15).
 
    **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7); a
    decision for every ticket in the block and every ticket the query returned, except those stopped or recently done;
@@ -59,7 +58,7 @@ in order:
    2026-10-15). The check sees that a duty was done, not that it was done well.
 
    In a dry run (D036), dispatch checks the live guards (§8) and starts nothing, no cursor advances, and nothing is
-   marked done. What the overseer writes is rendered into a later prompt, so the CLI validates its keys, verbs,
+   marked done. What the overseer writes is rendered into a later prompt, so its tools validate its keys, verbs,
    reasons, phases (§7), and cursor ids, and bounds its free text.
 6. Close the tick with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20)
