@@ -384,7 +384,7 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
                         <code className="font-mono">{source.key}</code>
                         {replaced.text !== null && (
                             <>
-                                : <MemoryText text={replaced.text} className="text-foreground" />
+                                : <MemoryText text={replaced.text} className="text-foreground" lines />
                             </>
                         )}
                     </>

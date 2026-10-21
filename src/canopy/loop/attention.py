@@ -36,6 +36,7 @@ from canopy.core import (
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs
+from canopy.infra.text import printable
 from canopy.notify import deliver
 from canopy.runs import drafted
 
@@ -348,9 +349,10 @@ def awaiting_detail(waiting: conversation.Awaiting) -> str:
     """The `awaiting_reply` item's detail: the question, and how to answer it (DESIGN §22).
 
     Returns:
-        The message id and the question on one line, cut to 1800 characters, then the `canopy reply` to answer it.
+        The message id and the question, its line breaks kept, cut to 1800 characters, then the `canopy reply` to
+        answer it.
     """
-    text = f"message {waiting.message_id}: {one_line(waiting.question)}"
+    text = f"message {waiting.message_id}: {printable(waiting.question).strip()}"
     return f"{text[:1800]}; answer with `canopy reply {waiting.key}`"
 
 

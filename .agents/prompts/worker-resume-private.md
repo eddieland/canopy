@@ -166,4 +166,4 @@ prompt comes first.
 
 Your last line of stdout must be exactly one JSON object, with nothing after it:
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed, line breaks sparingly>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}
