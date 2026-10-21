@@ -105,5 +105,7 @@ any directory finds it; it prints each assistant message's `providerID`, `modelI
 redacts its text, reasoning, tool output, and paths; a session it lacks is `Session not found` on stderr and exit 1.
 The sandbox's templates share OpenCode's data directory, so sandboxed runs are found too. Subagent sessions are not in
 their parent's export. Built (2026-10-20): the read, from `opencode export --sanitize` after each live tick, five
-runs a tick at most, a failed read tried again a day later up to three reads, and `canopy spend`'s split by model. Not
-built yet: the model shown in `canopy status` and the web UI's pages, and the choosing itself.
+runs a tick at most, a failed read tried again a day later up to three reads, and `canopy spend`'s split by model.
+Built (2026-10-21): the web UI's run, tick, chore run, and review run pages, and the runs list, name each run's models,
+each with its share of the cost when there are several, or why none is named yet. Not built yet: the model shown in
+`canopy status`, and the choosing itself.

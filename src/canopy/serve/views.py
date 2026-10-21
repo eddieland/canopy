@@ -25,11 +25,12 @@ from canopy.core import (
     pause,
     plans,
     records,
+    run_models,
     search,
 )
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
-from canopy.core.vocab import ChoreRunStatus, RunStatus
+from canopy.core.vocab import ChoreRunStatus, ModelsRead, RunStatus
 from canopy.runtime import entries, transcript
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
@@ -52,6 +53,7 @@ from canopy.serve.schema import (
     Message,
     MessageKind,
     MessageSource,
+    ModelsServed,
     NoticeChannel,
     Pause,
     PauseChannel,
@@ -62,6 +64,7 @@ from canopy.serve.schema import (
     RunState,
     SearchHit,
     SearchResults,
+    ServedModel,
     Spend,
     SpendBreakdown,
     SpendCosts,
@@ -93,6 +96,7 @@ from canopy.serve.schema import (
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
 
     from canopy.core.context import Context
     from canopy.serve import backend as served
@@ -369,6 +373,7 @@ def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
         output_path=shown_path(str(output), ctx.workspace.root) if output.exists() else None,
         previous_id=previous_id,
         next_id=next_id,
+        models=models_served(ctx.conn, "ticks", tick_id, ended=row.ended_at is not None, session_id=row.session_id),
     )
 
 
@@ -440,7 +445,25 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
         return None
     root = ctx.workspace.root
     held = db.all_run_slots(ctx.conn, [run_id] if row["status"] == "running" else []).get(run_id, [])
-    return run(row, root, [shown_path(str(s.slot_path), root) for s in held])
+    served = models_served(ctx.conn, "runs", run_id, ended=row["ended_at"] is not None, session_id=row["session_id"])
+    return run(row, root, [shown_path(str(s.slot_path), root) for s in held], served)
+
+
+def models_served(
+    conn: sqlite3.Connection,
+    table: run_models.RunTable,
+    run_id: int,
+    *,
+    ended: bool,
+    session_id: str | None,
+) -> ModelsServed:
+    """Which models served a run, as canopy last read them from its session (DESIGN §13, Each agent's model).
+
+    Returns:
+        The models when its session was read, else why there are none to show yet, or ever.
+    """
+    read = run_models.reads_of(conn, table, [run_id]).get(run_id)
+    return _served(read, run_models.of_run(conn, table, run_id), ended=ended, session_id=session_id)
 
 
 def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
@@ -553,11 +576,21 @@ def runs(ctx: Context) -> list[Run]:
         The running runs with the worktrees they hold, then at most `RECENT_RUNS` that ended.
     """
     running = db.running_runs(ctx.conn, "runs")
+    recent = db.recent_runs(ctx.conn, RECENT_RUNS)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
+    ended = [int(r["id"]) for r in recent]
+    reads, models = run_models.reads_of(ctx.conn, "runs", ended), run_models.of_runs(ctx.conn, "runs", ended)
     root = ctx.workspace.root
+    running_models = ModelsServed(status="running")
     return [
-        *(run(r, root, [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]]) for r in running),
-        *(run(r, root) for r in db.recent_runs(ctx.conn, RECENT_RUNS)),
+        *(
+            run(r, root, [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]], running_models)
+            for r in running
+        ),
+        *(
+            run(r, root, models=_served(reads.get(i), models[i], ended=True, session_id=r["session_id"]))
+            for i, r in zip(ended, recent, strict=True)
+        ),
     ]
 
 
@@ -596,8 +629,10 @@ def shown_path(path: str, root: Path) -> str:
     return str(found.relative_to(root)) if found.is_relative_to(root) else path
 
 
-def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run:
+def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models: ModelsServed | None = None) -> Run:
     """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
+
+    On the run's own page it carries `models`, the models that served it.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -628,7 +663,38 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         activity=_activity(row) if status == "running" else None,
         persona=str(row["persona"]) if row["persona"] is not None else None,
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
+        models=models,
     )
+
+
+def _served(
+    read: records.RunModelRead | None,
+    models: Sequence[records.RunModel],
+    *,
+    ended: bool,
+    session_id: str | None,
+) -> ModelsServed:
+    """What a run's last read of its session for its models, `read`, and the `models` it found, show (DESIGN §13).
+
+    Returns:
+        The models when the read found them, else why there are none to show yet, or ever.
+    """
+    if read is None and not ended:
+        return ModelsServed(status="running")
+    if read is None:
+        return ModelsServed(status="unread" if session_id else "no_session")
+    match read.status:
+        case ModelsRead.FOUND:
+            return ModelsServed(
+                status="found",
+                models=[ServedModel(model=m.model, replies=m.replies, cost_usd=m.cost_usd) for m in models],
+            )
+        case ModelsRead.MISSING:
+            return ModelsServed(status="missing")
+        case ModelsRead.FAILED:
+            return ModelsServed(status="failed", error=read.error)
+        case _:
+            assert_never(read.status)
 
 
 def _activity(row: sqlite3.Row) -> RunActivity | None:
@@ -1023,6 +1089,13 @@ def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | N
             )
             for f in (parsed.findings if parsed is not None else [])
         ],
+        models=models_served(
+            ctx.conn,
+            "chore_runs",
+            run_id,
+            ended=row.ended_at is not None,
+            session_id=row.session_id or None,
+        ),
     )
 
 

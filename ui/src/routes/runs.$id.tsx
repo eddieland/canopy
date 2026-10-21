@@ -10,6 +10,7 @@ import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
 import { FoldPanel } from '@/components/fold-panel'
 import { MemoryKinds } from '@/components/memory'
+import { ModelsField } from '@/components/models-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -140,6 +141,7 @@ function RunPanel({
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
+                {run.models !== null && <ModelsField models={run.models} />}
                 <Field label="branch" mono>
                     {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>

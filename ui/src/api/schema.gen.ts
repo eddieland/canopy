@@ -1836,6 +1836,8 @@ export type components = {
              * @default []
              */
             findings: components["schemas"]["ChoreRunFinding"][];
+            /** @description Which models served it. */
+            models: components["schemas"]["ModelsServed"];
             /**
              * Note
              * @description Why the harness decided the run's status, when it did: a timeout, a crash, a result that did not validate.
@@ -3221,6 +3223,31 @@ export type components = {
             workspace_root: string;
         };
         /**
+         * ModelsServed
+         * @description Which models served an agent run, read from its session after it ended (DESIGN §13, Each agent's model).
+         */
+        ModelsServed: {
+            /**
+             * Error
+             * @description When `failed`, canopy's words for why.
+             */
+            error: string | null;
+            /**
+             * Models
+             * @description When `found`, each model, the most costly first; empty for a session that made no model call.
+             * @default []
+             */
+            models: components["schemas"]["ServedModel"][];
+            /**
+             * Status
+             * @description `running` until it ends; `no_session` when it ended with none to read; `unread` until a tick reads it, a few
+             *     each tick; `found`, its models in `models`; `missing` when the runtime no longer keeps its session; `failed` when
+             *     the read failed, tried again a day later, a few times at most.
+             * @enum {string}
+             */
+            status: "running" | "no_session" | "unread" | "found" | "missing" | "failed";
+        };
+        /**
          * NoticeChanged
          * @description What setting or clearing a notice did, and the state it left.
          */
@@ -3961,6 +3988,8 @@ export type components = {
              * @description Where its log is: from the workspace root when under it.
              */
             log_path: string;
+            /** @description Which models served it. */
+            models: components["schemas"]["ModelsServed"];
             /**
              * New Tokens
              * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
@@ -4417,6 +4446,8 @@ export type components = {
              * @description Where its log is: from the workspace root when under it, as a worktree's path is.
              */
             log_path: string;
+            /** @description Which models served it, on its page and in the runs list; None where another page lists it. */
+            models: components["schemas"]["ModelsServed"] | null;
             /**
              * New Tokens
              * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
@@ -4704,6 +4735,27 @@ export type components = {
              * @description Each subject's reference: `review:ID`, a review run whose result they saw.
              */
             refs: string[];
+        };
+        /**
+         * ServedModel
+         * @description One model that wrote an agent run's replies, as the runtime's record of its session says (DESIGN §13).
+         */
+        ServedModel: {
+            /**
+             * Cost Usd
+             * @description What those replies cost, in US dollars, as the runtime priced them.
+             */
+            cost_usd: number;
+            /**
+             * Model
+             * @description As `provider/model`, as the runtime names it.
+             */
+            model: string;
+            /**
+             * Replies
+             * @description How many of the run's replies it wrote.
+             */
+            replies: number;
         };
         /**
          * Session
@@ -5403,6 +5455,8 @@ export type components = {
              * @description Its decisions, in the order they were recorded.
              */
             decisions: components["schemas"]["Decision"][];
+            /** @description Which models served its overseer. */
+            models: components["schemas"]["ModelsServed"];
             /**
              * Next Id
              * @description The tick after it, dry runs included, or None on the newest, until the next one starts.

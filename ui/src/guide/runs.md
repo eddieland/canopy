@@ -43,8 +43,13 @@ of those is said there and nowhere else on the page, so the panels under it can 
 
 The **Run** panel leads with its summary, the run's own account of what it did, then its PRs, then **when**: when it
 started and ended and how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m` while it runs. **spent** gives its
-cost, the tokens it used, and its peak context, the most one model call was sent. Last come the places: the branch,
-its worktrees, and the path of its log, which only you can read.
+cost, the tokens it used, and its peak context, the most one model call was sent. **model** names the model that
+wrote its replies, as the runtime's own record of the session says, so it is right even when a template's option or
+the runtime's default picked it rather than you. A run that switched models partway lists each with its share of the
+cost. The runtime prints no model while a run works, so canopy asks it after each tick, a few ended runs at a time,
+the newest first; until then, or once the runtime has forgotten the session, the field says why it names none. The
+runs list carries the same, so a run's page fills it in without a reload. Last come the places: the branch, its
+worktrees, and the path of its log, which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the

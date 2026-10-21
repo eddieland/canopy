@@ -12,14 +12,14 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, pause
+from canopy.core import config, conversation, db, pause, run_models
 from canopy.core.context import Context
-from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import ModelsRead, Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
 from canopy.runs import policy
-from canopy.runtime.report import Usage
+from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, views
 from canopy.serve.schema import LoopUpdated
 from tests.canopy.helpers import (
@@ -80,6 +80,37 @@ def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> No
     db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", usage)  # as a run recorded before the peak was kept
     run = c.get(f"/api/runs/{run_id}").json()
     assert (run["new_tokens"], run["peak_context"]) == (10_000, None)
+
+
+def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has_read_them(ctx: Context) -> None:
+    run_id = running_run(ctx, KEY, private=False)
+    c, _ = signed_in_client(ctx)
+
+    def models() -> dict[str, object]:
+        return c.get(f"/api/runs/{run_id}").json()["models"]
+
+    assert models() == {"status": "running", "models": [], "error": None}
+    db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+    assert models()["status"] == "no_session"  # the runtime reported none, so there is nothing to read
+    db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", None)
+    assert models()["status"] == "unread"
+    [due] = run_models.due(ctx.conn, limit=1)
+    run_models.record(ctx.conn, due, ModelsRead.FAILED, error="the runtime timed out")
+    assert models() == {"status": "failed", "models": [], "error": "the runtime timed out"}
+    used = [ModelUse("anthropic/claude-x", replies=3, cost_usd=0.1), ModelUse("openai/gpt-y", replies=2, cost_usd=0.4)]
+    run_models.record(ctx.conn, due, ModelsRead.FOUND, used)
+    # The most costly first, as `canopy spend` splits a kind's cost.
+    assert models() == {
+        "status": "found",
+        "models": [
+            {"model": "openai/gpt-y", "replies": 2, "cost_usd": 0.4},
+            {"model": "anthropic/claude-x", "replies": 3, "cost_usd": 0.1},
+        ],
+        "error": None,
+    }
+    assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
+    run_models.record(ctx.conn, due, ModelsRead.MISSING)
+    assert models()["status"] == "missing"
 
 
 def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:

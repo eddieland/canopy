@@ -169,6 +169,30 @@ class RunActivity(_Model):
     """When `_run` read it."""
 
 
+class ServedModel(_Model):
+    """One model that wrote an agent run's replies, as the runtime's record of its session says (DESIGN §13)."""
+
+    model: str
+    """As `provider/model`, as the runtime names it."""
+    replies: int
+    """How many of the run's replies it wrote."""
+    cost_usd: float
+    """What those replies cost, in US dollars, as the runtime priced them."""
+
+
+class ModelsServed(_Model):
+    """Which models served an agent run, read from its session after it ended (DESIGN §13, Each agent's model)."""
+
+    status: Literal["running", "no_session", "unread", "found", "missing", "failed"]
+    """`running` until it ends; `no_session` when it ended with none to read; `unread` until a tick reads it, a few
+    each tick; `found`, its models in `models`; `missing` when the runtime no longer keeps its session; `failed` when
+    the read failed, tried again a day later, a few times at most."""
+    models: list[ServedModel] = []
+    """When `found`, each model, the most costly first; empty for a session that made no model call."""
+    error: str | None = None
+    """When `failed`, canopy's words for why."""
+
+
 class Run(_Model):
     """One worker or split run (`run:ID`)."""
 
@@ -223,6 +247,8 @@ class Run(_Model):
     persona_digest: str | None = None
     """The sha256 of the persona's text as its prompt carried it, in hex: two runs with different digests had
     different texts under one name."""
+    models: ModelsServed | None = None
+    """Which models served it, on its page and in the runs list; None where another page lists it."""
 
 
 class TicketSummary(_Model):
@@ -652,6 +678,8 @@ class ChoreRunDetail(_Model):
     """Why the harness decided the run's status, when it did: a timeout, a crash, a result that did not validate."""
     findings: list[ChoreRunFinding] = []
     """An `ok` run's findings, as it listed them."""
+    models: ModelsServed
+    """Which models served it."""
 
 
 class Started(_Model):
@@ -1035,6 +1063,8 @@ class TickDetail(_Model):
     """The tick before it, dry runs included, or None on the first."""
     next_id: int | None = None
     """The tick after it, dry runs included, or None on the newest, until the next one starts."""
+    models: ModelsServed
+    """Which models served its overseer."""
 
 
 class TranscriptText(_Model):
@@ -2048,6 +2078,8 @@ class ReviewDetail(_Model):
     """The persona it ran in (DESIGN §31); None for a review from before canopy recorded it."""
     persona_digest: str | None = None
     """The sha256 of the persona's text as its prompt carried it, in hex."""
+    models: ModelsServed
+    """Which models served it."""
 
 
 class ReviewRequest(_Model):

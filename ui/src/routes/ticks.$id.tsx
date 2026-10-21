@@ -7,6 +7,7 @@ import type { TickDetail, Transcript } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
+import { ModelsField } from '@/components/models-field'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
@@ -102,6 +103,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             <Cost usd={tick.cost_usd} />
                             <span title={RUN_TOKENS_TITLE}>{runTokens(tick.new_tokens, tick.peak_context)}</span>
                         </Field>
+                        <ModelsField models={detail.models} />
                         <Field
                             label="canopy"
                             mono

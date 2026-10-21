@@ -30,7 +30,15 @@ from canopy.serve.schema import (
     RunState,
     Transcript,
 )
-from canopy.serve.views import lines, new_tokens, raw_output, session_transcript, shown_path, ticket_title
+from canopy.serve.views import (
+    lines,
+    models_served,
+    new_tokens,
+    raw_output,
+    session_transcript,
+    shown_path,
+    ticket_title,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -98,6 +106,13 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         log_path=shown_path(row.log_path, ctx.workspace.root),
         persona=row.persona,
         persona_digest=row.persona_digest,
+        models=models_served(
+            ctx.conn,
+            "review_runs",
+            run_id,
+            ended=row.ended_at is not None,
+            session_id=row.session_id or None,
+        ),
     )
 
 

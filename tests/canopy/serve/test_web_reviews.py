@@ -158,6 +158,11 @@ def test_a_reviews_run_is_its_log_its_tokens_and_its_reviewers_session(backend: 
     assert output["text"].endswith("--- reviewer exit 0 ---\n")
 
 
+def test_a_reviews_page_names_the_models_that_served_its_reviewer(backend: Backend) -> None:
+    served = client(None, backend).get("/api/reviews/4").json()["models"]
+    assert (served["status"], [m["model"] for m in served["models"]]) == ("found", ["openai/gpt-5"])
+
+
 def test_a_review_that_ended_badly_shows_the_call_it_ended_on(backend: Backend) -> None:
     entries = client(None, backend).get("/api/reviews/3/transcript").json()["entries"]
     failed = [e for e in entries if e["kind"] == "tool" and e["status"] == "error"]

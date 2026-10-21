@@ -8,6 +8,7 @@ import { CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
+import { ModelsField } from '@/components/models-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PromptPanel } from '@/components/prompt-panel'
 import { ReviewOutputPanel } from '@/components/raw-output'
@@ -142,6 +143,7 @@ function RunPanel({
                     <Cost usd={review.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(detail.new_tokens, detail.peak_context)}</span>
                 </Field>
+                <ModelsField models={detail.models} />
                 <Field label="log" mono>
                     <CopyablePath path={detail.log_path} label="log path">
                         <span title="the reviewer's stdout and stderr: yours alone">{detail.log_path}</span>

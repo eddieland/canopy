@@ -99,7 +99,14 @@ describe('applyStreamEvent', () => {
         if (!chore || !run) {
             throw new Error('fixtures have no ended chore run')
         }
-        const detail = { chore: chore.name, run, summary: null, note: null, findings: [] } as ChoreRunDetail
+        const detail: ChoreRunDetail = {
+            chore: chore.name,
+            run,
+            summary: null,
+            note: null,
+            findings: [],
+            models: { status: 'unread', models: [], error: null },
+        }
         client.setQueryData(keys.choreRun(chore.name, run.id), detail)
         client.setQueryData(keys.choreRunTranscript(chore.name, run.id), { status: 'read', entries: [] })
 

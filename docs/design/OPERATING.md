@@ -236,9 +236,9 @@ promises:
   operator's `canopy model`, refused inside an agent run (T1); the overseer, a dispatch, and ticket text choose none.
 - **What is recorded is what served.** No event names the model a call went to, so after each live tick canopy reads a
   few ended runs' sessions from the runtime's own record, never-read runs the newest first, past ones among them: each
-  model that wrote a run's replies, and what they cost. `canopy spend` breaks each kind's cost down by model. A read
-  never fails a tick; a session the runtime no longer keeps leaves its run unattributed, and a failed read is tried
-  again later, a few times at most.
+  model that wrote a run's replies, and what they cost. `canopy spend` breaks each kind's cost down by model, and the
+  web UI names each run's models on its page. A read never fails a tick; a session the runtime no longer keeps leaves
+  its run unattributed, and a failed read is tried again later, a few times at most.
 - **canopy's choice is the one made.** canopy writes the model into the agent's rendered definition, so each set of
   models gets its own snapshot (D040). A template's model option would override it unseen, so any `runtime` template,
   prefix, or suffix that passes one is a config error.
