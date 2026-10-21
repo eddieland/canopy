@@ -72,7 +72,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     assert "within 100,000 characters" in text
     assert text.rstrip().endswith(
         '{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>",'
-        '"question":"<only when blocked>"}',
+        '"question":"<only when blocked>","effort":"small|medium|large"}',
     )
     if private:
         assert "there is no label to check" in text

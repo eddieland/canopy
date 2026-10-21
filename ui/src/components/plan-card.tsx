@@ -71,6 +71,11 @@ export function PlanCard({
                         </>
                     )}
                 </Field>
+                {newest !== undefined && newest.effort !== null && (
+                    <Field label="effort" title="How much work the plan is for its worker, as its planner judged">
+                        {newest.effort}
+                    </Field>
+                )}
                 {newest?.approved_channel === 'planner' && (
                     <Field label="approved by">
                         the planner: <LinkedText text={newest.approved_reason ?? ''} />

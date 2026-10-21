@@ -36,14 +36,16 @@ so the PR's review is still where the work gets judged.
 A plan has a page of its own, so it gets the whole width and its comments get a margin. The ticket's page has a
 **Plan** card instead, at the top while the plan waits on you, and a `plan review` item in [Attention](attention)
 shows the same card. It says where the plan stands (`waiting on you`, in amber like everything else that is, then
-`approved` or `superseded`), which plan it is (`plan:2`), the run that wrote it and when, and how many comments are
-open. **Approve** on the card approves it as its file stands, for when you've already read it; **Open plan** opens
-its page, where the rest happens: comments, edits, asking for changes, skipping.
+`approved` or `superseded`), which plan it is (`plan:2`), the run that wrote it and when, its **effort**, and how
+many comments are open. The effort is the planner's guess at how much work the plan is for the worker that follows
+it, `small`, `medium`, or `large`: a hint for your reading, which canopy acts on nowhere. **Approve** on the card
+approves it as its file stands, for when you've already read it; **Open plan** opens its page, where the rest
+happens: comments, edits, asking for changes, skipping.
 
 There, the plan opens in an editor. The page's title names the plan and its ticket, and the line under it says which
-run wrote it, when you approved it and how, and whether its file was edited since. The **Plan** panel's header says
-where it stands and how old it is. Older plans are folded under **Earlier plans**, read only. The trail at the top
-leads back to the ticket.
+run wrote it, when you approved it and how, whether its file was edited since, and its effort. The **Plan** panel's
+header says where it stands and how old it is. Older plans are folded under **Earlier plans**, read only. The trail
+at the top leads back to the ticket.
 
 A plan that replaced one opens with its changes marked: the words added and removed since the plan before, word by
 word, so formatting alone is no change. A paragraph, heading, or table cell that's new whole gets one green block with

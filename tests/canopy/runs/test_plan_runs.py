@@ -11,7 +11,7 @@ from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
-from canopy.core.vocab import PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
 from canopy.runs import policy
 from tests.canopy.helpers import (
@@ -249,6 +249,30 @@ def test_under_tracker_private_a_tickets_first_plan_starts_it_privately(scenario
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
     assert (run.status, run.row["private"]) == (RunStatus.DONE, 1)
     assert conversation.is_started(conversation.start_of(scenario.conn, KEY))
+
+
+@pytest.mark.parametrize(
+    ("said", "recorded"),
+    [("large", PlanEffort.LARGE), ("small", PlanEffort.SMALL), (None, None), ("huge", None), (3, None)],
+)
+def test_a_plans_effort_is_recorded_as_its_planner_judged_and_one_it_misspells_drops_alone(
+    scenario: Scenario,
+    git_pool: GitPool,
+    *,
+    said: object,
+    recorded: PlanEffort | None,
+) -> None:
+    result: dict[str, object] = {"status": "done", "summary": "planned it"}
+    if said is not None:
+        result["effort"] = said
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert run.status == RunStatus.DONE
+    assert '"effort":"small|medium|large"' in run.prompt
+    [plan] = plans.history(scenario.conn, KEY)
+    assert (plan.status, plan.effort) == (PlanStatus.PROPOSED, recorded)
+    shown = scenario.operator("show", KEY).out
+    assert ("effort: large, as its planner judged" in shown) is (recorded is PlanEffort.LARGE)
+    assert ("effort:" in shown) is (recorded is not None)
 
 
 #: A planner's result saying its plan needs no review, with its reason (DESIGN §25).

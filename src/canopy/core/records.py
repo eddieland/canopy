@@ -41,6 +41,7 @@ from canopy.core.vocab import (
     MergeState,
     ModelsRead,
     Phase,
+    PlanEffort,
     PlanSetting,
     PlanStatus,
     PoolKind,
@@ -323,6 +324,8 @@ class Plan(Row):
     approved_channel: str | None
     #: Why the planner said its plan needs no review, when the harness approved it so (channel `planner`, DESIGN §25).
     approved_reason: str | None
+    #: How much work the plan is for its worker, as its planner judged; None when it gave no estimate.
+    effort: PlanEffort | None
 
 
 @dataclass(frozen=True)
@@ -347,6 +350,8 @@ class FeedbackPlan(Row):
     spent_run_id: int | None
     #: Why the planner said its plan needs no review, when the harness approved it so (channel `planner`, DESIGN §25).
     approved_reason: str | None
+    #: How much work the plan is for its worker, as its planner judged; None when it gave no estimate.
+    effort: PlanEffort | None
 
 
 @dataclass(frozen=True)

@@ -118,8 +118,9 @@ function emptyText(plans: TicketPlans): string {
 
 /**
  * The plan's state in a sentence or two, its page's description: the run that wrote it, its approval, what changed in
- * its file since, and what comes next. Its status and age are its panel's header, and changes asked are the band under
- * the page's header (`ChangesAsked`); with no plan, its panel says what comes, and this says nothing.
+ * its file since, how much work its planner judged it, and what comes next. Its status and age are its panel's header,
+ * and changes asked are the band under the page's header (`ChangesAsked`); with no plan, its panel says what comes,
+ * and this says nothing.
  */
 export function PlanState({ plans }: { plans: TicketPlans }) {
     const newest = plans.newest
@@ -132,6 +133,9 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
     // The harness approved it on its planner's word that it needs no review (policy.planner_may_approve).
     const byPlanner = plan.approved_at !== null && plan.approved_channel === 'planner'
     const next: [string, ReactNode][] = []
+    if (plan.effort !== null) {
+        next.push(['effort', `Its planner judged it ${plan.effort} work.`])
+    }
     if (plans.planning !== null) {
         next.push(['planning', `Run ${plans.planning} is writing a new plan.`])
     }
@@ -165,7 +169,7 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
             )}
             {newest.edited && ', edited since the planner wrote it'}
             {newest.changed_since_approval && ', changed since it was approved'}.{' '}
-            {/* What comes next, a sentence each, apart by a space. */}
+            {/* How much work it is, and what comes next, a sentence each, apart by a space. */}
             {next.map(([key, sentence], i) => (
                 <Fragment key={key}>
                     {i > 0 && ' '}

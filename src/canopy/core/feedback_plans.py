@@ -23,7 +23,16 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, drafts, plans, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanStatus, Proposal, ResumeReason, ReviewItem, ReviewState, RunKind, RunStatus
+from canopy.core.vocab import (
+    PlanEffort,
+    PlanStatus,
+    Proposal,
+    ResumeReason,
+    ReviewItem,
+    ReviewState,
+    RunKind,
+    RunStatus,
+)
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -260,6 +269,7 @@ def record(
     *,
     event: Callable[[int, str | None], db.Event | None] | None = None,
     no_review: str | None = None,
+    effort: PlanEffort | None = None,
 ) -> records.FeedbackPlan:
     """Record the feedback plan run `run_id` wrote for `key`, after its file, as `proposed`, with its items.
 
@@ -267,7 +277,8 @@ def record(
     for saying the plan needs no review, under `policy.planner_may_approve`: the plan is then recorded `approved` as
     the planner wrote it, the planner's approval (`plans.PLANNER`), unless it replaces one no `resume` has spent, which
     waited on the operator or was approved by them (DESIGN §32). `event` builds its event from its id and that reason
-    when it held, recorded in the same transaction (§20).
+    when it held, recorded in the same transaction (§20). `effort` is its planner's estimate of the work, kept to show
+    beside it.
 
     Returns:
         The plan's row.
@@ -292,6 +303,7 @@ def record(
                 approved_at=now if approved else None,
                 approved_channel=plans.PLANNER if approved else None,
                 approved_reason=reason,
+                effort=effort,
             ).returning("*"),
         )
         sql.execute_many(

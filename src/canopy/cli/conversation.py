@@ -655,6 +655,8 @@ def _show_plan(ctx: Context, plan: records.Plan) -> None:
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
     click.echo(f"\n  plan:{plan.id}  {plan.status}, written {attention.age(plan.created_at)} ago by run:{plan.run_id}")
+    if plan.effort is not None:
+        click.echo(f"  effort: {plan.effort}, as its planner judged")
     if plan.approved_at is not None and plan.approved_channel == plans.PLANNER:
         reason = conversation.printable(plan.approved_reason or "")
         click.echo(f"  approved {attention.age(plan.approved_at)} ago by the planner: {reason}")

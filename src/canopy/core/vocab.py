@@ -171,6 +171,20 @@ class PlanStatus(StrEnum):
     SUPERSEDED = "superseded"
 
 
+class PlanEffort(StrEnum):
+    """How much work a plan is for the worker that follows it, as its planner judged (DESIGN §25).
+
+    `plans.effort` and `feedback_plans.effort`; NULL when the planner gave none.
+    """
+
+    #: A small change in one place, each step plain from the ticket and the code.
+    SMALL = "small"
+    #: Changes across a few files, along patterns the code already has.
+    MEDIUM = "medium"
+    #: Many files, new structure, or behavior that is hard to get right.
+    LARGE = "large"
+
+
 class Proposal(StrEnum):
     """What a feedback plan proposes for one of its items, `feedback_plan_items.proposal` (DESIGN §32)."""
 
