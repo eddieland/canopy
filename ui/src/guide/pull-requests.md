@@ -154,6 +154,10 @@ you actually like. A persona canopy would refuse to run, such as a file past its
 hovering it says why. Asking again for a PR that's waiting, with personas checked, replaces its personas; with none
 checked, it keeps them. The PR's page names the personas with the request.
 
+If you always reach for the same reviewer, pick it once in [Settings](settings#reviews) and the form starts there,
+saying `as Settings prefers`. You can still check others for one request; the next one starts from your preference
+again. **Use the default** is still `[personas] reviewer`'s.
+
 The review stays in canopy, like every other. Whether you pass any of it on to your coworker, and in what tone, is
 between you and them.
 

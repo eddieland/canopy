@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
 import type { PersonaList, ReviewRequest } from '@/api/types'
+import { setReviewPersonas } from '@/lib/review-personas'
 
 import { ReviewRequestForm, ReviewRequestStatus } from './review-request'
 
@@ -54,6 +55,7 @@ beforeEach(() => {
     bodies = []
     answer = undefined
     listed = PERSONAS
+    setReviewPersonas([])
     api.use(server)
 })
 
@@ -210,6 +212,38 @@ describe('ReviewRequestForm', () => {
         menu = await openPersonas('Persona: canopy')
         fireEvent.click(within(menu).getByRole('menuitem', { name: 'Use the default' }))
         expect(await screen.findByRole('button', { name: 'Persona: canopy (default)' })).toBeTruthy()
+    })
+
+    it('starts from the personas Settings prefers, and goes back to them after each request', async () => {
+        setReviewPersonas(['skeptic', 'canopy'])
+        answer = Response.json({ already: false, request: { ...OPEN, personas: ['skeptic'] } })
+        renderWith(<ReviewRequestForm />)
+        expect(await screen.findByRole('button', { name: 'Persona: skeptic, canopy' })).toBeTruthy()
+        expect(screen.getByText('as Settings prefers')).toBeTruthy()
+
+        // Picked for this request alone: Settings keeps its choice.
+        fireEvent.change(field(), { target: { value: PR } })
+        const menu = await openPersonas('Persona: skeptic, canopy')
+        fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'canopy' }))
+        fireEvent.keyDown(menu, { key: 'Escape' })
+        expect(screen.getByRole('button', { name: 'Persona: skeptic' })).toBeTruthy()
+        expect(screen.queryByText('as Settings prefers')).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+        await screen.findByRole('status')
+        expect(bodies).toEqual([{ notes: '', personas: ['skeptic'] }])
+        expect(screen.getByRole('button', { name: 'Persona: skeptic, canopy' })).toBeTruthy()
+    })
+
+    it("leaves out a preferred persona canopy would not run, and Use the default goes to the config's", async () => {
+        setReviewPersonas(['gone', 'removed', 'skeptic'])
+        renderWith(<ReviewRequestForm />)
+        fireEvent.change(field(), { target: { value: PR } })
+        const menu = await openPersonas('Persona: skeptic')
+        fireEvent.click(within(menu).getByRole('menuitem', { name: 'Use the default' }))
+        fireEvent.click(await screen.findByRole('button', { name: 'Review' }))
+        await screen.findByRole('status')
+        expect(bodies).toEqual([{ notes: '', personas: [] }])
     })
 
     it('checks no more personas than one request may name', async () => {
