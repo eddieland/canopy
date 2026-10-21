@@ -6,6 +6,10 @@
         <meta name="color-scheme" content="light dark" />
         <!-- The UI has its own dark theme: tells Dark Reader not to restyle the page over it. -->
         <meta name="darkreader-lock" />
+        <!-- Only http and https URLs become links (D113): stops Safari linking run ids and SHAs as phone numbers. -->
+        <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
+        <!-- An operator's console, signed in: never a search result, even on a listener a crawler can reach. -->
+        <meta name="robots" content="noindex, nofollow" />
         <!--
         Blocking on purpose: sets the theme class, color-scheme, and each theme's palette before the first paint, so a
         reload never flashes the other theme. Keep it in sync with src/theme/store.ts and src/theme/palette.ts (their
