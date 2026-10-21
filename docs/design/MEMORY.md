@@ -46,9 +46,10 @@ What a run had refused is recorded in the harness's words, never its text.
 
 Enforced in code at write, and for a lesson's text at promotion. Each entry is refused alone, never cut or cleaned, so
 one bad entry costs only itself. Texts and their number a run are bounded, so one run cannot fill the queue. A text is
-one line of plain text, with no character that can hide text from the operator while a model still reads it. A text
-that looks like a secret is refused (a hexadecimal word never does, since notes name commits), and so is one that
-repeats a note in force, a pending proposal, or a lesson.
+plain text, its lines broken sparingly, with no character that can hide text from the operator while a model still
+reads it; a prompt quotes each of its lines, so a line break cannot end the quote. A text that looks like a secret is
+refused (a hexadecimal word never does, since notes name commits), and so is one that repeats a note in force, a
+pending proposal, or a lesson.
 
 ### Retention
 
