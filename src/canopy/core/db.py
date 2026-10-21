@@ -689,7 +689,8 @@ def finish_run(
 
     A worker run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
     also ends its PR's open review request, as `reviewed`, in the same transaction (DESIGN §21): the request asked for
-    one review, and this is it.
+    one review, and this is it. A request the operator chose personas for asked for one in each (§31): it ends once
+    each has a `done` review of the PR started since the request was made.
 
     Returns:
         True if this call closed the run.
@@ -703,7 +704,12 @@ def finish_run(
                 sql.update("review_requests")
                 .set(ended_at=now())
                 .set_to("end_reason = 'reviewed'")
-                .where("ended_at IS NULL AND pr_url = ({})", its_pr),
+                .where("ended_at IS NULL AND pr_url = ({})", its_pr)
+                .where(
+                    "NOT EXISTS (SELECT 1 FROM review_request_personas p WHERE p.request_id = review_requests.id "
+                    "AND NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.pr_url = review_requests.pr_url "
+                    "AND r.persona = p.persona AND r.status = 'done' AND r.started_at >= review_requests.created_at))",
+                ),
             )
         if closed and event is not None:
             record_event(conn, event)

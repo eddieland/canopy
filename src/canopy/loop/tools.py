@@ -798,6 +798,9 @@ class ReviewRun(_Request):
 def review_run(ctx: Context, request: ReviewRun) -> str:
     """Start a review of a PR at a commit, if its guards allow one now; in a dry run, check them and start nothing.
 
+    A PR the operator chose several personas for gets a review in each still owed one, side by side (DESIGN §31): a
+    guard that refuses one after the first leaves it and the rest to a later tick.
+
     Returns:
         What the command prints.
 
@@ -805,48 +808,77 @@ def review_run(ctx: Context, request: ReviewRun) -> str:
         Refused: Outside a running tick, or a guard refused the review, which is recorded.
     """
     current = running_tick(ctx)
+    asked = review_start.Request(pr=request.pr, sha=request.sha, ticket=request.ticket, repo=request.repo)
+    try:
+        due = review_start.due(ctx, asked)
+    except review_start.Refusal as r:
+        _record_refused(ctx, current, asked, r)
+        raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    said: list[str] = []
+    for i, one in enumerate(due):
+        try:
+            said.append(_review_one(ctx, current, one, request.context))
+        except review_start.Refusal as r:
+            if i == 0:
+                _record_refused(ctx, current, one, r)
+                raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+            # The reviews started stand; this one and the rest wait on a tick with room for them.
+            db.record_decision(ctx.conn, current.id, one.ticket, f"refused:{r.guard}", r.reason, pr=one.pr)
+            said.append(f"{one.persona}'s review waits ({r.guard}): {r.reason}")
+            break
+    return "\n".join(said)
+
+
+def _review_one(ctx: Context, current: records.Tick, one: review_start.Request, context: str | None) -> str:
+    """Start one review, or in a dry run check its guards, and record the decision.
+
+    Returns:
+        What the command prints of it.
+
+    Raises:
+        Refusal: a guard refused it.
+    """
     tick_id = current.id
+    in_persona = f" in {one.persona}" if one.persona is not None else ""
+    on_context = f"; context={context}" if context else ""
+    if current.dry_run:
+        review_start.check(ctx, tick_id=tick_id, request=one)
+        rationale = truncate(f"dry run: not dispatched; would review {one.sha}{in_persona}{on_context}")
+        db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
+        return f"dry run: recorded review of {one.pr}{in_persona}; nothing was started"
+    started = review_start.start(ctx, tick_id=tick_id, request=one, context=context)
+    rationale = truncate(f"review run {started.run_id}: {one.sha} in {started.slot}{in_persona}{on_context}")
+    db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
+    logs.for_tick(tick_id).info(
+        "review started",
+        extra={"pr": one.pr, "review_run_id": started.run_id, "pid": started.pid, "persona": one.persona},
+    )
+    return f"started review of {one.pr}{in_persona}: run {started.run_id}"
+
+
+def _record_refused(
+    ctx: Context,
+    current: records.Tick,
+    asked: review_start.Request,
+    r: review_start.Refusal,
+) -> None:
+    """Record a refused review, and what it leaves for the operator: an answered request, or an attention item."""
+    tick_id, pr, ticket = current.id, asked.pr, asked.ticket
     log = logs.for_tick(tick_id)
-    pr, ticket, context = request.pr, request.ticket, request.context
-    asked = review_start.Request(pr=pr, sha=request.sha, ticket=ticket, repo=request.repo)
     # A malformed URL is recorded cut short; the refusal says what was wrong with it.
     pr_key = pr if len(pr) <= review_start.MAX_PR_URL else pr[: review_start.MAX_PR_URL]
-    try:
-        if current.dry_run:
-            review_start.check(ctx, tick_id=tick_id, request=asked)
-            started = None
-        else:
-            started = review_start.start(ctx, tick_id=tick_id, request=asked, context=context)
-    except review_start.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, ticket, f"refused:{r.guard}", r.reason, pr=pr_key)
-        if r.guard == "reviewed" and not current.dry_run and review_requests.answered(ctx.conn, pr):
-            # The head already has a `done` review: that answers a `once` request, which no new review would end.
-            log.info("review request answered", extra={"pr": pr_key})
-        if r.guard == "review_limit":
-            # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
-            action = f"{attention.ACTION_PREFIX}review_limit"
-            db.record_decision(ctx.conn, tick_id, ticket, action, f"{r.reason}; {grants.hint(pr_key)}", pr=pr_key)
-        if r.attention is not None:
-            # A persona the operator must fix (DESIGN §31): the item is about the PR, or its ticket.
-            db.record_decision(
-                ctx.conn,
-                tick_id,
-                ticket,
-                f"{attention.ACTION_PREFIX}{r.attention}",
-                r.reason,
-                pr=pr_key,
-            )
-        log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
-        raise Refused(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    on_context = f"; context={context}" if context else ""
-    if started is None:
-        rationale = truncate(f"dry run: not dispatched; would review {request.sha}{on_context}")
-        db.record_decision(ctx.conn, tick_id, ticket, review_start.DISPATCH_ACTION, rationale, pr=pr)
-        return f"dry run: recorded review of {pr}; nothing was started"
-    rationale = truncate(f"review run {started.run_id}: {request.sha} in {started.slot}{on_context}")
-    db.record_decision(ctx.conn, tick_id, ticket, review_start.DISPATCH_ACTION, rationale, pr=pr)
-    log.info("review started", extra={"pr": pr, "review_run_id": started.run_id, "pid": started.pid})
-    return f"started review of {pr}: run {started.run_id}"
+    db.record_decision(ctx.conn, tick_id, ticket, f"refused:{r.guard}", r.reason, pr=pr_key)
+    if r.guard == "reviewed" and not current.dry_run and review_requests.answered(ctx.conn, pr):
+        # The head already has a `done` review: that answers a `once` request, which no new review would end.
+        log.info("review request answered", extra={"pr": pr_key})
+    if r.guard == "review_limit":
+        # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
+        action = f"{attention.ACTION_PREFIX}review_limit"
+        db.record_decision(ctx.conn, tick_id, ticket, action, f"{r.reason}; {grants.hint(pr_key)}", pr=pr_key)
+    if r.attention is not None:
+        # A persona the operator must fix (DESIGN §31): the item is about the PR, or its ticket.
+        db.record_decision(ctx.conn, tick_id, ticket, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, pr=pr_key)
+    log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
 
 
 class ReviewWait(_Request):

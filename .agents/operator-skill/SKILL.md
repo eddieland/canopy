@@ -49,7 +49,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy dismiss chore:NAME ID...` | Keeps findings off the attention list until the chore stops reporting them; `--undo`. |
 | `canopy dismiss review:ID N...` | Holds a review's findings back from workers and the overseer; `--undo`. |
 | `canopy send review:ID N...` | Sends findings to a worker: a reply on the review's ticket, the operator's go-ahead. |
-| `canopy start URL --review` | Reviews another's PR once, at its head; nothing is posted. `--notes TEXT`: what to look at; `--persona NAME`: its voice. |
+| `canopy start URL --review` | Reviews another's PR once, at its head; nothing is posted. `--notes TEXT`: what to look at; `--persona NAME`: its voice, again for one review in each. |
 | `canopy stop URL` | Ends a PR's review request; a running review finishes. `canopy show URL` shows it and its reviews. |
 | `canopy review show [ID]` | canopy's PR reviews of the last 14 days; with ID, one in full. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
