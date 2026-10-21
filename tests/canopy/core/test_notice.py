@@ -85,6 +85,7 @@ def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -
         "PR_URL": "https://github.com/acme/api/pull/7",
         "SHA": "a" * 40,
         "CHECKOUT": "/state/reviews/1/checkout",
+        "BASE": "main",
         "RUN_ID": "1",
         "TICKET": "PROJ-1",
         "TRACKER_PROVIDER": "jira",

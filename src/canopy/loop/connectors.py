@@ -12,7 +12,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import connector_runs, conversation, db, drafts, drafts_manage, observe, review_drafts_manage, sql
+from canopy.core import (
+    connector_runs,
+    conversation,
+    db,
+    drafts,
+    drafts_manage,
+    observe,
+    review_drafts_manage,
+    review_requests,
+    sql,
+)
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
 
 if TYPE_CHECKING:
@@ -92,8 +102,9 @@ def vcs_request(ctx: Context) -> observe.Request:
 
     A PR is watched while its unit's ticket is not marked done, merged and closed ones included, while a draft waits
     on a read of it (§29), a review's draft among them (§34), and while the reader last saw it open, so no PR's
-    observation stays open unread once its ticket is done or forgotten. A unit's PR that is not a PR's URL cannot be
-    read, so it is not asked about.
+    observation stays open unread once its ticket is done or forgotten. A PR with the operator's open review request is
+    watched too, so its review knows the branch it merges into (§21). A PR that is not a PR's URL cannot be read, so it
+    is not asked about.
 
     Returns:
         The request.
@@ -114,6 +125,7 @@ def vcs_request(ctx: Context) -> observe.Request:
         drafts_manage.unsettled_prs(ctx.conn),
         review_drafts_manage.unsettled_prs(ctx.conn),
         (str(r[0]) for r in sql.execute(ctx.conn, seen_open)),
+        (r.pr_url for r in review_requests.open_requests(ctx.conn) if observe.is_pr_url(r.pr_url)),
     )
     query = ctx.config.review.query.strip()
     return observe.Request(

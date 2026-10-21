@@ -806,7 +806,7 @@ def test_a_review_keeps_its_commits_diff_for_the_web_ui(
     git_pool: GitPool,
     tmp_path: Path,
 ) -> None:
-    """The diff against where the commit leaves the pool's base branch, beside the run's log (DESIGN §21)."""
+    """The diff against where the commit leaves the pool's base branch, for a PR not yet read (DESIGN §21)."""
     sha = feature_commit(git_pool, tmp_path)
     row = scenario.review(reviews(sha), reviewer=reviewer_reports(FINDINGS)).row
     assert (row.status, row.base_branch) == ("done", "main")
@@ -833,6 +833,46 @@ def test_a_review_without_its_base_branch_still_runs(
     reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(FINDINGS))
     assert reviewed.status == "done", reviewed.printed.out
     assert not review_diff.path_for(reviewed.row.log_path).exists()
+
+
+def test_a_review_of_a_stacked_pr_runs_from_the_branch_it_merges_into(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """The base is the PR's own, as the reader last read it, not the pool's: a stacked PR's diff is its own commits."""
+    parent = feature_commit(git_pool, tmp_path)
+    seed = tmp_path / "seed"
+    git("checkout", "--quiet", "-b", "stacked", cwd=seed)
+    (seed / "backoff.py").write_text("sleep(1)\n")
+    git("add", "backoff.py", cwd=seed)
+    git("commit", "--quiet", "-m", "backoff", cwd=seed)
+    git("push", "--quiet", str(git_pool.origin), "stacked", cwd=seed)
+    sha = present(git_pool.remote_head("stacked"))
+    sql.execute(
+        scenario.conn,
+        sql.insert(
+            "observed_prs",
+            url=PR,
+            repository="acme/api",
+            number=7,
+            head_sha=sha,
+            base_ref="feature",
+            draft=False,
+            observed_at=db.now(),
+            labels="[]",
+        ),
+    )
+    reads = [calls("canopy_git_merge-base", base="origin/feature", head="HEAD")]
+    reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN, tools=reads))
+    assert (reviewed.status, reviewed.row.base_branch) == ("done", "feature"), reviewed.printed.out
+    [changed] = present(review_diff.read(review_diff.path_for(reviewed.row.log_path))).files
+    assert changed.path == "backoff.py"
+    assert "- Base: the PR merges into `feature`, which is `origin/feature` in the checkout." in reviewed.prompt
+    [reviewer] = agent_runs(scenario.agent_log)
+    [fork] = reviewer["tools"]
+    assert (fork["error"], fork["text"]) == (False, parent)
 
 
 def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
