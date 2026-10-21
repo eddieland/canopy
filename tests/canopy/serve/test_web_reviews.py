@@ -107,13 +107,12 @@ def test_a_review_goes_gzipped_to_a_browser_that_takes_it_and_as_it_is_to_one_th
     ]:
         sent = c.get("/api/reviews/4", headers={"accept-encoding": accept})
         assert (sent.headers.get("content-encoding") == "gzip") is gzipped, accept
-    # A review too short to be worth it goes as it is. The bound is set from review 3's own length, so the case holds
-    # however long the mock journal's review grows.
+    # A review too short to be worth it goes as it is. The threshold is held just above review 3's length, so a field
+    # added to every review does not carry it past.
     length = len(c.get("/api/reviews/3", headers={"accept-encoding": "identity"}).content)
     with mock.patch.object(reviews_api, "_GZIP_FROM", length + 1):
-        assert "content-encoding" not in c.get("/api/reviews/3").headers
-    with mock.patch.object(reviews_api, "_GZIP_FROM", length):
-        assert c.get("/api/reviews/3").headers["content-encoding"] == "gzip"
+        short = c.get("/api/reviews/3")
+    assert "content-encoding" not in short.headers
 
 
 def test_a_review_without_a_diff_has_none_and_a_failed_one_says_why(backend: Backend) -> None:
