@@ -13,7 +13,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, feedback_plans, plan_export, plans, records
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PlanStatus
-from tests.canopy.helpers import KEY, PLAN, operator, plan_run, proposed
+from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, operator, plan_prompt, plan_run, prompted, proposed
 from tests.conftest import CanopyEnv
 
 
@@ -201,6 +201,67 @@ def test_a_name_carries_a_slug_of_the_title(heading: str, slug: str) -> None:
     assert plan_export.name("plan", plan, f"{heading}\n\n## Goal\n") == f"7-Proposed{slug}.md"
 
 
+def test_each_plan_has_its_prompt_beside_it(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    first = prompted(conn, state_dir)
+    feedback = feedback_plan(conn, state_dir, "# Feedback plan\n")
+    plan_prompt(conn, feedback).write_text("Plan the feedback.\n")
+    # A plan from before prompts were kept has none to export.
+    bare = proposed(conn, state_dir, key="PROJ-2")
+    dest = tmp_path / "archive"
+
+    exported = plan_export.export(conn, state_dir, dest)
+
+    assert exported.written == [
+        f"{KEY}/{first}-Proposed.md",
+        f"{KEY}/{first}-prompt.md",
+        f"{KEY}/{feedback}-Proposed-feedback.md",
+        f"{KEY}/{feedback}-prompt.md",
+        f"PROJ-2/{bare}-Proposed.md",
+    ]
+    # Its bytes as the run was given them, operator-only as the plans are.
+    assert (dest / KEY / f"{first}-prompt.md").read_text() == PLAN_PROMPT
+    assert (dest / KEY / f"{first}-prompt.md").stat().st_mode & 0o777 == 0o600
+    assert (dest / KEY / f"{feedback}-prompt.md").read_text() == "Plan the feedback.\n"
+    # A prompt never changes, so neither does its name when its plan's status does.
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    assert plan_export.export(conn, state_dir, dest).written == [f"{KEY}/{first}-Approved.md"]
+    assert plan_export.is_prompt(f"{first}-prompt.md")
+    assert not plan_export.is_prompt(f"{first}-Approved-improve-the-prompt.md")
+
+
+def test_prompts_off_exports_plans_alone(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    run_id = prompted(conn, state_dir)
+    dest = tmp_path / "archive"
+
+    exported = plan_export.export(conn, state_dir, dest, prompts=False)
+
+    assert exported.written == [f"{KEY}/{run_id}-Proposed.md"]
+    # Turned on again, the prompt goes in beside the plan, which is as it stands.
+    exported = plan_export.export(conn, state_dir, dest)
+    assert (exported.written, exported.unchanged) == ([f"{KEY}/{run_id}-prompt.md"], 1)
+
+
+def test_a_prompt_outside_the_state_directory_or_through_a_link_is_not_exported(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    linked = proposed(conn, state_dir)
+    outside = proposed(conn, state_dir, key="PROJ-2")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("not a prompt\n")
+    plan_prompt(conn, linked).symlink_to(secret)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(elsewhere / f"{outside}.log"), outside))
+    (elsewhere / f"{outside}.prompt").write_text("not canopy's\n")
+    dest = tmp_path / "archive"
+
+    exported = plan_export.export(conn, state_dir, dest)
+
+    assert exported.written == [f"{KEY}/{linked}-Proposed.md", f"PROJ-2/{outside}-Proposed.md"]
+
+
 @pytest.fixture
 def settled() -> Iterator[None]:
     """Take a file as settled as soon as it is written, so an export keeps fingerprints of what it just checked."""
@@ -242,6 +303,16 @@ def test_a_plan_found_as_it_stands_is_not_read_again(conn: sqlite3.Connection, s
     (dest / "PROJ-2" / f"{second}.md").write_text("A stray copy.\n")
     exported, read = reads(conn, state_dir, dest)
     assert (exported.removed, read) == ([f"PROJ-2/{second}.md"], 1)
+
+    # So is a plan whose prompt's export changed, and its prompt written again.
+    plan_prompt(conn, first).write_text(PLAN_PROMPT)
+    plan_export.export(conn, state_dir, dest)
+    plan_export.export(conn, state_dir, dest)
+    assert reads(conn, state_dir, dest)[1] == 0
+    (dest / KEY / f"{first}-prompt.md").write_text("The operator's edit.\n")
+    exported, read = reads(conn, state_dir, dest)
+    assert (exported.written, read) == ([f"{KEY}/{first}-prompt.md"], 1)
+    assert (dest / KEY / f"{first}-prompt.md").read_text() == PLAN_PROMPT
 
     # Fingerprints that cannot be read are none: every plan is read again.
     [kept] = (state_dir / plan_export.SEEN_DIR).iterdir()
@@ -354,7 +425,7 @@ def test_canopy_archive_exports_and_says_what_it_did(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    run_id = proposed(conn, state_dir)
+    run_id = prompted(conn, state_dir)
     gone = proposed(conn, state_dir, key="PROJ-2")
     plans.path_for(state_dir, "PROJ-2", gone).unlink()
     dest = tmp_path / "archive"
@@ -362,8 +433,9 @@ def test_canopy_archive_exports_and_says_what_it_did(
     assert operator("archive", str(dest)) == 0
     assert capsys.readouterr().out.splitlines() == [
         f"wrote {KEY}/{run_id}-Proposed.md",
+        f"wrote {KEY}/{run_id}-prompt.md",
         f"skipped PROJ-2's plan of run {gone}: its file is missing",
-        f"Exported 1 plan to {dest}; 0 unchanged, 1 skipped.",
+        f"Exported 1 plan and 1 prompt to {dest}; 0 unchanged, 1 skipped.",
     ]
     assert front_matter(dest / KEY / f"{run_id}-Proposed.md")[1] == PLAN
 

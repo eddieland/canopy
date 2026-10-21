@@ -79,10 +79,10 @@ def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
     """Export every plan into DIR, superseded and feedback plans included, each with what the journal records of it.
 
     Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-Approved-export-reports-as-csv.md, as its
-    file stands now under a front matter of its status, hashes, and approval. A file is rewritten only when its plan
-    changed, and removed only when its plan moved to a new name, so DIR can be a clone of a repository of yours that
-    you commit and push. Plans hold what the planners read of your tickets: keep that
-    repository private.
+    file stands now under a front matter of its status, hashes, and approval, and beside it the prompt its planner was
+    given, as RUN-prompt.md. A file is rewritten only when its plan changed, and removed only when its plan moved to a
+    new name, so DIR can be a clone of a repository of yours that you commit and push. Plans hold what the planners
+    read of your tickets, and prompts your messages and standing instructions: keep that repository private.
 
     Raises:
         CliError: it runs inside one of canopy's ticks or runs, or DIR cannot be written.
@@ -106,9 +106,12 @@ def cmd_archive(click_ctx: click.Context, dest: Path) -> int:
         click.echo(f"removed {name}, its plan now under another name")
     for s in exported.skipped:
         click.echo(f"skipped {s.ticket_key}'s {s.kind} of run {s.run_id}: its file is {s.problem}")
+    prompts = sum(plan_export.is_prompt(Path(name).name) for name in exported.written)
+    plans_written = len(exported.written) - prompts
     click.echo(
-        f"Exported {len(exported.written)} plan{'s' if len(exported.written) != 1 else ''} to {dest}; "
-        f"{exported.unchanged} unchanged, {len(exported.skipped)} skipped.",
+        f"Exported {plans_written} plan{'s' if plans_written != 1 else ''} and {prompts} "
+        f"prompt{'s' if prompts != 1 else ''} to {dest}; {exported.unchanged} unchanged, "
+        f"{len(exported.skipped)} skipped.",
     )
     return 0
 
