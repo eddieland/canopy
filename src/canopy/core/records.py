@@ -430,6 +430,19 @@ class NextRunPersona(Row):
 
 
 @dataclass(frozen=True)
+class PersonaText(Row):
+    """The text of a persona a run or a review was given, once per digest (DESIGN §31)."""
+
+    TABLE: ClassVar[str] = "persona_texts"
+
+    #: The sha256 of `text`, in hex, as a run's `persona_digest` names it.
+    digest: str
+    #: The persona's text as the prompt carried it.
+    text: str
+    recorded_at: str
+
+
+@dataclass(frozen=True)
 class PlanThread(Row):
     """One of the operator's comments on a ticket's plan, anchored by its passage's words (DESIGN §25)."""
 

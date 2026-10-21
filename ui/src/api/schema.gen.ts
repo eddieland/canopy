@@ -3514,6 +3514,8 @@ export type components = {
              * @description The file, under the state directory: the operator reads and edits it with their own tools too.
              */
             path: string;
+            /** @description The persona its planner wrote in, and its instructions; none for a run from before canopy recorded one. */
+            persona: components["schemas"]["RunPersona"] | null;
             /** @description The plan the file is. */
             plan: components["schemas"]["PlanSummary"];
             /**
@@ -4701,6 +4703,32 @@ export type components = {
             lessons: components["schemas"]["MemoryModeName"];
             /** @description Ticket notes' mode for this run. */
             ticket_notes: components["schemas"]["MemoryModeName"];
+        };
+        /**
+         * RunPersona
+         * @description The persona a run wrote in (DESIGN §31), and the instructions it read.
+         */
+        RunPersona: {
+            /**
+             * Digest
+             * @description The sha256 of its text as the run's prompt carried it, in hex.
+             */
+            digest: string;
+            /**
+             * Name
+             * @description The persona's name.
+             */
+            name: string;
+            /**
+             * Problem
+             * @description Why there is no text: the run is from before canopy kept texts, and its file is gone or edited since.
+             */
+            problem: string | null;
+            /**
+             * Text
+             * @description Its instructions as the run read them; none when canopy cannot tell what they were: `problem` says why.
+             */
+            text: string | null;
         };
         /**
          * RunsSince

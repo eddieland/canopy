@@ -58,7 +58,8 @@ workspace file can neither supply one nor choose one.
   It never falls back to `canopy`, since a run in a voice nobody chose would read as the chosen one's.
 - **What is recorded is what ran.** Each run and review records its persona's name and a digest of its text, so the
   operator can compare one persona's work with another's, and a persona edited between runs splits them into before
-  and after.
+  and after. The journal keeps each text once per digest, so the operator reads what a run read, a plan's planner on
+  its page among them, after the file is edited or gone.
 - A prompt override that cannot carry a persona still serves runs whose persona is `canopy`, which keep the voice the
   override already holds; a run given any other persona refuses it as `bad_prompt` rather than run without the
   persona (§8).

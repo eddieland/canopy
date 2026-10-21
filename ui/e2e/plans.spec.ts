@@ -198,6 +198,21 @@ test('an earlier plan opens read only', async ({ page }) => {
     )
 })
 
+test('a plan shows the persona its planner wrote in, and opens to the instructions it read', async ({ page }) => {
+    const persona = page.getByTestId('persona').first()
+    await expect(persona).toContainText('canopy')
+    await persona.getByRole('button', { name: 'Show instructions' }).click()
+    await expect(persona.getByRole('region', { name: "the persona's instructions" })).toContainText(
+        'When you plan, be as long as the work needs and no longer.',
+    )
+    // An earlier plan's planner read its own text, kept under its own digest.
+    const earlier = page.getByTestId('earlier-plans')
+    await earlier.getByRole('button', { name: 'Show plan 1' }).click()
+    await expect(earlier.getByTestId('persona')).toContainText('canopy c4a0f1e2d3b4')
+    await earlier.getByTestId('persona').getByRole('button', { name: 'Show instructions' }).click()
+    await expect(earlier.getByRole('region', { name: "the persona's instructions" })).toContainText('When you plan')
+})
+
 test('leaving the page with an edit not yet saved asks first; Stay keeps the edit, Leave goes', async ({ page }) => {
     await plan(page).getByText('Exports to anything but CSV.').click()
     await page.keyboard.press('End')

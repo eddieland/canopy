@@ -47,6 +47,17 @@ describe('RichText', () => {
         expect(screen.queryByText(/word79/u)).toBeNull()
     })
 
+    it("keeps a paragraph's line breaks, and with prose joins them as Markdown does, an item's too", () => {
+        const text = 'A plan as long\nas the work.\n\n- one item\n  wrapped'
+        const { container, unmount } = render(<RichText text={text} />)
+        expect(container.querySelectorAll('br')).toHaveLength(2)
+        unmount()
+
+        render(<RichText text={text} prose />)
+        expect(screen.getByText('A plan as long as the work.')).toBeDefined()
+        expect(screen.getByRole('listitem').textContent).toBe('one item wrapped')
+    })
+
     it("lays out an agent's lists, headings, and code, its markup as characters and only bare URLs linked", () => {
         const text = [
             '## What changed',

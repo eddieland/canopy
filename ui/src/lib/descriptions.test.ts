@@ -163,6 +163,7 @@ describe('ticketDescription', () => {
             sha256: 'abc',
             edited: false,
             changed_since_approval: false,
+            persona: null,
         }
         const plans: TicketPlans = { ...NO_PLAN, needed: true, plans: [plan], newest: file }
         expect(ticketDescription(IDLE, plans)).toBe('plan waiting on you')

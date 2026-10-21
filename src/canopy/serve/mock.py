@@ -29,7 +29,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, plans, pools, sql, workspace
+from canopy.core import chore_view, config, conversation, db, personas, plans, pools, sql, workspace
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import OverrideKind, RunKind, RunStatus
@@ -277,15 +277,16 @@ def seed(directory: Path) -> Backend:
             _memory(ctx.conn)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
-            _personas(ctx.conn)
+            _personas(ctx.conn, ctx.config)
     _transcripts(ws.state_dir)
     return backend
 
 
-def _personas(conn: sqlite3.Connection) -> None:
+def _personas(conn: sqlite3.Connection, cfg: config.Config) -> None:
     """The personas the runs and reviews wrote in (DESIGN §31).
 
     canopy's own, but ABC-099's reviewer, whom the operator set to `skeptic` from its page before its latest review.
+    ABC-105's newest plan run read canopy's text as it ships; the rest, made-up digests, each kept with its text.
     """
     sql.execute(
         conn,
@@ -293,6 +294,10 @@ def _personas(conn: sqlite3.Connection) -> None:
         .set(persona="canopy", persona_digest=_CANOPY_DIGEST)
         .where_in("kind", [RunKind.IMPLEMENT, RunKind.RESUME, RunKind.PLAN]),
     )
+    canopy, skeptic = personas.load(cfg, personas.DEFAULT), personas.load(cfg, "skeptic")
+    sql.execute(conn, sql.update("runs").set(persona_digest=canopy.digest).where("id = 44"))
+    for digest, text in ((canopy.digest, canopy.text), (_CANOPY_DIGEST, canopy.text), (_SKEPTIC_DIGEST, skeptic.text)):
+        db.record_persona_text(conn, digest, text)
     sql.execute(conn, sql.update("review_runs").set(persona="canopy", persona_digest=_CANOPY_DIGEST).everything())
     sql.execute(conn, sql.update("review_runs").set(persona="skeptic", persona_digest=_SKEPTIC_DIGEST).where("id = 4"))
     sql.execute(

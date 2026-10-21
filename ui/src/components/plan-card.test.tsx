@@ -34,6 +34,7 @@ const PLANS: TicketPlans = {
         sha256: 'abc',
         edited: false,
         changed_since_approval: false,
+        persona: null,
     },
     threads: [
         {

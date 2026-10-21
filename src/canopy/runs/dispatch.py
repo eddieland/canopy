@@ -1109,6 +1109,7 @@ def _spawn(
         feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
         persona=persona.name if persona is not None else None,
         persona_digest=persona.digest if persona is not None else None,
+        persona_text=persona.text if persona is not None else None,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)

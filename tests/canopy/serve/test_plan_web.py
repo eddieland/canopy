@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, plans
+from canopy.core import db, personas, plans, sql
 from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunStatus
 from tests.canopy.helpers import (
@@ -76,6 +76,40 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     gone = c.get(f"/api/tickets/{KEY}/plans/{plan_id}").json()
     assert (gone["text"], gone["problem"]) == (None, "missing")
     assert c.get(f"/api/tickets/{KEY}/plans/99").status_code == 404
+
+
+def test_a_plan_carries_the_persona_its_planner_wrote_in_and_the_instructions_it_read(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    plan_id = proposed(ctx)
+    # A run from before canopy recorded its persona has none to show.
+    assert c.get(f"/api/tickets/{KEY}/plans").json()["newest"]["persona"] is None
+
+    def ran_in(name: str, digest: str) -> dict[str, object]:
+        sql.execute(ctx.conn, sql.update("runs").set(persona=name, persona_digest=digest).everything())
+        ctx.conn.commit()
+        return c.get(f"/api/tickets/{KEY}/plans/{plan_id}").json()["persona"]
+
+    # The text the journal kept for the run's digest, whatever the file says now.
+    db.record_persona_text(ctx.conn, "0" * 64, "Press on failure paths.")
+    ctx.conn.commit()
+    assert ran_in("skeptic", "0" * 64) == {
+        "name": "skeptic",
+        "digest": "0" * 64,
+        "text": "Press on failure paths.",
+        "problem": None,
+    }
+    # A run from before canopy kept texts: its file, while its digest is still the run's.
+    skeptic = personas.load(ctx.config, "skeptic")
+    assert ran_in("skeptic", skeptic.digest)["text"] == skeptic.text
+    # Its file edited since, or gone: no text, never one the run did not read, and why.
+    edited = ran_in("skeptic", "1" * 64)
+    assert (edited["text"], edited["problem"]) == (
+        None,
+        "canopy kept no text, and its file has been edited since the run read it",
+    )
+    gone = ran_in("lenient", "1" * 64)
+    assert gone["text"] is None
+    assert str(gone["problem"]).startswith("canopy kept no text, and persona lenient has no file")
 
 
 def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context) -> None:

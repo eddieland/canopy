@@ -9,12 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, plan_threads, plans
+from canopy.core import db, personas, plan_threads, plans, records, sql
 from canopy.core.vocab import PlanStatus, RunKind
-from canopy.serve.schema import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, TicketPlans
+from canopy.serve.schema import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, RunPersona, TicketPlans
 
 if TYPE_CHECKING:
-    from canopy.core import records
     from canopy.core.context import Context
 
 
@@ -48,12 +47,14 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
     """A plan as its file stands now.
 
     Returns:
-        The plan, its path, its text or why it is not a plan any more, its hash, and whether it was edited.
+        The plan, the persona its planner wrote in, its path, its text or why it is not a plan any more, its hash,
+        and whether it was edited.
     """
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
     return PlanFile(
         plan=plan_summary(plan),
+        persona=run_persona(ctx, plan.run_id),
         path=str(path),
         text=reading.text,
         problem=reading.problem,
@@ -61,6 +62,35 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
         edited=reading.sha256 != plan.sha256,
         changed_since_approval=plan.status is PlanStatus.APPROVED and reading.sha256 != plan.approved_sha256,
     )
+
+
+def run_persona(ctx: Context, run_id: int) -> RunPersona | None:
+    """The persona run `run_id` wrote in, with the instructions it read (DESIGN §31).
+
+    The journal keeps a persona's text once per digest, from the run that first carried it. A run from before canopy
+    kept texts has its persona's file read instead, but only while the file's digest is still the run's: a text the run
+    never read is not shown as its.
+
+    Returns:
+        The persona, or None for a run from before canopy recorded one.
+    """
+    run = records.fetch_one(ctx.conn, records.Run, sql.select("*").from_("runs").where("id = ?", run_id))
+    if run is None or run.persona is None or run.persona_digest is None:
+        return None
+    kept = db.persona_text(ctx.conn, run.persona_digest)
+    if kept is not None:
+        return RunPersona(name=run.persona, digest=run.persona_digest, text=kept)
+    try:
+        now = personas.load(ctx.config, run.persona)
+    except personas.PersonaError as e:
+        return RunPersona(name=run.persona, digest=run.persona_digest, problem=f"canopy kept no text, and {e.reason}")
+    if now.digest != run.persona_digest:
+        return RunPersona(
+            name=run.persona,
+            digest=run.persona_digest,
+            problem="canopy kept no text, and its file has been edited since the run read it",
+        )
+    return RunPersona(name=run.persona, digest=run.persona_digest, text=now.text)
 
 
 def plan_summary(plan: records.Plan) -> PlanSummary:

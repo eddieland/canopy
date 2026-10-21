@@ -758,6 +758,7 @@ def insert_run(
     feedback_plan_id: int | None = None,
     persona: str | None = None,
     persona_digest: str | None = None,
+    persona_text: str | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -771,7 +772,7 @@ def insert_run(
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
     `feedback_plan_id` is the approved feedback plan a `resume` follows in place of a ticket's plan (DESIGN §32).
     `persona` and `persona_digest` are the name and text digest of the persona its prompt carries, or None for a kind
-    no persona reaches (DESIGN §31).
+    no persona reaches (DESIGN §31); `persona_text` is that text, kept once per digest (`record_persona_text`).
 
     Returns:
         The new run's id.
@@ -794,6 +795,7 @@ def insert_run(
             persona_digest=persona_digest,
         )
         run_id = _rowid(sql.execute(conn, run))
+        record_persona_text(conn, persona_digest, persona_text)
         sql.execute(conn, sql.update("runs").set(log_path=str(runs_dir / f"{run_id}.log")).where("id = ?", run_id))
         sql.execute_many(
             conn,
@@ -1267,12 +1269,13 @@ def insert_review_run(
     logs_dir: Path,
     persona: str | None = None,
     persona_digest: str | None = None,
+    persona_text: str | None = None,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
     `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `request` for a PR the operator
     asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
-    persona its prompt carries (DESIGN §31).
+    persona its prompt carries (DESIGN §31), and `persona_text` that text, kept once per digest (`record_persona_text`).
 
     Returns:
         The new review run's id.
@@ -1292,9 +1295,31 @@ def insert_review_run(
             persona_digest=persona_digest,
         )
         run_id = _rowid(sql.execute(conn, run))
+        record_persona_text(conn, persona_digest, persona_text)
         log_path = str(logs_dir / f"{run_id}.log")
         sql.execute(conn, sql.update("review_runs").set(log_path=log_path).where("id = ?", run_id))
     return run_id
+
+
+def record_persona_text(conn: sqlite3.Connection, digest: str | None, text: str | None) -> None:
+    """Keep the text of a persona a run was given, once per digest, unless it is kept already (DESIGN §31).
+
+    A text is its digest's, so the first run that carries a digest records it and no later one changes it. Nothing is
+    kept when either is None.
+    """
+    if digest is None or text is None:
+        return
+    sql.execute(conn, sql.insert("persona_texts", digest=digest, text=text, recorded_at=now()).or_ignore())
+
+
+def persona_text(conn: sqlite3.Connection, digest: str) -> str | None:
+    """Return the text of the persona whose digest is `digest`, as a run was given it, or None if none was kept."""
+    found = records.fetch_one(
+        conn,
+        records.PersonaText,
+        sql.select("*").from_("persona_texts").where("digest = ?", digest),
+    )
+    return found.text if found is not None else None
 
 
 def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
