@@ -28,6 +28,7 @@ const REVIEW: ReviewSummary = {
     cost_usd: 0.31,
     started_at: '2026-10-08T11:00:00Z',
     ended_at: '2026-10-08T11:04:00Z',
+    news: true,
     seen: true,
 }
 
@@ -102,12 +103,22 @@ describe('ReviewsTable', () => {
     })
 
     it('marks a review whose result the operator has not seen new, and no other', async () => {
-        const running = { ...REVIEW, id: 2, state: 'running', ended_at: null, verdict: null, seen: false } as const
-        await renderReviews([{ ...REVIEW, seen: false }, { ...REVIEW, id: 3 }, running])
+        const running = { ...REVIEW, id: 2, state: 'running', ended_at: null, verdict: null, news: false } as const
+        const clean = {
+            ...REVIEW,
+            id: 1,
+            verdict: 'clean',
+            findings: 0,
+            worst: null,
+            news: false,
+            seen: false,
+        } as const
+        await renderReviews([{ ...REVIEW, seen: false }, { ...REVIEW, id: 3 }, { ...running, seen: false }, clean])
         const fresh = within(screen.getByTestId('review-4')).getByText('new')
         expect(tipOf(fresh)).toBe('new: you have not seen it yet')
-        // Seen, or still running with no result to see.
+        // Seen, still running with no result to see, or clean and started by the loop, with nothing to read.
         expect(within(screen.getByTestId('review-3')).queryByText('new')).toBeNull()
         expect(within(screen.getByTestId('review-2')).queryByText('new')).toBeNull()
+        expect(within(screen.getByTestId('review-1')).queryByText('new')).toBeNull()
     })
 })

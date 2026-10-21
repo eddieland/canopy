@@ -1917,9 +1917,12 @@ class ReviewSummary(_Model):
     """When it ended; None while it runs."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
+    news: bool = False
+    """Whether it has a result for the operator to read: it ended with a verdict that found something, or with any
+    verdict when they asked for it. A clean review the loop started on its own has none."""
     seen: bool = False
-    """Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run that ended
-    with a verdict and is not seen is new to them."""
+    """Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run with news
+    that is not seen is new to them."""
 
 
 class RequestedReview(_Model):

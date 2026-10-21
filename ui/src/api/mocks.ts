@@ -120,6 +120,7 @@ export const mockReviews: ReviewSummary[] = [
         started_at: '2026-10-08T12:01:00Z',
         ended_at: null,
         cost_usd: 0.04,
+        news: false,
         seen: false,
     },
 ]
