@@ -5,12 +5,13 @@ socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, 
 `notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
 with its own async stack and HTTP transports, for these few methods.
 
-It serves in one of two modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
-command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
-time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
+It serves in one of three modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the
+same command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call
+at a time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
 (`CHORE`, `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy
 chore history` also reads; it lists and serves it only where CANOPY_RUN_ID names a chore's run, and serves nothing of
-the overseer's.
+the overseer's. The reviewer's and the planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in
+the checkouts its command line names, the run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
 
 A refusal or an invalid argument is a tool error, `isError`, with the text the command prints, and the server goes on.
 It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
@@ -31,7 +32,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
 from canopy.chores import history
-from canopy.core import config, context, conversation, db
+from canopy.core import config, context, conversation, db, git_tools
 from canopy.infra import logs
 from canopy.loop import tools
 
@@ -207,10 +208,11 @@ class Mode:
     refusal: Callable[[Opener], str | None]
 
 
-def run_stdio(runner: procs.Runner, *, chore: bool = False) -> int:
+def run_stdio(runner: procs.Runner, *, chore: bool = False, checkouts: Mapping[str, Path] | None = None) -> int:
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
 
-    `chore` serves a chore's run its history (`CHORE`), from the workspace its run names; else the overseer's verbs.
+    `chore` serves a chore's run its history (`CHORE`), from the workspace its run names; `checkouts`, a review's or a
+    plan's run read-only git in those checkouts, by name (`git_mode`); else it serves the overseer's verbs.
 
     The protocol keeps its own copy of stdout; the process's stdout and stderr then go nowhere, so nothing a call
     prints, and no warning or traceback, reaches the runtime's pipes.
@@ -231,9 +233,83 @@ def run_stdio(runner: procs.Runner, *, chore: bool = False) -> int:
     # A chore's agent may run in a `cwd` outside the workspace; its run names the workspace it belongs to.
     root = os.environ.get(history.WORKSPACE_ENV) if chore else None
     start = Path(root) if root else Path.cwd()
+    mode = git_mode(runner, checkouts) if checkouts else CHORE if chore else OVERSEER
     with contextlib.suppress(BrokenPipeError), out:
-        serve(sys.stdin.buffer, write, lambda: opened(runner, start), CHORE if chore else OVERSEER)
+        serve(sys.stdin.buffer, write, lambda: opened(runner, start), mode)
     return 0
+
+
+def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
+    """Read-only git in `checkouts`, by name, for a review's or a plan's run, with `runner` for each git it runs.
+
+    It lists its tools wherever it runs: what it may read is what its command line names, set by the harness for the
+    run, never by the agent. A call opens no workspace.
+
+    Returns:
+        The mode.
+    """
+    found = (
+        _git_tool(
+            git_tools.MERGE_BASE,
+            "Find the commit where two commits' histories meet, such as where a branch left its base.",
+            git_tools.MergeBase,
+            git_tools.merge_base,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.DIFF,
+            "Show the diff from one commit to another, in the paths named if any. Commits only, never the working "
+            "tree.",
+            git_tools.Diff,
+            git_tools.diff,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.LOG,
+            "List commits, newest first, with each one's message and the files it changed: one commit's history, or "
+            "BASE..HEAD for those on HEAD and not BASE.",
+            git_tools.Log,
+            git_tools.log,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.SHOW,
+            "Read a file as it is at a commit, or list a directory's entries there.",
+            git_tools.Show,
+            git_tools.show,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+    )
+    return Mode(found, lambda _opener: None)
+
+
+def _git_tool[R: git_tools.Request](
+    name: str,
+    description: str,
+    request: type[R],
+    do: Callable[[procs.Runner, Mapping[str, Path], R], str],
+    *,
+    runner: procs.Runner,
+    checkouts: Mapping[str, Path],
+) -> Tool:
+    """Make git read `do` a tool over `checkouts`, taking `request` as its arguments.
+
+    Returns:
+        The tool, which never opens the workspace.
+    """
+
+    def call(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: ARG001  (git reads no journal)
+        asked = request.model_validate(arguments)
+        try:
+            return do(runner, checkouts, asked)
+        except git_tools.Refused as r:
+            raise tools.Refused(str(r)) from None
+
+    return Tool(name, description, request, call)
 
 
 def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener, mode: Mode | None = None) -> None:

@@ -47,6 +47,13 @@ history (§19), the request and text `canopy chore history` has, refused for any
 exact name and denies bash; every other definition denies it. Each run canopy starts drops the variables that name a
 server, so none passes below the run it was given to.
 
+The reviewer and the planner, which have no shell, read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git`
+in a review's or a plan's inline config, serves `merge-base`, `diff`, `log`, and `show` over the checkouts the harness
+names on its command line for that run, never the agent. An argument is a revision or a path inside the repository,
+never an option; git reads commits only, inherits no `GIT_*` variable, and runs no hook, filesystem monitor, external
+diff, textconv, pager, signature check, or transport; output is bounded. Their definitions keep `bash: deny` and allow
+the four by exact name; every other definition denies `canopy_git_*`. Workers keep their shell, for git's writes.
+
 ### The tools
 
 One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `queried`,
@@ -89,7 +96,7 @@ Read from OpenCode 1.19.3's source (2026-10-16), and read again before stage 2. 
 ### What changes elsewhere, in stage 2
 
 The overseer's prompt and definition, §6, §13, §22, TRUST_MODEL T1 and T7, and D020 and D081. D124 already holds that
-canopy serves MCP itself, over stdio only, to the overseer only. §35 retires mirroring, and with it the `mirror` tool.
+canopy serves MCP itself, over stdio only. §35 retires mirroring, and with it the `mirror` tool.
 
 ### Open
 

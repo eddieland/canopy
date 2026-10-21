@@ -6,7 +6,9 @@ This is review 1 of at most 3 of this PR.
 - PR: https://github.com/acme/api/pull/7
 - Commit: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`. Review this commit, not whatever the PR's head is by the time you read it.
 - Checkout: `/state/reviews/1/checkout` is the repository at that commit. Read what you need; change nothing (you have no tools
-  to, and anything left there is discarded).
+  to, and anything left there is discarded). Your git tools, `canopy_git_merge-base`, `canopy_git_diff`,
+  `canopy_git_log`, and `canopy_git_show`, read its history: where the PR leaves its base, the diff from there, and a
+  file as it was before.
 - Ticket: none: this PR is not one of the loop's own. For a ticket, the tracker is jira; if a skill named
   `tracker-jira` is available, load it first.
 
