@@ -17,7 +17,8 @@ spend can be split by what it bought (ROADMAP M33).
 
 A tick is the overseer's turn; between ticks the loop also polls the connectors, every `connect.every_minutes` from the
 last read, whatever `loop.*` paces the ticks at (`poll`, DESIGN §6). A poll reads the world into the journal and ends
-no wait, and none runs while the loop is paused.
+no wait, and none runs while the loop is paused. The wait after a live tick also reads which models served the runs
+left unread (`models`), one at a time, which ends no wait either.
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -55,7 +56,7 @@ from rich.text import Text
 
 from canopy.core import config, db, notice, pause
 from canopy.infra import lock, logfmt, logs, procs, resources
-from canopy.loop import attention, duties, pacing, phases, poll, reread, tick, tick_now
+from canopy.loop import attention, duties, models, pacing, phases, poll, reread, tick, tick_now
 
 if TYPE_CHECKING:
     import sqlite3
@@ -356,11 +357,16 @@ class _Settings:
 
 @dataclass
 class _Polls:
-    """When the wait after a tick polls the connectors (`poll.run`): `connect.every_minutes` after the last read."""
+    """When the wait after a tick polls the connectors (`poll.run`): `connect.every_minutes` after the last read.
+
+    The wait also reads which models served the runs left unread, through `backlog`, between its polls.
+    """
 
     settings: _Settings
     clock: Callable[[], float]
     log: logs.TickAdapter
+    #: The runs' sessions left unread; None in a dry run, which reads none.
+    backlog: models.Backlog | None
     #: When the connectors last ran, a tick's or a poll's, on `clock`.
     last: float = 0.0
 
@@ -371,12 +377,19 @@ class _Polls:
             The time, on `clock`.
         """
         self.last = self.clock()
+        if self.backlog is not None:
+            self.backlog.ticked()
         return self.last
 
     def step(self) -> None:
-        """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused."""
+        """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused.
+
+        Before the poll, read a run's session if one is due (`models.Backlog.step`).
+        """
         self.settings.apply()
         ctx = self.settings.ctx
+        if self.backlog is not None:
+            self.backlog.step(ctx)
         if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
             return
         self.last = self.clock()
@@ -461,7 +474,8 @@ def _ticks(
         _log_woken(console, log, woken, seen=0, since=None, read_at=None)
         woken_by = woken or "start"
     idle_count = 0
-    polls = _Polls(settings, clock, log)
+    # A dry run reads no session, as its tick reads none.
+    polls = _Polls(settings, clock, log, None if dry_run else models.Backlog(clock, log))
     while not stop.requested:
         settings.apply()
         ctx, pace = settings.ctx, settings.pace

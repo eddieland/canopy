@@ -17,7 +17,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff, review_drafts, run_offers
+from canopy.core import (
+    conversation,
+    db,
+    definitions,
+    hostgit,
+    outbox,
+    pools,
+    review_diff,
+    review_drafts,
+    run_models,
+    run_offers,
+)
 from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
@@ -112,6 +123,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                     log.exception("review draft not made", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("review run finished", extra={**fields, "status": outcome.status})
+            run_models.read_ended(ctx, "review_runs", run_id, log)
     return outcome
 
 

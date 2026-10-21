@@ -10,7 +10,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, definitions, personas, records, review_diff, sql
+from canopy.core import conversation, db, definitions, personas, records, review_diff, run_models, sql
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.core.context import Context
@@ -650,8 +650,14 @@ def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
     assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
-def test_a_review_run_records_what_it_cost(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
+def test_a_review_run_records_what_it_cost(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    opencode_state: Path,
+) -> None:
     """With OpenCode's JSON events, as the default `review_cmd` asks for, a review run records its session and cost."""
+    opencode_state.write_text(json.dumps({"sessions": {"ses_review": [["anthropic", "claude-x", 0.25]]}}))
     with_events(reviewing, "canopy-reviewer")
     reviewer = reviewer_reports(FINDINGS, ["echo", "read it"], session="ses_review")
     reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer)
@@ -664,6 +670,8 @@ def test_a_review_run_records_what_it_cost(reviewing: CanopyEnv, scenario: Scena
     assert (reviewing.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
     assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
+    # Which models served it, read from its session as it ended (DESIGN §13).
+    assert [(m.model, m.replies) for m in run_models.of_run(conn, "review_runs", run_id)] == [("anthropic/claude-x", 1)]
 
 
 def test_a_timed_out_review_records_what_it_reported_before_the_kill(

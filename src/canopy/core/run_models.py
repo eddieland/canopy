@@ -1,8 +1,10 @@
 """Which models served each agent run, as its session's own record says (DESIGN §13, Each agent's model).
 
-The runtime prints no event naming the model a call went to, so the loop reads the session after the run ends
-(`canopy.loop.models`), and records here what it found: each model's replies and their cost (`run_models`), and how the
-read ended (`run_model_reads`). `due` is what to read next: runs never read, the newest first, then failed ones again.
+The runtime prints no event naming the model a call went to, so a run's session is read once the run has ended: by the
+process that ran it, as it closes the run (`read_ended`), and for a run that leaves it unread, by the loop while it
+waits between ticks (`canopy.loop.models`). What a read found is recorded here: each model's replies and their cost
+(`run_models`), and how the read ended (`run_model_reads`). `due` is what to read next: runs never read, the newest
+first, then failed ones again.
 """
 
 from __future__ import annotations
@@ -13,11 +15,14 @@ from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import ModelsRead
+from canopy.runtime import session_models
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Sequence
 
+    from canopy.core.context import Context
+    from canopy.infra import logs
     from canopy.runtime.report import ModelUse
 
 #: A table of agent runs, each with a session: a tick's overseer, a worker or plan run, a chore run, a review run.
@@ -48,18 +53,42 @@ def due(conn: sqlite3.Connection, *, limit: int, now: datetime | None = None) ->
     Returns:
         The runs, in the order to read them.
     """
-    retry_before = db.format_time((now or datetime.now(UTC)) - RETRY_AFTER)
+    retry_before = _retry_before(now)
     candidates = sql.union(*(_due_in(table, retry_before) for table in _TABLES), every=True)
-    query = (
-        sql.select("run_table, run_id, session_id, attempts")
-        .from_("({}) AS due", candidates)
-        .order_by("attempts, started_at DESC, run_table, run_id")
-        .limit(limit)
-    )
-    return [
-        Due(run_table=_table(str(r[0])), run_id=int(r[1]), session_id=str(r[2]), attempts=int(r[3]))
-        for r in sql.execute(conn, query)
-    ]
+    return _dues(conn, candidates, limit=limit)
+
+
+def read_ended(ctx: Context, table: RunTable, run_id: int, log: logs.TickAdapter) -> None:
+    """Read which models served run `run_id` of `table`, just closed, if its session is due to be read.
+
+    The process that ran it calls this once it has closed the run's row. What it raises is logged, never the run's
+    outcome: the run is closed, and a run left unread is read while the loop waits.
+    """
+    try:
+        for run in _dues(ctx.conn, _due_in(table, _retry_before()).where("r.id = ?", run_id), limit=1):
+            read(ctx, run, log)
+    except Exception as e:
+        log.exception(
+            "reading which models served a run raised",
+            extra={"run_table": table, "run_id": run_id, "error": str(e)},
+        )
+
+
+def read(ctx: Context, run: Due, log: logs.TickAdapter) -> ModelsRead:
+    """Read `run`'s session from the runtime's own record, and record which models served it.
+
+    Returns:
+        How the read ended. A failed one is logged, and due again `RETRY_AFTER` later.
+    """
+    found = session_models.read(ctx.runner, cwd=ctx.repo_root, session_id=run.session_id)
+    status = ModelsRead(found.outcome)
+    record(ctx.conn, run, status, found.models, error=found.error)
+    if status is ModelsRead.FAILED:
+        log.warning(
+            "could not read which models served a run",
+            extra={"run_table": run.run_table, "run_id": run.run_id, "error": found.error},
+        )
+    return status
 
 
 def record(
@@ -132,6 +161,24 @@ def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]
         return {}
     query = sql.select("*").from_("run_model_reads").where("run_table = ?", table).where_in("run_id", run_ids)
     return {row.run_id: row for row in records.fetch_all(conn, records.RunModelRead, query)}
+
+
+def _retry_before(now: datetime | None = None) -> str:
+    return db.format_time((now or datetime.now(UTC)) - RETRY_AFTER)
+
+
+# The runs `candidates` selects, as `_due_in` selects them, in the order to read them.
+def _dues(conn: sqlite3.Connection, candidates: sql.Composable, *, limit: int) -> list[Due]:
+    query = (
+        sql.select("run_table, run_id, session_id, attempts")
+        .from_("({}) AS due", candidates)
+        .order_by("attempts, started_at DESC, run_table, run_id")
+        .limit(limit)
+    )
+    return [
+        Due(run_table=_table(str(r[0])), run_id=int(r[1]), session_id=str(r[2]), attempts=int(r[3]))
+        for r in sql.execute(conn, query)
+    ]
 
 
 # One table's runs that are due: ended with a session, and never read or failed long enough ago to read again.
