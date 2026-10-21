@@ -77,6 +77,15 @@ def test_a_tick_page_names_the_ticks_either_side_dry_runs_included_and_steps_ove
     assert neighbours(last) == (dry, after)
 
 
+def test_a_tick_page_names_the_models_that_served_its_overseer(backend: Backend) -> None:
+    models = client(None, backend).get("/api/ticks/2").json()["models"]
+    assert models == {
+        "status": "found",
+        "models": [{"model": "anthropic/claude-sonnet-4-5", "replies": 13, "cost_usd": 0.31}],
+        "error": None,
+    }
+
+
 def test_no_such_tick_is_a_404_and_a_tick_id_is_a_positive_integer(backend: Backend) -> None:
     c = client(None, backend)
     missing = c.get("/api/ticks/99")

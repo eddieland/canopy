@@ -10,6 +10,7 @@ import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
 import { ListPanel } from '@/components/list-panel'
+import { ModelsField } from '@/components/models-field'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
@@ -157,6 +158,7 @@ function RunPanel({
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
+                <ModelsField models={detail.models} />
                 <Field label="log" mono>
                     <CopyablePath path={run.log_path} label="log path">
                         <span title="the chore's stdout and stderr: yours alone">{run.log_path}</span>

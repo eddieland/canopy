@@ -16,7 +16,7 @@ from canopy.core.vocab import ModelsRead
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from canopy.runtime.report import ModelUse
 
@@ -98,13 +98,40 @@ def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> list[recor
     Returns:
         A row per model; empty for a run not read yet, whose session is missing, or that made no model call.
     """
+    return of_runs(conn, table, [run_id])[run_id]
+
+
+def of_runs(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, list[records.RunModel]]:
+    """The models each of a table's runs' sessions named, as `of_run` gives them, in one read.
+
+    Returns:
+        Each run's models by its id, every one of `run_ids` included.
+    """
+    found: dict[int, list[records.RunModel]] = {i: [] for i in run_ids}
+    if not run_ids:
+        return found
     query = (
         sql.select("*")
         .from_("run_models")
-        .where("run_table = ? AND run_id = ?", table, run_id)
-        .order_by("cost_usd DESC, model")
+        .where("run_table = ?", table)
+        .where_in("run_id", run_ids)
+        .order_by("run_id, cost_usd DESC, model")
     )
-    return records.fetch_all(conn, records.RunModel, query)
+    for row in records.fetch_all(conn, records.RunModel, query):
+        found[row.run_id].append(row)
+    return found
+
+
+def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, records.RunModelRead]:
+    """How canopy's last read of each of a table's runs' sessions ended, in one read.
+
+    Returns:
+        Each read run's last read by its id; a run never read is not among them.
+    """
+    if not run_ids:
+        return {}
+    query = sql.select("*").from_("run_model_reads").where("run_table = ?", table).where_in("run_id", run_ids)
+    return {row.run_id: row for row in records.fetch_all(conn, records.RunModelRead, query)}
 
 
 # One table's runs that are due: ended with a session, and never read or failed long enough ago to read again.

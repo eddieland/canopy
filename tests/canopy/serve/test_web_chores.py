@@ -66,6 +66,15 @@ def test_a_chore_and_its_run_say_how_many_findings_it_did_not_list(backend: Back
     assert (page["runs"][0]["more_findings"], page["runs"][1]["more_findings"]) == (7, 0)
 
 
+def test_a_chore_runs_page_names_the_models_that_served_it_or_why_it_cannot(backend: Backend) -> None:
+    c = client(None, backend)
+    served = c.get(f"/api/chores/{mock.CHORE}/runs/1").json()["models"]
+    assert [(m["model"], m["cost_usd"]) for m in served["models"]] == [("anthropic/claude-haiku-4-5", 0.21)]
+    # The runtime no longer keeps run 2's session, and run 4 is still running.
+    assert c.get(f"/api/chores/{mock.CHORE}/runs/2").json()["models"]["status"] == "missing"
+    assert c.get("/api/chores/build-health/runs/4").json()["models"]["status"] == "running"
+
+
 def test_each_chore_carries_what_its_runs_cost_in_the_last_day_and_the_last_30_days(backend: Backend) -> None:
     with backend.open() as ctx:
         for started, cost in [(-3 * 24 * 60, 0.4), (-2 * 24 * 60, None), (-31 * 24 * 60, 9.0)]:
