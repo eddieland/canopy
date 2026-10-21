@@ -48,6 +48,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "send": ("conversation", "cmd_send"),
     "show": ("conversation", "cmd_show"),
     "plan": ("plans", "cmd_plan"),
+    "archive": ("plans", "cmd_archive"),
     "memory": ("memory", "memory_group"),
     "config": ("settings", "config_group"),
     "draft": ("drafts", "draft_group"),
