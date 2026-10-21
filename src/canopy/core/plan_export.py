@@ -3,7 +3,8 @@
 `export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/`: a front
 matter of its row, then its file as it stands now. The row is what a copy of `plans/` alone would lose: whether the plan
 was approved, by whom, and as which hash. The file's name says which plan it is and where it stands, so a listing reads
-without opening one: its run, its status, then its title as a slug (`name`), as `412-approved-export-reports-as-csv.md`.
+without opening one: its run, its status capitalized so it stands out, then its title as a slug (`name`), as
+`412-Approved-export-reports-as-csv.md`.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
 and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
@@ -51,7 +52,7 @@ _DIR_MODE = 0o700
 _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, so every plan exported before is read and compared again.
-_FORMAT = 2
+_FORMAT = 3
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
@@ -138,16 +139,16 @@ def export(conn: sqlite3.Connection, state_dir: Path, dest: Path, *, limit: int 
 
 
 def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str:
-    """A plan's file name in an export: its run, its status, `feedback` for a feedback plan, and its title's slug.
+    """A plan's file name in an export: its run, its status capitalized, `feedback` for a feedback plan, and a slug.
 
     The title is the plan's first `# ` heading, less the `Plan: KEY` the planner opens it with. A plan is model text
     (TRUST_MODEL T1), so its slug holds only lowercase letters, digits, and single hyphens, and is cut short; a plan
     with no title past that prefix has none in its name.
 
     Returns:
-        The name, as `412-approved-export-reports-as-csv.md`.
+        The name, as `412-Approved-export-reports-as-csv.md`.
     """
-    parts = [str(row.run_id), row.status.value]
+    parts = [str(row.run_id), row.status.value.capitalize()]
     if kind == "feedback plan":
         parts.append("feedback")
     slug = _slug(_title(text, row.ticket_key))
@@ -230,7 +231,9 @@ def _export_plan(
         return
     exported_name = name(kind, row, reading.text)
     data = document(kind, row, reading.text)
-    held = _held(dirs.dest_fd, exported_name, data)
+    # Only a name listed as it is: a filesystem that ignores case would find the plan under an earlier name that
+    # differs in case alone, and the name would never change to the new one.
+    held = _held(dirs.dest_fd, exported_name, data) if exported_name in dirs.listing else None
     if held is None:
         _write(dirs.dest_fd, dirs.dest / exported_name, data)
         tally.written.append(f"{dirs.key}/{exported_name}")
@@ -238,7 +241,8 @@ def _export_plan(
         tally.unchanged += 1
     # Only once the plan is in place under its name, so a failed write leaves it under the earlier one.
     for earlier in names:
-        if earlier != exported_name:
+        # A filesystem that ignores case finds the plan's new file under an earlier name that differs in case alone.
+        if earlier != exported_name and not _same_file(dirs.dest_fd, earlier, exported_name):
             _remove(dirs.dest_fd, dirs.dest / earlier)
             tally.removed.append(f"{dirs.key}/{earlier}")
     if held is not None:
@@ -283,9 +287,10 @@ def _is_name_of(run_id: int, file_name: str) -> bool:
     """Whether `file_name` is one an export could have given the plan of run `run_id`, now or in an earlier format.
 
     Returns:
-        True for `<run>.md`, and for `<run>-<status>.md` with anything `name` adds after the status.
+        True for `<run>.md`, and for `<run>-<status>.md`, the status lowercase or capitalized, with anything `name`
+        adds after it.
     """
-    statuses = "|".join(s.value for s in PlanStatus)
+    statuses = "|".join(f"{s.value}|{s.value.capitalize()}" for s in PlanStatus)
     return re.fullmatch(rf"{run_id}(?:-(?:{statuses})(?:-[a-z0-9]+)*)?\.md", file_name) is not None
 
 
@@ -519,6 +524,16 @@ def _stat(name: str, dir_fd: int) -> os.stat_result | None:
         return os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
     except OSError:
         return None
+
+
+def _same_file(dir_fd: int, name: str, other: str) -> bool:
+    """Whether `name` and `other` in the directory `dir_fd` are one file, as on a filesystem that ignores case.
+
+    Returns:
+        True when both stat, without following a link, as the same file.
+    """
+    first, second = _stat(name, dir_fd), _stat(other, dir_fd)
+    return first is not None and second is not None and os.path.samestat(first, second)
 
 
 def _write(dir_fd: int, path: Path, data: bytes) -> None:
