@@ -21,7 +21,8 @@ overseer; it may open a draft PR; and it may file tickets with no queue label.
   `canopy stop task:N` ends a running run as `stop` ends a ticket's and drops a queued one.
 - **Stage 2, the conversation.** `canopy reply task:N` queues the next run, which continues the branch, with the
   operator's messages as instructions and earlier summaries as data. A `blocked` run's question is a worker message,
-  and raises `awaiting_reply` until a reply. A run's end is a `task.ended` event (§20) with its summary.
+  and raises `awaiting_reply` until a reply. A run's end is a `task.ended` event, in a `tasks` group of its own (§20),
+  with its summary, its question when `blocked`, its branch, and its PR.
 - **Stage 3, what a task leaves.** The report: `.canopy-task-report.md` at the slot's root, excluded from git, copied
   to `<state_dir>/tasks/<N>/<run>.md` as plans are (§25), shown by `canopy show task:N`. Tickets: the result's
   `created`, at most `policy.max_follow_ups`, recorded against the task, each key's text checked only (D003), and

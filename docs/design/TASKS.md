@@ -59,7 +59,8 @@ Result contract, the last line of its text (§13), validated (D026); anything el
 A reply to a task (§22) queues its next run, which continues its branch, or starts one if none was pushed. A `blocked`
 run's question raises `awaiting_reply` (§14) until the operator replies. Stopping a task ends its run as `canopy stop`
 ends a ticket's, and drops what was queued; it is never deleted, so its runs, report, and spend stay to read. Each run
-that ends tells the sinks (§20), with its summary, and never its report.
+that ends is a `task.ended` event (§20) with its summary, its question when `blocked`, and its branch and PR, never
+its report.
 
 ### Trust model changes
 
