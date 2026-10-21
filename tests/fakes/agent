@@ -21,16 +21,18 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_STEP_COST
                         with `--format json`, each of the two `step_finish` events' `part.cost`, verbatim JSON, so a
                         test can make it invalid. Default 0.125. Each step's tokens are STEP_TOKENS.
+    FAKE_AGENT_ERRORS   with `--format json`, a JSON list, each the `error` of an `error` event printed after the final
+                        line, as OpenCode prints one when the session fails. Default none.
 
 With `--format json` it prints what `opencode run --format json` does: one JSON event per line, its text as `text`
 events, each command it ran as a `bash` `tool_use` event once it ends, and two model calls as `step_finish` events.
 Otherwise it prints its text as plain lines.
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_SAYS, FAKE_WORKER_EXIT,
-FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_SESSION, and FAKE_WORKER_STEP_COST first, falling back to the
-FAKE_AGENT_* ones, so one test can script an overseer and the workers it dispatches. `--agent canopy-overseer` reads
-FAKE_OVERSEER_* the same way, `--agent canopy-planner` FAKE_PLANNER_*, and `--agent canopy-worker-private`
-FAKE_WORKER_PRIVATE_*.
+FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_SESSION, FAKE_WORKER_STEP_COST, and FAKE_WORKER_ERRORS first,
+falling back to the FAKE_AGENT_* ones, so one test can script an overseer and the workers it dispatches.
+`--agent canopy-overseer` reads FAKE_OVERSEER_* the same way, `--agent canopy-planner` FAKE_PLANNER_*, and
+`--agent canopy-worker-private` FAKE_WORKER_PRIVATE_*.
 
 A run whose argv carries `--title=<title>` is of the ticket the title names first, as canopy's session titles do
 (`PROJ-1 implement: ...`). FAKE_<ROLE>_FOR, a JSON object from a ticket key to settings named without the prefix
@@ -155,6 +157,10 @@ def main(argv: list[str]) -> int:
     if result:
         say(argv, result)
     step(argv)
+    for error in json.loads(setting(argv, "ERRORS", "[]")) if events(argv) else []:
+        session = setting(argv, "SESSION", "ses_fake")
+        event = {"type": "error", "timestamp": int(time.time() * 1000), "sessionID": session}
+        print(json.dumps({**event, "error": error}), flush=True)
     return int(setting(argv, "EXIT", "0"))
 
 
