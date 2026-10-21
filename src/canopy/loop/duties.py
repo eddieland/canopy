@@ -100,6 +100,15 @@ def queried_keys(rationale: str) -> list[str]:
     return rationale.removeprefix(_QUERIED_SOME).split() if rationale.startswith(_QUERIED_SOME) else []
 
 
+def last_queried(conn: sqlite3.Connection) -> set[str]:
+    """The open tickets the newest `ok` tick that ran the tracker query found, whatever tick it was.
+
+    Returns:
+        Each key its `queried` decisions name; none before any tick has recorded one.
+    """
+    return {key for d in db.last_tick_decisions(conn, QUERIED_ACTION) for key in queried_keys(d.rationale)}
+
+
 def undone(conn: sqlite3.Connection, tick_id: int, duties: Duties) -> list[str]:
     """Each duty the overseer left undone this tick, in the procedure's order.
 

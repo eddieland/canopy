@@ -251,10 +251,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     "PROJ-3"
   ],
   "recently_done": [
-    {
-      "key": "PROJ-5",
-      "done_at": "2026-10-16T09:00:00.000Z"
-    }
+    "PROJ-5"
   ],
   "chores": [
     {

@@ -16,7 +16,7 @@ from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import lock, logs, procs
-from canopy.loop import attention, tick
+from canopy.loop import attention, duties, tick
 from tests.canopy.helpers import (
     agent_runs,
     canopy,
@@ -165,7 +165,10 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
     conn = scenario.conn
     repo = str(scenario.env.root)
     with in_tick(conn) as tick_id:
-        for key in ("PROJ-1", "PROJ-2", "PROJ-3", "PROJ-7"):
+        # The query found each still open but PROJ-8, which a human has closed since it merged.
+        found = [f"PROJ-{n}" for n in range(1, 8)]
+        db.record_decision(conn, tick_id, None, duties.QUERIED_ACTION, duties.queried_rationale(found))
+        for key in ("PROJ-1", "PROJ-2", "PROJ-3", "PROJ-7", "PROJ-8"):
             db.set_ticket(conn, key, repo, done=True)
             db.record_decision(conn, tick_id, key, "done", "merged")
         db.set_ticket(conn, "PROJ-4", repo, done=True)
@@ -186,18 +189,13 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
         # Its newest `done` decision is the one that counts.
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-3'", (long_ago,))
     with in_tick(conn) as tick_id:
-        newest = db.record_decision(conn, tick_id, "PROJ-3", "done", "merged, still open")
+        db.record_decision(conn, tick_id, "PROJ-3", "done", "merged, still open")
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
-    [done_at] = conn.execute("SELECT created_at FROM decisions WHERE ticket_key = 'PROJ-1'").fetchone()
-    [newest_at] = conn.execute("SELECT created_at FROM decisions WHERE id = ?", (newest,)).fetchone()
     scenario.tick(*waits("PROJ-5", rationale="checks pending"), dry_run=True)
     state = scenario.state()
     # Not PROJ-2, done too long ago; not PROJ-4, with no `done` decision; not PROJ-5, which is not marked done; not
-    # PROJ-6, closed; not PROJ-7, whose decision came before it was forgotten.
-    assert state["recently_done"] == [
-        {"key": "PROJ-1", "done_at": done_at},
-        {"key": "PROJ-3", "done_at": newest_at},
-    ]
+    # PROJ-6, closed; not PROJ-7, whose decision came before it was forgotten; not PROJ-8, which the query left out.
+    assert state["recently_done"] == ["PROJ-1", "PROJ-3"]
     assert [t["key"] for t in state["tickets"]] == ["PROJ-5"]
 
 

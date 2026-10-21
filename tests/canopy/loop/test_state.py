@@ -18,7 +18,7 @@ from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
-from canopy.loop import tick
+from canopy.loop import duties, tick
 from canopy.runs import policy, reconcile
 from tests.canopy.helpers import chore_toml
 
@@ -91,9 +91,10 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             runs_dir=runs_dir,
             works_units=False,
         )
-        # PROJ-5 merged, and the tracker still shows it open.
+        # PROJ-5 merged, and the tracker still shows it open: the query found it.
         db.set_ticket(conn, "PROJ-5", root, title="Bump the SDK", phase=Phase.MERGED, done=True)
         decide(conn, earlier, "PROJ-5", "done", "merged")
+        db.record_decision(conn, earlier, None, duties.QUERIED_ACTION, duties.queried_rationale(["PROJ-1", "PROJ-5"]))
         # PROJ-3 was started privately and stopped; PROJ-4 is private and its worker asked a question.
         with db.transaction(conn):
             for key in ("PROJ-3", "PROJ-4"):
