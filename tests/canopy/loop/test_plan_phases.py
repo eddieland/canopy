@@ -107,6 +107,21 @@ def test_an_approval_after_a_reply_wins(scenario: Scenario, git_pool: GitPool) -
     assert plans.changes_asked(scenario.conn, ticket) is None
 
 
+def test_a_question_keeps_its_line_breaks_where_the_page_shows_them(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures("workspace", policy={"plan": "approve"})
+    question = "Red or blue?\nRed matches the logo; blue matches the docs."
+    scenario.run(
+        PLAN, worker=planner_does(plan=None, result={"status": "blocked", "summary": "-", "question": question})
+    )
+    scenario.tick(*waits(KEY, rationale="the planner asked"))
+    [item] = [i for i in attention.current(scenario.conn) if i.reason == "awaiting_reply"]
+    # The web UI's detail pane shows the break; attention.md and `canopy status` keep each item to its line.
+    assert question in item.detail
+    flat = "Red or blue? Red matches the logo; blue matches the docs."
+    assert flat in (scenario.env.state_dir / "attention.md").read_text()
+    assert flat in scenario.operator("status").out
+
+
 def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures("workspace", policy={"plan": "approve"})
     blocked = {"status": "blocked", "summary": "unclear", "question": QUESTION}

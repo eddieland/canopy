@@ -247,7 +247,7 @@ function MemoryRow({
                     {entry.text === null ? (
                         <span className="text-muted-foreground">text deleted</span>
                     ) : (
-                        <MemoryText text={entry.text} />
+                        <MemoryText text={entry.text} lines />
                     )}
                 </RowLine>
                 <RowLine
@@ -351,7 +351,7 @@ function MemoryVersions({ id, onSaid }: { id: number; onSaid: ((said: string) =>
                         {version.id === id && <span>this row</span>}
                     </span>
                     <span className="text-sm">
-                        {version.text === null ? 'text deleted' : <MemoryText text={version.text} />}
+                        {version.text === null ? 'text deleted' : <MemoryText text={version.text} lines />}
                     </span>
                     {onSaid !== undefined && version.status !== 'active' && version.text !== null && (
                         <VersionForget version={version} onSaid={onSaid} />

@@ -87,4 +87,4 @@ gives it, with what you propose, and for a `change` or a `decline` the reply you
 4,000 characters. Name only ids the file gives: canopy leaves out any other. An item you leave out is planned
 next time. The summary is your report to the operator: what the plan proposes, in a paragraph.
 
-{"status":"done|blocked|failed","summary":"<your report>","question":"<only when blocked>","items":[{"id":123,"proposal":"change|decline|ask|leave","reply":"<for change or decline>"}]}
+{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>","question":"<only when blocked>","items":[{"id":123,"proposal":"change|decline|ask|leave","reply":"<for change or decline>"}]}

@@ -16,6 +16,7 @@ from canopy.cli.render import chore_line, named, one_line, persona_of, phase_of,
 from canopy.core import chore_view, connector_runs, contract, conversation, db, memory, notice, pause, review_requests
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
+from canopy.infra.text import printable
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
 from canopy.runs import drafted
@@ -188,14 +189,19 @@ def _print_attention(items: Sequence[attention.Item]) -> None:
     for group in sorted({i.reason for i in reasons}):
         click.echo(f"  {group}")
         for item in (i for i in reasons if i.reason == group):
-            click.echo(f"    {item.subject}  {attention.age(item.since)}  {item.detail}")
+            click.echo(f"    {item.subject}  {attention.age(item.since)}  {_flat(item.detail)}")
     findings = [i for i in items if i.finding]
     for chore in sorted({i.subject for i in findings}):
         click.echo(f"  {chore} findings")
         for item in (i for i in findings if i.subject == chore):
-            click.echo(f"    {item.reason}  {attention.age(item.since)}  {item.detail}")
+            click.echo(f"    {item.reason}  {attention.age(item.since)}  {_flat(item.detail)}")
     if not items:
         click.echo("  nothing needs you")
+
+
+def _flat(text: str) -> str:
+    # A detail may break its lines (an agent's, or a question it quotes); the list keeps each item to one line.
+    return " ".join(printable(text).split())
 
 
 def _print_started(ctx: Context) -> None:

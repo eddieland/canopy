@@ -49,7 +49,8 @@ Write the review so that someone who has not read the PR can act on it, every re
 - `findings`: the most severe first. Each `title` is one line naming the defect. Each `location` is `path:line` in this
   commit, at a line the diff adds or changes when the defect is there, since canopy shows the finding on that line of
   the diff. Each `detail` takes this shape: `<what is wrong, and why it matters>. Case: <the input or sequence that
-  shows it, and the line that mishandles it>. Fix: <the smallest change that would correct it>.`
+  shows it, and the line that mishandles it>. Fix: <the smallest change that would correct it>.`, with a line break
+  before `Case:` and `Fix:` where that reads better.
 
 ## Persona
 

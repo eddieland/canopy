@@ -1,7 +1,8 @@
 """Journal rows as the API's models: attention, runs, tickets and their conversations, chores, ticks, search hits.
 
 Reads only. Every text that came from an agent or the tracker stays untrusted: control characters are dropped from
-message bodies as `canopy show` drops them, run summaries are cut to one line, and the UI renders all of it as text.
+message bodies as `canopy show` drops them, run summaries are cut but keep their line breaks, and the UI renders all of
+it as text.
 """
 
 from __future__ import annotations
