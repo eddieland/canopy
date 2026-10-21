@@ -21,6 +21,10 @@ if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.config import Config
+    from canopy.core.review_result import ReviewResult
+
+#: `review_runs.purpose` of a review that answers the operator's request, rather than one the loop started on its own.
+PURPOSE = "request"
 
 # Why a request ended: a `done` review of its PR; the PR merged or closed before one, or is in none of the
 # workspace's repositories (the overseer's reading); or the operator stopped it.
@@ -219,6 +223,20 @@ def answered(conn: sqlite3.Connection, pr_url: str) -> bool:
             .where("pr_url = ? AND ended_at IS NULL", pr_url),
         )
     return cur.rowcount == 1
+
+
+def has_news(run: records.ReviewRun, found: ReviewResult | None) -> bool:
+    """Whether review run `run`, which stored `found`, has a result for the operator to read (DESIGN §22).
+
+    It has once it ended with a verdict that found something, or with any verdict when the operator asked for it: a
+    clean review the loop started on its own tells them nothing they need to read.
+
+    Returns:
+        True when the result is one to bring to the operator.
+    """
+    if run.ended_at is None or found is None or found.verdict is None:
+        return False
+    return found.verdict == "findings" or run.purpose == PURPOSE
 
 
 def _end(conn: sqlite3.Connection, request_id: int, reason: str) -> None:

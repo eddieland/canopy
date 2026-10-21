@@ -4299,6 +4299,13 @@ export type components = {
             /** @description The change's impact, once it reported one. */
             impact: components["schemas"]["ReviewImpact"] | null;
             /**
+             * News
+             * @description Whether it has a result for the operator to read: it ended with a verdict that found something, or with any
+             *     verdict when they asked for it. A clean review the loop started on its own has none.
+             * @default false
+             */
+            news: boolean;
+            /**
              * Pr Url
              * @description The PR's URL as the overseer gave it: an opaque https:// string.
              */
@@ -4310,8 +4317,8 @@ export type components = {
             repo: string | null;
             /**
              * Seen
-             * @description Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run that ended
-             *     with a verdict and is not seen is new to them.
+             * @description Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run with news
+             *     that is not seen is new to them.
              * @default false
              */
             seen: boolean;

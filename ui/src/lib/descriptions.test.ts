@@ -28,6 +28,7 @@ const REVIEW: ReviewSummary = {
     started_at: '2026-10-08T11:02:00Z',
     ended_at: '2026-10-08T11:04:00Z',
     cost_usd: 0.24,
+    news: true,
     seen: true,
 }
 
