@@ -157,3 +157,31 @@ test("a review's files fold away on their headers, and hide by type, until a fin
     await expect(page.locator('#finding-2')).toBeInViewport()
     await expect(types).toHaveText('All file types')
 })
+
+test('settings prefers the personas a review request starts from, apart from the config', async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await page.getByRole('button', { name: 'Persona: canopy (default)' }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('review-personas')).toHaveAccessibleName('Persona: skeptic')
+
+    // The reviews page's form starts from it, and keeps it after a reload.
+    await page.goto('reviews')
+    await settled(page)
+    const form = page.getByTestId('review-request-form')
+    await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    await expect(form).toContainText('as Settings prefers')
+    await page.reload()
+    await settled(page)
+    await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+
+    // The default goes back to the config's reviewer.
+    await page.goto('settings')
+    await settled(page)
+    await page.getByTestId('review-personas').click()
+    await page.getByRole('menuitem', { name: 'Use the default' }).click()
+    await page.goto('reviews')
+    await settled(page)
+    await expect(form.getByRole('button', { name: 'Persona: canopy (default)' })).toBeVisible()
+})
