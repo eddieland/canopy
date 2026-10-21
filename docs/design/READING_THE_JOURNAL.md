@@ -28,7 +28,7 @@ Judgment stays the overseer's: which repository, a slug and a title, a worker's 
 - A unit carries its PR's state, head, base, draft, and mergeable state; each named check at the head, a human check
   marked (§30); and the reviews and review comments past its `review` cursor, each marked trusted or not in code (D089).
 - Each subject carries the rows of §7 the derivation found holding (§30): the harness's reading, which the overseer may
-  overrule, since §7 has no order yet and a row moves into code only on evidence (D008).
+  overrule, since §7 has no order yet and a row moves into code only on evidence (D008, §37).
 - The tracker query's result and the review query's (§21), as their sources last read them whole. `canopy_queried` is
   then owed only on a tick whose query no source read (§6, the duties).
 
