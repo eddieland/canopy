@@ -58,7 +58,7 @@ Comments are kept apart from the conversation, in their own observations, once e
 comment is (§22), the workers' marks (D069) read in code. The conversation is what a private worker's prompt carries
 (§8), so a comment written there would reach a worker without the overseer mirroring it, under none of the mirror's
 bounds; while this section is in shadow they stay apart (operator, 2026-10-19), and the step that has the overseer read
-the journal (M37) decides how they reach it. The connector moves no mirror cursor and records no decision, so the
+the journal (§35) decides how they reach it. The connector moves no mirror cursor and records no decision, so the
 overseer mirrors as before. Each tick's run of a source is recorded with what it was asked and what it read; §29's
 reads after a run and before a send are validated the same way but are not a tick's runs.
 
@@ -118,4 +118,5 @@ credentials with it).
 ### Open
 
 - The tracker query's result in the state block in place of the query, which a cheaper overseer skipped unseen.
+  §35 puts it there.
 - Whether one failed run should raise `connector_failed`, or only one that leaves an observation stale.
