@@ -49,6 +49,8 @@ class Debug:
     fail: Callable[[Sequence[str]], procs.Result | None] = lambda _: None
     #: The built-in tools `debug agent` says each agent keeps.
     tools: Mapping[str, bool] = field(default_factory=dict)
+    #: What a plugin prints before and after each command's own output.
+    around: tuple[str, str] = ("", "")
     ran: list[tuple[tuple[str, ...], Path | None, Mapping[str, str] | None]] = field(default_factory=list)
 
     def run(
@@ -79,7 +81,8 @@ class Debug:
                 printed = {"name": name, "mode": "primary", "permission": permission, "tools": self.tools}
             case _:
                 raise AssertionError(args)
-        return procs.Result(tuple(args), 0, json.dumps(printed, indent=2), "")
+        before, after = self.around
+        return procs.Result(tuple(args), 0, f"{before}{json.dumps(printed, indent=2)}\n{after}", "")
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002
         raise AssertionError(args)
@@ -170,6 +173,29 @@ def test_a_debug_command_that_fails_is_the_error_and_names_no_secret() -> None:
     unreadable = offered(Debug({}, config={"mcp": {"github": {"enabled": "token-abc"}}}))
     assert unreadable.error == "`opencode debug config` printed what canopy cannot read"
     assert unreadable.agents == ()
+
+
+@pytest.mark.parametrize(
+    "around",
+    [
+        ("[corp-plugin] loaded v2.1\nhooks ready {\n", ""),
+        ("", "[corp-plugin] flushed 3 events\n[ unclosed\n"),
+        ('{"level": "info", "msg": "corp-plugin up"}\n[1, 2]\n', '{"mcp": {}, "permission": []}\n'),
+    ],
+    ids=["before", "after", "json-lines-around"],
+)
+def test_what_a_plugin_prints_around_opencode_s_output_is_passed_over(around: tuple[str, str]) -> None:
+    rules = {"canopy-worker": [rule("github_*")]}
+    clean = offered(Debug(rules), "canopy-worker")
+    assert clean.agents[0].servers[0] == ServerOffer("github", "none")
+    assert offered(Debug(rules, around=around), "canopy-worker") == clean
+
+
+def test_a_plugin_s_output_alone_is_not_opencode_s() -> None:
+    def plugin_only(args: Sequence[str]) -> procs.Result | None:
+        return procs.Result(tuple(args), 0, '[corp-plugin] loaded\n{"level": "info"}\n{"mcp": {}}\n', "")
+
+    assert offered(Debug({}, fail=plugin_only)).error == "`opencode debug config` printed what canopy cannot read"
 
 
 def test_opencode_missing_or_slow_is_the_error() -> None:
