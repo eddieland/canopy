@@ -40,6 +40,7 @@ from canopy.core.vocab import (
     MemoryStatus,
     MergeState,
     ModelsRead,
+    OverrideKind,
     Phase,
     PlanEffort,
     PlanSetting,
@@ -382,6 +383,23 @@ class TicketGrant(Row):
     kind: RunKind
     runs: int
     granted_at: str
+
+
+@dataclass(frozen=True)
+class TicketOverride(Row):
+    """The operator's choice for one of a ticket's agents, in force until cleared (DESIGN §31, §13)."""
+
+    TABLE: ClassVar[str] = "ticket_overrides"
+
+    ticket_key: str
+    #: `worker`, `planner`, or `reviewer`.
+    agent: str
+    kind: OverrideKind
+    #: What the operator chose: a persona's name.
+    value: str
+    #: `cli` or `web`: where the operator set it.
+    channel: str
+    set_at: str
 
 
 @dataclass(frozen=True)

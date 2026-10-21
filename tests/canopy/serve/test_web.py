@@ -328,6 +328,37 @@ def test_grant_from_the_web_raises_a_units_limit_as_canopy_grant_does(ctx: Conte
     assert c.get(f"/api/tickets/{KEY}").json()["limits"][0] == {**implement, "granted": 1, "limit": 3}
 
 
+def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona_makes_it(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+
+    def choose(body: dict[str, str | None]) -> httpx2.Response:
+        return c.post(f"/api/tickets/{KEY}/personas", json=body, headers=headers)
+
+    # The CLI's guards hold, and a ticket canopy has not seen may have one.
+    assert refused(choose({"persona": "lenient"})).startswith("unknown_persona: persona lenient has no file")
+    assert choose({"agent": "overseer", "persona": "skeptic"}).status_code == 422
+    assert c.post(f"/api/tickets/{KEY}/personas", json={}, headers={"origin": ORIGIN}).status_code == 403
+    assert choose({"agent": "reviewer", "persona": "skeptic"}).json() == {
+        "agent": "reviewer",
+        "persona": "skeptic",
+        "source": "ticket",
+        "error": None,
+    }
+    ended_run(ctx, KEY, "implement")
+    got = c.get(f"/api/tickets/{KEY}").json()
+    assert [(p["agent"], p["persona"], p["source"]) for p in got["personas"]] == [
+        ("worker", "canopy", "default"),
+        ("planner", "canopy", "default"),
+        ("reviewer", "skeptic", "ticket"),
+    ]
+    assert {"canopy", "skeptic", "minimalist", "explainer"} <= set(got["persona_names"])
+    channel = ctx.conn.execute("SELECT channel FROM ticket_overrides").fetchone()[0]
+    assert channel == "web"
+    # No persona clears it, as `--clear` does.
+    assert choose({"agent": "reviewer"}).json()["source"] == "default"
+    assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+
+
 def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_does(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     pr = "https://github.com/acme/repo/pull/7"

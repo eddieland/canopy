@@ -123,7 +123,7 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     planned = db.decisions_for_tick(ctx.conn, tick_id)
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request, planned=planned)
-        _persona(ctx)
+        _persona(ctx, request.ticket)
         return repo
 
 
@@ -140,7 +140,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request)
         # Fixed before the run is recorded, so a persona that cannot be used costs the PR none of its reviews.
-        persona = _persona(ctx)
+        persona = _persona(ctx, request.ticket)
         attempt = len(db.review_runs_of(ctx.conn, request.pr)) + 1
         run_id = db.insert_review_run(
             ctx.conn,
@@ -177,8 +177,10 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             raise
 
 
-def _persona(ctx: Context) -> personas.Persona:
-    """Return the reviewer's persona, `[personas]`'s, read now (DESIGN §31). It is never fallen back from.
+def _persona(ctx: Context, ticket: str | None) -> personas.Persona:
+    """Return the reviewer's persona, `ticket`'s override else `[personas]`'s, read now (DESIGN §31).
+
+    It is never fallen back from.
 
     Returns:
         The persona.
@@ -187,7 +189,7 @@ def _persona(ctx: Context) -> personas.Persona:
         Refusal: `persona_missing` or `bad_persona`, with its attention item, as a worker's dispatch refuses.
     """
     try:
-        return personas.chosen(ctx.config, "reviewer")
+        return personas.for_run(ctx.conn, ctx.config, "reviewer", ticket)
     except personas.PersonaError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 

@@ -164,6 +164,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | See each agent's command as a run starts it, rendered from your templates, to check their quoting | `canopy config commands` |
 | See which MCP servers and skills each of canopy's agents is offered, after your OpenCode config | `canopy agents` |
 | See each persona, yours and canopy's, and the one each agent writes in; choose under `[personas]` | `canopy personas` |
+| Give one ticket's workers, planner, or reviewer a persona of its own, until you clear it | `canopy persona KEY NAME [--agent planner\|reviewer]`, or the ticket's page |
 | See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
 | Keep every plan, with its status and approval, in a private repository of yours | `canopy archive DIR` |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |

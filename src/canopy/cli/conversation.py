@@ -318,7 +318,8 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
     """Forget a ticket's branch and PRs, so its next implement starts over on a new branch.
 
     Its runs and conversation stay in the journal for `canopy show`, and its runs still count toward the attempt limits.
-    Close its PRs and delete its branch yourself: canopy never does.
+    A persona override from `canopy persona` stays too; `canopy persona KEY --clear` removes it. Close its PRs and
+    delete its branch yourself: canopy never does.
     """
     _operator("forget")
     subject = _ref(ref, "forget")

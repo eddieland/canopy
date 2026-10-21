@@ -1,11 +1,12 @@
 """Personas (DESIGN §31): the voice a planner, a reviewer, or a worker writes in, chosen by the operator alone.
 
 A persona is a file, `<name>.md`, in the operator's `paths.personas` directory, which shadows one canopy ships of the
-same name, or among those canopy ships. A run's persona is its agent's in `[personas]`, `canopy` unless the operator
-chose another, fixed when the run starts. It is never fallen back from: a name with no file refuses the run
-(`persona_missing`), and a file canopy would not put in a prompt refuses it too (`bad_persona`), since a run in a voice
-nobody chose would read as the chosen one's. A persona is instructions in every run it reaches, so its file is bounded
-as the standing instructions are, and holds none of the characters a lesson may not (DESIGN §28, Bounds).
+same name, or among those canopy ships. A run's persona is its ticket's override for its agent, which only the operator
+sets (`choose`), else its agent's in `[personas]`, `canopy` unless the operator chose another, fixed when the run
+starts. It is never fallen back from: a name with no file refuses the run (`persona_missing`), and a file canopy would
+not put in a prompt refuses it too (`bad_persona`), since a run in a voice nobody chose would read as the chosen one's.
+A persona is instructions in every run it reaches, so its file is bounded as the standing instructions are, and holds
+none of the characters a lesson may not (DESIGN §28, Bounds).
 """
 
 from __future__ import annotations
@@ -15,12 +16,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import memory_text
+from canopy.core import conversation, db, memory_text, records, sql
 from canopy.core.config import DEFAULT_PERSONA, PERSONA_NAME_RE
-from canopy.core.vocab import RunKind
+from canopy.core.vocab import OverrideKind, RunKind
 from canopy.infra import resources
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Sequence
 
     from canopy.core.config import Config
@@ -39,6 +41,10 @@ AGENTS: tuple[Agent, ...] = ("worker", "planner", "reviewer")
 MISSING = "persona_missing"
 #: The guard and attention reason of a run whose persona's file canopy would not put in a prompt.
 BAD = "bad_persona"
+#: The guard of an override naming a persona with no file: it is refused when set, not when a run starts.
+UNKNOWN = "unknown_persona"
+#: Where an agent's next persona comes from: the ticket's override, `[personas]`, or canopy's own default.
+Source = Literal["ticket", "config", "default"]
 
 
 class PersonaError(Exception):
@@ -79,6 +85,17 @@ class Listed:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class Next:
+    """The persona one of a ticket's agents writes in at its next run, and where that choice comes from (DESIGN §31)."""
+
+    agent: Agent
+    name: str
+    source: Source
+    #: Why that run would refuse it, or None when it would render.
+    error: str | None = None
+
+
 def agent_of(kind: str) -> Agent | None:
     """Return the agent a worker run of `kind` is, for its persona (DESIGN §31).
 
@@ -107,6 +124,106 @@ def chosen(config: Config, agent: Agent) -> Persona:
         return load(config, name)
     except PersonaError as e:
         raise PersonaError(e.guard, f"[personas] {agent}: {e.reason}") from e
+
+
+def for_run(conn: sqlite3.Connection, config: Config, agent: Agent, ticket: str | None) -> Persona:
+    """Return the persona a run of `agent` for `ticket` gets now: the ticket's override, else `[personas]`'s.
+
+    A run for no ticket, such as a review of a coworker's PR, gets `[personas]`'s.
+
+    Returns:
+        The persona, read from its file.
+
+    Raises:
+        PersonaError: (`MISSING`) the name has no file, or (`BAD`) its file is one canopy would not put in a prompt.
+    """
+    name = override(conn, ticket, agent) if ticket is not None else None
+    if name is None:
+        return chosen(config, agent)
+    try:
+        return load(config, name)
+    except PersonaError as e:
+        clear = f"; or clear it: canopy persona {ticket}{_flag(agent)} --clear"
+        raise PersonaError(e.guard, f"{ticket}'s {agent} override: {e.reason}{clear}") from e
+
+
+def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
+    """Return the persona the operator chose for `ticket`'s `agent`, or None when they chose none."""
+    found = records.fetch_one(
+        conn,
+        records.TicketOverride,
+        sql.select("*")
+        .from_("ticket_overrides")
+        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.PERSONA),
+    )
+    return found.value if found is not None else None
+
+
+def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next]:
+    """Return the persona each of `ticket`'s agents writes in at its next run, in `AGENTS`' order.
+
+    Returns:
+        A `Next` per agent: its persona's name, whether the ticket's override, `[personas]`, or canopy's default chose
+        it, and why its run would refuse it, if it would.
+    """
+    found: list[Next] = []
+    for agent in AGENTS:
+        mine = override(conn, ticket, agent)
+        configured: str = getattr(config.personas, agent)
+        name = mine if mine is not None else configured
+        source: Source = "ticket" if mine is not None else "config" if configured != DEFAULT else "default"
+        try:
+            load(config, name)
+            error = None
+        except PersonaError as e:
+            error = e.reason
+        found.append(Next(agent, name, source, error))
+    return found
+
+
+def choose(
+    conn: sqlite3.Connection,
+    config: Config,
+    ticket: str,
+    agent: Agent,
+    name: str | None,
+    *,
+    channel: str,
+) -> Next:
+    """Set `ticket`'s override for `agent` to persona `name`, or clear it with None (DESIGN §31). Operator only.
+
+    It may be set before canopy has seen the ticket, and covers every run of that agent for the ticket until cleared.
+
+    Returns:
+        The persona the agent's next run for the ticket writes in now, and where it comes from.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `unknown_persona` for a name with no file, or
+            `bad_persona` for a file canopy would not put in a prompt.
+    """
+    conversation.check_operator()
+    if name is not None:
+        try:
+            load(config, name)
+        except PersonaError as e:
+            raise conversation.Refused(UNKNOWN if e.guard == MISSING else e.guard, e.reason) from e
+    where = "ticket_key = ? AND agent = ? AND kind = ?"
+    with db.transaction(conn):
+        sql.execute(conn, sql.delete("ticket_overrides").where(where, ticket, agent, OverrideKind.PERSONA))
+        if name is not None:
+            sql.execute(
+                conn,
+                sql.insert(
+                    "ticket_overrides",
+                    ticket_key=ticket,
+                    agent=agent,
+                    kind=OverrideKind.PERSONA,
+                    value=name,
+                    channel=channel,
+                    set_at=db.now(),
+                ),
+            )
+    return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
 
 
 def load(config: Config, name: str) -> Persona:
@@ -196,3 +313,8 @@ def _where(config: Config) -> str:
     # Where a persona's file was looked for, and what to do, to end a refusal's sentence.
     yours = f" in {config.paths.personas} or" if config.paths.personas is not None else ""
     return f"{yours} among canopy's own: add it, or name one `canopy personas` lists"
+
+
+def _flag(agent: Agent) -> str:
+    # The `--agent` a command names `agent` with: none for the workers, whose override `canopy persona KEY` sets.
+    return "" if agent == "worker" else f" --agent {agent}"

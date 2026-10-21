@@ -169,6 +169,22 @@ def test_a_review_runs_in_the_reviewers_persona_and_records_it(
     assert (got["persona"], got["persona_digest"]) == ("skeptic", skeptic.digest)
 
 
+def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    # DESIGN §31: the operator's override for one ticket's reviewer, which a review of a PR with no ticket never takes.
+    scenario.operator("persona", "PROJ-1", "skeptic", "--agent", "reviewer")
+    no_ticket = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert no_ticket.row.persona == "canopy"
+    of_ticket = scenario.review(reviews("b" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    assert of_ticket.row.persona == "skeptic"
+    scenario.operator("persona", "PROJ-1", "--agent", "reviewer", "--clear")
+    again = scenario.review(reviews("c" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
+    assert again.row.persona == "canopy"
+
+
 def test_a_review_whose_persona_has_no_file_costs_the_pr_nothing_and_asks_the_operator(
     reviewing: CanopyEnv,
     scenario: Scenario,
