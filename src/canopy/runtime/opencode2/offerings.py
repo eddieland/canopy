@@ -294,7 +294,8 @@ class _Client:
         server = self.server
         argv = [*server.launcher, "api", "--server", self.url, operation]
         try:
-            result = server.runner.run(argv, cwd=server.cwd, env=server.env, timeout=ASK_SECONDS)
+            # Through a file, not a pipe: OpenCode exits having written only what a pipe's buffer holds, 64 KiB.
+            result = server.runner.run(argv, cwd=server.cwd, env=server.env, timeout=ASK_SECONDS, stdout_to_file=True)
         except procs.ProcError as e:
             raise _FailedError(f"`opencode api {operation}` could not start: {e}") from None
         if result.timed_out:
