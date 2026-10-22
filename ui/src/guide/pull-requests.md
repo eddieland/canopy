@@ -265,8 +265,8 @@ and on which model, and where its log is; then the reviewer's transcript, every 
 prompt canopy handed it, and the log's end as written, each folded until you open it.
 
 Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
-PR, or the runtime. A reviewer's events reach its log when it ends, so while it works the transcript says so and
-waits; there is no watching it think.
+PR, or the runtime. While it works, the transcript grows as the reviewer goes, as a worker's does, and what it has spent
+so far moves with each model call.
 
 ## Acting on findings
 
