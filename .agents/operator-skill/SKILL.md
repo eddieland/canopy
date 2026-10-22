@@ -79,7 +79,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run, so the operator sees its findings in `canopy status` and the web UI. Suggest `--no-record`, which records nothing, only while a new prompt is first being drafted. |
 | `canopy chore history NAME` | A chore's runs, newest first, with what each found; `--run ID` one in detail. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
-| `canopy daemon start [LOOP OPTIONS]`, `stop` | The loop, detached; output in `.canopy/daemon.log`. The operator runs these. |
+| `canopy daemon start [LOOP OPTIONS]`, `stop [--wait]` | The loop, detached; output in `.canopy/daemon.log`. `stop` refuses while runs run; `--wait` stops it once they end. The operator runs these. |
 | `canopy daemon status` | Whether the detached loop runs, since when, and where its output is. |
 | `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and its private config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size. |

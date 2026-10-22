@@ -97,11 +97,11 @@ def signals(
 ) -> Generator[None]:
     """Make SIGINT and SIGTERM ask the loop to stop once the current tick ends, instead of killing it.
 
-    A first SIGINT, a Ctrl-C, also asks the loop to wait for the runs still running to end (`Stop.awaits_runs`); a
-    first SIGTERM, as `canopy daemon stop` sends, does not. A second signal raises KeyboardInterrupt, which aborts the
-    tick in progress: `procs` kills the overseer's process group, and the next tick closes the tick row as `abandoned`.
-    During the wait for runs, it ends the wait instead. Runs are detached and keep going either way. A signal within
-    `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
+    A first SIGINT, a Ctrl-C or `canopy daemon stop --wait`, also asks the loop to wait for the runs still running to
+    end (`Stop.awaits_runs`); a first SIGTERM, as `canopy daemon stop` sends, does not. A second signal raises
+    KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process group, and the next tick
+    closes the tick row as `abandoned`. During the wait for runs, it ends the wait instead. Runs are detached and keep
+    going either way. A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
 
     With `reload`, SIGHUP asks the loop to read its config again instead of ending it. A terminal hanging up sends
     SIGHUP too: when `hung_up()` says it did, the loop ends as SIGHUP always ended it, unless SIGHUP was ignored on

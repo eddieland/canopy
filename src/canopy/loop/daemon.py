@@ -4,6 +4,9 @@ The daemon is the same loop, started through `procs.Runner.spawn` from the works
 holds the lifelock beside its log for its whole life, and appends its output to `<state_dir>/daemon.log`. Nothing is
 installed with the operating system, nothing restarts it, and it does not start at login. Its pid is kept in
 `<state_dir>/daemon.pid` so `stop` can signal it; whether it runs is its lifelock, never the pid.
+
+`stop` refuses while runs are running, unless told to wait for them: a canopy started next that changes the journal
+does not migrate it under them, so the daemon stopped could not be started again until they end.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from canopy.core import db
 from canopy.infra import lock, procs
 from canopy.loop import repeat
 
@@ -33,6 +37,16 @@ POLL_SECONDS = 0.05
 
 class DaemonError(Exception):
     """The daemon could not be started: one runs already, a loop holds the lock, or it exited before taking it."""
+
+
+class RunsRunningError(Exception):
+    """`stop` was not told to wait, and runs are running. The daemon was not signalled."""
+
+    def __init__(self, runs: Sequence[str]) -> None:
+        """Name the runs that are running, as `db.live_runs` does."""
+        super().__init__(", ".join(runs))
+        #: Each run, `run 3` or `review run 4`.
+        self.runs = tuple(runs)
 
 
 @dataclass(frozen=True)
@@ -114,22 +128,31 @@ def _await_lock(state_dir: Path, log_path: Path, pid: int, offset: int) -> None:
         time.sleep(POLL_SECONDS)
 
 
-def stop(state_dir: Path, *, waiting: Callable[[int], None]) -> int | None:
-    """Send the daemon SIGTERM, and wait until it exits: at once during a wait, after the running tick otherwise.
+def stop(state_dir: Path, *, wait_for_runs: bool, waiting: Callable[[int], None]) -> int | None:
+    """Stop the daemon, and wait until it exits: at once during a wait, after the running tick otherwise.
+
+    Without `wait_for_runs`, the daemon is sent SIGTERM, and only when no run is running. With it, it is sent SIGINT,
+    as a Ctrl-C stops a loop: it ticks no more, and exits once every run has ended.
 
     Args:
         state_dir: The workspace's state directory.
+        wait_for_runs: Stop the daemon once its runs end, rather than refuse while they run.
         waiting: Called once with the pid, if the daemon has not exited QUIET_STOP_SECONDS after the signal.
 
     Returns:
         The pid of the daemon stopped, or None when none ran.
+
+    Raises:
+        RunsRunningError: Runs are running and `wait_for_runs` is not set.
     """
     current = state(state_dir)
     if current.pid is None:
         _forget(state_dir, current.log_path)
         return None
+    if not wait_for_runs and (running := _live_runs(state_dir)):
+        raise RunsRunningError(running)
     with contextlib.suppress(ProcessLookupError):  # it exited since `state` asked
-        os.kill(current.pid, signal.SIGTERM)
+        os.kill(current.pid, signal.SIGINT if wait_for_runs else signal.SIGTERM)
     told_at = time.monotonic() + QUIET_STOP_SECONDS
     while procs.running(current.log_path, current.pid):
         if told_at is not None and time.monotonic() >= told_at:
@@ -138,6 +161,19 @@ def stop(state_dir: Path, *, waiting: Callable[[int], None]) -> int | None:
         time.sleep(POLL_SECONDS)
     _forget(state_dir, current.log_path)
     return current.pid
+
+
+def _live_runs(state_dir: Path) -> list[str]:
+    """Return the runs that are running in the journal under `state_dir`, which the running daemon migrated.
+
+    Returns:
+        Each run, as `db.live_runs` names it; none when there is no journal.
+    """
+    path = state_dir / db.DB_FILE_NAME
+    if not path.exists():
+        return []
+    with contextlib.closing(db.connect(path)) as conn:
+        return db.live_runs(conn)
 
 
 def _read_pid(pid_file: Path) -> int | None:
