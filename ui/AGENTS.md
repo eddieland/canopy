@@ -47,7 +47,9 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
 | `npm run test:e2e -- <specs>` | build, then Playwright against it, served by FastAPI; every spec when none is named |
 
-With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium.
+With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium. It tests behavior,
+not looks: a build other than the one the pinned Playwright installs draws differently, so its screenshots fail by the
+dozen. When every screenshot differs, check the browser before the change.
 
 ## Rules
 
