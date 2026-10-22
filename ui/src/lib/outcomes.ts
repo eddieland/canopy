@@ -167,6 +167,18 @@ export function reviewDismissedText(dismissed: ReviewDismissed): string {
     return `${head} is no longer dismissed: a resume hands it to the worker again.`
 }
 
+/**
+ * What dismissing a finding of a review with a draft did, in the draft's terms (DESIGN §34): left out of the operator's
+ * review, or back in it, in the reviewer's words.
+ */
+export function reviewPointText(dismissed: ReviewDismissed): string {
+    const head = `review:${dismissed.run} finding ${dismissed.finding}`
+    if (dismissed.dismissed) {
+        return `${head} is dismissed: left out of your review.`
+    }
+    return `${head} is no longer dismissed: back in your review, in the reviewer's words.`
+}
+
 /** What sending a review's findings did, as `canopy send review:ID N...` says it. */
 export function reviewSentText(sent: ReviewSent): string {
     const head = `review:${sent.run} findings ${sent.findings.join(', ')}`

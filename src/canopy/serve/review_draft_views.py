@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, records, review_diff, review_drafts, sql
+from canopy.core import db, records, review_diff, review_drafts, review_result, sql
 from canopy.serve.review_schema import (
     ReviewDraft,
     ReviewDraftAuthorName,
@@ -29,16 +29,22 @@ def of_review(conn: sqlite3.Connection, run: records.ReviewRun, diff: review_dif
         The draft, or None.
     """
     found = review_drafts.of_review(conn, run.id)
-    return view(conn, found, diff) if found is not None else None
+    return view(conn, found, run, diff) if found is not None else None
 
 
-def view(conn: sqlite3.Connection, found: records.ReviewDraft, diff: review_diff.Diff | None) -> ReviewDraft:
-    """A draft as the API sends it, at its newest version, its comments placed on `diff`.
+def view(
+    conn: sqlite3.Connection,
+    found: records.ReviewDraft,
+    run: records.ReviewRun,
+    diff: review_diff.Diff | None,
+) -> ReviewDraft:
+    """A draft as the API sends it, at its newest version, its comments placed on `diff`, its review run `run`.
 
     Returns:
         The draft.
     """
     current = review_drafts.newest(conn, found.id)
+    stored = review_result.stored(run.result_json)
     pr = records.fetch_one(
         conn,
         records.ObservedPr,
@@ -56,6 +62,7 @@ def view(conn: sqlite3.Connection, found: records.ReviewDraft, diff: review_diff
         body=current.body,
         comments=[_comment(n, c, diff) for n, c in enumerate(current.comments, 1)],
         max_comments=review_drafts.MAX_COMMENTS,
+        in_body=review_drafts.in_body(current.body, stored.findings) if stored is not None else [],
         versions=[
             ReviewDraftVersion(
                 number=v.number,
