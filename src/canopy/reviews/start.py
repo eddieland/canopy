@@ -35,6 +35,7 @@ from canopy.core import (
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
+from canopy.infra.text import quoted
 from canopy.reviews import findings, grants
 
 if TYPE_CHECKING:
@@ -368,7 +369,8 @@ def _prompt(
         "LOW_IMPACT": cfg.review.low_impact.strip() or "None: never report `low`.",
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(grants.limit(ctx.conn, cfg, request.pr)),
-        "CONTEXT": context or None,
+        # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
+        "CONTEXT": quoted(context) if context else None,
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
         "CONTRACT": result.CONTRACT,
     }

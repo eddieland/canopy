@@ -69,7 +69,25 @@ it names. Live, once built, over a day: the overseer's decisions are only on the
 list changes only when an observation or the operator did; `loop waits` reports no churn; a median tick at half of
 M37's; and no action missed, checked against the derivation as in M36.
 
-Status: not started. Designed 2026-10-21 (DESIGN §37); the build waits on M37, and each row on its measurement. Open
-for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
-disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR
-(recommended: yes).
+Status: in progress. Designed 2026-10-21 (DESIGN §37); each row waits on its measurement. Started 2026-10-22 ahead of
+M37's end, at the operator's word, with the rows that need none. Built (2026-10-22): the first bullet's machinery and
+the fourth's `decided`. Before the overseer runs, the harness takes a ticket whole when every row the derivation finds
+for it and its units is enabled, none stale, and records its decision marked as its own (`decisions.decider`, which
+`canopy decisions` and the web UI's API show; the harness's attention items are marked too, older rows unmarked), with
+the phase that row names (`loop/harness.py`); the state block names each such ticket in `harness` and leaves it out of
+`tickets` and `observations`; the duties check owes nothing for one; and a decision, dispatch, attention item, or
+`ticket set` about one is refused `decided` through the tool and its command; D008 is edited in place. Rows enabled,
+read from the journal alone: `wait` for `running`, and for `needs_human` on a private ticket (its latest run `blocked`,
+no operator message since); a public ticket's `needs_human` rests on the tracker's label, so it waits on a measurement.
+Chosen conservatively, for the operator to change: a ticket with an item the overseer holds open on the attention list
+stays the overseer's, since it keeps one only by recording it again (D020), until the list moves to the harness; a
+ticket that is not a fresh, open candidate stays the overseer's; the cooldown's and a failed run's `wait` are not
+enabled, since each rests on rows the derivation reads from connectors (`ci_red`, and the rows a failed run leaves);
+review verbs and `mirror` are not refused `decided`, since an operator's review request on a ticket the harness took is
+still the overseer's to run, and a ticket the harness took has its comments mirrored once the overseer is given it
+again; and the tick's derivation comparison leaves out a ticket the harness decided. Left: every other row, each on its
+measurement; the harness's dispatches, `reserved`, and the priority order into §7; the attention list held in code;
+cursors moved by the harness; the prompt cut to the judgment; D020 edited in place; and the design folded into the
+sections it names. Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct
+situations, each disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels
+that hold a PR (recommended: yes).
