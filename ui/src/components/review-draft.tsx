@@ -12,21 +12,30 @@ import {
     showReviewDraft,
 } from '@/api/mutations'
 import type { ReviewDraft, ReviewDraftComment } from '@/api/types'
+import { useDismissReviewFinding } from '@/components/dismiss-finding'
+import type { DismissalWords } from '@/components/dismiss-finding'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
 import { Leaf } from '@/components/leaf'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { RichText } from '@/components/rich-text'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { reviewDraftDescription } from '@/lib/descriptions'
-import { reviewDraftEditedText, reviewDraftPublishedText, reviewDraftPublishedToast } from '@/lib/outcomes'
-import { REVIEW_DRAFT_TONE, commentAnchor, editable, versionBy } from '@/lib/review-drafts'
-import type { Adding } from '@/lib/review-drafts'
-import { shortSha } from '@/lib/reviews'
+import {
+    reviewDraftEditedText,
+    reviewDraftPublishedText,
+    reviewDraftPublishedToast,
+    reviewPointText,
+} from '@/lib/outcomes'
+import { REVIEW_DRAFT_TONE, commentAnchor, editable, leftOut, pointState, versionBy } from '@/lib/review-drafts'
+import type { Adding, PointState } from '@/lib/review-drafts'
+import { findingAnchor, SEVERITY_TONE, shortSha } from '@/lib/reviews'
+import type { Numbered } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 // What the draft is, around the commit the review read.
@@ -38,6 +47,32 @@ const INTRO = [
 // The end of the line by the publish buttons: what the review is not, and what the other button does.
 const POSTS_STAGED =
     ': it approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it there.'
+
+// A finding's card's one control, while the draft waits: leaving it out of the review is dismissing it, which drops
+// its comment or its part of the body, and putting it back is taking that back, which restores the reviewer's words.
+const POINT_WORDS: DismissalWords = {
+    labels: ['leave out', 'put back'],
+    titles: [
+        'Dismiss it: its comment leaves your review',
+        "Take the dismissal back: it returns in the reviewer's words",
+    ],
+    said: reviewPointText,
+}
+
+// The same control on a finding left out by a drop, not a dismissal: the server puts a finding back only by taking a
+// dismissal back, so it is dismissed first.
+const DROPPED_WORDS: DismissalWords = {
+    ...POINT_WORDS,
+    labels: ['dismiss', 'put back'],
+    titles: ['Dismiss it, so that put back can restore its comment', POINT_WORDS.titles[1]],
+}
+
+// What each place a finding may stand in the draft is called on its card.
+const POINT_CHIP: Record<PointState['kind'], string> = {
+    comment: 'in your review',
+    body: 'in your review',
+    out: 'left out',
+}
 
 /**
  * A draft's state, for the description of the review's page it leads: its status's chip in its tone, then its version
@@ -61,14 +96,15 @@ export function ReviewDraftState({ draft }: { draft: ReviewDraft }) {
  * submitted now, as `--submit` does, or left pending on GitHub for the operator to submit there. A staged one says
  * where to finish it, a published one links to it. With no diff kept, its comments are listed here. It leads the
  * review's page, whose description says its status (`ReviewDraftState`), so its header names only its version, with
- * what made it and its hash on hover. `onFollow` hears a link followed to a comment's card, by its file's index in
- * the diff.
+ * what made it and its hash on hover. `findings` is how many the review reported, so the list can say which the draft
+ * leaves out. `onFollow` hears a link followed to a comment's card, by its file's index in the diff.
  */
 export function ReviewDraftPanel({
     run,
     prUrl,
     sha,
     draft,
+    findings,
     hasDiff,
     onFollow,
 }: {
@@ -76,6 +112,7 @@ export function ReviewDraftPanel({
     prUrl: string
     sha: string
     draft: ReviewDraft
+    findings: number
     hasDiff: boolean
     onFollow: (file: number) => void
 }) {
@@ -153,7 +190,7 @@ export function ReviewDraftPanel({
                     <MemoryText text={draft.body} lines className="block" />
                 )}
             </div>
-            <CommentList run={run} draft={draft} hasDiff={hasDiff} onFollow={onFollow} />
+            <CommentList run={run} draft={draft} findings={findings} hasDiff={hasDiff} onFollow={onFollow} />
             <VersionList draft={draft} />
             <PublishFooter run={run} prUrl={prUrl} sha={sha} draft={draft} said={said} onSaid={setSaid} />
         </Panel>
@@ -161,21 +198,25 @@ export function ReviewDraftPanel({
 }
 
 /**
- * The draft's comments, each a row linking to its card on the diff, where it is edited or dropped; with no diff kept,
- * the rows are the cards themselves. A line under them says how to add one.
+ * The draft's comments, one row per point of the review that posts as one, each linking to its card on the diff: a
+ * finding's card, which is its comment's too, or the operator's own comment's. With no diff kept, the rows are the
+ * comments' cards themselves. Lines under them say which findings the draft leaves out, and how to add a comment.
  */
 function CommentList({
     run,
     draft,
+    findings,
     hasDiff,
     onFollow,
 }: {
     run: number
     draft: ReviewDraft
+    findings: number
     hasDiff: boolean
     onFollow: (file: number) => void
 }) {
     const count = draft.comments.length
+    const out = hasDiff ? leftOut(draft, findings) : []
     return (
         <div className="border-t" data-testid="draft-comments">
             <span className="panel-label block px-3 pt-3">
@@ -196,7 +237,7 @@ function CommentList({
                             <Link
                                 to="/reviews/$id"
                                 params={{ id: String(run) }}
-                                hash={commentAnchor(c.number)}
+                                hash={c.finding === null ? commentAnchor(c.number) : findingAnchor(c.finding)}
                                 onClick={() => {
                                     if (c.file !== null) {
                                         onFollow(c.file)
@@ -219,6 +260,12 @@ function CommentList({
                     ))}
                 </div>
             )}
+            {out.length > 0 && (
+                <p className="px-3 pb-3 text-xs text-muted-foreground" data-testid="draft-left-out">
+                    {leftOutText(out)}
+                    {editable(draft) && ' Put one back on its card.'}
+                </p>
+            )}
             {editable(draft) && hasDiff && (
                 <p className="px-3 pb-3 text-xs text-muted-foreground">
                     Add one with the + beside a line&apos;s number on the diff below.
@@ -229,6 +276,15 @@ function CommentList({
             )}
         </div>
     )
+}
+
+// Which findings the draft leaves out, as a sentence.
+function leftOutText(out: readonly number[]): string {
+    const last = out.at(-1)
+    if (out.length === 1) {
+        return `Left out: finding ${last}.`
+    }
+    return `Left out: findings ${out.slice(0, -1).join(', ')} and ${last}.`
 }
 
 // A comment's first line with text, for its row, so the row's link is never empty.
@@ -375,9 +431,11 @@ function postsWhat(draft: ReviewDraft): string {
 }
 
 /**
- * One comment of the draft, at its line of the diff: its number, the finding it was made from or that it is the
- * operator's, and its text, plain, every hidden character named. While the draft waits, Edit puts its text in a form
- * and Drop leaves it out, each a new version; dropping one made from a finding leaves the finding as it is.
+ * One comment of the draft as a card of its own: one the operator added, at its line of the diff, or, with no diff
+ * kept, any, in the draft's list. On the diff, a comment made from a finding is that finding's card instead
+ * (`ReviewPointCard`). It shows its number, the finding it was made from or that it is the operator's, and its text,
+ * plain, every hidden character named. While the draft waits, Edit puts its text in a form and Drop leaves it out,
+ * each a new version; dropping one made from a finding leaves the finding as it is.
  */
 export function DraftCommentCard({
     run,
@@ -443,6 +501,89 @@ export function DraftCommentCard({
             <Notice error={drop.error} className="mt-1.5">
                 {said}
             </Notice>
+        </DraftCardFrame>
+    )
+}
+
+/**
+ * One finding of a review with a draft, on the diff, as one card with what the draft makes of it (DESIGN §34): one
+ * point of the operator's review, never a finding's card beside a comment's. Its head line is the finding's number,
+ * severity, title, and where, then whether it is in the review or left out. In it as a comment, its text is that
+ * comment as it will post, every hidden character named, and Edit changes it in place, as `canopy review edit
+ * --comment` does; in it through the body, or left out, its text is the reviewer's detail. One control at the end of
+ * its head line leaves it out or puts it back, by dismissing the finding or taking that back (`POINT_WORDS`). Once
+ * the draft is published or on its way, the control is the plain dismissal again, which changes the draft no more.
+ */
+export function ReviewPointCard({ run, numbered, draft }: { run: number; numbered: Numbered; draft: ReviewDraft }) {
+    const client = useQueryClient()
+    const { n, finding } = numbered
+    const point = pointState(draft, n)
+    const open = editable(draft)
+    const dropped = point.kind === 'out' && !finding.dismissed
+    const words = open ? (dropped ? DROPPED_WORDS : POINT_WORDS) : undefined
+    const { button, notice } = useDismissReviewFinding(run, n, finding.dismissed, words)
+    const [editing, setEditing] = useState(false)
+    const [said, setSaid] = useState<string | null>(null)
+    const out = point.kind === 'out'
+    return (
+        <DraftCardFrame
+            id={findingAnchor(n)}
+            waiting={open && !out}
+            testId="review-point"
+            status={point.kind}
+            header={
+                <>
+                    <span className="readout text-xs text-muted-foreground">{n}</span>
+                    <Chip tone={SEVERITY_TONE[finding.severity]}>{finding.severity}</Chip>
+                    <span className={cn('font-medium', out && 'text-muted-foreground')}>{finding.title}</span>
+                    {finding.location && (
+                        <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
+                    )}
+                    <Chip>{POINT_CHIP[point.kind]}</Chip>
+                    <span className="ml-auto">{button}</span>
+                </>
+            }
+        >
+            {point.kind === 'comment' &&
+                (editing ? (
+                    <DraftTextForm
+                        label={`Edit comment ${point.comment.number} of review run ${run}'s draft`}
+                        initial={point.comment.text}
+                        save={(text) => editReviewDraftComment(run, point.comment.number, text)}
+                        onSaved={(saved) => {
+                            setSaid(reviewDraftEditedText(run, saved))
+                            setEditing(false)
+                            void showReviewDraft(client, run, saved)
+                        }}
+                        onCancel={() => setEditing(false)}
+                    />
+                ) : (
+                    <MemoryText text={point.comment.text} lines className="mt-1.5 block" />
+                ))}
+            {point.kind !== 'comment' && finding.detail && (
+                <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />
+            )}
+            {point.kind === 'body' && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                    No line of the diff takes it, so it posts in the body, under its location: edit it there.
+                </p>
+            )}
+            {open && dropped && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                    Its comment was dropped from your review. To have it back, dismiss the finding, then put it back.
+                </p>
+            )}
+            {open && point.kind === 'comment' && !editing && (
+                <DraftVerbs>
+                    <EditVerb
+                        onClick={() => setEditing(true)}
+                        disabled={false}
+                        title={`canopy review edit ${run} --comment ${point.comment.number} --text TEXT`}
+                    />
+                </DraftVerbs>
+            )}
+            {notice}
+            <Notice className="mt-1.5">{said}</Notice>
         </DraftCardFrame>
     )
 }

@@ -232,6 +232,15 @@ def checked(text: object) -> str:
     return check_text(text, MAX_DRAFT_CHARS)
 
 
+def in_body(body: str, findings: Sequence[review_result.Finding]) -> list[int]:
+    """The findings, by number, whose text `body` holds, put there where no line of the diff took them.
+
+    Returns:
+        Their numbers, from 1, in order.
+    """
+    return [number for number, finding in enumerate(findings, 1) if _held(body, _block(finding))]
+
+
 def dismissed(
     conn: sqlite3.Connection,
     run_id: int,

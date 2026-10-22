@@ -252,6 +252,7 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
             },
         ],
         max_comments: 30,
+        in_body: [3],
         versions: [
             {
                 number: 1,

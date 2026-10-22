@@ -4529,6 +4529,12 @@ export type components = {
              */
             hash: string;
             /**
+             * In Body
+             * @description The review's findings, by number, whose text the body holds, where no line of the diff took them: each still a
+             *     point of the review, though no comment carries it.
+             */
+            in_body: number[];
+            /**
              * Max Comments
              * @description How many comments a version may carry; an addition past it is refused.
              */

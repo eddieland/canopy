@@ -229,6 +229,9 @@ class ReviewDraft(Model):
     """Its comments, in the order they post."""
     max_comments: int
     """How many comments a version may carry; an addition past it is refused."""
+    in_body: list[int]
+    """The review's findings, by number, whose text the body holds, where no line of the diff took them: each still a
+    point of the review, though no comment carries it."""
     versions: list[ReviewDraftVersion]
     """Every version, oldest first."""
     pr_author: str | None = None

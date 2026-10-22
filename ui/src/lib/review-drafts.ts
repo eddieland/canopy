@@ -31,9 +31,10 @@ export type ReviewCard =
     | { kind: 'new'; adding: Adding }
 
 /**
- * Puts the draft's comments, and the new comment being written, on the diff beside the findings: on a line, each after
- * the findings there. A comment always sits on a line of the diff the review kept; one placed nowhere, once the diff
- * is gone, is elsewhere.
+ * Puts the operator's own comments of the draft, and the new comment being written, on the diff beside the findings:
+ * on a line, each after the findings there. A comment made from a finding is that finding's card (`ReviewPointCard`),
+ * one card per point, so it is not placed again. A comment always sits on a line of the diff the review kept; one
+ * placed nowhere, once the diff is gone, is elsewhere.
  */
 export function placeReviewCards(
     findings: Placed<Numbered>,
@@ -55,7 +56,7 @@ export function placeReviewCards(
         byLine.set(line, [...(byLine.get(line) ?? []), card])
         placed.lines.set(file, byLine)
     }
-    for (const comment of comments) {
+    for (const comment of comments.filter((c) => c.finding === null)) {
         const card: ReviewCard = { kind: 'comment', comment }
         if (comment.file === null) {
             placed.elsewhere.push(card)
@@ -79,6 +80,26 @@ function asCards(items: Numbered[]): ReviewCard[] {
 /** The element id a draft's comment's card has on the page, which the draft's list of comments links to. */
 export function commentAnchor(number: number): string {
     return `draft-comment-${number}`
+}
+
+/**
+ * Where a review's finding stands in its draft (DESIGN §34): a comment carries it, the body holds it where no line of
+ * the diff took it, or it is left out, dismissed or its comment dropped.
+ */
+export type PointState = { kind: 'comment'; comment: ReviewDraftComment } | { kind: 'body' } | { kind: 'out' }
+
+/** Where finding `n` stands in `draft`: the comment made from it, the body, or neither. */
+export function pointState(draft: Pick<ReviewDraft, 'comments' | 'in_body'>, n: number): PointState {
+    const comment = draft.comments.find((c) => c.finding === n)
+    if (comment !== undefined) {
+        return { kind: 'comment', comment }
+    }
+    return draft.in_body.includes(n) ? { kind: 'body' } : { kind: 'out' }
+}
+
+/** Which of a review's `findings` findings its draft leaves out, by number, from 1. */
+export function leftOut(draft: Pick<ReviewDraft, 'comments' | 'in_body'>, findings: number): number[] {
+    return Array.from({ length: findings }, (_, i) => i + 1).filter((n) => pointState(draft, n).kind === 'out')
 }
 
 /** Who wrote a version, as `canopy review draft` says it: the reviewer, a revision, or the operator, and where. */
