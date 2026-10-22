@@ -104,8 +104,9 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
-    # (DESIGN §21), and to mark it seen, as that show and its page do (§22).
-    REVIEW: ("dismiss", "send", "seen"),
+    # (DESIGN §21), to mark it seen, as that show and its page do (§22), and to note what a revision of its draft should
+    # change, or grant its draft more revisions (§34).
+    REVIEW: ("dismiss", "send", "seen", "reply", "grant"),
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
     # waits (DESIGN §36).
     TASK: ("stop", "reply", "show"),
@@ -371,6 +372,9 @@ def reply(
             letters, digits, `-`, or `_`.
     """
     check_verb(ref, "reply")
+    if ref.kind == REVIEW:
+        # A reply on a review is a note on its draft, a journal fact of the draft's (`review_drafts_manage.note`).
+        raise Refused("unsupported", f"a note on {ref}'s draft is recorded with the draft, not as a message")
     if ref.kind == TASK:
         # A task's guards are in core, as its submission's are: a reply authorizes its next run (TRUST_MODEL T1).
         check_operator()

@@ -1,11 +1,11 @@
-"""Reviews as the overseer sees them: the state block's `reviews` (DESIGN §21)."""
+"""Reviews as the overseer sees them: the state block's `reviews` (DESIGN §21), and the revisions asked for (§34)."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import db, personas, review_requests, review_runs
+from canopy.core import db, personas, review_requests, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import grants
@@ -85,6 +85,32 @@ class RequestedPR(TypedDict):
     latest: LatestReview | None
 
 
+class LatestRevision(TypedDict):
+    """A draft's latest revision: how it ended, or that it runs."""
+
+    run_id: int
+    status: str
+    started_at: str
+    ended_at: str | None
+
+
+class WantedRevision(TypedDict):
+    """A review's draft the operator's note asks a revision of (DESIGN §34): never the note's or the draft's text."""
+
+    #: The review whose draft it is, which `canopy review revise --run` names.
+    review_run: int
+    pr: str
+    #: The commit the review read, which the revision reads too.
+    sha: str
+    repo: str | None
+    #: When the newest note was written.
+    noted_at: str
+    #: The draft's revisions so far, however they ended, and how many it may have.
+    revisions: int
+    limit: int
+    latest: LatestRevision | None
+
+
 class ReviewsSection(TypedDict):
     """The state block's `reviews` (DESIGN §21)."""
 
@@ -95,18 +121,25 @@ class ReviewsSection(TypedDict):
     running: list[RunningReview]
     prs: list[ReviewedPR]
     requests: list[RequestedPR]
+    #: Only when a note asks for one: the drafts to revise.
+    revisions: NotRequired[list[WantedRevision]]
 
 
 def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> ReviewsSection | None:
-    """Return the state block's `reviews`, or None when reviews are off: then the block has no such key."""
-    if not review_requests.reviews_on(conn, config):
+    """Return the state block's `reviews`, or None when reviews are off: then the block has no such key.
+
+    A revision the operator's note asks for keeps the key, with reviews otherwise off (DESIGN §34).
+    """
+    if not review_requests.reviews_on(conn, config) and not review_revisions.on(conn, config):
         return None
     runs = review_runs.review_runs_since(conn, db.format_time(now - RECENT))
     by_pr: dict[str, list[records.ReviewRun]] = {}
     for run in runs:
         by_pr.setdefault(run.pr_url, []).append(run)
     prs = [_pr_summary(conn, config, url) for url in list(by_pr)[:MAX_PRS]]
-    started_today = len(review_runs.review_runs_since(conn, db.format_time(now - timedelta(hours=24))))
+    # The daily limit counts revisions too: each is a review run.
+    started_today = len(review_runs.review_runs_since(conn, db.format_time(now - timedelta(hours=24)), revisions=True))
+    revisions = [_wanted(w) for w in review_revisions.wanted(conn, config)]
     return {
         "agent_prs": config.review.agent_prs,
         "query": config.review.query.strip() or None,
@@ -129,6 +162,30 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
         ],
         "prs": prs,
         "requests": [_requested(conn, r) for r in review_requests.open_requests(conn)],
+        **({"revisions": revisions} if revisions else {}),
+    }
+
+
+def _wanted(wanted: review_revisions.Wanted) -> WantedRevision:
+    latest = wanted.revisions[0] if wanted.revisions else None
+    return {
+        "review_run": wanted.review.id,
+        "pr": wanted.review.pr_url,
+        "sha": wanted.review.sha,
+        "repo": wanted.review.repo,
+        "noted_at": wanted.notes[-1].created_at if wanted.notes else wanted.draft.created_at,
+        "revisions": len(wanted.revisions),
+        "limit": wanted.limit,
+        "latest": (
+            {
+                "run_id": latest.id,
+                "status": latest.status,
+                "started_at": latest.started_at,
+                "ended_at": latest.ended_at,
+            }
+            if latest is not None
+            else None
+        ),
     }
 
 

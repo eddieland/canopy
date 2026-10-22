@@ -18,6 +18,11 @@ if TYPE_CHECKING:
     from canopy.core.vocab import PoolKind
 
 
+#: A PR's reviews: its review runs but the revisions of their drafts (DESIGN §34), which review nothing, report no
+#: verdict, and count toward their draft's limit rather than the PR's.
+_REVIEWS = sql.select("*").from_("review_runs").where("revises IS NULL")
+
+
 def insert_review_run(
     conn: sqlite3.Connection,
     *,
@@ -31,13 +36,15 @@ def insert_review_run(
     persona: str | None = None,
     persona_digest: str | None = None,
     persona_text: str | None = None,
+    revises: tuple[int, int] | None = None,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
     `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `request` for a PR the operator
     asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
     persona its prompt carries (DESIGN §31), and `persona_text` that text, kept once per digest
-    (`db.record_persona_text`).
+    (`db.record_persona_text`). `revises` makes it a revision (§34): the draft it revises, by its id, and the version of
+    it the revision reads.
 
     Returns:
         The new review run's id.
@@ -55,6 +62,8 @@ def insert_review_run(
             log_path="",
             persona=persona,
             persona_digest=persona_digest,
+            revises=revises[0] if revises is not None else None,
+            revises_version=revises[1] if revises is not None else None,
         )
         run_id = db.rowid(sql.execute(conn, run))
         db.record_persona_text(conn, persona_digest, persona_text)
@@ -127,30 +136,25 @@ def get_review_run(conn: sqlite3.Connection, run_id: int) -> records.ReviewRun |
 
 
 def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[records.ReviewRun]:
-    """Return a PR's review runs, newest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRun,
-        sql.select("*").from_("review_runs").where("pr_url = ?", pr_url).order_by("id DESC"),
-    )
+    """Return a PR's review runs, newest first, revisions left out."""
+    return records.fetch_all(conn, records.ReviewRun, _REVIEWS.where("pr_url = ?", pr_url).order_by("id DESC"))
 
 
 def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[records.ReviewRun]:
-    """Return the latest `limit` review runs, newest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRun,
-        sql.select("*").from_("review_runs").order_by("id DESC").limit(limit),
-    )
+    """Return the latest `limit` review runs, newest first, revisions left out."""
+    return records.fetch_all(conn, records.ReviewRun, _REVIEWS.order_by("id DESC").limit(limit))
 
 
-def review_runs_since(conn: sqlite3.Connection, since: str) -> list[records.ReviewRun]:
-    """Return the review runs started at or after `since`, newest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRun,
-        sql.select("*").from_("review_runs").where("started_at >= ?", since).order_by("id DESC"),
-    )
+def review_runs_since(conn: sqlite3.Connection, since: str, *, revisions: bool = False) -> list[records.ReviewRun]:
+    """Return the review runs started at or after `since`, newest first, with `revisions` the revisions too."""
+    every = sql.select("*").from_("review_runs") if revisions else _REVIEWS
+    return records.fetch_all(conn, records.ReviewRun, every.where("started_at >= ?", since).order_by("id DESC"))
+
+
+def revision_runs_of(conn: sqlite3.Connection, draft_id: int) -> list[records.ReviewRun]:
+    """Return the revisions of review draft `draft_id` (DESIGN §34), newest first."""
+    query = sql.select("*").from_("review_runs").where("revises = ?", draft_id).order_by("id DESC")
+    return records.fetch_all(conn, records.ReviewRun, query)
 
 
 def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
@@ -165,7 +169,7 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
     found: dict[str, list[records.ReviewRun]] = {}
     # SQLite takes an empty list, `IN ()`, as matching nothing.
-    query = sql.select("*").from_("review_runs").where_in("pr_url", pr_urls).order_by("id DESC")
+    query = _REVIEWS.where_in("pr_url", pr_urls).order_by("id DESC")
     for run in records.fetch_all(conn, records.ReviewRun, query):
         found.setdefault(run.pr_url, []).append(run)
     return found

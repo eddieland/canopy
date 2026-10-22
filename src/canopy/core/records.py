@@ -257,6 +257,9 @@ class ReviewRun(Row):
     #: The persona it ran in, and the sha256 of its text (DESIGN §31); None for a review from before canopy recorded it.
     persona: str | None
     persona_digest: str | None
+    #: A revision's draft, by its id, and the version of it the revision read (DESIGN §34); None for a review.
+    revises: int | None
+    revises_version: int | None
 
 
 @dataclass(frozen=True)
@@ -1044,6 +1047,33 @@ class ReviewDraftVersion(Row):
     #: A JSON list of what canopy left out as it made it, and why.
     refused: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class ReviewDraftNote(Row):
+    """The operator's note on a review's draft, which asks for a revision while it is newer than the newest version."""
+
+    TABLE: ClassVar[str] = "review_draft_notes"
+
+    id: int
+    draft_id: int
+    #: The draft's newest version when the note was written: the note is newer while that is still the newest.
+    after_version: int
+    body: str
+    channel: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class ReviewDraftGrant(Row):
+    """Revisions the operator granted a review's draft past `policy.max_revisions_per_draft` (DESIGN §34)."""
+
+    TABLE: ClassVar[str] = "review_draft_grants"
+
+    id: int
+    draft_id: int
+    runs: int
+    granted_at: str
 
 
 @dataclass(frozen=True)

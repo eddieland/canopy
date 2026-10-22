@@ -187,6 +187,9 @@ TOLD_LINES = 2
 #: How long a held worker, or a test waiting on one, waits before it gives up.
 HOLD_TIMEOUT = 60
 
+#: The overseer's commands that start a review run: a review, and a revision of a review's draft (DESIGN §34).
+REVIEW_COMMANDS = (["canopy", "review", "run"], ["canopy", "review", "revise"])
+
 #: The roles a held run's agent may play, each scripted by its own `FAKE_<ROLE>_*` variables: a worker, a private
 #: ticket's, a planner, and a reviewer. The overseer is never held.
 HELD_ROLES = ("WORKER", "WORKER_PRIVATE", "PLANNER", "REVIEWER")
@@ -595,8 +598,8 @@ class Scenario:
         reviewer: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Reviewed:
-        """Start the review `command`, a `reviews(...)`, in a tick of its own, and do it in this process, its reviewer
-        doing `reviewer`, a `reviewer_reports(...)`, or the fake's default report if None.
+        """Start the review `command`, a `reviews(...)` or a `revises(...)`, in a tick of its own, and do it in this
+        process, its reviewer doing `reviewer`, a `reviewer_reports(...)`, or the fake's default report if None.
 
         The overseer is not run. `runner` runs the reviewer's processes, one that times it out, say, or a plain
         `InlineRunner` if None.
@@ -604,7 +607,7 @@ class Scenario:
         Returns:
             The review run, closed, with what its `canopy _review` printed.
         """
-        assert command[:3] == ["canopy", "review", "run"], command
+        assert command[:3] in REVIEW_COMMANDS, command
         with ExitStack() as stack:
             if reviewer is not None:
                 stack.enter_context(reviewer)
@@ -653,15 +656,15 @@ class Scenario:
         return done
 
     def starts_review(self, command: list[str], *, reviewer: Worker | None = None) -> Reviewing:
-        """Start the review `command`, a `reviews(...)`, in a tick of its own, and hold its reviewer at work, the
-        reviewer set to do `reviewer`, a `reviewer_reports(...)`, once the test lets it go on.
+        """Start the review `command`, a `reviews(...)` or a `revises(...)`, in a tick of its own, and hold its
+        reviewer at work, the reviewer set to do `reviewer`, a `reviewer_reports(...)`, once the test lets it go on.
 
         The review run is detached, as the overseer's is, and the overseer is not run.
 
         Returns:
             The review run, at work.
         """
-        assert command[:3] == ["canopy", "review", "run"], command
+        assert command[:3] in REVIEW_COMMANDS, command
         with ExitStack() as stack:
             if reviewer is not None:
                 stack.enter_context(reviewer)
@@ -678,14 +681,14 @@ class Scenario:
         return reviewing
 
     def refuses(self, command: list[str], *, dry_run: bool = False) -> Refused:
-        """Dispatch `command`, a `dispatches(...)`, or start the review `command`, a `reviews(...)`, in a tick of its
-        own, which canopy must refuse, starting no run.
+        """Dispatch `command`, a `dispatches(...)`, or start the review `command`, a `reviews(...)` or a
+        `revises(...)`, in a tick of its own, which canopy must refuse, starting no run.
 
         Returns:
             The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any; the tick,
             its decisions whole, and what the command printed ride along.
         """
-        review = command[:3] == ["canopy", "review", "run"]
+        review = command[:3] in REVIEW_COMMANDS
         assert review or command[:2] == ["canopy", "dispatch"], command
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
@@ -949,6 +952,11 @@ def reviews(
     reviewer."""
     flags = _option("--ticket", ticket) + _option("--context", context)
     return canopy("review", "run", "--pr", pr, "--sha", sha, "--repo", repo, *flags)
+
+
+def revises(review_run: int) -> list[str]:
+    """The overseer starts a revision of review run `review_run`'s draft, which the operator's note asks for."""
+    return canopy("review", "revise", "--run", str(review_run))
 
 
 def raises(key: str, reason: str, detail: str | None = None) -> list[str]:

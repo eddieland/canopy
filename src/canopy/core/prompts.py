@@ -126,6 +126,10 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
 #: A one-off task's prompt (DESIGN §36). An override must still carry the operator's text and the branch it may push.
 TASK = "task.md"
 REQUIRED_TASK = ("TASK", "BRANCH")
+#: The reviser's prompt (DESIGN §34): a revision of a review's draft on the operator's notes. An override must still
+#: name the PR, the commit, and the checkout, and carry the draft it revises and the notes, its only instructions.
+REVISER = "reviser.md"
+REQUIRED_REVISER = ("PR_URL", "SHA", "CHECKOUT", "DRAFT", "NOTES")
 # A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
 # override written before they existed still serves every other resume.
 REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
@@ -708,6 +712,31 @@ def render_task(config: Config, values: Mapping[str, str | None], *, notice: str
     standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
     required = (*REQUIRED_TASK, *pr_skill, *noticed)
     return render(config, TASK, values, required=required, one_of=(*standing, _required_attribution(config)))
+
+
+def render_reviser(
+    config: Config,
+    values: Mapping[str, str | None],
+    *,
+    persona: personas.Persona | None = None,
+) -> str:
+    """Return the reviser's prompt (DESIGN §34) with every `{{NAME}}` replaced from `values`.
+
+    It must carry `REQUIRED_REVISER`. The reviser writes in the review's persona, and reads the operator's standing
+    instructions to reviews, as the reviewer does (`render_reviewer`); it reads no notice, since it judges no build.
+
+    Returns:
+        The rendered prompt.
+    """
+    persona = persona or _default_persona(config, REVISER)
+    values = {
+        **values,
+        **_standing_values(reviewer_instructions(config), "reviewer"),
+        "PERSONA": persona.text if persona is not None else "",
+    }
+    standing = (REQUIRED_STANDING,) if config.paths.reviewer_instructions is not None else ()
+    required = (*REQUIRED_REVISER, *_persona_required(persona))
+    return render(config, REVISER, values, required=required, one_of=standing)
 
 
 def render(

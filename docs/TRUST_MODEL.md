@@ -160,7 +160,9 @@ Controls:
   edit` and `publish`, the operator's verbs on a review's draft (DESIGN §34): an agent that could publish one could
   post as the operator on any PR their query matches, and one that could edit it could choose what they publish
   unread. A draft is the reviewer's text, written from the PR's, and untrusted until the operator publishes a version
-  of it, which they name by its hash.
+  of it, which they name by its hash. So do `canopy reply review:ID`, the operator's note on a draft, which asks the
+  next tick for a revision, and `canopy grant review:ID revision`: a note is the reviser's only instruction, so an
+  agent that could write one could choose what the operator is offered to publish.
   So does `gc` (DESIGN §26): an agent that could remove history early
   could remove the transcript that shows what it did, and no flag of it shortens retention, which only the
   operator's private config sets. So does `notice`, when it sets or clears the operator's notice to workers
@@ -253,6 +255,10 @@ Controls:
   review of the same PR reads the latest `done` one's summary and undismissed findings as data, so a steered review can
   reach only a later reviewer of the PR whose text steered it, which reads that text anyway; the worst it does is lead
   that review to miss a defect, as a steered reviewer already could by reporting clean.
+  A revision of a review's draft (DESIGN §34) runs as the reviewer does and reads the same PR, its draft, and its
+  review, all data; the operator's notes since the draft's newest version are its only instructions. Its version is
+  untrusted like the reviewer's until the operator publishes it, and the state block names the draft, never its text
+  or the notes, so neither reaches the overseer.
   `review.query` authorizes a review, and only the operator writes it (private, T7). A review request (`canopy start
   URL --review`, ROADMAP M42) authorizes one review of one PR the same way, or one in each persona it names: a journal
   fact made only through the operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID`
@@ -332,6 +338,13 @@ Controls in code, not prompts:
   counting toward `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
   per PR with `canopy grant`), `capacity.max_reviews_per_day`, and
   `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
+- Revisions of a review's draft (DESIGN §34): each is a review run at the reviewed commit, started only by a tick
+  while the operator's note is newer than the draft's newest version, held by `capacity.max_reviews_per_day`,
+  `capacity.max_reviews`, `capacity.max_workers`, one review run of a PR at a time, and the review timeout, and
+  counting toward `policy.max_revisions_per_draft` per draft (3 by default), never reset, raised only by the operator,
+  in config or per draft with `canopy grant review:ID revision`. A note is refused at that limit and while a revision
+  runs, so a draft takes a bounded number of revisions however the overseer is steered. Revisions count toward no
+  PR's review limit.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
@@ -454,9 +467,9 @@ but must be distinguishable:
   be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
   hash, unmarked, as one comment review on the commit the review read, which approves nothing and resolves no thread.
   It speaks as the operator on someone else's PR, and with no bot identity (D010) nothing on GitHub says a model wrote
-  it but what the operator leaves in. The journal records which review wrote each version and what the operator
-  changed, the version published, the channel, and the review's and each comment's id. The loop's own PRs publish
-  none.
+  it but what the operator leaves in. The journal records which review or revision wrote each version, the notes that
+  asked for each revision, and what the operator changed, the version published, the channel, and the review's and
+  each comment's id. The loop's own PRs publish none.
 - A reply the operator sends through canopy (DESIGN §29) carries no marks: it is their own words, posted word for
   word as they last saw it, named by its hash, as one comment review that approves nothing and resolves no thread. The
   journal records which run drafted it, whether the operator edited it, the channel, and the comment's id, by which
@@ -551,10 +564,11 @@ Controls:
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
-- The reviewer writes nothing outside its result line (D114). Its definition denies commenting or replying anywhere,
-  submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth; the operator's
-  runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied whole but its
-  read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
+- The reviewer writes nothing outside its result line (D114), and a revision of a review's draft, which runs as the
+  reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
+  replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
+  the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
+  whole but its read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
   MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
@@ -821,8 +835,8 @@ loop's terminal would.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
 - Take runtime or notify commands, an agent's bash allows, chores, review settings, prompt paths, capacity, queue
-  labels, authorized repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` is policy: the
-  repository may only lower it.)
+  labels, authorized repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` and
+  `policy.max_revisions_per_draft` are policy: the repository may only lower them.)
 - Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once, but for a
   try the operator starts from the shell or the web UI (DESIGN §19).
 - Listen on a wildcard or public address, or serve journal data or take the operator's input without the operator's
