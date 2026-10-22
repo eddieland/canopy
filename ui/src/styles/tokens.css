@@ -11,8 +11,9 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set only the neutrals, over the default's: off-white, Solarized, Nord, and Gruvbox for light; grey (the one
- * the 2026-10-19 exploration drew for Mailroom), black, Solarized, and Gruvbox for dark.
+ * others set only the neutrals, over the default's: off-white, Solarized, Nord, Gruvbox, sage, and Rosé Pine Dawn for
+ * light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox, forest, plum, and
+ * Monokai for dark.
  */
 
 :root {
@@ -238,6 +239,35 @@
     --context-carried: oklch(0.59 0.02 70);
 }
 
+/* Sage: a soft green canvas, the light side of Forest. */
+:root[data-light-palette='sage']:not(.dark) {
+    --background: oklch(0.952 0.016 150);
+    --surface: oklch(0.992 0.005 150);
+    --surface-raised: oklch(0.963 0.014 150);
+    --border: oklch(0.9 0.024 150);
+    --foreground: oklch(0.25 0.025 160);
+    --muted-foreground: oklch(0.48 0.03 160);
+    --scrollbar: oklch(0.48 0.03 160 / 0.4);
+    --status-stopped: oklch(0.46 0.03 160);
+    --spend-dry-run: oklch(0.6 0.02 155);
+    --context-carried: oklch(0.6 0.02 155);
+}
+
+/* Rosé Pine Dawn: base the canvas, surface a surface, highlight med the hairlines, text the text, and subtle muted.
+ * The canvas is a shade darker than Rosé Pine's own, and subtle a step darker, so every hue reads at 4.5:1. */
+:root[data-light-palette='rose-pine']:not(.dark) {
+    --background: oklch(0.952 0.013 72);
+    --surface: oklch(0.987 0.011 77);
+    --surface-raised: oklch(0.962 0.013 68);
+    --border: oklch(0.892 0.012 31);
+    --foreground: oklch(0.42 0.063 290);
+    --muted-foreground: oklch(0.49 0.046 291);
+    --scrollbar: oklch(0.49 0.046 291 / 0.4);
+    --status-stopped: oklch(0.47 0.046 291);
+    --spend-dry-run: oklch(0.6 0.025 291);
+    --context-carried: oklch(0.6 0.025 291);
+}
+
 /* The dark theme's grey palette, Mailroom's neutrals. Muted text is a step further from the canvas than Mailroom drew
  * it, and stopped one more, to read on its own tint as well. */
 .dark[data-dark-palette='grey'] {
@@ -299,6 +329,53 @@
     --status-stopped: oklch(0.74 0.035 76);
     --spend-dry-run: oklch(0.62 0.02 70);
     --context-carried: oklch(0.62 0.02 70);
+}
+
+/* Forest: a deep green canvas, the dark side of Sage. */
+.dark[data-dark-palette='forest'] {
+    --background: oklch(0.17 0.02 165);
+    --surface: oklch(0.205 0.024 165);
+    --surface-raised: oklch(0.25 0.028 165);
+    --border: oklch(0.3 0.03 165);
+    --foreground: oklch(0.94 0.015 150);
+    --muted-foreground: oklch(0.71 0.03 155);
+    --accent-foreground: oklch(0.17 0.02 165);
+    --scrollbar: oklch(0.71 0.03 155 / 0.4);
+    --status-stopped: oklch(0.74 0.03 155);
+    --spend-dry-run: oklch(0.6 0.02 160);
+    --context-carried: oklch(0.6 0.02 160);
+}
+
+/* Plum: a dark wine-purple canvas, warmer than indigo. */
+.dark[data-dark-palette='plum'] {
+    --background: oklch(0.17 0.025 340);
+    --surface: oklch(0.205 0.03 340);
+    --surface-raised: oklch(0.25 0.035 340);
+    --border: oklch(0.3 0.04 340);
+    --foreground: oklch(0.95 0.012 340);
+    --muted-foreground: oklch(0.72 0.035 340);
+    --accent-foreground: oklch(0.17 0.025 340);
+    --scrollbar: oklch(0.72 0.035 340 / 0.4);
+    --status-stopped: oklch(0.75 0.035 340);
+    --spend-dry-run: oklch(0.6 0.025 340);
+    --context-carried: oklch(0.6 0.025 340);
+}
+
+/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, and the
+ * comment color muted. The bases are a step darker than Monokai's own, and the comment color brighter, so the status
+ * and section hues still read at 4.5:1. */
+.dark[data-dark-palette='monokai'] {
+    --background: oklch(0.18 0.009 115);
+    --surface: oklch(0.212 0.01 115);
+    --surface-raised: oklch(0.255 0.012 110);
+    --border: oklch(0.31 0.016 103);
+    --foreground: oklch(0.977 0.008 107);
+    --muted-foreground: oklch(0.72 0.029 97);
+    --accent-foreground: oklch(0.18 0.009 115);
+    --scrollbar: oklch(0.72 0.029 97 / 0.4);
+    --status-stopped: oklch(0.76 0.029 97);
+    --spend-dry-run: oklch(0.62 0.02 100);
+    --context-carried: oklch(0.62 0.02 100);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */

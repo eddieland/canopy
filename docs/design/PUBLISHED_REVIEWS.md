@@ -21,8 +21,11 @@ revise it, and publishes one version, which canopy posts word for word as a comm
 A `done` review of a PR the loop does not own is its draft's first version; a review that names a ticket, or of a PR a
 ticket's unit holds, has no draft, checked in code, and keeps §21's send. The draft is §29's, with the review as its
 source rather than a run, kept with the review rather than a ticket: versioned, each version recording who wrote it, the
-reviewer, the reviser, or the operator, and through which channel. Nothing is raised on the attention list for it:
-unlike a worker's drafts, nothing waits on it, and the operator need never publish one.
+reviewer, the reviser, or the operator, and through which channel. A review the operator asked for waits on them, as
+a worker's drafts do: the harness raises `review_waiting` about its PR until a draft of the PR's newest reviewed commit
+is published or staged, the operator empties it of all it would post, or the PR is seen merged or closed. A draft
+staged or of unknown outcome raises `review_unsettled` until a read settles it. A `review.query` match's draft waits on
+nobody, and none need ever be published.
 
 A version is exactly what would post: a body, and comments, each on a line of the diff the review kept (§21, The diff),
 on the commit's side. canopy makes the first from the review's summary and findings, a comment for each finding at its

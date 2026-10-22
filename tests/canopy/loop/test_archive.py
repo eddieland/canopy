@@ -282,6 +282,43 @@ def test_only_the_archive_is_committed(scenario: Scenario, clone: Path, upstream
     assert git("diff", "--cached", "--name-only", cwd=clone) == "notes.md"
 
 
+def test_without_the_workspace_dir_plans_go_in_the_top_level(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    scenario.configures(paths={"plan_archive_workspace_dir": False})
+    (clone / "notes.md").write_text("The operator's own.\n")
+    git("add", "notes.md", cwd=clone)
+    (clone / "scratch.md").write_text("Not for the remote.\n")
+    run_id = proposed(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{KEY}/{run_id}-PROPOSED.md", f"{KEY}/README.md", "README.md"]
+    assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
+        f"Archive 1 plan and 2 READMEs of {name}: {KEY}\n\nNew:\n- {KEY}/{run_id}-PROPOSED.md\n- {KEY}/README.md\n"
+        "- README.md"
+    )
+    # What the operator staged stays staged, and what they left untracked stays so.
+    assert git("status", "--porcelain", cwd=clone).splitlines() == ["A  notes.md", "?? scratch.md"]
+    assert unpushed(scenario) is None
+
+
+def test_the_operators_own_readme_at_the_top_level_is_never_committed(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+) -> None:
+    scenario.configures(paths={"plan_archive_workspace_dir": False})
+    (clone / "README.md").write_text("Our plans.\n")
+    run_id = proposed(scenario.conn, scenario.env.state_dir)
+
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{KEY}/{run_id}-PROPOSED.md", f"{KEY}/README.md"]
+    assert (clone / "README.md").read_text() == "Our plans.\n"
+    assert git("status", "--porcelain", cwd=clone) == "?? README.md"
+    assert unpushed(scenario) is None
+
+
 def test_a_directory_inside_a_repository_is_never_archived_to(scenario: Scenario, tmp_path: Path) -> None:
     repository = tmp_path / "work"
     git("init", "--quiet", str(repository), cwd=tmp_path)

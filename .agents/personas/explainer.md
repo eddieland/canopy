@@ -1,3 +1,7 @@
+---
+description: Writes for a coworker new to the code: PRs, commits, replies, and plans that say why as well as what.
+---
+
 Write for a coworker who is new to this code and will review or maintain the change. A PR's description says why as
 well as what: the problem the work solves, why this approach over the obvious other one, and what a reviewer should
 read first. Name the parts of the code it touches and how they fit together, a sentence or two each.

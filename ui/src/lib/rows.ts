@@ -132,8 +132,8 @@ export const ROW_COLUMNS = {
     ],
     /** A review run on the reviews page: its verdict, id, ticket, impact, PR, commit, and persona, cost, and when. */
     review: [
-        // `3 findings, 1 blocking` on one line, with its dot.
-        ['verdict', '12rem', 5],
+        // `3 findings, 1 major` on one line, with its dot and its draft's chip, which a longer verdict is cut beside.
+        ['verdict', '14rem', 5],
         ['id', '5rem'],
         ['key', '6rem', 3],
         ['impact', '7rem', 2],
@@ -143,7 +143,7 @@ export const ROW_COLUMNS = {
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
-        ['verdict', '12rem', 4],
+        ['verdict', '14rem', 4],
         ['id', '5rem'],
         ['impact', '7rem', 2],
         ['commit', FREE],
@@ -156,7 +156,8 @@ export const ROW_COLUMNS = {
      * a list in a 1280px window.
      */
     'pull-request': [
-        // `review:4 3 findings, 1 blocking` on one line, with its dot.
+        // `review:4 3 findings, 1 blocking` on one line, with its dot. Beside a draft's chip the verdict is cut, its
+        // whole on hover: any wider and the title is cut to a word in a narrow window.
         ['state', '16rem', 3],
         // As wide as the list's longest PR's name, so what is left goes to the title (`fitColumn`).
         ['pr', fitted('pr', PR_REM)],

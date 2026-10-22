@@ -15,9 +15,9 @@ test('the root redirects to the attention list', async ({ page }) => {
 test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    // The mock's six items less the PR that waits on a reviewer and the chore's finding, which block nothing.
-    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(6)
-    const count = 4
+    // The mock's seven items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(7)
+    const count = 5
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -215,7 +215,7 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
     const filters = page.getByRole('navigation', { name: 'Filter by kind' })
     await expect(filters.getByRole('link', { name: 'reviews' })).toHaveAttribute('data-selected', 'true')
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(4)
-    await expect(page.getByTestId('runs-count')).toHaveText('5')
+    await expect(page.getByTestId('runs-count')).toHaveText('6')
 
     // The two filters keep each other: a state chosen under a kind keeps the kind.
     await page.getByRole('navigation', { name: 'Filter by state' }).getByRole('link', { name: 'running' }).click()

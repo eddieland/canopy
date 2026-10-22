@@ -5,7 +5,7 @@ T2, D003). Each reads the token `gh` holds for the host its PR's URL or reposito
 and talks to that host's GraphQL API, so GitHub Enterprise works as github.com does. This module holds what both
 share: reading a PR's or an issue's URL and a clone URL, the token, the GraphQL client, and the JSON lines they print.
 
-Stdlib only, importing nothing from canopy.
+click for the command lines (D025), and nothing from canopy.
 """
 
 from __future__ import annotations
@@ -406,3 +406,13 @@ def emit(stdout: TextIO, line: Mapping[str, object]) -> None:
     """Print `line` as one JSON line, and flush it, so what was printed survives a kill."""
     stdout.write(json.dumps(dict(line), ensure_ascii=False, separators=(",", ":")) + "\n")
     stdout.flush()
+
+
+@dataclass(frozen=True)
+class Hosts:
+    """How a program reaches a GitHub host: as GitHub's own are reached, unless a test gives its own."""
+
+    #: A host to its GraphQL endpoint.
+    endpoint_of: Endpoint = endpoint
+    #: A host to its token.
+    token_of: Token = gh_token

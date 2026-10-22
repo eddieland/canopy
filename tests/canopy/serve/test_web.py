@@ -381,8 +381,16 @@ def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
         "yours": False,
         "defaults": ["worker", "planner", "reviewer"],
         "error": None,
+        "description": (
+            "canopy's own voice: plans as long as the work needs, reviews that read the change as an adversary, and "
+            "PR text left alone unless it is wrong."
+        ),
     }
     assert got["skeptic"]["defaults"] == []
+    assert got["minimalist"]["description"] == (
+        "The lazy senior developer: the smallest diff the ticket allows, what already exists before new code, and few "
+        "words."
+    )
 
 
 def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_does(ctx: Context) -> None:

@@ -45,6 +45,7 @@ from canopy.infra import logs
 from canopy.infra.text import printable
 from canopy.loop import archive
 from canopy.notify import deliver
+from canopy.reviews import waiting as review_waiting
 from canopy.runs import drafted
 
 if TYPE_CHECKING:
@@ -103,6 +104,7 @@ HARNESS_REASONS = frozenset(
         archive.REASON,
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
+        *review_waiting.REASONS,
         follow_ups.REASON,
         task_tickets.REASON,
     },
@@ -275,13 +277,14 @@ def listed(ctx: Context) -> list[Item]:
 
     A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all, nor is a finding
     the operator dismissed (DESIGN §19). A `drafts_waiting` item says what waits now, not at the tick that recorded
-    it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29). So do a task's
-    `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36).
+    it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29), and so do a review's
+    `review_waiting` and `review_unsettled`, gone once the operator publishes or a read settles it (§34). So do a
+    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36).
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
         i
-        for i in _drafts_now(ctx.conn, current(ctx.conn))
+        for i in _reviews_now(ctx.conn, _drafts_now(ctx.conn, current(ctx.conn)))
         if i.ticket_key is None
         or not i.ticket_key.startswith(CHORE_PREFIX)
         or i.ticket_key.removeprefix(CHORE_PREFIX) in configured
@@ -349,6 +352,22 @@ def _drafts_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:
         if item.reason != drafted.WAITING_REASON or item.ticket_key is None:
             found.append(item)
         elif (detail := waiting.get((item.ticket_key, item.repo))) is not None:
+            found.append(replace(item, detail=detail))
+    return found
+
+
+def _reviews_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:
+    """Check each review's item against its drafts as they stand, as `_drafts_now` does a run's drafts.
+
+    Returns:
+        The items in order, each review's with what it says now, or left out once its cause is gone.
+    """
+    now = {(f"{PR_PREFIX}{i.pr}", i.reason): i.detail for i in review_waiting.items(conn)}
+    found: list[Item] = []
+    for item in items:
+        if item.reason not in review_waiting.REASONS:
+            found.append(item)
+        elif (detail := now.get((item.ticket_key or "", item.reason))) is not None:
             found.append(replace(item, detail=detail))
     return found
 
