@@ -80,16 +80,27 @@ def decide(ctx: Context, derived: Iterable[Derived]) -> list[Decision]:
     by_ticket: dict[str, list[Derived]] = {}
     for d in derived:
         by_ticket.setdefault(d.ticket_key, []).append(d)
-    # An item the overseer recorded stays open only while it records it again (D020): its ticket stays its own.
-    held = {i.ticket_key for i in attention.current(ctx.conn) if i.reason not in attention.HARNESS_REASONS}
+    kept = held(ctx.conn)
     found: list[Decision] = []
     for key in sorted(by_ticket):
-        if key in held:
+        if key in kept:
             continue
         decision = _decided(ctx.conn, key, by_ticket[key])
         if decision is not None:
             found.append(decision)
     return found
+
+
+def held(conn: sqlite3.Connection) -> set[str]:
+    """The tickets with an item the overseer holds open on the attention list: each stays the overseer's whole.
+
+    An item the overseer recorded stays open only while it records it again (D020), so taking its ticket would drop it.
+
+    Returns:
+        Their keys.
+    """
+    items = attention.current(conn)
+    return {i.ticket_key for i in items if i.ticket_key is not None and i.reason not in attention.HARNESS_REASONS}
 
 
 def record(conn: sqlite3.Connection, tick_id: int, repo: str, decisions: Iterable[Decision]) -> None:

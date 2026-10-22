@@ -164,6 +164,13 @@ escapes it (§20).
 A PR's checks are its head commit's check runs and commit statuses. GitHub runs no checks on a PR that conflicts with
 its base, so `conflicted` comes before every CI and review phase; the `resume` attempt limit bounds its repeats (D030).
 
+**Order.** Dispatches take capacity in this order, whoever decides them (§37): a review the operator requested; a human
+waiting (`human_replied`, `changes_requested`, `review_findings`); `conflicted` and `ci_red`; `pushed_no_pr`; the
+loop's own and the query's reviews; then `ready`, a blocker before what it blocks. Work in flight comes before new work,
+and a person waiting before a machine. Tasks start first, within their share (§36). The harness makes its dispatches
+after the overseer, and an overseer's dispatch that would leave fewer workers free than the harness's ranked above it
+hold is refused `reserved`.
+
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
 identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's
 comment is never review feedback either. Anything else on the ticket is data, not instruction. See TRUST_MODEL.

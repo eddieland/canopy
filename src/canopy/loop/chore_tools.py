@@ -1,7 +1,8 @@
 """The overseer's chore verbs (DESIGN §6, §19, §27): start a run of one of the operator's chores, or hold one off.
 
 Each is a request (`loop.tools.Request`) and a function, which the `canopy chore` commands and the MCP server
-(`loop.mcp`) both call, as they do the overseer's other verbs.
+(`loop.mcp`) both call, as they do the overseer's other verbs. A chore with no `when` is the harness's, which runs it
+when it is due (DESIGN §37): either verb about one is refused `decided`.
 """
 
 from __future__ import annotations
@@ -13,8 +14,8 @@ from pydantic import Field
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, config, db
 from canopy.infra import logs
-from canopy.loop import attention
-from canopy.loop.tools import Refused, Request, Text, matching, running_tick, truncate
+from canopy.loop import attention, harness_dispatches
+from canopy.loop.tools import DECIDED, Refused, Request, Text, matching, running_tick, truncate
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -42,10 +43,11 @@ def chore_run(ctx: Context, request: ChoreRun) -> str:
         What the command prints.
 
     Raises:
-        Refused: Outside a running tick, or a guard refused the run, which is recorded.
+        Refused: Outside a running tick, a guard refused the run, or the chore is the harness's; each is recorded.
     """
     current = running_tick(ctx)
     tick_id, name, context = current.id, request.name, request.context
+    _refuse_decided(ctx, tick_id, name, "chore run")
     log = logs.for_tick(tick_id)
     try:
         if current.dry_run:
@@ -84,10 +86,27 @@ def chore_wait(ctx: Context, request: ChoreWait) -> str:
         What the command prints.
 
     Raises:
-        Refused: Outside a running tick, or no chore of that name is configured here.
+        Refused: Outside a running tick, no chore of that name is configured here, or the chore is the harness's, which
+            is recorded.
     """
     current = running_tick(ctx)
     if request.name not in chore_view.configured(ctx.config, ctx.workspace):
         raise Refused(f"no chore named {request.name!r} is configured for this workspace")
+    _refuse_decided(ctx, current.id, request.name, "chore wait")
     db.record_decision(ctx.conn, current.id, None, "wait", request.rationale, chore=request.name)
     return f"recorded wait for {attention.CHORE_PREFIX}{request.name}"
+
+
+def _refuse_decided(ctx: Context, tick_id: int, name: str, verb: str) -> None:
+    """Refuse the overseer's `verb` about chore `name` when it has no `when`: the harness runs it (DESIGN §37).
+
+    Raises:
+        Refused: The chore is the harness's. The refusal is recorded, as a guard's is.
+    """
+    chore = chore_view.configured(ctx.config, ctx.workspace).get(name)
+    if chore is None or not harness_dispatches.takes_chore(chore):
+        return
+    reason = f"{name} has no `when`, so the harness runs it when it is due, after you; record nothing about it"
+    db.record_decision(ctx.conn, tick_id, None, f"refused:{DECIDED}", reason, chore=name)
+    logs.for_tick(tick_id).info("refused: a chore of the harness's", extra={"chore": name, "verb": verb})
+    raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")

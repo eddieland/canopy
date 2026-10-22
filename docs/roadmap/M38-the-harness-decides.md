@@ -85,9 +85,23 @@ ticket that is not a fresh, open candidate stays the overseer's; the cooldown's 
 enabled, since each rests on rows the derivation reads from connectors (`ci_red`, and the rows a failed run leaves);
 review verbs and `mirror` are not refused `decided`, since an operator's review request on a ticket the harness took is
 still the overseer's to run, and a ticket the harness took has its comments mirrored once the overseer is given it
-again; and the tick's derivation comparison leaves out a ticket the harness decided. Left: every other row, each on its
-measurement; the harness's dispatches, `reserved`, and the priority order into §7; the attention list held in code;
-cursors moved by the harness; the prompt cut to the judgment; D020 edited in place; and the design folded into the
-sections it names. Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct
-situations, each disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels
-that hold a PR (recommended: yes).
+again; and the tick's derivation comparison leaves out a ticket the harness decided. Built (2026-10-22, stage 2): the
+third bullet. The priority order is in §7. Before the overseer the harness plans its dispatches, read from the journal
+wherever they are needed (the tick's derivation, the attention list, the chores' runs; `loop/harness_dispatches.py`),
+and the state block names them in `dispatches_to_come` with the workers they hold, leaving their tickets out. After the
+overseer's run, whatever it ended as, it makes them, runs in §7's order and then chores, each under every guard and
+recorded as its own; a tick halted before the overseer starts none, and a dry run checks the guards and starts none. An
+overseer's dispatch that would leave fewer workers free than the harness's runs ranked above it hold is refused
+`reserved`, through the tool and its command. Row enabled: `chore run` for a due chore with no `when`, read from the
+config and the journal. No ticket's dispatch row is, since each rests on an observation: `ROWS` is empty, wired, and
+tested with rows enabled by hand. Chosen conservatively, for the operator to change: a chore with no `when` is the
+harness's whether due or not, so `chores` lists only those with one, the overseer's `chore run` and `chore wait` about
+one are refused `decided`, and it runs with no context; the harness takes a ticket's run only when exactly one of its
+units holds rows, every one enabled, and its own row none, and not when a feedback plan gates the `resume` or is
+current; a `feedback-plan` ranks with a human waiting and a `retarget` with a repair, so neither is held behind a
+conflict; `reserved` holds `canopy dispatch` only, not a review the overseer starts, until a review row is the
+harness's; and the harness moves no cursor, so a row enabled later brings its cursors with it. Left: every other row,
+each on its measurement; the attention list held in code; cursors moved by the harness; the prompt cut to the
+judgment; D020 edited in place; and the design folded into the sections it names. Open for the operator: the bar a
+row clears in the measurement (recommended: at least three distinct situations, each disagreement the overseer's
+mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR (recommended: yes).

@@ -96,7 +96,7 @@ def closed(canopy_env: CanopyEnv) -> Path:
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n")
     days = json.dumps(closed_today())
-    canopy_env.append_user(chore_toml(extra=f'days = {days}\ntimezone = "UTC"\n'))
+    canopy_env.append_user(chore_toml(extra=f'days = {days}\ntimezone = "UTC"\nwhen = "Weekdays only."\n'))
     return prompt
 
 

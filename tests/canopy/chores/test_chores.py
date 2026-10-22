@@ -258,7 +258,7 @@ def test_the_chore_prompt(
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
-    canopy_env.append_user(chore_toml("queue-age", every=30))
+    canopy_env.append_user(chore_toml("queue-age", every=30, extra='when = "Weekdays only."\n'))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
@@ -537,7 +537,10 @@ def test_deleting_a_chore_clears_its_items(
 
 
 def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: CanopyEnv, chores: Path) -> None:
-    text = canopy_env.user_file.read_text().replace('when = "Weekdays only."', 'workspaces = ["elsewhere"]')
+    text = canopy_env.user_file.read_text().replace(
+        'when = "Weekdays only."',
+        'when = "Weekdays only."\nworkspaces = ["elsewhere"]',
+    )
     canopy_env.write_user(text)
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
