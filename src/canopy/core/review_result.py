@@ -46,7 +46,10 @@ class ReviewResult(BaseModel):
     status: Literal["done", "failed"]
     verdict: Literal["clean", "findings"] | None = None
     impact: Literal["low", "normal", "high"] | None = None
+    #: The review for canopy's operator: what the change does, and where its risk is.
     summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
+    #: What the reviewer would say to the PR's author beyond the findings, often nothing: a draft's body (DESIGN §34).
+    body: Annotated[StrictStr, bounded(MAX_REVISED_TEXT)] = ""
     # The PR's title as the reviewer read it, for display: it need not be its ticket's, and a PR canopy only reviews has
     # no other (DESIGN §21).
     pr_title: Annotated[StrictStr, one_line, bounded(contract.MAX_PR_TITLE)] | None = None
@@ -114,6 +117,7 @@ def parse_revision(stdout: str) -> RevisionResult | None:
 CONTRACT = (
     '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",'
     '"summary":"a paragraph, line breaks sparingly",'
+    '"body":"what you would tell the PR\'s author beyond the findings, or nothing",'
     '"pr_title":"the PR\'s title as it stands",'
     '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
     '"detail":"what is wrong and why"}]}'
