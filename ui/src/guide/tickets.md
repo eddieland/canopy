@@ -103,7 +103,8 @@ ticket's override, `[personas]` in your config, or canopy's default.
 Open a row's menu and pick a persona to set this ticket's override, as `canopy persona KEY NAME --agent AGENT` does.
 It holds for every run of that agent on this ticket until you pick **Clear the override**, which hands the choice back
 to your config. Set a skeptic on the one ticket whose reviews you want harder, and leave the rest alone. The menu lists
-what `canopy personas` does: canopy's own, and yours in `paths.personas`.
+what `canopy personas` does: canopy's own, and yours in `paths.personas`, each with the opening sentence of its file
+under its name, so you can tell `explainer` from `minimalist` without opening either.
 
 For one run alone, choose from the command line: `canopy persona KEY NAME --next`, or `--persona` on
 `canopy start KEY` or `canopy plan KEY`. The row names it under the persona, as **Its next run alone**, until that run

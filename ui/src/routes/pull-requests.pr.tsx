@@ -145,9 +145,15 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         )}
                         <CostTotalRow cost={cost} />
                     </Fields>
-                    {/* The PR's actions: stopping the operator's review request, and a grant of another review
-                        when it is at its review limit. */}
-                    <ReviewRequestStatus url={pr.url} request={pr.review_request} className="border-t" />
+                    {/* The PR's actions: asking for a review of one the loop does not own, or stopping the request,
+                        and a grant of another review when it is at its review limit. */}
+                    <ReviewRequestStatus
+                        url={pr.url}
+                        request={pr.review_request}
+                        loopPr={pr.loop_pr}
+                        reviewed={pr.reviews > 0}
+                        className="border-t"
+                    />
                     {reviewLimit !== null && (
                         <GrantLimits
                             limits={[reviewLimit]}

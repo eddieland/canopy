@@ -401,6 +401,8 @@ class PullRequest(Model):
     """The PR's URL: an opaque https:// string canopy never parses."""
     ticket_key: str | None = None
     """The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns."""
+    loop_pr: bool = False
+    """Whether a ticket's unit records it: one of the loop's own PRs, which a review request refuses (`loop_pr`)."""
     ticket_title: str | None = None
     """That ticket's title, as the overseer named it; None until it does."""
     title: str | None = None

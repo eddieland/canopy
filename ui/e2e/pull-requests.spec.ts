@@ -80,6 +80,8 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     // The latest review's verdict is in the header, where the page starts, not first in the Reviews panel.
     await open('acme/web#88')
     await expect(description).toHaveText('review:4 3 findings, 1 major · at its review limit')
+    // The loop's own PR is reviewed by `review.agent_prs`, so its page has no review to ask for.
+    await expect(page.getByTestId('review-request')).toHaveCount(0)
     const said = await box(description)
     expect(said.y + said.height).toBeLessThan(150)
     // Its title names its repository, so its fields do not.
@@ -95,6 +97,11 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     const yours = page.getByRole('definition').filter({ has: page.getByRole('link', { name: 'review:2' }) })
     await expect(yours).toHaveText('publishedreview:2')
     await expect(yours.getByRole('link', { name: 'review:2' })).toHaveAttribute('href', /\/reviews\/2$/u)
+    // Its request ended with that review: its foot asks for another, as `canopy start URL --review` does.
+    await expect(page.getByTestId('review-request').getByRole('button', { name: 'Review again' })).toHaveAttribute(
+        'title',
+        'canopy start https://github.com/acme/api/pull/12 --review',
+    )
 
     // One canopy has yet to review: its empty lists are their headers alone, each counting 0.
     await open('acme/web#95')

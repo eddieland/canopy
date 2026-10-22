@@ -105,6 +105,7 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
     return PullRequest(
         url=str(row["url"]),
         ticket_key=str(key) if key else None,
+        loop_pr=row["ticket_key"] is not None,
         ticket_title=_one_line(row["title"]),
         title=_one_line(row["pr_title"]),
         repo=str(repo) if repo else None,
