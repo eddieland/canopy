@@ -68,6 +68,7 @@ const SERIES = [
     'spend-plans',
     'spend-chores',
     'spend-reviews',
+    'spend-tasks',
     'spend-dry-run',
 ]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.

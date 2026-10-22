@@ -37,6 +37,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     running_run,
+    tools_of,
     with_events,
     with_rebase,
 )
@@ -272,7 +273,7 @@ def test_a_pushed_branch_is_recorded_with_its_head_and_the_slot_returned(
     assert "summary: found it" in out
 
 
-def test_a_task_run_s_models_are_read_from_its_session_as_it_ends(
+def test_a_task_run_s_models_and_tool_calls_are_recorded_as_it_ends(
     canopy_env: CanopyEnv,
     inline: Context,
     opencode_state: Path,
@@ -282,14 +283,18 @@ def test_a_task_run_s_models_are_read_from_its_session_as_it_ends(
     with_events(canopy_env, "canopy-worker-private")
     submit()
     [started] = start(inline)
-    with private_worker_does(result=DONE, session="ses_t1"):
+    with private_worker_does(["echo", "read it"], result=DONE, session="ses_t1"):
         run = run_task(inline, started.run_id)
     assert run.session_id == "ses_t1"
     assert [(m.model, m.replies) for m in run_models.of_run(inline.conn, "task_runs", run.id)] == [
         ("anthropic/claude-x", 1),
     ]
-    spent = spend.breakdown(inline.conn, datetime.now(UTC), 1).models
-    assert [(m.model, m.runs, m.cost_usd) for m in spent if m.kind == "tasks"] == [("anthropic/claude-x", 1, 0.25)]
+    assert tools_of(inline.conn, "task_runs", run.id) == [("bash", 1, 0, len("read it\n"))]
+    spent = spend.breakdown(inline.conn, datetime.now(UTC), 1)
+    assert [(m.model, m.runs, m.cost_usd) for m in spent.models if m.kind == "tasks"] == [
+        ("anthropic/claude-x", 1, 0.25),
+    ]
+    assert [(t.tool, t.runs, t.calls) for t in spent.tools if t.kind == "tasks"] == [("bash", 1, 1)]
 
 
 def test_commits_the_worker_left_unpushed_are_pushed_once(inline: Context, git_pool: GitPool) -> None:

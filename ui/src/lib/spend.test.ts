@@ -69,9 +69,9 @@ describe('spend', () => {
     })
 
     it('says a day on hover with each series it has', () => {
-        expect(dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, total: 1.5 }), H24)).toBe(
-            'Oct 7: $1.50, overseer $1.00 (idle ticks $0.25), reviews $0.50',
-        )
+        expect(
+            dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, tasks: 0.75, total: 2.25 }), H24),
+        ).toBe('Oct 7: $2.25, overseer $1.00 (idle ticks $0.25), reviews $0.50, tasks $0.75')
         expect(dayHint(day('2026-10-02', {}), H24)).toBe('Oct 2: nothing reported')
         expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H24)).toMatch(/^\S+ 8 14:00: \$2\.00, workers \$2\.00$/u)
         expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H12)).toMatch(/^\S+ 8 2:00 PM: \$2\.00/u)
@@ -151,7 +151,7 @@ describe('spend', () => {
     it('names each series once, the same in the totals, the legend, and the table', () => {
         const labels = SERIES.map((s) => s.label)
         expect(new Set(labels).size).toBe(labels.length)
-        expect(labels).toEqual(['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'dry runs'])
+        expect(labels).toEqual(['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry runs'])
     })
 
     it("sums each model's runs over every kind, the costliest first and the unnamed last, or keeps one kind's", () => {

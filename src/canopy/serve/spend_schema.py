@@ -16,7 +16,7 @@ from canopy.serve.schema import Model, Tick
 class SpendWindow(Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 
-    Worker, split, chore, and review runs and each tick's overseer, by when they started.
+    Worker, split, chore, review, and task runs and each tick's overseer, by when they started.
     """
 
     since: datetime
@@ -220,7 +220,7 @@ class SpendBreakdown(Model):
     woken: list[SpendWoken]
     """The loop's live ticks by what woke them, the most common first."""
     unpriced: list[SpendUnpriced]
-    """A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews."""
+    """A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews, tasks."""
     idle_share: float | None = None
     """Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
     no cost, so there is nothing to share."""
@@ -239,4 +239,5 @@ class SpendBreakdown(Model):
     """What each kind's tool calls returned, by tool, the most characters first: a row per kind and tool."""
     models: list[SpendModel] = []
     """What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
-    plans, chores, reviews, each kind's models the most costly first, and its runs no session named a model for last."""
+    plans, chores, reviews, tasks, each kind's models the most costly first, and its runs no session named a model for
+    last."""
