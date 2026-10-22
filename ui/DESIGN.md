@@ -98,8 +98,9 @@ Rules:
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
   only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
-  off-white, a warm paper, and the light tones of Solarized, Nord, and Gruvbox; dark has grey (the near-colorless
-  neutrals the 2026-10-19 exploration drew for Mailroom), black, and the dark tones of Solarized and Gruvbox. A light
+  off-white, a warm paper, sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the
+  near-colorless neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of
+  Solarized, Gruvbox, and Monokai. A light
   canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
   knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
   whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`

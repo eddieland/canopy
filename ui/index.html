@@ -32,8 +32,8 @@
                 try {
                     palettes = JSON.parse(localStorage.getItem('canopy-palette')) || {}
                 } catch (e) {}
-                var light = ['off-white', 'solarized', 'nord', 'gruvbox']
-                var dark = ['grey', 'black', 'solarized', 'gruvbox']
+                var light = ['off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine']
+                var dark = ['grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'monokai']
                 d.dataset.lightPalette = light.indexOf(palettes.light) >= 0 ? palettes.light : 'lavender'
                 d.dataset.darkPalette = dark.indexOf(palettes.dark) >= 0 ? palettes.dark : 'indigo'
             })()
