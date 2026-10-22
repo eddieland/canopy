@@ -344,7 +344,8 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                 <ReasonChip item={item} />
                 {done && <Answered />}
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                    {item.subject}
+                    {/* A PR no ticket owns is named as the PR is everywhere, not by its URL behind `pr:`. */}
+                    {item.pr === null ? item.subject : pullRequestLabel(item.pr)}
                     {item.finding ? ` ${item.reason}` : ''}
                 </span>
                 <Age at={item.since} className="ml-auto" />
