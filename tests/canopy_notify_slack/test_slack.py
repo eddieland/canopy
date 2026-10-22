@@ -256,6 +256,26 @@ def test_slack_blocks_parse_nothing_in_journal_text() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("summary", "linked"),
+    [
+        ("Opened https://x.test/pull/7: ready", "Opened <https://x.test/pull/7>: ready"),
+        ("Opened PR (https://x.test/pull/7).", "Opened PR (<https://x.test/pull/7>)."),
+        ("See [the PR](https://x.test/pull/7)", "See [the PR](<https://x.test/pull/7>)"),
+        ('"https://x.test/q?a=1&b=2", then', '"<https://x.test/q?a=1&amp;b=2>", then'),
+        ("https://x.test/wiki/Foo_(bar).", "<https://x.test/wiki/Foo_(bar)>."),
+        ("<https://x.test/7>", "&lt;<https://x.test/7>&gt;"),
+        # A URL holding `|` would show a label in its place, and a bare scheme is no URL: both stay text.
+        ("(https://evil.test|ok.test)", "(https://evil.test|ok.test)"),
+        ("Opened https://.", "Opened https://."),
+    ],
+)
+def test_slack_keeps_the_punctuation_around_a_url_out_of_its_link(summary: str, linked: str) -> None:
+    events = [{"kind": "run.ended", "ticket": "P-1", "run": 1, "run_kind": "implement", "status": "done"}]
+    events[0]["summary"] = summary
+    assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1].splitlines()[1] == linked
+
+
 def test_slack_blocks_for_each_event_kind() -> None:
     events: list[dict[str, Any]] = [
         {
