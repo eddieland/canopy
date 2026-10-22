@@ -133,6 +133,7 @@ export const mockReviews: ReviewSummary[] = [
         ended_at: null,
         cost_usd: 0.04,
         persona: 'canopy',
+        request_id: null,
         news: false,
         seen: false,
         draft: null,

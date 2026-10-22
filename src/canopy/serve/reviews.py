@@ -159,7 +159,7 @@ def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
 
 
 def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> list[ReviewSummary]:
-    """Review runs' rows, as the reviews list shows them, each with whether the operator has seen it and its draft's.
+    """Review runs' rows, as the reviews list shows them, each with whether it is seen, its draft, and its request.
 
     Returns:
         A summary of each, in their order.
@@ -169,12 +169,14 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
     own = db.pr_titles(conn, {row.pr_url for row in rows})
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
     drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
+    asked = review_requests.answered_by(conn, rows)
     return [
         summary(
             row,
             seen=str(row.id) in seen,
             title=ticket_title(own.get(row.pr_url)) or ticket_title(tickets.get(row.ticket_key or "")),
             draft=drafts.get(row.id),
+            request=asked.get(row.id),
         )
         for row in rows
     ]
@@ -186,8 +188,11 @@ def summary(
     seen: bool,
     title: str | None,
     draft: records.ReviewDraft | None,
+    request: int | None,
 ) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
+
+    `request` is the id of the operator's request it answers, which groups it with its reviews in other personas.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
@@ -212,6 +217,7 @@ def summary(
         ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
         cost_usd=row.cost_usd,
         persona=row.persona,
+        request_id=request,
         news=review_requests.has_news(row, stored),
         seen=seen,
         draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,

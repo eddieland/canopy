@@ -92,11 +92,18 @@ test("a requested review's draft leads to the review's page, where it is read an
     await expect(row).toContainText('acme/api#14')
     await row.click()
     const detail = page.getByTestId('attention-detail')
-    await expect(detail).toContainText('which you asked for, is done')
+    // Asked in two personas, both reviews are done, and it leads to the first's draft.
+    await expect(detail).toContainText('review:5 and review:6, which you asked for, are done')
     // Its draft is what it asks for, not the PR's review limit.
     await expect(detail).not.toContainText('Nothing to answer here')
     await detail.getByTestId('attention-review').getByRole('link', { name: 'Read the draft of review:5' }).click()
     await expect(page).toHaveURL(/\/reviews\/5$/u)
+    // Its page names the request's other review, the skeptic's, so the operator picks the one to publish.
+    const siblings = page.getByTestId('draft-siblings')
+    await expect(siblings).toContainText('Also reviewed as skeptic, from the same request at this commit.')
+    await siblings.getByRole('link', { name: 'skeptic' }).click()
+    await expect(page).toHaveURL(/\/reviews\/6$/u)
+    await expect(page.getByTestId('draft-siblings').getByRole('link', { name: 'canopy' })).toBeVisible()
 })
 
 test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {
