@@ -4,7 +4,8 @@
 matter of its row and its planner's persona, then its file as it stands now. These are what a copy of `plans/` alone
 would lose: whether the plan was approved, by whom, and as which hash, and in whose voice it was written. The file's
 name says which plan it is and where it stands, so a listing reads without opening one: its run, its status in capitals
-so it stands out, then its title as a slug (`name`), as `412-APPROVED-export-reports-as-csv.md`.
+so it stands out, then its title as a slug (`name`), as `412-APPROVED-export-reports-as-csv.md`; a plan that gives
+itself no title takes its ticket's in the journal.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
 and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
@@ -82,7 +83,7 @@ _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
-_FORMAT = 6
+_FORMAT = 7
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
 # The most characters of a title an index shows.
@@ -166,6 +167,7 @@ def export(
     prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
     planners = _personas(conn)
     planned = {row.ticket_key for _, row in rows}
+    ticket_titles = db.ticket_titles(conn, planned)
     last_messages: dict[str, int] = (
         {k: m for k, m in _last_messages(conn).items() if k in planned} if conversations else {}
     )
@@ -198,6 +200,7 @@ def export(
                             seen,
                             tally,
                             persona=planners.get(row.run_id),
+                            ticket_title=ticket_titles.get(key),
                             prompt=prompt,
                             settled_before=settled_before,
                         ),
@@ -241,12 +244,18 @@ def export(
     )
 
 
-def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str:
+def name(
+    kind: Kind,
+    row: records.Plan | records.FeedbackPlan,
+    text: str,
+    *,
+    ticket_title: str | None = None,
+) -> str:
     """A plan's file name in an export: its run, its status in capitals, `feedback` for a feedback plan, and a slug.
 
-    The title is the plan's first `# ` heading, less the `Plan: KEY` the planner opens it with. A plan is model text
-    (TRUST_MODEL T1), so its slug holds only lowercase letters, digits, and single hyphens, and is cut short; a plan
-    with no title past that prefix has none in its name.
+    The title is the plan's own (`_title`), or `ticket_title`, the ticket's in the journal, when it has none. Either is
+    model text (TRUST_MODEL T1), so its slug holds only lowercase letters, digits, and single hyphens, and is cut short;
+    a plan with no title of either has none in its name.
 
     Returns:
         The name, as `412-APPROVED-export-reports-as-csv.md`.
@@ -254,7 +263,7 @@ def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str
     parts = [str(row.run_id), row.status.value.upper()]
     if kind == "feedback plan":
         parts.append("feedback")
-    slug = _slug(_title(text, row.ticket_key))
+    slug = _slug(_title(text, row.ticket_key, ticket_title))
     if slug:
         parts.append(slug)
     return "-".join(parts) + ".md"
@@ -447,13 +456,14 @@ def _export_plan(
     tally: _Tally,
     *,
     persona: str | None,
+    ticket_title: str | None,
     prompt: _Prompt | None,
     settled_before: int,
 ) -> _Listed:
     """Export one plan into its ticket's directory, unless it is there as it stands, and remove its earlier names.
 
-    `persona` is its planner's, for its front matter. With `prompt`, its run's prompt goes beside it too, unless that is
-    there as it stands.
+    `persona` is its planner's, for its front matter, and `ticket_title` its ticket's, for its name when it has no title
+    of its own. With `prompt`, its run's prompt goes beside it too, unless that is there as it stands.
 
     Returns:
         The plan as its ticket's index lists it: under the name it is exported as, or for a plan not exported, the
@@ -477,6 +487,7 @@ def _export_plan(
             kind,
             row,
             persona=persona,
+            ticket_title=ticket_title,
             source=source_stat,
             exported_name=names[0],
             exported=exported,
@@ -489,8 +500,8 @@ def _export_plan(
         # A reading without text always says why; "unreadable" only satisfies the type.
         tally.skipped.append(Skipped(kind, dirs.key, row.run_id, reading.problem or "unreadable"))
         return _Listed(kind, row, names[0] if len(names) == 1 else None, seen.title(plan), stale=True)
-    title = _title(reading.text, row.ticket_key)
-    exported_name = name(kind, row, reading.text)
+    title = _title(reading.text, row.ticket_key, ticket_title)
+    exported_name = name(kind, row, reading.text, ticket_title=ticket_title)
     data = document(kind, row, reading.text, persona=persona)
     # Only a name listed as it is: a filesystem that ignores case would find the plan under an earlier name that
     # differs in case alone, and the name would never change to the new one.
@@ -510,6 +521,7 @@ def _export_plan(
             kind,
             row,
             persona=persona,
+            ticket_title=ticket_title,
             source=source_stat,
             exported_name=exported_name,
             exported=held,
@@ -829,16 +841,35 @@ def _earlier_prompt_name(run_id: int) -> str:
     return f"{run_id}-prompt.md"
 
 
-def _title(text: str, key: str) -> str:
-    """The plan's title: its first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
+def _title(text: str, key: str, ticket_title: str | None = None) -> str:
+    """The plan's own title (`_own_title`), or `ticket_title`, the ticket's in the journal, on one line.
+
+    Returns:
+        The title, or "" when neither the plan nor `ticket_title` has one.
+    """
+    return _own_title(text, key) or " ".join((ticket_title or "").split())
+
+
+def _own_title(text: str, key: str) -> str:
+    """The plan's first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
+
+    A heading of the key alone takes its title from the first line of text below it, unless that is a heading: a
+    planner can read the outline's "then the ticket's title" as the line after.
 
     Returns:
         The title, or "" when the plan has no such heading or nothing past its prefix.
     """
-    heading = next((line[2:] for line in text.splitlines() if line.startswith("# ")), "")
-    title = _HEADING_PREFIX.sub("", heading.strip().rstrip("#").strip(), count=1)
+    lines = text.splitlines()
+    at = next((i for i, line in enumerate(lines) if line.startswith("# ")), None)
+    if at is None:
+        return ""
+    title = _HEADING_PREFIX.sub("", lines[at][2:].strip().rstrip("#").strip(), count=1)
     # The key alone, never the start of a longer one: `PROJ-1` stays in `PROJ-12`.
-    return re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+    rest = re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+    if rest == title or any(c.isalnum() for c in rest):
+        return rest
+    below = next((line.strip() for line in lines[at + 1 :] if line.strip()), "")
+    return "" if below.startswith("#") else below
 
 
 def _slug(title: str) -> str:
@@ -906,6 +937,7 @@ class _Seen:
         row: records.Plan | records.FeedbackPlan,
         *,
         persona: str | None,
+        ticket_title: str | None,
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result | None,
@@ -923,7 +955,17 @@ class _Seen:
             kept is not None
             and source is not None
             and exported is not None
-            and (kept == _fingerprint(kind, row, source, exported_name, exported, persona=persona, prompt=prompt))
+            and kept
+            == _fingerprint(
+                kind,
+                row,
+                source,
+                exported_name,
+                exported,
+                persona=persona,
+                ticket_title=ticket_title,
+                prompt=prompt,
+            )
         )
 
     def record(
@@ -933,6 +975,7 @@ class _Seen:
         row: records.Plan | records.FeedbackPlan,
         *,
         persona: str | None,
+        ticket_title: str | None,
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result,
@@ -949,7 +992,16 @@ class _Seen:
         if source is not None and all(
             max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in stats if s is not None
         ):
-            fingerprint = _fingerprint(kind, row, source, exported_name, exported, persona=persona, prompt=prompt)
+            fingerprint = _fingerprint(
+                kind,
+                row,
+                source,
+                exported_name,
+                exported,
+                persona=persona,
+                ticket_title=ticket_title,
+                prompt=prompt,
+            )
             self.changed |= self.fingerprints.get(plan) != fingerprint or self.titles.get(plan) != title
             self.fingerprints[plan] = fingerprint
             self.titles[plan] = title
@@ -1053,9 +1105,12 @@ def _fingerprint(
     exported: os.stat_result,
     *,
     persona: str | None,
+    ticket_title: str | None,
     prompt: _PromptStats | None,
 ) -> str:
-    """A plan's row and persona, the stat of its file, the name and stat of its export, and its prompt's, as a digest.
+    """A plan's row, persona, ticket title, file's stat, export's name and stat, and its prompt's, as a digest.
+
+    The ticket's title is in it for a plan named for that title, so a ticket retitled moves the plan to its new name.
 
     Returns:
         The digest, hex.
@@ -1063,7 +1118,7 @@ def _fingerprint(
     stats = [_identity(s) for s in (source, exported)]
     prompt_stats = None if prompt is None else [None if s is None else _identity(s) for s in prompt]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
-    digested = (_FORMAT, kind, row, persona, exported_name, stats, prompt_stats)
+    digested = (_FORMAT, kind, row, persona, ticket_title, exported_name, stats, prompt_stats)
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
