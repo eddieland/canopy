@@ -324,12 +324,14 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
 
 
 def _replied(ticket: records.Ticket) -> sql.Select:
-    # When the operator last wrote on the ticket since its last forget: one row, None when they have not.
+    # When the operator last wrote on the ticket since its last forget, but for a verb's instruction, such as a feedback
+    # plan's approval, which answers no question and asks for no change: one row, None when they have not.
     return (
         sql.select("max(at)")
         .from_("messages")
         .where("subject_kind = ? AND subject_id = ?", conversation.TICKET, ticket.key)
         .where("source = 'operator' AND id > ?", ticket.forgotten_message_id or 0)
+        .where("coalesce(submission, '') NOT GLOB ?", f"{conversation.INSTRUCTION}*")
     )
 
 

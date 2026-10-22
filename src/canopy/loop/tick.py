@@ -220,7 +220,7 @@ def _render(
         private=private,
         operator=operator,
         planned=planned,
-        feedback_planned=_feedback_plans(ctx, tickets),
+        feedback_planned=_feedback_plans(ctx, tickets, now),
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
@@ -260,8 +260,15 @@ def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.P
     return found
 
 
-def _feedback_plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, feedback_plans.FeedbackPlanState]:
-    """Return each ticket's feedback plan for the state block, by key: only the tickets feedback plans touch (§32)."""
+def _feedback_plans(
+    ctx: Context,
+    tickets: Iterable[records.Ticket],
+    now: datetime,
+) -> dict[str, feedback_plans.FeedbackPlanState]:
+    """Return each ticket's feedback plan for the state block, by key: only the tickets feedback plans touch (§32).
+
+    After the tick's connectors read, so whether a waiting plan is stale is as of what they observed.
+    """
     done = policy.feedback_plan_attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
     units = db.all_units(ctx.conn)
@@ -270,7 +277,7 @@ def _feedback_plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str
         repos = [str(u.repo) for u in units.get(t.key, [])]
         attempts = {r: done.get(policy.unit(t.key, r), 0) for r in repos}
         limits = {r: policy.feedback_plan_limit(ctx.config, granted.get(policy.unit(t.key, r), {})) for r in repos}
-        section = feedback_plans.state_section(ctx.conn, ctx.config, t, attempts=attempts, limits=limits)
+        section = feedback_plans.state_section(ctx.conn, ctx.config, t, attempts=attempts, limits=limits, now=now)
         if section is not None:
             found[t.key] = section
     return found
@@ -343,6 +350,8 @@ def _steps(
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)
+    # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
+    feedback_plans.note_moves(ctx.conn, ctx.config)
     _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
