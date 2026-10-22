@@ -101,6 +101,6 @@ Rejected, either way: a probe program that fingerprints the world, a second read
 
 - Whether a `tracker` source is required (§35, Open). Recommended: required, as §35 recommends, and settled before
   this is built, since an overseer with no MCP can do nothing with a ticket no source observes.
-- Whether `runtime.allow_bash`, the overseer's alone, which lets it run commands the operator names, such as a
-  tracker's CLI while its MCP server is down, goes with the MCP servers. Recommended: it goes, the key with it, since
-  an overseer that calls no tracker or VCS tool has nothing left to run.
+- Whether `runtime.allow_bash`'s overseer entry, which lets it run commands the operator names, such as a
+  tracker's CLI while its MCP server is down, goes with the MCP servers. Recommended: it goes, that entry with it, since
+  an overseer that calls no tracker or VCS tool has nothing left to run; the workers' entries stay.

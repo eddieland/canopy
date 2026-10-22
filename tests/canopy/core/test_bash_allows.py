@@ -20,6 +20,23 @@ def test_the_overseer_takes_the_operators_allows_in_order(canopy_env: CanopyEnv)
     assert bash_allows.by_agent(cfg.runtime.allow_bash) == {agents.OVERSEER: tuple(JIRA)}
 
 
+def test_each_worker_takes_the_operators_allows(canopy_env: CanopyEnv) -> None:
+    cfg = _load(canopy_env, {"worker": ["jira issue view *"], "worker-private": JIRA})
+    assert bash_allows.by_agent(cfg.runtime.allow_bash) == {
+        agents.WORKER: ("jira issue view *",),
+        agents.PRIVATE_WORKER: tuple(JIRA),
+    }
+
+
+@pytest.mark.parametrize("role", ["worker", "worker-private"])
+def test_a_workers_allow_is_held_to_the_overseers_checks(canopy_env: CanopyEnv, role: str) -> None:
+    # A worker's shell runs all but what it denies; git, gh, sudo, and the loop's own tools stay denied whatever it is
+    # allowed.
+    for pattern, refused in [("gh issue comment *", "gh"), ("sudo *", "sudo"), ("canopy *", "canopy")]:
+        with pytest.raises(config.ConfigError, match=rf"allows '{refused}'"):
+            _load(canopy_env, {role: [pattern]})
+
+
 def test_none_by_default_and_an_empty_list_allows_nothing(canopy_env: CanopyEnv) -> None:
     assert config.load(canopy_env.root, canopy_env.user_file).runtime.allow_bash == {}
     assert bash_allows.by_agent(_load(canopy_env, {"overseer": []}).runtime.allow_bash) == {}
@@ -127,8 +144,7 @@ def test_a_command_that_would_undo_the_trust_model_is_refused(pattern: str, why:
 
 
 @pytest.mark.parametrize("role", sorted(bash_allows.REFUSED_ROLES))
-def test_no_agent_but_the_overseer_takes_an_allow(canopy_env: CanopyEnv, role: str) -> None:
-    # A worker's shell already runs what its rules do not deny, so an allow could only undo a deny; the rest have none.
+def test_no_agent_without_a_shell_takes_an_allow(canopy_env: CanopyEnv, role: str) -> None:
     with pytest.raises(config.ConfigError, match=rf"'{role}' takes no bash allows: "):
         _load(canopy_env, {role: ["jira issue list *"]})
 

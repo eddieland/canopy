@@ -168,10 +168,11 @@ Agent definitions ship in `agents/`:
   Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and loses every decision not yet
   recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and branches, and of issues only when
   they are the tickets.
-- `canopy-worker`: edit and bash within the worktree. MCP: the tracker (comments, labels, follow-ups), GitHub (open and
-  update a PR, read reviews and checks, and its issue tools only when they are the tickets); merge, review submission,
-  closing, transition, delete, fork, API file and branch writes, and other agents or workflow runs denied by name
-  (D084).
+- `canopy-worker`: edit and bash within the worktree; `runtime.allow_bash` names commands that beat its bash denies,
+  rendered last, with the overseer's checks, and the private worker's the same. MCP: the tracker (comments, labels,
+  follow-ups), GitHub (open and update a PR, read reviews and checks, and its issue tools only when they are the
+  tickets); merge, review submission, closing, transition, delete, fork, API file and branch writes, and other agents
+  or workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; MCP read tools only (§21): of the tracker's server, its read tools
   by name, and of GitHub, issue reads only when they are the tickets.
 - `canopy-chore`: no edits or subagents, and no shell but its own history; MCP write tools denied by name, and of the
