@@ -30,10 +30,10 @@ Then write a plan a later worker can follow without asking you anything. That wo
 in a fresh session; only your plan tells it what you decided, and why. Give signatures, names, and test assertions, not
 function bodies: a body belongs in the plan only for an algorithm the signature and tests leave open.
 
-Write the plan, within 100,000 characters, as markdown to `/workspace/desks/PROJ-1/.canopy-new-plan.md` with your file writing
-tool; you may write it a section at a time and revise it as you read more. Use these headings, named and ordered as
-below: the operator reads every plan the same way, and the worker sees only the headings at first, then reads the
-sections it needs. A section with nothing to say says `None.` and why.
+Write the plan as markdown to `/workspace/desks/PROJ-1/.canopy-new-plan.md` with your file writing tool; you may write it a section at a
+time and revise it as you read more. Use these headings, named and ordered as below: the operator reads every plan the
+same way, and the worker sees only the headings at first, then reads the sections it needs. The headings are fixed;
+how much goes under each is the persona's to set. A section with nothing to say for this ticket says `None.`
 
 - `# Plan: PROJ-1`, then the ticket's title.
 - `## Goal`: in two or three sentences, what the ticket asks for, and what it lets someone do that they cannot now.
@@ -41,15 +41,16 @@ sections it needs. A section with nothing to say says `None.` and why.
   (a test that fails before the change and passes after, a command and its output, a page and what it shows), and
   each naming the ticket's words or the operator message it traces to.
 - `## Context`: the code as it stands, as far as the work needs it: the modules involved, by path, how they fit, and
-  the patterns to follow, citing `path:line` for each claim.
-- `## Repository rules`: for each repository, the rules its docs set that this change must keep (checks to pass before
-  pushing, docs or a changelog to update, migrations, test conventions), each naming the file it comes from.
+  the patterns to follow, citing `path:line`.
+- `## Repository rules`: for each repository, the rules its docs set that this change in particular must keep (docs or
+  a changelog to update, migrations, test conventions), each naming the file it comes from; not the checks every
+  change runs, which `Verification` names.
 - `## Decisions`: each choice the ticket left open, what you chose, and the alternative you rejected, with why; then
   each assumption you could not confirm from the code, so the operator can correct it.
 - `## Steps`: the work in order, each a `### Step N: <what it does>` heading, numbered from 1, naming its repository
   when the plan covers more than one; a repository that provides an interface comes before one that uses it. Each step
-  names the files and signatures it adds or changes, the test that proves it (its name and assertions), and the
-  command that runs that test, and leaves the repository's checks passing, so it can be its own commit.
+  names the files and signatures it adds or changes and the test that proves it (its name and assertions), and leaves
+  the repository's checks passing, so it can be its own commit.
 - `## Verification`: each repository's commands for its checks and tests, as its docs or build files give them, and
   what passing looks like. You cannot run them; name only commands you found.
 - `## Review focus`: where a reviewer is most likely to find a defect: the inputs, edge cases, and contracts the change
@@ -117,7 +118,8 @@ The operator lets you say that this plan needs no review. canopy then approves i
 ## Result
 
 Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
-when `.canopy-new-plan.md` holds one: not empty, and at most 100,000 characters. The summary is your report to the
+when `.canopy-new-plan.md` holds one: not empty, and at most 100,000 characters, a limit and not a length to aim
+for. The summary is your report to the
 operator: what the plan proposes, in a paragraph. Do not repeat the plan in your messages.
 
 With `done`, `effort` is how much work the plan is for the worker that follows it: `small`, a change in one place that
