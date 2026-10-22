@@ -190,15 +190,14 @@ overseer's judgment, checked again by the worker; the harness cannot see who wro
 
 ### R14. Flaky CI is rerun, not fixed
 
-Deferred (M25, 2026-10-15). Written down 2026-10-09. When a PR's check fails for a reason the change did not cause (a
-flaky test, a lost runner, a registry outage), canopy should rerun it instead of sending a worker to "fix" code that is
-not broken. Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the
-repository provides, and a CI that is not GitHub Actions is reached through its own MCP server.
+Built in M25, live acceptance pending (SCENARIOS S63). Written down 2026-10-09. When a PR's check fails for a reason
+the change did not cause (a flaky test, a lost runner, a registry outage), canopy should get it rerun instead of sending
+a worker to "fix" code that is not broken, again and again.
 
-Shape (§23): a `triage-ci` run comes before a `resume` for `ci` on a new failure. It reads the failure, follows the
-named skill, and either reruns the failed jobs or reports the failure real, which sends the `resume` as today. It never
-edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
-the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
+Shape (§23), reshaped by the operator 2026-10-22: the `resume` worker sent for the failure judges it, with evidence,
+and reports it `flaky` rather than changing anything; the overseer then asks the operator to rerun the check
+(`flaky_rerun`) instead of waiting for a newer run. No agent reruns CI. Rejected: a `triage-ci` run before each `resume`
+that reran what it judged flaky, the first design, deferred 2026-10-15.
 
 ### R15. Tell every run that builds or reads CI about a passing condition, for as long as it lasts
 
