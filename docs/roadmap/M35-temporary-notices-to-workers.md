@@ -11,5 +11,3 @@ Learned: closed on the operator's request with the tests with the fakes passing,
 outage, which is SCENARIOS S37. The open questions settled small: 1 KiB, four hours by default and seven days at most,
 and no repository scoping until real use asks for it (DESIGN §8, Open). A lapse commits nothing, so the web UI's
 stream, which reads again only on a commit, watches the lapse of the notice it sent.
-Next: once M25 is built, `triage-ci` reruns a held check where triage is on, in place of `notice_rerun`, and §23 says
-so.

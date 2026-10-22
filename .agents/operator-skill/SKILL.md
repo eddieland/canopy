@@ -178,6 +178,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit: `canopy review show`; at the limit, `canopy grant URL review`. |
 | `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
+| `flaky_rerun` | A worker judged a failed check flaky and changed nothing for it: rerun the check, or `canopy reply` that it is real. |
 | `repo_missing` | A repository in the workspace map has no clone: `canopy workspace sync`. |
 | `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |

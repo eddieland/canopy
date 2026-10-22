@@ -87,6 +87,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 - **S43. A red check and a review comment, one run** (M56). On one of the loop's PRs with a red check and a new review
   comment from a trusted reviewer, expect the next tick to send one `resume` with reasons `ci` and `review`, shown as
   `resume (ci, review)` in `canopy status`, which fixes the check and addresses the comment in one push.
+- **S63. A flaky check, left for a rerun** (M25). On one of the loop's PRs, make a check fail for a reason the change
+  did not cause (a job that sleeps past its timeout on one run only, say). Expect the `resume` for `ci` to push nothing
+  for it and end `done` with `flaky`, and the next tick to record `flaky_rerun` naming the check, not another `resume`.
+  Rerun the check: green clears the item. On a PR whose failure is the change's, expect a fix and no `flaky`.
 - **S10. A conflicted PR** (M3). Make a PR conflict with its base. Expect `conflicted`, then a worker that merges the
   base to a clean PR.
 - **S11. A blocked question** (M3, M22). Write a ticket that tells the worker to ask first. Expect one concrete question
