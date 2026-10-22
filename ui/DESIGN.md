@@ -265,8 +265,11 @@ Rules:
   screen reader, and `Show memory` opens the rows; it reads `none, recording only` for a run that read nothing because
   its tier was recording. The memory page leads with what waits on the operator: a Proposals panel, counted in
   `status-blocked` while one waits as the nav counts them, and saying that none reaches a run until promoted;
-  then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
-  notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. From 120rem,
+  then Lessons under the tier's band, the pinned ones first as runs are served them, under a `Pinned` heading with a
+  filled pin in `foreground` and their count, then the rest under `Up for review` (headings only while one is pinned),
+  and a pinned row's line of where it came from leads with the same pin and `pinned`, the digest folded at its foot
+  (`Show what every run is served`); then Ticket notes, a row a ticket opening to its notes, which it reads only then,
+  counted `2 tickets · 3 notes`. From 120rem,
   the tickets sit beside the queue in 34rem, where their opened notes' columns fit and the queue still keeps a
   proposal's verbs on one line; narrower, they stack under it. Under every panel, and under the panel saying memory
   is off, a muted `xs` line says purge deletes many memories' text from the shell alone, then `canopy memory purge` in
