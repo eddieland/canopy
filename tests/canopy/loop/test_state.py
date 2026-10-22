@@ -18,7 +18,7 @@ from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
-from canopy.loop import duties, tick
+from canopy.loop import duties, harness, tick
 from canopy.runs import policy, reconcile
 from tests.canopy.helpers import chore_toml
 
@@ -178,7 +178,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             runs_dir=runs_dir,
         )
     with clock("10:00"):
-        tick_id = db.start_tick(conn, dry_run=True)
+        # The harness decided PROJ-2 before the overseer: the block names it, and lists it no more (DESIGN §37).
+        tick_id = tick_deciding(conn, root, "PROJ-2")
 
     leased = [
         pools.Slot(
@@ -212,13 +213,31 @@ def clock(hhmm: str) -> Iterator[None]:
         yield
 
 
+def tick_deciding(conn: sqlite3.Connection, root: str, key: str) -> int:
+    """Start a dry-run tick in which the harness decided `key`, a worker of which is running, and return its id."""
+    tick_id = db.start_tick(conn, dry_run=True)
+    why = f"{Phase.RUNNING}: {harness.ROWS[Phase.RUNNING].why}"
+    harness.record(conn, tick_id, root, [harness.Decision(key, Phase.RUNNING, "wait", why)])
+    return tick_id
+
+
 def stamp(hhmm: str) -> str:
     return f"{DAY}T{hhmm}:00.000Z"
 
 
-def decide(conn: sqlite3.Connection, tick_id: int, key: str, action: str, rationale: str, **about: str) -> None:
+def decide(
+    conn: sqlite3.Connection,
+    tick_id: int,
+    key: str,
+    action: str,
+    rationale: str,
+    *,
+    repo: str | None = None,
+    chore: str | None = None,
+    pr: str | None = None,
+) -> None:
     """Record a decision at the clock's time: the schema's default is the real one."""
-    decision = db.record_decision(conn, tick_id, key, action, rationale, **about)
+    decision = db.record_decision(conn, tick_id, key, action, rationale, repo=repo, chore=chore, pr=pr)
     conn.execute("UPDATE decisions SET created_at = ? WHERE id = ?", (db.now(), decision))
 
 

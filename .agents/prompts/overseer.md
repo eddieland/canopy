@@ -174,6 +174,7 @@ removed. Read each ticket, from its fresh observation or else live, and take the
 
 | Ticket | What you record |
 |---|---|
+| in `harness` | nothing; the harness decided it this tick, in code: do not read or mirror it. A decision, dispatch, attention item, or `ticket set` about it is refused `decided` |
 | in `stopped` | nothing; do not read it (see "Private tickets") |
 | in `recently_done` | nothing; do not read it, mirror it, or look for its PRs |
 | closed, with a running worker | `wait`; a tick after its run ends marks it done |
@@ -196,8 +197,8 @@ you left out comes back next tick, so leaving one out saves nothing.
 
 1. When `query_due` is true and `observations.query` is not `fresh`: the query ran, and `canopy queried` recorded
    what it returned.
-2. Every ticket in `tickets`, and every one the query returned, except those in `stopped` or `recently_done`, has a
-   decision of its own this tick (step 5).
+2. Every ticket in `tickets`, and every one the query returned, except those in `harness`, `stopped`, or
+   `recently_done`, has a decision of its own this tick (step 5).
 3. Every chore whose `due` is true and that is not `running` has a `canopy chore run` or `canopy chore wait`.
 4. Your final message has the `CANOPY_TICK_DONE` line.
 
