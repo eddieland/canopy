@@ -200,7 +200,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
     # The reviewer's own directory is canopy's, but the runtime may read config above it, as in a workspace's checkout.
-    refused = project_config.refusal((cwd, ctx.workspace.root))
+    refused = project_config.refusal((cwd, ctx.workspace.root), servers=(git_tools.SERVER,))
     if refused is not None:
         raise _SetupError(refused)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")

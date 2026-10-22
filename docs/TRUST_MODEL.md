@@ -668,6 +668,11 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 - The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
   agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
+- It refuses to start a review, a plan, or a chore where that config names the MCP server canopy gives the run,
+  `canopy_git` or `canopy_chore`, or one of its tools, by name anywhere in the text of those files or an agent file
+  under `.opencode/`: an entry there merges into canopy's inline config and could change the server's command or
+  environment, and a rule after canopy's, which of its tools the agent may call (DESIGN §27). `canopy init` warns of
+  such config in the workspace and its clones.
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
@@ -690,7 +695,9 @@ also add skills (prompt text, like the repository's other docs), MCP servers, pl
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
 agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
-agents. A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
+agents. The check of canopy's own servers is a text match too, and JSON escapes get past it the same way; so does a
+server under another name whose tools the runtime names the same, such as one named `canopy` with a tool `git_diff`.
+A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
 agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
 the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
 rules are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can

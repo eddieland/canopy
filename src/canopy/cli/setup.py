@@ -14,9 +14,10 @@ from pathlib import Path
 import click
 from click.shell_completion import BashComplete, FishComplete, ShellComplete, ZshComplete
 
+from canopy.chores import history
 from canopy.cli import workspace as cli_workspace
 from canopy.cli.common import CliError, runner_of
-from canopy.core import config, conversation, hostgit, workspace
+from canopy.core import config, conversation, git_tools, hostgit, workspace
 from canopy.infra import procs, resources
 from canopy.runtime import project_config
 from canopy.serve import secret
@@ -32,6 +33,8 @@ COMPLETE_VAR = "_CANOPY_COMPLETE"
 # Where `canopy skill --install` saves the skill when given no directory: the home skills directory shared by agent
 # runtimes (DESIGN §13).
 SKILLS_DIR = "~/.agents/skills"
+#: canopy's own MCP servers, which a review, a plan, or a chore is given (DESIGN §27): init warns of config naming one.
+OWN_SERVERS = (git_tools.SERVER, history.SERVER)
 
 
 @click.command("init")
@@ -153,6 +156,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
     # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
     report.shadowing += [path for repo in ws.repos if repo.cloned for path in project_config.shadowing(repo.path)]
     _print_shadowing(report)
+    _print_own_servers(ws)
     cli_workspace.check_synced(synced)
     return 0
 
@@ -173,6 +177,15 @@ def _print_shadowing(report: init.Report) -> None:
         click.echo(
             "  Earlier versions of `canopy init` put them there. Agent runs refuse to start until they are gone.",
         )
+
+
+def _print_own_servers(ws: workspace.Workspace) -> None:
+    places = [ws.root, *(repo.path for repo in ws.repos if repo.cloned)]
+    named = project_config.naming_servers(places, OWN_SERVERS)
+    if named is not None:
+        click.echo()
+        click.echo(f"Warning: {named}")
+        click.echo("  A review, a plan, or a chore refuses to start where the runtime reads it.")
 
 
 @click.group("sandbox")

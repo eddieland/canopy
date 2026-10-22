@@ -410,7 +410,8 @@ def _run_agent(
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
     `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12), for the worker's timeout.
-    A private run's places and a plan's must also name none of the tracker server's tools (DESIGN §22, §25).
+    A private run's places and a plan's must also name none of the tracker server's tools (DESIGN §22, §25), and a
+    plan's none of canopy's git server or its tools (§27).
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
@@ -421,7 +422,7 @@ def _run_agent(
 
     Raises:
         SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run or a
-            plan, names one of the tracker server's tools.
+            plan, names one of the tracker server's tools, or, for a plan, canopy's git server.
     """
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     desked = dispatch.in_desk(str(run["kind"]), slots)
@@ -431,8 +432,13 @@ def _run_agent(
     desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if desked else []
     places = [path for _, path in trees] + desk_parents
     tools = ctx.config.tracker.tools()
-    read_only = run["private"] or run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
-    refused = project_config.refusal(places, tracker_server=tools.server if read_only and tools is not None else None)
+    plans = run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
+    read_only = run["private"] or plans
+    refused = project_config.refusal(
+        places,
+        servers=(git_tools.SERVER,) if plans else (),
+        tracker_server=tools.server if read_only and tools is not None else None,
+    )
     if refused is not None:
         raise SetupError(refused)
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
@@ -460,7 +466,7 @@ def _run_agent(
     # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
-    if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
+    if plans:
         env |= git_tools.run_env({s.repo: s.path for s in slots}, cwd=ctx.workspace.root.absolute())
     with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         result = ctx.runner.run(

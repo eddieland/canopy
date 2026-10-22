@@ -178,6 +178,23 @@ def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
     assert f"Warning: OpenCode config here defines one of canopy's agents ({old})" in capsys.readouterr().out
 
 
+def test_init_warns_about_config_that_names_canopys_own_servers(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """#1218: a review, a plan, or a chore would refuse to start where the runtime reads it."""
+    in_root = canopy_env.root / "opencode.json"
+    in_root.write_text('{"mcp": {"canopy_chore": {}}}')
+    in_repo = canopy_env.repo / ".opencode" / "opencode.json"
+    in_repo.parent.mkdir(parents=True)
+    in_repo.write_text('{"permission": {"canopy_git_*": "allow"}}')
+    assert main(["init"]) == 0
+    out = capsys.readouterr().out
+    named = f"servers 'canopy_git' and 'canopy_chore', or their tools ({in_repo}, {in_root})"
+    assert f"Warning: OpenCode config here names canopy's own MCP {named}" in out
+    assert "A review, a plan, or a chore refuses to start" in out
+
+
 def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace("env OPENCODE_CONFIG_DIR={definitions_dir} ", ""))
     assert main(["init"]) == 0

@@ -223,7 +223,9 @@ Nothing is installed into repositories. OpenCode merges canopy's definitions aft
 repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where
 the config in its start directory defines one of canopy's agents: the overseer's refusal fails the tick, and a
 worker's is a `crashed` run whose slot is returned. A private run (§22) is also refused where that config names any
-tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
+tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool. A review, a plan, and a
+chore are refused where it names the MCP server canopy gives them (§27), or its tools: an entry there merges into
+canopy's.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
 turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A

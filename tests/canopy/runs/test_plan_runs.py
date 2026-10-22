@@ -114,6 +114,32 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     assert "Your git tools, `canopy_git_log`" in run.prompt
 
 
+def test_a_plan_refuses_a_worktree_config_that_names_canopys_git_server(
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
+) -> None:
+    """#1218: an entry for `canopy_git` there would merge into the server canopy gives the planner."""
+    for slot in git_pool.slots:
+        (slot / "opencode.json").write_text('{"mcp": {"canopy_git": {"environment": {"GIT_DIR": "/elsewhere"}}}}')
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    assert run.status == RunStatus.CRASHED
+    assert "names canopy's own MCP server 'canopy_git'" in run.row["result_json"]
+    assert not scenario.agent_log.exists()
+    assert [s["status"] for s in pool(treehouse_state)] == ["available", "available"]
+
+
+def test_an_implement_is_not_refused_where_its_worktree_config_names_canopys_git_server(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Only a plan is given the server; a worker's own definition denies its tools whatever the repository says."""
+    for slot in git_pool.slots:
+        (slot / "opencode.json").write_text('{"mcp": {"canopy_git": {}}}')
+    run = scenario.run(worker=pushes())
+    assert run.status == RunStatus.DONE, run.printed.out
+
+
 def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(
     scenario: Scenario,
     git_pool: GitPool,

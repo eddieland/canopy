@@ -3,9 +3,12 @@
 OpenCode merges a repository's definition of an agent into canopy's, and a repository that repeats one of canopy's
 permission patterns can put its own rules after it. So a run refuses to start in a directory whose OpenCode config
 defines one of canopy's agents: `shadowing` finds those files. A private run also refuses one whose config names the
-tracker server's tools (`naming_tools`): a rule merged after canopy's could reopen a write tool (DESIGN §22).
+tracker server's tools (`naming_tools`): a rule merged after canopy's could reopen a write tool (DESIGN §22). And a run
+canopy gives one of its own MCP servers refuses one whose config names that server or its tools (`naming_server`): an
+entry merged into canopy's inline config could change how the server starts, and a rule after canopy's, which of its
+tools the agent may call (DESIGN §27).
 
-Both match the files as text, not parsed: JSONC and substitutions are not read (a TRUST_MODEL T7 residual), and a
+Each matches the files as text, not parsed: JSONC and substitutions are not read (a TRUST_MODEL T7 residual), and a
 comment naming an agent is a false positive, which only asks the operator to reword it.
 """
 
@@ -64,9 +67,7 @@ def naming_tools(root: Path, server: str) -> list[Path]:
     OpenCode names a server's tools `<server>_<tool>`, and a `permission` or `tools` entry for one, merged after
     canopy's rules, could reopen a write tool a private worker is denied.
     """
-    needle = f"{server}_"
-    candidates = [*_agent_files(root / CONFIG_DIR), *_config_files(root)]
-    return [p for p in candidates if p.is_file() and needle in p.read_text(errors="replace")]
+    return _naming(root, f"{server}_")
 
 
 def naming_tools_message(server: str, found: Iterable[Path]) -> str:
@@ -81,6 +82,37 @@ def naming_tools_message(server: str, found: Iterable[Path]) -> str:
         "may call only the tracker's read tools, and a rule here could reopen a write tool (DESIGN §22). Remove it, or "
         "work this ticket publicly."
     )
+
+
+def naming_server(root: Path, server: str) -> list[Path]:
+    """Return the files in `root`'s OpenCode config that may name canopy's own MCP server `server`, or its tools.
+
+    A server entry of that name merges into the one canopy gives the run, and every tool of it is named
+    `<server>_<tool>`, so the server's name is matched alone.
+    """
+    return _naming(root, server)
+
+
+def naming_server_message(servers: Iterable[str], found: Iterable[Path]) -> str:
+    """Explain what `naming_server` found for `servers` and what to do about it.
+
+    Returns:
+        A message for the operator naming each of `servers` and every file in `found`.
+    """
+    names = [repr(s) for s in servers]
+    named = f"servers {' and '.join(names)}, or their tools" if len(names) > 1 else f"server {names[0]}, or its tools"
+    files = ", ".join(str(p) for p in found)
+    return (
+        f"OpenCode config here names canopy's own MCP {named} ({files}). canopy gives a run such a server in its "
+        "inline config, and an entry here merges into it, so it could change how the server starts or which of its "
+        "tools the agent may call (DESIGN §27, D044). Remove it, or rename the server."
+    )
+
+
+# The files in `root`'s OpenCode config, agent files and JSON config, whose text holds `needle`.
+def _naming(root: Path, needle: str) -> list[Path]:
+    candidates = [*_agent_files(root / CONFIG_DIR), *_config_files(root)]
+    return [p for p in candidates if p.is_file() and needle in p.read_text(errors="replace")]
 
 
 # The agent and mode files under a repository's `.opencode/`, in name order by pattern; none when it has none.
