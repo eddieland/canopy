@@ -1011,6 +1011,45 @@ def test_the_chore_is_sent_githubs_reads_whatever_the_tracker(canopy_env: Canopy
     assert sent >= GITHUB_ISSUE_READS
 
 
+#: GitHub's issue tools, which only the `tracker-github` skill names: its issue reads, and what filing or labelling an
+#: issue takes.
+GITHUB_ISSUE_TOOLS = GITHUB_ISSUE_READS | {
+    "github_issue_write",
+    "github_list_issue_types",
+    "github_list_issue_fields",
+    "github_get_label",
+}
+ISSUES_MARKER = "  # canopy: github issue tools\n"
+
+
+@pytest.mark.parametrize("provider", ["jira", "github"])
+@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER])
+def test_workers_and_the_planner_lose_githubs_issue_tools_off_a_github_tracker_and_nothing_else(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
+    # OpenCode sends no tool a rule denies whole (MEASUREMENTS 2026-10-21 F54): each run's request is smaller by their
+    # schemas. Compared with the same definition rendered without them, every other tool is sent or not as it was.
+    _set_provider(canopy_env, provider)
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    head, marker, tail = rendered.partition(ISSUES_MARKER)
+    denials, _, rest = tail.partition("  # ")
+    without = _opencode_ruleset(f"{head}{marker}  # {rest}")
+    ruleset = _opencode_ruleset(rendered)
+    jira = config.DEFAULT_TRACKER_TOOLS["jira"]
+    tools = (*GITHUB_TOOLS, *(f"{jira.server}_{tool}" for tool in (*jira.allowed, *JIRA_WRITES)), *GIT_TOOLS)
+    sent = {tool for tool in tools if not _opencode_disabled(ruleset, tool)}
+    before = {tool for tool in tools if not _opencode_disabled(without, tool)}
+    if provider == "github":
+        assert not denials
+        assert sent == before
+    else:
+        assert before & GITHUB_ISSUE_TOOLS
+        assert sent == before - GITHUB_ISSUE_TOOLS
+    assert "github_pull_request_read" in sent
+
+
 #: The tracker's tools each agent's prompt names, by provider: a run must be sent each.
 JIRA = config.DEFAULT_TRACKER_TOOLS["jira"]
 JIRA_READS = frozenset(f"{JIRA.server}_{read}" for read in JIRA.allowed)
