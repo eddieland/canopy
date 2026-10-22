@@ -48,7 +48,7 @@ dependencies = [
 [project.scripts]
 canopy = "canopy.cli.launcher:main"
 # Notification sinks canopy ships (DESIGN §20). They run as sink commands, never inside the harness.
-canopy-notify-desktop = "canopy.cli.desktop:main"
+canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
 # canopy's GitHub reader and poster, a workspace member too: commands, so the harness holds no token (DESIGN §29).

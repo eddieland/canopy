@@ -159,8 +159,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   share, such as reading an operator-only secret file, go in a common workspace member, never copied into each.
 - Modules are small and named for what they own, in the package for their layer (DESIGN §5): `core/db.py`,
   `infra/lock.py`, `runs/dispatch.py`, `loop/attention.py`, `cli/main.py`. Imports go down the layers, never between
-  features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
-  there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
+  features, and only `cli/` imports click, besides the two programs canopy ships in its own package, the desktop sink
+  and `python -m canopy.serve`; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer there and a
+  line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
 - Config is not downgrade-compatible. An unknown key stays an error, so an older release rejects a key a newer one
   added; that is expected, since a release already out cannot be fixed. A review finding about it needs no code.

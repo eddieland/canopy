@@ -18,10 +18,6 @@ from canopy.infra import procs, resources
 from tests.canopy.helpers import present
 from tests.conftest import CanopyEnv
 
-# The command lines of programs canopy ships beside `canopy`, here since only canopy.cli imports click: they are
-# commands of their own, never `canopy`'s.
-PROGRAMS = {("desktop", "command"), ("devserver", "command")}
-
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--version"]) == 0
@@ -109,7 +105,7 @@ def test_every_command_in_a_command_module_is_registered_under_its_own_name() ->
         )
     subcommands = {id(sub) for c in defined.values() if isinstance(c, click.Group) for sub in c.commands.values()}
     top_level = {where for where, c in defined.items() if id(c) not in subcommands}
-    assert set(cli_main.COMMANDS.values()) == top_level - PROGRAMS
+    assert set(cli_main.COMMANDS.values()) == top_level
     for name in cli_main.COMMANDS:
         command = present(cli_main.cli.get_command(click.Context(cli_main.cli), name))
         assert command.name == name

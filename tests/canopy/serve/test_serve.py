@@ -24,12 +24,12 @@ import uvicorn
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
-from canopy.cli.devserver import main
 from canopy.core import conversation, db, review_runs
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
 from canopy.serve import live, mock_reviews, secret, server, views
 from canopy.serve import mock as serve_mock
+from canopy.serve.__main__ import main
 from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions

@@ -6,7 +6,7 @@ and `osascript` on macOS, each given the title and body as separate arguments, n
 from the text. It exits 0 when the notification was shown, 1 when the tool failed, and 2 when there is no tool or no
 message.
 
-It runs as its own process, its command line in canopy.cli.desktop, configured like any other sink:
+It runs as its own process, configured like any other sink:
 
     [notify.sinks.desktop]
     cmd = "canopy-notify-desktop"
@@ -18,7 +18,12 @@ from __future__ import annotations
 import json
 import shutil
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
+
+import click
 
 from canopy.infra import procs
 
@@ -70,13 +75,54 @@ def command(title: str, body: str, platform: str) -> list[str] | None:
     return None
 
 
-def show(stdin: str, *, runner: procs.Runner, platform: str) -> int:
-    """Show `stdin`, a message in either format, as a desktop notification through `runner`, as on `platform`.
+def run(argv: Sequence[str], stdin: TextIO, *, runner: procs.Runner, platform: str) -> int:
+    """Show the message on `stdin` as a desktop notification.
 
     Returns:
-        The exit code: 0 once shown; 1 if the notifier could not run or failed; 2 for an empty message or no notifier
-        installed.
+        The exit code: 0 once shown; 1 if the notifier could not run or failed; 2 for a command line it cannot use, an
+        empty message, or no notifier installed.
     """
+    try:
+        found = cli.main(
+            args=list(argv),
+            prog_name="canopy-notify-desktop",
+            standalone_mode=False,
+            obj=_Io(stdin, runner, platform),
+        )
+    except click.ClickException as e:
+        e.show()
+        return e.exit_code
+    return found if isinstance(found, int) else 0
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    """Show the canopy message on stdin as a desktop notification: canopy's desktop sink (DESIGN §20)."""
+    io = ctx.find_object(_Io) or _Io(sys.stdin, procs.SubprocessRunner(), sys.platform)
+    ctx.exit(_show(io.stdin.read(), io.runner, io.platform))
+
+
+def main() -> int:
+    """The `canopy-notify-desktop` command.
+
+    Returns:
+        The process exit code, as `run` returns it.
+    """
+    return run(sys.argv[1:], sys.stdin, runner=procs.SubprocessRunner(), platform=sys.platform)
+
+
+@dataclass(frozen=True)
+class _Io:
+    """What the sink reads, and how it runs the notifier: the real ones, unless a test gives its own."""
+
+    stdin: TextIO
+    runner: procs.Runner
+    #: `sys.platform`'s value: `darwin` runs `osascript`, any other `notify-send`.
+    platform: str
+
+
+def _show(stdin: str, runner: procs.Runner, platform: str) -> int:
     title, body = message(stdin)
     if not body:
         print("canopy-notify-desktop: no message on stdin", file=sys.stderr)  # noqa: T201
