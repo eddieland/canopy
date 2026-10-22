@@ -56,8 +56,8 @@ since those are the ones you come back to debug. After that your `[retention]` r
 [Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **24 hours**, **7 days**, or **30
 days**. The line under the title is the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for
 what the page holds. The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent,
-then the workers, plans, chores, reviews, and dry runs. Beside them are the tickets the loop marked done in that window,
-and what each cost on average, the overseer and chores included.
+then the workers, plans, chores, reviews, your one-off tasks, and dry runs. Beside them are the tickets the loop marked
+done in that window, and what each cost on average, the overseer and chores included.
 
 Each split has one name everywhere on the page, in the totals, the chart's legend, and the table: **overseer** is all
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went

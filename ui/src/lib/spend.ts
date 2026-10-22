@@ -28,7 +28,7 @@ export const SPEND_WINDOWS: readonly SpendBreakdownRange[] = [{ hours: 24 }, DEF
 const CHARS_PER_TOKEN = 4
 
 /** A series of the by-day chart: a part of a day's spend no other series counts. */
-export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'plans' | 'chores' | 'reviews' | 'dry_run'
+export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'plans' | 'chores' | 'reviews' | 'tasks' | 'dry_run'
 
 /**
  * One series: what it counts, its name, what that name means on hover, and its fill, written out so Tailwind finds
@@ -48,7 +48,7 @@ export interface Series {
 /**
  * The series bottom up. Idle ticks first, on the baseline under the rest of the overseer's, a deeper shade of the same
  * hue, so the two read as one: together they are the overseer's bar, and idle ticks a part of it. Then the runs the
- * overseer started, the plans among them, then dry runs. Idle spend is a sliver beside a
+ * overseer started, the plans among them, then your tasks' runs, then dry runs. Idle spend is a sliver beside a
  * worker's, so its trend across days is read from the table, not the bars.
  */
 export const SERIES: readonly Series[] = [
@@ -78,6 +78,7 @@ export const SERIES: readonly Series[] = [
     },
     { key: 'chores', label: 'chores', hint: 'The chores canopy ran', fill: 'bg-spend-chores' },
     { key: 'reviews', label: 'reviews', hint: "canopy's reviews of PRs", fill: 'bg-spend-reviews' },
+    { key: 'tasks', label: 'tasks', hint: 'The runs of the one-off tasks you submitted', fill: 'bg-spend-tasks' },
     { key: 'dry_run', label: 'dry runs', hint: 'Dry-run ticks, apart from the live ones', fill: 'bg-spend-dry-run' },
 ]
 
