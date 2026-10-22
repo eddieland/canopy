@@ -57,8 +57,9 @@ source whole, the harness works out what a tick would now record and list, recor
 differs from the latest tick: a decision that tick did not record, or something it did not list to the overseer, a
 ticket, a row on one, an item past a cursor (§35), or a due chore. They are compared by what is decided and listed,
 never by wording, so a poll that only reads again what the latest tick saw wakes nothing, and a ticket the overseer
-waited on wakes nothing until something new is on it. A gate coming due, a run ending, and the operator's acts end the
-wait as today, and `loop.min_gap_minutes` holds every wake. The tick records the poll as what woke it (§11). An event
+waited on wakes nothing until something new is on it; an edit to an item already handled is not new, and the next
+run sees its text. A gate coming due, a run ending, and the operator's acts end the wait as today, and
+`loop.min_gap_minutes` holds every wake. The tick records the poll as what woke it (§11). An event
 in the world is then acted on within a poll, or the minimum gap after the latest tick if that is later, not up to
 `loop.idle_max_minutes` later: the trade §6 states is lifted.
 Rejected: a tick on every poll, which writes a tick's rows every few minutes to learn what one comparison answers.
