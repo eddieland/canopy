@@ -15,6 +15,12 @@ an agent's text mentions it: the name still opens the PR's page, and the icon ta
 column is only as wide as the longest name in the list, and in a narrow window the phase goes first, then the age, so
 the title keeps the room.
 
+On a PR the loop doesn't own, a chip after the verdict says where your own review of it stands: `draft` while it waits
+on you, `staged` once it's a pending review on GitHub for you to submit, `unconfirmed` while canopy doesn't know whether
+a publish posted, and `published` once it did ([Publishing your review](#publishing-your-review)). `staged` and
+`unconfirmed` are amber, since each waits on you or on GitHub; the rest stay grey. Scan the column for amber and you
+know which coworkers are still waiting on a review you think you sent.
+
 The field over the list keeps the PRs whose name, ticket, or title holds every word you type, in any case, so `web#88`
 or `debounce` finds the one you mean without scrolling. With PRs in more than one repository, a repository picker
 sits beside it: check one or several, type a few letters to find one in a long list, and **every repository** clears
@@ -27,6 +33,7 @@ read when canopy looks at the PR, not live: rename one on GitHub and canopy catc
 A PR's page opens with where the PR stands, in the line under its title: canopy's latest review and its verdict, such
 as `review:4 3 findings, 1 major` (or `not reviewed`), `at its review limit` once it is, and the run working it now.
 A PR canopy only reviews says so there too. Below that, it gathers what canopy knows of the PR: its ticket and branch,
+or, on a PR the loop doesn't own, **your review**, where your draft stands with a link to the review that holds it,
 what it has cost, its coworkers' review threads when canopy has read them (below), canopy's reviews of it, the runs
 that pushed to it, and the decisions that named it. A list with nothing in it shows its header and a `0`, and nothing
 else: an empty list doesn't need a paragraph. A PR with no ticket has no Runs at all, since runs belong to a ticket.
@@ -184,14 +191,16 @@ between you and your coworker.
 `normal impact`, `high impact`), the PR and commit, the persona it wrote in (`as skeptic`, where the list has room for
 it), and what it cost. A PR you had reviewed in several personas gets a row for each, and the persona is how you tell
 the skeptic from the minimalist. A verdict reads `clean`, or counts the findings with the worst among them, such as
-`3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. With no review yet, it points you to **Review a
+`3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. A review of a PR the loop doesn't own carries its
+draft's chip after the verdict, as the pull requests list does. With no review yet, it points you to **Review a
 PR** above the list, which works with the defaults, and to `review.agent_prs` and `review.query`, which have the loop
 review PRs on its own. Either way, `capacity.max_reviews` must be above 0.
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
-verdict, commit, or cost because nothing has read it yet. Once a tick starts its review, the review's own row takes its
-place. If that review fails, the request is still open, so the `requested` row comes back and the next tick tries
-again.
+verdict, commit, or cost because nothing has read it yet. Where a ticket would be, it names the PR's author once canopy
+has read the PR, which it does at the next tick; until then it says `none`. Once a tick starts its review, the review's
+own row takes its place. If that review fails, the request is still open, so the `requested` row comes back and the
+next tick tries again.
 
 The reviews list filters as the PRs do: a field for words in the PR, its ticket, or the commit (the first few characters
 of a sha will do), and the same repository picker. A `requested` row drops out once you pick a repository, because

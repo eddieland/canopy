@@ -34,6 +34,11 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('Bump the retry budget for flaky upstreams')
     // One the operator asked canopy to review is listed before its first review.
     await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
+    // Where the operator's review of each PR the loop does not own stands, after its verdict; the loop's own have none.
+    const state = (pr: string) => rows.filter({ hasText: pr }).getByTestId('pull-request-review')
+    await expect(state('acme/api#14')).toHaveText(/review:5.*draft$/u)
+    await expect(state('acme/api#12')).toHaveText(/review:2.*published$/u)
+    await expect(state('acme/web#88')).not.toContainText('draft')
 
     await ours.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
@@ -85,6 +90,11 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     await expect(description).toContainText('canopy only reviews it')
     await expect(page.locator('main').getByText('canopy only reviews it')).toHaveCount(1)
     await expect(page.getByTestId('pull-request-runs')).toHaveCount(0)
+    // Its Pull request panel says where the operator's review of it stands, and links to it. Not followed: opening
+    // review 2 marks it seen, a write this journal never takes.
+    const yours = page.getByRole('definition').filter({ has: page.getByRole('link', { name: 'review:2' }) })
+    await expect(yours).toHaveText('publishedreview:2')
+    await expect(yours.getByRole('link', { name: 'review:2' })).toHaveAttribute('href', /\/reviews\/2$/u)
 
     // One canopy has yet to review: its empty lists are their headers alone, each counting 0.
     await open('acme/web#95')

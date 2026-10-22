@@ -178,6 +178,27 @@ def test_the_page_stages_by_default_and_names_why_a_post_posted_nothing(
     assert reads(github_state, "post")[-1]["submit"] is False
 
 
+def test_the_lists_say_where_a_reviews_draft_stands(reviewed: int, ctx: Context, github_state: Path) -> None:
+    c, write = signed_in_client(ctx)
+
+    def listed() -> tuple[str | None, dict[str, Any] | None]:
+        [review] = [r for r in c.get("/api/reviews").json() if r["id"] == reviewed]
+        [pr] = [p for p in c.get("/api/pull-requests").json() if p["url"] == THEIRS]
+        return review["draft"], pr["draft"]
+
+    assert listed() == ("waiting", {"review_id": reviewed, "status": "waiting"})
+    github_state.write_text(json.dumps({"prs": {THEIRS: {}}}))
+    staged = c.post(
+        f"/api/reviews/{reviewed}/draft/publish",
+        json={"hash": draft_of(c, reviewed)["hash"]},
+        headers=write,
+    )
+    assert staged.status_code == 200, staged.text
+    assert listed() == ("staged", {"review_id": reviewed, "status": "staged"})
+    pr = c.get("/api/pull-request", params={"url": THEIRS}).json()["pull_request"]
+    assert pr["draft"] == {"review_id": reviewed, "status": "staged"}
+
+
 def test_a_review_of_the_loops_own_pr_has_no_draft_to_edit_or_publish(
     scenario: Scenario,
     reviewing: object,
@@ -190,6 +211,7 @@ def test_a_review_of_the_loops_own_pr_has_no_draft_to_edit_or_publish(
     own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     c, write = signed_in_client(ctx)
     assert c.get(f"/api/reviews/{own}").json()["draft"] is None
+    assert c.get("/api/reviews").json()[0]["draft"] is None
     body = c.post(f"/api/reviews/{own}/draft/body", json={"text": "Mine."}, headers=write)
     assert refused(body).startswith("no_draft: ")
     publish = c.post(f"/api/reviews/{own}/draft/publish", json={"hash": "0" * 12}, headers=write)

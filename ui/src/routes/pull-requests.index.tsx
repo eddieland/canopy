@@ -8,6 +8,7 @@ import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestFilterBar } from '@/components/pull-request-filter'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewDraftChip } from '@/components/review-draft-chip'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -127,7 +128,8 @@ function Row({ pr }: { pr: PullRequest }) {
 /**
  * Where a PR stands, leading its row as a run's state does: while a run works it, the running dot and that run, then
  * its latest review and that review's verdict (the dot how the review's run ended, the verdict's color its worst
- * finding), or `not reviewed`, and `requested` while the operator's review request on it is open.
+ * finding), or `not reviewed`; then, for a PR the loop does not own, where the operator's review of it stands, its
+ * newest draft's state (`ReviewDraftChip`), and `requested` while the operator's review request on it is open.
  */
 function State({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
@@ -154,6 +156,7 @@ function State({ pr }: { pr: PullRequest }) {
             ) : (
                 'not reviewed'
             )}
+            {pr.draft !== null && <ReviewDraftChip status={pr.draft.status} />}
             {pr.review_request !== null && pr.review_request.ended_at === null && <Chip>requested</Chip>}
         </span>
     )
