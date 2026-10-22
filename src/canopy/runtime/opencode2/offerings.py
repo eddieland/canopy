@@ -29,7 +29,8 @@ import json
 import re
 import secrets
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -40,7 +41,7 @@ from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
 
 #: How long the server may take to say where it listens, and its plugins to load once it has.
 TIMEOUT_SECONDS = 120
@@ -140,13 +141,12 @@ class _Entry(BaseModel):
     info: _Info | None = None
 
 
-class _Loaded(BaseModel):
+@dataclass(frozen=True)
+class _Loaded:
     """What the server has loaded: canopy's agents' rules, the skills, and the MCP servers, in config's order."""
 
-    model_config = ConfigDict(frozen=True)
-
-    agents: Mapping[str, tuple[_Rule, ...]]
-    skills: tuple[str, ...]
+    agents: Mapping[str, Sequence[_Rule]]
+    skills: Sequence[str]
     servers: Mapping[str, _McpServer]
 
 
