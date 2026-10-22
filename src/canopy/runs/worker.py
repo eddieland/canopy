@@ -92,6 +92,9 @@ def _known_effort(value: object) -> object:
 
 #: A planner's estimate of how much work its plan is (DESIGN §25).
 Effort = Annotated[PlanEffort | None, BeforeValidator(_known_effort)]
+#: Whether a worker said a failed check was not its change's (DESIGN §23): only `true` says so, and anything else is
+#: false, never a reason to drop the result with it.
+Flaky = Annotated[bool, BeforeValidator(lambda value: value is True)]
 
 
 class WorkerResult(BaseModel):
@@ -110,6 +113,9 @@ class WorkerResult(BaseModel):
     pr_titles: dict[StrictStr, PrTitle | None] | None = None
     summary: Text = ""
     question: Text | None = None
+    #: Whether a `resume` for `ci` left a failed check as not the change's, such as a flaky test, for the operator to
+    #: rerun (DESIGN §23). The checks and the evidence are in `summary`.
+    flaky: Flaky = False
 
     def for_repos(self, repos: Sequence[str]) -> Self:
         """Return this result with `prs` and `pr_titles` kept to `repos`, the repositories the run worked in.
