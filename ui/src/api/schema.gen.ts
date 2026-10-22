@@ -479,6 +479,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/{memory_id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pin a lesson
+         * @description `canopy memory pin ID`: the lesson is never due for review, and runs are served it before the rest.
+         *
+         *     Refused `off`, `unknown` for an id no lesson in force has, or `pinned` for one pinned already, as the CLI refuses
+         *     it.
+         */
+        post: operations["pinMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/{memory_id}/promote": {
         parameters: {
             query?: never;
@@ -537,9 +560,32 @@ export type paths = {
          * Renew a lesson
          * @description `canopy memory renew ID`: the lesson comes up for review again later, and a run's report it is wrong is cleared.
          *
-         *     Refused `off`, or `unknown` for an id no lesson in force has, as the CLI refuses it.
+         *     A pinned lesson is never due, so `review_at` is null. Refused `off`, or `unknown` for an id no lesson in force has,
+         *     as the CLI refuses it.
          */
         post: operations["renewMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/{memory_id}/unpin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unpin a lesson
+         * @description `canopy memory unpin ID`: the lesson comes up for review again later, and is served as any other.
+         *
+         *     Refused `off`, `unknown` for an id no lesson in force has, or `not_pinned`, as the CLI refuses it.
+         */
+        post: operations["unpinMemory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2979,6 +3025,11 @@ export type components = {
              */
             origin: components["schemas"]["MemoryOrigin"] | null;
             /**
+             * Pinned At
+             * @description When the operator pinned a lesson, which runs are served before every lesson not pinned; None if not pinned.
+             */
+            pinned_at: string | null;
+            /**
              * Private
              * @description Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
              *     tracker.
@@ -3002,7 +3053,7 @@ export type components = {
             repo: string | null;
             /**
              * Review At
-             * @description A lesson's next review.
+             * @description A lesson's next review; None for a pinned one, which is never due.
              */
             review_at: string | null;
             /**
@@ -3189,6 +3240,23 @@ export type components = {
             tickets: components["schemas"]["TicketNotes"][];
         };
         /**
+         * MemoryPinned
+         * @description A lesson the operator pinned: never due for review, and served before every lesson not pinned.
+         */
+        MemoryPinned: {
+            /**
+             * Id
+             * @description The lesson's id.
+             */
+            id: number;
+            /**
+             * Pinned At
+             * Format: date-time
+             * @description When it was pinned.
+             */
+            pinned_at: string;
+        };
+        /**
          * MemoryPromoted
          * @description What a promote made: the lesson, what it came from, the lesson it superseded, and whether runs read it now.
          */
@@ -3293,10 +3361,9 @@ export type components = {
             id: number;
             /**
              * Review At
-             * Format: date-time
-             * @description When it is next due for review.
+             * @description When it is next due for review; None for a pinned lesson, which never is.
              */
-            review_at: string;
+            review_at: string | null;
         };
         /**
          * @description What a memory is: a ticket's note, a worker's proposal, or the operator's lesson.
@@ -3350,6 +3417,23 @@ export type components = {
              * @description Its mode in words: `off`, `recording`, or `in use`. No two modes share them.
              */
             words: string;
+        };
+        /**
+         * MemoryUnpinned
+         * @description A lesson the operator unpinned: it comes up for review again later, and is served as any other.
+         */
+        MemoryUnpinned: {
+            /**
+             * Id
+             * @description The lesson's id.
+             */
+            id: number;
+            /**
+             * Review At
+             * Format: date-time
+             * @description When it is next due for review.
+             */
+            review_at: string;
         };
         /**
          * Message
@@ -8592,6 +8676,92 @@ export interface operations {
             };
         };
     };
+    pinMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryPinned"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     promoteMemory: {
         parameters: {
             query?: never;
@@ -8787,6 +8957,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoryRenewed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unpinMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryUnpinned"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

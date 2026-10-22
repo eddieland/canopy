@@ -275,6 +275,11 @@ function MemoryRow({
                     <UsedIn entry={entry} ownRun={ownRun} />
                     {leftOut !== undefined && <span>{leftOutText(leftOut)}</span>}
                     {entry.why !== null && <span>{entry.why}</span>}
+                    {entry.pinned_at !== null && entry.status === 'active' && (
+                        <span title={`pinned at ${localTime(entry.pinned_at, clock)}: never due, and served first`}>
+                            pinned
+                        </span>
+                    )}
                     {entry.review_at !== null && entry.status === 'active' && (
                         <span
                             className={cn(
