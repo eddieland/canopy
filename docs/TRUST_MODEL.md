@@ -134,6 +134,13 @@ Controls:
   replaces one the operator was asked to approve, or a ticket they asked a plan of by name, waits on them. The plan
   and its reason stay on file, the sinks are told, and an edit to the file needs the operator's approval. The
   backstop is the PR's review; for a feedback plan, an untrusted reviewer's items can now start a `resume` unseen.
+- Under `trust.review_replies = "approve"` (DESIGN §29), a feedback plan whose items are all `decline`, `ask`, or
+  `leave` needs no approval (DESIGN §32): a `resume` for review feedback alone goes ahead on it, its go-ahead recorded
+  as `changes-nothing`, never the operator's, and spent once. It fails closed in code: a plan that covers no item, a
+  `resume` with any other reason, a stale plan, one the operator replied to, and one whose file is not as its planner
+  wrote it all wait on them, and under `post` every plan does. Residual: the proposals are the planner's judgment,
+  which any reviewer's comment can steer, and only the prompt holds that run to pushing nothing; its replies are
+  drafts, which wait on the operator, and a push it makes anyway lands on the PR, whose review is the backstop.
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders

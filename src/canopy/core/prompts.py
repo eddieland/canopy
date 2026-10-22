@@ -434,6 +434,7 @@ def feedback_plan_note(
     left_out: Sequence[tuple[int, int]] = (),
     message_id: int | None = None,
     by_planner: bool = False,
+    unapproved: bool = False,
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 
@@ -441,16 +442,26 @@ def feedback_plan_note(
     plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` names the plan's items
     the operator left out of their approval, each its number and observed id, whose sections its copy still holds, under
     `### Item <id>` headings as every item's are. `message_id` is the operator message their approval wrote, which the
-    prompt carries above among their messages. `by_planner` says who approved it, as `plan_note`'s does.
+    prompt carries above among their messages. `by_planner` says who approved it, as `plan_note`'s does; `unapproved`
+    that it changes nothing and goes ahead without approval, so the run drafts its replies and pushes nothing.
 
     Returns:
         The copy's path and what it is, the outline as `plan_note` gives it, and a line per item.
     """
     who = _BY_PLANNER if by_planner else "the operator approved"
+    if unapproved:
+        who = "its planner wrote"
     what = (
         f"`{copy}` is the feedback plan {who} for this round of the PR's feedback, a copy written for this run alone."
     )
-    if left_out:
+    if unapproved:
+        what += (
+            " It proposes no change to the code, and the replies you draft wait on the operator, so it goes ahead "
+            "without their approval: that is the go-ahead for drafting the reply it proposes to each item below, "
+            "whoever wrote it, and for nothing else of the PR's feedback. Change no code, and commit and push "
+            "nothing; leave any other review comment for the next plan."
+        )
+    elif left_out:
         them = "it" if len(left_out) == 1 else "them"
         what += (
             " The operator approved only the items below of it, whoever wrote them: that is the go-ahead for each of "

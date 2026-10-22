@@ -17,11 +17,16 @@ channel's, refused inside canopy's own runs, and holds the dispatch lock, as app
 A waiting plan whose PRs changed since it saw them is stale (`feedback_items.changes`): it is planned again once the
 quiet period on its PRs passed, and approving it is refused `stale` once, naming what changed (DESIGN §32, Planning
 again).
+
+A plan that changes nothing, every item it covers a `decline`, an `ask`, or a `leave`, needs no approval under
+`trust.review_replies = "approve"`: a `resume` for review feedback alone goes ahead on it as its planner wrote it, so
+long as it is still the round's plan as written (`goes_ahead`), and spends it as an approval is spent (DESIGN §32,
+Approving).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import timedelta
@@ -29,7 +34,16 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, feedback_items, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
+from canopy.core.vocab import (
+    PlanEffort,
+    PlanStatus,
+    Proposal,
+    ReplyMode,
+    ResumeReason,
+    ReviewItem,
+    RunKind,
+    RunStatus,
+)
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -47,8 +61,14 @@ MAX_REPLY = replies.MAX_DRAFT_CHARS
 #: The most characters of the operator's own words an approval's message carries, after the sentence naming the
 #: plan's items, within an operator message's bound.
 MAX_WORDS = conversation.MAX_OPERATOR - 1000
+#: The channel the go-ahead of a plan that changes nothing names, which needed no approval: never the operator's.
+CHANGES_NOTHING = "changes-nothing"
+#: Why a plan whose go-ahead names `CHANGES_NOTHING` went ahead, as `canopy show` says it.
+WENT_AHEAD = "it changes no code, and the replies its resume drafts wait on the operator"
 #: The most refused ids a run's harness note names one by one.
 _MAX_NAMED = 10
+#: What a plan may propose for each of its items and still change no code.
+_NO_CHANGE: AbstractSet[Proposal] = frozenset({Proposal.DECLINE, Proposal.ASK, Proposal.LEAVE})
 
 
 @dataclass(frozen=True)
@@ -292,22 +312,24 @@ def approved_text(state_dir: Path, plan: records.FeedbackPlan) -> str | None:
 def resume_refusal(
     conn: sqlite3.Connection,
     state_dir: Path,
-    policy: Policy,
+    config: Config,
     key: str,
     *,
     repos_named: Sequence[str],
     reasons: Collection[str],
+    now: datetime,
 ) -> tuple[str, str] | None:
     """Return the guard and reason that refuse a `resume` of `key` over `repos_named` for `reasons`, or None.
 
     A guard in code, whatever the overseer asks for (DESIGN §32, Approving): with feedback plans on, a `resume` that
-    needs one (`needed`) goes ahead only on the ticket's approved feedback plan that no `resume` has spent, covering
-    every repository it names, whose file still has the hash the operator approved.
+    needs one (`needed`) goes ahead only on the ticket's feedback plan that no `resume` has spent, covering every
+    repository it names: one the operator approved, whose file still has the hash they approved, or, for review
+    feedback alone, a waiting plan that changes nothing (`goes_ahead`).
 
     Returns:
         `unplanned` or `plan_changed` with why, or None when it may go ahead.
     """
-    if not needed(policy, reasons):
+    if not needed(config.policy, reasons):
         return None
     plan = current(conn, key)
     then = f"dispatch `feedback-plan` for {key}'s PRs, or wait for the operator"
@@ -315,16 +337,95 @@ def resume_refusal(
         had = "" if plan is None else f": feedback plan {plan.id} went ahead with run {plan.spent_run_id} already"
         return "unplanned", f"{key}'s resume waits on a feedback plan the operator approved{had}; {then}"
     if plan.status is not PlanStatus.APPROVED:
-        return "unplanned", f"{key}'s resume waits on feedback plan {plan.id}, which the operator has not approved"
+        why = _needs_approval(conn, state_dir, config, plan, now, reasons=reasons)
+        if why is not None:
+            waits = f"{key}'s resume waits on feedback plan {plan.id}, which the operator has not approved"
+            return "unplanned", f"{waits}, and it needs their approval: {why}"
     covered = repos(conn, plan)
     outside = [r for r in repos_named if r not in covered]
     if outside:
         why = f"feedback plan {plan.id} of {key} covers {', '.join(covered)}, not {', '.join(outside)}"
         return "unplanned", f"{why}; resume only the repositories it covers"
-    if approved_text(state_dir, plan) is None:
+    if plan.status is PlanStatus.APPROVED and approved_text(state_dir, plan) is None:
         path = plans.path_for(state_dir, key, plan.run_id)
         why = f"feedback plan {plan.id} of {key}, {path}, is no longer the text the operator approved"
         return "plan_changed", f"{why}; they approve it again"
+    return None
+
+
+def goes_ahead(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    config: Config,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> bool:
+    """Whether a waiting feedback plan changes nothing, so needs no approval (DESIGN §32, Approving).
+
+    Returns:
+        True under `trust.review_replies = "approve"` for a plan no `resume` has spent that covers review items and
+        proposes `decline`, `ask`, or `leave` for each, while the operator has asked for no change, nothing changed on
+        its PRs since it was written, and its file is as its planner wrote it: a `resume` for review feedback alone
+        then follows it.
+    """
+    if plan.status is not PlanStatus.PROPOSED or plan.spent_run_id is not None:
+        return False
+    return _needs_approval(conn, state_dir, config, plan, now, reasons=(ResumeReason.REVIEW,)) is None
+
+
+def changes_nothing(covered: Iterable[records.FeedbackPlanItem]) -> bool:
+    """Whether a feedback plan's items change no code.
+
+    Returns:
+        True when it covers review items and proposes `decline`, `ask`, or `leave` for each. A plan that covers none is
+        not one: its `resume` works its other reasons, such as red CI, as it says.
+    """
+    proposals = [i.proposal for i in covered]
+    return bool(proposals) and all(p in _NO_CHANGE for p in proposals)
+
+
+def _needs_approval(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    config: Config,
+    plan: records.FeedbackPlan,
+    now: datetime,
+    *,
+    reasons: Collection[str],
+) -> str | None:
+    """Return why a waiting feedback plan needs the operator's approval before a `resume` for `reasons`, or None.
+
+    Returns:
+        Why, in the harness's words, or None when it changes nothing and goes ahead without (`goes_ahead`).
+    """
+    if config.trust.review_replies is not ReplyMode.APPROVE:
+        return 'trust.review_replies is "post", so the replies it proposes would go out unseen'
+    if not changes_nothing(items(conn, plan.id)):
+        return "it proposes a change, or covers no review item"
+    if set(reasons) != {ResumeReason.REVIEW}:
+        return "a resume for more than review feedback changes code whatever its items propose"
+    return _not_as_written(conn, state_dir, config, plan, now)
+
+
+def _not_as_written(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    config: Config,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> str | None:
+    """Return why a waiting feedback plan is no longer the round's plan as its planner wrote it, or None.
+
+    Returns:
+        Why, in the harness's words: the operator asked for changes, its PRs changed, or its file did.
+    """
+    ticket = db.get_ticket(conn, plan.ticket_key)
+    if ticket is not None and changes_asked(conn, ticket) is not None:
+        return "the operator asked for changes to it"
+    if stale(conn, config, plan, now).changes:
+        return "its PRs changed since it was written"
+    if plans.read(plans.path_for(state_dir, plan.ticket_key, plan.run_id)).sha256 != plan.sha256:
+        return "its file is no longer as its planner wrote it"
     return None
 
 
@@ -334,31 +435,52 @@ def follows(
     key: str,
     reasons: Collection[str],
 ) -> records.FeedbackPlan | None:
-    """The approved feedback plan a `resume` for `reasons` follows, once `resume_refusal` let it through.
+    """The feedback plan a `resume` for `reasons` follows, once `resume_refusal` let it through.
 
     Returns:
-        The plan, or None for a `resume` that needs none.
+        The ticket's plan no `resume` has spent, approved or one that changes nothing, or None for a `resume` that
+        needs none.
     """
     if not needed(policy, reasons):
         return None
     plan = current(conn, key)
-    return plan if plan is not None and plan.status is PlanStatus.APPROVED and plan.spent_run_id is None else None
+    return plan if plan is not None and plan.spent_run_id is None else None
 
 
-def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
-    """Record that `run_id` went ahead on feedback plan `plan_id`'s approval. Call inside the run's insert.
+def followed_text(state_dir: Path, plan: records.FeedbackPlan) -> str | None:
+    """The text of the feedback plan a `resume` follows: as the operator approved it, or, waiting, as written.
 
     Returns:
-        False when the plan is no longer approved and unspent, and nothing was recorded: the run must not start.
+        The text, or None when its file is missing, unreadable, or no longer as approved, or as written.
     """
-    row = sql.execute(
-        conn,
-        sql.update("feedback_plans")
-        .set(spent_run_id=run_id)
-        .where("id = ? AND status = ? AND spent_run_id IS NULL", plan_id, PlanStatus.APPROVED)
-        .returning("id"),
-    ).fetchone()
-    return row is not None
+    if plan.status is PlanStatus.APPROVED:
+        return approved_text(state_dir, plan)
+    reading = plans.read(plans.path_for(state_dir, plan.ticket_key, plan.run_id))
+    return reading.text if plan.status is PlanStatus.PROPOSED and reading.sha256 == plan.sha256 else None
+
+
+def spend(conn: sqlite3.Connection, plan_id: int, run_id: int, *, unapproved: bool = False) -> bool:
+    """Record that `run_id` went ahead on feedback plan `plan_id`'s approval. Call inside the run's insert.
+
+    With `unapproved`, the plan is a waiting one that changes nothing, which `resume_refusal` let through: its go-ahead
+    is recorded as its approval, of its file as its planner wrote it, by `CHANGES_NOTHING`, never the operator, and is
+    spent as any approval is, so it goes ahead once.
+
+    Returns:
+        False when the plan is no longer approved, or for `unapproved` waiting, and unspent, and nothing was recorded:
+        the run must not start.
+    """
+    update = sql.update("feedback_plans").set(spent_run_id=run_id)
+    status = PlanStatus.APPROVED
+    if unapproved:
+        status = PlanStatus.PROPOSED
+        update = update.set(
+            status=PlanStatus.APPROVED,
+            approved_at=db.now(),
+            approved_channel=CHANGES_NOTHING,
+        ).set_to("approved_sha256 = sha256")
+    query = update.where("id = ? AND status = ? AND spent_run_id IS NULL", plan_id, status).returning("id")
+    return sql.execute(conn, query).fetchone() is not None
 
 
 def dispatch_refusal(conn: sqlite3.Connection, config: Config, key: str, *, now: datetime) -> tuple[str, str] | None:
@@ -755,6 +877,9 @@ class NewestFeedbackPlan(TypedDict):
     stale: bool
     #: Whether the quiet period on its PRs has passed, so a stale plan may be planned again.
     quiet_passed: bool
+    #: Whether it waits, but changes nothing and needs no approval (`goes_ahead`): a `resume` for review feedback
+    #: alone follows it, as an approved one (DESIGN §32, Approving).
+    goes_ahead: bool
 
 
 class FeedbackPlanState(TypedDict):
@@ -776,6 +901,7 @@ def state_section(
     config: Config,
     ticket: records.Ticket,
     *,
+    state_dir: Path,
     attempts: Mapping[str, int],
     limits: Mapping[str, int],
     now: datetime,
@@ -785,7 +911,8 @@ def state_section(
     With `policy.feedback_plan` off, a ticket that never had a feedback plan run has no `feedback_plan` key, so the
     block is as it was before feedback plans (DESIGN §32). `attempts` and `limits` are its units', by repository.
     Whether its newest plan is stale, and the quiet period on its PRs passed at `now`, is computed here, after the
-    tick's connectors read, so the overseer compares no times.
+    tick's connectors read, so the overseer compares no times, and so is whether it goes ahead without approval;
+    `state_dir` holds its file.
     """
     key = ticket.key
     on = config.policy.feedback_plan == "approve"
@@ -815,14 +942,20 @@ def state_section(
         "needed": on,
         "attempts": dict(attempts),
         "limits": dict(limits),
-        "newest": None if newest is None else _newest(conn, config, newest, now),
+        "newest": None if newest is None else _newest(conn, config, newest, state_dir, now),
         "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
     }
 
 
-def _newest(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> NewestFeedbackPlan:
-    waits = plan.status is PlanStatus.PROPOSED
+def _newest(
+    conn: sqlite3.Connection,
+    config: Config,
+    plan: records.FeedbackPlan,
+    state_dir: Path,
+    now: datetime,
+) -> NewestFeedbackPlan:
+    waits = plan.status is PlanStatus.PROPOSED and plan.spent_run_id is None
     found = stale(conn, config, plan, now) if waits else Stale(changes=(), quiet_until=None)
     return {
         "id": plan.id,
@@ -832,6 +965,7 @@ def _newest(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan
         "spent": plan.spent_run_id is not None,
         "stale": bool(found.changes),
         "quiet_passed": found.quiet_passed(now),
+        "goes_ahead": waits and goes_ahead(conn, state_dir, config, plan, now),
     }
 
 

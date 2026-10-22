@@ -973,6 +973,7 @@ def _spawn(
             remembered=remembered,
             replied=replied,
             feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
+            unapproved=followed is not None and followed.unapproved,
             rendered_in=(key, kind, persona),
         ),
         feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
@@ -1109,16 +1110,19 @@ def _record_rendered(
     remembered: memory.Rendered | None,
     replied: replies.Rendered | None,
     feedback_plan_id: int | None,
+    unapproved: bool,
     rendered_in: tuple[str, str, personas.Persona | None],
 ) -> None:
     """Record what run `run_id`'s prompt was rendered under, inside the transaction that inserts it.
 
-    A `resume` that follows a feedback plan spends its approval here, so one approval goes ahead once (DESIGN §32).
+    A `resume` that follows a feedback plan spends its approval here, so one approval goes ahead once (DESIGN §32);
+    `unapproved` for one that changes nothing, whose go-ahead is recorded as its approval.
     `rendered_in` is the run's ticket, kind, and persona: a persona chosen for its agent's next run alone is spent
     here, so it reaches that run alone (§31).
 
     Raises:
-        Refusal: (`unplanned`) the feedback plan is no longer approved and unspent; the run is not inserted.
+        Refusal: (`unplanned`) the feedback plan is no longer approved, or waiting for `unapproved`, and unspent; the
+            run is not inserted.
     """
     if remembered is not None:
         memory.record_rendered(ctx.conn, run_id, remembered)
@@ -1128,7 +1132,8 @@ def _record_rendered(
     agent = personas.agent_of(kind)
     if agent is not None and persona is not None:
         personas.spend_next(ctx.conn, key, agent, persona.name)
-    if feedback_plan_id is not None and not feedback_plans.spend(ctx.conn, feedback_plan_id, run_id):
+    spent = feedback_plan_id is None or feedback_plans.spend(ctx.conn, feedback_plan_id, run_id, unapproved=unapproved)
+    if not spent:
         raise Refusal(
             "unplanned",
             f"feedback plan {feedback_plan_id} was replaced or spent while this dispatch was planned",

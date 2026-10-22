@@ -90,7 +90,7 @@ def planned_refusal(
     A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
     one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
     Under `policy.feedback_plan = "approve"`, a `resume` but one for `no_pr` alone waits on an approved feedback plan no
-    `resume` has spent, and follows it in place of the ticket's plan.
+    `resume` has spent, or one that changes nothing, and follows it in place of the ticket's plan.
 
     Returns:
         The guard and reason that refuse it, or None: an `implement` for a ticket that needs a plan and has none
@@ -105,10 +105,11 @@ def planned_refusal(
         return feedback_plans.resume_refusal(
             ctx.conn,
             ctx.state_dir,
-            ctx.config.policy,
+            ctx.config,
             key,
             repos_named=repos,
             reasons=reasons,
+            now=datetime.now(UTC),
         )
     ticket = db.get_ticket(ctx.conn, key)
     plan = plans.current(ctx.conn, key)
@@ -133,6 +134,8 @@ class Followed:
     note: str
     plan_id: int | None = None
     feedback_plan_id: int | None = None
+    #: Whether the feedback plan is one that changes nothing and goes ahead unapproved, its go-ahead its approval.
+    unapproved: bool = False
 
 
 def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection[str]) -> Followed | None:
@@ -150,9 +153,10 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
         return None
     if kind == RunKind.RESUME:
         feedback = feedback_plans.follows(ctx.conn, ctx.config.policy, key, reasons)
-        text = feedback_plans.approved_text(ctx.state_dir, feedback) if feedback is not None else None
+        text = feedback_plans.followed_text(ctx.state_dir, feedback) if feedback is not None else None
         if feedback is not None and text is not None:
             covered = feedback_plans.items(ctx.conn, feedback.id)
+            unapproved = feedback.status is PlanStatus.PROPOSED
             note = prompts.feedback_plan_note(
                 copy,
                 plans.outline(text),
@@ -160,8 +164,9 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
                 left_out=[(i.number, i.item_id) for i in covered if i.left_out],
                 message_id=feedback.approved_message_id,
                 by_planner=feedback.approved_channel == plans.PLANNER,
+                unapproved=unapproved,
             )
-            return Followed(note=note, feedback_plan_id=feedback.id)
+            return Followed(note=note, feedback_plan_id=feedback.id, unapproved=unapproved)
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
     if approved is None or text is None:
