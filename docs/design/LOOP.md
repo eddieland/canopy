@@ -31,10 +31,12 @@ in order:
    (§14).
 4. **Render the state block**, the overseer's whole message: one JSON object holding what the overseer needs to decide
    every ticket not done or stopped, ordered from what changes rarely to what changes every tick so the provider can
-   cache it. The overseer's prompt is its agent definition's system prompt (§13), not part of the block. The block
-   lists the overseer's own open attention items, without their detail, which may quote a comment: an item stays open
-   only while every tick records it again (MEASUREMENTS 2026-10-13). Rejected: a harness that keeps an item until the
-   overseer resolves it, which leaves an item standing whenever the overseer forgets one.
+   cache it. After its fixed sections come the observations (§35): what the connectors last read of each ticket and
+   its units, each fresh, stale, or unobserved. The overseer's prompt is its agent definition's system prompt (§13),
+   not part of the block. The block lists the overseer's own open attention items, without their detail, which may
+   quote a comment: an item stays open only while every tick records it again (MEASUREMENTS 2026-10-13). Rejected: a
+   harness that keeps an item until the overseer resolves it, which leaves an item standing whenever the overseer
+   forgets one.
 5. **Check the disk and `canopy`, then run the overseer.** If the state directory's or the workspace's filesystem has
    less than `loop.min_free_disk_mib` free, the tick records `attention:disk_low` and closes `disk_low`: the overseer
    and the runs it would start are what fill a disk, and a full one can kill the loop mid-write. Reconcile has run, so

@@ -86,6 +86,14 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- The overseer's state block carries what canopy's connectors observed (DESIGN §35): each ticket marked a candidate or
+  not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
+  candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
+  trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
+  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut as a mirror cuts it.
+  The marks inform the overseer; no guard checks a claim against them yet (ROADMAP M37), so the label, reply, and
+  review checks above are still the overseer's and the worker's. Residual: an observation is what a connector printed,
+  up to that age old.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -651,7 +659,9 @@ agent branches under an unexpected prefix, which branch protection (§7) still g
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
 nothing. The query can still widen what the overseer reads: it reads every ticket a query returns, text and comments,
 before it checks for a label, so a widened query puts tickets nobody labeled, any the operator's tracker account can
-see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. Settled
+see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. With a
+`tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its
+prompt says not to read it (DESIGN §35); a stale or unobserved one is still read live. Settled
 (2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
 who shares the workspace with people they do not trust overrides it in the private file. Checking labels in code before
 any ticket reaches the overseer closes this with ROADMAP M37. The provider also picks the default tracker server and
