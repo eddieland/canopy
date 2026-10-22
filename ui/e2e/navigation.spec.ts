@@ -215,7 +215,7 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
     const filters = page.getByRole('navigation', { name: 'Filter by kind' })
     await expect(filters.getByRole('link', { name: 'reviews' })).toHaveAttribute('data-selected', 'true')
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(4)
-    await expect(page.getByTestId('runs-count')).toHaveText('5')
+    await expect(page.getByTestId('runs-count')).toHaveText('6')
 
     // The two filters keep each other: a state chosen under a kind keeps the kind.
     await page.getByRole('navigation', { name: 'Filter by state' }).getByRole('link', { name: 'running' }).click()

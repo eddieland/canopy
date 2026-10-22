@@ -209,3 +209,22 @@ test('settings prefers the personas a review request starts from, apart from the
     await settled(page)
     await expect(form.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
 })
+
+test("a request's reviews in two personas sit together in the lists, the second named by its persona", async ({
+    page,
+}) => {
+    await page.goto('reviews')
+    await settled(page)
+    // Carol's PR, asked for in canopy and skeptic: one row for each, side by side, the PR named once.
+    const rows = page.getByTestId('reviews').getByRole('listitem')
+    const ids = await rows.evaluateAll((items) => items.map((item) => (item as HTMLElement).dataset.testid))
+    expect(ids.indexOf('review-5')).toBe(ids.indexOf('review-6') + 1)
+    const second = page.getByTestId('review-5')
+    await expect(second.getByTestId('sibling-persona')).toHaveText('as canopy')
+    await expect(second.getByRole('link', { name: 'acme/api#14', exact: true })).toHaveCount(0)
+    await expect(page.getByTestId('review-6').getByRole('link', { name: 'acme/api#14', exact: true })).toBeVisible()
+
+    // The PR's page groups them the same way.
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/api/pull/14')}`)
+    await expect(page.getByTestId('pull-request-review-5').getByTestId('sibling-persona')).toHaveText('as canopy')
+})

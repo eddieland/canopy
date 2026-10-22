@@ -73,6 +73,9 @@ class ReviewSummary(Model):
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
     persona: str | None = None
     """The persona it ran in (DESIGN §31); None for a review from before canopy recorded it."""
+    request_id: int | None = None
+    """The operator's review request it answers (DESIGN §21), which its reviews in the request's other personas share
+    (§31); None for a review the loop started on its own."""
     news: bool = False
     """Whether it has a result for the operator to read: it ended with a verdict that found something, or with any
     verdict when they asked for it. A clean review the loop started on its own has none."""

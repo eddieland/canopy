@@ -36,7 +36,7 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
     // Where the operator's review of each PR the loop does not own stands, after its verdict; the loop's own have none.
     const state = (pr: string) => rows.filter({ hasText: pr }).getByTestId('pull-request-review')
-    await expect(state('acme/api#14')).toHaveText(/review:5.*draft$/u)
+    await expect(state('acme/api#14')).toHaveText(/review:6.*draft$/u)
     await expect(state('acme/api#12')).toHaveText(/review:2.*published$/u)
     await expect(state('acme/web#88')).not.toContainText('draft')
 

@@ -11,7 +11,7 @@ import {
     publishReviewDraft,
     showReviewDraft,
 } from '@/api/mutations'
-import type { ReviewDraft, ReviewDraftComment } from '@/api/types'
+import type { ReviewDraft, ReviewDraftComment, ReviewSummary } from '@/api/types'
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import type { DismissalWords } from '@/components/dismiss-finding'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
@@ -19,6 +19,7 @@ import { Leaf } from '@/components/leaf'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { ReviewLink } from '@/components/review-link'
 import { RichText } from '@/components/rich-text'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
@@ -87,6 +88,10 @@ export function ReviewDraftState({ draft }: { draft: ReviewDraft }) {
     )
 }
 
+// A review that answers no request in several personas: one array, as a default made in the signature would be a
+// new one on every render.
+const NO_SIBLINGS: ReviewSummary[] = []
+
 /**
  * A review of a PR the loop does not own as the comment review canopy would post in the operator's name (DESIGN §34):
  * its newest version word for word, the body here and each comment on its line of the diff, every hidden character
@@ -97,7 +102,8 @@ export function ReviewDraftState({ draft }: { draft: ReviewDraft }) {
  * where to finish it, a published one links to it. With no diff kept, its comments are listed here. It leads the
  * review's page, whose description says its status (`ReviewDraftState`), so its header names only its version, with
  * what made it and its hash on hover. `findings` is how many the review reported, so the list can say which the draft
- * leaves out. `onFollow` hears a link followed to a comment's card, by its file's index in the diff.
+ * leaves out. `onFollow` hears a link followed to a comment's card, by its file's index in the diff. `siblings` are the
+ * reviews its request made of the same commit in its other personas, named under the intro so the operator picks one.
  */
 export function ReviewDraftPanel({
     run,
@@ -107,6 +113,7 @@ export function ReviewDraftPanel({
     findings,
     hasDiff,
     onFollow,
+    siblings = NO_SIBLINGS,
 }: {
     run: number
     prUrl: string
@@ -115,6 +122,7 @@ export function ReviewDraftPanel({
     findings: number
     hasDiff: boolean
     onFollow: (file: number) => void
+    siblings?: ReviewSummary[]
 }) {
     const client = useQueryClient()
     const [editingBody, setEditingBody] = useState(false)
@@ -148,6 +156,7 @@ export function ReviewDraftPanel({
                         {' now: its comments would show as outdated, on the commit the review read.'}
                     </p>
                 )}
+                {siblings.length > 0 && <Siblings siblings={siblings} />}
                 {draft.why !== null && <p className="text-xs text-muted-foreground">{draft.why}</p>}
                 {draft.refused.map((why) => (
                     <p key={why} className="text-xs text-status-failed">
@@ -194,6 +203,27 @@ export function ReviewDraftPanel({
             <VersionList draft={draft} />
             <PublishFooter run={run} prUrl={prUrl} sha={sha} draft={draft} said={said} onSaid={setSaid} />
         </Panel>
+    )
+}
+
+/**
+ * The reviews the same request made of the same commit in its other personas, each named by its persona and opening
+ * its page: each holds a draft of its own, so the operator reads them side by side and publishes the one they want.
+ * Publishing one leaves the others as they are.
+ */
+function Siblings({ siblings }: { siblings: ReviewSummary[] }) {
+    return (
+        <p className="text-muted-foreground" data-testid="draft-siblings">
+            Also reviewed as{' '}
+            {siblings.map((r, i) => (
+                <span key={r.id}>
+                    {i > 0 && ', '}
+                    <ReviewLink id={r.id}>{r.persona}</ReviewLink>
+                </span>
+            ))}
+            {', from the same request at this commit. Each is a draft of its own: publish the one you want, and ' +
+                'the others stay as they are.'}
+        </p>
     )
 }
 
