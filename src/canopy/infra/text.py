@@ -15,6 +15,17 @@ def printable(text: str) -> str:
     return "".join(c if c.isprintable() or c == "\n" else " " for c in text.replace("\r\n", "\n"))
 
 
+def quoted(text: str) -> str:
+    """`text` as a Markdown quote for a prompt: untrusted text that cannot pass for the prompt's own (TRUST_MODEL T1).
+
+    Every line starts `> `, so no line of it can be a heading, a fence, or a label the harness writes outside it.
+
+    Returns:
+        `printable(text)` with `> ` before each line, or a lone `> ` for empty text.
+    """
+    return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
+
+
 def one_line(text: str) -> str:
     """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut.
 

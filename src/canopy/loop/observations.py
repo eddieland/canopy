@@ -216,11 +216,18 @@ class ReviewItemState(TypedDict):
     body: str
 
 
-def section(ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> ObservationsState:
+def section(
+    ctx: Context,
+    tick_id: int,
+    now: datetime,
+    tickets: Iterable[records.Ticket],
+    *,
+    decided: AbstractSet[str] = frozenset(),
+) -> ObservationsState:
     """Read the observations of tick `tick_id` for the state block, as they stand at `now`.
 
     `tickets` are those the block lists: open and not stopped. The query's tickets join them, less those stopped or
-    marked done, as the derivation's do (§30).
+    marked done, as the derivation's do (§30), and less `decided`, those the harness decided this tick (§37).
 
     Returns:
         The block's `observations`.
@@ -230,7 +237,7 @@ def section(ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records
         "max_age_minutes": ctx.config.connect.max_age_minutes,
         "max_new_items": MAX_NEW_ITEMS,
         "query": reader.query(SourceKind.TRACKER),
-        "tickets": [reader.ticket(key) for key in reader.keys],
+        "tickets": [reader.ticket(key) for key in reader.keys if key not in decided],
     }
     if ctx.config.review.query.strip():
         found["review_query"] = reader.query(SourceKind.VCS)

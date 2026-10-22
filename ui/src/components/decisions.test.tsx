@@ -26,6 +26,7 @@ function decision(fields: Partial<Decision>): Decision {
         repo: null,
         pr: null,
         rationale: 'Nothing to do yet.',
+        decider: 'overseer',
         ...fields,
     }
 }
