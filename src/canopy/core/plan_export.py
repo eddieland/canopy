@@ -148,7 +148,7 @@ def export(
 
     Returns:
         The files written and removed, how many were already as they stand, the plans whose files are not plans, and
-        how many plans and conversations `limit` left unchecked.
+        how many plans, conversations, and indexes `limit` left unchecked.
 
     Raises:
         ExportError: `dest`, or a ticket's directory in it, is a link or not a directory, or a file could not be
@@ -383,6 +383,8 @@ class _Listed:
     name: str | None
     #: Its title, as `_title` finds it; "" when it has none, or none is known without reading it.
     title: str
+    #: Whether `name` is the file an earlier export left, the plan not exported as it stands now.
+    stale: bool = False
 
 
 @dataclass(frozen=True)
@@ -439,7 +441,7 @@ def _export_plan(
     if reading.text is None:
         # A reading without text always says why; "unreadable" only satisfies the type.
         tally.skipped.append(Skipped(kind, dirs.key, row.run_id, reading.problem or "unreadable"))
-        return _Listed(kind, row, names[0] if len(names) == 1 else None, seen.title(plan))
+        return _Listed(kind, row, names[0] if len(names) == 1 else None, seen.title(plan), stale=True)
     title = _title(reading.text, row.ticket_key)
     exported_name = name(kind, row, reading.text)
     data = document(kind, row, reading.text)
@@ -655,11 +657,13 @@ def _run_cell(entry: _Listed, prefix: str) -> str:
     to a renderer that reads escapes loosely.
 
     Returns:
-        The cell's Markdown; the run's number, marked not exported, for a plan with no file to link.
+        The cell's Markdown; the run's number, marked not exported, for a plan with no file to link, and marked not
+        exported as it stands for one whose file an earlier export left, which its row's status may no longer match.
     """
     if entry.name is None:
         return f"{entry.row.run_id} (not exported)"
-    return f"[{entry.row.run_id}]({quote(prefix + entry.name)})"
+    link = f"[{entry.row.run_id}]({quote(prefix + entry.name)})"
+    return f"{link} (not exported as it stands)" if entry.stale else link
 
 
 def _escaped_title(title: str) -> str:

@@ -727,6 +727,24 @@ def test_only_an_index_canopy_wrote_is_rewritten(conn: sqlite3.Connection, state
     assert f"[{other}]({other}-APPROVED.md)" in (dest / "PROJ-2" / "README.md").read_text()
 
 
+def test_an_index_says_a_plan_left_as_last_exported_is_not_as_it_stands(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    run_id = proposed(conn, state_dir)
+    dest = tmp_path / "archive"
+    indexed(conn, state_dir, dest)
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    plans.path_for(state_dir, KEY, run_id).unlink()
+
+    indexed(conn, state_dir, dest)
+
+    # Its row is approved, but the file linked is the one exported while it was proposed.
+    line = f"| [{run_id}]({run_id}-PROPOSED.md) (not exported as it stands) |  | plan | approved |"
+    assert line in (dest / KEY / "README.md").read_text()
+
+
 @pytest.mark.usefixtures("settled")
 def test_an_index_lists_a_plan_it_does_not_read(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
     run_id = proposed(conn, state_dir, f"# Plan: {KEY} Export reports as CSV\n")
