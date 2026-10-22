@@ -127,12 +127,12 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
     """Export every plan into DIR, superseded and feedback plans included, each with what the journal records of it.
 
     Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-APPROVED-export-reports-as-csv.md, as its
-    file stands now under a front matter of its status, hashes, and approval, and beside it the prompt its planner was
-    given, as RUN-PROMPT.md. Each ticket's DIR/KEY/README.md lists its plans, and DIR/README.md every ticket, unless
-    one there is your own: canopy rewrites only a README.md its first line says canopy wrote. A file is rewritten only
-    when its plan changed, and removed only when it moved to a new name, so DIR can be a clone of a repository of yours
-    that you commit and push. Plans hold what the planners
-    read of your tickets, and prompts your messages and standing instructions: keep that repository private.
+    file stands now under a front matter of its status, hashes, approval, and its planner's persona, and beside it the
+    prompt its planner was given, as RUN-PROMPT.md. Each ticket's DIR/KEY/README.md lists its plans, and DIR/README.md
+    every ticket, unless one there is your own: canopy rewrites only a README.md its first line says canopy wrote. A
+    file is rewritten only when its plan changed, and removed only when it moved to a new name, so DIR can be a clone
+    of a repository of yours that you commit and push. Plans hold what the planners read of your tickets, and prompts
+    your messages and standing instructions: keep that repository private.
 
     --conversations adds each planned ticket's conversation, every message canopy records on it, as
     DIR/KEY/CONVERSATION.md: workers' reports and questions, your replies, and mirrored tracker comments, a private
