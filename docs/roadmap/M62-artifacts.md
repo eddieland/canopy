@@ -27,45 +27,9 @@ Stages 1 and 2 need nothing; stage 3 needs M36 and M37. Four stages, in order, e
 
 ## The contract
 
-What Louvre and the local store both serve. It moves to the store's own documentation once one is built.
-
-| Record | Fields |
-|---|---|
-| Artifact | `id`, `title`, `namespace`, `origin` (at most 16 string pairs; canopy sets `canopy.workspace`, `canopy.ticket`, `canopy.run`), `latest_version` |
-| Version | `artifact_id`, `n`, `content_type` (`text/html`, `text/markdown`), `sha256`, `text` (the rendered page's visible text, what anchors resolve against); immutable |
-| Thread | `id`, `artifact_id`, `anchor` (none for the whole artifact), `anchored_version`, `state` (`open`, `resolved`) |
-| Comment | `id`, `thread_id`, `seq`, `author`, `body` (at most 4,000 characters), `created_at`, `edited_at`, `deleted_at`, `via` (`web`, `mcp`) |
-| Author | `id` (stable, from the store's sign-in), `display_name`, `kind` (`person`, `agent`), `on_behalf_of` |
-
-An anchor is a W3C Web Annotation `TextQuoteSelector` over the version's `text`, whitespace collapsed: `exact`, and
-`prefix` and `suffix` of at most 32 characters, as a plan's comments are. HTML anchors are taken inside the sandboxed
-frame and checked against `text`, never markup.
-
-| Tool | Input | Returns | Writes |
-|---|---|---|---|
-| `artifact_publish` | `title`, `content_type`, `content`, `origin`, `artifact_id` (to add a version) | `artifact_id`, `version`, `url` | yes |
-| `artifact_read` | `artifact_id`, `version` | metadata, `content`, `text` | no |
-| `artifact_list` | an `origin` filter, `cursor` | artifacts, newest first, paged | no |
-| `thread_list` | `artifact_id`, `state`, `version` | threads, comments, each anchor's status (`found`, `passage_gone`) | no |
-| `comment_feed` | an `origin` filter, `since`, `limit` (at most 200) | the changes after `since`, then an `end` line | no |
-| `comment_reply` | `thread_id`, `body` | `comment_id`, `seq` | yes |
-| `comment_create` | `artifact_id`, `anchor`, `body` | `thread_id`, `comment_id`, `seq` | yes |
-| `thread_resolve` | `thread_id`, `resolved` | `state` | yes |
-
-A refusal is a tool error with a code: `not_found`, `out_of_scope` (outside the token's namespace), `too_long`,
-`anchor_not_found`, `read_only`. No tool deletes an artifact or shares one. The local store speaks stdio and opens no
-socket; Louvre speaks MCP's streamable HTTP behind its token.
-
-- **The feed's cursor.** `seq` is one sequence across the store, given in commit order to every change (a comment
-  created, edited, or deleted; a thread resolved or reopened), and only once the change is visible, so nothing appears
-  below a cursor a reader has passed. A deleted comment keeps its row with its body empty.
-- **Each page** holds at most `limit` changes, oldest first, and ends `{"kind": "end", "through": <seq>}`; a page
-  without one is incomplete. A change carries ids, the thread's anchor and state, the author, `via`, times, and the
-  body, never the artifact's content.
-- **Tokens.** The operator mints canopy's token in Louvre, bound to their account and one namespace, with scopes `read`,
-  `publish`, and `comment`; the source's is `read` only. It lives in an operator-only file the runtime's MCP config
-  reads, never in canopy's config, journal, or logs (TRUST_MODEL T2). A comment written with it is `kind: agent`, and
-  canopy adds its comment marks (D069) too.
+What Louvre and the local store both serve, in full: records, anchors, tools, refusal codes, the comment feed, and
+Louvre's tokens. Once stage 1 built the store, it moved to the store's README,
+[packages/canopy-artifacts](../../packages/canopy-artifacts/README.md). Stage 2's config:
 
 ```toml
 [artifacts]  # private (TRUST_MODEL T7)
@@ -80,4 +44,7 @@ ticket, a listed author comments on a passage, the comment reaches the ticket's 
 new version that answers it, replies, and resolves the thread; an unlisted author's comment waits on the attention
 list.
 
-Status: not started.
+Status: in progress. Stage 1 is built (2026-10-22): `canopy-artifacts serve`, the local store, serves the eight
+tools over stdio from a directory of the operator's, with versions, anchors, and the feed, and the contract is its
+README. Every comment through its tools is an agent's on the operator's behalf; people's comments wait for the web
+channel. Stage 2, publishing, is next.
