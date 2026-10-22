@@ -1,4 +1,4 @@
--- sha256 of 0079_observed_check_runs.sql: 7fee17ebd4afb195c7d2d0cb6c2363858b3fa8f0142bb50197dec3030468d425
+-- sha256 of 0079_lesson_pins.sql: ac2ac083fc10f9c2176f1259ed5cad5d0be46b6319042675bb139857023e8322
 
-INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at)
-VALUES ('https://e.test/pr/7', 10, 'build', 'abc1234', 'failure', 'x');
+INSERT INTO memories (scope, key, body, status, author, created_at, approved_at, pinned_at)
+VALUES ('lesson', 'tests-need-docker', 'Start Docker before the tests.', 'active', 'operator', 'x', 'x', 'x');

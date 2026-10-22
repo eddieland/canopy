@@ -24,7 +24,9 @@ import {
     promotedText,
     rejectedText,
     reloadedText,
+    pinnedText,
     renewedText,
+    unpinnedText,
     repliedText,
     reviewDismissedText,
     reviewRequestedText,
@@ -357,6 +359,7 @@ describe('outcomes', () => {
             used_by: [] as number[],
             last_used_at: null,
             review_at: '2027-01-06T12:00:00Z',
+            pinned_at: null,
             wrong_at: null,
             wrong_run_id: null,
             promoted_from: 2,
@@ -392,6 +395,17 @@ describe('outcomes', () => {
         expect(rejectedText(5)).toBe('Proposal 5 is rejected.')
         expect(renewedText({ id: 9, review_at: '2027-01-06T12:00:00Z' })).toBe(
             `Lesson 9 is renewed: due for review at ${due}.`,
+        )
+        const pinnedEdit = { ...edit, lesson: { ...edit.lesson, review_at: null, pinned_at: '2026-10-08T12:00:00Z' } }
+        expect(editedText(pinnedEdit)).toContain('version 3, pinned, never due for review. Lesson 9 stays')
+        expect(renewedText({ id: 9, review_at: null })).toBe(
+            'Lesson 9 is renewed: any report that it is wrong is cleared. Pinned, it is never due.',
+        )
+        expect(pinnedText({ id: 9, pinned_at: '2026-10-08T12:00:00Z' })).toBe(
+            'Lesson 9 is pinned: never due for review, and served before every lesson not pinned.',
+        )
+        expect(unpinnedText({ id: 9, review_at: '2027-01-06T12:00:00Z' })).toBe(
+            `Lesson 9 is unpinned: due for review at ${due}.`,
         )
         const forgot = { id: 9, scope: 'lesson', key: 'web-tests', checkpointed: true } as const
         expect(memoryForgottenText(forgot)).toBe('Memory 9 (lesson `web-tests`) is forgotten: its text is deleted.')
