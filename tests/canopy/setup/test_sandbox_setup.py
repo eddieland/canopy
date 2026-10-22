@@ -170,7 +170,9 @@ def test_a_template_kept_that_lets_a_run_write_the_operators_caches_is_to_be_cha
 
 @pytest.mark.parametrize("role", ["worker", "chore", "review"])
 def test_a_template_kept_that_names_the_operators_opencode_data_is_to_be_changed(
-    machine: Machine, canopy_env: CanopyEnv, role: str
+    machine: Machine,
+    canopy_env: CanopyEnv,
+    role: str,
 ) -> None:
     """Templates from before `@DATA@` let a run read and write `~/.local/share/opencode`, whose logins and config the
     overseer's OpenCode acts on, and gave a run's OpenCode no data directory of its own."""
@@ -194,7 +196,9 @@ def test_a_template_kept_that_names_the_operators_opencode_data_is_to_be_changed
 
 @pytest.mark.parametrize("key", ["allowRead", "allowWrite"])
 def test_a_template_kept_without_the_runs_own_data_is_to_be_changed(
-    machine: Machine, canopy_env: CanopyEnv, key: str
+    machine: Machine,
+    canopy_env: CanopyEnv,
+    key: str,
 ) -> None:
     """Without `@DATA@`, the run's OpenCode cannot reach the data directory the wrapper copies the logins into."""
     machine.install(*LINUX_COMMANDS)

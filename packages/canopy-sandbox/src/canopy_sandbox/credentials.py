@@ -175,7 +175,9 @@ def refreshed_mcp_login(ours: object, theirs: object) -> dict[str, object] | Non
 
 
 def _merge(
-    path: Path, theirs: dict[str, object], refreshed: Callable[[object, object], dict[str, object] | None]
+    path: Path,
+    theirs: dict[str, object],
+    refreshed: Callable[[object, object], dict[str, object] | None],
 ) -> list[str]:
     """Write into the operator's file at `path` each of its entries that `theirs` holds a refresh of.
 

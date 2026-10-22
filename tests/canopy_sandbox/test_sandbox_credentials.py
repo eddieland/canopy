@@ -53,7 +53,8 @@ REFRESHED = st.fixed_dictionaries(
     optional={"accountId": JSON, "enterpriseUrl": JSON, "key": JSON, "metadata": JSON},
 )
 MCP_TOKENS = st.fixed_dictionaries(
-    {"accessToken": TOKEN, "expiresAt": STAMP}, optional={"refreshToken": TOKEN | st.none(), "scope": TOKEN}
+    {"accessToken": TOKEN, "expiresAt": STAMP},
+    optional={"refreshToken": TOKEN | st.none(), "scope": TOKEN},
 )
 MCP_LOGIN = st.fixed_dictionaries(
     {
@@ -133,7 +134,8 @@ def test_only_an_oauth_login_with_an_expiry_takes_a_refresh(ours: object) -> Non
     ],
 )
 def test_an_mcp_login_is_taken_back_only_when_it_is_a_later_refresh_for_the_same_server(
-    theirs: object, taken: object
+    theirs: object,
+    taken: object,
 ) -> None:
     assert credentials.refreshed_mcp_login(MCP, theirs) == taken
 

@@ -719,7 +719,12 @@ def take_back(data: Path, operator: Path) -> None:
 
 
 def environment(
-    current: Mapping[str, str], bin_dir: Path | None, tmp: Path, *, cache: Path, data: Path
+    current: Mapping[str, str],
+    bin_dir: Path | None,
+    tmp: Path,
+    *,
+    cache: Path,
+    data: Path,
 ) -> dict[str, str]:
     """Return the command's environment: the wrapper's, scrubbed at start, plus the run's directories.
 

@@ -411,7 +411,9 @@ def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_pat
 
 @pytest.mark.parametrize("role", ROLES)
 def test_each_role_starts_with_the_operators_logins_in_a_data_directory_of_its_own(
-    sandbox: Sandbox, tmp_path: Path, role: str
+    sandbox: Sandbox,
+    tmp_path: Path,
+    role: str,
 ) -> None:
     """OpenCode's data directory is the role's, and the wrapper copies the operator's logins into it: the operator's
     OpenCode, and the overseer's, run code their own names, so no run writes it, whatever the template says. Setup
@@ -444,7 +446,9 @@ def test_each_role_starts_with_the_operators_logins_in_a_data_directory_of_its_o
 
 @pytest.mark.parametrize("place", ["missing", "link"])
 def test_the_operators_opencode_data_is_denied_writing_wherever_it_leads(
-    sandbox: Sandbox, tmp_path: Path, place: str
+    sandbox: Sandbox,
+    tmp_path: Path,
+    place: str,
 ) -> None:
     """Missing, it is made, as OpenCode would at its first start, so that it is denied before a run could make it.
     A link, as a dotfile manager makes, is denied with where it leads."""
@@ -524,13 +528,16 @@ def test_a_login_the_operator_no_longer_has_is_gone_from_the_roles(sandbox: Sand
         pytest.param('ln -sf "$1/auth.json" "$XDG_DATA_HOME/opencode/auth.json"', id="file-link"),
         pytest.param('rm "$XDG_DATA_HOME/opencode/auth.json" && mkfifo "$XDG_DATA_HOME/opencode/auth.json"', id="fifo"),
         pytest.param(
-            'rm "$XDG_DATA_HOME/opencode/auth.json" && cp -r "$1" "$XDG_DATA_HOME/opencode/auth.json"', id="dir"
+            'rm "$XDG_DATA_HOME/opencode/auth.json" && cp -r "$1" "$XDG_DATA_HOME/opencode/auth.json"',
+            id="dir",
         ),
         pytest.param('cp "$1/big.json" "$XDG_DATA_HOME/opencode/auth.json"', id="too-big"),
     ],
 )
 def test_what_a_run_leaves_in_place_of_its_logins_is_never_followed(
-    sandbox: Sandbox, tmp_path: Path, script: str
+    sandbox: Sandbox,
+    tmp_path: Path,
+    script: str,
 ) -> None:
     """The host reads what a run left in its data directory: a link is not followed, a fifo does not hang the
     wrapper, and a file bigger than any login file is not read. The next run of the role starts from the operator's
