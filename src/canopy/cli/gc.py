@@ -11,7 +11,7 @@ import click
 from canopy.cli.common import CliError, open_context
 from canopy.cli.render import report_json
 from canopy.core import conversation
-from canopy.loop import gc
+from canopy.loop import gc, vacuum
 
 if TYPE_CHECKING:
     from canopy.loop.gc import Report
@@ -24,28 +24,40 @@ _SIZE_WIDTH = 11
 
 @click.command("gc")
 @click.option("--dry-run", is_flag=True, help="Report what a pass would remove, and remove nothing.")
-@click.option("--json", "as_json", is_flag=True, help="Print the report as one JSON object instead.")
+@click.option("--json", "as_json", is_flag=True, help="Print the dry run's report as one JSON object instead.")
+@click.option("--vacuum", "vacuum_journal", is_flag=True, help="Give the journal's free pages back to its disk.")
 @click.pass_context
-def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool) -> int:
+def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool, vacuum_journal: bool) -> int:
     """Report what canopy keeps of its own history, and what a pass with your `[retention]` would remove.
 
     For each kind: how many there are and their size, then how many a pass would remove and theirs, and the rule that
-    removes them. A live tick runs the pass once a day, removing the files the report counts, and rotates canopy.log;
-    by hand, only the dry run is built yet, and it removes nothing (ROADMAP M47).
+    removes them. A live tick runs the pass once a day, removing the files and the journal's rows the report counts,
+    and rotates canopy.log. By hand, `--dry-run` removes nothing, and `--vacuum` shrinks the journal by its free pages:
+    it runs only while no tick is running and no run is live, and when the disk has room for a copy of the journal
+    (ROADMAP M47).
 
     Raises:
-        UsageError: `--dry-run` is not given.
-        CliError: it runs inside one of canopy's ticks or runs.
+        UsageError: neither `--dry-run` nor `--vacuum` is given, or both are.
+        CliError: it runs inside one of canopy's ticks or runs, or `--vacuum` cannot run now.
     """
     try:
         conversation.check_operator()
     except conversation.Refused as r:
         raise CliError(f"gc refused ({r.guard}): {r.reason}") from None
-    if not dry_run:
+    if dry_run == vacuum_journal:
         raise click.UsageError(
-            "only `canopy gc --dry-run` is built yet; the loop's live ticks run the pass once a day",
+            "give `--dry-run` or `--vacuum`; the loop's live ticks run the pass once a day",
         )
     ctx = open_context(click_ctx)
+    if vacuum_journal:
+        try:
+            done = vacuum.vacuum(ctx)
+        except vacuum.RefusedError as e:
+            raise CliError(f"gc --vacuum refused: {e}") from None
+        click.echo(f"The journal was {size_text(done.before)}, and is {size_text(done.after)}.")
+        if not done.checkpointed:
+            click.echo("A reader holds its WAL: it shrinks the rest of the way once the reader lets go.")
+        return 0
     report = gc.measure(ctx, datetime.now(UTC))
     if as_json:
         click.echo(report_json(dataclasses.asdict(report)))

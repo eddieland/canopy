@@ -58,4 +58,8 @@ full. The operator closed its check on real use (2026-10-21: the dry run works w
 `MEASUREMENTS.md` section, so §26's defaults stay as proposed, and the unrun live measurement moved to `SCENARIOS.md`
 (S59). Stage 2 is built against the fakes (2026-10-21): the daily pass over files in reconcile, recorded in
 `gc_passes`; `canopy.log` rotated by each live tick; and the web UI's "removed after N days". Its check, a week of the
-operator's loop with the pass on (S60), is the operator's; stage 3 waits on it.
+operator's loop with the pass on (S60), is the operator's. Stage 3 is built against the fakes ahead of that check, at
+the operator's word (2026-10-21): the pass also deletes the harness's attention rows, connector runs, and derivations
+outside the window and `journal_days`, recorded as rows in `gc_passes.removed`, and checkpoints the journal; `canopy
+gc --vacuum` runs between ticks while no run is live. Its check, the journal across a pass and a vacuum (S61), is the
+operator's too, after S60.

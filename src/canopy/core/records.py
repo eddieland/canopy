@@ -932,7 +932,8 @@ class GcPass(Row):
     #: The end before which a run's files went, and an `ok` tick's; None when that kind is kept forever.
     run_cutoff: str | None
     tick_cutoff: str | None
-    #: The files it removed and their bytes, by the kind `canopy gc --dry-run` names, as a JSON object.
+    #: The files and the journal's rows it removed, and their bytes, by the kind `canopy gc --dry-run` names, as a JSON
+    #: object of `{"files", "bytes"}` or `{"rows", "bytes"}`.
     removed: str
     #: The files it found past retention but could not remove.
     failures: int
