@@ -265,6 +265,9 @@ def test_slack_blocks_parse_nothing_in_journal_text() -> None:
         ('"https://x.test/q?a=1&b=2", then', '"<https://x.test/q?a=1&amp;b=2>", then'),
         ("https://x.test/wiki/Foo_(bar).", "<https://x.test/wiki/Foo_(bar)>."),
         ("<https://x.test/7>", "&lt;<https://x.test/7>&gt;"),
+        # A URL holding `|` would show a label in its place, and a bare scheme is no URL: both stay text.
+        ("(https://evil.test|ok.test)", "(https://evil.test|ok.test)"),
+        ("Opened https://.", "Opened https://."),
     ],
 )
 def test_slack_keeps_the_punctuation_around_a_url_out_of_its_link(summary: str, linked: str) -> None:
