@@ -84,6 +84,7 @@ def rules(config: Config) -> agents.Rules:
         overseer_prompt=prompt,
         tracker_provider=config.tracker.provider,
         bash_allows=bash_allows.by_agent(runtime.allow_bash),
+        artifacts=config.artifacts.publishing(),
     )
 
 

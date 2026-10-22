@@ -22,6 +22,8 @@ permission:
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
   skill:
     "canopy": deny
+    # The artifact store's skill is for the agents that publish to it (DESIGN §38).
+    "canopy-artifacts": deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth for servers other than the tracker's: commenting or replying anywhere, reviewing, and anything that
   # creates, pushes, writes files, changes labels, or edits or deletes. Reading stays allowed.
@@ -100,6 +102,9 @@ permission:
   "atlassian_listJiraProjects": allow
   "atlassian_lookupJiraAccountId": allow
   "atlassian_searchJiraIssuesUsingJql": allow
+  # The artifact store's MCP server, `artifacts.mcp_server`: this agent never publishes, whatever config says
+  # (DESIGN §38), and canopy renders the server denied whole at the marked line.
+  # canopy: artifact tools
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
   # pattern, so none above, such as `*merge*`, closes one.
   "canopy_git_merge-base": allow

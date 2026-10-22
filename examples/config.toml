@@ -219,6 +219,15 @@ cmd = ""
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
 
+# Optional: an artifact store workers publish pages to for people to comment on (DESIGN §38), Louvre or canopy's local
+# one, `canopy-artifacts serve`, each an MCP server your runtime config names. Every agent's definition denies the
+# server but those publish_roles names; "worker" is the one role that may publish, and only for public tickets.
+# [artifacts]
+# mcp_server = "louvre"
+# namespace = "canopy/operator"
+# authorized_authors = ["u_ana", "u_raj"]     # whose comments steer a worker, once comments come back (M62)
+# publish_roles = ["worker"]
+
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
 # and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk.

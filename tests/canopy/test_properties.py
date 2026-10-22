@@ -210,6 +210,10 @@ def test_every_config_key_declares_a_scope() -> None:
         "chores",
         # It widens what an agent's shell reaches (TRUST_MODEL T1).
         "runtime.allow_bash",
+        # Which agents may send what they read to a store, and whose comments there steer a worker (DESIGN §38).
+        "artifacts.mcp_server",
+        "artifacts.publish_roles",
+        "artifacts.authorized_authors",
     }
 
 

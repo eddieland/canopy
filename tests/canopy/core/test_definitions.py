@@ -578,6 +578,55 @@ def test_no_other_agent_may_call_canopys_git_tools(canopy_env: CanopyEnv, agent:
     assert [tool for tool in GIT_TOOLS if not _opencode_disabled(ruleset, tool)] == []
 
 
+#: The artifact store's tools as the runtime names them on a server called `louvre` (DESIGN §38), the feed among them.
+STORE_TOOLS = tuple(f"louvre_{tool}" for tool in (*config.ARTIFACT_TOOLS, "comment_feed"))
+#: The store's skill, which every definition denies but a publishing worker's.
+STORE_SKILL = "canopy-artifacts"
+
+
+def _publish(canopy_env: CanopyEnv, roles: str = '["worker"]') -> None:
+    canopy_env.write_private(f'[artifacts]\nmcp_server = "louvre"\npublish_roles = {roles}\n')
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+def test_a_worker_publish_roles_names_may_call_the_stores_tools_by_name(canopy_env: CanopyEnv, provider: str) -> None:
+    _set_provider(canopy_env, provider)
+    _publish(canopy_env)
+    ruleset = _ruleset(canopy_env, agents.WORKER)
+    allowed = [tool for tool in STORE_TOOLS if _opencode_action(ruleset, tool, "*") == "allow"]
+    assert allowed == [f"louvre_{tool}" for tool in config.ARTIFACT_TOOLS]
+    # By exact name, after the server's wildcard: the feed and a tool the contract does not have are denied.
+    assert _opencode_action(ruleset, "louvre_comment_feed", "*") == "deny"
+    assert _opencode_action(ruleset, "louvre_artifact_delete", "*") == "deny"
+    assert _opencode_action(ruleset, "skill", STORE_SKILL) == "allow"
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.WORKER}))
+def test_no_other_agent_may_call_the_store_or_load_its_skill(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    """The planner and a private ticket's worker never publish, and the others publish nothing (DESIGN §38)."""
+    _set_provider(canopy_env, provider)
+    _publish(canopy_env)
+    ruleset = _ruleset(canopy_env, agent)
+    assert [tool for tool in STORE_TOOLS if not _opencode_disabled(ruleset, tool)] == []
+    assert _opencode_action(ruleset, "skill", STORE_SKILL) == "deny"
+
+
+@pytest.mark.parametrize("agent", runtime_definitions.agent_names())
+def test_a_store_no_role_publishes_to_is_denied_to_every_agent(canopy_env: CanopyEnv, agent: str) -> None:
+    _publish(canopy_env, "[]")
+    ruleset = _ruleset(canopy_env, agent)
+    assert [tool for tool in STORE_TOOLS if not _opencode_disabled(ruleset, tool)] == []
+    assert _opencode_action(ruleset, "skill", STORE_SKILL) == "deny"
+
+
+@pytest.mark.parametrize("agent", runtime_definitions.agent_names())
+def test_without_a_store_no_definition_names_one_and_none_may_load_its_skill(canopy_env: CanopyEnv, agent: str) -> None:
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
+    assert "louvre" not in rendered
+    assert _opencode_action(_opencode_ruleset(rendered), "skill", STORE_SKILL) == "deny"
+
+
 @pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))
 def test_an_example_chores_agent_may_call_its_history_tool_too(agent: str) -> None:
     """Copied at install, it keeps its shell for its prompts' commands, and gets the tool every chore's prompt names."""
@@ -743,6 +792,18 @@ def test_each_agent_definition_as_rendered(
     agent: str,
 ) -> None:
     # What each agent runs on, as a run loads it: its rules, and the overseer's whole prompt and tracker skill.
+    files = definitions.sources(config.load(canopy_env.root))
+    assert files[f"agents/{agent}.md"].decode() == markdown_snapshot
+
+
+@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER])
+def test_each_worker_definition_as_rendered_with_a_store_the_worker_publishes_to(
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+    agent: str,
+) -> None:
+    # The public worker may call the store's tools by name and load its skill; the private one is denied both.
+    canopy_env.write_private('[artifacts]\nmcp_server = "louvre"\npublish_roles = ["worker"]\n')
     files = definitions.sources(config.load(canopy_env.root))
     assert files[f"agents/{agent}.md"].decode() == markdown_snapshot
 

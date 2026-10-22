@@ -36,6 +36,8 @@ permission:
   # overseer has nothing to load. Otherwise the prompt has it load the skill by name, if there is one.
   skill:
     "canopy": deny
+    # The artifact store's skill is for the agents that publish to it (DESIGN §38).
+    "canopy-artifacts": deny
     # canopy: skill rule
     "*": deny
   # The overseer only reads the tracker (TRUST_MODEL T6). At the marked line canopy renders the tracker's server denied
@@ -101,6 +103,9 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
+  # (DESIGN §38): canopy renders it denied whole at the marked line.
+  # canopy: artifact tools
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from collections.abc import Set as AbstractSet
 
 WORKER = "canopy-worker"
 PRIVATE_WORKER = "canopy-worker-private"
@@ -38,6 +39,19 @@ class McpTools:
     #: private worker's, for its own PRs. The planner writes nothing, so gets neither these nor `create`, even where
     #: `allowed` names them.
     pr_writes: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
+class Publishing:
+    """The artifact store's MCP server (DESIGN §38), the tools of it an agent that publishes may call, and those agents.
+
+    Every other agent of canopy's is denied the server whole, and the planner and the private worker never publish.
+    """
+
+    server: str
+    tools: Sequence[str]
+    #: The agents that publish, by name: each may call `tools`, and no other tool of the server.
+    agents: AbstractSet[str]
 
 
 @dataclass(frozen=True)
@@ -70,6 +84,8 @@ class Rules:
     #: The commands config allows each agent beyond its own bash rules, by agent name: each a rule the runtime matches
     #: a command line against (`canopy.runtime.definitions.BASH_ALLOW_RE`). An agent not named gets none.
     bash_allows: Mapping[str, Sequence[str]]
+    #: The artifact store's server and who publishes to it; None when no store is configured, and no rule names one.
+    artifacts: Publishing | None
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

@@ -36,7 +36,7 @@ Louvre's tokens. Once stage 1 built the store, it moved to the store's README,
 mcp_server = "louvre"          # or the local store's
 namespace = "canopy/operator"
 authorized_authors = ["u_ana", "u_raj"]
-publish_roles = ["implement"]
+publish_roles = ["worker"]     # an agent, as runtime.allow_bash names one
 ```
 
 Accept: written with the design, before work starts. Live, once built: a worker publishes an artifact to Louvre for a
@@ -47,4 +47,7 @@ list.
 Status: in progress. Stage 1 is built (2026-10-22): `canopy-artifacts serve`, the local store, serves the eight
 tools over stdio from a directory of the operator's, with versions, anchors, and the feed, and the contract is its
 README. Every comment through its tools is an agent's on the operator's behalf; people's comments wait for the web
-channel. Stage 2, publishing, is next.
+channel. Stage 2 is built (2026-10-22): `[artifacts]` in the private file, the `canopy-artifacts` skill, and the public
+worker, the one agent `publish_roles` may name, allowed the store's tools by exact name, but the feed; every other
+definition denies the server whole, and the store's skill with it. `publish_roles` names agents, not run kinds: a
+definition serves every kind its agent runs. Stage 3 is next, once M36 and M37 are done.

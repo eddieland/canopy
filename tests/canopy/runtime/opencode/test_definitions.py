@@ -13,6 +13,8 @@ PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 SKILL_MARKER = "    # canopy: skill rule\n"
 READS_MARKER = "  # canopy: tracker reads\n"
 ISSUES_MARKER = "  # canopy: github issue tools\n"
+ARTIFACT_TOOLS_MARKER = "  # canopy: artifact tools\n"
+ARTIFACT_SKILL_MARKER = "    # canopy: artifact skill\n"
 #: The denial of GitHub's issue tools, as rendered for both workers and the planner off a GitHub tracker.
 ISSUE_DENIALS = "".join(
     f'  "*{tool}*": deny\n'
@@ -54,6 +56,7 @@ PLAIN = agents.Rules(
     overseer_prompt="Decide.\n",
     tracker_provider="no-such-tracker",
     bash_allows={},
+    artifacts=None,
 )
 
 
@@ -100,12 +103,16 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
 def test_the_overseer_gets_the_trackers_skill_when_canopy_ships_one_and_no_skill_tool() -> None:
     # With the skill in its body there is nothing left to load, and OpenCode sends no tool a rule denies whole.
     files = {
-        "agents/canopy-overseer.md": f"---\npermission:\n{SKILL_MARKER}{READS_MARKER}---\n{PROMPT_MARKER}".encode(),
+        "agents/canopy-overseer.md": (
+            f"---\npermission:\n{SKILL_MARKER}{READS_MARKER}{ARTIFACT_TOOLS_MARKER}---\n{PROMPT_MARKER}".encode()
+        ),
         "skills/tracker-jira/SKILL.md": b"---\nname: tracker-jira\n---\nUse JQL.\n",
     }
     overseer = definitions.render(files, replace(PLAIN, tracker_provider="jira"))["agents/canopy-overseer.md"].decode()
     skill = "The skill `tracker-jira` follows, given here so that you need not load it.\n\nUse JQL.\n"
-    assert overseer == f'---\npermission:\n{SKILL_MARKER}    "*": deny\n{READS_MARKER}---\nDecide.\n\n{skill}'
+    assert overseer == (
+        f'---\npermission:\n{SKILL_MARKER}    "*": deny\n{READS_MARKER}{ARTIFACT_TOOLS_MARKER}---\nDecide.\n\n{skill}'
+    )
 
 
 @pytest.mark.parametrize("agent", TEMPERATURE_AGENTS)
@@ -274,3 +281,32 @@ def test_a_pattern_that_matches_a_known_tracker_tool_is_left_out(agent: str) -> 
     rendered = definitions.render_github_issues(bundled, agent, linear, "linear")
     rules = rendered.split(ISSUES_MARKER, 1)[1].split("  # ", 1)[0]
     assert rules == ISSUE_DENIALS.replace('  "*list_issues*": deny\n', "")
+
+
+#: A store on a server called `louvre` that the public worker publishes to (DESIGN §38).
+STORE = agents.Publishing("louvre", ("artifact_publish", "thread_resolve"), frozenset({agents.WORKER}))
+
+
+@pytest.mark.parametrize("agent", definitions.agent_names())
+def test_without_a_store_each_definition_stays_as_shipped(agent: str) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    assert definitions.render_artifacts(bundled, agent, None) == bundled
+
+
+@pytest.mark.parametrize("agent", definitions.agent_names())
+def test_the_store_is_denied_whole_and_only_a_publishing_agent_gets_its_tools_and_skill(agent: str) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    rendered = definitions.render_artifacts(bundled, agent, STORE)
+    tools = '  "louvre_artifact_publish": allow\n  "louvre_thread_resolve": allow\n' if agent == agents.WORKER else ""
+    assert f'{ARTIFACT_TOOLS_MARKER}  "louvre_*": deny\n{tools}' in rendered
+    skill = '    "canopy-artifacts": allow\n'
+    assert (f"{ARTIFACT_SKILL_MARKER}{skill}" in rendered) is (agent == agents.WORKER)
+    assert '    "canopy-artifacts": deny\n' in rendered
+
+
+def test_a_definition_without_its_artifact_lines_is_refused() -> None:
+    bundled = (resources.agents_dir() / f"{agents.WORKER}.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match="artifact tools"):
+        definitions.render_artifacts(bundled.replace(ARTIFACT_TOOLS_MARKER, ""), agents.WORKER, None)
+    with pytest.raises(agents.DefinitionsError, match="artifact skill"):
+        definitions.render_artifacts(bundled.replace(ARTIFACT_SKILL_MARKER, ""), agents.WORKER, STORE)

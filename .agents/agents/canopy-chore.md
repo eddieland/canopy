@@ -22,6 +22,8 @@ permission:
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
   skill:
     "canopy": deny
+    # The artifact store's skill is for the agents that publish to it (DESIGN §38).
+    "canopy-artifacts": deny
   # A chore reads the tracker and writes nothing to it (TRUST_MODEL T6). At the marked line canopy renders, off a GitHub
   # tracker, the tracker's server denied by a wildcard and each of its read tools allowed by name: OpenCode sends no
   # other tool of it, and a write no pattern names fails closed (D021). GitHub's issue reads stay, as the chore's prompt
@@ -50,6 +52,9 @@ permission:
   "*branch*": deny
   "*fork*": deny
   "*copilot*": deny
+  # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
+  # (DESIGN §38): canopy renders it denied whole at the marked line.
+  # canopy: artifact tools
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny
