@@ -25,9 +25,9 @@ running it. A tick the operator asks for is no different: the overseer would be 
 - The disk check still holds the harness's dispatches, which fill a disk as the overseer's do. The check that
   `canopy` runs is the overseer's and is skipped with it, and nothing is owed: the duties (§6) are owed only for what
   the overseer was listed (§37).
-- The attention list stands as it was, since under §37 no item hangs on a tick recording it again. That is why this
-  waits on §37: with the list the latest `ok` tick's (§14), a tick that closed `ok` without the overseer would clear
-  every item the overseer records.
+- The attention list is §37's: the harness's items open and close with their causes on every tick, this one too, and
+  the overseer's stand until what ends them. That is why this waits on §37: with the list the latest `ok` tick's
+  (§14), a tick that closed `ok` without the overseer would clear every item the overseer records.
 - Each tick records whether it ran the overseer (§11). One that did not costs nothing, and `canopy spend` and the web
   UI's spend page count it at nothing, never among the runs that reported no cost. They split ticks by whether the
   overseer ran, beside what woke them, so what an idle tick costs is the overseer's runs that bought nothing.
@@ -38,15 +38,17 @@ The overseer reads the journal and nothing else. Its definition loses the tracke
 provider skill in its body (§13), and denies every MCP server but canopy's, whatever the operator's runtime config
 grants: it has canopy's tools (§27), or its `canopy` commands until those reach it, and nothing else.
 
-- A stale or unobserved subject (§35) gets the harness's `wait`, naming what is old, instead of a live read, and
-  leaves §37's list of what the overseer is left. The source behind it has raised `connector_failed` (§30), and the
-  ticket moves again once a read is whole. A dispatch resting on it is still refused `stale` (§35).
-- The tracker query is read by the `tracker` source alone, so no tick owes `canopy queried`. A query no source read is
-  `connector_failed`, and a ticket it would have found waits for the read that finds it.
+- A stale or unobserved subject (§35) gets the harness's `wait`, naming what is old or that no source covers it,
+  instead of a live read, and leaves §37's list of what the overseer is left. A stale one's source has raised
+  `connector_failed` (§30), and the ticket moves again once a read is whole; an unobserved one is no outage, and the
+  wait says so. A dispatch resting on a stale one is still refused `stale` (§35).
+- The tracker query is read by the `tracker` source alone, on its polls as M36 built them, and the harness records the
+  latest whole read when §7 says the query is due, so no tick owes `canopy queried`. A query the source failed to read
+  is `connector_failed`, and a ticket it would have found waits for the read that finds it.
 - With nothing to read, the overseer has no outage to skip a tick over: its tick-wide `skip` and §15's case for an MCP
   server down go. A source down is `connector_failed`, and what it left stale waits.
-- An overseer that cannot read a ticket can do nothing with one no source observes, so this needs a `tracker` source
-  (Open).
+- An overseer that cannot read a ticket can do nothing with one no source observes, so this needs a `tracker` source,
+  and the build waits until that is settled (Open).
 
 ### Ticking when the observations change
 
@@ -57,7 +59,8 @@ ticket, a row on one, an item past a cursor (§35), or a due chore. They are com
 never by wording, so a poll that only reads again what the latest tick saw wakes nothing, and a ticket the overseer
 waited on wakes nothing until something new is on it. A gate coming due, a run ending, and the operator's acts end the
 wait as today, and `loop.min_gap_minutes` holds every wake. The tick records the poll as what woke it (§11). An event
-in the world is then acted on within a poll, not up to `loop.idle_max_minutes` later: the trade §6 states is lifted.
+in the world is then acted on within a poll, or the minimum gap after the latest tick if that is later, not up to
+`loop.idle_max_minutes` later: the trade §6 states is lifted.
 Rejected: a tick on every poll, which writes a tick's rows every few minutes to learn what one comparison answers.
 
 Idle pacing paces only the overseer's runs. A ticket the overseer waited on stays listed to it while its row holds
