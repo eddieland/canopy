@@ -959,7 +959,7 @@ def test_the_reviewer_is_sent_githubs_issue_reads_only_when_they_are_the_tickets
     shipped = _opencode_ruleset((resources.agents_dir() / f"{agents.REVIEWER}.md").read_text())
     expected = {tool for tool in GITHUB_TOOLS if not _opencode_disabled(shipped, tool)}
     assert sent == (expected if issues else expected - GITHUB_ISSUE_READS)
-    assert {"github_pull_request_read", "github_get_commit", "github_list_commits"} <= sent
+    assert "github_pull_request_read" in sent
     # Nor what only filing or labelling an issue needs: it writes nothing.
     assert not {"github_list_issue_types", "github_list_issue_fields", "github_get_label"} & sent
 
@@ -1075,9 +1075,20 @@ PROMPT_GITHUB_TOOLS: dict[str, AbstractSet[str]] = {
     agents.OVERSEER: OVERSEER_GITHUB_READS,
     agents.WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
     agents.PRIVATE_WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
-    agents.REVIEWER: {"github_pull_request_read", "github_get_commit", "github_list_commits"},
+    agents.REVIEWER: {"github_pull_request_read"},
     agents.PLANNER: {"github_pull_request_read"},
     agents.CHORE: {"github_pull_request_read", "github_list_pull_requests", "github_get_commit", "github_list_tags"},
+}
+#: OpenCode's tools and canopy's that each agent's prompt names: the overseer's `canopy` commands and its reads of a
+#: tool output saved to a file, the workers' shell and edits, the plan the planner writes, and the git tools and history
+#: canopy serves.
+PROMPT_OWN_TOOLS: dict[str, AbstractSet[str]] = {
+    agents.OVERSEER: {"bash", "read", "grep"},
+    agents.WORKER: {"bash", "edit", "read"},
+    agents.PRIVATE_WORKER: {"bash", "edit", "read"},
+    agents.REVIEWER: {"read", *GIT_TOOLS},
+    agents.PLANNER: {"edit", "read", *GIT_TOOLS},
+    agents.CHORE: {"read", CHORE_HISTORY},
 }
 
 
@@ -1087,8 +1098,28 @@ def test_each_agent_is_sent_each_tool_its_prompt_names(canopy_env: CanopyEnv, ag
     # `tool not found`. On defaults, workers drafting their PR replies.
     _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agent)
-    named = PROMPT_TRACKER_TOOLS[agent, provider] | PROMPT_GITHUB_TOOLS[agent]
+    named = PROMPT_TRACKER_TOOLS[agent, provider] | PROMPT_GITHUB_TOOLS[agent] | PROMPT_OWN_TOOLS[agent]
     assert sorted(tool for tool in named if _opencode_disabled(ruleset, tool)) == []
+
+
+#: GitHub's reads of commits and code, which canopy's git tools and the checkout stand in for (DESIGN §27).
+GITHUB_HISTORY_READS = {"github_list_commits", "github_get_commit", "github_search_commits", "github_search_code"}
+
+
+@pytest.mark.parametrize("provider", ["jira", "github"])
+@pytest.mark.parametrize("agent", sorted(GIT_READERS))
+def test_the_reviewer_and_the_planner_read_history_with_canopys_git_tools_not_githubs(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
+    # Their prompts read the code where it is checked out and its history through canopy's git tools, so GitHub's reads
+    # of commits and code are left out of every request, whatever the tracker: each is a schema sent on every call.
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    assert sorted(tool for tool in GITHUB_HISTORY_READS if not _opencode_disabled(ruleset, tool)) == []
+    assert [tool for tool in GIT_TOOLS if _opencode_disabled(ruleset, tool)] == []
+    assert not _opencode_disabled(ruleset, "github_pull_request_read")
 
 
 #: GitHub's tools the planner may call when the tracker is GitHub: its reads of issues and PRs,
@@ -1156,6 +1187,10 @@ def test_the_overseer_has_no_todo_list_and_no_skill_tool_with_the_trackers_skill
     assert _opencode_disabled(without, "todowrite")
     assert _opencode_disabled(with_skill, "skill")
     assert not _opencode_disabled(without, "skill")
+    # Nor a tool to list files: it reads the one a tool output was saved to by its name.
+    assert _opencode_disabled(with_skill, "glob")
+    assert not _opencode_disabled(with_skill, "read")
+    assert not _opencode_disabled(with_skill, "grep")
 
 
 @pytest.mark.parametrize(

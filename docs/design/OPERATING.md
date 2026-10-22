@@ -172,14 +172,16 @@ Agent definitions ship in `agents/`:
   closing, transition, delete, fork, API file and branch writes, and other agents or workflow runs denied by name
   (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; MCP read tools only (§21): of the tracker's server, its read tools
-  by name, and of GitHub, issue reads only when they are the tickets.
+  by name, and of GitHub, issue reads only when they are the tickets, and no commit or code reads, which its checkout
+  and canopy's git tools stand in for (§27).
 - `canopy-chore`: no edits or subagents, and no shell but its own history; MCP write tools denied by name, and of the
   tracker's server, its read tools only, by name (§19).
 
 None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 A tool an agent never calls is denied whole, since the runtime sends every schema it allows on every call and none it
 denies: GitHub's tools no prompt asks for, by name, as the server's own name is the operator's, and its issue tools,
-from both workers and the planner too, off a GitHub tracker. A pattern that would take one of the tracker's own tools
+from both workers and the planner too, off a GitHub tracker; its commit and code reads from the planner as from the
+reviewer. A pattern that would take one of the tracker's own tools
 canopy knows is left out.
 
 ### What a run prints

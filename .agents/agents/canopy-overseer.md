@@ -30,6 +30,8 @@ permission:
     # canopy: bash allows
   # Nothing to plan across calls: a tick's work is its decisions, each recorded as it is made.
   todowrite: deny
+  # Its file tools are `read` and `grep`, for a tool output saved to a file it is told the name of; it lists none.
+  glob: deny
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. With the
   # tracker's skill in its body, canopy renders `"*": deny` at the marked line, last, so the tool is denied whole: the
   # overseer has nothing to load. Otherwise the prompt has it load the skill by name, if there is one.

@@ -64,6 +64,12 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # And GitHub's reads of commits and code: the planner reads the code in its desk and its history with canopy's git
+  # tools below, as it does on a GitHub tracker, whose rules allow it none of these.
+  "*list_commits*": deny
+  "*get_commit*": deny
+  "*search_commits*": deny
+  "*search_code*": deny
   # GitHub's issue tools, which only the `tracker-github` skill names: off a GitHub tracker, canopy renders their
   # denial at the marked line, so OpenCode sends none of them. Its issue comment tools stay, for a PR's conversation.
   # canopy: github issue tools

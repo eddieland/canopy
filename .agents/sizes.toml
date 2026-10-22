@@ -2,9 +2,9 @@
 # a prompt as the work needs, and update its number here in the same PR, so the diff shows by how much.
 # tests/canopy/test_prompt_sizes.py names the line to update; `make prompt-sizes` prints the sizes, with tokens.
 "agents/canopy-chore.md" = 3012
-"agents/canopy-overseer.md" = 5021
-"agents/canopy-planner.md" = 4751
-"agents/canopy-reviewer.md" = 4363
+"agents/canopy-overseer.md" = 5149
+"agents/canopy-planner.md" = 5052
+"agents/canopy-reviewer.md" = 4662
 "agents/canopy-worker-private.md" = 7293
 "agents/canopy-worker.md" = 5890
 "personas/canopy.md" = 882

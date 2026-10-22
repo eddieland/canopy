@@ -74,6 +74,12 @@ permission:
   "*list_issue_types*": deny
   "*list_issue_fields*": deny
   "*get_label*": deny
+  # And GitHub's reads of commits and code: the reviewer reads the code in its checkout and its history with canopy's
+  # git tools below, so each would be a schema sent on every call and never used.
+  "*list_commits*": deny
+  "*get_commit*": deny
+  "*search_commits*": deny
+  "*search_code*": deny
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
   # pattern, so none above, such as `*merge*`, closes one.
   "canopy_git_merge-base": allow

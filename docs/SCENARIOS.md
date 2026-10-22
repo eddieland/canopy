@@ -396,7 +396,11 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   Of the tracker's server, expect the overseer, the reviewer, and the chore sent only its read tools (Jira's 12 by
   default). Off a GitHub tracker, expect both workers and the planner sent none of GitHub's issue tools (`issue_read`,
   `issue_write`, `list_issues`, `search_issues`, `list_issue_types`, `list_issue_fields`, `get_label`; #436): about
-  2.8k tokens less on each worker run and 1.8k on each plan (2026-10-21 F54), and every other tool as on 2026-10-21.
+  2.8k tokens less on each worker run and 1.8k on each plan (2026-10-21 F54). Whatever the tracker, expect the reviewer
+  and the planner sent none of GitHub's commit and code reads (`list_commits`, `get_commit`, `search_commits`,
+  `search_code`; #436), about 1.5k tokens less on each review and plan, and the overseer not sent `glob`, about 0.3k a
+  tick; every other tool as on 2026-10-21. OpenCode's three MCP resource tools stay on every agent: at 1.19.3 they are
+  left out only when the `read` tool is denied whole.
   Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
   rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
