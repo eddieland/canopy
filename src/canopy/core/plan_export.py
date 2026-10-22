@@ -23,6 +23,15 @@ the journal records on the ticket, oldest first, each body quoted under a headin
 body can pass for another message. A message is never changed or deleted, so the file changes only when one is added;
 one exported before is left when `conversations` is off.
 
+With `indexes`, each ticket's directory gets a `README.md` listing its plans, newest first, each linked with its prompt
+and its conversation, and `dest` one listing every ticket by its newest plan, so a forge that shows a directory's
+README shows each listing. An index is canopy's only while `INDEX_MARK` opens it: a `README.md` that does not, a link
+among them, is the operator's and never touched, and deleting the line takes one over. A plan's title is model text
+(TRUST_MODEL T1), so an index escapes every character in it Markdown reads as markup and never puts it inside a link:
+it shows as text, never as a link with a hidden target, an image, or HTML. An index is written once its ticket, or for
+`dest` every ticket, was checked, so `limit` leaves it for the export that finishes them. A plan an index lists without
+reading it has the title kept with its fingerprint.
+
 A history of thousands of plans is exported each tick, so an export reads only what may have changed: for each plan it
 found exported as it stands, it keeps a fingerprint of its row and of every file's stat in the state directory, and
 next time skips a plan whose fingerprint still matches with a stat of each file and no read (`_Seen`). With `limit`,
@@ -45,6 +54,7 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
+from urllib.parse import quote
 
 from canopy.core import db, plans, records, sql
 from canopy.core.vocab import PlanStatus
@@ -53,21 +63,32 @@ from canopy.infra.text import printable
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
 
 #: Which of a ticket's plans a file is: the plan before its implement (§25), or one before a resume (§32).
 type Kind = Literal["plan", "feedback plan"]
 
 #: A ticket's conversation's name in an export, beside its plans.
 CONVERSATION_NAME = "CONVERSATION.md"
+#: An index's name in an export: one in each ticket's directory, and one in `dest` for every ticket.
+INDEX_NAME = "README.md"
+#: The line that opens every index canopy writes, so an export rewrites only its own.
+INDEX_MARK = "<!-- Written by canopy: each export rewrites this file while this line opens it. -->\n"
 #: Where, under the state directory, each destination's fingerprints are kept (`_Seen`), one file for each.
 SEEN_DIR = "plan-exports"
 _DIR_MODE = 0o700
 _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
-# Bumped whenever `document` or `name` changes, so every plan exported before is read and compared again.
-_FORMAT = 5
+# Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
+# and compared again.
+_FORMAT = 6
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
+# The most characters of a title an index shows.
+_MAX_INDEX_TITLE = 100
+# What a line of Markdown text reads as markup: a link or an image, a tag, an entity, emphasis, code, math, a table's
+# cell, and the escape itself. A backslash before each makes it literal.
+_MARKUP_RE = re.compile(r"([\\`*_~\[\]()<>|&$])")
 # A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
 # which always has a status after its run.
 _PROMPT_NAME_RE = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
@@ -98,7 +119,7 @@ class Exported:
     unchanged: int
     #: The plans it could not export.
     skipped: Sequence[Skipped]
-    #: How many plans and conversations it left unchecked, having written its `limit` of files first.
+    #: How many plans, conversations, and indexes it left unchecked, having written its `limit` of files first.
     left: int = 0
     #: The files it removed, relative to `dest`: each a plan's or prompt's earlier name, the file now under a new one.
     #: On a filesystem that ignores case, a name that differs in case alone names the new file, so is gone, not removed.
@@ -117,15 +138,17 @@ def export(
     limit: int | None = None,
     prompts: bool = True,
     conversations: bool = False,
+    indexes: bool = False,
 ) -> Exported:
     """Export every plan and feedback plan in the journal into `dest`, made operator-only if it is missing.
 
     With `limit`, stop once that many files are written; the plans after them are left for the next export. With
-    `prompts`, each plan's prompt goes beside it, and with `conversations`, each planned ticket's conversation.
+    `prompts`, each plan's prompt goes beside it, with `conversations`, each planned ticket's conversation, and with
+    `indexes`, a `README.md` listing each ticket's plans in its directory and one listing every ticket in `dest`.
 
     Returns:
         The files written and removed, how many were already as they stand, the plans whose files are not plans, and
-        how many plans and conversations `limit` left unchecked.
+        how many plans, conversations, and indexes `limit` left unchecked.
 
     Raises:
         ExportError: `dest`, or a ticket's directory in it, is a link or not a directory, or a file could not be
@@ -147,39 +170,72 @@ def export(
     )
     tally = _Tally()
     checked = 0
+    # Each ticket whose every plan, and conversation if it has one, was checked, for the index in `dest`.
+    indexed: list[_Ticket] = []
     # Before any file is read: one changed after this is never taken as settled.
     settled_before = time.time_ns() - _SETTLED_NS
     with _dest_dir(dest) as dest_fd, _Seen.of(state_dir, dest) as seen:
         for key, group in itertools.groupby(rows, key=lambda kind_row: kind_row[1].ticket_key):
-            if limit is not None and len(tally.written) >= limit:
+            if tally.full(limit):
                 break
             source_dir = plans.dir_for(state_dir, key)
             with _source_dir(source_dir) as source_fd, _ticket_dir(dest_fd, dest / key) as dir_fd:
                 dirs = _Dirs(key, source_dir, source_fd, dest / key, dir_fd, _list(dir_fd))
-                for kind, row in group:
-                    if limit is not None and len(tally.written) >= limit:
+                written_before, removed_before = len(tally.written), len(tally.removed)
+                ticket_rows = list(group)
+                listed: list[_Listed] = []
+                for kind, row in ticket_rows:
+                    if tally.full(limit):
                         break
                     checked += 1
                     prompt = None if prompt_paths is None else _Prompt(prompt_paths.get(row.run_id))
-                    _export_plan(
-                        kind,
-                        row,
-                        dirs,
-                        seen,
-                        tally,
-                        persona=planners.get(row.run_id),
-                        prompt=prompt,
+                    listed.append(
+                        _export_plan(
+                            kind,
+                            row,
+                            dirs,
+                            seen,
+                            tally,
+                            persona=planners.get(row.run_id),
+                            prompt=prompt,
+                            settled_before=settled_before,
+                        ),
+                    )
+                done = len(listed) == len(ticket_rows)
+                last = last_messages.get(key)
+                if last is not None:
+                    done = done and not tally.full(limit)
+                    if done:
+                        checked += 1
+                        _export_conversation(conn, last, dirs, seen, tally, settled_before=settled_before)
+                if indexes and done and not tally.full(limit):
+                    checked += 1
+                    # What the ticket's directory holds now: as listed, less what was removed, and what was written.
+                    present = {
+                        *(set(dirs.listing) - {Path(r).name for r in tally.removed[removed_before:]}),
+                        *(Path(w).name for w in tally.written[written_before:]),
+                    }
+                    data = _ticket_index(key, listed, present)
+                    _export_index(
+                        dir_fd,
+                        dest / key,
+                        f"{key}/{INDEX_NAME}",
+                        data,
+                        seen=seen,
+                        tally=tally,
                         settled_before=settled_before,
                     )
-                last = last_messages.get(key)
-                if last is not None and (limit is None or len(tally.written) < limit):
-                    checked += 1
-                    _export_conversation(conn, last, dirs, seen, tally, settled_before=settled_before)
+                    indexed.append(_Ticket(key, listed))
+        if indexes and planned and len(indexed) == len(planned) and not tally.full(limit):
+            checked += 1
+            top = _top_index(indexed)
+            _export_index(dest_fd, dest, INDEX_NAME, top, seen=seen, tally=tally, settled_before=settled_before)
+    index_items = len(planned) + 1 if indexes and planned else 0
     return Exported(
         written=tally.written,
         unchanged=tally.unchanged,
         skipped=tally.skipped,
-        left=len(rows) + len(last_messages) - checked,
+        left=len(rows) + len(last_messages) + index_items - checked,
         removed=tally.removed,
     )
 
@@ -251,6 +307,15 @@ def is_conversation(file_name: str) -> bool:
     return file_name == CONVERSATION_NAME
 
 
+def is_index(file_name: str) -> bool:
+    """Whether `file_name` in an export is an index, a ticket's or the one of every ticket, rather than a plan.
+
+    Returns:
+        True for `INDEX_NAME`.
+    """
+    return file_name == INDEX_NAME
+
+
 def conversation_document(key: str, messages: Sequence[records.Message]) -> bytes:
     """A ticket's conversation as it is exported: a front matter, then each message under a heading, its body quoted.
 
@@ -312,6 +377,36 @@ class _Tally:
     skipped: list[Skipped] = dataclasses.field(default_factory=list[Skipped])
     unchanged: int = 0
 
+    def full(self, limit: int | None) -> bool:
+        """Whether `limit` files are written, so the export stops.
+
+        Returns:
+            True once as many files as `limit` are written; never without one.
+        """
+        return limit is not None and len(self.written) >= limit
+
+
+@dataclass(frozen=True)
+class _Listed:
+    """A plan as its ticket's index lists it."""
+
+    kind: Kind
+    row: records.Plan | records.FeedbackPlan
+    #: Its file's name in the ticket's directory; None when it has none there to link.
+    name: str | None
+    #: Its title, as `_title` finds it; "" when it has none, or none is known without reading it.
+    title: str
+    #: Whether `name` is the file an earlier export left, the plan not exported as it stands now.
+    stale: bool = False
+
+
+@dataclass(frozen=True)
+class _Ticket:
+    """A ticket as the index of every ticket lists it: its plans, every one of them checked."""
+
+    key: str
+    listed: Sequence[_Listed]
+
 
 def _export_plan(
     kind: Kind,
@@ -323,11 +418,15 @@ def _export_plan(
     persona: str | None,
     prompt: _Prompt | None,
     settled_before: int,
-) -> None:
+) -> _Listed:
     """Export one plan into its ticket's directory, unless it is there as it stands, and remove its earlier names.
 
     `persona` is its planner's, for its front matter. With `prompt`, its run's prompt goes beside it too, unless that is
     there as it stands.
+
+    Returns:
+        The plan as its ticket's index lists it: under the name it is exported as, or for a plan not exported, the
+        one name an earlier export left it under.
 
     Raises:
         ExportError: its file, or its prompt, could not be written, or an earlier one removed.
@@ -353,12 +452,13 @@ def _export_plan(
             prompt=prompt_stats,
         ):
             tally.unchanged += 1
-            return
+            return _Listed(kind, row, names[0], seen.title(plan))
     reading = plans.read(dirs.source / source_name)
     if reading.text is None:
         # A reading without text always says why; "unreadable" only satisfies the type.
         tally.skipped.append(Skipped(kind, dirs.key, row.run_id, reading.problem or "unreadable"))
-        return
+        return _Listed(kind, row, names[0] if len(names) == 1 else None, seen.title(plan), stale=True)
+    title = _title(reading.text, row.ticket_key)
     exported_name = name(kind, row, reading.text)
     data = document(kind, row, reading.text, persona=persona)
     # Only a name listed as it is: a filesystem that ignores case would find the plan under an earlier name that
@@ -383,8 +483,10 @@ def _export_plan(
             exported_name=exported_name,
             exported=held,
             prompt=prompt_held,
+            title=title,
             settled_before=settled_before,
         )
+    return _Listed(kind, row, exported_name, title)
 
 
 def _export_conversation(
@@ -477,6 +579,134 @@ def _personas(conn: sqlite3.Connection) -> dict[int, str]:
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
     runs = sql.select("id, persona").from_("runs").where("id IN ({}) AND persona IS NOT NULL", planned)
     return {int(r["id"]): str(r["persona"]) for r in sql.execute(conn, runs)}
+
+
+def _export_index(
+    dir_fd: int,
+    dir_path: Path,
+    exported_as: str,
+    data: bytes,
+    *,
+    seen: _Seen,
+    tally: _Tally,
+    settled_before: int,
+) -> None:
+    """Write an index as `INDEX_NAME` in the directory `dir_fd`, unless it is there as it stands or is not canopy's.
+
+    `exported_as` is its path relative to `dest`, as `written` names it, and what its fingerprint is kept as.
+
+    Raises:
+        ExportError: it could not be written.
+    """
+    exported = _stat(INDEX_NAME, dir_fd)
+    if seen.index_matches(exported_as, data, exported):
+        return
+    found = _read_head(dir_fd, INDEX_NAME, len(data) + 1)
+    if found is None:
+        # A link, a directory, or a file that cannot be read is the operator's, or not one canopy can tell is its own.
+        if exported is None:
+            _write(dir_fd, dir_path / INDEX_NAME, data)
+            tally.written.append(exported_as)
+        return
+    held, head = found
+    if head == data:
+        seen.record_index(exported_as, data, held, settled_before=settled_before)
+    elif head.startswith(INDEX_MARK.encode()):
+        _write(dir_fd, dir_path / INDEX_NAME, data)
+        tally.written.append(exported_as)
+
+
+def _ticket_index(key: str, listed: Sequence[_Listed], present: AbstractSet[str]) -> bytes:
+    """A ticket's index: its conversation when it is exported, then a table of its plans, newest first.
+
+    `present` is the names in the ticket's directory, so a prompt or a conversation is linked only where it is.
+
+    Returns:
+        The file's bytes, UTF-8.
+    """
+    lines = [INDEX_MARK, "\n", f"# {key}\n", "\n"]
+    if CONVERSATION_NAME in present:
+        lines.extend([f"Conversation: [{CONVERSATION_NAME}]({CONVERSATION_NAME})\n", "\n"])
+    lines.extend(
+        [
+            "| Run | Title | Kind | Status | Written | Approved | Prompt |\n",
+            "| --- | --- | --- | --- | --- | --- | --- |\n",
+        ],
+    )
+    for entry in sorted(listed, key=lambda e: e.row.run_id, reverse=True):
+        row, prompt = entry.row, prompt_name(entry.row.run_id)
+        approved = "" if row.approved_at is None else f"{row.approved_at[:10]}, {row.approved_channel or 'unknown'}"
+        cells = [
+            _run_cell(entry, ""),
+            _escaped_title(entry.title),
+            entry.kind,
+            row.status.value,
+            row.created_at[:10],
+            approved,
+            f"[prompt]({quote(prompt)})" if prompt in present else "",
+        ]
+        lines.append(f"| {' | '.join(cells)} |\n")
+    return "".join(lines).encode("utf-8")
+
+
+def _top_index(tickets: Iterable[_Ticket]) -> bytes:
+    """The index of every ticket: a table of each, by its newest plan, the ticket with the newest first.
+
+    Returns:
+        The file's bytes, UTF-8.
+    """
+    lines = [
+        INDEX_MARK,
+        "\n",
+        "# Plans\n",
+        "\n",
+        "| Ticket | Plans | Newest | Title | Kind | Status | Written |\n",
+        "| --- | --- | --- | --- | --- | --- | --- |\n",
+    ]
+    newest = [(t, max(t.listed, key=lambda e: e.row.run_id)) for t in tickets]
+    for ticket, entry in sorted(newest, key=lambda t_e: t_e[1].row.run_id, reverse=True):
+        cells = [
+            f"[{ticket.key}]({quote(ticket.key)}/)",
+            str(len(ticket.listed)),
+            _run_cell(entry, f"{ticket.key}/"),
+            _escaped_title(entry.title),
+            entry.kind,
+            entry.row.status.value,
+            entry.row.created_at[:10],
+        ]
+        lines.append(f"| {' | '.join(cells)} |\n")
+    return "".join(lines).encode("utf-8")
+
+
+def _run_cell(entry: _Listed, prefix: str) -> str:
+    """A plan's run as an index's cell, linked to the plan's file at `prefix`.
+
+    The link is the run's number, never the title: a title inside a link's text could still pass for a link of its own
+    to a renderer that reads escapes loosely.
+
+    Returns:
+        The cell's Markdown; the run's number, marked not exported, for a plan with no file to link, and marked not
+        exported as it stands for one whose file an earlier export left, which its row's status may no longer match.
+    """
+    if entry.name is None:
+        return f"{entry.row.run_id} (not exported)"
+    link = f"[{entry.row.run_id}]({quote(prefix + entry.name)})"
+    return f"{link} (not exported as it stands)" if entry.stale else link
+
+
+def _escaped_title(title: str) -> str:
+    """A plan's title as an index shows it: one line, cut short, and every character Markdown reads as markup escaped.
+
+    A title is model text (TRUST_MODEL T1), so nothing in it can be read as Markdown or HTML: not a link with a target
+    of its own, an image, a tag, an entity, or a table's `|`.
+
+    Returns:
+        The title, "..." ended where it was cut; "" when it has nothing but whitespace.
+    """
+    flat = " ".join(printable(title).split())
+    cut = flat[:_MAX_INDEX_TITLE].rstrip()
+    escaped = _MARKUP_RE.sub(r"\\\1", cut)
+    return escaped + "..." if len(flat) > _MAX_INDEX_TITLE else escaped
 
 
 def _prompt_paths(conn: sqlite3.Connection, state_dir: Path) -> dict[int, Path]:
@@ -614,10 +844,12 @@ class _Seen:
     written whole under a temporary name.
     """
 
-    def __init__(self, path: Path, dest: Path, fingerprints: Mapping[str, str]) -> None:
+    def __init__(self, path: Path, dest: Path, fingerprints: Mapping[str, str], titles: Mapping[str, str]) -> None:
         self.path = path
         self.dest = dest
         self.fingerprints = dict(fingerprints)
+        #: Each plan's title by its `KEY/RUN`, kept with its fingerprint, so an index lists a plan it does not read.
+        self.titles = dict(titles)
         self.changed = False
 
     @classmethod
@@ -630,7 +862,7 @@ class _Seen:
         """
         dest = dest.resolve()
         path = state_dir / SEEN_DIR / f"{hashlib.sha256(os.fsencode(dest)).hexdigest()[:32]}.json"
-        seen = cls(path, dest, _load(path))
+        seen = cls(path, dest, *_load(path))
         try:
             yield seen
         finally:
@@ -674,19 +906,46 @@ class _Seen:
         exported_name: str,
         exported: os.stat_result,
         prompt: _PromptStats | None,
+        title: str,
         settled_before: int,
     ) -> None:
-        """Keep that `plan` was found exported as it stands, unless a file changed too recently to tell by its stat.
+        """Keep that `plan` was found exported as it stands, with its title, unless a file changed too recently.
 
-        A plan's file that could not be statted before it was read is not kept either.
+        A file changed too recently cannot be told unchanged by its stat; a plan's file that could not be statted before
+        it was read is not kept either.
         """
         stats = [source, exported, *(prompt or ())]
         if source is not None and all(
             max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in stats if s is not None
         ):
             fingerprint = _fingerprint(kind, row, source, exported_name, exported, persona=persona, prompt=prompt)
-            self.changed |= self.fingerprints.get(plan) != fingerprint
+            self.changed |= self.fingerprints.get(plan) != fingerprint or self.titles.get(plan) != title
             self.fingerprints[plan] = fingerprint
+            self.titles[plan] = title
+
+    def title(self, plan: str) -> str:
+        """The title kept with `plan`'s fingerprint.
+
+        Returns:
+            The title; "" when none was kept.
+        """
+        return self.titles.get(plan, "")
+
+    def index_matches(self, exported_as: str, data: bytes, exported: os.stat_result | None) -> bool:
+        """Whether the index `exported_as` was found holding `data`, and unchanged since.
+
+        Returns:
+            False when it is missing, or nothing was kept for it.
+        """
+        kept = self.fingerprints.get(exported_as)
+        return kept is not None and exported is not None and kept == _index_fingerprint(data, exported)
+
+    def record_index(self, exported_as: str, data: bytes, exported: os.stat_result, *, settled_before: int) -> None:
+        """Keep that the index `exported_as` was found holding `data`, unless it changed too recently to tell."""
+        if max(exported.st_mtime_ns, exported.st_ctime_ns) < settled_before:
+            fingerprint = _index_fingerprint(data, exported)
+            self.changed |= self.fingerprints.get(exported_as) != fingerprint
+            self.fingerprints[exported_as] = fingerprint
 
     def conversation_matches(self, key: str, last: int, exported: os.stat_result | None) -> bool:
         """Whether `key`'s conversation was found exported as it stands up to message `last`, and unchanged since.
@@ -708,7 +967,8 @@ class _Seen:
         """Write the fingerprints if any changed. A file that cannot be written costs the next export its reads only."""
         if not self.changed:
             return
-        data = json.dumps({"format": _FORMAT, "dest": str(self.dest), "plans": self.fingerprints}).encode()
+        kept = {"format": _FORMAT, "dest": str(self.dest), "plans": self.fingerprints, "titles": self.titles}
+        data = json.dumps(kept).encode()
         temporary = self.path.with_name(f".{self.path.name}.{secrets.token_hex(8)}.tmp")
         try:
             self.path.parent.mkdir(mode=_DIR_MODE, exist_ok=True)
@@ -721,22 +981,37 @@ class _Seen:
                 temporary.unlink()
 
 
-def _load(path: Path) -> dict[str, str]:
-    """The fingerprints kept at `path`.
+def _load(path: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """The fingerprints and titles kept at `path`.
 
     Returns:
-        Each plan's fingerprint by its `KEY/RUN`, and each conversation's by `KEY/conversation`; none when the file
-        is missing, unreadable, not
-        canopy's, or from another format.
+        Each plan's fingerprint by its `KEY/RUN`, each conversation's by `KEY/conversation`, and each index's by its
+        path in `dest`; then each plan's title by its `KEY/RUN`. Neither has any when the file is missing,
+        unreadable, not canopy's, or from another format.
     """
     try:
         kept: object = json.loads(path.read_bytes())
     except (OSError, ValueError):
-        return {}
-    if not isinstance(kept, dict) or kept.get("format") != _FORMAT or not isinstance(kept.get("plans"), dict):
-        return {}
+        return {}, {}
+    if (
+        not isinstance(kept, dict)
+        or kept.get("format") != _FORMAT
+        or not isinstance(kept.get("plans"), dict)
+        or not isinstance(kept.get("titles"), dict)
+    ):
+        return {}, {}
     fingerprints: dict[object, object] = kept["plans"]
-    return {k: v for k, v in fingerprints.items() if isinstance(k, str) and isinstance(v, str)}
+    titles: dict[object, object] = kept["titles"]
+    return _strings(fingerprints), _strings(titles)
+
+
+def _strings(kept: Mapping[object, object]) -> dict[str, str]:
+    """What of `kept` maps a string to a string.
+
+    Returns:
+        Those entries alone.
+    """
+    return {k: v for k, v in kept.items() if isinstance(k, str) and isinstance(v, str)}
 
 
 def _fingerprint(
@@ -777,6 +1052,16 @@ def _conversation_fingerprint(last: int, exported: os.stat_result) -> str:
         The digest, hex.
     """
     digested = (_FORMAT, "conversation", last, _identity(exported))
+    return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
+
+
+def _index_fingerprint(data: bytes, exported: os.stat_result) -> str:
+    """An index's bytes and the stat of its file, as one digest.
+
+    Returns:
+        The digest, hex.
+    """
+    digested = (_FORMAT, "index", hashlib.sha256(data).hexdigest(), _identity(exported))
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
@@ -964,3 +1249,24 @@ def _held(dir_fd: int, name: str, data: bytes) -> os.stat_result | None:
             return None
         # One byte past `data` tells a longer file apart without reading the rest of it.
         return held if f.read(len(data) + 1) == data else None
+
+
+def _read_head(dir_fd: int, name: str, size: int) -> tuple[os.stat_result, bytes] | None:
+    """Read at most `size` bytes from the start of `name` in the directory `dir_fd`, never through a link.
+
+    Returns:
+        Its stat, taken before it was read, and its first bytes; None when it is missing, a link, not a regular file,
+        or unreadable.
+    """
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        found = os.fstat(f.fileno())
+        if not stat.S_ISREG(found.st_mode):
+            return None
+        try:
+            return found, f.read(size)
+        except OSError:
+            return None

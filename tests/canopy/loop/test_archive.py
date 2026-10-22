@@ -50,8 +50,13 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
     assert git("show", f"main:{name}/{KEY}/{run_id}-PROPOSED.md", cwd=upstream).endswith(PLAN.strip())
+    assert f"[{run_id}]({run_id}-PROPOSED.md)" in git("show", f"main:{name}/{KEY}/README.md", cwd=upstream)
     assert unpushed(scenario) is None
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "1", "nothing changed, so nothing is committed"
@@ -65,8 +70,13 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
     )
     scenario.tick(*waits(KEY))
     assert git("rev-list", "--count", "main", cwd=upstream) == "2"
-    # The plan moved to its approved name: the archive holds it there alone.
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-APPROVED.md"]
+    # The plan moved to its approved name: the archive holds it there alone, and each index links it there.
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-APPROVED.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
+    assert f"({KEY}/{run_id}-APPROVED.md)" in git("show", f"main:{name}/README.md", cwd=upstream)
     assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}-APPROVED.md", cwd=upstream)
 
 
@@ -77,7 +87,9 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
 
     scenario.tick(*waits(KEY, "PROJ-2"))
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 2 plans of {name}: {KEY}, PROJ-2\n\nNew:\n- {KEY}/{first}-PROPOSED.md\n- PROJ-2/{second}-PROPOSED.md"
+        f"Archive 2 plans and 3 READMEs of {name}: {KEY}, PROJ-2\n\n"
+        f"New:\n- {KEY}/{first}-PROPOSED.md\n- {KEY}/README.md\n- PROJ-2/{second}-PROPOSED.md\n- PROJ-2/README.md\n"
+        "- README.md"
     )
 
     plans.approve(
@@ -89,7 +101,8 @@ def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, u
     )
     scenario.tick(*waits(KEY, "PROJ-2"))
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 1 plan of {name}: {KEY}\n\nChanged:\n- {KEY}/{first}-APPROVED.md (was {first}-PROPOSED.md)"
+        f"Archive 1 plan and 2 READMEs of {name}: {KEY}\n\n"
+        f"Changed:\n- {KEY}/{first}-APPROVED.md (was {first}-PROPOSED.md)\n- {KEY}/README.md\n- README.md"
     )
 
 
@@ -99,11 +112,16 @@ def test_each_plans_prompt_goes_beside_it(scenario: Scenario, clone: Path, upstr
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROMPT.md", f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-PROMPT.md",
+        f"{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
     assert git("show", f"main:{name}/{KEY}/{run_id}-PROMPT.md", cwd=upstream) == PLAN_PROMPT.strip()
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 1 plan and 1 prompt of {name}: {KEY}\n\n"
-        f"New:\n- {KEY}/{run_id}-PROMPT.md\n- {KEY}/{run_id}-PROPOSED.md"
+        f"Archive 1 plan, 1 prompt and 2 READMEs of {name}: {KEY}\n\n"
+        f"New:\n- {KEY}/{run_id}-PROMPT.md\n- {KEY}/{run_id}-PROPOSED.md\n- {KEY}/README.md\n- README.md"
     )
 
 
@@ -123,10 +141,11 @@ def test_a_name_changed_in_case_alone_is_renamed_where_git_ignores_case(
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROMPT.md", f"{name}/{KEY}/{run_id}-PROPOSED.md"]
     assert git("show", "--name-status", "--format=", "main", cwd=upstream).splitlines() == [
         f"R100\t{name}/{KEY}/{run_id}-prompt.md\t{name}/{KEY}/{run_id}-PROMPT.md",
         f"A\t{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"A\t{name}/{KEY}/README.md",
+        f"A\t{name}/README.md",
     ]
 
 
@@ -142,7 +161,12 @@ def test_what_the_operator_staged_in_the_clone_stays_staged(
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    # The clone's own README.md is not the workspace's index.
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
     assert git("diff", "--cached", "--name-only", cwd=clone) == "README.md"
 
 
@@ -153,7 +177,11 @@ def test_prompts_off_archives_plans_alone(scenario: Scenario, clone: Path, upstr
 
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
 
 
 def test_conversations_go_beside_the_plans_when_asked(scenario: Scenario, clone: Path, upstream: Path) -> None:
@@ -171,15 +199,22 @@ def test_conversations_go_beside_the_plans_when_asked(scenario: Scenario, clone:
     name = workspace.find(scenario.env.root).name
 
     scenario.tick(*waits(KEY))
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"], "off by default"
+    assert f"{name}/{KEY}/CONVERSATION.md" not in archived(scenario, upstream), "off by default"
 
     scenario.configures(paths={"plan_archive_conversations": True})
     scenario.tick(*waits(KEY))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md", f"{name}/{KEY}/CONVERSATION.md"]
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"{name}/{KEY}/CONVERSATION.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
     assert "\n> Planned it.\n" in git("show", f"main:{name}/{KEY}/CONVERSATION.md", cwd=upstream)
+    # Its ticket's index links it now.
     assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
-        f"Archive 1 conversation of {name}: {KEY}\n\nNew:\n- {KEY}/CONVERSATION.md"
+        f"Archive 1 conversation and 1 README of {name}: {KEY}\n\n"
+        f"New:\n- {KEY}/CONVERSATION.md\n\nChanged:\n- {KEY}/README.md"
     )
 
 
@@ -188,16 +223,29 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
     second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
     name = workspace.find(scenario.env.root).name
 
-    with mock.patch.object(archive, "PER_TICK", 1):
+    with mock.patch.object(archive, "PER_TICK", 2):
         scenario.tick(*waits(KEY, "PROJ-2"))
-        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md"]
+        assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md", f"{name}/{KEY}/README.md"]
         assert unpushed(scenario) == (
-            "1 plan or conversation waits for the next tick's archive: a tick archives at most 1 files"
+            "3 plans, conversations, or READMEs wait for the next tick's archive: a tick archives at most 2 files"
+        )
+
+        scenario.tick(*waits(KEY, "PROJ-2"))
+        # The index of every ticket waits for the tick that finds every ticket exported.
+        assert f"{name}/README.md" not in archived(scenario, upstream)
+        assert unpushed(scenario) == (
+            "1 plan, conversation, or README waits for the next tick's archive: a tick archives at most 2 files"
         )
 
         scenario.tick(*waits(KEY, "PROJ-2"))
 
-    assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md", f"{name}/PROJ-2/{second}-PROPOSED.md"]
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{first}-PROPOSED.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/PROJ-2/{second}-PROPOSED.md",
+        f"{name}/PROJ-2/README.md",
+        f"{name}/README.md",
+    ]
     assert unpushed(scenario) is None
 
 
