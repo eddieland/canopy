@@ -6,6 +6,7 @@ import type {
     Dismissed,
     Draft,
     DraftsSent,
+    FeedbackPlanApproved,
     Forgot,
     Granted,
     MemoryEdited,
@@ -420,6 +421,41 @@ export function planText(key: string, changed: PlanChanged): string {
         `${superseded}${key} is planned first: the next tick dispatches a planner, and nothing is ` +
         'implemented until you approve its plan.'
     )
+}
+
+/**
+ * What an approval of a feedback plan did, as `canopy plan KEY --approve` says it (canopy/cli/plans.py): whole, or
+ * for some of its items, each named by its number and observed id, and the message on the ticket naming them.
+ */
+export function feedbackPlanApprovedText(approved: FeedbackPlanApproved): string {
+    const { plan, ticket_key: key, addressed, left } = approved
+    const total = addressed.length + left.length
+    const once = `The next tick can resume ${key} on it, once.`
+    let head =
+        `Feedback plan ${plan} of ${key}, covering ${total} item${total === 1 ? '' : 's'}, is approved whole as its ` +
+        `file stands now. ${once}`
+    if (left.length > 0) {
+        head =
+            `Feedback plan ${plan} of ${key} is approved as its file stands now, for ${addressed.length} of its ` +
+            `${total} items: ${itemNames(addressed)}. ${once} Left out, for the next plan: ${itemNames(left)}.`
+    }
+    return approved.message === null ? head : `${head} Message ${approved.message} on ${key} names the items.`
+}
+
+/**
+ * A feedback plan's items as canopy names them wherever it mentions them (canopy/core/prompts.py `item_names`): by
+ * number and observed id, never by their text.
+ */
+export function itemNames(items: readonly { number: number; item_id: number }[]): string {
+    const words = items.map((i) => `${i.number} (id ${i.item_id})`)
+    const [first, second] = words
+    if (words.length === 1 && first !== undefined) {
+        return `item ${first}`
+    }
+    if (words.length === 2 && first !== undefined && second !== undefined) {
+        return `items ${first} and ${second}`
+    }
+    return `items ${words.slice(0, -1).join(', ')}, and ${words.at(-1) ?? ''}`
 }
 
 /**

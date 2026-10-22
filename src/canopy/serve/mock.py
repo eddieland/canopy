@@ -12,7 +12,7 @@ workspace's policy allows one resume and two reviews, so ABC-100 is at its resum
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
 call on each one's row (§8).
 Each feature's fixtures are in a module of their own beside this one, `mock_<feature>.py`, which `seed` calls: plans,
-memory, chore runs, review runs, review replies, personas, and the runs' transcripts.
+memory, chore runs, review runs, review replies, a feedback plan, personas, and the runs' transcripts.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -32,6 +32,7 @@ from canopy.infra import resources
 from canopy.serve import (
     mock_chores,
     mock_drafts,
+    mock_feedback_plans,
     mock_memory,
     mock_personas,
     mock_plans,
@@ -269,6 +270,7 @@ def seed(directory: Path) -> Backend:
             mock_memory.seed(ctx.conn, at)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
+            mock_feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
         mock_reviews.drafts(ctx.conn)
     mock_transcripts.write(ws.state_dir, T0)
@@ -321,7 +323,8 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
         .where("r.ticket_key = ?", key)
-        .where("r.kind NOT IN ('split', 'plan')")
+        # Counted apart, as `runs.policy` counts them, and shown with no unit's limits.
+        .where("r.kind NOT IN ('split', 'plan', 'feedback-plan')")
         .where("s.repo IS NOT NULL")
         .group_by("s.repo, r.kind")
     )

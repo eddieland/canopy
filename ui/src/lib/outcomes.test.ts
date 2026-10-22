@@ -17,6 +17,7 @@ import {
     failedText,
     forgotText,
     grantedText,
+    itemNames,
     memoryForgottenText,
     notedText,
     planText,
@@ -396,5 +397,18 @@ describe('outcomes', () => {
         const forgot = { id: 9, scope: 'lesson', key: 'web-tests', checkpointed: true } as const
         expect(memoryForgottenText(forgot)).toBe('Memory 9 (lesson `web-tests`) is forgotten: its text is deleted.')
         expect(memoryForgottenText({ ...forgot, checkpointed: false })).toContain('may stay in the log')
+    })
+})
+
+// A feedback plan's item `number`, its observed id 500 more.
+function item(number: number) {
+    return { number, item_id: 500 + number }
+}
+
+describe('itemNames', () => {
+    it("names a feedback plan's items by number and id, as canopy/core/prompts.py item_names does", () => {
+        expect(itemNames([item(2)])).toBe('item 2 (id 502)')
+        expect(itemNames([item(1), item(3)])).toBe('items 1 (id 501) and 3 (id 503)')
+        expect(itemNames([item(1), item(3), item(5)])).toBe('items 1 (id 501), 3 (id 503), and 5 (id 505)')
     })
 })

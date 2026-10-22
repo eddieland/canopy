@@ -5,6 +5,8 @@ import type {
     Capacity,
     ChoreSummary,
     Draft,
+    FeedbackPlan,
+    FeedbackPlanItem,
     PullRequestThreads,
     ReviewDraft,
     ReviewSummary,
@@ -309,6 +311,60 @@ export function pullRequestThreads(fields: Partial<PullRequestThreads> = {}): Pu
         threads: [reviewThread()],
         pr_drafts: [],
         unplaced: [],
+        feedback_plan: null,
+        ...fields,
+    }
+}
+
+/** Item 2 of run 46's feedback plan for ABC-099: a change for alice's thread on PR 88, `fields` over it. */
+export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): FeedbackPlanItem {
+    return {
+        number: 2,
+        pr_url: 'https://github.com/acme/web/pull/88',
+        item: 'comment',
+        item_id: 2468013579,
+        proposal: 'change',
+        reply: 'Moved it into a `finally`.',
+        left_out: false,
+        author: 'alice',
+        trusted: true,
+        thread_id: 'PRRT_1',
+        ...fields,
+    }
+}
+
+/**
+ * Run 46's feedback plan for ABC-099, waiting: alice's review to leave, item 1, and her thread to change, item 2,
+ * `fields` over it.
+ */
+export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
+    return {
+        id: 1,
+        ticket_key: 'ABC-099',
+        run: 46,
+        created_at: '2026-10-08T11:48:00Z',
+        status: 'waiting',
+        changes: [],
+        stale_shown: false,
+        approved_at: null,
+        approved_channel: null,
+        approved_reason: null,
+        approved_message: null,
+        spent_run: null,
+        path: '/home/op/acme/.canopy/plans/ABC-099/46.md',
+        text: '# Feedback plan: ABC-099\n\n### Item 2468013579: change\n\nMove it into a `finally`.\n',
+        problem: null,
+        items: [
+            feedbackPlanItem({
+                number: 1,
+                item: 'review',
+                item_id: 4102337001,
+                proposal: 'leave',
+                reply: null,
+                thread_id: null,
+            }),
+            feedbackPlanItem(),
+        ],
         ...fields,
     }
 }

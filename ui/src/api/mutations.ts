@@ -9,6 +9,7 @@ import type {
     Dismissed,
     Draft,
     DraftsSent,
+    FeedbackPlanApproved,
     Forgot,
     Granted,
     Limit,
@@ -149,6 +150,18 @@ export async function replyTicket(key: string, body: string, submission: string)
  */
 export async function decidePlan(key: string, action: PlanChanged['action']): Promise<PlanChanged> {
     return unwrap(await api.POST('/api/tickets/{key}/plan', { params: { path: { key } }, body: { action } }))
+}
+
+/**
+ * `canopy plan KEY --approve`, on its feedback plan (DESIGN §32): whole when `items` and `leave` are both empty, else
+ * only the items `items` names by number, as `--item N`, or all but those `leave` names, as `--leave N`, with the
+ * operator's own `message` after the one the approval writes on the ticket, as `--message`.
+ */
+export async function approveFeedbackPlan(
+    key: string,
+    choice: { items: number[]; leave: number[]; message: string | null },
+): Promise<FeedbackPlanApproved> {
+    return unwrap(await api.POST('/api/tickets/{key}/feedback-plan', { params: { path: { key } }, body: choice }))
 }
 
 /**
