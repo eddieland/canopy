@@ -247,10 +247,15 @@ class SubprocessRunner:
             if isinstance(e, PermissionError):
                 reason = "not executable" if _exists(argv[0], cwd=cwd, env=full_env) else "not found"
                 raise CommandNotFoundError(f"command {reason}: {argv[0]}") from e
-            # Linux holds one argument to 128 KiB: a prompt placed in the argv rather than on stdin can pass it.
+            # Linux holds one argument or variable to 128 KiB, and all of them to its ARG_MAX: a prompt placed in the
+            # argv rather than on stdin can pass the first. Both sizes are named, since either may be the cause.
             if e.errno == errno.E2BIG:
                 longest = max(len(os.fsencode(a)) for a in argv)
-                raise ProcError(f"arguments too long to start {argv[0]}: the longest is {longest:,} bytes") from e
+                environ = sum(len(os.fsencode(f"{k}={v}")) + 1 for k, v in (full_env or os.environ).items())
+                raise ProcError(
+                    f"arguments and environment too long to start {argv[0]}: its longest argument is {longest:,} "
+                    f"bytes, its environment {environ:,}",
+                ) from e
             raise
 
         # Leaving the block closes the pipes, which communicate() leaves open when a signal interrupts it.

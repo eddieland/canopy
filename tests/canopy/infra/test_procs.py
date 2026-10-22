@@ -160,7 +160,7 @@ def test_missing_cwd_is_not_reported_as_missing_command(agent_log: Path, tmp_pat
 
 
 def test_an_argument_past_the_systems_limit_says_how_long_it_is(agent_log: Path) -> None:
-    with pytest.raises(ProcError, match="arguments too long to start agent: the longest is 200,000 bytes"):
+    with pytest.raises(ProcError, match="too long to start agent: its longest argument is 200,000 bytes, its env"):
         SubprocessRunner().run(["agent", "x" * 200_000])
 
 

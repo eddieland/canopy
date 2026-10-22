@@ -58,7 +58,7 @@ def cmd_show(click_ctx: click.Context, *, as_json: bool) -> int:
     "--json",
     "as_json",
     is_flag=True,
-    help="Print the commands as one JSON object instead, each as its argv.",
+    help="Print the commands as one JSON object instead, each as its argv and, when the prompt goes there, its stdin.",
 )
 @click.pass_context
 def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
@@ -67,8 +67,8 @@ def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
     Each is quoted for a shell, so you can see where one word ends: `<prompt>` stands for the prompt, `< <prompt>` for
     one written on the command's stdin, the title is an example, and the definitions directory is the one a run would
     use. A worker run's prefix and suffix are in place, and each chore with a command of its own, and
-    `runtime.setup_cmd`, follow. A command may carry a token, so only you
-    read them: it is refused inside one of canopy's own ticks or runs.
+    `runtime.setup_cmd`, follow. A command may carry a token, so only you read them: it is refused inside one of
+    canopy's own ticks or runs.
     """
     try:
         conversation.check_operator()

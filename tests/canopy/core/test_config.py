@@ -454,6 +454,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.review_cmd,
     ):
         # No `{prompt}`: canopy writes the prompt on stdin, past any limit on one argument (D023).
+        assert config.PROMPT not in template
         assert template.endswith(" --title={title}")
         # Events, with the model's reasoning among them, so a transcript shows why a call did what it did (DESIGN §22).
         assert " --format json --thinking " in template

@@ -492,7 +492,7 @@ def test_a_block_too_long_for_one_argument_fails_the_tick_naming_why(scenario: S
     with block_padded_past_one_argument():
         failed = scenario.tick(dry_run=True, code=1)
     assert failed.tick.status == "overseer_failed"
-    assert "arguments too long to start env: the longest is " in failed.tick.summary
+    assert "arguments and environment too long to start env: its longest argument is " in failed.tick.summary
     assert not scenario.agent_log.exists()
 
 

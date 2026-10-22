@@ -570,7 +570,7 @@ def _run_overseer(
     dry_run: bool,
     log: logs.TickAdapter,
 ) -> tuple[str | None, Usage | None]:
-    """Run `overseer_cmd` with the state block `block` as its `{prompt}`, and `title` as its `{title}`.
+    """Run `overseer_cmd` with the state block `block` as its prompt, and `title` as its `{title}`.
 
     Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
     block to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22). What its events report
