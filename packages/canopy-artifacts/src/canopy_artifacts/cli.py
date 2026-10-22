@@ -10,8 +10,6 @@ Exit codes: 0 served until stdin closed; 2 the options or the store's directory 
 from __future__ import annotations
 
 import re
-import sys
-from collections.abc import Sequence
 from pathlib import Path
 
 import click
@@ -25,35 +23,12 @@ _NAMESPACE = re.compile(r"(?=.{1,128}\Z)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _AGENT = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
-def main() -> int:
-    """The `canopy-artifacts` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:])
-
-
-def run(argv: Sequence[str]) -> int:
-    """Run `canopy-artifacts` with `argv`.
-
-    Returns:
-        The exit code.
-    """
-    try:
-        found = command.main(args=list(argv), prog_name="canopy-artifacts", standalone_mode=False)
-    except click.ClickException as e:
-        e.show()
-        return e.exit_code
-    return found if isinstance(found, int) else 0
-
-
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
-def command() -> None:
+@click.group("canopy-artifacts", context_settings={"help_option_names": ["-h", "--help"]})
+def main() -> None:
     """The local artifact store canopy ships: pages workers publish, and the comments on them (DESIGN §38)."""
 
 
-@command.command()
+@main.command()
 @click.option(
     "--store",
     "directory",

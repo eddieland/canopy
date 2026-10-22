@@ -48,17 +48,12 @@ import click
 
 from canopy_github import (
     Client,
-    Endpoint,
     GitHubError,
+    Hosts,
     InputError,
-    Io,
     Ref,
-    Token,
     client_for,
     emit,
-    endpoint,
-    gh_token,
-    invoke,
     items,
     number,
     obj,
@@ -228,37 +223,19 @@ class Out:
             self.ended = True
 
 
-def run(
-    argv: Sequence[str],
-    stdin: TextIO,
-    stdout: TextIO,
-    *,
-    endpoint_of: Endpoint = endpoint,
-    token_of: Token = gh_token,
-) -> int:
-    """Post what `stdin` holds, and print what was posted on `stdout`.
-
-    `endpoint_of` and `token_of` map a host to its GraphQL endpoint and its token.
-
-    Returns:
-        The exit code: 0 posted, 1 refused or unknown, 2 nothing posted for want of usable input or `argv`.
-    """
-    return invoke(command, "canopy-post-github", argv, Io(stdin, stdout, endpoint_of, token_of))
-
-
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.command("canopy-post-github", context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
-def command(ctx: click.Context) -> None:
+def main(ctx: click.Context) -> None:
     """Post what the operator approved in canopy, word for word (DESIGN §29, §34).
 
     What to post is one JSON object on stdin; what was posted is JSON lines on stdout, the `end` line last.
     """
-    io = ctx.find_object(Io) or Io(sys.stdin, sys.stdout)
-    out = Out(io.stdout)
+    hosts = ctx.find_object(Hosts) or Hosts()
+    out = Out(sys.stdout)
     try:
-        request = parse_request(read_input(io.stdin))
+        request = parse_request(read_input(sys.stdin))
         ref = request.pr if isinstance(request, Review) else request.issue
-        client = client_for(ref.host, io.endpoint_of, io.token_of)
+        client = client_for(ref.host, hosts.endpoint_of, hosts.token_of)
     except InputError as e:
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
         ctx.exit(2)
@@ -601,12 +578,3 @@ def post_comment(client: Client, comment: IssueComment, out: Out) -> None:
     node = obj(obj(data.get("commentEdge"), "commentEdge").get("node"), "comment")
     out.line({"kind": "comment", "id": number(node.get("fullDatabaseId")), "url": node.get("url")})
     out.line({"kind": "end", "submitted": True})
-
-
-def main() -> int:
-    """The `canopy-post-github` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:], sys.stdin, sys.stdout)
