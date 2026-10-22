@@ -7,7 +7,8 @@ the operator chose another, fixed when the run starts; only the operator chooses
 from: a name with no file refuses the run (`persona_missing`), and a file canopy would not put in a prompt refuses it
 too (`bad_persona`), since a run in a voice nobody chose would read as the chosen one's.
 A persona is instructions in every run it reaches, so its file is bounded as the standing instructions are, and holds
-none of the characters a lesson may not (DESIGN §28, Bounds).
+none of the characters a lesson may not (DESIGN §28, Bounds). Its file may open with a front matter naming its
+`description` for the menus that list it; that is never instructions, so no prompt carries it.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from canopy.core import conversation, db, memory_text, records, sql
 from canopy.core.config import DEFAULT_PERSONA, PERSONA_NAME_RE
@@ -51,8 +52,18 @@ BAD = "bad_persona"
 UNKNOWN = "unknown_persona"
 #: Where an agent's next persona comes from: the ticket's override, `[personas]`, or canopy's own default.
 Source = Literal["ticket", "config", "default"]
-#: The most characters of a persona's description, its opening sentence, a menu shows beside its name.
+#: The most characters of a persona's description a menu shows beside its name; a longer one is cut at a word.
 DESCRIPTION_CHARS = 160
+#: The one key a persona's front matter may hold.
+DESCRIPTION_KEY = "description"
+#: A persona's front matter: a `---` line, its fields, and a `---` line, at the very start of its file, as a skill's.
+_FRONT_MATTER = re.compile(r"---[ \t]*\n(.*?)^---[ \t]*$\n?", re.DOTALL | re.MULTILINE)
+#: The line a front matter opens with; a file that opens with it and never closes it is refused.
+_OPENS = re.compile(r"---[ \t]*(?:\n|$)")
+#: One field of a front matter: its key, a colon, and its value on the same line.
+_FIELD = re.compile(r"([A-Za-z_][\w-]*):[ \t]*(.*)")
+#: A value in quotes, single or double, which a front matter's value may be written in, as YAML's.
+_QUOTED = re.compile(r"(['\"])(.*)\1")
 
 
 class PersonaError(Exception):
@@ -70,7 +81,7 @@ class Persona:
     """A persona as a run gets it: its name, its text, and the digest of that text, which the run records."""
 
     name: str
-    #: The file's text without its surrounding blank lines, as the prompt carries it.
+    #: The file's text without its front matter and its surrounding blank lines, as the prompt carries it.
     text: str
     #: The sha256 of `text`, in hex: a persona edited between two runs splits them.
     digest: str
@@ -91,7 +102,7 @@ class Listed:
     defaults: Sequence[Agent]
     #: Why a run would refuse it, or None when it would render.
     error: str | None = None
-    #: What it is, in its own words: the opening sentence of its text (`description`); None when it is refused.
+    #: What it is: its front matter's `description`, else its text's opening sentence; None when it is refused.
     description: str | None = None
 
 
@@ -348,7 +359,7 @@ def load(config: Config, name: str) -> Persona:
     path = find(config, name)
     if path is None:
         raise PersonaError(MISSING, f"persona {name} has no file{_where(config)}")
-    text = _read(name, path)
+    text = _read(name, path).text
     return Persona(name, text, hashlib.sha256(text.encode()).hexdigest())
 
 
@@ -380,7 +391,7 @@ def listed(config: Config) -> list[Listed]:
         if path is None:
             continue
         try:
-            described, error = description(_read(name, path)), None
+            described, error = _read(name, path).description, None
         except PersonaError as e:
             described, error = None, e.reason
         defaults: tuple[Agent, ...] = tuple(
@@ -396,9 +407,9 @@ def listed(config: Config) -> list[Listed]:
 def description(text: str) -> str | None:
     """Return what a persona is, in its own words, for a menu to show beside its name: its text's opening sentence.
 
-    A persona has no description of its own, since every word of its file is instructions to the agent; its opening
-    sentence says what it is (`Work like the lazy senior developer...`). Its first paragraph that is not a heading is
-    read, its lines joined, up to the end of its first sentence, cut at a word to `DESCRIPTION_CHARS`.
+    This is the description of a persona whose front matter names none: its opening sentence most often says what it
+    is (`Work like the lazy senior developer...`). Its first paragraph that is not a heading is read, its lines joined,
+    up to the end of its first sentence, cut at a word to `DESCRIPTION_CHARS`.
 
     Returns:
         The sentence, or None for a text with no paragraph but headings.
@@ -408,10 +419,20 @@ def description(text: str) -> str | None:
     if not words:
         return None
     end = re.search(r"[.!?](?=\s|$)", words)
-    sentence = words[: end.end()] if end is not None else words
-    if len(sentence) <= DESCRIPTION_CHARS:
-        return sentence
-    cut = sentence[: DESCRIPTION_CHARS - 1].rsplit(" ", 1)[0]
+    return _cut(words[: end.end()] if end is not None else words)
+
+
+class _File(NamedTuple):
+    # A persona's file as canopy reads it: the text a prompt carries, and what a menu shows beside its name.
+    text: str
+    description: str | None
+
+
+def _cut(words: str) -> str:
+    # `words` cut at a word to `DESCRIPTION_CHARS`, an ellipsis marking the cut.
+    if len(words) <= DESCRIPTION_CHARS:
+        return words
+    cut = words[: DESCRIPTION_CHARS - 1].rsplit(" ", 1)[0]
     return f"{cut.rstrip(',;:')}…"
 
 
@@ -424,12 +445,16 @@ def _names(directory: Path) -> set[str]:
     }
 
 
-def _read(name: str, path: Path) -> str:
-    """Return a persona's text, without surrounding blank lines, refusing a file canopy would not put in a prompt.
+def _read(name: str, path: Path) -> _File:
+    """Return a persona's text and description, refusing a file canopy would not put in a prompt.
+
+    The text is the file's without its front matter and its surrounding blank lines; the description is the front
+    matter's, else the text's opening sentence.
 
     Raises:
-        PersonaError: (`BAD`) the file cannot be read, is not UTF-8, is over `MAX_BYTES`, or holds a character that
-            hides text: one `memory_text.hidden_char` names, but a line feed or a tab.
+        PersonaError: (`BAD`) the file cannot be read, is not UTF-8, is over `MAX_BYTES`, holds a character that hides
+            text: one `memory_text.hidden_char` names, but a line feed or a tab, or opens a front matter `_front`
+            refuses.
     """
     try:
         data = path.read_bytes()
@@ -441,7 +466,70 @@ def _read(name: str, path: Path) -> str:
     hidden = next((c for c in text if memory_text.hidden_char(c) and c not in "\n\t"), None)
     if hidden is not None:
         raise PersonaError(BAD, f"persona {name} at {path} holds U+{ord(hidden):04X}, a character that hides text")
-    return text.strip()
+    body, described = _front(f"persona {name} at {path}", text)
+    body = body.strip()
+    return _File(body, described if described is not None else description(body))
+
+
+def _front(where: str, text: str) -> tuple[str, str | None]:
+    """Split a persona's file into its text after any front matter and the `description` that front matter names.
+
+    A front matter is a skill's: a `---` line first in the file, then `key: value` lines, then a `---` line. Only
+    `description` is read, as plain text, YAML's way: on its line and any indented lines after it, joined by a space,
+    quotes around it dropped, and cut to `DESCRIPTION_CHARS`. A blank line, or one that opens with `#`, is skipped.
+
+    Returns:
+        The text after the front matter, the whole file's when it has none, and its description, or None when it
+        names none.
+
+    Raises:
+        PersonaError: (`BAD`) a front matter that never closes, or that `_description_lines` refuses, or whose
+            description is empty; `where` names the file.
+    """
+    found = _FRONT_MATTER.match(text)
+    if found is None:
+        if _OPENS.match(text) is not None:
+            raise PersonaError(BAD, f"{where} opens a front matter with `---` and never closes it")
+        return text, None
+    value = _description_lines(where, found.group(1))
+    if value is None:
+        return text[found.end() :], None
+    words = " ".join(" ".join(value).split())
+    quoted = _QUOTED.fullmatch(words)
+    described = " ".join((quoted.group(2) if quoted is not None else words).split())
+    if not described:
+        raise PersonaError(BAD, f"{where} has an empty {DESCRIPTION_KEY}")
+    return text[found.end() :], _cut(described)
+
+
+def _description_lines(where: str, front: str) -> list[str] | None:
+    """Return the lines of a front matter's `description`: its value on its key's line, then each indented line after.
+
+    Returns:
+        The lines, or None when the front matter names no description.
+
+    Raises:
+        PersonaError: (`BAD`) a line that is not a field, a key but `description`, or a description twice.
+    """
+    value: list[str] | None = None
+    for line in front.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        if line[0] in " \t" and value is not None:
+            value.append(line)
+            continue
+        field = _FIELD.fullmatch(line.rstrip())
+        if field is None:
+            raise PersonaError(BAD, f"{where} has a front matter line that is not `key: value`: {line.strip()!r}")
+        if field.group(1) != DESCRIPTION_KEY:
+            raise PersonaError(
+                BAD,
+                f"{where} has front matter key {field.group(1)!r}; only {DESCRIPTION_KEY!r} is read",
+            )
+        if value is not None:
+            raise PersonaError(BAD, f"{where} names its {DESCRIPTION_KEY} twice")
+        value = [field.group(2)]
+    return value
 
 
 def _where(config: Config) -> str:

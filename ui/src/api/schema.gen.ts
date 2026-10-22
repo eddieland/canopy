@@ -3638,7 +3638,8 @@ export type components = {
             defaults: components["schemas"]["PersonaAgent"][];
             /**
              * Description
-             * @description What it is, in its own words: its text's opening sentence; None for one a run would refuse.
+             * @description What it is: its front matter's `description`, else its text's opening sentence; None for one a run would
+             *     refuse.
              */
             description: string | null;
             /**

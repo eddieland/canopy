@@ -178,7 +178,7 @@ ones; a review already running keeps the notes it started with.
 
 **Persona** picks the voice the review is written in, as `--persona` does. Left alone, it reads `(default)` beside
 `[personas] reviewer`'s, which is usually `canopy`; folded, the form says which it will use. Each persona in the menu
-says what it is under its name, in its own opening sentence. Check one persona, say `skeptic`, and the review is
+says what it is under its name, in its own words. Check one persona, say `skeptic`, and the review is
 written in it; check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest
 way to learn which reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse
 to run, such as a file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's
