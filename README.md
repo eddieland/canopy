@@ -44,7 +44,7 @@ you start a ticket in canopy, or label it in your tracker
 | Implement | leases a worktree, runs a worker that implements, pushes, and opens the PR, then returns the worktree | answer with `canopy reply` or the web UI, if the worker asks |
 | CI | waits without a worktree; on red or a conflict, resumes the worker to fix it, within an attempt limit and a cooldown | `canopy grant` another attempt past the limit, or `canopy notice` an outage |
 | Review | reviews the head with its own reviewer agent, if `[review]` is on; resumes the worker for feedback from `trust.trusted_reviewers`, `canopy:review` naming its own | review the PR; say what to do with anyone else's comments |
-| Merge | marks the ticket done once every PR of it is merged | approve and merge, and close the ticket |
+| Merge | marks the ticket done in its own journal once every PR of it is merged; it never moves the ticket in your tracker | approve and merge, and close the ticket |
 
 Between stages a ticket holds no worktree and no capacity: its pushed branch is the checkpoint, and each run is a fresh
 worker on it (§9). Each tick, an overseer agent reads the tracker, GitHub, and canopy's journal, derives each ticket's
