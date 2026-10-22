@@ -99,6 +99,10 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     check(tracked, "build", "completed", "failure", run_id=12)
     check(tracked, "deploy/approval", "pending", None)
     check(tracked, "lint", "completed", "success", head="0ld0ld0")
+    check(tracked, "test", "completed", "success")
+    check(tracked, "docs", "completed", "skipped")
+    check(tracked, "e2e", "in_progress", None)
+    check(tracked, "legacy", "completed", "stale")
     review(tracked, 1, "octocat", "approved", "2026-10-20T09:00:00.000Z")
     review(tracked, 2, "octocat", "changes_requested", "2026-10-20T11:00:00.000Z", "Rename the helper.")
     review(tracked, 3, "octocat", None, "2026-10-20T11:00:00.000Z", "This name says too little.", item="comment")
@@ -109,6 +113,21 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     assert found == snapshot
     [unit] = found["tickets"][0].get("units", [])
     assert [r["id"] for r in unit.get("reviews", [])] == [2, 3, 4, 5, 6]
+    # Passing CI is only counted; a failure keeps what a `resume` for `ci` names; an older head's check is left out.
+    assert unit.get("checks") == {
+        "passed": 2,
+        "pending": ["e2e"],
+        "failed": [
+            {
+                "name": "build",
+                "conclusion": "failure",
+                "run_id": 12,
+                "url": "https://github.com/acme/repo/actions/runs/12",
+            },
+        ],
+        "stale": ["legacy"],
+        "human": [{"name": "deploy/approval", "status": "pending", "conclusion": None}],
+    }
 
 
 def test_stale_and_unobserved_subjects_name_what(

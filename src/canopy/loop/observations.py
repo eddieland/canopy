@@ -6,9 +6,10 @@ covers it, as every ticket is without a `tracker` source. A fresh ticket is mark
 observed labels and state (§17). One that is not is listed by key and why, with none of its text, so a widened query
 shows the overseer nothing of it (TRUST_MODEL T7). A fresh candidate carries its title, state, labels, and blockers, its
 body until its first unit, and its new comments, each marked in code: whether its author is an authorized replier, and
-whether it is a worker's (D069). Each of its units carries its PR, the checks at its head, each person's latest verdict,
-and the new reviews and review comments, each marked trusted or not in code (D089). Every subject carries the rows of
-§7 the tick's derivation found holding (§30): the harness's reading, which the overseer may overrule.
+whether it is a worker's (D069). Each of its units carries its PR, the checks at its head with passing CI only
+counted, each person's latest verdict, and the new reviews and review comments, each marked trusted or not in code
+(D089). Every subject carries the rows of §7 the tick's derivation found holding (§30): the harness's reading, which the
+overseer may overrule.
 
 Text is the observation's, as the connector's validation cut and marked it (§30). A subject shows at most
 `MAX_NEW_ITEMS` new items, oldest first, and counts the rest, which stay new for a later tick. Nothing here authorizes:
@@ -24,7 +25,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
 
 from canopy.core import conversation, db, observe, records, sql
-from canopy.core.vocab import ReviewItem, ReviewState, SourceKind, TicketState
+from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
 from canopy.loop import phases
 
 if TYPE_CHECKING:
@@ -137,7 +138,7 @@ class UnitObservation(TypedDict):
     observed_at: NotRequired[str]
     pr: NotRequired[PrObservation]
     branch: NotRequired[str | None]
-    checks: NotRequired[list[CheckState]]
+    checks: NotRequired[ChecksState]
     verdicts: NotRequired[list[VerdictState]]
     reviews: NotRequired[list[ReviewItemState]]
     more_reviews: NotRequired[int]
@@ -157,15 +158,36 @@ class PrObservation(TypedDict):
     author: str | None
 
 
-class CheckState(TypedDict):
-    """A named check at a PR's head. `human` when the repository's `human_checks` names it: not CI (DESIGN §30)."""
+class ChecksState(TypedDict):
+    """The named checks at a PR's head, summarized: CI that passed is only counted, so a busy repository's stay short.
+
+    `stale` only when a check ended neither passing nor failing, and `human` only when the repository's
+    `human_checks` names a check at the head: those wait on a person, are not CI, and count in none of the others
+    (DESIGN §30).
+    """
+
+    passed: int
+    pending: list[str]
+    failed: list[FailedCheck]
+    stale: NotRequired[list[str]]
+    human: NotRequired[list[HumanCheck]]
+
+
+class FailedCheck(TypedDict):
+    """A check that failed at a PR's head: what a `resume` for `ci` names, its run as the cursor."""
+
+    name: str
+    conclusion: str
+    run_id: int | None
+    url: str | None
+
+
+class HumanCheck(TypedDict):
+    """A check the repository's `human_checks` names, at a PR's head, as it stands."""
 
     name: str
     status: str
     conclusion: str | None
-    run_id: int | None
-    url: str | None
-    human: bool
 
 
 class VerdictState(TypedDict):
@@ -492,18 +514,7 @@ class _Reader:
                 "mergeable_state": pr.mergeable_state,
                 "author": pr.author,
             },
-            "checks": [
-                {
-                    "name": c.name,
-                    "status": c.status,
-                    "conclusion": c.conclusion,
-                    "run_id": c.run_id,
-                    "url": c.url,
-                    "human": c.name in human,
-                }
-                for c in self.checks.get(url, [])
-                if c.head_sha == pr.head_sha
-            ],
+            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], human),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
             "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
         }
@@ -579,6 +590,33 @@ def _after(comments: Sequence[records.ObservedComment], cursor: str | None) -> i
     if not cursor.isdigit():
         return 0
     return next((i for i, c in enumerate(comments) if c.id.isdigit() and int(c.id) > int(cursor)), len(comments))
+
+
+def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) -> ChecksState:
+    """Summarize the checks at a PR's head as the phase table reads them (DESIGN §7): passed, pending, or failed.
+
+    Returns:
+        How many passed, the names of those pending, each failure whole, and the stale and human checks when any.
+    """
+    found: ChecksState = {"passed": 0, "pending": [], "failed": []}
+    stale: list[str] = []
+    people: list[HumanCheck] = []
+    for c in checks:
+        if c.name in human:
+            people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
+        elif c.status is not CheckStatus.COMPLETED:
+            found["pending"].append(c.name)
+        elif c.conclusion in phases.PASSED:
+            found["passed"] += 1
+        elif c.conclusion is not None and c.conclusion in phases.FAILED:
+            found["failed"].append({"name": c.name, "conclusion": c.conclusion, "run_id": c.run_id, "url": c.url})
+        else:
+            stale.append(c.name)
+    if stale:
+        found["stale"] = stale
+    if people:
+        found["human"] = people
+    return found
 
 
 def _verdicts(reviews: Collection[records.ObservedReview], trusted: AbstractSet[str]) -> list[VerdictState]:
