@@ -442,13 +442,16 @@ function Entry({
  */
 function Thinking({ text, open, words }: { text: string; open: boolean; words: readonly string[] }) {
     const [toggled, setToggled] = useState<boolean | null>(null)
-    const fold = foldText(text, THINKING_LINES)
-    const whole = toggled ?? (open || matches(text, words) > matches(fold.shown, words))
+    // A model's thinking often ends on a blank line, and a fold can too; pre-wrap would show it as an empty line.
+    const said = text.trimEnd()
+    const fold = foldText(said, THINKING_LINES)
+    const shown = fold.shown.trimEnd()
+    const whole = toggled ?? (open || matches(said, words) > matches(shown, words))
     return (
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-muted-foreground italic">
             <p className="text-sm break-words whitespace-pre-wrap">
                 <span className="panel-label mr-2 not-italic">thinking</span>
-                <MarkedText text={whole ? text : fold.shown} words={words} />
+                <MarkedText text={whole ? said : shown} words={words} />
             </p>
             {fold.hidden > 0 && <MoreLines hidden={fold.hidden} open={whole} onToggle={() => setToggled(!whole)} />}
         </div>
