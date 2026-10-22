@@ -551,8 +551,9 @@ Controls:
   on. The keys are private, so a shared workspace file can neither name a remote nor change what goes there (T7). The
   harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
   only a path that is a clone's own top level, never a directory inside a repository the operator works in, commits
-  only the workspace's own directory there, runs git with hooks off (D107), and never forces a push. A prompt is
-  exported only from beside its run's log under the state directory, never through a link. Residual: anyone who can
+  only the workspace's own directory there, or with `paths.plan_archive_workspace_dir` off only each planned ticket's
+  directory and canopy's own index at its top level, runs git with hooks off (D107), and never forces a push. A prompt
+  is exported only from beside its run's log under the state directory, never through a link. Residual: anyone who can
   read that remote reads every plan, prompt, and conversation there, so the operator keeps it private; the clone's
   own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their home directory is.
 - With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
