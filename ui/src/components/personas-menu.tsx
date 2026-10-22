@@ -119,8 +119,8 @@ export function PersonaRadioItem({ name, description }: { name: string; descript
 
 /**
  * A persona as every persona menu lists it (ui/DESIGN.md, "A choice of persona"): its name in monospace, and under it,
- * in muted body text, its description, the opening sentence of its text, which says what the persona is. The
- * description is the item's accessible description, not part of its name.
+ * in muted body text, its description, which says what the persona is: its file's own, else its opening sentence.
+ * The description is the item's accessible description, not part of its name.
  */
 function PersonaLabel({ name, description, id }: { name: string; description: string | null; id: string }) {
     return (

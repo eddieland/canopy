@@ -381,11 +381,15 @@ def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
         "yours": False,
         "defaults": ["worker", "planner", "reviewer"],
         "error": None,
-        "description": "When you plan, be as long as the work needs and no longer.",
+        "description": (
+            "canopy's own voice: plans as long as the work needs, reviews that read the change as an adversary, and "
+            "PR text left alone unless it is wrong."
+        ),
     }
     assert got["skeptic"]["defaults"] == []
     assert got["minimalist"]["description"] == (
-        "Work like the lazy senior developer who has been here longest: the best code is the code never written."
+        "The lazy senior developer: the smallest diff the ticket allows, what already exists before new code, and few "
+        "words."
     )
 
 

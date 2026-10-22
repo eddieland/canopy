@@ -103,8 +103,24 @@ ticket's override, `[personas]` in your config, or canopy's default.
 Open a row's menu and pick a persona to set this ticket's override, as `canopy persona KEY NAME --agent AGENT` does.
 It holds for every run of that agent on this ticket until you pick **Clear the override**, which hands the choice back
 to your config. Set a skeptic on the one ticket whose reviews you want harder, and leave the rest alone. The menu lists
-what `canopy personas` does: canopy's own, and yours in `paths.personas`, each with the opening sentence of its file
-under its name, so you can tell `explainer` from `minimalist` without opening either.
+what `canopy personas` does: canopy's own, and yours in `paths.personas`, each with its description under its name,
+so you can tell `explainer` from `minimalist` without opening either.
+
+A persona's description is what its file says it is, in a front matter at the very top, as a skill's:
+
+```markdown
+---
+description: Reviews like a pirate: every finding a plank, every fix a way off it.
+---
+
+When you review, ...
+```
+
+Only `description` goes there, on one line or wrapped onto indented ones, and it is for the menus alone: no agent ever
+reads it, so the prompt gets exactly what follows the closing `---`. A file without one is described by its opening
+sentence, which works until your persona opens with "When you plan,", as canopy's own once did. A front matter canopy
+can't read, such as one never closed or with a key it doesn't know, refuses the persona as `bad_persona`, the way a
+file past its size limit does.
 
 For one run alone, choose from the command line: `canopy persona KEY NAME --next`, or `--persona` on
 `canopy start KEY` or `canopy plan KEY`. The row names it under the persona, as **Its next run alone**, until that run

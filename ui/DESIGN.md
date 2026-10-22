@@ -1361,8 +1361,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   `Public: remove its queue label to stop it, or start it privately.`
 - **A choice of persona** is a menu (`DropdownMenu`) on an outline `xs` button naming the choice
   (`src/components/personas-menu.tsx`): a ticket's agent's picks one (`PersonaRadioItem`), a review request's checks
-  several (`PersonasMenu`). Each item is the persona's name in monospace over its description, the opening sentence of
-  its file, in muted `text-xs`: the name is the item's accessible name, the description its accessible description.
+  several (`PersonasMenu`). Each item is the persona's name in monospace over its description, its file's own or
+  else its opening sentence, in muted `text-xs`: the name is the item's accessible name, the description its accessible
+  description.
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
