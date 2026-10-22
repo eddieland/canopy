@@ -30,7 +30,8 @@ const SEVERAL =
  * does not own, by its URL, with what its reviewer should know, and the personas to review it in, one review each,
  * or none for `[personas] reviewer`'s. The personas start as those the operator prefers in Settings, and each request
  * goes back to them. canopy reviews it once, at its head, in whichever of the workspace's repositories it is in.
- * Nothing is posted on the PR, and nothing is reviewed now: the next tick does it.
+ * Its review becomes a draft the operator may publish as their own; nothing posts until they do, and nothing is
+ * reviewed now: the next tick does it.
  */
 export function ReviewRequestForm({ className }: { className?: string }) {
     const client = useQueryClient()
@@ -69,8 +70,8 @@ export function ReviewRequestForm({ className }: { className?: string }) {
             }}
         >
             <p className="text-sm text-muted-foreground">
-                Have canopy review a PR the loop does not own, such as a coworker&apos;s. Its review stays here; nothing
-                is posted on the PR.
+                Have canopy review a PR the loop does not own, such as a coworker&apos;s. Its review is a draft you may
+                publish, word for word, as your own; nothing posts until you do.
             </p>
             <div className="flex flex-wrap items-center gap-2">
                 <Input

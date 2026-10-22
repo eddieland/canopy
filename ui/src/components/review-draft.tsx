@@ -163,7 +163,7 @@ function CommentList({
             {hasDiff ? (
                 <ol className="divide-y">
                     {draft.comments.map((c) => (
-                        <ListRow key={c.number} kind="review-finding" className="py-2 text-sm">
+                        <ListRow key={c.number} kind="draft-comment" className="py-2 text-sm">
                             <span className="readout text-xs text-muted-foreground">{c.number}</span>
                             <Chip className="justify-center">
                                 {c.finding === null ? 'yours' : `finding ${c.finding}`}
