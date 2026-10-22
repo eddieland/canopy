@@ -12,6 +12,22 @@ from canopy.runtime.opencode import definitions
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 SKILL_MARKER = "    # canopy: skill rule\n"
 READS_MARKER = "  # canopy: tracker reads\n"
+ISSUES_MARKER = "  # canopy: github issue tools\n"
+#: The denial of GitHub's issue tools, as rendered for both workers and the planner off a GitHub tracker.
+ISSUE_DENIALS = "".join(
+    f'  "*{tool}*": deny\n'
+    for tool in (
+        "issue_read",
+        "list_issues",
+        "search_issues",
+        "issue_write",
+        "list_issue_types",
+        "list_issue_fields",
+        "get_label",
+    )
+)
+#: The agents that deny GitHub's issue tools off a GitHub tracker.
+ISSUE_AGENTS = [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER]
 TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER]
 
 
@@ -56,6 +72,9 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
     text = {name: rendered[f"agents/{name}.md"].decode() for name in definitions.agent_names()}
     assert '  "tracker_*": deny\n  "tracker_read": allow\n' in text[agents.PRIVATE_WORKER]
     assert '  "tracker_read": allow\n' in text[agents.PLANNER]
+    # Both workers and the planner deny GitHub's issue tools: the tracker is not GitHub.
+    for agent in ISSUE_AGENTS:
+        assert f"{ISSUES_MARKER}{ISSUE_DENIALS}" in text[agent], agent
     # The overseer reads it too, and denies GitHub's issue reads, which are no tracker's but GitHub's.
     assert (
         f'{READS_MARKER}  "*issue_read*": deny\n  "*list_issues*": deny\n  "*search_issues*": deny\n'
@@ -221,3 +240,37 @@ def test_a_bash_allow_canopy_would_not_render_is_refused(allow: str) -> None:
     rules = replace(PLAIN, bash_allows={agents.OVERSEER: (allow,)})
     with pytest.raises(agents.DefinitionsError, match="is not a bash rule canopy renders"):
         definitions.render(definitions.bundled(), rules)
+
+
+@pytest.mark.parametrize("agent", ISSUE_AGENTS)
+@pytest.mark.parametrize("tools", [None, agents.McpTools("tracker", ("read",))])
+def test_a_definition_without_its_github_issue_tools_line_is_refused(agent: str, tools: agents.McpTools | None) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line '# canopy: github issue tools'"):
+        definitions.render_github_issues(bundled.replace(ISSUES_MARKER, ""), f"{agent}.md", tools, "jira")
+
+
+@pytest.mark.parametrize("agent", ISSUE_AGENTS)
+@pytest.mark.parametrize(
+    ("tools", "provider"),
+    [(agents.McpTools("github", ("issue_read",)), "github"), (None, "linear")],
+)
+def test_a_github_tracker_or_none_known_leaves_githubs_issue_tools(
+    agent: str,
+    tools: agents.McpTools | None,
+    provider: str,
+) -> None:
+    # On GitHub the issues are the tickets; with no tracker tools known, a pattern could take one of the tracker's.
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    assert definitions.render_github_issues(bundled, agent, tools, provider) == bundled
+
+
+@pytest.mark.parametrize("agent", ISSUE_AGENTS)
+def test_a_pattern_that_matches_a_known_tracker_tool_is_left_out(agent: str) -> None:
+    # Linear's own `list_issues` would be denied with GitHub's, and the public worker allows no tracker tool by name to
+    # win it back: GitHub's `list_issues` stays instead.
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    linear = agents.McpTools("linear", ("list_issues", "get_issue"), ("create_issue",))
+    rendered = definitions.render_github_issues(bundled, agent, linear, "linear")
+    rules = rendered.split(ISSUES_MARKER, 1)[1].split("  # ", 1)[0]
+    assert rules == ISSUE_DENIALS.replace('  "*list_issues*": deny\n', "")

@@ -394,8 +394,11 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   twice more, in two directories, and compare the two requests as 2026-10-19's second section did: expect them to
   share nothing while OpenCode sends one system block (F48), or the tools and the body once something splits it (F50).
   Of the tracker's server, expect the overseer, the reviewer, and the chore sent only its read tools (Jira's 12 by
-  default). Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash`
-  gone if its rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
+  default). Off a GitHub tracker, expect both workers and the planner sent none of GitHub's issue tools (`issue_read`,
+  `issue_write`, `list_issues`, `search_issues`, `list_issue_types`, `list_issue_fields`, `get_label`; #436): about
+  2.8k tokens less on each worker run and 1.8k on each plan (2026-10-21 F54), and every other tool as on 2026-10-21.
+  Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
+  rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
 - **S59. What canopy keeps** (M47, stage 1's check, closed on real use 2026-10-21). Run `canopy gc --dry-run --json`
   on the live workspace and record each kind's count and bytes, and what a pass with §26's defaults removes, in

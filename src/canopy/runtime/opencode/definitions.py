@@ -9,7 +9,7 @@ files mark for it:
 - the tracker's MCP server and the tools of it the private worker and the planner may call: its read tools, and for
   the private worker alone, its tools that create a ticket and those that write to a PR (DESIGN §22, §25); and the
   overseer, the reviewer, and the chore, its reads only; off a GitHub tracker, the overseer's and the reviewer's denial
-  of GitHub's issue reads (DESIGN §13);
+  of GitHub's issue reads, and both workers' and the planner's of GitHub's issue tools (DESIGN §13);
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
 - the reviewer's and overseer's temperature, unless it sets none;
@@ -30,6 +30,7 @@ private worker's reply tools are marked below its tracker tools, which allow Git
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from typing import TYPE_CHECKING
 
@@ -73,6 +74,8 @@ _CHORE_FILE = _file(CHORE)
 # The definitions that may call only the tracker's read tools, rendered at their marked line.
 _READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, _file(PLANNER))
 _WORKER_FILES = (_file(WORKER), _PRIVATE_FILE)
+# The definitions that deny GitHub's issue tools off a GitHub tracker, at their marked line.
+_GITHUB_ISSUE_FILES = (*_WORKER_FILES, _file(PLANNER))
 # The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
 _REBASE_MARKER = "    # canopy: rebase rules\n"
 # The one forced push `trust.rebase` allows, after the deny of every other: the prompts' own command, a lease on the
@@ -114,7 +117,19 @@ _OVERSEER_GITHUB_READS = (
 # GitHub's issue reads, which the overseer and the reviewer have no use for off a GitHub tracker. Rendered before the
 # tracker's rules: a read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after
 # it.
-_GITHUB_ISSUE_READS = ('  "*issue_read*": deny\n', '  "*list_issues*": deny\n', '  "*search_issues*": deny\n')
+_GITHUB_ISSUE_READS = ("*issue_read*", "*list_issues*", "*search_issues*")
+# GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
+# for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,
+# which comment on a PR's conversation too.
+_GITHUB_ISSUE_TOOLS = (
+    *_GITHUB_ISSUE_READS,
+    "*issue_write*",
+    "*list_issue_types*",
+    "*list_issue_fields*",
+    "*get_label*",
+)
+# The line of the shipped workers' and planner's definitions the denial of GitHub's issue tools is rendered at.
+_ISSUES_MARKER = "  # canopy: github issue tools\n"
 # The line of the shipped reviewer's and overseer's definitions their temperature is rendered at.
 _TEMPERATURE_MARKER = "# canopy: temperature\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
@@ -170,6 +185,10 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
             drafts = rules.private_drafts if rel == _PRIVATE_FILE else rules.worker_drafts
             rendered = render_replies(text, rel, approve=drafts.approve, ticket_comments=drafts.ticket_comments)
             found[rel] = rendered.encode()
+    for rel in _GITHUB_ISSUE_FILES:
+        if rel in found:
+            text = found[rel].decode()
+            found[rel] = render_github_issues(text, rel, rules.tracker_tools, rules.tracker_provider).encode()
     _render_by_agent(found, rules)
     if _OVERSEER_FILE in found:
         skill = _tracker_skill(found, rules.tracker_provider)
@@ -257,6 +276,27 @@ def render_replies(text: str, name: str, *, approve: bool, ticket_comments: bool
     tools = (*_REPLY_TOOLS, *(() if ticket_comments else _REPLY_TOOLS_ISSUES))
     text = text.replace(_REPLY_BASH_MARKER, _REPLY_BASH_MARKER + "".join(bash), 1)
     return text.replace(_REPLY_TOOLS_MARKER, _REPLY_TOOLS_MARKER + "".join(tools), 1)
+
+
+def render_github_issues(text: str, name: str, tools: McpTools | None, provider: str) -> str:
+    """Return worker or planner definition `name` denying GitHub's issue tools, if the tracker is not GitHub.
+
+    Only the `tracker-github` skill names them, and OpenCode sends no tool a rule denies whole, so each run's request is
+    smaller by their schemas. The patterns match by tool name whatever the server, so one that matches a tool of the
+    tracker's that canopy knows, such as a `list_issues` of its own, is left out, and GitHub's tool of that name stays:
+    the worker's rules allow no tracker tool by name to win it back, and each pattern left out only keeps a tool. On a
+    GitHub tracker, whose issues are the tickets, and with no tracker tools known, the marked line stays as it is.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the denials at.
+    """
+    if _ISSUES_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_ISSUES_MARKER.strip()!r} to render GitHub's issue tools at")
+    if tools is None or provider == _GITHUB:
+        return text
+    known = [f"{tools.server}_{tool}" for tool in (*tools.allowed, *tools.create, *tools.pr_writes)]
+    denied = [p for p in _GITHUB_ISSUE_TOOLS if not any(fnmatch.fnmatchcase(tool, p) for tool in known)]
+    return text.replace(_ISSUES_MARKER, _ISSUES_MARKER + "".join(_deny(pattern) for pattern in denied), 1)
 
 
 def render_temperature(text: str, name: str, temperature: float | None) -> str:
@@ -393,11 +433,15 @@ def _render_reads(text: str, server: str, reads: Iterable[str], *, issue_reads: 
         `text` with the rules after its marked line.
     """
     rules = [
-        *(_GITHUB_ISSUE_READS if issue_reads else ()),
-        f'  "{server}_*": deny\n',
+        *(_deny(pattern) for pattern in (_GITHUB_ISSUE_READS if issue_reads else ())),
+        _deny(f"{server}_*"),
         *(f'  "{server}_{tool}": allow\n' for tool in reads),
     ]
     return text.replace(_READS_MARKER, _READS_MARKER + "".join(rules), 1)
+
+
+def _deny(pattern: str) -> str:
+    return f'  "{pattern}": deny\n'
 
 
 def _tracker_skill(found: Mapping[str, bytes], provider: str) -> str | None:

@@ -100,6 +100,16 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # GitHub's issue tools, which only the `tracker-github` skill names: off a GitHub tracker, canopy renders their
+  # denial at the marked line, so OpenCode sends none of them. Its issue comment tools stay, for a PR's conversation.
+  # canopy: github issue tools
+  "*issue_read*": deny
+  "*list_issues*": deny
+  "*search_issues*": deny
+  "*issue_write*": deny
+  "*list_issue_types*": deny
+  "*list_issue_fields*": deny
+  "*get_label*": deny
   # With `trust.review_replies = "approve"`, canopy renders the denial of the GitHub server's comment tools here.
   # canopy: reply tools
   "*reply_to_pull_request_comment*": deny
