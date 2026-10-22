@@ -398,6 +398,10 @@ whose PR needs work comes before one that waits. The Action column is shorthand 
   its run link, and run <id>>'`, and dispatch no `resume` for it. Otherwise, if it ended `done` and the same check run
   still fails, its fix has not reached CI or did not help: `wait` until a newer check run exists. If it ended
   `blocked`, the ticket is `needs_human`.
+- A `resume` for `ci` alone refused `handled` had no failure a worker had not: each failed at that head at or behind
+  the `ci` cursor, so a rerun went red again and another worker would see what the last one saw. Record `canopy
+  attention <KEY> flaky_rerun --repo <the unit> --detail '<the check, its run link, and that its rerun failed again>'`,
+  and dispatch no `resume` for it; a new head, or an operator message carried as `--reason reply`, starts one.
 
 Read a PR's mergeability first: GitHub runs no checks on a PR it cannot merge, so a conflicting PR's checks look
 pending with nothing running, or show an earlier head's. A conflict (`mergeable` false, `mergeable_state` `dirty`)

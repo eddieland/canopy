@@ -951,6 +951,22 @@ class ObservedCheck(Row):
 
 
 @dataclass(frozen=True)
+class ObservedCheckRun(Row):
+    """A completed check run a `vcs` source observed, kept across later reads of its PR (DESIGN §35)."""
+
+    TABLE: ClassVar[str] = "observed_check_runs"
+
+    pr_url: str
+    run_id: int
+    #: Its context's name, as `observed_checks.name`.
+    name: str
+    head_sha: str
+    conclusion: CheckConclusion
+    #: When a source first observed it completed.
+    observed_at: str
+
+
+@dataclass(frozen=True)
 class ConnectorRun(Row):
     """One run of a source (DESIGN §30): what it was asked, how it ended, and what it read."""
 

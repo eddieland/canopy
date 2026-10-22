@@ -79,9 +79,16 @@ ticket, a named unit's PR, and a stacked dispatch's blocker's PR; none for a pri
 Chosen conservatively: cursors are checked as they are today, a `review` cursor naming an item by its time to the
 second; a ticket the query found this tick is stale until the next read records its comments, so its first dispatch
 waits a tick, as the block already said; the prompt is unchanged, its refusals section covering the new codes.
-Left: the duties check owing `canopy queried` only when no source read the query (it needs the harness to touch the
-source's tickets into the journal, so it is not small), the cursor check on `canopy ticket set`, `handled`,
-journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the conversation, the
-design folded into the sections it names, and the live re-measurement. Open for the operator: whether a tracker with
-no connector keeps the live-read procedure or a `tracker` source is required (recommended: required), and how many
-new items a subject shows before the rest are counted.
+Built (2026-10-22): `handled`, on the `ci` cursor as it is: each completed check run a source observes is kept by its
+run id across reads (`observed_check_runs`), so a re-run at the same head is told from the run it repeats, and a
+`resume` for `ci` alone is refused `handled` when every failure at the head is at or behind the cursor or repeats, at
+the same head and context, one that is; tests through the command and the tool, and of a held check's re-run observed
+at the same head. Chosen conservatively, for the operator to change: a failure with no run (a commit status) is new;
+a `ci` cursor empty or not a number refuses nothing, nor does a head whose only failures are `human_checks` or that
+has none; and the prompt has the overseer record `flaky_rerun` on a `handled` refusal, a new head or an operator
+message starting the next. Left: the duties check owing `canopy queried` only when no source read the query (it
+needs the harness to touch the source's tickets into the journal, so it is not small), the cursor check on `canopy
+ticket set`, journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the
+conversation, the design folded into the sections it names, and the live re-measurement. Open for the operator:
+whether a tracker with no connector keeps the live-read procedure or a `tracker` source is required (recommended:
+required), and how many new items a subject shows before the rest are counted.

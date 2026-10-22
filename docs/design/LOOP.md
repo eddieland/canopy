@@ -218,7 +218,7 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 1. Check the guards, which are in code and not overridable from the prompt. A refusal is recorded as a decision naming
    the guard and why, and the command exits 1; a dry run checks them and stops (§6, D036). Dispatch is refused when:
    - a claim rests on a stale observation or one that does not bear it out (`stale`, `unauthorized`, `unobserved`),
-     checked first (§35).
+     or a `resume` for CI alone has only failures a worker already had at that head (`handled`), checked first (§35).
    - the label is not a queue label, or a started ticket's (§22) start record does not allow the run; the worker checks
      the label again (step 3, D051).
    - the request does not fit its kind: a `resume` with no branch to continue, a cursor moved without its reason, or a

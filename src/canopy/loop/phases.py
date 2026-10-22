@@ -669,7 +669,7 @@ class _World:
         pending = any(c.status is not CheckStatus.COMPLETED for c in ci)
         failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in FAILED]
         phases = [Phase.CI_RUNNING] if pending else []
-        cursor = _ci_cursor(unit.last_ci_run_id)
+        cursor = ci_cursor(unit.last_ci_run_id)
         if any(cursor is None or (c.run_id is not None and c.run_id > cursor) for c in failed):
             phases.append(Phase.CI_RED)
         return phases, not pending and all(c.conclusion in PASSED for c in ci)
@@ -780,8 +780,12 @@ def _approved(reviews: Collection[records.ObservedReview]) -> bool:
     return any(state is ReviewState.APPROVED for state in latest.values())
 
 
-# The `ci` cursor, a check run's id; None when it is empty or not a number, so every failure is new.
-def _ci_cursor(value: str | None) -> int | None:
+def ci_cursor(value: str | None) -> int | None:
+    """Read a unit's `ci` cursor, a check run's id.
+
+    Returns:
+        The id; None when it is empty or not a number, so every failure is new.
+    """
     try:
         return int(value) if value else None
     except ValueError:
