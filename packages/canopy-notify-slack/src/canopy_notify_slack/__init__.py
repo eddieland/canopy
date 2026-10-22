@@ -40,12 +40,12 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, TextIO
+from typing import Protocol
 
 import click
 
@@ -1068,39 +1068,16 @@ def read_message(stdin: str) -> dict[str, object]:
 
 
 @dataclass(frozen=True)
-class Io:
-    """What the sink reads, and where it may post: Slack's own, unless a test gives its own."""
+class Slack:
+    """Where the sink may post: Slack's own, unless a test gives its own."""
 
-    stdin: TextIO
     #: What the webhook URL must start with.
     prefix: str = SLACK_PREFIX
     #: Where a token posts.
     api_url: str = SLACK_API_URL
 
 
-def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
-    """Post the message on `stdin`.
-
-    `prefix` is what the webhook URL must start with; `api_url` is where a token posts.
-
-    Returns:
-        The exit code: 0 posted, 1 Slack refused the post, 2 `argv`, the secret file, the channel, or the message is
-        not usable.
-    """
-    try:
-        found = command.main(
-            args=list(argv),
-            prog_name="canopy-notify-slack",
-            standalone_mode=False,
-            obj=Io(stdin, prefix, api_url),
-        )
-    except click.ClickException as e:
-        e.show()
-        return e.exit_code
-    return found if isinstance(found, int) else 0
-
-
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.command("canopy-notify-slack", context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--webhook-file",
     type=click.Path(dir_okay=False, path_type=Path),
@@ -1131,7 +1108,7 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
     + ".",
 )
 @click.pass_context
-def command(
+def main(
     ctx: click.Context,
     *,
     webhook_file: Path | None,
@@ -1147,18 +1124,18 @@ def command(
     It posts to an incoming webhook, or with --channel, with a bot token. Each secret is read from a file that is
     yours alone.
     """
-    io = ctx.find_object(Io) or Io(sys.stdin)
+    slack = ctx.find_object(Slack) or Slack()
     _check_options(ctx.params)
     send: Callable[[str, list[Block]], tuple[bool, str]]
     threaded: tuple[Send, str] | None = None
     try:
         if channel is None:
-            send = functools.partial(post, read_webhook(webhook_file or default_webhook_file(), prefix=io.prefix))
+            send = functools.partial(post, read_webhook(webhook_file or default_webhook_file(), prefix=slack.prefix))
         else:
             checked = check_channel(channel)
             to_channel = functools.partial(
                 post_message,
-                io.api_url,
+                slack.api_url,
                 read_token(token_file or default_token_file()),
                 checked,
                 username=None if username is None else check_username(username),
@@ -1166,7 +1143,7 @@ def command(
             )
             send = to_channel
             threaded = (to_channel, checked) if threads else None
-        parsed = read_message(io.stdin.read())
+        parsed = read_message(sys.stdin.read())
         if threaded is None:
             ok, reply = send(render(parsed), blocks(parsed))
         else:
@@ -1199,12 +1176,3 @@ def _check_options(given: Mapping[str, object]) -> None:
         raise click.UsageError("--broadcast needs --threads")
     if channel is not None and given.get("webhook_file") is not None:
         raise click.UsageError("--webhook-file and --channel are two ways to post; give one")
-
-
-def main() -> int:
-    """The `canopy-notify-slack` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:], sys.stdin)
