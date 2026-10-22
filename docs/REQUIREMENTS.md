@@ -315,11 +315,11 @@ compared.
 
 ### R25. One-off private tasks, about no ticket
 
-Built in part (M61, §36): a task runs; replies, its report, and tickets are to come. Written down 2026-10-21. The
-operator wants to hand canopy one-off work in their own words that belongs to no ticket: exploring a question in the
-code, or planning the tickets that should follow. A task runs once in a worktree and may push a branch, open a draft
-PR, and file tickets with no queue label. What it leaves is throwaway quality until the operator gives it a pass of
-their own. Like a started ticket, its conversation stays in canopy.
+Built in part (M61, §36): a task runs, and the operator's replies run it again; its report and tickets are to come.
+Written down 2026-10-21. The operator wants to hand canopy one-off work in their own words that belongs to no ticket:
+exploring a question in the code, or planning the tickets that should follow. A task runs once in a worktree and may
+push a branch, open a draft PR, and file tickets with no queue label. What it leaves is throwaway quality until the
+operator gives it a pass of their own. Like a started ticket, its conversation stays in canopy.
 
 ### R26. Publish artifacts people comment on, and bring their comments back to the ticket
 

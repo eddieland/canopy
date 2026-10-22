@@ -106,8 +106,9 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21), and to mark it seen, as that show and its page do (§22).
     REVIEW: ("dismiss", "send", "seen"),
-    # Submitted with `canopy task submit`; stopping one ends it, and drops it while it waits (DESIGN §36).
-    TASK: ("stop", "show"),
+    # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
+    # waits (DESIGN §36).
+    TASK: ("stop", "reply", "show"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -348,25 +349,31 @@ def reply(
     submission: str | None = None,
     chores: Collection[str] = (),
 ) -> Replied:
-    """Record the operator's reply to a ticket canopy knows, or a note to a chore in `chores` (DESIGN §19, §22).
+    """Record the operator's reply to a ticket canopy knows or a task, or a note to a chore in `chores` (§19, §22, §36).
 
     A started ticket's reply is its conversation. A public ticket's is the operator's word to the loop, beside its
     authorized repliers' comments on the ticket, and how the operator answers an untrusted reviewer's feedback (DESIGN
-    §7, D089). It answers the ticket's latest question when there is one. A chore's is a note its next runs read. A
-    channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one the id is
-    derived from the subject, the message it answers, and the body. Either way the same reply sent again after an
-    uncertain result records nothing new.
+    §7, D089). It answers the ticket's latest question when there is one. A task's is the operator's next instruction
+    to it, answering its waiting question, if any, and it queues the task's next run. A chore's is a note its next
+    runs read. A channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one
+    the id is derived from the subject, the message it answers, and the body. Either way the same reply sent again
+    after an uncertain result records nothing new.
 
     Returns:
         The message's id, the question it answers, if any, and whether it was new. A repeated submission returns the
         message it recorded first, with what that answered.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a ticket or a chore, `unknown` for a ticket that was neither
-            started nor seen by a tick or a chore not in `chores`, `bad_body` for an empty body or one over 4000
-            characters, `bad_submission` for a submission id that is not 8 to 64 letters, digits, `-`, or `_`.
+        Refused: `unsupported` for a subject that is not a ticket, a task, or a chore, `unknown` for a ticket that was
+            neither started nor seen by a tick, a task canopy has no record of, or a chore not in `chores`,
+            `stopped` for a task the operator stopped, `inside_run` for a task's inside a tick or a run, `bad_body` for
+            an empty body or one over 4000 characters, `bad_submission` for a submission id that is not 8 to 64
+            letters, digits, `-`, or `_`.
     """
     check_verb(ref, "reply")
+    if ref.kind == TASK:
+        # A task's guards are in core, as its submission's are: a reply authorizes its next run (TRUST_MODEL T1).
+        check_operator()
     if submission is not None and not SUBMISSION_RE.fullmatch(submission):
         raise Refused("bad_submission", f"a submission id is {SUBMISSION_RE.pattern}")
     text = body.strip()
@@ -377,13 +384,7 @@ def reply(
     if ref.kind == CHORE and ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     with db.transaction(conn):
-        if ref.kind == TICKET and db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
-            raise Refused(
-                "unknown",
-                f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
-            )
-        question = latest_question(conn, ref.id) if ref.kind == TICKET else None
-        answers = question.id if question is not None else None
+        answers = _answers(conn, ref)
         if submission is None:
             stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
         else:
@@ -406,6 +407,35 @@ def reply(
         recorded = db.get_message(conn, message_id)
         answers = recorded.answers if recorded is not None else None
     return Replied(message_id=message_id, answers=answers, new=new)
+
+
+def _answers(conn: sqlite3.Connection, ref: Ref) -> int | None:
+    """Check that a reply's subject can take one, and return the question it answers: a ticket's or a task's.
+
+    Returns:
+        The id of the subject's latest question that no operator message has followed, or None.
+
+    Raises:
+        Refused: (`unknown`) a ticket that was neither started nor seen by a tick, or a task canopy has no record of;
+            (`stopped`) a task the operator stopped.
+    """
+    if ref.kind == TICKET:
+        if db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
+            raise Refused(
+                "unknown",
+                f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
+            )
+        question = latest_question(conn, ref.id)
+    elif ref.kind == TASK:
+        row = sql.execute(conn, sql.select("stopped_at").from_("tasks").where("id = ?", int(ref.id))).fetchone()
+        if row is None:
+            raise Refused("unknown", f"canopy has no {ref}")
+        if row[0] is not None:
+            raise Refused("stopped", f"{ref} is stopped, and nothing starts it again; submit a new task instead")
+        question = task_question(conn, int(ref.id))
+    else:
+        question = None
+    return question.id if question is not None else None
 
 
 def dismiss(
@@ -795,6 +825,28 @@ def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | Non
     return row
 
 
+def task_question(conn: sqlite3.Connection, task_id: int) -> records.Message | None:
+    """Return task `task_id`'s latest question if no operator message came after it, else None (DESIGN §36)."""
+    row = records.fetch_one(
+        conn,
+        records.Message,
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND kind = 'question'", TASK, str(task_id))
+        .order_by("id DESC")
+        .limit(1),
+    )
+    if row is None:
+        return None
+    replied = (
+        sql.select("1")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TASK, str(task_id), row.id)
+        .limit(1)
+    )
+    return None if sql.execute(conn, replied).fetchone() is not None else row
+
+
 @dataclass(frozen=True)
 class Awaiting:
     """A started ticket waiting on the operator: its latest question, which no operator message came after."""
@@ -1020,6 +1072,29 @@ class ChoreNote(TypedDict):
     note: str
 
 
+def prompt_task_conversation(conn: sqlite3.Connection, task_id: int, up_to: int | None) -> str | None:
+    """Return a task prompt's `{{CONVERSATION}}`: its messages up to message `up_to`, oldest first, bounded (§36).
+
+    They are its earlier runs' reports and questions, data, and the operator's replies, instructions; the task's own
+    text is the prompt's `{{TASK}}`.
+
+    Returns:
+        The messages; None, which leaves the prompt's section out, when there are none, as for a task's first run.
+    """
+    if up_to is None:
+        return None
+    rows = records.fetch_all(
+        conn,
+        records.Message,
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND id <= ?", TASK, str(task_id), up_to)
+        .order_by("id DESC")
+        .limit(PROMPT_MESSAGES),
+    )
+    return _bounded([_prompt_message(m) for m in reversed(rows)])
+
+
 def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     """Return what a chore's prompt carries of the operator's notes to it: the latest, oldest first (DESIGN §19)."""
     return [{"id": m.id, "at": m.at, "note": printable(m.body)} for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)]
@@ -1050,7 +1125,8 @@ def _prompt_message(m: records.Message) -> str:
         whose = "an earlier worker's" if m.source == "worker" else f"account {m.author}'s"
         what = f"{whose} tracker comment {m.comment_id}, data"
     else:
-        what = f"an earlier worker's {m.kind}" + (f", run {m.run_id}" if m.run_id else "")
+        run = m.run_id or m.task_run_id
+        what = f"an earlier worker's {m.kind}" + (f", run {run}" if run else "")
     return f"Message {m.id}, {what}, at {m.at}:\n{_quoted(m.body)}"
 
 
@@ -1078,7 +1154,8 @@ def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, 
     """Return the `(kind, body)` messages a run that closed as `status` reports.
 
     That is a report, and for a `blocked` run its question. The report is the worker's summary, an old triage's reason,
-    or the harness's note, or the status, then each PR on a line of its own.
+    or the harness's note, or the status, then each PR on a line of its own. A ticket's run names its PRs by
+    repository, a task's in a list (DESIGN §36).
     """
     result = contract.stored_object(result_json)
     # An old triage's report is its reason (M55).
@@ -1086,7 +1163,8 @@ def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, 
         _text(result.get("summary")) or _text(result.get("reason")) or _text(result.get("harness")) or f"ended {status}"
     )
     prs = result.get("prs")
-    urls = [str(u) for u in prs.values() if isinstance(u, str) and u] if isinstance(prs, dict) else []
+    listed: list[object] = list(prs.values()) if isinstance(prs, dict) else prs if isinstance(prs, list) else []
+    urls = [str(u) for u in listed if isinstance(u, str) and u]
     found = [("report", "\n".join([summary, *urls]))]
     question = _text(result.get("question"))
     if status == RunStatus.BLOCKED and question:
