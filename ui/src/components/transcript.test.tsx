@@ -494,7 +494,8 @@ describe('TranscriptPanel', () => {
         expect(open).toHaveLength(PAGE)
     })
 
-    it('draws a page of a long session’s calls by call, and a fold after them', () => {
+    // Draws a page of calls twice over: a second in happy-dom, past the default's five on a busy runner.
+    it('draws a page of a long session’s calls by call, and a fold after them', { timeout: 30_000 }, () => {
         const entries = said(PAGE + 50).flatMap((entry, i) => [{ ...entry, call: i + 1 }, step(i + 1)])
         render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
         fireEvent.click(screen.getByRole('button', { name: 'By call' }))
