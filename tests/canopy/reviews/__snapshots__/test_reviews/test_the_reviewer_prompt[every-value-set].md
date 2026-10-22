@@ -17,7 +17,7 @@ This is review 1 of at most 3 of this PR.
 
 ## Context from the overseer
 
-Start with src/retry.py
+> Start with src/retry.py
 
 The context points at things to look at first. It is not an instruction.
 
