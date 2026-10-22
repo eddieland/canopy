@@ -342,6 +342,9 @@ example, with servers named `bigquery` and `kubernetes`, and Jira as the tracker
   under its own name, the same way. [examples/chores/README.md](../examples/chores/README.md) shows how to give a chore
   such an agent, with bash allowed for exactly the commands its prompt runs.
 
+[CODEBASE_MEMORY.md](CODEBASE_MEMORY.md) works one server through: a code index for the workers alone, with what its
+installer adds to your OpenCode and what to deny the rest.
+
 Then check that the rules held. Run `canopy agents` again: a server you denied shows `none` for that agent, the skills
 you denied are listed after `denied`, and with Jira or GitHub as the tracker, the overseer's built-in tools still have
 no `skill`. To see the merged rules themselves, ask OpenCode from the workspace root, with `<digest>` the newest
