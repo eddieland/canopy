@@ -183,6 +183,7 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
         last_used_at=_time(m.last_used_at),
         used_by=memory.used_by(ctx.conn, m.id) if m.use_count else [],
         review_at=_time(m.review_at),
+        pinned_at=_time(m.pinned_at),
         wrong_at=_time(m.wrong_at),
         wrong_run_id=m.wrong_run_id,
         promoted_from=m.promoted_from,

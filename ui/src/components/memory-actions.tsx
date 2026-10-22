@@ -1,11 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
-import { ArrowUpFromLine, Eraser, Pencil, RefreshCw, X } from 'lucide-react'
+import { ArrowUpFromLine, Eraser, Pencil, Pin, PinOff, RefreshCw, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 
 import { ApiError } from '@/api/client'
-import { editMemory, forgetMemory, promoteMemory, refreshMemory, rejectMemory, renewMemory } from '@/api/mutations'
+import {
+    editMemory,
+    forgetMemory,
+    pinMemory,
+    promoteMemory,
+    refreshMemory,
+    rejectMemory,
+    renewMemory,
+    unpinMemory,
+} from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
 import { ForgetForm } from '@/components/forget-form'
@@ -18,7 +27,16 @@ import { RowLine } from '@/components/rows'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
 import { editRepoChoices, lessonChars, MAX_LESSON_CHARS, memoryStand, repoChoices } from '@/lib/memory'
-import { editedText, memoryForgottenText, PRIVATE_WORDS, promotedText, rejectedText, renewedText } from '@/lib/outcomes'
+import {
+    editedText,
+    memoryForgottenText,
+    pinnedText,
+    PRIVATE_WORDS,
+    promotedText,
+    rejectedText,
+    renewedText,
+    unpinnedText,
+} from '@/lib/outcomes'
 import { memoryRef } from '@/lib/refs'
 import { useSendKeys } from '@/lib/send-key'
 import type { SendKeys } from '@/lib/send-key'
@@ -228,9 +246,10 @@ export function NoteActions({ note, promote = true, onSaid }: Said & { note: Mem
 }
 
 /**
- * A lesson's verbs, under its row, shown at rest only while it is due or wrong: Renew; Edit, which opens the form for
- * its new version; and Forget, which cannot be undone and so asks for the lesson's ref typed. Until then Forget is the
- * quieter, at the line's end. With `edit` and `forget` false, as on a `lesson_review` item, Renew alone.
+ * A lesson's verbs, under its row, shown at rest only while it is due or wrong: Renew; Pin, or Unpin on a pinned one;
+ * Edit, which opens the form for its new version; and Forget, which cannot be undone and so asks for the lesson's ref
+ * typed. Until then Forget is the quieter, at the line's end. With `edit` and `forget` false, as on a `lesson_review`
+ * item, Renew and Pin alone.
  */
 export function LessonActions({
     lesson,
@@ -252,10 +271,21 @@ export function LessonActions({
         },
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
+    const pinned = lesson.pinned_at !== null
+    const pin = useMutation({
+        mutationFn: async () =>
+            pinned ? unpinnedText(await unpinMemory(lesson.id)) : pinnedText(await pinMemory(lesson.id)),
+        onSuccess: (said) => {
+            onSaid(said)
+            void refreshMemory(client)
+        },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
+    })
+    const pending = renew.isPending || pin.isPending
     // A lesson that asks nothing shows its verbs only on its row's hover or focus, as a row's copy button does, so a
     // list of hundreds is not a wall of buttons, and at rest they take no room: they show over the row's end, on the
     // panel's ground, so nothing under the row moves. A touch screen, with no hover, keeps them in the row's flow.
-    const shown = asked || open || confirming || renew.error !== null
+    const shown = asked || open || confirming || renew.error !== null || pin.error !== null
     return (
         <RowLine
             from="key"
@@ -280,10 +310,21 @@ export function LessonActions({
                         className={cn(!asked && 'text-muted-foreground')}
                         title={`canopy memory renew ${lesson.id}`}
                         onClick={() => renew.mutate()}
-                        disabled={renew.isPending}
+                        disabled={pending}
                     >
                         <RefreshCw />
                         Renew
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-muted-foreground"
+                        title={`canopy memory ${pinned ? 'unpin' : 'pin'} ${lesson.id}`}
+                        onClick={() => pin.mutate()}
+                        disabled={pending}
+                    >
+                        {pinned ? <PinOff /> : <Pin />}
+                        {pinned ? 'Unpin' : 'Pin'}
                     </Button>
                     {edit && (
                         <Button
@@ -292,14 +333,14 @@ export function LessonActions({
                             className="text-muted-foreground"
                             title={`canopy memory edit ${lesson.id} --text TEXT --repo REPO`}
                             onClick={() => setOpen(true)}
-                            disabled={renew.isPending}
+                            disabled={pending}
                         >
                             <Pencil />
                             Edit
                         </Button>
                     )}
                     {forget && !confirming && (
-                        <ForgetButton memory={lesson} onClick={() => setConfirming(true)} disabled={renew.isPending} />
+                        <ForgetButton memory={lesson} onClick={() => setConfirming(true)} disabled={pending} />
                     )}
                 </span>
             )}
@@ -310,7 +351,7 @@ export function LessonActions({
                     {lesson.version > 1 && ' Its earlier versions keep their words: forget each from its versions.'}
                 </ForgetChallenge>
             )}
-            <Notice error={renew.error} />
+            <Notice error={renew.error ?? pin.error} />
         </RowLine>
     )
 }
