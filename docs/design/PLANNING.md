@@ -86,12 +86,15 @@ of theirs, each under a front matter of its row, since status and approval live 
 run, status, and title, so a listing reads without opening a plan. Beside each goes the prompt its planner was given,
 named for its run, so a plan can be read with what it was written from; a plan run keeps its prompt as long as its plan
 (§26). It rewrites a file only when its plan or row changed, and removes only a plan's own earlier name when its status
-or title moved it, so the directory can be a repository the operator pushes and git sees a rename.
+or title moved it, so the directory can be a repository the operator pushes and git sees a rename. Asked to, it also
+writes each planned ticket's conversation (§22) beside its plans, every message oldest first, each body quoted under a
+heading canopy writes, so no body can pass for another message.
 With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, prompts too unless
-`paths.plan_archive_prompts` is off, commits that directory alone, and pushes to the clone's upstream, never forcing;
-`archive_unpushed` stays open while the archive is not all there, so a failed push is retried each tick. A tick
-writes at most a thousand files, so a long history goes in over several, each push bounded, and reads again only the
-plans whose row or files changed since it last found them as they stand. A dry run only reads the clone (TRUST_MODEL T6).
+`paths.plan_archive_prompts` is off, conversations only with `paths.plan_archive_conversations`, commits that directory
+alone, and pushes to the clone's upstream, never forcing; `archive_unpushed` stays open while the archive is not all
+there, so a failed push is retried each tick. A tick writes at most a thousand files, so a long history goes in over
+several, each push bounded, and reads again only the plans whose row or files changed, and the conversations with a new
+message, since it last found them as they stand. A dry run only reads the clone (TRUST_MODEL T6).
 
 ### Commenting on a plan
 
