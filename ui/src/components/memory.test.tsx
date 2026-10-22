@@ -74,6 +74,7 @@ const NOTE: MemoryEntry = {
     head: 'a1b2c3d',
     why: null,
     review_at: null,
+    pinned_at: null,
     wrong_at: null,
     wrong_run_id: null,
     read_count: 6,
@@ -204,6 +205,13 @@ describe('MemoryRows', () => {
         expect(first?.textContent).toBe('due')
         expect(second?.textContent).toBe('wrong')
         expect(screen.getAllByText(/^review overdue \S+$/u)).toHaveLength(2)
+    })
+
+    it('says a pinned lesson is pinned, with no review date', async () => {
+        const pinned = { ...NOTE, scope: 'lesson' as const, pinned_at: '2026-10-01T12:00:00Z' }
+        await renderRows(<MemoryRows entries={[pinned]} />)
+        expect(screen.getByText('pinned')).toBeDefined()
+        expect(screen.queryByText(/^review /u)).toBeNull()
     })
 
     it('says which memories in force the digest’s cap leaves out, telling served from recording', async () => {
