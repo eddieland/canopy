@@ -142,25 +142,32 @@
         'title': 'Retry flaky uploads',
         'units': list([
           dict({
-            'checks': list([
-              dict({
-                'conclusion': 'failure',
-                'human': False,
-                'name': 'build',
-                'run_id': 12,
-                'status': 'completed',
-                'url': 'https://github.com/acme/repo/actions/runs/12',
-              }),
-              dict({
-                'conclusion': None,
-                'human': True,
-                'name': 'deploy/approval',
-                'run_id': 11,
-                'status': 'pending',
-                'url': 'https://github.com/acme/repo/actions/runs/11',
-              }),
-            ]),
+            'checks': dict({
+              'failed': list([
+                dict({
+                  'conclusion': 'failure',
+                  'name': 'build',
+                  'run_id': 12,
+                  'url': 'https://github.com/acme/repo/actions/runs/12',
+                }),
+              ]),
+              'human': list([
+                dict({
+                  'conclusion': None,
+                  'name': 'deploy/approval',
+                  'status': 'pending',
+                }),
+              ]),
+              'passed': 2,
+              'pending': list([
+                'e2e',
+              ]),
+              'stale': list([
+                'legacy',
+              ]),
+            }),
             'derived': list([
+              'ci_running',
               'ci_red',
               'changes_requested',
               'untrusted_review',
@@ -322,8 +329,13 @@
         'observed': 'unobserved',
         'units': list([
           dict({
-            'checks': list([
-            ]),
+            'checks': dict({
+              'failed': list([
+              ]),
+              'passed': 0,
+              'pending': list([
+              ]),
+            }),
             'derived': list([
               'green_unreviewed',
             ]),
