@@ -39,12 +39,12 @@ you start a ticket in canopy, or label it in your tracker
 
 | Stage | canopy does | You do |
 | --- | --- | --- |
-| Intake | picks up a started or labeled ticket when there is capacity; stacks a ticket on its blocker's branch once that PR is green | `canopy start KEY` to work it privately, with no label and nothing written to the ticket; or add your queue label |
-| Plan, if `policy.plan` asks for one | a planner reads the ticket and the code and writes how the work will be done; each reply of yours has it plan again; nothing is implemented until you approve | read the plan, reply with what to change or edit it yourself, and approve it when it is right |
+| Intake | picks up a started or labeled ticket when there is capacity; can stack a ticket on its blocker's branch once that PR is green (`policy.stacking`) | `canopy start KEY` to work it privately, with no label and nothing written to the ticket; or add your queue label |
+| Plan, if `policy.plan` asks for one | a planner reads the ticket and the code and writes how the work will be done; each reply of yours has it plan again; nothing is implemented until the plan is approved, by you unless you let the planner approve its own (`policy.planner_may_approve`) | read the plan, reply with what to change or edit it yourself, and approve it when it is right |
 | Implement | leases a worktree, runs a worker that implements, pushes, and opens the PR, then returns the worktree | answer with `canopy reply` or the web UI, if the worker asks |
 | CI | waits without a worktree; on red or a conflict, resumes the worker to fix it, within an attempt limit and a cooldown | `canopy grant` another attempt past the limit, or `canopy notice` an outage |
 | Review | reviews the head with its own reviewer agent, if `[review]` is on; resumes the worker for feedback from `trust.trusted_reviewers`, `canopy:review` naming its own | review the PR; say what to do with anyone else's comments |
-| Merge | marks the ticket done in its own journal once every PR of it is merged; it never moves the ticket in your tracker | approve and merge, and close the ticket |
+| Merge | marks the ticket done in its own journal once its PRs are merged and no repository is left to change; it never moves the ticket in your tracker | approve and merge, and close the ticket |
 
 Between stages a ticket holds no worktree and no capacity: its pushed branch is the checkpoint, and each run is a fresh
 worker on it (§9). Each tick, an overseer agent reads the tracker, GitHub, and canopy's journal, derives each ticket's
@@ -55,8 +55,8 @@ The plan is the cheapest place to steer. A planning round costs one run and touc
 the worker start from a plan you have read rather than correcting its PR afterwards (§25). With `policy.feedback_plan`,
 what comes back to a PR is planned the same way before the worker acts on it (§32, in progress).
 
-A private ticket's conversation stays in canopy: the agents' questions and your answers never reach the tracker, though
-its PRs are as public as any. `private = true` under `[tracker]` works labeled tickets the same way (§22).
+A private ticket's conversation stays in canopy: canopy posts none of the agents' questions or your answers to the
+tracker, though its PRs are as public as any. `private = true` under `[tracker]` works labeled tickets the same way (§22).
 
 ## Reviewing other people's PRs
 
@@ -64,9 +64,10 @@ Ask canopy to review a coworker's PR, with `canopy start PR_URL --review` or the
 `review.query` matches. Its reviewer agent reads the PR at its head and reports findings on the lines of the diff, in
 canopy, posting nothing. The review is a draft you iterate on: dismiss findings, edit the text, or reply with what to
 change, `canopy reply review:ID`, and an agent revises it into a new version. When it says what you mean,
-`canopy review publish` posts that one version, word for word, as your comment review. Ask again after the author pushes,
-and the new head gets a review of its own. Publishing and revising are built from the CLI; asking for a revision from the
-review's page is still to come (§21, §34).
+`canopy review publish RUN_ID HASH` posts that one version, word for word, as your comment review: pending on GitHub for
+you to submit there, or submitted with `--submit`. Ask again after the author pushes, and the new head gets a review of
+its own. Publishing and revising are built from the CLI; asking for a revision from the review's page is still to come
+(§21, §34).
 
 Beside the loop, canopy also runs chores, scheduled agents that read your CI, PRs, or tracker and report what matters,
 changing nothing, and notifies you on your desktop or in Slack when the attention list changes.
