@@ -3637,6 +3637,11 @@ export type components = {
              */
             defaults: components["schemas"]["PersonaAgent"][];
             /**
+             * Description
+             * @description What it is, in its own words: its text's opening sentence; None for one a run would refuse.
+             */
+            description: string | null;
+            /**
              * Error
              * @description Why a run would refuse it, or None when it would render.
              */
@@ -4091,6 +4096,12 @@ export type components = {
             draft: components["schemas"]["PullRequestDraft"] | null;
             /** @description Its newest review run, or None when canopy has not reviewed it. */
             latest_review: components["schemas"]["ReviewSummary"] | null;
+            /**
+             * Loop Pr
+             * @description Whether a ticket's unit records it: one of the loop's own PRs, which a review request refuses (`loop_pr`).
+             * @default false
+             */
+            loop_pr: boolean;
             /**
              * Phase
              * @description The unit's phase as the overseer last derived it, for display; None for a PR no unit records.

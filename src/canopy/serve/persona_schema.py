@@ -55,6 +55,8 @@ class PersonaChoice(Model):
     """The agents whose `[personas]` names it, `reviewer` among them when `[personas] reviewers` does."""
     error: str | None = None
     """Why a run would refuse it, or None when it would render."""
+    description: str | None = None
+    """What it is, in its own words: its text's opening sentence; None for one a run would refuse."""
 
 
 class PersonaList(Model):

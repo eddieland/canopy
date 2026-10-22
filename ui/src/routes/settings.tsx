@@ -537,10 +537,10 @@ function ReviewsPanel() {
             <div className="flex items-center justify-between gap-4 p-3">
                 <div className="flex flex-col gap-1">
                     <p className="max-w-3xl text-sm text-muted-foreground">
-                        The personas a review you request on the Reviews page is written in, one review in each. Its
-                        form starts from them; you can still pick others for one request. The default leaves it to your
-                        config&apos;s <code className="font-mono text-xs">[personas] reviewer</code>. This choice is
-                        yours alone: the loop&apos;s own reviews never read it.
+                        The personas a review you request on the Reviews page, or from a PR&apos;s page, is written in,
+                        one review in each. Both start from them; you can still pick others for one request. The default
+                        leaves it to your config&apos;s <code className="font-mono text-xs">[personas] reviewer</code>.
+                        This choice is yours alone: the loop&apos;s own reviews never read it.
                     </p>
                     {left.length > 0 && (
                         <p className="max-w-3xl text-sm text-status-blocked" data-testid="review-personas-left">

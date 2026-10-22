@@ -156,30 +156,38 @@ one: the reviewer is wrong often enough that you'll want to read a few before it
 
 To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the
 [reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. A link to one of its
-threads or its files tab works too: the page trims it back to the PR, so you needn't. The next tick reviews the PR
-once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
-Until then it's a `requested` row at the head of the reviews list, so you can see it landed, and it waits on the
-[pull requests page](#the-pull-requests-page) wearing `requested` too. The PR's page shows the open request, with
-**Stop** to withdraw it, and says where it came from, `web` or `cli`. Once the request ends, the page says when and
-why: `reviewed`, `stopped`, `merged` or `closed` before a review got to it, or `unknown_repo` when none of your
-repositories holds the PR.
+threads or its files tab works too: the page trims it back to the PR, so you needn't. The page then opens the PR's
+own page, where the request now stands. The next tick reviews the PR once, at its latest commit, in whichever of your
+repositories holds it, and the request ends with that review. Until then it's a `requested` row at the head of the
+reviews list, so you can see it landed, and it waits on the [pull requests page](#the-pull-requests-page) wearing
+`requested` too. The PR's page shows the open request, with **Stop** to withdraw it, and says where it came from, `web`
+or `cli`. Once the request ends, the page says when and why: `reviewed`, `stopped`, `merged` or `closed` before a
+review got to it, or `unknown_repo` when none of your repositories holds the PR.
 
-Under the URL, **Notes for the reviewer** takes whatever you want the reviewer to know before it starts: what the author
-asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and it's
-`--notes` on the command line. The reviewer weighs your notes ahead of the overseer's pointers, but they don't narrow
-the review: it still reads the whole change. The PR's page shows the notes with the request. Asking again for a PR
-that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it started with.
+Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
+reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
+same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers. The
+loop's own PRs have neither button. `review.agent_prs` reviews those, and canopy would refuse the request anyway.
+
+**Show persona and notes**, under the URL, opens the rest of the form. **Notes for the reviewer** takes whatever you
+want the reviewer to know before it starts: what the author asked you to look at, the part of the change that worries
+you, or why the PR exists at all. It's optional, and it's `--notes` on the command line. The reviewer weighs your
+notes ahead of the overseer's pointers, but they don't narrow the review: it still reads the whole change. The PR's
+page shows the notes with the request. Asking again for a PR that's already waiting, with new notes, replaces the old
+ones; a review already running keeps the notes it started with.
 
 **Persona** picks the voice the review is written in, as `--persona` does. Left alone, it reads `(default)` beside
-`[personas] reviewer`'s, which is usually `canopy`. Check one persona, say `skeptic`, and the review is written in it;
-check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest way to learn which
-reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse to run, such as a
-file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's waiting, with personas
-checked, replaces its personas; with none checked, it keeps them. The PR's page names the personas with the request.
+`[personas] reviewer`'s, which is usually `canopy`; folded, the form says which it will use. Each persona in the menu
+says what it is under its name, in its own opening sentence. Check one persona, say `skeptic`, and the review is
+written in it; check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest
+way to learn which reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse
+to run, such as a file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's
+waiting, with personas checked, replaces its personas; with none checked, it keeps them. The PR's page names the
+personas with the request.
 
 If you always reach for the same reviewer, pick it once in [Settings](settings#reviews) and the form starts there,
-saying `as Settings prefers`. You can still check others for one request; the next one starts from your preference
-again. **Use the default** is still `[personas] reviewer`'s.
+saying `as Settings prefers`, and so does a PR's **Review this PR**. You can still check others for one request; the
+next one starts from your preference again. **Use the default** is still `[personas] reviewer`'s.
 
 The review stays in canopy until you say otherwise. Its page holds it as a draft of your review on the PR, which you
 can trim, reword, and publish ([below](#publishing-your-review)); whether you pass any of it on, and in what tone, is
