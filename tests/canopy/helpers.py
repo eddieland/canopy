@@ -463,6 +463,13 @@ class InlineRunner:
         return os.getpid()
 
 
+def inline_context(env: CanopyEnv, runner: InlineRunner | None = None) -> Context:
+    """The workspace's context as its config now stands, migrated, whose runner starts no detached process."""
+    found = context(env, runner or InlineRunner())
+    db.migrate(found.conn, resources.migrations_dir())
+    return found
+
+
 # Scripting the fake agents (tests/fakes/agent)
 #
 # A `*_does` helper scripts what an agent does from start to end: its commands, none if not given, then its result
