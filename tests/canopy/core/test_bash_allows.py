@@ -28,7 +28,12 @@ def test_each_worker_takes_the_operators_allows(canopy_env: CanopyEnv) -> None:
     }
 
 
-@pytest.mark.parametrize("role", ["worker", "worker-private"])
+def test_the_planner_takes_the_operators_allows(canopy_env: CanopyEnv) -> None:
+    cfg = _load(canopy_env, {"planner": JIRA})
+    assert bash_allows.by_agent(cfg.runtime.allow_bash) == {agents.PLANNER: tuple(JIRA)}
+
+
+@pytest.mark.parametrize("role", ["worker", "worker-private", "planner"])
 def test_a_workers_allow_is_held_to_the_overseers_checks(canopy_env: CanopyEnv, role: str) -> None:
     # A worker's shell runs all but what it denies; git, gh, sudo, and the loop's own tools stay denied whatever it is
     # allowed.
