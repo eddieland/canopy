@@ -712,7 +712,9 @@ def _raised_id(item: PlanItem, pr: str, head: str, what: str) -> int:
     # up (`observe`), in a plan's result line or wherever an item is named. Made of what the item is, its PR, the head,
     # and the check's name or the base, and of nothing a read changes at that head, such as a check run's id or its
     # time: every read of the same head names the same failure by the same id, so an item a `resume` handled stays
-    # handled, and one no plan covered is offered again as itself, until a push makes a new one.
+    # handled, and one no plan covered is offered again as itself, until a push makes a new one. Two of a PR's sharing
+    # one, a chance near n²/2^49 for its n items, makes `feedback_plans.match` refuse that id with a note, so neither is
+    # planned until a push: a rare re-plan, never a wrong item approved, and more bits would not stay exact in JSON.
     digest = hashlib.sha256(f"{item}\0{pr}\0{head}\0{what}".encode()).digest()
     return -(int.from_bytes(digest) >> (256 - _ID_BITS)) - 1
 
@@ -839,14 +841,16 @@ def _moved(conn: sqlite3.Connection, plan_id: int, then: records.FeedbackPlanPr)
         for c in _checks_at(conn, pr, observed.head_sha)
         if c.conclusion != was.get(c.name)
     ]
-    # Only once the host has said, then and now: a PR whose mergeability it is still working out has not moved.
+    # Only once the host has said now: a PR whose mergeability it is still working out has not moved. One it had not
+    # settled when the plan read it was offered no conflict, so a conflict it settles since is new to the plan, and no
+    # conflict is no change.
     now = observe.conflicts(observed)
-    if then.conflicted is not None and now is not None and now != then.conflicted:
+    if now is not None and now != then.conflicted and (now or then.conflicted is not None):
         found.append(Change(Changed.CONFLICT, pr, was=_conflicting(then.conflicted), now=_conflicting(now)))
     return found
 
 
-def _conflicting(conflicts: bool) -> str | None:  # noqa: FBT001
+def _conflicting(conflicts: bool | None) -> str | None:  # noqa: FBT001
     return "conflicting" if conflicts else None
 
 
