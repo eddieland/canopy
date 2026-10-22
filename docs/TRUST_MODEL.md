@@ -430,7 +430,8 @@ Controls now:
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
   that link; a canary like the desk's checks the reads (DESIGN §21).
-- The reviewer and the planner read git history through canopy's read-only git tools (DESIGN §27), never a shell.
+- The reviewer and the planner read git history through canopy's read-only git tools (DESIGN §27), never a shell: the
+  reviewer has none, and the planner's runs only what `runtime.allow_bash` names, which canopy refuses git in.
   Their server reads only the checkouts the harness names on its command line for the run, its review's or its desk's
   worktrees. Every argument is checked as a revision or a path inside the repository before git sees it, never an
   option, and git reads commits, never the working tree, so no clean filter runs; it runs with no hook, filesystem
