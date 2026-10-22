@@ -3,10 +3,10 @@
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`
 (`plan_export`), each with its planner's prompt unless `paths.plan_archive_prompts` is off, and each planned ticket's
 conversation with `paths.plan_archive_conversations`, commits what changed there and nothing else, under a message
-naming each file it adds or changes, and pushes the clone's branch to its upstream. A dry run only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its
-upstream, so a push that failed is retried each live tick and the operator sees why until one succeeds. A tick writes
-at most `PER_TICK` files, so a long history goes in over several ticks, each commit and push bounded, and the item
-stays open until it all has.
+naming each file it adds or changes, and pushes the clone's branch to its upstream. A dry run only reads the clone.
+Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a push that failed is
+retried each live tick and the operator sees why until one succeeds. A tick writes at most `PER_TICK` files, so a long
+history goes in over several ticks, each commit and push bounded, and the item stays open until it all has.
 
 The path must be a clone's own top level, never a directory inside a repository, which could be one the operator works
 in. git runs as the harness always runs it (D107), and the push never forces. Nothing here raises: an archive that fails
