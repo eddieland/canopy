@@ -30,31 +30,35 @@ a reaction whose outcome is unknown is one to send again, never one that can pos
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed, or one it
 opened and could not fill.
 
-Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin is not usable, `gh`
-holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was posted. A comment
-GitHub refuses, as on a line its diff of the PR does not show, posts nothing of the review, and the error names it.
+Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin or the command line
+is not usable, `gh` holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was
+posted. A comment GitHub refuses, as on a line its diff of the PR does not show, posts nothing of the review, and the
+error names it.
 """
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TextIO
 
+import click
+
 from canopy_github import (
     Client,
     Endpoint,
     GitHubError,
     InputError,
+    Io,
     Ref,
     Token,
     client_for,
     emit,
     endpoint,
     gh_token,
+    invoke,
     items,
     number,
     obj,
@@ -237,18 +241,27 @@ def run(
     `endpoint_of` and `token_of` map a host to its GraphQL endpoint and its token.
 
     Returns:
-        The exit code: 0 posted, 1 refused or unknown, 2 nothing posted for want of usable input.
+        The exit code: 0 posted, 1 refused or unknown, 2 nothing posted for want of usable input or `argv`.
     """
-    parser = argparse.ArgumentParser(prog="canopy-post-github", description=__doc__.split("\n", 1)[0])
-    parser.parse_args(argv)
-    out = Out(stdout)
+    return invoke(command, "canopy-post-github", argv, Io(stdin, stdout, endpoint_of, token_of))
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.pass_context
+def command(ctx: click.Context) -> None:
+    """Post what the operator approved in canopy, word for word (DESIGN §29, §34).
+
+    What to post is one JSON object on stdin; what was posted is JSON lines on stdout, the `end` line last.
+    """
+    io = ctx.find_object(Io) or Io(sys.stdin, sys.stdout)
+    out = Out(io.stdout)
     try:
-        request = parse_request(read_input(stdin))
+        request = parse_request(read_input(io.stdin))
         ref = request.pr if isinstance(request, Review) else request.issue
-        client = client_for(ref.host, endpoint_of, token_of)
+        client = client_for(ref.host, io.endpoint_of, io.token_of)
     except InputError as e:
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     try:
         login = _id(obj(client.query(_VIEWER, {}).get("viewer"), "viewer").get("login"), "viewer's login")
         out.line({"kind": "as", "login": login})
@@ -260,14 +273,13 @@ def run(
         # Refused before anything was opened, so nothing was posted.
         out.line({"kind": "end", "submitted": False})
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     except GitHubError as e:
         # Anything but an unknown submit failed before what it posted could be seen.
         if not out.ended and not isinstance(e, UnknownOutcomeError):
             out.line({"kind": "end", "submitted": False})
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
-        return 1
-    return 0
+        ctx.exit(1)
 
 
 def parse_request(request: Mapping[str, object]) -> Review | IssueComment:

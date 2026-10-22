@@ -8,13 +8,13 @@ Not an operator command: `canopy loop` serves the operator's own journal (DESIGN
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
+import click
 import uvicorn
 
 from canopy.infra.resources import ui_dir
@@ -24,40 +24,93 @@ from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    """Parse `argv` and serve, or print the schema."""
-    parser = argparse.ArgumentParser(prog="python -m canopy.serve", description=__doc__.splitlines()[0])
-    parser.add_argument("command", nargs="?", choices=("serve", "openapi"), default="serve")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--base-path", default="")
-    parser.add_argument("--mock", action="store_true", help="serve a journal seeded from fixtures (required)")
-    parser.add_argument("--mock-event-seconds", type=float, default=3.0, help="0 changes nothing, for screenshots")
-    parser.add_argument("--secret-file", type=Path, help="sign in with the listener secret in this file")
-    parser.add_argument("--ui-dir", type=Path, help="the built UI (default: the bundled one, or ui/dist)")
-    args = parser.parse_args(argv)
-    if args.command == "serve" and not args.mock:
-        parser.error("only --mock is served from here; `canopy loop` serves the operator's journal")
-    seconds = float(args.mock_event_seconds)
+def main(argv: Sequence[str] | None = None) -> int:
+    """Parse `argv`, by default the process's own, and serve, or print the schema.
+
+    Returns:
+        The exit code: 0 once served or printed, 2 for a command line it cannot use.
+    """
+    try:
+        found = cli.main(
+            args=None if argv is None else list(argv),
+            prog_name="python -m canopy.serve",
+            standalone_mode=False,
+        )
+    except click.ClickException as e:
+        e.show()
+        return e.exit_code
+    return found if isinstance(found, int) else 0
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("action", type=click.Choice(["serve", "openapi"]), default="serve", required=False)
+@click.option("--host", default="127.0.0.1", show_default=True, help="A loopback address.")
+@click.option("--port", type=int, default=8765, show_default=True)
+@click.option("--base-path", default="", help="The path prefix to serve under, such as /canopy.")
+@click.option("--mock", "seeded", is_flag=True, help="Serve a journal seeded from fixtures (required).")
+@click.option(
+    "--mock-event-seconds",
+    type=float,
+    default=3.0,
+    show_default=True,
+    help="Seconds between the mock journal's changes; 0 changes nothing, for screenshots.",
+)
+@click.option(
+    "--secret-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Sign in with the listener secret in this file.",
+)
+@click.option(
+    "--ui-dir",
+    "built",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="The built UI. Default: the bundled one, or ui/dist.",
+)
+def cli(
+    *,
+    action: str,
+    host: str,
+    port: int,
+    base_path: str,
+    seeded: bool,
+    mock_event_seconds: float,
+    secret_file: Path | None,
+    built: Path | None,
+) -> None:
+    """Serve mock data for development and tests, or print the OpenAPI schema with `openapi`."""
     options = ServeOptions(
-        host=str(args.host),
-        port=int(args.port),
-        base_path=str(args.base_path),
+        host=host,
+        port=port,
+        base_path=base_path,
         mock=True,
-        mock_event_seconds=seconds or None,
-        ui_dir=args.ui_dir if isinstance(args.ui_dir, Path) else ui_dir(),
+        mock_event_seconds=mock_event_seconds or None,
+        ui_dir=built or ui_dir(),
     )
-    if not options.loopback:
-        parser.error("mock data is served on loopback only")
-    key = secret.read(args.secret_file) if isinstance(args.secret_file, Path) else None
+    _check(options, serving=action == "serve", seeded=seeded)
+    key = secret.read(secret_file) if secret_file is not None else None
     sessions = Sessions(key, port=options.port, base_path=options.base_path, hosts=options.hosts)
     with tempfile.TemporaryDirectory(prefix="canopy-mock-") as directory:
         app = create_app(options, mock.seed(Path(directory)), sessions)
-        if args.command == "openapi":
-            sys.stdout.write(json.dumps(app.openapi(), indent=2, sort_keys=True) + "\n")
+        if action == "openapi":
+            click.echo(json.dumps(app.openapi(), indent=2, sort_keys=True))
             return
         uvicorn.run(app, host=options.host, port=options.port, log_level="info")
 
 
+def _check(options: ServeOptions, *, serving: bool, seeded: bool) -> None:
+    """Refuse to serve anything but mock data, and anywhere but loopback.
+
+    Raises:
+        UsageError: It is asked to serve without `--mock`, or `options` are not on loopback.
+    """
+    if serving and not seeded:
+        raise click.UsageError("only --mock is served from here; `canopy loop` serves the operator's journal")
+    if not options.loopback:
+        raise click.UsageError("mock data is served on loopback only")
+
+
+# Guarded: tests/canopy/test_models.py imports every module of canopy.
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

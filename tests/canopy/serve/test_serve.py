@@ -983,11 +983,9 @@ def test_the_mock_journal_covers_every_run_state_and_message_source(ui: Path, ba
 
 
 def test_the_development_server_serves_mock_data_only(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit):
-        main(["serve"])
+    assert main(["serve"]) == 2
     assert "--mock" in capsys.readouterr().err
-    with pytest.raises(SystemExit):
-        main(["serve", "--mock", "--host", "10.0.0.5"])
+    assert main(["serve", "--mock", "--host", "10.0.0.5"]) == 2
     assert "loopback" in capsys.readouterr().err
 
 

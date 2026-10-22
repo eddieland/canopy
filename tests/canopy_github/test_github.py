@@ -1290,13 +1290,13 @@ def test_the_poster_refuses_what_it_cannot_use(github: tuple[Fake, str], request
 
 
 @pytest.mark.parametrize("main", [connect.run, post.run], ids=["connect", "post"])
-def test_help_never_reads_stdin(main: Callable[..., int], capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_command_line_is_read_before_stdin(main: Callable[..., int], capsys: pytest.CaptureFixture[str]) -> None:
     class Unread(io.StringIO):
         @override
         def read(self, size: int | None = -1, /) -> str:
             raise AssertionError("read stdin")
 
-    with pytest.raises(SystemExit) as exit_:
-        main(["--help"], Unread(), io.StringIO())
-    assert exit_.value.code == 0
-    assert "usage: canopy-" in capsys.readouterr().out
+    assert main(["--help"], Unread(), io.StringIO()) == 0
+    assert "Usage: canopy-" in capsys.readouterr().out
+    assert main(["--nope"], Unread(), io.StringIO()) == 2
+    assert "No such option '--nope'" in capsys.readouterr().err

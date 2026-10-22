@@ -74,11 +74,11 @@ def test_the_desktop_sink_without_its_tool(tmp_path: Path, capsys: pytest.Captur
         assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
 
 
-def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exit_:
-        desktop.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux")
-    assert exit_.value.code == 0
-    assert "usage: canopy-notify-desktop" in capsys.readouterr().out
+def test_the_command_line_is_read_before_stdin(capsys: pytest.CaptureFixture[str]) -> None:
+    assert desktop.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux") == 0
+    assert "Usage: canopy-notify-desktop [OPTIONS]" in capsys.readouterr().out
+    assert desktop.run(["--nope"], _Unread(), runner=SubprocessRunner(), platform="linux") == 2
+    assert "No such option '--nope'" in capsys.readouterr().err
 
 
 class _Unread(io.StringIO):

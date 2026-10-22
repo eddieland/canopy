@@ -346,10 +346,8 @@ class _Unread(io.StringIO):
 
 
 def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exit_:
-        slack.run(["--help"], _Unread())
-    assert exit_.value.code == 0
-    assert "usage: canopy-notify-slack" in capsys.readouterr().out
+    assert slack.run(["--help"], _Unread()) == 0
+    assert "Usage: canopy-notify-slack [OPTIONS]" in capsys.readouterr().out
 
 
 # Slack with a bot token
@@ -512,10 +510,8 @@ def test_the_name_and_icon_are_checked(
     ],
 )
 def test_a_token_and_a_webhook_are_not_mixed(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exited:
-        slack.run(argv, io.StringIO(json.dumps(MESSAGE)))
-    assert exited.value.code == 2
-    assert "canopy-notify-slack: error:" in capsys.readouterr().err
+    assert slack.run(argv, _Unread()) == 2
+    assert "Usage: canopy-notify-slack [OPTIONS]" in capsys.readouterr().err
 
 
 # Slack with a bot token, in threads
