@@ -61,6 +61,18 @@ def test_shadowing_looks_in_every_directory_above_where_the_agent_starts(tmp_pat
     assert project_config.shadowing(worktree) == [config, above]
 
 
+def test_shadowing_looks_above_both_a_link_and_where_it_leads(tmp_path: Path) -> None:
+    real = tmp_path / "real" / "worktree"
+    real.mkdir(parents=True)
+    (tmp_path / "links").mkdir()
+    (tmp_path / "links" / "worktree").symlink_to(real)
+    above_real = tmp_path / "real" / "opencode.json"
+    above_link = tmp_path / "links" / "opencode.json"
+    for config in (above_real, above_link):
+        config.write_text('{"agent": {"canopy-worker": {}}}')
+    assert project_config.shadowing(tmp_path / "links" / "worktree") == [above_link, above_real]
+
+
 def test_shadowing_accepts_a_json_config_that_does_not(tmp_path: Path) -> None:
     (tmp_path / "opencode.json").write_text('{"mcp": {"docs": {"type": "remote", "url": "https://example.test"}}}')
     assert project_config.shadowing(tmp_path) == []

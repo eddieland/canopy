@@ -90,10 +90,11 @@ def naming_tools_message(server: str, found: Iterable[Path]) -> str:
     )
 
 
-# `root` and every directory above it, as OpenCode walks them.
+# `root` and every directory above it, as OpenCode walks them: from the path it was started with, which `PWD` names with
+# any links in it, and from the one they lead to, which it may read instead.
 def _searched(root: Path) -> list[Path]:
-    absolute = root.absolute()
-    return [absolute, *absolute.parents]
+    absolute, resolved = root.absolute(), root.resolve()
+    return list(dict.fromkeys([absolute, *absolute.parents, resolved, *resolved.parents]))
 
 
 # The agent and mode files under a `.opencode/`, in name order by pattern; none when it has none.
