@@ -14,6 +14,12 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reviews')
     // The operator's own PR, matched by review.query, has no ticket: canopy only reviews it.
     await expect(page.getByTestId('review-2').getByTitle('none: canopy only reviews it')).toHaveText('none')
+    // A review of a PR the loop does not own says where its draft stands, after its verdict; the loop's own have none.
+    await expect(page.getByTestId('review-5')).toContainText('draft')
+    await expect(page.getByTestId('review-2')).toContainText('published')
+    await expect(page.getByTestId('review-4')).not.toContainText('draft')
+    // A PR waiting on its review names its author where a ticket would be, once canopy has read it.
+    await expect(page.getByTestId('requested-https://github.com/acme/web/pull/95')).toContainText('dana')
 
     await page.getByTestId('review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
@@ -186,11 +192,13 @@ test('settings prefers the personas a review request starts from, apart from the
     await page.goto('reviews')
     await settled(page)
     const form = page.getByTestId('review-request-form')
+    // Folded, the form names them; opened, its menu holds them.
+    await expect(form.getByTestId('review-request-chosen')).toHaveText('in skeptic, as Settings prefers')
+    await form.getByRole('button', { name: 'Show persona and notes' }).click()
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
-    await expect(form).toContainText('as Settings prefers')
     await page.reload()
     await settled(page)
-    await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    await expect(form.getByTestId('review-request-chosen')).toHaveText('in skeptic, as Settings prefers')
 
     // The default goes back to the config's reviewer.
     await page.goto('settings')
@@ -199,5 +207,5 @@ test('settings prefers the personas a review request starts from, apart from the
     await page.getByRole('menuitem', { name: 'Use the default' }).click()
     await page.goto('reviews')
     await settled(page)
-    await expect(form.getByRole('button', { name: 'Persona: canopy (default)' })).toBeVisible()
+    await expect(form.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
 })

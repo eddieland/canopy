@@ -584,32 +584,43 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
 
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
-    // Its review is written in skeptic, as `--persona skeptic` asks.
+    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded with the notes.
+    await form.getByRole('button', { name: 'Show persona and notes' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
+    await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
+        /^Plans and reviews by naming the input that would break each claim/u,
+    )
     await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
     await page.keyboard.press('Escape')
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
     await form.getByTestId('review-request-submit').click()
-    await expect(form.getByRole('status')).toHaveText(
-        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
-    )
-    // It is in the reviews list at once, waiting on a tick to start its review.
+    // It opens the PR's page, where the request waits on a tick. canopy only reviews it, so it has no ticket's title
+    // to lead with.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
+    const request = page.getByTestId('review-request')
+    await expect(request).toContainText('canopy reviews its head once')
+    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
+    // It is in the reviews list, waiting on a tick to start its review, and on the pull requests page too.
+    await page.goto('reviews')
     await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
-    // The request waits on the pull requests page too, until the next tick reviews it.
     await page.goto('pull-requests')
     const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
     await expect(row).toContainText('requested')
 
     await row.getByRole('link', { name: 'acme/web#120', exact: true }).click()
-    // canopy only reviews it, so it has no ticket's title to lead with.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
-    const request = page.getByTestId('review-request')
-    await expect(request).toContainText('canopy reviews its head once')
-    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
     await request.getByTestId('review-request-stop').click()
     await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
     await expect(request).toContainText('Your review request ended')
     await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
+    // Asked again from its page, in the personas the request had, and stopped again.
+    await expect(request.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    await request.getByRole('button', { name: 'Review again' }).click()
+    await expect(request.getByRole('status')).toHaveText(
+        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
+    )
+    await request.getByTestId('review-request-stop').click()
+    await expect(request.getByRole('button', { name: 'Review again' })).toBeVisible()
     // Nothing waits on a tick for it any more.
     await page.goto('reviews')
     await expect(page.getByTestId('reviews').getByTestId('review-4')).toBeVisible()

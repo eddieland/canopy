@@ -3637,6 +3637,12 @@ export type components = {
              */
             defaults: components["schemas"]["PersonaAgent"][];
             /**
+             * Description
+             * @description What it is: its front matter's `description`, else its text's opening sentence; None for one a run would
+             *     refuse.
+             */
+            description: string | null;
+            /**
              * Error
              * @description Why a run would refuse it, or None when it would render.
              */
@@ -4087,8 +4093,16 @@ export type components = {
              * @description The unit's branch; None for a PR no unit records.
              */
             branch: string | null;
+            /** @description The newest of its reviews' drafts; None when none has one, as no review of the loop's own PRs does. */
+            draft: components["schemas"]["PullRequestDraft"] | null;
             /** @description Its newest review run, or None when canopy has not reviewed it. */
             latest_review: components["schemas"]["ReviewSummary"] | null;
+            /**
+             * Loop Pr
+             * @description Whether a ticket's unit records it: one of the loop's own PRs, which a review request refuses (`loop_pr`).
+             * @default false
+             */
+            loop_pr: boolean;
             /**
              * Phase
              * @description The unit's phase as the overseer last derived it, for display; None for a PR no unit records.
@@ -4166,6 +4180,19 @@ export type components = {
              * @default false
              */
             threads: boolean;
+        };
+        /**
+         * PullRequestDraft
+         * @description The newest draft of a review of a PR the loop does not own (DESIGN §34): the operator's review of it.
+         */
+        PullRequestDraft: {
+            /**
+             * Review Id
+             * @description The review run whose draft it is, whose page holds it.
+             */
+            review_id: number;
+            /** @description Where it stands. */
+            status: components["schemas"]["ReviewDraftStatusName"];
         };
         /**
          * PullRequestThreads
@@ -4333,6 +4360,11 @@ export type components = {
          * @description A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21).
          */
         RequestedReview: {
+            /**
+             * Author
+             * @description The PR's author, as canopy's reader last read the PR; None until it has.
+             */
+            author: string | null;
             /**
              * Channel
              * @description Where they asked: `cli` or `web`.
@@ -4973,6 +5005,8 @@ export type components = {
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
              */
             cost_usd: number | null;
+            /** @description Where its draft stands (DESIGN §34); None for a review that has none, such as one of the loop's own PRs. */
+            draft: components["schemas"]["ReviewDraftStatusName"] | null;
             /**
              * Ended At
              * @description When it ended; None while it runs.

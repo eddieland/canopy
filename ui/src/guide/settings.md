@@ -34,10 +34,10 @@ Shift+Enter always makes a new line. The key you pick shows on each send button.
 
 ## Reviews
 
-The [personas](tickets#choosing-a-persona) a review you request on the [reviews page](pull-requests#asking-for-a-review)
-is written in. Check one, say `skeptic`, and that form starts with it checked; check several and each request gets a
-review in each. You can still pick others for one request, and **Use the default** leaves it to `[personas] reviewer` in
-your config.
+The [personas](tickets#choosing-a-persona) a review you request on the
+[reviews page](pull-requests#asking-for-a-review), or from a PR's page, is written in. Check one, say `skeptic`, and
+both start with it checked; check several and each request gets a review in each. You can still pick others for one
+request, and **Use the default** leaves it to `[personas] reviewer` in your config.
 
 This is yours, not the loop's: it lives in this browser, your config doesn't set it, and the reviews canopy runs on
 its own PRs never read it. A persona you prefer that canopy would refuse to run, or one whose file you've since

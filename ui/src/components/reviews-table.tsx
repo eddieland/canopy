@@ -2,6 +2,7 @@ import type { RequestedReview, ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewDraftChip } from '@/components/review-draft-chip'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
@@ -23,7 +24,8 @@ const NONE_REQUESTED: RequestedReview[] = []
  * reviews page passes the PRs the operator asked to have reviewed that no review of has started yet as `requested`, a
  * row each, before the runs, or after them with `requestedLast`: what comes next is the newest end of the list. A
  * review whose result is new to the operator (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said
- * `new` on hover and to a screen reader.
+ * `new` on hover and to a screen reader. A review of a PR the loop does not own says where its draft stands after
+ * that (`ReviewDraftChip`), so the list shows which hold a review the operator has yet to publish or submit.
  */
 export function ReviewsTable({
     reviews,
@@ -50,8 +52,9 @@ export function ReviewsTable({
 
 /**
  * A PR the operator asked to have reviewed, waiting on a tick to start its review: a hollow ring, as nothing runs for
- * it yet, then `requested`, its PR, which opens its page with **Stop**, and how long it has waited. It has no review
- * id, impact, commit, or cost until its review starts, and then the review's own row takes its place.
+ * it yet, then `requested`, its author where a ticket would be once canopy has read the PR (it has no ticket: canopy
+ * only reviews it), its PR, which opens its page with **Stop**, and how long it has waited. It has no review id,
+ * impact, commit, or cost until its review starts, and then the review's own row takes its place.
  */
 function RequestedRow({ request }: { request: RequestedReview }) {
     return (
@@ -63,8 +66,14 @@ function RequestedRow({ request }: { request: RequestedReview }) {
                 </Tip>
             </span>
             <span />
-            <span className="truncate">
-                <None reason={NO_TICKET} brief className="font-mono text-xs" />
+            <span className="flex min-w-0">
+                {request.author === null ? (
+                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
+                ) : (
+                    <Tip fact="The PR's author: canopy only reviews it, so it has no ticket">
+                        <span className="truncate font-mono text-xs text-muted-foreground">{request.author}</span>
+                    </Tip>
+                )}
             </span>
             <span />
             <span className="flex min-w-0 items-center gap-3">
@@ -111,6 +120,7 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
                         </span>
                     </Tip>
                 )}
+                {review.draft !== null && <ReviewDraftChip status={review.draft} />}
             </span>
             <ReviewLink id={review.id} />
             {pr && (

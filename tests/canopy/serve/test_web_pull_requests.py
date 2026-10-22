@@ -42,6 +42,12 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
     assert (requested["reviews"], requested["review_request"]["end_reason"]) == (0, None)
     assert theirs["review_request"]["end_reason"] == "reviewed"  # the request its clean review answered
     assert theirs["title"] == "Bump the retry budget for flaky upstreams"  # its review reported it
+    # The operator's review of a PR the loop does not own, as its newest draft stands; the loop's own PRs have none.
+    assert theirs["draft"] == {"review_id": 2, "status": "published"}
+    assert by_url[mock_reviews.PR_14]["draft"] == {"review_id": 5, "status": "waiting"}
+    assert (ours["draft"], requested["draft"]) == (None, None)
+    # Only the loop's own, which a unit records, are refused a review request (`loop_pr`).
+    assert [ours["loop_pr"], theirs["loop_pr"], requested["loop_pr"]] == [True, False, False]
 
 
 def test_a_prs_page_has_the_runs_that_pushed_to_it_its_reviews_and_its_decisions(backend: Backend) -> None:
