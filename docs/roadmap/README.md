@@ -50,7 +50,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M11. Reviews](M11-reviews.md): done 2026-10-13.
 - [M12. The loop](M12-the-loop.md): done 2026-10-13.
 - [M13. Spend-paced loop](M13-spend-paced-loop.md): done 2026-10-18.
-- [M14. PR-scoped work](M14-pr-scoped-work.md): deferred 2026-10-15.
+- [M14. PR-scoped work](M14-pr-scoped-work.md): done 2026-10-22.
 - [M15. Sessions and recent runs](M15-sessions-and-recent-runs.md): done 2026-10-17.
 - [M16. Worktree setup for large monorepos](M16-worktree-setup-for-monorepos.md): done 2026-10-13.
 - [M17. Declared repositories and pools](M17-declared-repositories-and-pools.md): done 2026-10-13.
