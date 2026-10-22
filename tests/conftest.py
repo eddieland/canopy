@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 import pytest
+from click.testing import CliRunner, Result
 
 from canopy.core import db
 from canopy.infra import resources
@@ -25,6 +26,8 @@ from canopy.infra.procs import SubprocessRunner
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterator, Sequence
+
+    import click
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
@@ -391,6 +394,18 @@ def executable(path: Path, text: str) -> Path:
     path.write_text(text)
     path.chmod(0o755)
     return path
+
+
+def invoke(command: click.Command, args: Sequence[str] = (), *, stdin: str = "", obj: object = None) -> Result:
+    """Run one of the programs canopy ships as its console script would, with `args` and `stdin`.
+
+    `obj` stands in for what the program would reach outside the process, such as a server's address. An exception
+    the program does not handle fails the test, rather than becoming the result's.
+
+    Returns:
+        What it printed, on stdout and on stderr apart, and its exit code.
+    """
+    return CliRunner().invoke(command, list(args), input=stdin, obj=obj, catch_exceptions=False)
 
 
 @dataclass(frozen=True)

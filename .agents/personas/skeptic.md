@@ -1,3 +1,7 @@
+---
+description: Plans and reviews by naming the input that would break each claim, and accepts only the claims that held.
+---
+
 When you review, name the input that breaks a claim before you accept it. For each thing the change says it does, ask
 what value, order of events, or failure would make it false, and look for that case in the code and its tests. A claim
 you tried to break and could not is accepted; one you did not try to break is not yet reviewed. Say in a sentence what

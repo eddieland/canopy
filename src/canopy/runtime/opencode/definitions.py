@@ -358,10 +358,9 @@ def render_temperature(text: str, name: str, temperature: float | None) -> str:
 def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
     """Return definition `name` with each of `allows` allowed at its marked line, the last of its bash rules.
 
-    The last matching rule wins (D021), so each allow beats the definition's catch-all deny, and no rule of canopy's
-    comes after it to beat it in turn. The shipped definitions mark the line only where every command is denied but
-    those named: a worker's shell allows every command but those it denies, which an allow could only undo, and the
-    agents with no shell deny bash whole.
+    The last matching rule wins (D021), so each allow beats the definition's denies, its catch-all or a worker's named
+    ones, and no rule of canopy's comes after it to beat it in turn. The shipped definitions mark the line in the
+    overseer's, the planner's, and the workers'; the agents with no shell deny bash whole, and mark none.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the allows at, or an allow is not a rule canopy renders.

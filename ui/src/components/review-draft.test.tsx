@@ -3,13 +3,15 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { reviewDraft } from '@/api/mocks'
-import type { DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
+import { mockReviews, reviewDraft } from '@/api/mocks'
+import type { DiffLine, ReviewDiff, ReviewDraft, ReviewFinding } from '@/api/types'
+import { ToastContext } from '@/hooks/use-toast'
 import { placeFindings } from '@/lib/reviews'
-import { renderRouted } from '@/test-utils'
+import type { NewToast } from '@/lib/toasts'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { ReviewDiffPanels } from './review-diff'
-import { DraftCommentCard, ReviewDraftPanel } from './review-draft'
+import { DraftCommentCard, ReviewDraftPanel, ReviewDraftState } from './review-draft'
 
 const PR = 'https://github.com/acme/api/pull/14'
 const SHA = `a61f7c08${'4'.repeat(32)}`
@@ -19,6 +21,8 @@ let sent: { method: string; path: string; body: unknown }[] = []
 let answer: (path: string, body: unknown) => Response
 // What the panel calls when a link to a comment's card is followed.
 const followed = vi.fn<(file: number) => void>()
+// Every toast the panel showed.
+let toasts: NewToast[] = []
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -32,6 +36,7 @@ const server: Middleware = {
 
 beforeEach(() => {
     sent = []
+    toasts = []
     answer = () => Response.json(reviewDraft({ version: 2, hash: 'aaaaaaaaaaaa', change: 'edited the body' }))
     api.use(server)
 })
@@ -45,19 +50,69 @@ function writes() {
     return sent.filter((s) => s.method === 'POST')
 }
 
-async function panel(draft: ReviewDraft = reviewDraft(), hasDiff = true) {
+async function panel(draft: ReviewDraft = reviewDraft(), hasDiff = true, findings = 1) {
     await renderRouted(
-        <ReviewDraftPanel run={5} prUrl={PR} sha={SHA} draft={draft} hasDiff={hasDiff} onFollow={followed} />,
+        <ToastContext
+            value={(toast) => {
+                toasts.push(toast)
+            }}
+        >
+            <ReviewDraftPanel
+                run={5}
+                prUrl={PR}
+                sha={SHA}
+                draft={draft}
+                findings={findings}
+                hasDiff={hasDiff}
+                onFollow={followed}
+            />
+        </ToastContext>,
     )
     return screen.getByTestId('review-draft')
 }
 
 describe('ReviewDraftPanel', () => {
+    it("names the request's reviews in its other personas, each opening its page, or nothing", async () => {
+        const [one] = mockReviews
+        if (one === undefined) {
+            throw new Error('no mock review')
+        }
+        await renderRouted(
+            <ReviewDraftPanel
+                run={5}
+                prUrl={PR}
+                sha={SHA}
+                draft={reviewDraft()}
+                findings={1}
+                hasDiff
+                onFollow={followed}
+                siblings={[
+                    { ...one, id: 6, persona: 'skeptic' },
+                    { ...one, id: 7, persona: 'eddie' },
+                ]}
+            />,
+        )
+        const line = screen.getByTestId('draft-siblings')
+        expect(line.textContent).toBe(
+            'Also reviewed as skeptic, eddie, from the same request at this commit. Each is a draft of its own: ' +
+                'publish the one you want, and the others stay as they are.',
+        )
+        expect(within(line).getByRole('link', { name: 'eddie' }).getAttribute('href')).toBe('/reviews/7')
+        cleanup()
+        await panel()
+        expect(screen.queryByTestId('draft-siblings')).toBeNull()
+    })
+
     it('shows what would post word for word, its comments and versions, every hidden character named', async () => {
         const hidden = `Retry${String.fromCodePoint(8203)}s.`
         const found = await panel(reviewDraft({ body: hidden }))
-        expect(within(found).getByText('waiting')).toBeTruthy()
-        expect(within(found).getByText('version 1, 3f9a1c27b0de')).toBeTruthy()
+        // The page's description says its status; what made the version, and its hash, are on the version's hover.
+        expect(within(found).queryByText('waiting')).toBeNull()
+        expect(within(found).queryByText(/3f9a1c27b0de/u, { selector: 'p' })).toBeNull()
+        expect(tipOf(within(found).getByTestId('draft-version'))).toBe(
+            "Version 1: made from review run 5's summary and findings, by the reviewer. " +
+                'A publish carries its hash, 3f9a1c27b0de.',
+        )
         expect(within(found).getByText('<U+200B>')).toBeTruthy()
         const comments = within(found).getByTestId('draft-comments')
         expect(within(comments).getByText('1 of at most 30')).toBeTruthy()
@@ -68,39 +123,113 @@ describe('ReviewDraftPanel', () => {
         )
     })
 
-    it('stages the version shown by default, and submits it once ticked, as canopy review publish does', async () => {
-        answer = () =>
-            Response.json({ draft: reviewDraft({ status: 'staged' }), published: 1, failed: null }, { status: 200 })
-        const found = await panel()
-        const stage = within(found).getByRole('button', { name: 'Start the review on GitHub' })
-        expect(stage.getAttribute('title')).toBe('canopy review publish 5 3f9a1c27b0de')
-        fireEvent.click(stage)
-        await waitFor(() => {
-            expect(
-                within(found).getByText(/^Staged version 1 of review run 5's draft in a pending review/u),
-            ).toBeTruthy()
-        })
-        expect(writes()).toEqual([
-            { method: 'POST', path: '/api/reviews/5/draft/publish', body: { hash: '3f9a1c27b0de', submit: false } },
-        ])
+    it("links each comment to its point's card, and says which findings the draft leaves out", async () => {
+        const mine = {
+            number: 2,
+            path: 'api/upstream.py',
+            line: 3,
+            text: 'Why random?',
+            finding: null,
+            file: 0,
+            diff_line: 3,
+        }
+        const base = reviewDraft()
+        const found = await panel(reviewDraft({ comments: [...base.comments, mine] }), true, 4)
+        const comments = within(found).getByTestId('draft-comments')
+        // A finding's comment is its finding's card; the operator's own is a card of its own.
+        expect(
+            within(comments)
+                .getByRole('link', { name: /The last 503/u })
+                .getAttribute('href'),
+        ).toBe('/reviews/5#finding-1')
+        expect(within(comments).getByRole('link', { name: 'Why random?' }).getAttribute('href')).toBe(
+            '/reviews/5#draft-comment-2',
+        )
+        // Finding 3 is in the body; 2 and 4 are in neither.
+        expect(within(found).getByTestId('draft-left-out').textContent).toBe(
+            'Left out: findings 2 and 4. Put one back on its card.',
+        )
+    })
 
+    it('says what would post, as whom, on whose PR, and on which commit', async () => {
+        const found = await panel()
+        expect(within(found).getByTestId('draft-posts').textContent).toBe(
+            "Publish posts the body and 1 comment as your comment review, unmarked, on carol's PR, at a61f7c0: it " +
+                'approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it ' +
+                'there.',
+        )
         cleanup()
-        sent = []
+        const unread = await panel(reviewDraft({ body: '', pr_author: null }))
+        expect(within(unread).getByTestId('draft-posts').textContent).toMatch(
+            /^Publish posts 1 comment, no body, as your comment review, unmarked, on the PR, at a61f7c0:/u,
+        )
+    })
+
+    it('publishes the version shown, or starts the review on GitHub, as canopy review publish does', async () => {
+        const url = `${PR}#pullrequestreview-9`
         answer = () =>
             Response.json({
-                draft: reviewDraft({ status: 'published', published_url: `${PR}#pullrequestreview-9` }),
+                draft: reviewDraft({ status: 'published', published_url: url }),
                 published: 1,
                 failed: null,
             })
-        const again = await panel()
-        fireEvent.click(within(again).getByRole('checkbox', { name: 'Submit it on GitHub now' }))
-        fireEvent.click(within(again).getByRole('button', { name: 'Publish version 1' }))
+        const found = await panel()
+        const publish = within(found).getByRole('button', { name: 'Publish version 1' })
+        expect(publish.getAttribute('title')).toBe('canopy review publish 5 3f9a1c27b0de --submit')
+        fireEvent.click(publish)
         await waitFor(() => {
-            expect(
-                within(again).getByText(`Published version 1 of review run 5's draft: ${PR}#pullrequestreview-9`),
-            ).toBeTruthy()
+            expect(toasts).toEqual([
+                { title: "Published version 1 of review run 5's draft", detail: url, tone: 'done' },
+            ])
         })
-        expect(writes()[0]?.body).toEqual({ hash: '3f9a1c27b0de', submit: true })
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/reviews/5/draft/publish', body: { hash: '3f9a1c27b0de', submit: true } },
+        ])
+        // The draft's own linked line says it once the draft shows published; the raw URL is the toast's alone.
+        expect(within(found).queryByRole('status')).toBeNull()
+        // Posting it drops a leaf, as approving a plan does.
+        expect(within(found).getByTestId('leaf')).toBeTruthy()
+
+        cleanup()
+        sent = []
+        toasts = []
+        answer = () => Response.json({ draft: reviewDraft({ status: 'staged' }), published: 1, failed: null })
+        const again = await panel()
+        const stage = within(again).getByRole('button', { name: 'Start the review on GitHub' })
+        expect(stage.getAttribute('title')).toBe('canopy review publish 5 3f9a1c27b0de')
+        fireEvent.click(stage)
+        await waitFor(() => {
+            expect(toasts).toEqual([
+                {
+                    title: "Staged version 1 of review run 5's draft in a review on GitHub",
+                    detail: `${PR}/files`,
+                    tone: 'done',
+                },
+            ])
+        })
+        expect(writes()[0]?.body).toEqual({ hash: '3f9a1c27b0de', submit: false })
+        // Staging posts nothing anyone sees yet, so it drops no leaf.
+        expect(within(again).queryByTestId('leaf')).toBeNull()
+    })
+
+    it('says why a publish posted nothing, with a cross', async () => {
+        answer = () =>
+            Response.json({ draft: reviewDraft({ status: 'waiting' }), published: 1, failed: 'the post failed: 502' })
+        const found = await panel()
+        fireEvent.click(within(found).getByRole('button', { name: 'Publish version 1' }))
+        expect(
+            await within(found).findByText("Version 1 of review run 5's draft was not published: the post failed: 502"),
+        ).toBeTruthy()
+        expect(toasts).toEqual([{ title: "Version 1 of review run 5's draft was not published", tone: 'failed' }])
+        expect(within(found).queryByTestId('leaf')).toBeNull()
+    })
+
+    it('offers nothing to publish while the draft is empty', async () => {
+        const found = await panel(reviewDraft({ body: '', comments: [] }))
+        expect(within(found).getByRole('button', { name: 'Publish version 1' }).hasAttribute('disabled')).toBe(true)
+        expect(within(found).getByTestId('draft-posts').textContent).toBe(
+            'Nothing to post yet: it needs a body or a comment.',
+        )
     })
 
     it('names the guard of a refused publish, as the CLI does', async () => {
@@ -133,14 +262,19 @@ describe('ReviewDraftPanel', () => {
     it('offers nothing to change once published, and links to the review on GitHub', async () => {
         const url = `${PR}#pullrequestreview-9`
         const found = await panel(reviewDraft({ status: 'published', published_url: url }))
-        expect(within(found).queryByRole('button', { name: 'edit' })).toBeNull()
+        expect(within(found).queryByRole('button', { name: /^edit$/iu })).toBeNull()
         expect(within(found).queryByRole('button', { name: 'Start the review on GitHub' })).toBeNull()
+        expect(within(found).getByTestId('draft-published').textContent).toContain('Published version 1 as your review')
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(url)
+        // Published before the page opened: nothing was just done here, so no leaf.
+        expect(within(found).queryByTestId('leaf')).toBeNull()
     })
 
     it('says where to finish a staged review', async () => {
         const found = await panel(reviewDraft({ status: 'staged' }))
-        expect(within(found).getByTestId('draft-staged').textContent).toContain('It waits in the review you staged.')
+        expect(within(found).getByTestId('draft-staged').textContent).toContain(
+            'Version 1 waits in the review you staged.',
+        )
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(`${PR}/files`)
     })
 })
@@ -155,13 +289,13 @@ describe('DraftCommentCard', () => {
         await renderRouted(<DraftCommentCard run={5} comment={comment} draft={draft} />)
         const card = screen.getByTestId('draft-comment')
         expect(within(card).getByText('from finding 1')).toBeTruthy()
-        fireEvent.click(within(card).getByRole('button', { name: 'edit' }))
+        fireEvent.click(within(card).getByRole('button', { name: 'Edit' }))
         fireEvent.change(within(card).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
         fireEvent.click(within(card).getByRole('button', { name: /Save/u }))
         await waitFor(() => {
             expect(writes()).toHaveLength(1)
         })
-        fireEvent.click(await within(card).findByRole('button', { name: 'drop' }))
+        fireEvent.click(await within(card).findByRole('button', { name: 'Drop' }))
         await waitFor(() => {
             expect(writes()).toHaveLength(2)
         })
@@ -176,6 +310,21 @@ describe('DraftCommentCard', () => {
     })
 })
 
+// Review 5's findings: 1 on line 15, which comment 1 carries; 2 on line 9; 3 on no line, in the body.
+function carolFindings(fields: Partial<ReviewFinding>[] = []): ReviewFinding[] {
+    const at = (line: number | null, n: number): ReviewFinding => ({
+        severity: n === 1 ? 'major' : 'minor',
+        title: `finding ${n}'s title`,
+        location: line === null ? 'tests/test_upstream.py' : `api/upstream.py:${line}`,
+        detail: `finding ${n}'s detail`,
+        file: 0,
+        line,
+        dismissed: false,
+        ...fields[n - 1],
+    })
+    return [at(15, 1), at(9, 2), at(null, 3)]
+}
+
 describe('ReviewDiffPanels with a draft', () => {
     const lines = Array.from({ length: 15 }, (_, i): DiffLine => ({
         kind: 'add',
@@ -188,11 +337,89 @@ describe('ReviewDiffPanels with a draft', () => {
         files: [{ path: 'api/upstream.py', old_path: null, binary: false, hunks: [{ header: '', lines }] }],
     }
 
-    it('puts each comment on its line, and adds one on any line of the diff', async () => {
-        await renderRouted(
-            <ReviewDiffPanels run={5} diff={diff} placed={placeFindings([], true)} draft={reviewDraft()} />,
-        )
-        expect(screen.getByTestId('draft-comment').textContent).toContain('The last 503 is returned')
+    async function diffWith(draft: ReviewDraft, found: ReviewFinding[] = carolFindings()) {
+        await renderRouted(<ReviewDiffPanels run={5} diff={diff} placed={placeFindings(found, true)} draft={draft} />)
+        return (n: number) => {
+            const card = screen.getAllByTestId('review-point').find((c) => c.id === `finding-${n}`)
+            if (card === undefined) {
+                throw new Error(`no card for finding ${n}`)
+            }
+            return card
+        }
+    }
+
+    it('shows each finding once, as the comment it posts as, edited in place', async () => {
+        const point = await diffWith(reviewDraft())
+        // One card per point: no comment's card beside the finding's.
+        expect(screen.getAllByTestId('review-point')).toHaveLength(3)
+        expect(screen.queryByTestId('draft-comment')).toBeNull()
+        const first = point(1)
+        expect(within(first).getByText("finding 1's title")).toBeTruthy()
+        expect(within(first).getByText('in your review')).toBeTruthy()
+        expect(first.textContent).toContain('The last 503 is returned as if it were an answer')
+        expect(first.textContent).not.toContain("finding 1's detail")
+        fireEvent.click(within(first).getByRole('button', { name: 'Edit' }))
+        fireEvent.change(within(first).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
+        fireEvent.click(within(first).getByRole('button', { name: /Save/u }))
+        await waitFor(() => {
+            expect(writes()).toEqual([
+                {
+                    method: 'POST',
+                    path: '/api/reviews/5/draft/comments/1/edit',
+                    body: { text: 'Raise once it gives up.' },
+                },
+            ])
+        })
+        // The finding the body holds is in the review too, edited with the body.
+        const third = point(3)
+        expect(within(third).getByText('in your review')).toBeTruthy()
+        expect(third.textContent).toContain('it posts in the body')
+    })
+
+    it('leaves a finding out, and puts it back, by its dismissal, one control for both', async () => {
+        answer = () => Response.json({ run: 5, finding: 1, dismissed: true })
+        const point = await diffWith(reviewDraft())
+        fireEvent.click(within(point(1)).getByRole('button', { name: 'leave out' }))
+        await within(point(1)).findByText('review:5 finding 1 is dismissed: left out of your review.')
+        cleanup()
+        sent = []
+        answer = () => Response.json({ run: 5, finding: 1, dismissed: false })
+        const out = await diffWith(reviewDraft({ comments: [] }), carolFindings([{ dismissed: true }]))
+        const left = out(1)
+        expect(within(left).getByText('left out')).toBeTruthy()
+        // Left out, it shows what the reviewer found, which putting it back restores.
+        expect(left.textContent).toContain("finding 1's detail")
+        expect(within(left).queryByRole('button', { name: 'Edit' })).toBeNull()
+        fireEvent.click(within(left).getByRole('button', { name: 'put back' }))
+        await waitFor(() => {
+            expect(writes()).toEqual([
+                { method: 'POST', path: '/api/reviews/5/dismissals', body: { finding: 1, undo: true } },
+            ])
+        })
+    })
+
+    it('says how to put back a finding whose comment was dropped rather than dismissed', async () => {
+        const point = await diffWith(reviewDraft({ comments: [] }))
+        const left = point(1)
+        expect(within(left).getByText('left out')).toBeTruthy()
+        expect(within(left).getByRole('button', { name: 'dismiss' })).toBeTruthy()
+        expect(left.textContent).toContain('To have it back, dismiss the finding, then put it back.')
+    })
+
+    it('keeps a comment the operator added as a card of its own, and adds one on any line of the diff', async () => {
+        const mine = {
+            number: 2,
+            path: 'api/upstream.py',
+            line: 3,
+            text: 'Why random?',
+            finding: null,
+            file: 0,
+            diff_line: 3,
+        }
+        const base = reviewDraft()
+        await diffWith(reviewDraft({ comments: [...base.comments, mine] }))
+        expect(screen.getByTestId('draft-comment').textContent).toContain('Why random?')
+        expect(screen.getAllByTestId('review-point')).toHaveLength(3)
         fireEvent.click(screen.getByRole('button', { name: 'Comment on api/upstream.py:3' }))
         const form = screen.getByRole('form', { name: 'Comment on api/upstream.py:3' })
         fireEvent.change(within(form).getByRole('textbox'), { target: { value: 'Why random?' } })
@@ -219,6 +446,15 @@ describe('ReviewDiffPanels with a draft', () => {
             />,
         )
         expect(screen.queryByRole('button', { name: /^Comment on /u })).toBeNull()
-        expect(screen.queryByRole('button', { name: 'edit' })).toBeNull()
+        expect(screen.queryByRole('button', { name: /^edit$/iu })).toBeNull()
+    })
+})
+
+describe('ReviewDraftState', () => {
+    it("says the draft's status, its version, and what the status means, for the page's description", async () => {
+        await renderRouted(<ReviewDraftState draft={reviewDraft({ status: 'staged', version: 3 })} />)
+        const state = screen.getByTestId('draft-state')
+        expect(within(state).getByText('staged')).toBeTruthy()
+        expect(state.textContent).toBe('stagedversion 3 · pending on GitHub, for you to submit there')
     })
 })

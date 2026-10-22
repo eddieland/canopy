@@ -61,6 +61,9 @@ permission:
     "canopy memory search *": allow
     "treehouse *": deny
     "sudo *": deny
+    # The commands `runtime.allow_bash` names for the worker are rendered at the marked line, last, so that each beats
+    # a deny above (DESIGN §13). canopy refuses git, gh, a shell, a wrapper such as sudo, or its own tools there.
+    # canopy: bash allows
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth, whatever write tools the operator's runtime config grants (D084). The worker comments on its ticket,
   # edits the ticket's labels, opens and updates its PRs, and creates follow-up tickets linked to its ticket (DESIGN

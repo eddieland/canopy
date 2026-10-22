@@ -334,7 +334,7 @@ example, with servers named `bigquery` and `kubernetes`, and Jira as the tracker
 - **Deny, rather than allow.** Your rules come before canopy's, so where a rule of canopy's also matches, canopy's
   decides. A pattern canopy's definition also names is the exception: OpenCode keeps it where your block put it, so
   your rules after it come after canopy's and can beat it (D044). Allow only to narrow a deny of your own, as
-  the tracker skill's allow does, and to widen the overseer's shell, use `runtime.allow_bash` (`examples/config.toml`).
+  the tracker skill's allow does, and to widen an agent's shell, use `runtime.allow_bash` (`examples/config.toml`).
 - **Not the overseer's skills.** With Jira or GitHub as the tracker, canopy puts the tracker's skill in the overseer's
   prompt and ends its skill rules with `"*": "deny"`, so it is not sent the skill tool at all. A `"*"` rule of yours
   would move that one ahead of canopy's other skill rules, and the tool would be sent again.

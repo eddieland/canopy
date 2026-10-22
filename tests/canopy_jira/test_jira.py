@@ -1,7 +1,6 @@
 """canopy's Jira connector (DESIGN §30), against a local stand-in for Jira Cloud's REST API."""
 
 import contextlib
-import io
 import json
 import os
 import threading
@@ -16,12 +15,13 @@ from unittest import mock
 import canopy_jira
 import pytest
 from canopy_jira import connect
+from canopy_jira.connect import Sites
 
 from canopy.core import config, db, observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import ConnectorRunStatus, TicketState
 from canopy.infra import logs, procs
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, invoke
 
 #: What the stand-in pages by: smaller than the connector asks for, so every read crosses a page.
 PAGE = 2
@@ -271,11 +271,9 @@ class Read:
 
 def read(url: str, request: object, credentials: Path, *, site: str = "acme.atlassian.net") -> Read:
     """Run the connector for `request`, against the stand-in at `url`."""
-    out, err = io.StringIO(), io.StringIO()
     argv = ["--site", site, "--credentials-file", str(credentials)]
-    with contextlib.redirect_stderr(err):
-        code = connect.run(argv, io.StringIO(json.dumps(request)), out, endpoint_of=lambda _: url)
-    return Read(code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue())
+    result = invoke(connect.main, argv, stdin=json.dumps(request), obj=Sites(lambda _: url))
+    return Read(result.exit_code, [json.loads(line) for line in result.stdout.splitlines()], result.stderr)
 
 
 # Reading
@@ -563,13 +561,11 @@ class InProcess:
     ) -> procs.Result:
         del cwd, env, timeout, on_start, stdout_to_file
         assert args[0] == "canopy-connect-jira"
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stderr(err):
-            code = connect.run(args[1:], io.StringIO(stdin or ""), out, endpoint_of=lambda _: self.url)
-        for line in out.getvalue().splitlines(keepends=True):
+        result = invoke(connect.main, args[1:], stdin=stdin or "", obj=Sites(lambda _: self.url))
+        for line in result.stdout.splitlines(keepends=True):
             if on_line is not None:
                 on_line(line)
-        return procs.Result(tuple(args), code, out.getvalue(), err.getvalue())
+        return procs.Result(tuple(args), result.exit_code, result.stdout, result.stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         raise AssertionError(f"a connector is run, never spawned: {args}, {cwd}, {log_path}")
@@ -709,30 +705,26 @@ def test_an_empty_request_reads_nothing_and_ends(jira: tuple[Jira, str], credent
     assert not fake.seen
 
 
-def test_help_never_reads_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    class Unread(io.StringIO):
-        @override
-        def read(self, size: int | None = -1, /) -> str:
-            raise AssertionError("read stdin")
-
+def test_help_ends_before_stdin_is_read() -> None:
     for flag in ("--help", "-h"):
-        assert connect.run([flag], Unread(), io.StringIO()) == 0
-        printed = capsys.readouterr().out
-        assert printed.startswith("Usage: canopy-connect-jira [OPTIONS]")
-        assert "--credentials-file" in printed
+        helped = invoke(connect.main, [flag], stdin="not JSON")
+        assert helped.exit_code == 0
+        assert helped.stdout.startswith("Usage: canopy-connect-jira [OPTIONS]")
+        assert "--credentials-file" in helped.stdout
 
 
 def test_a_command_line_it_cannot_use_is_a_usage_error_and_sends_nothing(
     jira: tuple[Jira, str],
     credentials: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     fake, url = jira
-    assert connect.run([], io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2
-    assert "Missing option '--site'" in capsys.readouterr().err
+    missing = invoke(connect.main, stdin="{}", obj=Sites(lambda _: url))
+    assert missing.exit_code == 2
+    assert "Missing option '--site'" in missing.stderr
     unknown = ["--site", "acme.atlassian.net", "--credentials-file", str(credentials), "--token", "x"]
-    assert connect.run(unknown, io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2
-    assert "No such option '--token'" in capsys.readouterr().err
+    refused = invoke(connect.main, unknown, stdin="{}", obj=Sites(lambda _: url))
+    assert refused.exit_code == 2
+    assert "No such option '--token'" in refused.stderr
     assert not fake.seen
 
 
