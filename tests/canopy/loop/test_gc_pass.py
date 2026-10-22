@@ -6,6 +6,7 @@ import os
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 from unittest import mock
 
 import pytest
@@ -15,14 +16,18 @@ from canopy.core import db, records, sql
 from canopy.core.context import Context
 from canopy.core.vocab import GcPassStatus
 from canopy.infra import lock, logs
-from canopy.loop import gc, gc_pass
-from tests.canopy.helpers import context, earlier, ended_tick, run_with_files, write_file
+from canopy.loop import attention, gc, gc_pass
+from canopy.notify import journal
+from tests.canopy.helpers import KEY, context, earlier, ended_tick, run_with_files, write_file
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 MIB = 1024 * 1024
 # The kinds of file a pass removes, as the dry run names them.
 FILE_KINDS = ("run files", "tick files", "chore run files", "review files", "unrecorded files")
+# The tables whose rows a test counts before and after a pass.
+type Table = Literal["decisions", "connector_runs", "derivations", "ticks"]
+TABLES: tuple[Table, ...] = ("decisions", "connector_runs", "derivations", "ticks")
 
 
 def passes(conn: sqlite3.Connection) -> list[records.GcPass]:
@@ -223,3 +228,145 @@ def test_a_live_tick_rotates_canopy_log_past_log_max_mib_as_the_dry_run_predicte
     # This process's handler followed the move: the tick's later lines are in the new log.
     lines = [json.loads(line) for line in log.read_text().splitlines()]
     assert any(line["msg"] == "tick finished" and line["tick_id"] == ticked.tick.id for line in lines)
+
+
+def attention_row(conn: sqlite3.Connection, tick_id: int, key: str, reason: str, at: str) -> int:
+    """An attention item tick `tick_id` recorded at `at`, as the harness or the overseer does each tick it holds."""
+    cursor = conn.execute(
+        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at) VALUES (?, ?, ?, ?, ?)",
+        (tick_id, key, f"{attention.ACTION_PREFIX}{reason}", f"{reason} of {key}", at),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def connector_run(conn: sqlite3.Connection, tick_id: int | None, source: str, at: str, query: str | None = None) -> int:
+    """A run of `source` that started at `at`: a tick's, or a poll's with no tick, recording `query` if it read it."""
+    cursor = conn.execute(
+        "INSERT INTO connector_runs (tick_id, source, kind, started_at, ended_at, status, request, recorded, refused, "
+        "missed, stderr, query_result) VALUES (?, ?, 'tracker', ?, ?, 'ok', '{}', '{}', '{}', NULL, '', ?)",
+        (tick_id, source, at, at, query),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def derived(conn: sqlite3.Connection, tick_id: int) -> int:
+    """What tick `tick_id` derived of KEY, in shadow."""
+    cursor = conn.execute(
+        "INSERT INTO derivations (tick_id, ticket_key, repo, candidate, closed, phases) VALUES (?, ?, NULL, 1, 0, ?)",
+        (tick_id, KEY, '["ready"]'),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def rows_of(conn: sqlite3.Connection) -> dict[Table, set[int]]:
+    """The ids of every row of each table a test counts."""
+    return {table: {int(r[0]) for r in sql.execute(conn, sql.select("id").from_(table))} for table in TABLES}
+
+
+def told(conn: sqlite3.Connection, key: str, reason: str) -> None:
+    """The sink `slack` was told of `key`'s `reason` item, as a delivery records it."""
+    conn.execute(
+        "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, sent_at) VALUES ('slack', ?, ?, ?, ?)",
+        (attention.fingerprint(key, reason, None), key, reason, db.now()),
+    )
+
+
+def what_the_operator_sees(conn: sqlite3.Connection) -> tuple[object, ...]:
+    """The attention list, each item with its open-since, and what the sink `slack` would be told of it now."""
+    items = attention.current(conn)
+    change = journal.diff(conn, "slack", items)
+    return (items, change.added, change.resolved)
+
+
+def test_a_pass_deletes_journal_rows_outside_the_window_and_the_operator_sees_the_same_after(
+    canopy_env: CanopyEnv,
+    ctx: Context,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The window is the newest three `ok` ticks here, not a thousand.
+    with mock.patch.object(attention, "HISTORY_TICKS", 3):
+        conn = canopy_env.journal()
+        now = datetime.now(UTC)
+        old, young = earlier(now, 200), earlier(now, 10)
+        # A poll between ticks, made long before the window, and not its source's newest run.
+        poll = connector_run(conn, None, "jira", earlier(now, 300))
+        failed = ended_tick(conn, old, "overseer_failed")
+        gone = {attention_row(conn, failed, KEY, "crashed", old)}
+        # Six `ok` ticks, the window the newest three. Of the three before it, the third is younger than journal_days.
+        ticks = [ended_tick(conn, young if n == 2 else old) for n in range(6)]
+        runs: list[int] = []
+        derivations: list[int] = []
+        for n, tick_id in enumerate(ticks):
+            at = young if n == 2 else old
+            harness = [attention_row(conn, tick_id, KEY, "crashed", at)]
+            attention_row(conn, tick_id, "PROJ-4", "needs_reviewer", at)
+            if n < 2:
+                harness.append(attention_row(conn, tick_id, "PROJ-2", "unpushed", at))
+            if n > 3:
+                attention_row(conn, tick_id, "PROJ-3", "worker_failed", at)
+            if n < 2:
+                gone.update(harness)
+            runs.append(connector_run(conn, tick_id, "jira", at, query='["PROJ-1"]' if n == 0 else None))
+            derivations.append(derived(conn, tick_id))
+        github = connector_run(conn, ticks[1], "github", old)
+        told(conn, KEY, "crashed")
+        told(conn, "PROJ-2", "unpushed")
+        before = rows_of(conn)
+        seen = what_the_operator_sees(conn)
+        assert main(["gc", "--dry-run", "--json"]) == 0
+        predicted = {k["name"]: k for k in json.loads(capsys.readouterr().out)["kinds"] if k["unit"] == "rows"}
+
+        row = run_pass(ctx)
+
+        assert what_the_operator_sees(conn) == seen
+        removed = {kind: n for kind, n in json.loads(row.removed).items() if "rows" in n}
+        assert {kind: n["rows"] for kind, n in removed.items()} == {
+            "harness attention": 5,
+            "connector runs": 2,
+            "derivations": 2,
+        }
+        assert {kind: (n["rows"], n["bytes"]) for kind, n in removed.items()} == {
+            kind: (predicted[kind]["removable"], predicted[kind]["removable_size"]) for kind in removed
+        }
+        after = rows_of(conn)
+        # The harness's items of the failed tick and of the two old ticks before the window; never the overseer's.
+        assert before["decisions"] - after["decisions"] == gone
+        # jira's run that recorded the query's result and github's only run stay, however old.
+        assert before["connector_runs"] - after["connector_runs"] == {poll, runs[1]}
+        assert {runs[0], github} <= after["connector_runs"]
+        assert before["derivations"] - after["derivations"] == set(derivations[:2])
+        assert before["ticks"] <= after["ticks"], "no tick is deleted"
+        # A dry run after it finds nothing more to remove.
+        assert main(["gc", "--dry-run", "--json"]) == 0
+        kinds = json.loads(capsys.readouterr().out)["kinds"]
+        assert {k["name"]: k["removable"] for k in kinds if k["unit"] == "rows"} == dict.fromkeys(predicted, 0)
+
+
+def test_with_fewer_ok_ticks_than_the_window_a_pass_deletes_no_row(canopy_env: CanopyEnv, ctx: Context) -> None:
+    # The window is the newest three `ok` ticks here, not a thousand.
+    with mock.patch.object(attention, "HISTORY_TICKS", 3):
+        conn = canopy_env.journal()
+        old = earlier(datetime.now(UTC), 400)
+        # Two `ok` ticks and four that are not: a tick that did not close `ok` is no part of the window.
+        for status in ("ok", "overseer_failed", "error", "overseer_failed", "error", "ok"):
+            tick_id = ended_tick(conn, old, status)
+            attention_row(conn, tick_id, KEY, "crashed", old)
+            connector_run(conn, tick_id, "jira", old)
+            derived(conn, tick_id)
+        before = rows_of(conn)
+
+        row = run_pass(ctx)
+
+        after = rows_of(conn)
+        assert after["decisions"] == before["decisions"]
+        assert after["connector_runs"] == before["connector_runs"]
+        assert after["derivations"] == before["derivations"]
+        assert json.loads(row.removed) == {}
+
+
+def test_a_pass_empties_the_journals_wal(canopy_env: CanopyEnv, ctx: Context) -> None:
+    run_pass(ctx)
+    assert (canopy_env.state_dir / f"{db.DB_FILE_NAME}-wal").stat().st_size == 0

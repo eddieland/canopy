@@ -717,14 +717,14 @@ class Retention(Section):
 
     Private: only the operator's own config shortens retention, since an agent that could remove history early could
     remove the transcript that shows what it did. Read by `canopy gc --dry-run`, and by the pass a live tick runs, which
-    removes files and rotates `canopy.log` alone yet (ROADMAP M47).
+    removes files and the journal's rows, and rotates `canopy.log` (ROADMAP M47).
     """
 
     # A run's, chore run's, or review's log, prompt, and diff, once it ended this long ago.
     run_files_days: Annotated[Count, Scope.PRIVATE] = 30
     # A tick's log and prompt; a tick that did not close `ok` keeps them for `run_files_days`.
     tick_files_days: Annotated[Count, Scope.PRIVATE] = 7
-    # The attention rows the harness raised, once outside the window the attention list reads.
+    # The attention rows the harness raised, connector runs, and derivations, once outside the attention list's window.
     journal_days: Annotated[Count, Scope.PRIVATE] = 90
     # `canopy.log` is rotated past this many MiB, and this many rotated files are kept.
     log_max_mib: Annotated[Count, Scope.PRIVATE] = 50

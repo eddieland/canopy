@@ -1,8 +1,8 @@
 """What a live tick removes of canopy's own history (DESIGN §26): `canopy.log` rotated, and once a day, the pass.
 
-The pass removes the files `gc.file_kinds` finds removable, the ones `canopy gc --dry-run` counts, and records itself in
-`gc_passes`. Either step that fails is logged, and the tick goes on: a full disk is the pass's reason to run, and must
-not stop the loop that would free it.
+The pass removes the files `gc.file_kinds` finds removable and the journal's rows `gc.row_kinds` does, the ones
+`canopy gc --dry-run` counts, records itself in `gc_passes`, and checkpoints the journal's WAL. Any step that fails is
+logged, and the tick goes on: a full disk is the pass's reason to run, and must not stop the loop that would free it.
 """
 
 from __future__ import annotations
@@ -11,13 +11,15 @@ import stat
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db, gc_passes
+from canopy.core import db, gc_passes, sql
 from canopy.infra import logs
 from canopy.loop import gc
 
 if TYPE_CHECKING:
+    import sqlite3
     from pathlib import Path
 
+    from canopy.core.config import Retention
     from canopy.core.context import Context
 
 #: The least time from one pass's start to the next's.
@@ -45,14 +47,33 @@ def run(ctx: Context, tick_id: int, log: logs.TickAdapter) -> int | None:
         latest = gc_passes.latest(ctx.conn)
         if latest is not None and db.parse_time(latest.started_at) > now - PASS_EVERY:
             return None
-        return _pass(ctx, tick_id, now, log)
+        pass_id = _pass(ctx, tick_id, now, log)
     except Exception as e:
         log.exception("gc pass not recorded", extra={"error": str(e)})
         return None
+    checkpoint(ctx.conn, log)
+    return pass_id
+
+
+def checkpoint(conn: sqlite3.Connection, log: logs.TickAdapter) -> bool:
+    """Copy the journal's WAL into it and empty the WAL, `PRAGMA wal_checkpoint(TRUNCATE)`, logging how it went.
+
+    A reader holding an older snapshot, such as the web UI's, keeps the WAL until it lets go; the next pass takes it.
+
+    Returns:
+        Whether the WAL was emptied.
+    """
+    try:
+        busy, frames, copied = sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()
+    except Exception as e:
+        log.exception("journal not checkpointed", extra={"error": str(e)})
+        return False
+    log.info("journal checkpointed", extra={"busy": bool(busy), "frames": frames, "copied": copied})
+    return not busy
 
 
 def _pass(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> int:
-    """Remove every file a pass at `now` finds removable, and record what it removed.
+    """Remove every file and journal row a pass at `now` finds removable, and record what it removed.
 
     Returns:
         The pass's id.
@@ -62,19 +83,9 @@ def _pass(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> i
     failures = 0
     error: str | None = None
     try:
-        for kind in gc.file_kinds(ctx, now):
-            for found in kind.files:
-                if not found.removable:
-                    continue
-                try:
-                    gone = _remove(found.path)
-                except OSError as e:
-                    failures += 1
-                    log.warning("gc could not remove a file", extra={"path": str(found.path), "error": str(e)})
-                    continue
-                if gone:
-                    was = removed.get(kind.name, gc_passes.Removed(0, 0))
-                    removed[kind.name] = gc_passes.Removed(was.files + 1, was.bytes + found.size)
+        failures = _files(ctx, now, removed, log)
+        # After the files: on a full disk, deleting rows needs the room removing them makes.
+        removed.update(_rows(ctx.conn, now, retention))
     except Exception as e:
         log.exception("gc pass failed", extra={"error": str(e)})
         error = f"{type(e).__name__}: {e}"
@@ -94,12 +105,36 @@ def _pass(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> i
         "gc pass",
         extra={
             "gc_pass": pass_id,
-            "files": sum(r.files for r in removed.values()),
+            "files": sum(r.count for r in removed.values() if r.unit == "files"),
+            "rows": sum(r.count for r in removed.values() if r.unit == "rows"),
             "bytes": sum(r.bytes for r in removed.values()),
             "failures": failures,
         },
     )
     return pass_id
+
+
+def _files(ctx: Context, now: datetime, removed: dict[str, gc_passes.Removed], log: logs.TickAdapter) -> int:
+    """Remove every file a pass at `now` finds removable, counting each kind's in `removed` as it goes.
+
+    Returns:
+        How many it found removable but could not remove.
+    """
+    failures = 0
+    for kind in gc.file_kinds(ctx, now):
+        for found in kind.files:
+            if not found.removable:
+                continue
+            try:
+                gone = _remove(found.path)
+            except OSError as e:
+                failures += 1
+                log.warning("gc could not remove a file", extra={"path": str(found.path), "error": str(e)})
+                continue
+            if gone:
+                was = removed.get(kind.name, gc_passes.Removed(0, 0))
+                removed[kind.name] = gc_passes.Removed(was.count + 1, was.bytes + found.size)
+    return failures
 
 
 def _remove(path: Path) -> bool:
@@ -119,3 +154,22 @@ def _remove(path: Path) -> bool:
     except FileNotFoundError:
         return False
     return True
+
+
+def _rows(conn: sqlite3.Connection, now: datetime, retention: Retention) -> dict[str, gc_passes.Removed]:
+    """Delete every journal row a pass at `now` finds removable.
+
+    One transaction, so no tick closes between finding the window and deleting outside it.
+
+    Returns:
+        What it deleted of each kind, the kinds it deleted none of left out.
+    """
+    removed: dict[str, gc_passes.Removed] = {}
+    with db.transaction(conn):
+        for row_kind in gc.row_kinds(conn, now, retention):
+            found = row_kind.kind(conn)
+            if not found.removable:
+                continue
+            deleted = sql.execute(conn, row_kind.delete()).rowcount
+            removed[row_kind.name] = gc_passes.Removed(deleted, found.removable_size, unit="rows")
+    return removed

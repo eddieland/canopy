@@ -1,4 +1,4 @@
-"""The passes of garbage collection the journal records (DESIGN §26), and which gone files they removed.
+"""The passes of garbage collection the journal records (DESIGN §26), and what they removed.
 
 The loop's pass records itself here once a day; the web UI reads here whether a run's or a tick's missing file went by
 retention, so a page says "removed after N days" rather than that the file is gone for no reason it knows.
@@ -25,10 +25,12 @@ type Rule = Literal["run_files_days", "tick_files_days"]
 
 @dataclass(frozen=True)
 class Removed:
-    """What a pass removed of one kind: how many files, and their bytes."""
+    """What a pass removed of one kind: how many, and their bytes."""
 
-    files: int
+    count: int
     bytes: int
+    #: What `count` counts: files, or the journal's rows.
+    unit: Literal["files", "rows"] = "files"
 
 
 def record(
@@ -46,11 +48,14 @@ def record(
 ) -> int:
     """Record a pass that started at `started_at` and ends now, `failed` when `error` says what it raised.
 
+    `removed` is kept as a JSON object, each kind's count under its unit: `{"files": n, "bytes": b}`, or
+    `{"rows": n, "bytes": b}`.
+
     Returns:
         The pass's id.
     """
     status = GcPassStatus.OK if error is None else GcPassStatus.FAILED
-    counted = {kind: {"files": r.files, "bytes": r.bytes} for kind, r in removed.items()}
+    counted = {kind: {r.unit: r.count, "bytes": r.bytes} for kind, r in removed.items()}
     statement = sql.insert(
         "gc_passes",
         tick_id=tick_id,

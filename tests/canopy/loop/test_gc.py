@@ -229,15 +229,26 @@ def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
-def test_an_agent_cannot_run_gc(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], env: str) -> None:
+@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum"])
+def test_an_agent_cannot_run_gc(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    env: str,
+    flag: str,
+) -> None:
     with mock.patch.dict(os.environ, {env: "3"}):
-        assert main(["gc", "--dry-run"]) == 1
+        assert main(["gc", flag]) == 1
     assert "gc refused (inside_run)" in capsys.readouterr().err
 
 
-def test_gc_without_dry_run_removes_nothing_yet(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["gc"]) == 2
-    assert "only `canopy gc --dry-run` is built yet" in capsys.readouterr().err
+@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"]])
+def test_gc_takes_one_of_dry_run_and_vacuum(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+    flags: list[str],
+) -> None:
+    assert main(["gc", *flags]) == 2
+    assert "give `--dry-run` or `--vacuum`" in capsys.readouterr().err
 
 
 def test_the_text_report(snapshot: SnapshotAssertion) -> None:

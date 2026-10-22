@@ -6,9 +6,9 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 
 ## 26. Garbage collection
 
-Built: `canopy gc --dry-run`, `[retention]`, and the loop's pass over files, with `canopy.log`'s rotation. Until the
-rest lands, canopy removes only what the table's third column says, and §6, §11, §12, §18, and §22 describe canopy as
-it is; this section says what changes.
+Built: `canopy gc --dry-run`, `[retention]`, the loop's pass over files and the journal, with `canopy.log`'s rotation,
+and `canopy gc --vacuum`. Until the rest lands, canopy removes only what the table's third column says, and §6, §11,
+§12, §18, and §22 describe canopy as it is; this section says what changes.
 
 ### What grows
 
@@ -20,9 +20,9 @@ it is; this section says what changes.
 | `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | after `run_files_days` | unchanged |
 | Any of those with no journal row | a review run that never started | after an hour | unchanged |
 | `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` | unchanged |
-| Attention items the harness raised | each open item, every tick | never | outside the window (below) |
-| Connector runs and derivations (§30) | each tick, and each of M39's polls | never | outside the window (below) |
-| Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | never | checkpointed each pass; `canopy gc --vacuum` |
+| Attention items the harness raised | each open item, every tick | outside the window (below) | unchanged |
+| Connector runs and derivations (§30) | each tick, and each of M39's polls | outside the window (below) | unchanged |
+| Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` | unchanged |
 | Loose objects and packs in a primary clone | every worker's fetches and commits | never (`gc.auto=0`) | `canopy gc --git` (below) |
 | `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | never | `canopy gc --caches` |
 | A run's lock, object directory, desk, and review checkout | one per run | when the run ends, or by reconcile | unchanged |
