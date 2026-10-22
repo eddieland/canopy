@@ -57,6 +57,7 @@ from typing import TYPE_CHECKING, Literal, Self
 from urllib.parse import quote
 
 from canopy.core import db, plans, records, sql
+from canopy.core.conversation import KEY_RE, MAX_KEY
 from canopy.core.vocab import PlanStatus
 from canopy.infra.text import printable
 
@@ -314,6 +315,36 @@ def is_index(file_name: str) -> bool:
         True for `INDEX_NAME`.
     """
     return file_name == INDEX_NAME
+
+
+def owned(conn: sqlite3.Connection, dest: Path) -> list[str]:
+    """What an export wrote in `dest`, told apart from what the operator keeps beside it there.
+
+    Returns:
+        The name of each planned ticket's directory in `dest`, sorted, then `INDEX_NAME` while `INDEX_MARK` opens it;
+        only names `dest` holds, never a link.
+    """
+    planned = sql.union(sql.select("ticket_key").from_("plans"), sql.select("ticket_key").from_("feedback_plans"))
+    keys = (str(r[0]) for r in sql.execute(conn, planned))
+    names = sorted(
+        key
+        for key in keys
+        if len(key) <= MAX_KEY
+        and KEY_RE.fullmatch(key)
+        and (found := _lstat(dest / key)) is not None
+        and stat.S_ISDIR(found.st_mode)
+    )
+    try:
+        dest_fd = os.open(dest, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return names
+    try:
+        index = _read_head(dest_fd, INDEX_NAME, len(INDEX_MARK.encode()))
+    finally:
+        os.close(dest_fd)
+    if index is not None and index[1] == INDEX_MARK.encode():
+        names.append(INDEX_NAME)
+    return names
 
 
 def conversation_document(key: str, messages: Sequence[records.Message]) -> bytes:

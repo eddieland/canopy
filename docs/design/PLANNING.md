@@ -92,9 +92,11 @@ oldest first, each body quoted under a heading canopy writes, so no body can pas
 each ticket's directory lists its plans, and one in the directory every ticket, so a forge shows the listing; an index
 is canopy's only while its first line says so, so the operator's own is never touched, and a title in one is escaped
 text, never inside a link (T1).
-With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, prompts too unless
-`paths.plan_archive_prompts` is off, conversations only with `paths.plan_archive_conversations`, commits that directory
-alone, and pushes to the clone's upstream, never forcing; `archive_unpushed` stays open while the archive is not all
+With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, or into the top
+level itself with `paths.plan_archive_workspace_dir` off, prompts too unless `paths.plan_archive_prompts` is off,
+conversations only with `paths.plan_archive_conversations`, commits what it wrote there alone (at the top level, each
+planned ticket's directory and its own index, never the operator's files beside them), and pushes to the clone's
+upstream, never forcing; `archive_unpushed` stays open while the archive is not all
 there, so a failed push is retried each tick. A tick writes at most a thousand files, so a long history goes in over
 several, each push bounded, and reads again only the plans whose row or files changed, and the conversations with a new
 message, since it last found them as they stand. A dry run only reads the clone (TRUST_MODEL T6).
