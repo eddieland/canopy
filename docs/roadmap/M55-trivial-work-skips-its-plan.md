@@ -17,11 +17,11 @@ first, in §25.
   first `plan` of such a ticket, with no branch, no plan run, and no triage run yet, the
   overseer dispatches a `needs-plan` run, once per ticket: a second is refused `triaged` however the first ended, and
   one not due `bad_triage`. Under M54, before a feedback plan too, once per round of feedback.
-- **The run.** A read-only run with a verdict, as M25's `triage-ci` is (DESIGN §23): it leases no slot, reads the ticket
-  through the tracker's read tools and the named repositories' primary clones, linked from a directory of canopy's,
-  and writes nothing anywhere. It still counts toward `capacity.max_workers` with workers and reviews, since it is an
-  agent run with spend: a slot bounds worktrees, the cap bounds runs. Its definition, `canopy-plan-triage`, is the
-  planner's with nothing to edit (T6). Result line:
+- **The run.** A read-only run with a verdict: it leases no slot, reads the ticket through the tracker's read tools
+  and the named repositories' primary clones, linked from a directory of canopy's, and writes nothing anywhere. It
+  still counts toward `capacity.max_workers` with workers and reviews, since it is an agent run with spend: a slot
+  bounds worktrees, the cap bounds runs. Its definition, `canopy-plan-triage`, is the planner's with nothing to edit
+  (T6). Result line:
   `{"status":"done|failed","verdict":"trivial|plan","reason":"one sentence"}`. Its prompt says: when unsure, `plan`.
 - **Fails closed.** Only a `done` run with the verdict `trivial` waives the plan. A `plan` verdict, a failure, a
   timeout, or a result that does not validate leaves the ticket needing its plan, and the next tick dispatches `plan`
@@ -40,8 +40,7 @@ first, in §25.
   `decisions` corpus, how often triage was wrong. With reviews off there is no second opinion but the PR's review.
 - **No glance first.** A waiver goes ahead without the operator: a ticket its author calls trivial usually is, and
   waiting on the operator would give back the time triage saves (the operator, 2026-10-17).
-- **Code shared.** M25's `triage-ci` shape (a slotless read-only run with a verdict, never built yet, so whichever is
-  built first builds it for both), M44's planner definition and read tools, §21's plain-language criteria, and the
+- **Code shared.** M44's planner definition and read tools, §21's plain-language criteria, and the
   spend page (M33), which shows triage runs as a kind of their own.
 - **TRUST_MODEL**, in the PR that builds it: T1 (a triage verdict, an agent's judgment that ticket text can steer, may
   lift the plan gate, but only where the operator turned triage on and only for a plan the policy asked for; the

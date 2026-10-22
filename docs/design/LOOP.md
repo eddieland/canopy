@@ -149,7 +149,7 @@ escapes it (§20).
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
-| `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8) |
+| `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8); left by a worker as flaky, attention (§23) |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
@@ -179,8 +179,9 @@ reviews. It is empty by default, so a review bot's comment never starts a fixup 
 - The worker's prompt names the trusted reviewers, and the worker addresses anyone else's comment only as an operator
   message says, checking the overseer's classification again (D051). The comment stays data either way.
 
-The harness cannot tell a review comment's author (D003), so this gate is the overseer's judgment, checked again by the
-worker. With feedback plans on, the gate is instead the operator's approval of the PR's plan, checked in code (§32).
+Where the `vcs` source observes the PR, dispatch checks this gate in code (§35); elsewhere it is the overseer's judgment,
+checked again by the worker. With feedback plans on, the gate is instead the operator's approval of the PR's plan,
+checked in code (§32).
 What the harness can check, it does: only the operator's channels write operator messages, and cursors advance only
 with a run that starts.
 
@@ -216,6 +217,8 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 
 1. Check the guards, which are in code and not overridable from the prompt. A refusal is recorded as a decision naming
    the guard and why, and the command exits 1; a dry run checks them and stops (§6, D036). Dispatch is refused when:
+   - a claim rests on a stale observation or one that does not bear it out (`stale`, `unauthorized`, `unobserved`),
+     checked first (§35).
    - the label is not a queue label, or a started ticket's (§22) start record does not allow the run; the worker checks
      the label again (step 3, D051).
    - the request does not fit its kind: a `resume` with no branch to continue, a cursor moved without its reason, or a
@@ -260,11 +263,13 @@ on the host. A command named in that directory's config still runs (§24, Git st
 
 Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
 in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the
-follow-up tickets it filed, each with its repository or null, which authorize nothing (§18):
+follow-up tickets it filed, each with its repository or null, which authorize nothing (§18). `flaky` is a `resume`'s
+for `ci`, true when it left a failed check a rerun would pass (§23):
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},
- "pr_titles":{"api":"KEY: ...|null"},"summary":"a paragraph, line breaks sparingly","question":"only when blocked"}
+ "pr_titles":{"api":"KEY: ...|null"},"summary":"a paragraph, line breaks sparingly","question":"only when blocked",
+ "flaky":false}
 ```
 
 **Worker obligations**, stated in every worker prompt:

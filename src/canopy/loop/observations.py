@@ -225,7 +225,7 @@ def section(ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records
     Returns:
         The block's `observations`.
     """
-    reader = _Reader.read(ctx, tick_id, now, tickets)
+    reader = Reader.read(ctx, tick_id, now, tickets)
     found: ObservationsState = {
         "max_age_minutes": ctx.config.connect.max_age_minutes,
         "max_new_items": MAX_NEW_ITEMS,
@@ -250,8 +250,12 @@ def past_comments(comments: Sequence[records.ObservedComment], *cursors: str | N
 
 
 @dataclass(frozen=True)
-class _Reader:
-    """What one tick's observations read: the journal and the connectors' rows, once."""
+class Reader:
+    """What one tick's observations read: the journal and the connectors' rows, once.
+
+    The state block's section reads every subject through it, and a dispatch's claims the subjects they rest on
+    (`loop.claims`), so a claim is checked against the observation the block showed.
+    """
 
     ctx: Context
     #: Before this, an observation is stale (`connect.max_age_minutes`).
@@ -273,7 +277,12 @@ class _Reader:
     tracked: bool
 
     @classmethod
-    def read(cls, ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> _Reader:
+    def read(cls, ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> Reader:
+        """Read the observations of tick `tick_id` as they stand at `now`, with `tickets` the ones the block lists.
+
+        Returns:
+            The reader.
+        """
         conn = ctx.conn
         cutoff = now - timedelta(minutes=ctx.config.connect.max_age_minutes)
         listed = {t.key: t for t in tickets}
@@ -373,7 +382,7 @@ class _Reader:
             "key": key,
             "observed": "unobserved" if why == NO_TRACKER else "stale",
             "why": why or f"{key} never observed",
-            "units": self._units(key),
+            "units": self.units(key),
         }
 
     def _candidate(self, key: str, seen: records.ObservedTicket, labels: Iterable[phases.Label]) -> TicketObservation:
@@ -403,7 +412,7 @@ class _Reader:
         derived = self.derived.get((key, None))
         if derived is not None and derived.stale is None:
             found["derived"] = json.loads(derived.phases)
-        found["units"] = self._units(key)
+        found["units"] = self.units(key)
         return found
 
     def _candidate_stale(self, key: str, seen: records.ObservedTicket) -> str | None:
@@ -451,7 +460,7 @@ class _Reader:
 
     # Its units
 
-    def _units(self, key: str) -> list[UnitObservation]:
+    def units(self, key: str) -> list[UnitObservation]:
         """Each of a ticket's units: those the journal holds, and any the tick derived from a branch observed.
 
         Returns:

@@ -533,6 +533,9 @@ class Policy(Section):
     #: planner's approval and not the operator's (DESIGN §25). Private: it loosens the operator's gate on plans, so only
     #: the operator's own files turn it on (TRUST_MODEL T7).
     planner_may_approve: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: How long a stale feedback plan waits after the newest item or reply on its PRs before it is planned again
+    #: (DESIGN §32): a burst of comments makes one plan, and a bot's stream of them a bounded number (TRUST_MODEL T3).
+    feedback_quiet_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 10
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
@@ -1076,6 +1079,66 @@ class Connect(Section):
         return next((source for source in self.sources.values() if source.kind == kind), None)
 
 
+#: The tools of an artifact store an agent that publishes may call, by the names the store's contract gives them
+#: (DESIGN §38, `packages/canopy-artifacts`): all but `comment_feed`, which is for the source that reads comments back.
+ARTIFACT_TOOLS = (
+    "artifact_publish",
+    "artifact_read",
+    "artifact_list",
+    "thread_list",
+    "comment_reply",
+    "comment_create",
+    "thread_resolve",
+)
+#: The agents `artifacts.publish_roles` may name, by the name it keys them by, as `runtime.allow_bash` keys them.
+PUBLISH_ROLES: Mapping[str, str] = {"worker": agents.WORKER}
+#: The agents that never publish, by that name, and why (DESIGN §38).
+REFUSED_PUBLISH_ROLES: Mapping[str, str] = {
+    "worker-private": "a private ticket's worker never publishes, so nothing of a private ticket reaches a store",
+    "planner": "the planner writes one file, its plan, and nothing else",
+}
+
+
+def _publish_role(value: str) -> str:
+    if value in REFUSED_PUBLISH_ROLES:
+        raise ValueError(f"{value!r} cannot publish: {REFUSED_PUBLISH_ROLES[value]}")
+    if value not in PUBLISH_ROLES:
+        raise ValueError(f"{value!r} is not an agent that may publish; name one of {', '.join(PUBLISH_ROLES)}")
+    return value
+
+
+PublishRole = Annotated[StrictStr, AfterValidator(_publish_role)]
+
+
+class Artifacts(Section):
+    """The `[artifacts]` table: the store workers publish artifacts to, and which of canopy's agents may (DESIGN §38).
+
+    Off unless `mcp_server` is set. Private (TRUST_MODEL T7): it chooses which agents may send what they read to a
+    store off the machine, and whose comments there steer a worker.
+    """
+
+    #: The store's MCP server, as the operator's runtime config names it: Louvre's, or the local store's. Empty for
+    #: none, and then no definition names one.
+    mcp_server: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_server_name)] = ""
+    #: The namespace canopy's artifacts are in, as the server's token or `--namespace` binds it. Empty for unset.
+    namespace: Annotated[StrictStr, Scope.PRIVATE] = ""
+    #: The store's ids of the people whose comments are authority, as an authorized replier's are (DESIGN §38).
+    authorized_authors: Annotated[tuple[NonBlank, ...], Scope.PRIVATE] = ()
+    #: The agents that may publish, by the names `PUBLISH_ROLES` keys them by. Every other one is denied the server.
+    publish_roles: Annotated[tuple[PublishRole, ...], Scope.PRIVATE] = ()
+
+    def publishing(self) -> agents.Publishing | None:
+        """The store's server, the tools a publishing agent may call, and those agents, for their definitions.
+
+        Returns:
+            The rules to render, or None when no store is configured.
+        """
+        if not self.mcp_server:
+            return None
+        agent_names = frozenset(PUBLISH_ROLES[role] for role in self.publish_roles)
+        return agents.Publishing(self.mcp_server, ARTIFACT_TOOLS, agent_names)
+
+
 CHORE_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
 ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _HOURS_RE = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
@@ -1167,6 +1230,7 @@ class Config(Section):
     retention: Retention
     connect: Connect
     personas: Personas
+    artifacts: Artifacts
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -1192,6 +1256,7 @@ SECTIONS: dict[str, type[Section]] = {
     "retention": Retention,
     "connect": Connect,
     "personas": Personas,
+    "artifacts": Artifacts,
 }
 
 

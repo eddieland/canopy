@@ -6,8 +6,8 @@ leave on them, and how those comments come back to a ticket. Sections are number
 
 ## 38. Artifacts and Louvre
 
-The local store is built; publishing from runs, and comments back to the ticket, are designed, not built (ROADMAP
-M62). Until they are, a worker's output reaches people as a PR, a ticket comment, or a plan (§25).
+The local store and publishing from runs are built; comments back to the ticket are designed, not built (ROADMAP
+M62). Until they are, a comment on an artifact reaches a worker only as the operator passes it on.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.
@@ -79,8 +79,9 @@ a new version, replies on the threads it addressed, and resolves them.
   authorized replier's comment is. Anyone else's is untrusted feedback that waits on the attention list until the
   operator sends it on (D089). A comment marked as an agent's, or carrying every comment mark (D069), is never
   authority. On the local store, comments are the operator's, behind the listener secret (T8).
-- **Which runs publish.** Only the roles the operator names in private config hold the tools. Never the planner or a
-  private ticket's worker: a private ticket publishes to the local store only, so nothing of it reaches Louvre (§22).
+- **Which runs publish.** Only the agents the operator names in private config hold the tools, each by its exact
+  name, and every other definition denies the store's server whole. Never the planner or a private ticket's worker,
+  so nothing of a private ticket reaches a store (§22).
 - **Rendering locally.** The web UI renders journal text as text (D113). The local store's HTML is served from a second
   loopback origin, in a frame sandboxed without same-origin access or network, behind the listener secret (T8).
 
@@ -91,3 +92,4 @@ a new version, replies on the threads it addressed, and resolves them.
 - A listed author's reply in a thread an unlisted person opened: authority for the thread, or only for its own words.
 - What Louvre keeps of an artifact whose ticket canopy forgets (`canopy forget`).
 - Whether Louvre is the name.
+- Whether a private ticket may publish to the local store alone, which needs a second server in config.
