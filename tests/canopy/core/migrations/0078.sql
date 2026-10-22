@@ -1,3 +1,3 @@
--- sha256 of 0078_draft_plan_items.sql: 07e198f4a19cff80ef042e1d8af271cbd2ff928371cc4d4c4156fc6c6fafe3c2
+-- sha256 of 0078_decision_decider.sql: 5300290afff0d771aa4d3d4052b27e5c327d692fb656609b5a06fab81beb7b68
 
--- Creates no table, so seeds no row.
+INSERT INTO decisions (tick_id, ticket_key, action, rationale, decider) VALUES (1, 'OLD-1', 'wait', 'r', 'harness');

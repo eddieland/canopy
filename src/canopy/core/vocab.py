@@ -494,3 +494,12 @@ class GcPassStatus(StrEnum):
     OK = "ok"
     #: It raised before its end, and the tick went on; what it removed before is counted.
     FAILED = "failed"
+
+
+class Decider(StrEnum):
+    """Who made a decision, `decisions.decider` (DESIGN §37, TRUST_MODEL T5)."""
+
+    #: The overseer, through one of its verbs: what it decided, or what a guard refused it.
+    OVERSEER = "overseer"
+    #: The harness on its own, in code: an attention item it raises, or a decision that needed no judgment.
+    HARNESS = "harness"

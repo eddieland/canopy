@@ -2336,6 +2336,12 @@ export type components = {
              */
             chore: string | null;
             /**
+             * Decider
+             * @description Who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37); None for one
+             *     recorded before the journal said.
+             */
+            decider: ("overseer" | "harness") | null;
+            /**
              * Id
              * @description The decision's id.
              */

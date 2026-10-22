@@ -240,6 +240,7 @@ def decision(row: records.Decision) -> Decision:
         pr=row.pr,
         action=row.action,
         rationale=lines(row.rationale),
+        decider=row.decider.value if row.decider is not None else None,
     )
 
 
