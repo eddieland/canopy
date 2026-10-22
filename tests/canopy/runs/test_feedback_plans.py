@@ -72,13 +72,13 @@ def github_shows(
     state.write_text(json.dumps({"prs": {PR: shown}}))
 
 
-def planned(scenario: Scenario, github_state: Path, result: object = None) -> int:
+def planned(scenario: Scenario, github_state: Path, result: object = None, *, mergeable: str = "mergeable") -> int:
     """A feedback plan run on alice's and bob's comments, `build` red, that writes TEXT and reports `result`.
 
     Returns:
         Its run id.
     """
-    github_shows(github_state, ALICE, BOB)
+    github_shows(github_state, ALICE, BOB, mergeable=mergeable)
     line = PLANNED if result is None else result
     assert isinstance(line, dict)
     run = scenario.run(FEEDBACK_PLAN, worker=planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result=line))
@@ -493,6 +493,29 @@ def test_a_change_on_its_pr_marks_a_waiting_plan_stale_with_its_reason(
     moved = "'s head moved" in said or said.startswith("check ")
     assert (newest["stale"], newest["quiet_passed"]) == (True, not moved)
     assert stale_for(scenario) == [said]
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize(
+    ("now", "said"),
+    [
+        pytest.param("conflicting", [f"{PR} now conflicts with its base"], id="a conflict"),
+        pytest.param("mergeable", [], id="no conflict"),
+        pytest.param("unknown", [], id="still unknown"),
+    ],
+)
+def test_a_conflict_the_host_had_not_settled_when_planned_marks_the_plan_stale_once_it_says_so(
+    scenario: Scenario,
+    github_state: Path,
+    now: str,
+    said: list[str],
+) -> None:
+    with_a_pr(scenario)
+    planned(scenario, github_state, mergeable="unknown")
+    github_shows(github_state, ALICE, BOB, mergeable=now)
+    # The plan was offered no conflict, so one the host settles since is new to it; none is no change.
+    assert read_again(scenario)["stale"] is bool(said)
+    assert stale_for(scenario) == said
 
 
 @pytest.mark.usefixtures("git_pool")
