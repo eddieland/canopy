@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import { reviewDraft } from '@/api/mocks'
-import type { DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
+import type { DiffLine, ReviewDiff, ReviewDraft, ReviewFinding } from '@/api/types'
 import { ToastContext } from '@/hooks/use-toast'
 import { placeFindings } from '@/lib/reviews'
 import type { NewToast } from '@/lib/toasts'
@@ -50,14 +50,22 @@ function writes() {
     return sent.filter((s) => s.method === 'POST')
 }
 
-async function panel(draft: ReviewDraft = reviewDraft(), hasDiff = true) {
+async function panel(draft: ReviewDraft = reviewDraft(), hasDiff = true, findings = 1) {
     await renderRouted(
         <ToastContext
             value={(toast) => {
                 toasts.push(toast)
             }}
         >
-            <ReviewDraftPanel run={5} prUrl={PR} sha={SHA} draft={draft} hasDiff={hasDiff} onFollow={followed} />
+            <ReviewDraftPanel
+                run={5}
+                prUrl={PR}
+                sha={SHA}
+                draft={draft}
+                findings={findings}
+                hasDiff={hasDiff}
+                onFollow={followed}
+            />
         </ToastContext>,
     )
     return screen.getByTestId('review-draft')
@@ -81,6 +89,34 @@ describe('ReviewDraftPanel', () => {
         expect(within(comments).getByText('api/upstream.py:15')).toBeTruthy()
         expect(within(found).getByTestId('draft-versions').textContent).toContain(
             "1 3f9a1c27b0de by the reviewer: made from review run 5's summary and findings",
+        )
+    })
+
+    it("links each comment to its point's card, and says which findings the draft leaves out", async () => {
+        const mine = {
+            number: 2,
+            path: 'api/upstream.py',
+            line: 3,
+            text: 'Why random?',
+            finding: null,
+            file: 0,
+            diff_line: 3,
+        }
+        const base = reviewDraft()
+        const found = await panel(reviewDraft({ comments: [...base.comments, mine] }), true, 4)
+        const comments = within(found).getByTestId('draft-comments')
+        // A finding's comment is its finding's card; the operator's own is a card of its own.
+        expect(
+            within(comments)
+                .getByRole('link', { name: /The last 503/u })
+                .getAttribute('href'),
+        ).toBe('/reviews/5#finding-1')
+        expect(within(comments).getByRole('link', { name: 'Why random?' }).getAttribute('href')).toBe(
+            '/reviews/5#draft-comment-2',
+        )
+        // Finding 3 is in the body; 2 and 4 are in neither.
+        expect(within(found).getByTestId('draft-left-out').textContent).toBe(
+            'Left out: findings 2 and 4. Put one back on its card.',
         )
     })
 
@@ -243,6 +279,21 @@ describe('DraftCommentCard', () => {
     })
 })
 
+// Review 5's findings: 1 on line 15, which comment 1 carries; 2 on line 9; 3 on no line, in the body.
+function carolFindings(fields: Partial<ReviewFinding>[] = []): ReviewFinding[] {
+    const at = (line: number | null, n: number): ReviewFinding => ({
+        severity: n === 1 ? 'major' : 'minor',
+        title: `finding ${n}'s title`,
+        location: line === null ? 'tests/test_upstream.py' : `api/upstream.py:${line}`,
+        detail: `finding ${n}'s detail`,
+        file: 0,
+        line,
+        dismissed: false,
+        ...fields[n - 1],
+    })
+    return [at(15, 1), at(9, 2), at(null, 3)]
+}
+
 describe('ReviewDiffPanels with a draft', () => {
     const lines = Array.from({ length: 15 }, (_, i): DiffLine => ({
         kind: 'add',
@@ -255,11 +306,89 @@ describe('ReviewDiffPanels with a draft', () => {
         files: [{ path: 'api/upstream.py', old_path: null, binary: false, hunks: [{ header: '', lines }] }],
     }
 
-    it('puts each comment on its line, and adds one on any line of the diff', async () => {
-        await renderRouted(
-            <ReviewDiffPanels run={5} diff={diff} placed={placeFindings([], true)} draft={reviewDraft()} />,
-        )
-        expect(screen.getByTestId('draft-comment').textContent).toContain('The last 503 is returned')
+    async function diffWith(draft: ReviewDraft, found: ReviewFinding[] = carolFindings()) {
+        await renderRouted(<ReviewDiffPanels run={5} diff={diff} placed={placeFindings(found, true)} draft={draft} />)
+        return (n: number) => {
+            const card = screen.getAllByTestId('review-point').find((c) => c.id === `finding-${n}`)
+            if (card === undefined) {
+                throw new Error(`no card for finding ${n}`)
+            }
+            return card
+        }
+    }
+
+    it('shows each finding once, as the comment it posts as, edited in place', async () => {
+        const point = await diffWith(reviewDraft())
+        // One card per point: no comment's card beside the finding's.
+        expect(screen.getAllByTestId('review-point')).toHaveLength(3)
+        expect(screen.queryByTestId('draft-comment')).toBeNull()
+        const first = point(1)
+        expect(within(first).getByText("finding 1's title")).toBeTruthy()
+        expect(within(first).getByText('in your review')).toBeTruthy()
+        expect(first.textContent).toContain('The last 503 is returned as if it were an answer')
+        expect(first.textContent).not.toContain("finding 1's detail")
+        fireEvent.click(within(first).getByRole('button', { name: 'Edit' }))
+        fireEvent.change(within(first).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
+        fireEvent.click(within(first).getByRole('button', { name: /Save/u }))
+        await waitFor(() => {
+            expect(writes()).toEqual([
+                {
+                    method: 'POST',
+                    path: '/api/reviews/5/draft/comments/1/edit',
+                    body: { text: 'Raise once it gives up.' },
+                },
+            ])
+        })
+        // The finding the body holds is in the review too, edited with the body.
+        const third = point(3)
+        expect(within(third).getByText('in your review')).toBeTruthy()
+        expect(third.textContent).toContain('it posts in the body')
+    })
+
+    it('leaves a finding out, and puts it back, by its dismissal, one control for both', async () => {
+        answer = () => Response.json({ run: 5, finding: 1, dismissed: true })
+        const point = await diffWith(reviewDraft())
+        fireEvent.click(within(point(1)).getByRole('button', { name: 'leave out' }))
+        await within(point(1)).findByText('review:5 finding 1 is dismissed: left out of your review.')
+        cleanup()
+        sent = []
+        answer = () => Response.json({ run: 5, finding: 1, dismissed: false })
+        const out = await diffWith(reviewDraft({ comments: [] }), carolFindings([{ dismissed: true }]))
+        const left = out(1)
+        expect(within(left).getByText('left out')).toBeTruthy()
+        // Left out, it shows what the reviewer found, which putting it back restores.
+        expect(left.textContent).toContain("finding 1's detail")
+        expect(within(left).queryByRole('button', { name: 'Edit' })).toBeNull()
+        fireEvent.click(within(left).getByRole('button', { name: 'put back' }))
+        await waitFor(() => {
+            expect(writes()).toEqual([
+                { method: 'POST', path: '/api/reviews/5/dismissals', body: { finding: 1, undo: true } },
+            ])
+        })
+    })
+
+    it('says how to put back a finding whose comment was dropped rather than dismissed', async () => {
+        const point = await diffWith(reviewDraft({ comments: [] }))
+        const left = point(1)
+        expect(within(left).getByText('left out')).toBeTruthy()
+        expect(within(left).getByRole('button', { name: 'dismiss' })).toBeTruthy()
+        expect(left.textContent).toContain('To have it back, dismiss the finding, then put it back.')
+    })
+
+    it('keeps a comment the operator added as a card of its own, and adds one on any line of the diff', async () => {
+        const mine = {
+            number: 2,
+            path: 'api/upstream.py',
+            line: 3,
+            text: 'Why random?',
+            finding: null,
+            file: 0,
+            diff_line: 3,
+        }
+        const base = reviewDraft()
+        await diffWith(reviewDraft({ comments: [...base.comments, mine] }))
+        expect(screen.getByTestId('draft-comment').textContent).toContain('Why random?')
+        expect(screen.getAllByTestId('review-point')).toHaveLength(3)
         fireEvent.click(screen.getByRole('button', { name: 'Comment on api/upstream.py:3' }))
         const form = screen.getByRole('form', { name: 'Comment on api/upstream.py:3' })
         fireEvent.change(within(form).getByRole('textbox'), { target: { value: 'Why random?' } })

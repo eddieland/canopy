@@ -377,8 +377,11 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     await expect(fold).not.toContainText('summary')
     await fold.getByRole('button', { name: 'Show the review' }).click()
     await expect(fold.getByRole('heading', { name: /^Findings/u })).toBeVisible()
+    // Each finding is one card on the diff, the comment it posts as on it: no comment's card beside a finding's.
+    const points = page.getByTestId('review-point')
+    await expect(points).toHaveCount(3)
     const comments = page.getByTestId('draft-comment')
-    await expect(comments).toHaveCount(2)
+    await expect(comments).toHaveCount(0)
 
     await draft.getByTestId('draft-body').getByRole('button', { name: 'edit' }).click()
     await draft.getByRole('textbox', { name: 'In your words' }).fill('One thing to fix before this goes in.')
@@ -388,38 +391,53 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     )
     await expect(draft.getByTestId('draft-body')).toContainText('One thing to fix before this goes in.')
 
-    // Each comment is edited and dropped on its card, at its line of the diff.
-    const first = comments.filter({ hasText: 'Comment 1' })
+    // A finding's comment is edited in place on its card, and left out and put back with one control.
+    const first = points.filter({ hasText: 'The last 503 is returned' })
     await first.getByRole('button', { name: 'Edit' }).click()
     await first.getByRole('textbox', { name: 'In your words' }).fill('Raise once the attempts run out.')
     await first.getByRole('button', { name: 'Save' }).click()
     await expect(first).toContainText('Raise once the attempts run out.')
-    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'Drop' }).click()
-    await expect(comments).toHaveCount(1)
+    const second = points.filter({ hasText: 'is never read' })
+    await second.getByRole('button', { name: 'leave out' }).click()
+    await expect(second).toContainText('left out')
+    // Finding 3 went with the body the operator replaced, which held it: left out, not dismissed.
+    await expect(draft.getByTestId('draft-left-out')).toHaveText(
+        'Left out: findings 2 and 3. Put one back on its card.',
+    )
+    await expect(points.filter({ hasText: 'No test stops the backoff' })).toContainText(
+        'To have it back, dismiss the finding, then put it back.',
+    )
+    await second.getByRole('button', { name: 'put back' }).click()
+    await expect(second).toContainText('in your review')
+    await expect(draft.getByTestId('draft-left-out')).toHaveText('Left out: finding 3. Put one back on its card.')
 
-    // A comment of the operator's own, on any line of the diff.
+    // A comment of the operator's own, on any line of the diff, is a card of its own.
     await page.getByRole('button', { name: 'Comment on api/upstream.py:14' }).click()
     const form = page.getByRole('form', { name: 'Comment on api/upstream.py:14' })
     await form.getByRole('textbox', { name: 'In your words' }).fill('Cap the delay?')
     await form.getByRole('button', { name: 'Save' }).click()
-    await expect(comments).toHaveCount(2)
+    await expect(comments).toHaveCount(1)
     await expect(comments.filter({ hasText: 'Cap the delay?' })).toContainText('yours')
-    await expect(draft.getByTestId('draft-version')).toHaveText('version 5')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 6')
+    await expect(draft.getByTestId('draft-versions')).toContainText('dismissed finding 2')
     await expect(draft.getByTestId('draft-versions')).toContainText('added a comment on api/upstream.py:14')
 
     // Publish submits it; the outline button beside it would stage it. The mock answers for canopy's GitHub programs:
     // it posts nowhere.
     await expect(draft.getByRole('button', { name: 'Start the review on GitHub' })).toBeVisible()
-    await expect(draft.getByTestId('draft-posts')).toContainText('the body and 2 comments as your comment review')
+    await expect(draft.getByTestId('draft-posts')).toContainText('the body and 3 comments as your comment review')
     await expect(draft.getByTestId('draft-posts')).toContainText("on carol's PR, at a61f7c0")
-    await draft.getByRole('button', { name: 'Publish version 5' }).click()
-    await expect(page.getByTestId('toast')).toContainText("Published version 5 of review run 5's draft")
+    await draft.getByRole('button', { name: 'Publish version 6' }).click()
+    await expect(page.getByTestId('toast')).toContainText("Published version 6 of review run 5's draft")
     await expect(page.getByTestId('toast')).toContainText('https://github.com/acme/api/pull/14#pullrequestreview-')
-    await expect(draft.getByTestId('draft-published')).toContainText('Published version 5 as your review on GitHub.')
+    await expect(draft.getByTestId('draft-published')).toContainText('Published version 6 as your review on GitHub.')
     // A draft publishes once: nothing on the page changes it now.
     await expect(draft.getByRole('button')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Comment on /u })).toHaveCount(0)
     await expect(comments.getByRole('button')).toHaveCount(0)
+    // A finding's card keeps only its dismissal, which changes the draft no more.
+    await expect(points.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(points.getByRole('button', { name: 'leave out' })).toHaveCount(0)
 })
 
 test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {

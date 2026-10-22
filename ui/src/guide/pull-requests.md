@@ -271,8 +271,9 @@ first draft of a review you could leave on it, and its page is about that draft.
 acme/api#14 by carol**, and the line under it says where the draft stands: waiting on you, staged on GitHub, published,
 or unconfirmed while canopy finds out whether a publish landed. **Draft review** comes first and shows exactly what
 canopy would post in your name: the reviewer's summary as the body, each finding on a line of the diff as a comment on
-that line, and a finding the diff doesn't show tucked into the body under its location. The comments sit on the diff
-beside the findings they came from. Every word is the reviewer's, written after reading the PR, so read it as you'd read
+that line, and a finding the diff doesn't show tucked into the body under its location. On the diff, each finding is
+one card: its severity and title from the reviewer, then the comment as it will post, marked **in your review** or
+**left out**. Every word is the reviewer's, written after reading the PR, so read it as you'd read
 anything a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
 Hover the version in its header to see who made it and the hash a publish carries.
 
@@ -283,9 +284,16 @@ want to check the draft against what the reviewer actually said.
 Change it until it says what you would:
 
 - **edit**, beside **Body**, rewrites the body; empty, the comments post alone.
-- **Edit** and **Drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
-  **dismiss** on the finding drops its comment too, and **undo** puts it back.
-- The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it.
+- **Edit**, on a finding's card, rewords its comment in place.
+- **leave out**, on the same card, takes the finding out of your review: it dismisses the finding, which drops its
+  comment or its paragraph of the body. **put back** takes that back, in the reviewer's words, so your edit of it goes
+  with the dismissal. The **Comments** list says which findings you've left out.
+- The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it. Yours
+  keep cards of their own, with **Edit** and **Drop**.
+
+A finding can also leave your review without a dismissal: you rewrote the body it lived in, or dropped its comment with
+`canopy review edit --drop`. Its card then says **left out** and offers **dismiss**; canopy only puts a finding back by
+taking its dismissal back, so dismiss it, then **put back**. Two clicks, and the reviewer's words return.
 
 Each change is a new version, listed under **Versions** with who made it, and is the same as `canopy review edit`.
 A version holds at most 30 comments, which is more than any review worth reading needs.

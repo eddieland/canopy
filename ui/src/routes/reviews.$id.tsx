@@ -18,7 +18,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
-import { ReviewDraftPanel, ReviewDraftState } from '@/components/review-draft'
+import { ReviewDraftPanel, ReviewDraftState, ReviewPointCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
@@ -116,6 +116,7 @@ function Loaded({ id }: { id: number }) {
                             prUrl={data.review.pr_url}
                             sha={data.review.sha}
                             draft={draft}
+                            findings={data.findings.length}
                             hasDiff={data.diff !== null}
                             onFollow={follow}
                         />
@@ -142,9 +143,18 @@ function Loaded({ id }: { id: number }) {
                             <Panel>
                                 <PanelHeader label="Not in the diff" />
                                 <div className="flex flex-col gap-2 p-3">
-                                    {placed.elsewhere.map((f) => (
-                                        <FindingCard key={f.n} run={data.review.id} numbered={f} />
-                                    ))}
+                                    {placed.elsewhere.map((f) =>
+                                        draft === null ? (
+                                            <FindingCard key={f.n} run={data.review.id} numbered={f} />
+                                        ) : (
+                                            <ReviewPointCard
+                                                key={f.n}
+                                                run={data.review.id}
+                                                numbered={f}
+                                                draft={draft}
+                                            />
+                                        ),
+                                    )}
                                 </div>
                             </Panel>
                         )}

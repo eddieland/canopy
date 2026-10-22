@@ -636,11 +636,11 @@ side.
   top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
   what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
 - **A draft's card** (`DraftCardFrame`, `src/components/draft-card.tsx`): text canopy holds that would post as the
-  operator on a PR, a thread's reply (`DraftCard`) or a review's comment (`DraftCommentCard`, `NewCommentCard`), is one
-  card: `surface`, a `status-blocked/40` border while it waits on the operator, a header of its `panel-label` and what
-  names it, its text, then its verbs in a row under it, `sm` buttons with the CLI's command on hover, `Edit` outline
-  (`EditVerb`) and `Drop` ghost (`DropVerb`). `Edit` opens `DraftForm`: a `Textarea` with its count against 4,000,
-  `Save` disabled past it or while the text is not one the draft may hold, and `Cancel`.
+  operator on a PR, a thread's reply (`DraftCard`) or a review's comment (`DraftCommentCard`, `NewCommentCard`,
+  `ReviewPointCard`), is one card: `surface`, a `status-blocked/40` border while it waits on the operator, a header of
+  its `panel-label` and what names it, its text, then its verbs in a row under it, `sm` buttons with the CLI's command
+  on hover, `Edit` outline (`EditVerb`) and `Drop` ghost (`DropVerb`). `Edit` opens `DraftForm`: a `Textarea` with its
+  count against 4,000, `Save` disabled past it or while the text is not one the draft may hold, and `Cancel`.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
   name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
@@ -1440,14 +1440,24 @@ sliver beside four others; and its axis names short call numbers without measuri
   panel's header names the version in a muted readout, what made it and its hash in its `Tip`; then a muted line saying
   it is what would post, word for word, on which commit, and to read it first; a `status-blocked` line when the PR's
   head has moved past that commit; the body as `MemoryText` with a ghost `xs` `edit`; its comments as rows linking to
-  their cards; every version in muted monospace, the newest in the foreground; and in its foot the one way canopy posts
-  as the operator, as a PR's thread drafts are sent (A PR's threads, below): a default `Publish version N`, which
-  submits it, and beside it an outline `Start the review on GitHub`, which stages it, each with its command on hover,
-  and a muted line by them saying what posts: as you, on the PR's author's PR (`the PR` when canopy has not read it),
-  the body and how many comments, on which commit. A publish says what it did in a toast; staged or published, the foot
-  says so in one line linked to GitHub instead, never a raw URL. Each comment's card (`DraftCommentCard`, a draft's
-  card, above: its `surface` tells it from a finding's `surface-raised`) sits under its line after the findings there,
-  with `Edit` and `Drop` while the draft waits. While it waits, each line of the new side has a ghost `+` beside its
+  their cards (a `draft-comment` row: its number, `finding N` or `yours`, its first line, its line), and a muted line
+  under them naming the findings it leaves out; every version in muted monospace, the newest in the foreground; and in
+  its foot the one way canopy posts as the operator, as a PR's thread drafts are sent (A PR's threads, below): a default
+  `Publish version N`, which submits it, and beside it an outline `Start the review on GitHub`, which stages it, each
+  with its command on hover, and a muted line by them saying what posts: as you, on the PR's author's PR (`the PR` when
+  canopy has not read it), the body and how many comments, on which commit. A publish says what it did in a toast;
+  staged or published, the foot says so in one line linked to GitHub instead, never a raw URL. On the diff, one card per
+  point of the review: each finding's card is its comment's too (`ReviewPointCard`, a draft's card, above, never a
+  `FindingCard` beside a comment's card). It heads with the finding's number, severity, title, and location, then a
+  chip, `in your review` or `left out`; in the review as a comment, its text is that comment as it will post, with
+  `Edit` while the draft waits; through the body, or left out, the reviewer's detail, and a muted line saying where it
+  posts or how to have it back. One ghost `xs` control ends its head line where a finding's `dismiss` is: `leave out`
+  dismisses it, `put back` takes that back (`useDismissReviewFinding` with the draft's words), so the two are one
+  choice, as DESIGN §34 ties them. A finding left out by a drop or a body edit rather than a dismissal shows `dismiss`,
+  since the server puts a finding back only by taking its dismissal back. Once the draft is published or on its way, the
+  control is the plain `dismiss` or `undo`. A comment the operator added keeps a card of its own (`DraftCommentCard`)
+  under its line after the findings there, with `Edit` and `Drop` while the draft waits; with no diff kept, every
+  comment's card is in the panel's list, as before. While it waits, each line of the new side has a ghost `+` beside its
   number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new comment's card under the
   line, its form open.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
