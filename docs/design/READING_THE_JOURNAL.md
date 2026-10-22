@@ -8,8 +8,9 @@ reviews](PUBLISHED_REVIEWS.md). Next: [One-off tasks](TASKS.md).
 ## 35. The overseer reads the journal
 
 Being built (ROADMAP M37), ahead of §30's measurement at the operator's word. Built: the observations in the state
-block, and the prompt's procedure that decides a fresh subject from them. The claims checked in code, the cursors, and
-comments reaching the conversation wait, and none needs the overseer's tools (§27), whose verbs the commands share.
+block, the prompt's procedure that decides a fresh subject from them, and a dispatch's claims checked in code. The
+cursor check on `canopy_ticket-set`, `handled`, cursors as journal numbers, and comments reaching the conversation wait,
+and none needs the overseer's tools (§27), whose verbs the commands share.
 Until each is built, §4 principle 1, §6, §7, §8, §17, §22, and TRUST_MODEL describe canopy as it is; this section says
 what changes, and the PR that builds the last of it cuts this one to what is left.
 

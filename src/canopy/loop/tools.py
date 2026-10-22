@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import (
@@ -37,7 +38,7 @@ from pydantic_core import PydanticUndefined
 from canopy.core import config, contract, conversation, db, memory, vocab
 from canopy.core.vocab import ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
-from canopy.loop import attention, duties
+from canopy.loop import attention, claims, duties
 from canopy.reviews import findings, grants
 from canopy.runs import dispatch, policy
 
@@ -405,6 +406,20 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
     try:
         dispatch.check_kind(kind)
         review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
+        # The claims, checked against what the connectors observed, before §8's other guards (DESIGN §35).
+        claims.check(
+            ctx,
+            tick_id,
+            datetime.now(UTC),
+            key=key,
+            kind=kind,
+            label=request.label,
+            repos=repos,
+            reasons=reasons,
+            cursors=dict(cursor_pairs),
+            review_run=request.review_run,
+            base=request.base,
+        )
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if current.dry_run:
             plan = dispatch.check(

@@ -71,8 +71,17 @@ ten new items (`MAX_NEW_ITEMS`); a tracker with no connector keeps today's live 
 stays; a candidate canopy did not hold when its source last read it is stale, since its comments were not recorded; a
 cursor naming no observed comment is passed by larger numeric ids; each person's latest verdict is shown, since an
 approval before the `review` cursor still counts; and a stale or unobserved ticket shows only what is old, never its
-stale text. Left: the duties check owing `canopy queried` only when no source read the query, the claim checks in code
-(`unauthorized`, `unobserved`, `stale`, `handled`), journal-numbered cursors and their migration, the mirror's
-retirement with comments recorded in the conversation, the design folded into the sections it names, and the live
-re-measurement. Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker`
-source is required (recommended: required), and how many new items a subject shows before the rest are counted.
+stale text. Built (2026-10-22): the third bullet's claims on `canopy dispatch`, checked in code before §8's other guards
+(`loop/claims.py`), through the command and the tool alike: `unauthorized` for a label not observed, a reply not by an
+authorized replier or by a worker, and review feedback covered with no trusted item or no operator message after an
+untrusted one; `unobserved` for a cursor naming nothing observed or passing what the block left out; `stale` for the
+ticket, a named unit's PR, and a stacked dispatch's blocker's PR; none for a private ticket or an unobserved subject.
+Chosen conservatively: cursors are checked as they are today, a `review` cursor naming an item by its time to the
+second; a ticket the query found this tick is stale until the next read records its comments, so its first dispatch
+waits a tick, as the block already said; the prompt is unchanged, its refusals section covering the new codes.
+Left: the duties check owing `canopy queried` only when no source read the query (it needs the harness to touch the
+source's tickets into the journal, so it is not small), the cursor check on `canopy ticket set`, `handled`,
+journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the conversation, the
+design folded into the sections it names, and the live re-measurement. Open for the operator: whether a tracker with
+no connector keeps the live-read procedure or a `tracker` source is required (recommended: required), and how many
+new items a subject shows before the rest are counted.

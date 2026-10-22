@@ -59,7 +59,8 @@ Controls:
 - canopy has no tracker code, so it cannot read labels, and a live tick showed an overseer can skip its label check
   for a ticket the journal remembers (D051). `canopy dispatch` refuses without `--label` naming one of
   `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
-  ticket. The independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
+  ticket. Where a `tracker` source observes the ticket, it is checked against the observation too (below). The
+  independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
   changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
   judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
 - An approved plan (DESIGN §25) is data, not an operator instruction. A planner wrote it from ticket text, which anyone
@@ -91,9 +92,13 @@ Controls:
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
   trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
   it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut as a mirror cuts it.
-  The marks inform the overseer; no guard checks a claim against them yet (ROADMAP M37), so the label, reply, and
-  review checks above are still the overseer's and the worker's. Residual: an observation is what a connector printed,
-  up to that age old.
+  `canopy dispatch` checks the overseer's claims against them in code, before its other guards: the label must be one
+  observed on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a
+  worker's or at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone
+  else's only with an operator message after it (`unauthorized`), and each cursor must name an item observed and
+  shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused `stale`. A
+  private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
+  guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -104,9 +109,10 @@ Controls:
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
-  about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
-  cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
-  `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR can claim to be it.
+  about it says, and is told who is trusted. Where the `vcs` source observes the PR, the harness checks this too
+  (above); elsewhere both checks are agent judgment, as label checks are (D051). canopy's own reviewer is trusted
+  only when the list names `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR
+  can claim to be it.
 - With `policy.feedback_plan = "approve"` (DESIGN §32, private), D089's gate becomes the operator's approval of a
   feedback plan, checked in code: every `resume` but one for `no_pr` alone is refused (`unplanned`) until the ticket
   has an approved feedback plan no `resume` has spent, and `plan_changed` once its file differs from the hash approved.

@@ -249,7 +249,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D051. A dispatch names the queue label it relies on, and the worker checks it again
 
-- `--label` is a claim the harness cannot verify (D003); the worker re-reads the labels and fails without changes.
+- Where a `tracker` source observes the ticket, the label must be one it observed, checked in code (`unauthorized`,
+  DESIGN §35); without one, `--label` stays a claim. Either way the worker re-reads the labels and fails without changes.
 
 ## D053. State directories and snapshots must be private to the operator
 
@@ -361,10 +362,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - `trust.trusted_reviewers` (private, empty by default; `canopy:review` for canopy's reviewer). Anyone else's
   feedback is `untrusted_review` attention until the operator answers with `canopy reply` or the web UI.
-- Enforced by prompt only: the harness cannot read a comment's author (D003). With `policy.feedback_plan = "approve"`
+- Checked in code where the `vcs` source observes the PR fresh (DESIGN §35): a `resume` for `review` must cover a
+  trusted reviewer's item or a trusted canopy review, and anyone else's only with an operator message after it among
+  those it carries; else `unauthorized`. Unobserved, it is the prompt's. With `policy.feedback_plan = "approve"`
   (DESIGN §32) the go-ahead is the approval of a feedback plan instead, in code, and trust only informs the operator.
 - Rejected: an untrusted list (new bots trusted until noticed); the go-ahead as a tracker comment.
-- Revisit: if the overseer dispatches without a go-ahead; then a `--review-from` claim checked like `--label`.
 
 ## D093. Every public worker hears the operator's messages
 
