@@ -74,11 +74,11 @@ def test_a_done_review_of_someone_elses_pr_drafts_a_review_its_finding_off_the_d
     assert (first.number, first.author, first.channel) == (1, ReviewDraftAuthor.REVIEWER, None)
     assert first.body == OFF_DIFF
     assert first.comments == [ON_LINE]
-    assert first.change == f"made from review run {reviewed}'s findings"
+    assert first.change == f"made from review run {reviewed}'s body and findings"
     draft = draft_of(scenario, reviewed)
     assert (draft.status, draft.pr_url) == (ReviewDraftStatus.WAITING, THEIRS)
     shown = scenario.operator("review", "draft", str(reviewed)).out
-    assert f"Version 1, hash {first.hash}: made from review run {reviewed}'s findings" in shown
+    assert f"Version 1, hash {first.hash}: made from review run {reviewed}'s body and findings" in shown
     assert "Comment 1, on retry.py:1 (finding 1):\n    loops forever\n" in shown
     assert f"canopy review publish {reviewed} {first.hash}" in shown
     # A review of one of the loop's own PRs has none: its findings go to a worker.
@@ -109,6 +109,33 @@ def test_a_reviewers_text_canopy_would_not_keep_is_left_out_alone(
     assert why.startswith("finding 1: its text holds")
 
 
+@pytest.mark.parametrize(
+    ("said", "body", "refused"),
+    [
+        ("Could the client's own retry do this?", f"Could the client's own retry do this?\n\n{OFF_DIFF}", []),
+        # A body canopy would not keep is left out alone, the findings kept.
+        ("Could\u200b the client's own retry do this?", OFF_DIFF, ["the body: its text holds"]),
+    ],
+)
+def test_the_reviewers_body_for_the_author_leads_the_first_version_and_its_summary_stays_out(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+    said: str,
+    body: str,
+    refused: list[str],
+) -> None:
+    del reviewing
+    sha = feature_commit(git_pool, tmp_path)
+    first = newest(
+        scenario,
+        scenario.review(reviews(sha, THEIRS), reviewer=reviewer_reports({**REPORT, "body": said})).id,
+    )
+    assert (first.body, first.comments) == (body, [ON_LINE])
+    assert [why[: len(want)] for why, want in zip(first.refused, refused, strict=True)] == refused
+
+
 def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenario, reviewed: int) -> None:
     run = str(reviewed)
     scenario.operator("review", "edit", run, "--comment", "1", "--text", "This never stops.")
@@ -119,7 +146,7 @@ def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenar
     scenario.operator("dismiss", f"review:{reviewed}", "1", "--undo")
     versions = review_drafts.versions(scenario.conn, draft_of(scenario, reviewed).id)
     assert [(v.number, v.author, v.channel, v.change) for v in versions] == [
-        (1, ReviewDraftAuthor.REVIEWER, None, f"made from review run {reviewed}'s findings"),
+        (1, ReviewDraftAuthor.REVIEWER, None, f"made from review run {reviewed}'s body and findings"),
         (2, ReviewDraftAuthor.OPERATOR, "cli", "edited comment 1"),
         (3, ReviewDraftAuthor.OPERATOR, "cli", "added a comment on retry.py:2"),
         (4, ReviewDraftAuthor.OPERATOR, "cli", "edited the body"),

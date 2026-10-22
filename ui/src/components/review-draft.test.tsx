@@ -110,7 +110,7 @@ describe('ReviewDraftPanel', () => {
         expect(within(found).queryByText('waiting')).toBeNull()
         expect(within(found).queryByText(/3f9a1c27b0de/u, { selector: 'p' })).toBeNull()
         expect(tipOf(within(found).getByTestId('draft-version'))).toBe(
-            "Version 1: made from review run 5's findings, by the reviewer. " +
+            "Version 1: made from review run 5's body and findings, by the reviewer. " +
                 'A publish carries its hash, 3f9a1c27b0de.',
         )
         expect(within(found).getByText('<U+200B>')).toBeTruthy()
@@ -119,7 +119,7 @@ describe('ReviewDraftPanel', () => {
         expect(within(comments).getByText('finding 1')).toBeTruthy()
         expect(within(comments).getByText('api/upstream.py:15')).toBeTruthy()
         expect(within(found).getByTestId('draft-versions').textContent).toContain(
-            "1 3f9a1c27b0de by the reviewer: made from review run 5's findings",
+            "1 3f9a1c27b0de by the reviewer: made from review run 5's body and findings",
         )
     })
 
