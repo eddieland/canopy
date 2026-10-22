@@ -135,8 +135,8 @@ def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
     """Whether nothing the journal holds for a tick to act on happened after a tick read it, at `read_at`.
 
     No run of any table started or ended, and the operator recorded no message, started or stopped no ticket, granted
-    nothing, set or cleared no notice, and submitted or stopped no task, past `message_id`, the newest message that
-    tick had read.
+    nothing, set or cleared no notice, and submitted, replied to, or stopped no task, past `message_id`, the newest
+    message that tick had read.
 
     Returns:
         True if nothing did.

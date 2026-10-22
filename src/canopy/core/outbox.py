@@ -23,6 +23,8 @@ RUNS = "runs"
 LOOP = "loop"
 CHORES = "chores"
 REVIEWS = "reviews"
+#: A one-off task's runs (DESIGN §36): a group of its own, which no sink takes unless the operator lists it.
+TASKS = "tasks"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
 #: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
@@ -110,6 +112,25 @@ class ReviewEnded(TypedDict):
     verdict: str | None
     impact: str | None
     findings: int
+
+
+class TaskEnded(TypedDict):
+    """A `task.ended` event's fields (DESIGN §36): how one run of a task ended, never its report.
+
+    `question` is set only for a `blocked` run; `branch` and `head` only when the task's branch was on origin as the
+    run ended; `pr` is the first of the PRs its result named.
+    """
+
+    task: int
+    run: int
+    status: str
+    summary: str | None
+    question: str | None
+    branch: str | None
+    head: str | None
+    pr: str | None
+    #: The run's last message: its question when `blocked`, else its report, so a channel can say what a reply answers.
+    message: int | None
 
 
 class LoopFailing(TypedDict):
@@ -314,6 +335,41 @@ def review_ended(
         "findings": len(result.findings) if result is not None else 0,
     }
     return Event(REVIEWS, "review.ended", fields)
+
+
+def task_ended(
+    config: Config,
+    run: records.TaskRun,
+    status: RunStatus,
+    result_json: str | None,
+    *,
+    head: str | None,
+    message: int | None,
+) -> Event | None:
+    """Return the `task.ended` event for task run `run`, closing as `status` with `head` on origin, or None.
+
+    It is None unless a sink takes `tasks`: a task's work is private, and a sink's audience may not be (DESIGN §36).
+    """
+    if not config.notify.takes(TASKS):
+        return None
+    result = contract.stored_object(result_json)
+    summary = contract.stored_note(result)
+    question = result.get("question") if status == "blocked" else None
+    prs = result.get("prs")
+    listed: list[object] = prs if isinstance(prs, list) else []
+    urls = [u for u in listed if isinstance(u, str) and u]
+    fields: TaskEnded = {
+        "task": run.task_id,
+        "run": run.id,
+        "status": status,
+        "summary": cut(summary, SUMMARY_LIMIT) if summary else None,
+        "question": cut(question, SUMMARY_LIMIT) if question else None,
+        "branch": run.branch if head else None,
+        "head": head,
+        "pr": cut(urls[0], DETAIL_LIMIT) if urls else None,
+        "message": message,
+    }
+    return Event(TASKS, "task.ended", fields)
 
 
 def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:

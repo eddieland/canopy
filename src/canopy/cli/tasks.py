@@ -1,8 +1,8 @@
-"""`canopy task`: the operator's one-off tasks (DESIGN §36), and how `canopy show` and `canopy stop` treat `task:N`.
+"""`canopy task`: the operator's one-off tasks (DESIGN §36), and how `show`, `reply`, and `stop` treat `task:N`.
 
-A submission writes through `canopy.core.tasks`, which refuses inside canopy's own ticks and runs (`inside_run`): only
-the operator hands canopy a task. The next tick starts it, before the overseer, which never sees it; `canopy _task`
-(`cli/runs.py`) is its run.
+A submission writes through `canopy.core.tasks`, and a reply through `canopy.core.conversation`, each refusing inside
+canopy's own ticks and runs (`inside_run`): only the operator hands canopy a task, or its next word. The next tick
+starts a run, before the overseer, which never sees it; `canopy _task` (`cli/runs.py`) is its run.
 """
 
 from __future__ import annotations
@@ -85,26 +85,28 @@ def cmd_task_list(click_ctx: click.Context) -> int:
     ctx = open_context(click_ctx)
     found = tasks.every(ctx.conn)
     latest = tasks.latest_runs(ctx.conn)
+    waiting = {t.id for t in tasks.queued(ctx.conn)}
     for task in found:
         text = one_line(task.text)
         cut = f"{text[:LIST_TEXT]}..." if len(text) > LIST_TEXT else text
-        click.echo(
-            f"task:{task.id}  {standing(task, latest.get(task.id))}  {task.repo}  {age(task.submitted_at)}  {cut}",
-        )
+        said = standing(task, latest.get(task.id), queued=task.id in waiting)
+        click.echo(f"task:{task.id}  {said}  {task.repo}  {age(task.submitted_at)}  {cut}")
     if not found:
         click.echo("No tasks yet: `canopy task submit TEXT` hands canopy one.")
     return 0
 
 
-def standing(task: records.Task, latest: records.TaskRun | None) -> str:
-    """Where a task stands, as a line shows it: `stopped`, `queued`, or its latest run's status.
+def standing(task: records.Task, latest: records.TaskRun | None, *, queued: bool) -> str:
+    """Where a task stands, as a line shows it: `stopped`, `queued` for a run a tick will start, or its latest run's.
+
+    `queued` says whether a tick would start a run of it now: its first, or the one a reply asked for.
 
     Returns:
         The word.
     """
     if task.stopped_at is not None and (latest is None or latest.status is not RunStatus.RUNNING):
         return "stopped"
-    if latest is None:
+    if latest is None or queued:
         return "queued"
     return str(latest.status)
 
@@ -119,8 +121,9 @@ def show(ctx: Context, task_id: int) -> None:
     if task is None:
         raise CliError(f"canopy has no task:{task_id}")
     runs = tasks.runs_of(ctx.conn, task_id)
+    waiting = any(t.id == task_id for t in tasks.queued(ctx.conn))
     click.echo(
-        f"task:{task.id}: {standing(task, runs[-1] if runs else None)}, in {task.repo}, submitted "
+        f"task:{task.id}: {standing(task, runs[-1] if runs else None, queued=waiting)}, in {task.repo}, submitted "
         f"{age(task.submitted_at)} ago via {task.channel}",
     )
     if task.stopped_at is not None:
@@ -135,6 +138,23 @@ def show(ctx: Context, task_id: int) -> None:
         _show_run(run)
     if not runs:
         click.echo("  none yet: the next tick starts it" if task.stopped_at is None else "  none")
+    messages = tasks.messages_of(ctx.conn, task_id)
+    if messages:
+        click.echo(f"\nConversation ({len(messages)}):")
+    for message in messages:
+        _show_message(message)
+    question = conversation.task_question(ctx.conn, task_id)
+    if question is not None and task.stopped_at is None:
+        click.echo(f"\nMessage {question.id} waits on your answer: `canopy reply task:{task_id} TEXT`.")
+
+
+def replied(ctx: Context, task_id: int) -> None:
+    """Say what a reply to task `task_id` starts: its next run, at the next tick or once its running run ends."""
+    running = next((r for r in tasks.runs_of(ctx.conn, task_id) if r.status is RunStatus.RUNNING), None)
+    if running is not None:
+        click.echo(f"Its run {running.id} is still working; the first tick after it ends starts the next run.")
+    else:
+        click.echo("The next tick starts its next run, on its branch.")
 
 
 def stop(ctx: Context, task_id: int, *, now: bool) -> int:
@@ -178,10 +198,7 @@ def _show_run(run: records.TaskRun) -> None:
     head = f"  head {run.head[:SHORT_SHA]}" if run.head else "  nothing pushed"
     click.echo(f"  run {run.id}  {run.status}  {when}  {run.branch}{head}{spent(run)}")
     result = result_of(run)
-    for name in ("summary", "question"):
-        said = result.get(name)
-        if isinstance(said, str) and said.strip():
-            click.echo(f"    {name}: {one_line(said)}")
+    # Its summary and question are messages, in the conversation below.
     for pr in _prs(result):
         click.echo(f"    PR {pr}")
     note = one_line(str(result.get("harness") or ""))
@@ -189,6 +206,16 @@ def _show_run(run: records.TaskRun) -> None:
         click.echo(f"    harness: {note}")
     session = f"session {run.session_id}" if run.session_id else "no session reported"
     click.echo(f"    {session}, log {run.log_path}")
+
+
+def _show_message(message: records.Message) -> None:
+    if message.source == "operator":
+        what = "your reply" + (f" to message {message.answers}" if message.answers else "") + f" via {message.channel}"
+    else:
+        what = f"run {message.task_run_id}'s {message.kind}" if message.task_run_id else message.kind
+    click.echo(f"  message {message.id}, {what}, {age(message.at)} ago:")
+    for line in printable(message.body).splitlines() or [""]:
+        click.echo(f"    {line}")
 
 
 def _prs(result: Mapping[str, object]) -> list[str]:

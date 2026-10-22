@@ -1,9 +1,10 @@
-"""One-off tasks (DESIGN §36): the operator's submissions, each one's runs, and the stop that ends them.
+"""One-off tasks (DESIGN §36): the operator's submissions, each one's runs, its conversation, and the stop that ends it.
 
 Only the operator's channels write a task, and every write here refuses inside a tick or any agent's run (`inside_run`,
-TRUST_MODEL T1): the submission is what authorizes a task's run, and its text is the operator's instruction. The
-overseer never reads a task. The tick starts a queued one before the overseer runs (`runs/tasks.py`), and `_task`
-records how its run ended (`runs/task_run.py`). A task's runs write nothing about any ticket: their rows name the task.
+TRUST_MODEL T1): the submission, and each reply (`conversation.reply`), is what authorizes a task's run, and its text
+the operator's instruction. The overseer never reads a task. The tick starts a queued one before the overseer runs
+(`runs/tasks.py`), and `_task` records how its run ended (`runs/task_run.py`), with its report and question as
+messages about the task. A task's runs write nothing about any ticket: their rows name the task.
 """
 
 from __future__ import annotations
@@ -12,13 +13,14 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, pools, records, sql
+from canopy.core import conversation, db, outbox, pools, records, sql
 from canopy.core.conversation import Refused
 from canopy.core.vocab import RunStatus
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from canopy.core.config import Config
     from canopy.core.vocab import PoolKind
     from canopy.core.workspace import Workspace
 
@@ -38,7 +40,7 @@ class Stopped:
     """What `stop` did: whether the task was already stopped, whether it was still queued, and its running run."""
 
     already: bool
-    #: It had not started: the tick that would have started it starts nothing for it now.
+    #: It waited for a run, its first or one a reply asked for: the tick that would have started it starts nothing now.
     dropped: bool
     running: records.TaskRun | None
 
@@ -94,24 +96,102 @@ def every(conn: sqlite3.Connection) -> list[records.Task]:
 
 
 def queued(conn: sqlite3.Connection) -> list[records.Task]:
-    """Return the tasks waiting for a tick to start them, the oldest first: not stopped, and never run.
+    """Return the tasks waiting for a tick to start a run, the oldest first (DESIGN §36).
+
+    A task waits when it is not stopped and has no run running, and has never run, or the operator replied to it
+    after its latest run started: each run follows an operator's word, so a task never retries on its own.
 
     Returns:
         The tasks, by when they were submitted.
     """
-    never_run = "NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = tasks.id)"
-    query = sql.select("*").from_("tasks").where("stopped_at IS NULL").where(never_run).order_by("id")
+    never_run = sql.frag("NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = tasks.id)")
+    # Past the newest message the latest run's prompt carried: a reply no run has taken yet.
+    replied = sql.frag(
+        "EXISTS (SELECT 1 FROM messages m WHERE m.subject_kind = ? AND m.subject_id = CAST(tasks.id AS TEXT)"
+        " AND m.source = 'operator' AND m.id > coalesce("
+        "(SELECT r.message_id FROM task_runs r WHERE r.task_id = tasks.id ORDER BY r.id DESC LIMIT 1), 0))",
+        conversation.TASK,
+    )
+    query = (
+        sql.select("*")
+        .from_("tasks")
+        .where("stopped_at IS NULL")
+        .where("NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = tasks.id AND r.status = 'running')")
+        .where("{} OR {}", never_run, replied)
+        .order_by("id")
+    )
     return records.fetch_all(conn, records.Task, query)
 
 
 def moved_after(conn: sqlite3.Connection, since: str) -> bool:
-    """Whether the operator submitted or stopped a task after `since`, a time the journal wrote (§6, §36).
+    """Whether the operator submitted, replied to, or stopped a task after `since`, a time the journal wrote (§6, §36).
 
     Returns:
-        True if one did: it ends the loop's wait, so a submission starts at the next tick, not the one after the wait.
+        True if one did: it ends the loop's wait, so the run it asks for starts at the next tick, not the one after
+        the wait.
     """
     query = sql.select("1").from_("tasks").where("submitted_at > ? OR stopped_at > ?", since, since).limit(1)
-    return sql.execute(conn, query).fetchone() is not None
+    replied = (
+        sql.select("1")
+        .from_("messages")
+        .where("subject_kind = ? AND source = 'operator' AND at > ?", conversation.TASK, since)
+        .limit(1)
+    )
+    return sql.execute(conn, query).fetchone() is not None or sql.execute(conn, replied).fetchone() is not None
+
+
+@dataclass(frozen=True)
+class Awaiting:
+    """A task whose latest run asked the operator a question that no reply has followed (DESIGN §36)."""
+
+    task_id: int
+    #: The question, a message of the run's.
+    message_id: int
+    run_id: int | None
+    #: When the run asked it.
+    at: str
+
+
+def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
+    """Return every task not stopped whose latest question waits on a reply, by id: each raises `awaiting_reply`.
+
+    Returns:
+        The tasks, with the question each waits on, never its text: the item names the task.
+    """
+    # Each task's latest question, as `conversation.task_question` reads one, for every task at once.
+    query = (
+        sql.select("m.*")
+        .from_("messages m")
+        .join("tasks t ON m.subject_id = CAST(t.id AS TEXT)")
+        .where("m.subject_kind = ? AND m.kind = 'question' AND t.stopped_at IS NULL", conversation.TASK)
+        .where(
+            "m.id = (SELECT max(q.id) FROM messages q"
+            " WHERE q.subject_kind = m.subject_kind AND q.subject_id = m.subject_id AND q.kind = 'question')",
+        )
+        .where(
+            "NOT EXISTS (SELECT 1 FROM messages o WHERE o.subject_kind = m.subject_kind"
+            " AND o.subject_id = m.subject_id AND o.source = 'operator' AND o.id > m.id)",
+        )
+        .order_by("t.id")
+    )
+    return [
+        Awaiting(int(m.subject_id), m.id, m.task_run_id, m.at) for m in records.fetch_all(conn, records.Message, query)
+    ]
+
+
+def messages_of(conn: sqlite3.Connection, task_id: int) -> list[records.Message]:
+    """Return task `task_id`'s conversation, oldest first: its runs' reports and questions, and the operator's replies.
+
+    Returns:
+        The messages, by id.
+    """
+    query = (
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ?", conversation.TASK, str(task_id))
+        .order_by("id")
+    )
+    return records.fetch_all(conn, records.Message, query)
 
 
 def runs_of(conn: sqlite3.Connection, task_id: int) -> list[records.TaskRun]:
@@ -141,7 +221,8 @@ def running(conn: sqlite3.Connection) -> list[records.TaskRun]:
 def stop(conn: sqlite3.Connection, task_id: int) -> Stopped:
     """Mark task `task_id` stopped, in one transaction with reading its running run (DESIGN §36).
 
-    A stopped task is never started again; one still queued is dropped. Its runs, and the task, stay to read. The tick
+    A stopped task is never started again; one still queued, new or replied to, is dropped. Its runs, and the task,
+    stay to read. The tick
     reads `queued` and inserts its run in one transaction too, so whichever commits first wins.
 
     Returns:
@@ -156,11 +237,12 @@ def stop(conn: sqlite3.Connection, task_id: int) -> Stopped:
         if task is None:
             raise Refused("unknown", f"canopy has no task:{task_id}")
         runs = runs_of(conn, task_id)
+        waiting = any(t.id == task_id for t in queued(conn))
         if task.stopped_at is None:
             sql.execute(conn, sql.update("tasks").set(stopped_at=db.now()).where("id = ?", task_id))
     return Stopped(
         already=task.stopped_at is not None,
-        dropped=task.stopped_at is None and not runs,
+        dropped=waiting,
         running=next((r for r in runs if r.status is RunStatus.RUNNING), None),
     )
 
@@ -205,6 +287,11 @@ def insert_run(
     with db.transaction(conn):
         if all(t.id != task.id for t in queued(conn)):
             return None
+        newest = (
+            sql.select("max(id)")
+            .from_("messages")
+            .where("subject_kind = ? AND subject_id = ?", conversation.TASK, str(task.id))
+        )
         run = sql.insert(
             "task_runs",
             task_id=task.id,
@@ -218,6 +305,7 @@ def insert_run(
             pool=str(pool),
             started_at=db.now(),
             log_path="",
+            message_id=sql.execute(conn, newest).fetchone()[0],
         )
         run_id = int(sql.execute(conn, run).lastrowid or 0)
         log_path = str(logs_dir / f"{run_id}.log")
@@ -232,23 +320,51 @@ def set_git_link(conn: sqlite3.Connection, run_id: int, link: bytes | None) -> N
 
 def close_run(
     conn: sqlite3.Connection,
+    config: Config,
     run_id: int,
     status: RunStatus,
     result_json: str,
     *,
     head: str | None,
 ) -> bool:
-    """Close task run `run_id` as `status`, with its result and the head its branch was at on origin.
+    """Close task run `run_id` as `status`, with its result and the head its branch was at on origin (DESIGN §36).
+
+    In the same transaction it records the run's messages about its task, its report and a `blocked` run's question,
+    each naming the run, and its `task.ended` event when a sink takes `tasks`.
 
     Returns:
-        True if this call closed it; False when it was already closed, by reconcile or a stop.
+        True if this call closed it; False when it was already closed, by reconcile or a stop: nothing is recorded.
+
+    Raises:
+        DatabaseError: the run's row is gone, which nothing but a broken journal does.
     """
     close = (
         sql.update("task_runs")
         .set(ended_at=db.now(), status=str(status), result_json=result_json, head=head)
         .where("id = ? AND status = 'running'", run_id)
     )
-    return sql.execute(conn, close).rowcount == 1
+    with db.transaction(conn):
+        if sql.execute(conn, close).rowcount != 1:
+            return False
+        run = get_run(conn, run_id)
+        if run is None:
+            raise sqlite3.DatabaseError(f"task run {run_id} vanished as it closed")
+        last: int | None = None
+        for kind, body in conversation.run_messages(status, result_json):
+            last = db.insert_message(
+                conn,
+                conversation.TASK,
+                str(run.task_id),
+                source="worker",
+                kind=kind,
+                channel="run",
+                body=body,
+                task_run_id=run_id,
+            )
+        event = outbox.task_ended(config, run, status, result_json, head=head, message=last)
+        if event is not None:
+            db.record_event(conn, event)
+    return True
 
 
 def _repository(workspace: Workspace, repo: str | None) -> str:

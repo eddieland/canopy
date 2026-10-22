@@ -31,10 +31,12 @@ TIMEOUT_SECONDS = 60
 # A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
 # `loop.failing` once.
 FAILING_AFTER = 3
-_POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS)
+_POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS, outbox.TASKS)
 # Events a batching sink sends at once, with whatever it held: the loop or a sink failing, or a plan waiting on the
 # operator, which holds its ticket until they answer (DESIGN §25).
 _URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+# The events whose `blocked` run asked the operator a question: a ticket's run's, and a one-off task's (DESIGN §36).
+_ASKING_KINDS = frozenset({"run.ended", "task.ended"})
 
 
 @dataclass(frozen=True)
@@ -288,7 +290,7 @@ def _urgent(change: journal.Diff | None, events: Iterable[message.Event]) -> boo
     if change is not None and change.added:
         return True
     return any(
-        e.kind in _URGENT_KINDS or (e.kind == "run.ended" and e.fields.get("status") == "blocked") for e in events
+        e.kind in _URGENT_KINDS or (e.kind in _ASKING_KINDS and e.fields.get("status") == "blocked") for e in events
     )
 
 

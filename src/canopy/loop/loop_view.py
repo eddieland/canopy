@@ -35,7 +35,7 @@ PAUSE_KEY = "p"
 _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
     "starts": "a ticket started or stopped; next tick in ",
-    "task": "a task submitted or stopped; next tick in ",
+    "task": "a task submitted, replied to, or stopped; next tick in ",
     "grant": "a grant; next tick in ",
     "notice": "a notice to workers set or cleared; next tick in ",
     "run": "a run ended; next tick in ",
