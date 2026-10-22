@@ -81,7 +81,7 @@ _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
-_FORMAT = 6
+_FORMAT = 7
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
 # The most characters of a title an index shows.
@@ -243,9 +243,9 @@ def export(
 def name(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> str:
     """A plan's file name in an export: its run, its status in capitals, `feedback` for a feedback plan, and a slug.
 
-    The title is the plan's first `# ` heading, less the `Plan: KEY` the planner opens it with. A plan is model text
-    (TRUST_MODEL T1), so its slug holds only lowercase letters, digits, and single hyphens, and is cut short; a plan
-    with no title past that prefix has none in its name.
+    The title is the plan's first `# ` heading, less the `Plan: KEY` the planner opens it with, or the line under a
+    heading of nothing else (`_title`). A plan is model text (TRUST_MODEL T1), so its slug holds only lowercase letters,
+    digits, and single hyphens, and is cut short; a plan with no title past that prefix has none in its name.
 
     Returns:
         The name, as `412-APPROVED-export-reports-as-csv.md`.
@@ -801,13 +801,23 @@ def _earlier_prompt_name(run_id: int) -> str:
 def _title(text: str, key: str) -> str:
     """The plan's title: its first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
 
+    A heading of the key alone takes its title from the first line of text below it, unless that is a heading: a
+    planner can read the outline's "then the ticket's title" as the line after.
+
     Returns:
         The title, or "" when the plan has no such heading or nothing past its prefix.
     """
-    heading = next((line[2:] for line in text.splitlines() if line.startswith("# ")), "")
-    title = _HEADING_PREFIX.sub("", heading.strip().rstrip("#").strip(), count=1)
+    lines = text.splitlines()
+    at = next((i for i, line in enumerate(lines) if line.startswith("# ")), None)
+    if at is None:
+        return ""
+    title = _HEADING_PREFIX.sub("", lines[at][2:].strip().rstrip("#").strip(), count=1)
     # The key alone, never the start of a longer one: `PROJ-1` stays in `PROJ-12`.
-    return re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+    rest = re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+    if rest == title or any(c.isalnum() for c in rest):
+        return rest
+    below = next((line.strip() for line in lines[at + 1 :] if line.strip()), "")
+    return "" if below.startswith("#") else below
 
 
 def _slug(title: str) -> str:

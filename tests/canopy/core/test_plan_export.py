@@ -217,6 +217,10 @@ def test_a_name_that_is_the_plans_own_file_is_not_removed(
         ("# Plan the migration", "-plan-the-migration"),
         (f"# Plan: {KEY}2 Next", f"-{KEY.lower()}2-next"),
         (f"# Plan: {KEY}", ""),
+        # A title on the line under a heading of the key alone, as a planner may write the outline.
+        (f"# Plan: {KEY}\n\nExport reports as CSV", "-export-reports-as-csv"),
+        (f"# Feedback plan: {KEY} -\n**Export reports**", "-export-reports"),
+        ("# Plan\n\nAdd the endpoint.", ""),
         ("# 日本語", ""),
         ("## Goal", ""),
         ("# " + "word " * 30, "-" + "-".join(["word"] * 12)),
