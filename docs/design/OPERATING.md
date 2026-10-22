@@ -120,10 +120,11 @@ Rules:
   workspace sync` warns about push URLs over SSH; nothing else checks the remote.
 
 **Command templates.** A template is split into words with `shlex`, and `{prompt}`, `{definitions_dir}`, and
-`{title}` are replaced inside each word. No shell runs, so the prompt is always exactly one argument (D023). Every
-agent template contains `{prompt}` exactly once and `{definitions_dir}` (§13) at least once. canopy cannot tell where
-the runtime reads it: a custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it, or
-OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
+`{title}` are replaced inside each word. No shell runs, so the prompt is always exactly one argument, or, in a
+template that places no `{prompt}`, as the defaults do, the command's stdin, where no argument limit applies (D023).
+Every agent template contains `{prompt}` at most once and `{definitions_dir}` (§13) at least once. canopy cannot tell
+where the runtime reads it: a custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it,
+or OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
 `{prompt}`. `runtime.worker_cmd_prefix` and `worker_cmd_suffix` wrap every command a worker run starts (worker, private
 worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; they may not hold `{prompt}`. The
 overseer's, a chore's, and a review's templates are not wrapped: each takes a different sandbox role, or none.

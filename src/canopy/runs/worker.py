@@ -438,7 +438,8 @@ def _run_agent(
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     command = ctx.config.runtime.worker_template(template)
-    argv = render_command(command, prompt, snapshot, title)
+    rendered = render_command(command, prompt, snapshot, title)
+    argv = rendered.argv
     if desked:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
         for name, text in (desk_files or {}).items():
@@ -467,6 +468,7 @@ def _run_agent(
             argv,
             cwd=cwd,
             env=env,
+            stdin=rendered.stdin,
             timeout=timeout_minutes * 60,
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
             on_line=_Progress(ctx, run_id, out, log),

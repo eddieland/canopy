@@ -25,10 +25,8 @@ from canopy.infra import lock, logs, procs
 from canopy.runtime import stdout
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from canopy.core import records
-    from canopy.core.config import Chore
+    from canopy.core.config import Chore, Rendered
     from canopy.core.context import Context
 
 
@@ -57,7 +55,7 @@ class Prepared:
     body: str
     context: str | None
     cwd: Path
-    argv: Sequence[str]
+    command: Rendered
 
 
 def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
@@ -87,10 +85,10 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         held=notice.for_prompt(ctx.conn),
     )
     try:
-        cwd, argv, _ = execute.prepare(ctx, name, chore, prompt)
+        cwd, command, _ = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
         raise TrialError(str(e)) from e
-    return Prepared(name, chore, body, context, cwd, argv)
+    return Prepared(name, chore, body, context, cwd, command)
 
 
 def record(ctx: Context, prepared: Prepared) -> Recorded:
@@ -195,8 +193,9 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         The harness's outcome, `timeout` or `unknown` when there is no valid result, with what the agent printed.
     """
     done = ctx.runner.run(
-        prepared.argv,
+        prepared.command.argv,
         cwd=prepared.cwd,
+        stdin=prepared.command.stdin,
         # What its agent sees as CANOPY_RUN_ID, so the operator's commands refuse inside it (DESIGN §22), and names the
         # chore, whose history it reads with no run row to find it from. A recorded try's is `chore-<run id>`.
         env=history.run_env(ctx, f"{history.TRY_PREFIX}{prepared.name}"),

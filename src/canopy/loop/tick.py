@@ -570,7 +570,7 @@ def _run_overseer(
     dry_run: bool,
     log: logs.TickAdapter,
 ) -> tuple[str | None, Usage | None]:
-    """Run `overseer_cmd` with the state block `block` as its `{prompt}`, and `title` as its `{title}`.
+    """Run `overseer_cmd` with the state block `block` as its prompt, and `title` as its `{title}`.
 
     Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
     block to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22). What its events report
@@ -591,7 +591,8 @@ def _run_overseer(
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e), None
-    argv = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
+    command = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
+    argv = command.argv
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     out_dir = ctx.state_dir / "ticks"
@@ -603,7 +604,14 @@ def _run_overseer(
         env = {TICK_ID_ENV: str(tick_id)}
         try:
             with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env, log=log):
-                result = ctx.runner.run(argv, cwd=ctx.repo_root, env=env, timeout=timeout_minutes * 60, on_line=watch)
+                result = ctx.runner.run(
+                    argv,
+                    cwd=ctx.repo_root,
+                    env=env,
+                    stdin=command.stdin,
+                    timeout=timeout_minutes * 60,
+                    on_line=watch,
+                )
         except procs.ProcError as e:
             # It printed nothing, so it keeps no output, as a tick whose overseer never ran keeps none.
             out_path.unlink(missing_ok=True)

@@ -48,6 +48,8 @@ class Command:
     keys: Sequence[Key]
     #: Its words, as canopy runs them with no shell, `PROMPT` in the prompt's place.
     argv: Sequence[str]
+    #: `PROMPT` when canopy writes the prompt on its stdin; None when a word of `argv` carries it, or it takes none.
+    stdin: str | None = None
 
 
 def commands(cfg: Config, layer_of: Mapping[str, Layer], definitions_dir: Path) -> list[Command]:
@@ -68,37 +70,32 @@ def commands(cfg: Config, layer_of: Mapping[str, Layer], definitions_dir: Path) 
         suffix = ["runtime.worker_cmd_suffix"] if runtime.worker_cmd_suffix else []
         return keys(*prefix, name, *suffix)
 
-    def render(template: str, title: str) -> list[str]:
-        return config.render_command(template, PROMPT, definitions_dir, title)
+    def render(role: str, made_of: Sequence[Key], template: str, title: str) -> Command:
+        rendered = config.render_command(template, PROMPT, definitions_dir, title)
+        return Command(role, made_of, rendered.argv, rendered.stdin)
 
     found = [
-        Command(
-            "overseer",
-            keys("runtime.overseer_cmd"),
-            render(runtime.overseer_cmd, "tick 1 · by hand · nothing open"),
-        ),
-        Command(
+        render("overseer", keys("runtime.overseer_cmd"), runtime.overseer_cmd, "tick 1 · by hand · nothing open"),
+        render(
             "worker",
             wrapped("runtime.worker_cmd"),
-            render(runtime.worker_template(runtime.worker_cmd), _title(RunKind.IMPLEMENT)),
+            runtime.worker_template(runtime.worker_cmd),
+            _title(RunKind.IMPLEMENT),
         ),
-        Command(
+        render(
             "private worker",
             wrapped("runtime.private_worker_cmd"),
-            render(runtime.worker_template(runtime.private_worker_cmd), _title(RunKind.IMPLEMENT)),
+            runtime.worker_template(runtime.private_worker_cmd),
+            _title(RunKind.IMPLEMENT),
         ),
-        Command(
-            "planner",
-            wrapped("runtime.plan_cmd"),
-            render(runtime.worker_template(runtime.plan_cmd), _title(RunKind.PLAN)),
-        ),
-        Command("reviewer", keys("runtime.review_cmd"), render(runtime.review_cmd, f"review {EXAMPLE_PR}")),
-        Command("chore", keys("runtime.chore_cmd"), render(runtime.chore_cmd, "chore:<name>")),
+        render("planner", wrapped("runtime.plan_cmd"), runtime.worker_template(runtime.plan_cmd), _title(RunKind.PLAN)),
+        render("reviewer", keys("runtime.review_cmd"), runtime.review_cmd, f"review {EXAMPLE_PR}"),
+        render("chore", keys("runtime.chore_cmd"), runtime.chore_cmd, "chore:<name>"),
     ]
     # A chore's table is one key, from the last file that has the whole `chores` section.
     chores_from = layer_of.get("chores")
     found.extend(
-        Command(f"chore {name}", [Key(f"chores.{name}.cmd", chores_from)], render(chore.cmd, f"chore:{name}"))
+        render(f"chore {name}", [Key(f"chores.{name}.cmd", chores_from)], chore.cmd, f"chore:{name}")
         for name, chore in sorted(cfg.chores.items())
         if chore.cmd is not None
     )
