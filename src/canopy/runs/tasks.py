@@ -169,6 +169,8 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         # Earlier runs' reports and questions, data, and the operator's replies, instructions, up to the newest message
         # when the run started (DESIGN §36). None on a task's first run, which leaves the section out.
         "CONVERSATION": conversation.prompt_task_conversation(ctx.conn, task.id, run.message_id),
+        "REPORT": tasks.REPORT,
+        "TICKETS": _tickets(ctx, task, run.branch),
     }
     log_path = Path(run.log_path)
     try:
@@ -183,6 +185,26 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         raise _NotStarted(str(e)) from e
     db.claim_run(ctx.conn, "task_runs", run_id, pid)
     return pid
+
+
+def _tickets(ctx: Context, task: records.Task, branch: str) -> str:
+    """Return a task prompt's `{{TICKETS}}`: whether its worker may file tickets, only in its project, and how (§36).
+
+    Returns:
+        The instructions and the bound; or why it files none.
+    """
+    limit = ctx.config.policy.max_follow_ups
+    if task.project is None:
+        return prompts.no_task_tickets("the operator submitted this task with no tracker project for its tickets")
+    if limit == 0:
+        return prompts.no_task_tickets("the operator set policy.max_follow_ups to 0")
+    return prompts.task_tickets(
+        task.project,
+        limit,
+        branch=branch,
+        needs_human=ctx.config.tracker.needs_human_label,
+        labels=ctx.config.tracker.labels,
+    )
 
 
 def _give_back(pool: pools.Pool, lease: pools.Lease, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:

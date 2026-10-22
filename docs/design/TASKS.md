@@ -6,8 +6,7 @@ reads the journal](READING_THE_JOURNAL.md). Next: [The harness decides](HARNESS_
 
 ## 36. One-off tasks
 
-Built in part (ROADMAP M61): submitting, starting, the run, stopping, and the conversation. The report and tickets
-are designed, not built.
+Built, and checked against the fakes; its live check is ROADMAP M61's.
 
 A **task** is one-off work the operator submits in canopy, in their own words, about no ticket: exploring a question in
 the code, trying an approach, or planning the tickets that should follow. A worker runs it once in a worktree of one
@@ -53,9 +52,10 @@ after later replies move the branch.
 - It may file tickets only when its submission names a tracker project, and only in that project, with no queue label,
   as follow-ups are filed (§18), at most `policy.max_follow_ups` per run. They authorize nothing; canopy records their
   keys against the task, checking only their text (D003), and the operator labels or starts the ones worth working. A
-  reported key outside the named project, as far as its text shows, or any key from a task that names none, is not
-  recorded and raises an attention item, so a steered worker's ticket elsewhere is not silent. One it files and never
-  reports is T6's residual for follow-ups, unchanged.
+  reported key outside the named project, as far as its text shows, or past the bound, or any key from a task that
+  names none, is not recorded and raises `task_ticket_unrecorded` (§14) until the operator replies to the task or
+  stops it, so a steered worker's ticket elsewhere is not silent; the item names the task and how many, and
+  `canopy show` the keys. One it files and never reports is T6's residual for follow-ups, unchanged.
 - It may leave a report, a markdown file at the slot's root, excluded from git. canopy keeps it as it keeps a plan
   (§25): an operator-only file in the state directory, copied out before the slot is returned, never read through a
   link, never sent anywhere. The next run gets a copy, as a worker gets its plan. The result line's summary stays short;
@@ -75,14 +75,14 @@ question, which the operator reads in canopy. Stopping a task ends its run as `c
 what was queued; it is never deleted, so its runs, report, and spend stay to read.
 
 Each run that ends is a `task.ended` event (§20) with its summary, its question when `blocked`, its branch, pushed head
-commit, and PR, never its report. Its group, `tasks`, reaches only the sinks the operator lists it for, as `runs` does:
-a task's work is private, and a sink's audience may not be.
+commit, PR, and the tickets recorded from it, never its report. Its group, `tasks`, reaches only the sinks the operator
+lists it for, as `runs` does: a task's work is private, and a sink's audience may not be.
 
 ### Trust model changes
 
-TRUST_MODEL holds them, but for what tickets add, which waits for them: T1 (a task's text and replies
-are the operator's, written only through the operator's channels; its reports are data; its branch is never pushed
-with force, whatever `trust.rebase` says), T3
+TRUST_MODEL holds them: T1 (a task's text and replies are the operator's, written only through the operator's
+channels; its summaries, questions, and reports are data; its branch is never pushed with force, whatever
+`trust.rebase` says), T3
 (`capacity.max_tasks`, one run per task, one run per operator word), and T6 (a task's worker is the private worker,
 which may also open a PR for its own branch and file unlabeled tickets in the project its submission names; the PR's
 draft state and the project are the prompt's rules, a ticket reported outside the project is caught after the run, and,

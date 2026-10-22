@@ -8,7 +8,7 @@ event is recorded. Text fields are cut to the limits DESIGN §20 lists and kept 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import contract, review_result
@@ -131,6 +131,8 @@ class TaskEnded(TypedDict):
     pr: str | None
     #: The run's last message: its question when `blocked`, else its report, so a channel can say what a reply answers.
     message: int | None
+    #: The tickets the run filed that canopy recorded against the task, at most `MAX_FOLLOW_UPS`, in its result's order.
+    tickets: list[str]
 
 
 class LoopFailing(TypedDict):
@@ -349,8 +351,11 @@ def task_ended(
     *,
     head: str | None,
     message: int | None,
+    tickets: Sequence[str] = (),
 ) -> Event | None:
     """Return the `task.ended` event for task run `run`, closing as `status` with `head` on origin, or None.
+
+    `tickets` are the keys the run's close recorded against the task (DESIGN §36).
 
     It is None unless a sink takes `tasks`: a task's work is private, and a sink's audience may not be (DESIGN §36).
     """
@@ -372,6 +377,7 @@ def task_ended(
         "head": head,
         "pr": cut(urls[0], DETAIL_LIMIT) if urls else None,
         "message": message,
+        "tickets": list(tickets[:MAX_FOLLOW_UPS]),
     }
     return Event(TASKS, "task.ended", fields)
 

@@ -64,4 +64,10 @@ submission; and TRUST_MODEL T1, T3, and T6. Stage 2 is built: `canopy reply task
 the branch with the conversation in its prompt, and ends the loop's wait; each run's report and question are messages
 naming it, recorded as it closes, earlier runs' too by migration; a `blocked` run raises `awaiting_reply` naming the
 task until a reply or a stop; and each run's end is a `task.ended` event in a `tasks` group no sink takes unless the
-operator lists it. Left: stage 3, the report and tickets.
+operator lists it. Stage 3 is built: `.canopy-task-report.md`, ignored by git in the slot, kept as
+`<state_dir>/tasks/<N>/<run>.md` with its hash in the journal before the slot is returned, shown by `canopy show
+task:N`, and copied into the next run's slot; the prompt letting a task with `--project` file unlabeled tickets there
+alone; the result's `created`, checked on its text and capped at `policy.max_follow_ups`, recorded in a `task_tickets`
+table and named in `task.ended`; and `task_ticket_unrecorded`, naming the task and a count, for a key outside the
+project, past the cap, or from a task with none, until the operator replies to the task or stops it. Left: the live
+Accept.

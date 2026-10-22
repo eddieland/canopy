@@ -425,16 +425,31 @@ def write(state_dir: Path, key: str, run_id: int, text: str) -> Written:
             the file's name is taken, by an earlier file or anything else, which is left as it is.
     """
     path = path_for(state_dir, key, run_id)
+    return write_new(state_dir / DIR_NAME, key, path.name, text)
+
+
+def write_new(top: Path, sub: str, name: str, text: str, *, what: str = "plan") -> Written:
+    """Write `text` to a new file `<top>/<sub>/<name>`, readable only by the operator, as a plan's file is written.
+
+    A task's report is kept the same way (DESIGN §36). `what` names the file in what it raises.
+
+    Returns:
+        The file's hash and size.
+
+    Raises:
+        PlanFileError: `top` or `<top>/<sub>` is a symlink, not a directory, or not the operator's alone; or the file's
+            name is taken, by an earlier file or anything else, which is left as it is.
+    """
     data = text.encode("utf-8")
-    plans_fd = _private_dir(None, state_dir / DIR_NAME)
+    top_fd = _private_dir(None, top, what=what)
     try:
-        ticket_fd = _private_dir(plans_fd, key)
+        sub_fd = _private_dir(top_fd, sub, what=what)
     finally:
-        os.close(plans_fd)
+        os.close(top_fd)
     try:
-        _link_new(ticket_fd, path.name, data)
+        _link_new(sub_fd, name, data, what=what)
     finally:
-        os.close(ticket_fd)
+        os.close(sub_fd)
     return Written(sha256=hashlib.sha256(data).hexdigest(), size=len(data))
 
 
@@ -720,7 +735,7 @@ def supersede(conn: sqlite3.Connection, key: str) -> int | None:
     return int(row[0]) if row is not None else None
 
 
-def _private_dir(parent_fd: int | None, path: Path | str) -> int:
+def _private_dir(parent_fd: int | None, path: Path | str, *, what: str = "plan") -> int:
     """Open the directory `path`, made operator-only if it is missing, refusing one that is not the operator's alone.
 
     With `parent_fd`, `path` is a name in that directory, so a directory swapped for a link after its parent was checked
@@ -741,11 +756,11 @@ def _private_dir(parent_fd: int | None, path: Path | str) -> int:
     st = os.fstat(fd)
     if st.st_uid != os.getuid() or st.st_mode & 0o077:
         os.close(fd)
-        raise PlanFileError(f"{path} is not private to you, so canopy writes no plan in it")
+        raise PlanFileError(f"{path} is not private to you, so canopy writes no {what} in it")
     return fd
 
 
-def _link_new(dir_fd: int, name: str, data: bytes) -> None:
+def _link_new(dir_fd: int, name: str, data: bytes, *, what: str = "plan") -> None:
     """Write `data` to a new file `name` in the directory `dir_fd`: no reader sees half of it, and nothing is replaced.
 
     Raises:
@@ -761,7 +776,7 @@ def _link_new(dir_fd: int, name: str, data: bytes) -> None:
         # A link, not a rename: a rename would replace a file already at `name`.
         os.link(temporary, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd, follow_symlinks=False)
     except FileExistsError:
-        raise PlanFileError(f"a plan named {name} is already there, so canopy leaves it as it is") from None
+        raise PlanFileError(f"a {what} named {name} is already there, so canopy leaves it as it is") from None
     finally:
         os.unlink(temporary, dir_fd=dir_fd)
 

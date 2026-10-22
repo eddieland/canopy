@@ -177,7 +177,10 @@ Controls:
   channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
   `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so are `canopy reply task:N`, which queues its next run,
   and `canopy stop task:N`. Its text, and the replies a later run takes, are the operator's instructions; what a run
-  reports, its summary and question, is data, and a later run's prompt says so. A task never reaches the overseer: a
+  reports, its summary, question, and report file, is data, and a later run's prompt says so. The report is kept as a
+  plan is (T2): copied out of the slot before it is returned, bounded and never through a link, into the
+  operator-only state directory, and only its copy in the task's next slot reaches an agent. A task never reaches the
+  overseer: a
   tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
   or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
   branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
@@ -548,14 +551,17 @@ Controls:
   with that definition's tool lists, so on the tracker only its read tools and the tools that create a ticket, and on
   GitHub the tools of its PR; a run is refused where the slot's OpenCode config names any of the tracker server's
   tools, as a private ticket's is. Its prompt says to push only its own branch, to open one PR for it, as a draft, only
-  when the task's text asks for one, and to write nothing to any ticket, existing or new. Those are the prompt's rules,
-  not guards: the PR's draft state and its existence at all are agent judgment, and the create tool the definition
-  allows is a private worker's residual below. Filing unlabeled tickets in the project the submission names is ROADMAP
-  M61's third stage. A task's PR is the operator's like any other: canopy never drives it, and reviews it only when
-  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2). A run's
-  summary, question, branch, head, and PR leave the machine only as a `task.ended` event, to a sink whose events list
-  `tasks`, which none does unless the operator adds it; its `awaiting_reply` item, on every attention sink, names the
-  task and never the question.
+  when the task's text asks for one, to write nothing to any ticket that exists, and to file tickets, unlabeled, only
+  when the submission names a tracker project, and only there. Those are the prompt's rules, not guards: the PR's draft
+  state and its existence at all are agent judgment, and the create tool the definition allows is a private worker's
+  residual below. After the run, canopy checks each key the result reports on its text alone (D003), records against
+  the task only those in the project, at most `policy.max_follow_ups`, and raises `task_ticket_unrecorded` for the
+  rest, naming the task and how many; a recorded key authorizes nothing, and names no ticket canopy works. A task's PR
+  is the operator's like any other: canopy never drives it, and reviews it only when `review.query` or a request names
+  it. Its text, summaries, reports, and pushed heads stay in the journal and the state directory (T2). A run's summary,
+  question, branch, head, PR, and recorded keys leave the machine only as a `task.ended` event, to a sink whose events
+  list `tasks`, which none does unless the operator adds it; its report never does. Its `awaiting_reply` and
+  `task_ticket_unrecorded` items, on every attention sink, name the task and never the question or the keys.
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
@@ -614,9 +620,10 @@ private ticket, whose worker writes nothing to it. Residual: a private worker ca
 careless one can put what it read, the operator's messages included, into a follow-up's title or body, which the
 tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`, also
 edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same exposure
-the public worker has had, now on private tickets too. A task's worker has the same tools, and so the same residual,
-though its prompt files nothing yet; and a steered one can open a PR that is no draft, or one the text did not ask for,
-with what it read in its body, where whoever reads the repository's PRs sees it.
+the public worker has had, now on private tickets too. A task's worker has the same tools, and so the same residual, in
+any project the token reaches, though its prompt files only in the one the submission names and canopy flags a
+reported key outside it; and a steered one can open a PR that is no draft, or one the text did not ask for, with what
+it read in its body, where whoever reads the repository's PRs sees it.
 
 ### T7. Hostile shared config
 

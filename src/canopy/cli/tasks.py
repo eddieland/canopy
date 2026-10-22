@@ -15,7 +15,7 @@ import click
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import result_of, spent
-from canopy.core import contract, conversation, tasks
+from canopy.core import contract, conversation, plans, task_tickets, tasks
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
@@ -57,7 +57,8 @@ def cmd_task_submit(click_ctx: click.Context, text: str, repo: str | None, proje
     The next tick starts it, before the overseer, in a slot of its repository, as capacity allows: at most
     capacity.max_tasks at once, within capacity.max_workers. Its worker works on the branch <branch_prefix>task/N,
     which it pushes only if it changes something; it opens a PR, as a draft, only when your text asks for one, and
-    writes nothing to any ticket. `canopy show task:N` shows how each run went.
+    writes nothing to any existing ticket. With --project it may file unlabeled tickets in that project, and none
+    elsewhere. `canopy show task:N` shows how each run went, its tickets, and its latest report.
     """
     try:
         # Before stdin is read: inside a run, it would wait on whatever the agent left open.
@@ -112,7 +113,9 @@ def standing(task: records.Task, latest: records.TaskRun | None, *, queued: bool
 
 
 def show(ctx: Context, task_id: int) -> None:
-    """Print task `task_id`: where it stands, its text, and each run, with its branch and the head it left on origin.
+    """Print task `task_id`: where it stands, its text, each run, its tickets, its conversation, and its report.
+
+    Each run is shown with its branch and the head it left on origin; the newest report as its file stands (§36).
 
     Raises:
         CliError: canopy has no such task.
@@ -135,14 +138,18 @@ def show(ctx: Context, task_id: int) -> None:
         click.echo(f"    {line}")
     click.echo(f"\nRuns ({len(runs)}):")
     for run in runs:
-        _show_run(run)
+        _show_run(ctx, run)
     if not runs:
         click.echo("  none yet: the next tick starts it" if task.stopped_at is None else "  none")
+    _show_tickets(ctx, task)
     messages = tasks.messages_of(ctx.conn, task_id)
     if messages:
         click.echo(f"\nConversation ({len(messages)}):")
     for message in messages:
         _show_message(message)
+    reported = [r for r in runs if r.report_sha256 is not None]
+    if reported:
+        _show_report(ctx, reported[-1])
     question = conversation.task_question(ctx.conn, task_id)
     if question is not None and task.stopped_at is None:
         click.echo(f"\nMessage {question.id} waits on your answer: `canopy reply task:{task_id} TEXT`.")
@@ -191,7 +198,7 @@ def stop(ctx: Context, task_id: int, *, now: bool) -> int:
     return 0
 
 
-def _show_run(run: records.TaskRun) -> None:
+def _show_run(ctx: Context, run: records.TaskRun) -> None:
     when = f"started {age(run.started_at)} ago"
     if run.ended_at:
         when = f"ended {age(run.ended_at)} ago"
@@ -204,8 +211,42 @@ def _show_run(run: records.TaskRun) -> None:
     note = one_line(str(result.get("harness") or ""))
     if note:
         click.echo(f"    harness: {note}")
+    if run.report_sha256 is not None:
+        path = tasks.report_path(ctx.state_dir, run.task_id, run.id)
+        click.echo(f"    report {path}{_report_state(run, plans.read(path))}")
     session = f"session {run.session_id}" if run.session_id else "no session reported"
     click.echo(f"    {session}, log {run.log_path}")
+
+
+def _show_tickets(ctx: Context, task: records.Task) -> None:
+    # A task with no project files none, as its header says; what a run reported anyway is in its note.
+    filed = task_tickets.of_task(ctx.conn, task.id)
+    if task.project is None and not filed:
+        return
+    click.echo(f"\nTickets ({len(filed)}), unlabeled, each worked only once you label or start it:")
+    for ticket in filed:
+        click.echo(f"  {ticket.key}  reported by run {ticket.task_run_id}")
+    if not filed:
+        click.echo("  none")
+
+
+def _show_report(ctx: Context, run: records.TaskRun) -> None:
+    path = tasks.report_path(ctx.state_dir, run.task_id, run.id)
+    reading = plans.read(path)
+    click.echo(f"\nReport, as run {run.id} left it: {path}{_report_state(run, reading)}")
+    if reading.text is not None:
+        click.echo("")
+        for line in printable(reading.text).splitlines():
+            click.echo(f"    {line}")
+
+
+def _report_state(run: records.TaskRun, reading: plans.Reading) -> str:
+    # How a kept report's file stands: as its run left it, edited since, or no longer a report, and why.
+    if reading.problem is not None:
+        return f": its file is {reading.problem}"
+    if reading.sha256 != run.report_sha256:
+        return ": edited since its run left it"
+    return ""
 
 
 def _show_message(message: records.Message) -> None:

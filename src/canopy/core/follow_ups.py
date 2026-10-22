@@ -132,7 +132,7 @@ def check(
     recorded: dict[str, str | None] = {}
     refused: list[Refusal] = []
     for key, repo in entries.items():
-        if not _valid_key(key):
+        if not valid_key(key):
             refused.append(Refusal(None, "not a ticket key"))
             continue
         # Past the bound, an entry is refused unread: a steered worker's long list costs no query each.
@@ -245,6 +245,20 @@ def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None
     return records.fetch_one(conn, records.FollowUp, sql.select("*").from_("follow_ups").where("key = ?", key))
 
 
+def valid_key(key: object) -> bool:
+    """Whether `key`, as a result line gave it, is a ticket key canopy can record: its text alone (D003).
+
+    Returns:
+        True for a string of at most `conversation.MAX_KEY` characters that `conversation.KEY_RE` matches.
+    """
+    return isinstance(key, str) and len(key) <= conversation.MAX_KEY and conversation.KEY_RE.fullmatch(key) is not None
+
+
+def project_of(key: str) -> str:
+    """Return `key`'s project, as far as its shape shows it: what comes before its last `-`, or "" when it has none."""
+    return key.rpartition("-")[0]
+
+
 def _run_wide(conn: sqlite3.Connection, parent: str, *, limit: int) -> str:
     # Why a run records no follow-up at all, or "" when it may record some.
     if get_follow_up(conn, parent) is not None:
@@ -258,22 +272,13 @@ def _check_entry(conn: sqlite3.Connection, key: str, repo: object, *, parent: st
     # Why one entry cannot be recorded, or "" when it can, as far as the entry alone shows it.
     if key == parent:
         return "the run's own ticket"
-    if _prefix(key) and _prefix(parent) and _prefix(key) != _prefix(parent):
+    if project_of(key) and project_of(parent) and project_of(key) != project_of(parent):
         return f"not in {parent}'s project"
     if repo is not None and (not isinstance(repo, str) or repo not in repos):
         return "its repository is not one in this workspace"
     if known_ticket(conn, key):
         return "not a new ticket: the journal already knows it"
     return ""
-
-
-def _valid_key(key: object) -> bool:
-    return isinstance(key, str) and len(key) <= conversation.MAX_KEY and conversation.KEY_RE.fullmatch(key) is not None
-
-
-def _prefix(key: str) -> str:
-    # A key's project, as far as its shape shows it: what comes before its last `-`, or "" when it has none.
-    return key.rpartition("-")[0]
 
 
 def _note_late(conn: sqlite3.Connection, run_id: int, late: Iterable[str]) -> None:
@@ -301,7 +306,7 @@ def _said(stored: Mapping[str, object]) -> str:
     # What one run's stored refusals name: its valid keys, then a count of the rest. Untrusted, so read with care.
     keys = stored.get("keys")
     others = stored.get("others")
-    named = [str(k) for k in cast("list[object]", keys) if _valid_key(k)] if isinstance(keys, list) else []
+    named = [str(k) for k in cast("list[object]", keys) if valid_key(k)] if isinstance(keys, list) else []
     count = others if isinstance(others, int) and others > 0 else 0
     parts = [*named]
     if count:

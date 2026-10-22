@@ -326,6 +326,23 @@ class TaskRun(Row):
     #: The newest message about its task when it started: its prompt carries the conversation up to it, and a reply
     #: past it queues the next run. None when the task had none.
     message_id: int | None
+    #: The SHA-256, hex, of the report it left, as `_task` kept it in the state directory; None when it left none.
+    report_sha256: str | None
+
+
+@dataclass(frozen=True)
+class TaskTicket(Row):
+    """A ticket a task's run reported filing in the task's project, checked on its text alone (DESIGN §36, D003)."""
+
+    TABLE: ClassVar[str] = "task_tickets"
+
+    id: int
+    task_id: int
+    #: The run whose result reported it.
+    task_run_id: int
+    #: The ticket's key, as the result spelled it: the tracker's, which canopy works only once it is authorized.
+    key: str
+    at: str
 
 
 @dataclass(frozen=True)

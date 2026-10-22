@@ -6,20 +6,36 @@ with force whatever `trust.rebase` says (`unpushed` when it cannot), records the
 tidies and returns the slot. The slot is returned on every exit path this process can see; a run whose `_task` died is
 closed by reconcile, and one the operator stops with `--now` by `canopy stop` (`end`).
 
-The run writes nothing about any ticket: its row, its log, and its result name the task alone.
+What the run leaves besides its branch: its report, `.canopy-task-report.md` at the slot's root, which git there
+ignores, is kept in the state directory before the slot is returned, and the next run starts with a copy of the
+latest; and the tickets its result's `created` names are checked on their text and recorded against the task
+(`task_tickets`). The run writes nothing about any ticket: its row, its log, and its result name the task alone.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
-from canopy.core import contract, conversation, db, definitions, hostgit, pools, progress, run_models, tasks
+from canopy.core import (
+    contract,
+    conversation,
+    db,
+    definitions,
+    follow_ups,
+    hostgit,
+    plans,
+    pools,
+    progress,
+    run_models,
+    task_tickets,
+    tasks,
+)
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
@@ -60,6 +76,7 @@ class TaskResult(BaseModel):
     branch: Text | None = None
     #: The PR it opened, at most one by its prompt; shown when it is a plain URL.
     prs: Annotated[list[Text], Field(max_length=MAX_PRS)] = []
+    # `created` is read apart, by `follow_ups.parse`, so a list of any shape refuses its entries, never the result.
 
 
 @dataclass(frozen=True)
@@ -70,12 +87,19 @@ class Outcome:
     result: TaskResult | None
     note: str = ""
     head: str | None = None
+    #: Its result's `created`, checked: the keys its close records against the task, and the entries refused.
+    tickets: task_tickets.Checked = field(default_factory=task_tickets.Checked)
 
     def result_json(self) -> str:
-        """Return what `task_runs.result_json` stores: the validated result and the harness's note, never output."""
+        """Return what `task_runs.result_json` stores: the validated result, the harness's note, and the refusals.
+
+        Returns:
+            The JSON, never the worker's output.
+        """
         data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
+        data.update(self.tickets.stored())
         return json.dumps(data)
 
 
@@ -117,9 +141,22 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             # From here on a signal is ignored: returning the slot and closing the row must not be interrupted.
             stop.armed = False
+            # Before the slot goes back, which removes the report from it (DESIGN §36).
+            kept = keep_report(ctx, run, log)
+            if kept:
+                outcome = replace(outcome, note="; ".join(n for n in (outcome.note, kept) if n))
             release(ctx, run, link, log)
             stored = outcome.result_json()
-            if not tasks.close_run(ctx.conn, ctx.config, run_id, outcome.status, stored, head=outcome.head):
+            closed = tasks.close_run(
+                ctx.conn,
+                ctx.config,
+                run_id,
+                outcome.status,
+                stored,
+                head=outcome.head,
+                tickets=outcome.tickets.recorded,
+            )
+            if not closed:
                 log.warning("task run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("task run finished", extra={**fields, "status": outcome.status, "head": outcome.head})
@@ -144,6 +181,8 @@ def end(ctx: Context, run: records.TaskRun, status: RunStatus, note: str, log: l
         # Its own `_task` closed it first, and returned its slot.
         return set()
     procs.drop_lifelock(Path(run.log_path))
+    # A report the worker wrote is kept however its run ended; why one was not is in the log alone.
+    keep_report(ctx, run, log)
     release(ctx, run, run.git_link, log)
     log.warning("task run closed without its `_task`", extra={**fields, "status": status, "note": note})
     return {run.lease_id}
@@ -165,13 +204,46 @@ def stop_now(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> bool:
     return bool(end(ctx, current, RunStatus.STOPPED, STOP_NOTE, log))
 
 
-def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.TickAdapter) -> None:
-    """Tidy the run's slot as a worker run's is (DESIGN §8), return it, and remove the run's object directory.
+def keep_report(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> str:
+    """Keep the report the run's worker left at its slot's root, `<state_dir>/tasks/<task>/<run>.md` (DESIGN §36).
 
-    A slot that could not be tidied is not returned, and the object directory is kept, so its objects can be read.
+    The report is read bounded and never through a link, as a plan is (§25), and its hash recorded on the run. It is
+    kept as the worker left it, also when that is the copy it started with. Never raises: the slot is returned after.
+
+    Returns:
+        A harness note when there was a file that could not be kept, else "": none was left, or it was kept.
+    """
+    reading = plans.read(Path(run.slot_path) / tasks.REPORT)
+    fields = {"task_run_id": run.id, "task": run.task_id}
+    if reading.problem in {"missing", "empty"}:
+        return ""
+    if reading.text is None:
+        log.warning("task's report not kept", extra={**fields, "problem": reading.problem})
+        return f"its {tasks.REPORT} is {reading.problem}, so it was not kept"
+    try:
+        written = tasks.keep_report(ctx.state_dir, run.task_id, run.id, reading.text)
+    except (plans.PlanFileError, OSError) as e:
+        log.error("task's report not kept", extra={**fields, "error": str(e)})  # noqa: TRY400  (no traceback)
+        return f"its {tasks.REPORT} was not kept: {e}"
+    tasks.set_report(ctx.conn, run.id, written.sha256)
+    log.info("task's report kept", extra={**fields, "size": written.size})
+    return ""
+
+
+def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.TickAdapter) -> None:
+    """Remove the report from the run's slot, tidy it as a worker run's is (DESIGN §8), and return it.
+
+    The run's object directory is removed too. A slot that could not be tidied is not returned, and the object
+    directory is kept, so its objects can be read.
     """
     fields = {"task_run_id": run.id, "slot": run.slot_path, "lease_id": run.lease_id, "repo": run.repo}
     slot = Path(run.slot_path)
+    try:
+        # Never followed: a link in its place is removed, not what it names.
+        (slot / tasks.REPORT).unlink(missing_ok=True)
+    except OSError as e:
+        # A directory a worker made in its place: it is no report canopy wrote, and the next copy refuses it.
+        log.warning("task's report not removed from its slot", extra={**fields, "error": str(e)})
     objects = starts.objects_dir(Path(run.log_path))
     if not tidy.tidy(ctx.runner, slot, link=link, base=run.base_branch, objects=objects, log=log, fields=fields):
         return
@@ -210,6 +282,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     slot = Path(run.slot_path)
     git = checkpoint.Git(ctx.runner, slot, run.repo)
     start = checkpoint.check_out(git, run.base_branch, run.branch)
+    _place_report(ctx, git, run, log)
     done, text = _run_agent(ctx, run, task, out, log)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(TaskResult, text)
@@ -219,10 +292,18 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
     else:
         status, note = RunStatus(parsed.status), ""
+    # Each entry checked alone, on its text (D003), whatever the rest of the result says.
+    tickets = task_tickets.check(
+        follow_ups.parse(text),
+        project=task.project,
+        limit=ctx.config.policy.max_follow_ups,
+    )
+    note = "; ".join(n for n in (note, tickets.note()) if n)
     rewritten = _rewritten(slot, link)
     if rewritten is not None:
         # The slot's git directory may be one the worker made: canopy runs no git in it.
-        return Outcome(RunStatus.CRASHED, parsed, f"the worker rewrote {rewritten}; nothing was checked or pushed")
+        crashed = f"the worker rewrote {rewritten}; nothing was checked or pushed"
+        return Outcome(RunStatus.CRASHED, parsed, "; ".join(n for n in (crashed, tickets.note()) if n), tickets=tickets)
     objects = starts.objects_dir(Path(run.log_path))
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -240,7 +321,25 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         # Under `trust.rebase` the private worker's definition allows a push with a lease; a task's prompt forbids it.
         log.warning("task's branch rewritten on origin", extra={"task_run_id": run.id, "before": start.pushed})
         note = "; ".join(n for n in (note, forced) if n)
-    return Outcome(status, parsed, note, head=head)
+    return Outcome(status, parsed, note, head=head, tickets=tickets)
+
+
+def _place_report(ctx: Context, git: checkpoint.Git, run: records.TaskRun, log: logs.TickAdapter) -> None:
+    """Have git ignore the slot's report, and put a copy of the task's latest report there, if it has one (§36).
+
+    Raises:
+        SetupError: the exclude file or the copy could not be written.
+    """
+    checkpoint.ignore(git, tasks.REPORT)
+    latest = tasks.latest_report(ctx.conn, ctx.state_dir, run.task_id)
+    if latest is None:
+        return
+    earlier, text = latest
+    try:
+        logs.write_private(Path(run.slot_path) / tasks.REPORT, text)
+    except OSError as e:
+        raise SetupError(f"{git.where}could not write the copy of the task's report: {e}") from e
+    log.info("task's latest report copied in", extra={"task_run_id": run.id, "from_run": earlier.id})
 
 
 def _forced(git: checkpoint.Git, branch: str, start: checkpoint.Start, head: str | None) -> str:
