@@ -26,7 +26,7 @@ import re
 import shlex
 import stat
 import tomllib
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -232,20 +232,20 @@ def _reviewer(value: str) -> str:
 
 
 def command_words(template: str) -> list[str]:
-    """Split a command template into words, as `render_command` does. It must mention `{prompt}` exactly once.
+    """Split a command template into words, as `render_command` does. It may mention `{prompt}` at most once.
 
     Returns:
         The template's words, its placeholders not yet replaced.
 
     Raises:
-        ValueError: The template is empty, has an unclosed quote, or does not contain `{prompt}` exactly once.
+        ValueError: The template is empty, has an unclosed quote, or contains `{prompt}` more than once.
     """
     words = shlex.split(template)
     if not words:
         raise ValueError("must not be empty")
-    # Exactly once: the prompt must land in one argument, not be copied into several (D023).
-    if sum(w.count("{prompt}") for w in words) != 1:
-        raise ValueError("must contain {prompt} exactly once")
+    # At most once: the prompt must land in one argument, or on stdin, not be copied into several (D023).
+    if sum(w.count("{prompt}") for w in words) > 1:
+        raise ValueError("must contain {prompt} at most once; without it, the prompt arrives on stdin")
     return words
 
 
@@ -628,7 +628,7 @@ class Pools(Section):
 
 
 def _default_cmd(agent: str) -> str:
-    return invocation.default_template(agent, definitions_dir=DEFINITIONS_DIR, title=TITLE, prompt=PROMPT)
+    return invocation.default_template(agent, definitions_dir=DEFINITIONS_DIR, title=TITLE)
 
 
 class Runtime(Section):
@@ -1527,16 +1527,29 @@ def _value(cfg: Config, name: str) -> object:
     return getattr(values, key) if key else values
 
 
-def render_command(template: str, prompt: str, definitions_dir: Path, title: str) -> list[str]:
-    """Turn a command template into argv. No shell runs (D023).
+@dataclass(frozen=True)
+class Rendered:
+    """A command template rendered for one run: what to start, and what to write on its stdin."""
+
+    #: The argv to run, with every placeholder replaced.
+    argv: Sequence[str]
+    #: The prompt, when the template places no `{prompt}`; None when it is in `argv`, and stdin is `/dev/null`.
+    stdin: str | None
+
+
+def render_command(template: str, prompt: str, definitions_dir: Path, title: str) -> Rendered:
+    """Turn a command template into argv, and the prompt into an argument or stdin. No shell runs (D023).
 
     The template is split with shell word rules, then `{prompt}`, `{definitions_dir}`, and `{title}` are replaced inside
-    each word, in one pass, so no value is searched for another placeholder. The prompt therefore always lands in
-    exactly one argument, whatever it contains. Every title starts with a letter or digit, so even as a word of its own
-    it is never read as an option.
+    each word, in one pass, so no value is searched for another placeholder. The prompt therefore lands in exactly one
+    argument, whatever it contains, or, when the template places none, on stdin, where no argument limit applies
+    (Linux's is 128 KiB). Every title starts with a letter or digit, so even as a word of its own it is never read as
+    an option.
 
     Returns:
-        The argv to run, with every placeholder replaced.
+        The argv to run, with every placeholder replaced, and the prompt as stdin when no argument carries it.
     """
+    words = command_words(template)
     values = {PROMPT: prompt, DEFINITIONS_DIR: str(definitions_dir), TITLE: title}
-    return [_PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], w) for w in command_words(template)]
+    argv = [_PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], w) for w in words]
+    return Rendered(argv, None if any(PROMPT in w for w in words) else prompt)

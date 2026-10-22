@@ -9,6 +9,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -460,6 +461,39 @@ def test_missing_overseer_command(scenario: Scenario) -> None:
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == "overseer_failed"
     assert "command not found" in failed.tick.summary
+
+
+@contextmanager
+def block_padded_past_one_argument() -> Iterator[None]:
+    """Have each tick's state block run past Linux's 128 KiB for one argument, as many tickets' observations do."""
+    render = tick._render  # noqa: SLF001
+
+    def padded(*args: Any, **kwargs: Any) -> tuple[str, duties.Duties, str]:  # noqa: ANN401
+        block, owed, title = render(*args, **kwargs)
+        return block + "x" * 200_000, owed, title
+
+    with mock.patch.object(tick, "_render", autospec=True, side_effect=padded):
+        yield
+
+
+def test_an_overseer_template_that_places_no_prompt_gets_the_block_on_stdin(scenario: Scenario) -> None:
+    scenario.configures(
+        runtime={"overseer_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer"},
+    )
+    with block_padded_past_one_argument():
+        scenario.tick(dry_run=True)
+    [run] = agent_runs(scenario.agent_log)
+    assert run["argv"] == ["run", "--agent", "canopy-overseer"]
+    assert run["stdin"].startswith("## State\n")
+    assert run["stdin"].endswith("x" * 200_000)
+
+
+def test_a_block_too_long_for_one_argument_fails_the_tick_naming_why(scenario: Scenario) -> None:
+    with block_padded_past_one_argument():
+        failed = scenario.tick(dry_run=True, code=1)
+    assert failed.tick.status == "overseer_failed"
+    assert "arguments too long to start env: the longest is " in failed.tick.summary
+    assert not scenario.agent_log.exists()
 
 
 def test_treehouse_failure_skips_the_overseer(scenario: Scenario) -> None:

@@ -159,6 +159,11 @@ def test_missing_cwd_is_not_reported_as_missing_command(agent_log: Path, tmp_pat
     assert not isinstance(exc.value, CommandNotFoundError)
 
 
+def test_an_argument_past_the_systems_limit_says_how_long_it_is(agent_log: Path) -> None:
+    with pytest.raises(ProcError, match="arguments too long to start agent: the longest is 200,000 bytes"):
+        SubprocessRunner().run(["agent", "x" * 200_000])
+
+
 def test_on_start_gets_the_pid_that_leads_the_group(agent_log: Path) -> None:
     started: list[int] = []
     assert SubprocessRunner().run(["agent"], on_start=started.append).ok

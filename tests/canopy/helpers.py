@@ -826,9 +826,9 @@ def commands_run(agent_log: Path) -> list[list[dict[str, Any]]]:
 
 
 def state_block(agent_log: Path) -> dict[str, Any]:
-    """The state block the last agent to run, an overseer, was given in its prompt."""
+    """The state block the last agent to run, an overseer, was given in its prompt: on stdin, or its last argument."""
     *_, overseer = agent_runs(agent_log)
-    return json_block(overseer["argv"][-1])
+    return json_block(overseer["stdin"] or overseer["argv"][-1])
 
 
 def json_block(text: str) -> dict[str, Any]:

@@ -146,13 +146,19 @@ WORDS = st.text(alphabet=string.ascii_letters + string.digits + "-_", min_size=1
 
 @given(st.lists(WORDS, min_size=1, max_size=4), st.text())
 def test_the_prompt_is_always_exactly_one_argument(words: list[str], prompt: str) -> None:
-    argv = config.render_command(" ".join([*words, "{prompt}"]), prompt, Path("/defs"), "tick 1")
-    assert argv == [*words, prompt]
+    rendered = config.render_command(" ".join([*words, "{prompt}"]), prompt, Path("/defs"), "tick 1")
+    assert rendered == config.Rendered([*words, prompt], None)
+
+
+@given(st.lists(WORDS, min_size=1, max_size=4), st.text())
+def test_a_template_with_no_prompt_gets_it_whole_on_stdin(words: list[str], prompt: str) -> None:
+    rendered = config.render_command(" ".join(words), prompt, Path("/defs"), "tick 1")
+    assert rendered == config.Rendered(words, prompt)
 
 
 @given(st.text())
 def test_the_prompt_survives_quoting_in_the_template(prompt: str) -> None:
-    argv = config.render_command("agent --message='{prompt}'", prompt, Path("/defs"), "tick 1")
+    argv = config.render_command("agent --message='{prompt}'", prompt, Path("/defs"), "tick 1").argv
     assert argv == ["agent", f"--message={prompt}"]
 
 

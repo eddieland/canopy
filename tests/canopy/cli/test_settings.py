@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, definitions
+from canopy.core import agent_commands, config, conversation, definitions
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (
@@ -108,6 +108,8 @@ def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys:
         ],
     )
     assert f"\n  {line}\n" in out
+    # The default templates place no prompt: canopy writes it on stdin.
+    assert f"'--title=review {agent_commands.EXAMPLE_PR}' < <prompt>\n" in out
     assert "setup:" not in out
 
 

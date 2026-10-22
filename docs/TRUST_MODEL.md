@@ -738,7 +738,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
   following links; nothing else under the state directory is read but the output below and the session's prompt.
 - With a transcript it serves the session's prompt, the `<id>.prompt` canopy wrote beside the log before the agent
-  started: what the agent command was given as `{prompt}`, a worker's or a chore's rendered prompt or a tick's state
+  started: what the agent command was given as its prompt, a worker's or a chore's rendered prompt or a tick's state
   block. It quotes ticket text, comments, PRs, and the operator's messages, untrusted as the journal is, and names
   worktree paths. It is read the same way, at most 1 MiB, its control characters dropped, rendered as text.
 - It serves the end of a tick's output, or of a worker run's log, as written (DESIGN §22): at most its last 1 MiB,
