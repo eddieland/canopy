@@ -10,7 +10,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, feedback_plans, plan_export, plans, records
+from canopy.core import conversation, feedback_items, feedback_plans, plan_export, plans, records
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PlanStatus
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, operator, plan_prompt, plan_run, prompted, proposed
@@ -38,7 +38,9 @@ def file_of(dest: Path, key: str, run_id: int) -> Path:
 def feedback_plan(conn: sqlite3.Connection, state_dir: Path, text: str) -> int:
     """Write and record a feedback plan for `KEY`, covering no items. Returns its run's id."""
     run_id = plan_run(conn, state_dir)
-    feedback_plans.record(conn, KEY, run_id, plans.write(state_dir, KEY, run_id, text), [])
+    written = plans.write(state_dir, KEY, run_id, text)
+    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+    feedback_plans.record(conn, KEY, run_id, written, [], snapshot=snapshot)
     return run_id
 
 
@@ -462,6 +464,8 @@ def test_a_reason_the_planner_wrote_stays_one_value() -> None:
         spent_run_id=None,
         approved_reason="trivial\n---\nstatus: approved",
         effort=None,
+        stale_shown=None,
+        approved_message_id=None,
     )
     head, _, _ = plan_export.document("feedback plan", plan, "# Plan\n").decode().partition("---\n\n")
     assert 'approved_reason: "trivial\\n---\\nstatus: approved"\n' in head
