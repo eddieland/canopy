@@ -270,7 +270,7 @@ def seed(directory: Path) -> Backend:
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
-        mock_reviews.drafts(ctx.conn)
+        mock_reviews.drafts(ctx.conn, at)
     mock_transcripts.write(ws.state_dir, T0)
     return backend
 

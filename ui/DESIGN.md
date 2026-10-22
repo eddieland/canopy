@@ -1366,7 +1366,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
   request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its
   Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
-  Stop did goes under it (`Notice`).
+  Stop did goes under it (`Notice`). Until its review starts, the reviews list has a `requested` row for it, whose
+  ticket's place names the PR's author in muted monospace once canopy has read the PR, since it has no ticket.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posting nothing itself (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
   once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
@@ -1432,24 +1433,28 @@ sliver beside four others; and its axis names short call numbers without measuri
   to tell it from a finding's `surface-raised`) sits under its line after the findings there, with ghost `xs` `edit` and
   `drop`. While the draft waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`),
   shown on the row's hover or its focus, which opens a new comment's form under the line. Each form is a `Textarea` with
-  its count against 4,000, as a draft's.
+  its count against 4,000, as a draft's. Outside its review's page a draft is its status alone (`ReviewDraftChip`):
+  `draft` while it waits, else the journal's word, in `REVIEW_DRAFT_TONE`, with the word and what it means on hover. A
+  review's row and a PR's carry it after the verdict (a PR's, its newest review's draft that has one), where its state
+  is, so the list's left edge says which of the operator's reviews wait on them; the verdict is cut first. A PR's
+  Pull request panel carries it as `your review`, with the review's `review:N`.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does (a pulsing dot and `run:N`), then its latest review (its state's dot unless a
-  run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted) and `requested` while
-  the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a chip; then its
-  ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The ticket shares the
-  free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
-  page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its ticket's,
-  with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review and that
-  review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the run
-  working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how many
-  reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
+  run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted), its draft's chip, and
+  `requested` while the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a
+  chip; then its ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The
+  ticket shares the free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px
+  window. Its page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its
+  ticket's, with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review
+  and that review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the
+  run working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how
+  many reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
   (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
   ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
   with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
-  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`),
-  and its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no
-  ticket, since runs are a ticket's.
+  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and
+  its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no ticket,
+  since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`

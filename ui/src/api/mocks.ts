@@ -135,6 +135,7 @@ export const mockReviews: ReviewSummary[] = [
         persona: 'canopy',
         news: false,
         seen: false,
+        draft: null,
     },
 ]
 

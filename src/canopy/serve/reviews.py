@@ -10,11 +10,21 @@ control characters dropped, as every page's does, and the diff within `review_di
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, assert_never, cast
 
-from canopy.core import contract, conversation, db, review_diff, review_requests, review_runs
+from canopy.core import (
+    contract,
+    conversation,
+    db,
+    records,
+    review_diff,
+    review_drafts,
+    review_requests,
+    review_runs,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus, SeenKind
 from canopy.serve import review_draft_views
@@ -26,6 +36,7 @@ from canopy.serve.review_schema import (
     RequestedReview,
     ReviewDetail,
     ReviewDiff,
+    ReviewDraftStatusName,
     ReviewFinding,
     ReviewSummary,
 )
@@ -35,7 +46,6 @@ from canopy.serve.views import lines, models_served, new_tokens, shown_path, tic
 if TYPE_CHECKING:
     import sqlite3
 
-    from canopy.core import records
     from canopy.core.context import Context
     from canopy.serve.schema import RunState
     from canopy.serve.transcript_schema import RawOutput, Transcript
@@ -61,9 +71,16 @@ def requested(ctx: Context) -> list[RequestedReview]:
     Returns:
         Each open request no review of its PR is running for: one that started shows in `reviews` instead.
     """
+    waiting = review_requests.waiting_requests(ctx.conn)
+    authors = _authors(ctx.conn, {r.pr_url for r in waiting})
     return [
-        RequestedReview(pr_url=r.pr_url, created_at=db.parse_time(r.created_at), channel=r.channel)
-        for r in review_requests.waiting_requests(ctx.conn)
+        RequestedReview(
+            pr_url=r.pr_url,
+            created_at=db.parse_time(r.created_at),
+            channel=r.channel,
+            author=authors.get(r.pr_url),
+        )
+        for r in waiting
     ]
 
 
@@ -143,7 +160,7 @@ def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
 
 
 def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> list[ReviewSummary]:
-    """Review runs' rows, as the reviews list shows them, each saying whether the operator has seen it.
+    """Review runs' rows, as the reviews list shows them, each with whether the operator has seen it and its draft's.
 
     Returns:
         A summary of each, in their order.
@@ -152,17 +169,25 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
     # A PR's title as its pages give it: its own, else its ticket's.
     own = db.pr_titles(conn, {row.pr_url for row in rows})
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
+    drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
     return [
         summary(
             row,
             seen=str(row.id) in seen,
             title=ticket_title(own.get(row.pr_url)) or ticket_title(tickets.get(row.ticket_key or "")),
+            draft=drafts.get(row.id),
         )
         for row in rows
     ]
 
 
-def summary(row: records.ReviewRun, *, seen: bool, title: str | None) -> ReviewSummary:
+def summary(
+    row: records.ReviewRun,
+    *,
+    seen: bool,
+    title: str | None,
+    draft: records.ReviewDraft | None,
+) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
 
     Returns:
@@ -190,6 +215,7 @@ def summary(row: records.ReviewRun, *, seen: bool, title: str | None) -> ReviewS
         persona=row.persona,
         news=review_requests.has_news(row, stored),
         seen=seen,
+        draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,
     )
 
 
@@ -248,3 +274,13 @@ def diff_view(diff: review_diff.Diff) -> ReviewDiff:
         ],
         truncated=diff.truncated,
     )
+
+
+def _authors(conn: sqlite3.Connection, urls: Collection[str]) -> dict[str, str]:
+    """Each of PRs `urls`' author, as canopy's reader last read it, by URL: a PR it has not read is left out.
+
+    Returns:
+        The authors, by URL.
+    """
+    query = sql.select("*").from_("observed_prs").where_in("url", urls)
+    return {pr.url: pr.author for pr in records.fetch_all(conn, records.ObservedPr, query) if pr.author}
