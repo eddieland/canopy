@@ -118,8 +118,8 @@ export async function grantLimit(ticketKey: string | null, limit: Limit): Promis
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME`: canopy reviews a PR it does not own, once, at its head, its
- * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing is posted on
- * the PR; the next tick reviews it.
+ * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing posts on the
+ * PR until the operator publishes its draft; the next tick reviews it.
  */
 export async function requestReview(
     url: string,

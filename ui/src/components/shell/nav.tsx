@@ -50,7 +50,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     {
         to: '/reviews',
         icon: FileSearch,
-        hint: 'PR reviews canopy keeps instead of posting, with findings on the diff',
+        hint: "canopy's PR reviews, with findings on the diff; on a coworker's PR, a draft you may publish",
     },
     { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
