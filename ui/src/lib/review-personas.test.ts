@@ -15,9 +15,9 @@ function load() {
 const PERSONAS: PersonaList = {
     reviewer: 'canopy',
     personas: [
-        { name: 'canopy', yours: false, defaults: ['worker', 'planner', 'reviewer'], error: null },
-        { name: 'gone', yours: true, defaults: [], error: 'persona gone is past 4096 bytes' },
-        { name: 'skeptic', yours: false, defaults: [], error: null },
+        { name: 'canopy', yours: false, defaults: ['worker', 'planner', 'reviewer'], error: null, description: null },
+        { name: 'gone', yours: true, defaults: [], error: 'persona gone is past 4096 bytes', description: null },
+        { name: 'skeptic', yours: false, defaults: [], error: null, description: null },
     ],
 }
 

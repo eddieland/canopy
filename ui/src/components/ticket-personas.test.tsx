@@ -4,7 +4,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import type { AgentPersona } from '@/api/types'
+import type { AgentPersona, PersonaList } from '@/api/types'
 
 import { TicketPersonas } from './ticket-personas'
 
@@ -14,6 +14,18 @@ const PERSONAS: AgentPersona[] = [
     { agent: 'planner', persona: 'skeptic', source: 'config', error: null, once: null, several: [] },
     { agent: 'reviewer', persona: 'canopy', source: 'default', error: null, once: null, several: [] },
 ]
+// What the menus describe each persona with: skeptic alone has a description here.
+const SKEPTIC = 'When you review, name the input that breaks a claim.'
+const LISTED: PersonaList = {
+    reviewer: 'canopy',
+    personas: NAMES.map((name) => ({
+        name,
+        yours: false,
+        defaults: [],
+        error: null,
+        description: name === 'skeptic' ? SKEPTIC : null,
+    })),
+}
 
 // Every choice the menus send, and what the server stand-in answers each.
 let sent: { path: string; body: unknown }[] = []
@@ -21,6 +33,10 @@ let answer: Response | undefined
 
 const server: Middleware = {
     async onRequest({ request }) {
+        // The personas the menus describe: a read, not one of the choices a test counts.
+        if (new URL(request.url).pathname === '/api/personas') {
+            return Response.json(LISTED)
+        }
         sent.push({ path: new URL(request.url).pathname, body: JSON.parse(await request.text()) as unknown })
         return (
             answer ??
@@ -94,7 +110,9 @@ describe('TicketPersonas', () => {
         renderPersonas()
         const menu = openMenu('reviewer persona: canopy')
         const items = within(menu).getAllByRole('menuitemradio')
-        expect(items.map((item) => item.textContent)).toEqual(NAMES)
+        expect(items).toEqual(NAMES.map((name) => within(menu).getByRole('menuitemradio', { name })))
+        // Each says what it is under its name, as the review request's menu does, apart from its name.
+        expect(await within(menu).findByRole('menuitemradio', { name: 'skeptic', description: SKEPTIC })).toBe(items[3])
         // Nothing is checked while no override stands: the agent's persona is config's, not the ticket's.
         expect(items.map((item) => item.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false'])
         expect(within(menu).getByRole('menuitem', { name: 'Clear the override' }).getAttribute('aria-disabled')).toBe(

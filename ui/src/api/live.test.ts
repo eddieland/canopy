@@ -158,7 +158,12 @@ describe('applyStreamEvent', () => {
     it('writes the reviews waiting on a tick whole', () => {
         const client = new QueryClient()
         const requests = [
-            { pr_url: 'https://github.com/acme/web/pull/95', created_at: '2026-10-08T11:40:00Z', channel: 'web' },
+            {
+                pr_url: 'https://github.com/acme/web/pull/95',
+                created_at: '2026-10-08T11:40:00Z',
+                channel: 'web',
+                author: 'dana',
+            },
         ]
         applyStreamEvent(client, { type: 'review_requests.updated', requests })
         expect(client.getQueryData(keys.reviewRequests)).toEqual(requests)

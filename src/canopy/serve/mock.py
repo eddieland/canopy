@@ -134,6 +134,14 @@ ATTENTION: tuple[Item, ...] = (
         at(-22),
         repo="web",
     ),
+    # Carol's PR, which the operator asked canopy to review: its review is done, its draft unpublished (DESIGN §34).
+    Item(
+        f"pr:{mock_reviews.PR_14}",
+        "review_waiting",
+        f"review:5 and review:6, which you asked for, are done: their drafts of {mock_reviews.PR_14} wait on you to "
+        "publish or stage one",
+        at(-30),
+    ),
     Item(
         "ABC-102",
         "awaiting_reply",
@@ -270,7 +278,7 @@ def seed(directory: Path) -> Backend:
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
-        mock_reviews.drafts(ctx.conn)
+        mock_reviews.drafts(ctx.conn, at)
     mock_transcripts.write(ws.state_dir, T0)
     return backend
 

@@ -1,19 +1,19 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
 import { chooseTicketPersona } from '@/api/mutations'
-import { keys } from '@/api/queries'
+import { keys, personasQuery } from '@/api/queries'
 import type { AgentPersona } from '@/api/types'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
+import { PersonaRadioItem } from '@/components/personas-menu'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -32,8 +32,8 @@ interface Choice {
  * its workers, its planner, and its reviewer, each a menu that sets the ticket's override to one of `names`, or clears
  * it, as `canopy persona KEY NAME --agent AGENT` and `--clear` do. A persona the operator chose for the agent's next
  * run alone, with `--next`, is named under it, and so are the reviewer's personas when `[personas] reviewers` has a
- * review in each. A run whose persona's file has gone is refused, not run in another voice: its row says why, in the
- * failure color.
+ * review in each. Each menu lists every persona with its description, as the review request's does (`PersonasMenu`).
+ * A run whose persona's file has gone is refused, not run in another voice: its row says why, in the failure color.
  */
 export function TicketPersonas({
     ticketKey,
@@ -108,6 +108,9 @@ function PersonaMenu({
 }) {
     // A persona whose file has gone is still the one chosen: it stays in the list so the menu shows it checked.
     const choices = names.includes(current.persona) ? names : [...names, current.persona]
+    // Each one's description, as the review request's menu shows it: none until the list is read, or for a gone one.
+    const { data: listed } = useQuery(personasQuery)
+    const described = new Map(listed?.personas.map((p) => [p.name, p.description]))
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -127,9 +130,7 @@ function PersonaMenu({
                     onValueChange={(value) => onChoose(value)}
                 >
                     {choices.map((name) => (
-                        <DropdownMenuRadioItem key={name} value={name} className="font-mono text-xs">
-                            {name}
-                        </DropdownMenuRadioItem>
+                        <PersonaRadioItem key={name} name={name} description={described.get(name) ?? null} />
                     ))}
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
