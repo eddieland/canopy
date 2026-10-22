@@ -26,10 +26,8 @@ from canopy.core import conversation, db, observe, personas, plans, records, rev
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
-    CheckConclusion,
     CheckStatus,
     ConnectorRunStatus,
-    MergeState,
     Phase,
     PrState,
     ReviewItem,
@@ -49,21 +47,6 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-#: How a completed CI context ends red: what holds a unit at `ci_red`.
-FAILED: AbstractSet[CheckConclusion] = frozenset(
-    {
-        CheckConclusion.FAILURE,
-        CheckConclusion.ERROR,
-        CheckConclusion.CANCELLED,
-        CheckConclusion.TIMED_OUT,
-        CheckConclusion.ACTION_REQUIRED,
-        CheckConclusion.STARTUP_FAILURE,
-    },
-)
-#: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
-PASSED: AbstractSet[CheckConclusion] = frozenset(
-    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
-)
 _DISPATCH = "dispatch:"
 _ATTENTION = attention.ACTION_PREFIX
 _RESUME = f"{_DISPATCH}resume"
@@ -640,7 +623,7 @@ class _World:
         if pr.state is not PrState.OPEN:
             return Derived(key, repo)
         phases: list[Phase] = []
-        if pr.mergeable == "conflicting" or pr.mergeable_state is MergeState.DIRTY:
+        if observe.conflicts(pr):
             phases.append(Phase.CONFLICTED)
         ci, passed = self._ci(repo, pr, unit)
         phases.extend(ci)
@@ -667,12 +650,12 @@ class _World:
         human = found.human_checks if found is not None else frozenset[str]()
         ci = [c for c in self.checks.get(pr.url, []) if c.head_sha == pr.head_sha and c.name not in human]
         pending = any(c.status is not CheckStatus.COMPLETED for c in ci)
-        failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in FAILED]
+        failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in observe.FAILED]
         phases = [Phase.CI_RUNNING] if pending else []
         cursor = _ci_cursor(unit.last_ci_run_id)
         if any(cursor is None or (c.run_id is not None and c.run_id > cursor) for c in failed):
             phases.append(Phase.CI_RED)
-        return phases, not pending and all(c.conclusion in PASSED for c in ci)
+        return phases, not pending and all(c.conclusion in observe.PASSED for c in ci)
 
     def _feedback(self, key: str, pr: records.ObservedPr, unit: records.TicketUnit) -> list[Phase]:
         """Derive the review rows (DESIGN §7, D089): feedback newer than the unit's `review` cursor, by whom it is from.

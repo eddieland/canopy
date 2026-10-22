@@ -115,6 +115,15 @@ out goes to the next plan as an uncovered item does; and the overseer gives the 
 named by its number on input, and by number and id wherever canopy mentions it; and an approval answers no question a
 run asked, which still waits on a reply. Settled for it, open to the operator: an approved plan not yet spent may be
 approved again for other items or with a message, which writes a new message; whole approval writes a message too; and
-an item left out is not marked handled, so its next plan offers it whatever changed. Left: the PR page's threads view
-and T8's web approval, drafts starting from the plan, the plan that changes nothing, and failed checks and conflicts as
-items with ids of their own.
+an item left out is not marked handled, so its next plan offers it whatever changed. Built 2026-10-22, against the
+fakes, failed checks and conflicts as items: each check failed at a PR's head, but one its repository's
+`human_checks` names, and the PR's conflict with its base, are in the planner's items file with an id canopy gives
+them, below zero, from a hash of the PR, the head, and the check's name or the base, so it never meets an observed id
+and is the same on every read of that head; they are planned, numbered, approved or left by item, named in `{{PLAN}}`
+and `canopy show` as reviews are, and an uncovered or left one goes to the next plan; migration 0078 widens
+`feedback_plan_items.item` and records whether each PR conflicted, so a conflict that comes or goes at an unmoved head
+makes a waiting plan stale. Settled for it, open to the operator: a check or a conflict carries no reply; a handled one
+stays handled until a push, even if the check is run again and fails at the same head; a conflict while the host is
+still working out mergeability is no change; and a merged blocker still reaches the planner as context. Left: the PR
+page's threads view and T8's web approval, drafts starting from the plan, the plan that changes nothing, and a merged
+blocker as an item.

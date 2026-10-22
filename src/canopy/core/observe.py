@@ -41,6 +41,9 @@ from canopy.core.vocab import (
 from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
+    from canopy.core import records
     from canopy.core.config import Config, Source
 
 #: How much of a connector's stderr a run keeps.
@@ -62,6 +65,22 @@ OWNS: Mapping[SourceKind, frozenset[str]] = {
     SourceKind.TRACKER: frozenset({"ticket", "comment"}),
     SourceKind.VCS: frozenset({"pr", "review", "check", "branch"}),
 }
+#: How a completed CI context ends red: what holds a unit at `ci_red`, and what makes a failed check a feedback plan's
+#: item (DESIGN §32).
+FAILED: AbstractSet[CheckConclusion] = frozenset(
+    {
+        CheckConclusion.FAILURE,
+        CheckConclusion.ERROR,
+        CheckConclusion.CANCELLED,
+        CheckConclusion.TIMED_OUT,
+        CheckConclusion.ACTION_REQUIRED,
+        CheckConclusion.STARTUP_FAILURE,
+    },
+)
+#: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
+PASSED: AbstractSet[CheckConclusion] = frozenset(
+    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
+)
 
 
 @dataclass(frozen=True)
@@ -320,6 +339,19 @@ def is_pr_url(value: str) -> bool:
         True for a plain `https://HOST/OWNER/REPO/pull/N`.
     """
     return contract.plain_url(value, conversation.MAX_PR_URL) and conversation.PR_URL_RE.fullmatch(value) is not None
+
+
+def conflicts(pr: records.ObservedPr) -> bool | None:
+    """Whether an observed PR conflicts with its base, as its host says: what holds a unit at `conflicted`.
+
+    Returns:
+        True when it conflicts, False when the host says it does not, and None while the host has not said.
+    """
+    if pr.mergeable == "conflicting" or pr.mergeable_state is MergeState.DIRTY:
+        return True
+    if pr.mergeable == "mergeable" or pr.mergeable_state not in (None, MergeState.UNKNOWN):
+        return False
+    return None
 
 
 def _pr_url(value: str) -> str:
