@@ -5,6 +5,7 @@ import { act, render, screen } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
+import type * as ShikiCore from 'shiki/core'
 import { vi } from 'vitest'
 
 /**
@@ -80,6 +81,25 @@ export function otherTabClears(): void {
 /** Makes every use of localStorage throw, as a privacy mode can. */
 export function breakStorage(): void {
     vi.stubGlobal('localStorage', { getItem: refuse, setItem: refuse, removeItem: refuse, clear: refuse })
+}
+
+/**
+ * Shiki's core, `shiki`, with no limit on how long its highlighters take over a line: for `vi.mock('shiki/core')`. Past
+ * its default half second, Shiki leaves the rest of a line plain, which a busy runner reaches on the first line a
+ * grammar reads, so a test of the colors would fail on how fast the machine is.
+ */
+export function untimedShiki(shiki: typeof ShikiCore): typeof ShikiCore {
+    return {
+        ...shiki,
+        createHighlighterCore: async (options) => {
+            const highlighter = await shiki.createHighlighterCore(options)
+            return {
+                ...highlighter,
+                codeToTokensBase: (code, tokenizing) =>
+                    highlighter.codeToTokensBase(code, { ...tokenizing, tokenizeTimeLimit: 0 }),
+            }
+        },
+    }
 }
 
 /** Stands in for EventSource: records instances, and lets a test play the server. */
