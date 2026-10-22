@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
+.PHONY: screenshots test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
@@ -124,6 +124,13 @@ ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout 
 # slices, as CI's jobs do.
 ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by FastAPI (SHARD=i/n: one slice of it)
 	npm --prefix ui run test:e2e$(if $(SHARD), -- --shard=$(SHARD))
+
+# Not part of check: it needs Docker. The Screenshots workflow stays CI's way to regenerate the baselines; this renders
+# the same images locally, in Playwright's Ubuntu image at the version ui/package.json pins, in under a minute once the
+# image and its cache volume are pulled. UPDATE is changed (rewrite the images that fail the comparison), all (rewrite
+# every one), or check (compare only).
+screenshots: ## Regenerate the Playwright screenshot baselines in Docker, as CI renders them (UPDATE=changed|all|check)
+	ui/scripts/screenshots.sh $(or $(UPDATE),changed)
 
 # Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
 # INSTALL_SOURCE is what to install: this checkout by default, or anything `uv tool install` accepts.
