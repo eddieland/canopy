@@ -1,10 +1,10 @@
 """Plans exported into a directory of the operator's, each with what the journal records of it (DESIGN §25).
 
 `export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/`: a front
-matter of its row, then its file as it stands now. The row is what a copy of `plans/` alone would lose: whether the plan
-was approved, by whom, and as which hash. The file's name says which plan it is and where it stands, so a listing reads
-without opening one: its run, its status in capitals so it stands out, then its title as a slug (`name`), as
-`412-APPROVED-export-reports-as-csv.md`.
+matter of its row and its planner's persona, then its file as it stands now. These are what a copy of `plans/` alone
+would lose: whether the plan was approved, by whom, and as which hash, and in whose voice it was written. The file's
+name says which plan it is and where it stands, so a listing reads without opening one: its run, its status in capitals
+so it stands out, then its title as a slug (`name`), as `412-APPROVED-export-reports-as-csv.md`.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
 and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
@@ -65,7 +65,7 @@ _DIR_MODE = 0o700
 _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, so every plan exported before is read and compared again.
-_FORMAT = 4
+_FORMAT = 5
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
 # A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
@@ -140,6 +140,7 @@ def export(
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
     prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
+    planners = _personas(conn)
     planned = {row.ticket_key for _, row in rows}
     last_messages: dict[str, int] = (
         {k: m for k, m in _last_messages(conn).items() if k in planned} if conversations else {}
@@ -160,7 +161,16 @@ def export(
                         break
                     checked += 1
                     prompt = None if prompt_paths is None else _Prompt(prompt_paths.get(row.run_id))
-                    _export_plan(kind, row, dirs, seen, tally, prompt=prompt, settled_before=settled_before)
+                    _export_plan(
+                        kind,
+                        row,
+                        dirs,
+                        seen,
+                        tally,
+                        persona=planners.get(row.run_id),
+                        prompt=prompt,
+                        settled_before=settled_before,
+                    )
                 last = last_messages.get(key)
                 if last is not None and (limit is None or len(tally.written) < limit):
                     checked += 1
@@ -211,11 +221,12 @@ def is_prompt(file_name: str) -> bool:
     return _PROMPT_NAME_RE.fullmatch(file_name) is not None
 
 
-def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) -> bytes:
-    """A plan as it is exported: a front matter of its kind and its row's columns that are set, then its text.
+def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str, *, persona: str | None = None) -> bytes:
+    """A plan as it is exported: a front matter of its kind, its row's columns that are set, and its planner's persona.
 
-    Each value is written as JSON, which YAML reads as the same string or number, so a reason the planner wrote cannot
-    end the front matter or add a key to it.
+    The persona is the one its run was given (DESIGN §31), None for a run from before canopy recorded it, which has
+    none in its front matter. Each value is written as JSON, which YAML reads as the same string or number, so a reason
+    the planner wrote cannot end the front matter or add a key to it.
 
     Returns:
         The file's bytes, UTF-8.
@@ -225,6 +236,8 @@ def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) ->
         value: object = getattr(row, field.name)
         if value is not None:
             lines.append(f"{field.name}: {json.dumps(value)}\n")
+    if persona is not None:
+        lines.append(f"persona: {json.dumps(persona)}\n")
     lines.extend([_FRONT_MATTER, "\n", text])
     return "".join(lines).encode("utf-8")
 
@@ -307,12 +320,14 @@ def _export_plan(
     seen: _Seen,
     tally: _Tally,
     *,
+    persona: str | None,
     prompt: _Prompt | None,
     settled_before: int,
 ) -> None:
     """Export one plan into its ticket's directory, unless it is there as it stands, and remove its earlier names.
 
-    With `prompt`, its run's prompt goes beside it too, unless that is there as it stands.
+    `persona` is its planner's, for its front matter. With `prompt`, its run's prompt goes beside it too, unless that is
+    there as it stands.
 
     Raises:
         ExportError: its file, or its prompt, could not be written, or an earlier one removed.
@@ -331,6 +346,7 @@ def _export_plan(
             plan,
             kind,
             row,
+            persona=persona,
             source=source_stat,
             exported_name=names[0],
             exported=exported,
@@ -344,7 +360,7 @@ def _export_plan(
         tally.skipped.append(Skipped(kind, dirs.key, row.run_id, reading.problem or "unreadable"))
         return
     exported_name = name(kind, row, reading.text)
-    data = document(kind, row, reading.text)
+    data = document(kind, row, reading.text, persona=persona)
     # Only a name listed as it is: a filesystem that ignores case would find the plan under an earlier name that
     # differs in case alone, and the name would never change to the new one.
     held = _held(dirs.dest_fd, exported_name, data) if exported_name in dirs.listing else None
@@ -362,6 +378,7 @@ def _export_plan(
             plan,
             kind,
             row,
+            persona=persona,
             source=source_stat,
             exported_name=exported_name,
             exported=held,
@@ -449,6 +466,17 @@ def _heading(m: records.Message) -> str:
         parts.append("cut short")
     parts.append(f"at {m.at}")
     return " ".join(printable(", ".join(parts)).split())
+
+
+def _personas(conn: sqlite3.Connection) -> dict[int, str]:
+    """The persona each plan run was given (DESIGN §31).
+
+    Returns:
+        Each plan run's persona, by its run's id; a run from before canopy recorded one has none.
+    """
+    planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
+    runs = sql.select("id, persona").from_("runs").where("id IN ({}) AND persona IS NOT NULL", planned)
+    return {int(r["id"]): str(r["persona"]) for r in sql.execute(conn, runs)}
 
 
 def _prompt_paths(conn: sqlite3.Connection, state_dir: Path) -> dict[int, Path]:
@@ -614,6 +642,7 @@ class _Seen:
         kind: Kind,
         row: records.Plan | records.FeedbackPlan,
         *,
+        persona: str | None,
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result | None,
@@ -631,7 +660,7 @@ class _Seen:
             kept is not None
             and source is not None
             and exported is not None
-            and (kept == _fingerprint(kind, row, source, exported_name, exported, prompt=prompt))
+            and (kept == _fingerprint(kind, row, source, exported_name, exported, persona=persona, prompt=prompt))
         )
 
     def record(
@@ -640,6 +669,7 @@ class _Seen:
         kind: Kind,
         row: records.Plan | records.FeedbackPlan,
         *,
+        persona: str | None,
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result,
@@ -654,7 +684,7 @@ class _Seen:
         if source is not None and all(
             max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in stats if s is not None
         ):
-            fingerprint = _fingerprint(kind, row, source, exported_name, exported, prompt=prompt)
+            fingerprint = _fingerprint(kind, row, source, exported_name, exported, persona=persona, prompt=prompt)
             self.changed |= self.fingerprints.get(plan) != fingerprint
             self.fingerprints[plan] = fingerprint
 
@@ -716,9 +746,10 @@ def _fingerprint(
     exported_name: str,
     exported: os.stat_result,
     *,
+    persona: str | None,
     prompt: _PromptStats | None,
 ) -> str:
-    """A plan's row, the stat of its file, the name and stat of its export, and those of its prompt, as one digest.
+    """A plan's row and persona, the stat of its file, the name and stat of its export, and its prompt's, as a digest.
 
     Returns:
         The digest, hex.
@@ -726,7 +757,7 @@ def _fingerprint(
     stats = [_identity(s) for s in (source, exported)]
     prompt_stats = None if prompt is None else [None if s is None else _identity(s) for s in prompt]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
-    digested = (_FORMAT, kind, row, exported_name, stats, prompt_stats)
+    digested = (_FORMAT, kind, row, persona, exported_name, stats, prompt_stats)
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
