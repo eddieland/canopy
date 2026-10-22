@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from canopy_artifacts import tools as store_tools
 
 from canopy.cli.main import main
 from canopy.core import config, workspace
@@ -723,3 +724,65 @@ def test_a_relative_path_in_the_private_file_names_a_file_in_the_state_directory
     canopy_env.append_user('worker_instructions = "worker-instructions.md"\n')
     with pytest.raises(ConfigError, match=r"paths\.worker_instructions: Value error, must be an absolute path or"):
         load(canopy_env.root, canopy_env.user_file)
+
+
+def test_artifacts_are_off_until_the_operator_names_a_store(canopy_env: CanopyEnv) -> None:
+    artifacts = load(canopy_env.root, canopy_env.user_file).artifacts
+    assert (artifacts.mcp_server, artifacts.publish_roles, artifacts.authorized_authors) == ("", (), ())
+    assert artifacts.publishing() is None
+
+
+def test_artifacts_name_a_store_and_the_workers_that_publish_to_it(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(
+        '[artifacts]\nmcp_server = "louvre"\nnamespace = "canopy/operator"\n'
+        'authorized_authors = ["u_ana", "u_raj"]\npublish_roles = ["worker"]\n',
+    )
+    artifacts = load(canopy_env.root, canopy_env.user_file).artifacts
+    assert (artifacts.namespace, artifacts.authorized_authors) == ("canopy/operator", ("u_ana", "u_raj"))
+    publishing = artifacts.publishing()
+    assert publishing is not None
+    assert (publishing.server, publishing.agents) == ("louvre", {"canopy-worker"})
+    # A worker publishes and answers threads; the feed is for the source that reads comments back (DESIGN §38).
+    assert "artifact_publish" in publishing.tools
+    assert "comment_feed" not in publishing.tools
+
+
+def test_a_store_no_role_publishes_to_is_one_no_agent_publishes_to(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private('[artifacts]\nmcp_server = "louvre"\n')
+    publishing = load(canopy_env.root, canopy_env.user_file).artifacts.publishing()
+    assert publishing is not None
+    assert publishing.agents == frozenset()
+
+
+@pytest.mark.parametrize(
+    "line",
+    ['mcp_server = "louvre"', 'publish_roles = ["worker"]', 'authorized_authors = ["u_ana"]', 'namespace = "x"'],
+)
+def test_the_workspace_file_cannot_choose_who_publishes_or_whose_comments_count(
+    canopy_env: CanopyEnv,
+    line: str,
+) -> None:
+    canopy_env.append_shared(f"\n[artifacts]\n{line}\n")
+    with pytest.raises(ConfigError, match=r"artifacts\.\w+ is private and cannot be set in the workspace file"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize(
+    ("toml", "message"),
+    [
+        ('mcp_server = "louvre"\npublish_roles = ["planner"]', "'planner' cannot publish: the planner writes one file"),
+        ('mcp_server = "louvre"\npublish_roles = ["worker-private"]', "a private ticket's worker never publishes"),
+        ('mcp_server = "louvre"\npublish_roles = ["reviewer"]', "'reviewer' is not an agent that may publish"),
+        ('mcp_server = "louvre"\npublish_roles = ["implement"]', "'implement' is not an agent that may publish"),
+        ('mcp_server = "lou vre"', "must match"),
+        ('authorized_authors = [""]', "artifacts.authorized_authors"),
+    ],
+)
+def test_artifacts_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -> None:
+    canopy_env.write_private(f"[artifacts]\n{toml}\n")
+    with pytest.raises(ConfigError, match=re.escape(message)):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_publishing_worker_gets_every_tool_of_the_stores_contract_but_its_feed() -> None:
+    assert sorted(config.ARTIFACT_TOOLS) == sorted({t.name for t in store_tools.TOOLS} - {"comment_feed"})

@@ -12,6 +12,8 @@ files mark for it:
   of GitHub's issue reads, and both workers' and the planner's of GitHub's issue tools (DESIGN §13);
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
+- the artifact store's MCP server, denied whole to every agent, then for each agent config lets publish its tools
+  allowed by name, and the store's skill, which every definition denies as shipped (DESIGN §38);
 - the reviewer's and overseer's temperature, unless it sets none;
 - the commands the operator allows an agent beyond its own bash rules (`runtime.allow_bash`, DESIGN §13), last of
   them;
@@ -41,7 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from canopy.runtime.agents import McpTools, Rules
+    from canopy.runtime.agents import McpTools, Publishing, Rules
 
 #: The directories of a config directory OpenCode reads agents, skills, and plugins from.
 AGENTS_SUBDIR = "agents"
@@ -130,6 +132,15 @@ _GITHUB_ISSUE_TOOLS = (
 )
 # The line of the shipped workers' and planner's definitions the denial of GitHub's issue tools is rendered at.
 _ISSUES_MARKER = "  # canopy: github issue tools\n"
+# The line of every shipped definition the artifact store's server is rendered at (DESIGN §38): after the patterns
+# that deny tools by their names, so that a tool allowed by name there is allowed, and before the rules for canopy's own
+# servers, whose names no store's may share.
+_ARTIFACT_TOOLS_MARKER = "  # canopy: artifact tools\n"
+# The line of the shipped worker definition the allow of the store's skill is rendered at, after its deny.
+_ARTIFACT_SKILL_MARKER = "    # canopy: artifact skill\n"
+_ARTIFACT_SKILL = "canopy-artifacts"
+# The agents canopy ships, each of which is rendered with the store's server.
+_AGENTS = (WORKER, PRIVATE_WORKER, PLANNER, REVIEWER, OVERSEER, CHORE)
 # The line of the shipped reviewer's and overseer's definitions their temperature is rendered at.
 _TEMPERATURE_MARKER = "# canopy: temperature\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
@@ -204,7 +215,11 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
 
 
 def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
-    """Render into `found`, in place, what `rules` gives agents by name: their bash allows and their temperature."""
+    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature."""
+    for agent in _AGENTS:
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_artifacts(found[rel].decode(), agent, rules.artifacts).encode()
     for agent, allows in rules.bash_allows.items():
         rel = _file(agent)
         if rel in found:
@@ -297,6 +312,34 @@ def render_github_issues(text: str, name: str, tools: McpTools | None, provider:
     known = [f"{tools.server}_{tool}" for tool in (*tools.allowed, *tools.create, *tools.pr_writes)]
     denied = [p for p in _GITHUB_ISSUE_TOOLS if not any(fnmatch.fnmatchcase(tool, p) for tool in known)]
     return text.replace(_ISSUES_MARKER, _ISSUES_MARKER + "".join(_deny(pattern) for pattern in denied), 1)
+
+
+def render_artifacts(text: str, agent: str, publishing: Publishing | None) -> str:
+    """Return agent `agent`'s definition with the artifact store's rules at its marked lines (DESIGN §38).
+
+    Every tool of the store's server is denied by a wildcard. For an agent that publishes, the tools it may call are
+    allowed by exact name after it, the last rules that match them (D021), and so is the store's skill, which the
+    definition denies as shipped. With no store configured, the marked lines stay as they are.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the rules at.
+    """
+    name = _file(agent)
+    if _ARTIFACT_TOOLS_MARKER not in text:
+        marker = _ARTIFACT_TOOLS_MARKER.strip()
+        raise DefinitionsError(f"{name} has no line {marker!r} to render the artifact store's rules at")
+    if publishing is None:
+        return text
+    server = publishing.server
+    publishes = agent in publishing.agents
+    allows = [f'  "{server}_{tool}": allow\n' for tool in publishing.tools] if publishes else []
+    text = text.replace(_ARTIFACT_TOOLS_MARKER, _ARTIFACT_TOOLS_MARKER + _deny(f"{server}_*") + "".join(allows), 1)
+    if not publishes:
+        return text
+    if _ARTIFACT_SKILL_MARKER not in text:
+        marker = _ARTIFACT_SKILL_MARKER.strip()
+        raise DefinitionsError(f"{name} has no line {marker!r} to render the artifact store's skill at")
+    return text.replace(_ARTIFACT_SKILL_MARKER, f'{_ARTIFACT_SKILL_MARKER}    "{_ARTIFACT_SKILL}": allow\n', 1)
 
 
 def render_temperature(text: str, name: str, temperature: float | None) -> str:

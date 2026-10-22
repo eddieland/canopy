@@ -209,8 +209,8 @@ what woke it, and what it faces; a chore or review by its name or PR. A title ne
 canopy snapshots its bundled agents, skills, and plugin into the state directory, named for a digest of their contents,
 and the templates point the runtime at it (§12). The snapshot is written whole, never changed, unwritable once written
 (§33), and readable only by the operator, so overlapping runs never load a partial set; one that is a symlink, someone
-else's, or open to others is refused, failing the tick or making the run `crashed` (D040). Two definitions are
-rendered from config, so a change to their inputs makes a new snapshot:
+else's, or open to others is refused, failing the tick or making the run `crashed` (D040). Definitions are rendered
+from config, so a change to their inputs makes a new snapshot. Among them:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
 - `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
@@ -218,6 +218,8 @@ rendered from config, so a change to their inputs makes a new snapshot:
   having nothing left to load. The body is the system prompt the provider caches across ticks; a tick's message is its
   state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather than
   running without the prompt.
+- Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
+  tools by exact name and its skill (§38).
 
 Nothing is installed into repositories. OpenCode merges canopy's definitions after the repository's config, so a
 repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where

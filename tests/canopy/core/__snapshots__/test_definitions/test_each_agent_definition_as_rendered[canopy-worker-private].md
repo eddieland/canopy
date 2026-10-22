@@ -21,6 +21,8 @@ permission:
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
   skill:
     "canopy": deny
+    # The artifact store's skill is for the agents that publish to it (DESIGN §38).
+    "canopy-artifacts": deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077). Bash can still reach the network, for package installs and builds; this removes the tools
   # a model reaches for on its own, not the capability.
@@ -158,6 +160,9 @@ permission:
   "*reply_to_pull_request_comment*": deny
   "*add_comment_to_pending_review*": deny
   "*add_issue_comment*": deny
+  # The artifact store's MCP server, `artifacts.mcp_server`: this agent never publishes, whatever config says
+  # (DESIGN §38), and canopy renders the server denied whole at the marked line.
+  # canopy: artifact tools
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny

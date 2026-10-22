@@ -559,6 +559,13 @@ Controls:
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
+- With `[artifacts]` set (DESIGN §38), the agents `artifacts.publish_roles` names may call the artifact store's
+  tools by exact name: publish an artifact or a new version of one, read and list them, and reply, comment, and resolve
+  threads on them, never the comment feed. The public worker is the one agent config lets it name, and its definition
+  denies the store's server (`artifacts.mcp_server`) by a wildcard before those allows, so a tool the contract lacks
+  fails closed. Every other definition of canopy's denies the server whole by name, and its skill, `canopy-artifacts`,
+  by name too. The planner and the private worker never publish: config refuses either in `publish_roles`. The keys
+  are private (T7).
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 - Notifications carry text written by agents and org members (attention details, worker summaries and questions,
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
@@ -600,6 +607,14 @@ GitHub's server or another the tracker's rules do not cover, under a name the de
 reviewer post; that is noise, not authority, since the loop reads reviews only from its journal. A steered reviewer
 can put a link carrying data in a comment of a review's draft, which reaches GitHub if the operator publishes it
 unread.
+With a store configured, a public worker steered by what it read can publish the worktree, the ticket, or anything
+else it reads to the store, under any title, where whoever can read canopy's namespace reads it; it can reply on or
+resolve any thread there, and comment on any artifact of the namespace. The namespace bounds where (Louvre's token,
+the local store's `--namespace`), and no tool deletes an artifact or changes who may see it, so what was published
+stays until a person removes it in the store. The skill says to publish only when asked, which no guard checks. An
+artifact's origin, which names its ticket, is the worker's word until canopy sets it per run. A repository's OpenCode
+config naming the store's tools is not refused, as it is for the tracker's on a private run, and an example chore's
+agent, copied at install and never rendered, does not deny the store's server.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
@@ -628,8 +643,9 @@ shares with a team, so anyone who can push there can change that file, and a che
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, authorized repliers, agent memory's
-tiers, or the agents' personas, one commit would be enough to run commands on operators' machines, raise their spend,
-or pick who steers their workers.
+tiers, the agents' personas, or which agents publish artifacts and whose comments on them count, one commit would be
+enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who
+steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
