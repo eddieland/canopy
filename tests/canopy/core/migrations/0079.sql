@@ -1,4 +1,4 @@
--- sha256 of 0079_feedback_plan_check_items.sql: 2f47be53b63ea48d402f5474275dedaabeed6a2495d97a0484ad4ae168d8b16a
+-- sha256 of 0079_lesson_pins.sql: ac2ac083fc10f9c2176f1259ed5cad5d0be46b6319042675bb139857023e8322
 
-INSERT INTO feedback_plan_items (plan_id, number, pr_url, item, item_id, proposal, reply, left_out)
-VALUES (1, 2, 'https://github.com/acme/api/pull/7', 'check', -281474976710656, 'change', NULL, 1);
+INSERT INTO memories (scope, key, body, status, author, created_at, approved_at, pinned_at)
+VALUES ('lesson', 'tests-need-docker', 'Start Docker before the tests.', 'active', 'operator', 'x', 'x', 'x');

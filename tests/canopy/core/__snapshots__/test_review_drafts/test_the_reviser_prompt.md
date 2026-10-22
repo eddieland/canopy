@@ -26,12 +26,14 @@ Version 1.
 The body:
 > Two defects.
 > 
-> **minor** at `tests/test_retry.py:3`: no tests
+> `tests/test_retry.py:3`
+> 
+> no tests
 > 
 > Add one.
 
 Comment 1, on `retry.py:1`:
-> **blocking**: loops forever
+> loops forever
 > 
 > Nothing ends it.
 
