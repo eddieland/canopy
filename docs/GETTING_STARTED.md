@@ -231,3 +231,62 @@ meant to fix it.
 [BAZEL.md](BAZEL.md) is the full recipe: what each `.bazelrc` line buys, a per-repository `setup_cmd` script, how to
 check that seeding, separate output bases, the shared cache, and idle servers all work, what the worker can read
 through `bazel-out/`, and troubleshooting.
+
+## Narrowing what canopy's agents are offered
+
+canopy's agents run in your OpenCode, so every MCP server and skill in your OpenCode config is offered to them as well,
+unless a rule denies it: the overseer, the reviewer, and every chore get your BigQuery server, or a cluster server
+that blocks no command, as a worker does. OpenCode sends the schema of each tool an agent may call, and the name and
+description of each skill it may load, with every model call, so each one costs every tick and run, and is one more
+thing a steered agent could reach. `canopy agents` shows what each of canopy's agents is offered now.
+
+To take some away, add rules for canopy's agents, by name, to the `agent` block of `~/.config/opencode/opencode.json`.
+OpenCode merges that block into canopy's definitions, which canopy writes to `.canopy/runtime/<digest>/` and renders
+from its own config. Never edit them there: they are read-only, and canopy writes a new snapshot when its config
+changes. For example, with servers named `bigquery` and `kubernetes`:
+
+```json
+{
+  "agent": {
+    "canopy-overseer": {"permission": {"bigquery_*": "deny", "kubernetes_*": "deny"}},
+    "canopy-planner": {
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-*": "allow"}}
+    },
+    "canopy-reviewer": {
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-*": "allow"}}
+    },
+    "canopy-chore": {
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-*": "allow"}}
+    }
+  }
+}
+```
+
+- **A server, whole.** OpenCode names a server's tools `<server>_<tool>`, so `"<server>_*": "deny"` takes every tool of
+  it from that agent, and OpenCode stops sending them. Leave the workers, `canopy-worker` and `canopy-worker-private`,
+  the servers their tickets need.
+- **Skills.** The last rule that matches a skill's name decides, so `"*": "deny"` comes first and `"tracker-*": "allow"`
+  after it, which keeps the tracker skill canopy ships (`tracker-jira`, `tracker-github`): the reviewer's and the
+  planner's prompts load it. Leave the workers' skills alone, since they work with yours, such as `runtime.pr_skill`.
+- **Deny, rather than allow.** Your rules come before canopy's, so where a rule of canopy's also matches, canopy's
+  decides. A pattern canopy's definition also names is the exception: OpenCode keeps it where your block put it, so
+  your rules after it come after canopy's and can beat it (D044). Allow only to narrow a deny of your own, as
+  `tracker-*` does, and to widen the overseer's shell, use `runtime.allow_bash` (`examples/config.toml`).
+- **Not the overseer's skills.** With Jira or GitHub as the tracker, canopy puts the tracker's skill in the overseer's
+  prompt and ends its skill rules with `"*": "deny"`, so it is not sent the skill tool at all. A `"*"` rule of yours
+  would move that one ahead of canopy's other skill rules, and the tool would be sent again.
+- **A chore with its own agent**, such as `canopy-introspect` for `canopy-health` and `canopy-efficiency`, is narrowed
+  under its own name, the same way. [examples/chores/README.md](../examples/chores/README.md) shows how to give a chore
+  such an agent, with bash allowed for exactly the commands its prompt runs.
+
+Then check that the rules held. Run `canopy agents` again: a server you denied shows `none` for that agent, the skills
+you denied are listed after `denied`, and with Jira or GitHub as the tracker, the overseer's built-in tools still have
+no `skill`. To see the merged rules themselves, ask OpenCode from the workspace root, with `<digest>` the newest
+directory under `.canopy/runtime/`:
+
+```sh
+env OPENCODE_CONFIG_DIR="$PWD/.canopy/runtime/<digest>" opencode debug agent canopy-overseer
+```
+
+`canopy agents` lists canopy's own agents only. For a chore's own agent, point `OPENCODE_CONFIG_DIR` at
+`.canopy/chore-agents/<chore>/` instead, and name that agent.
