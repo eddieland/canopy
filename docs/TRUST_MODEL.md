@@ -250,15 +250,17 @@ Controls:
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code, and the commands the operator names for it in `runtime.allow_bash`, such as a
   tracker's CLI while its MCP server is down. That key is private (T7): only the operator widens the overseer's shell,
-  and canopy renders each pattern last of its bash rules, so it wins, and lists them in `canopy agents`. In code,
-  canopy refuses an allow for any other agent (a worker's shell already runs all but what it denies, so an allow could
-  only undo a deny; the others have none), a pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`,
-  redirect, backslash, brace, or newline), a command named by a wildcard or a path, and one that runs a command it is
-  given (a shell, an interpreter, a wrapper such as `env`, `xargs`, or `timeout`, a package or build runner, `find`,
-  a pager, a database shell), fetches pages (D077), is git or a forge's CLI, or is the loop's own (`canopy`,
-  `treehouse`, the runtime). Residual, the operator's: an allowed command runs as they do with arguments the overseer
-  picks, so one that writes, such as `jira issue create`, writes, and one that reads text anyone can write puts that
-  text in front of it; and an option that runs a program, in a command canopy's list does not name, runs it.
+  and canopy renders each pattern last of its bash rules, so it wins, and lists them in `canopy agents`. The same key
+  takes allows for both workers, rendered last of theirs: a worker's shell already runs all but what it denies, so
+  there an allow undoes a deny, which the checks below keep from git, `gh`, `sudo`, and the loop's own tools, and leave
+  open for the private worker's tracker CLIs (T6). In code, canopy refuses an allow for the agents with no shell, a
+  pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`, redirect, backslash, brace, or newline), a
+  command named by a wildcard or a path, and one that runs a command it is given (a shell, an interpreter, a wrapper
+  such as `env`, `xargs`, or `timeout`, a package or build runner, `find`, a pager, a database shell), fetches pages
+  (D077), is git or a forge's CLI, or is the loop's own (`canopy`, `treehouse`, the runtime). Residual, the
+  operator's: an allowed command runs as they do with arguments the agent picks, so one that writes, such as
+  `jira issue create`, writes, and one that reads text anyone can write puts that text in front of it; and an option
+  that runs a program, in a command canopy's list does not name, runs it.
 - The loop may create tickets, but they authorize nothing: a human's queue label on a ticket, or the operator's start
   of a private one, authorizes work, and nothing else does (D123). An `implement` or `resume` worker, public or private,
   may file follow-up tickets to its ticket, with no labels and no assignee (DESIGN §18). canopy records each one its
@@ -564,13 +566,15 @@ Controls:
   `gh run view`, which read a PR and its CI and never the ticket, and `gh pr edit`, which resolves no issue and so
   writes only to a PR: its title, body, and base, as the PR update tool does, and its labels, assignees, reviewers,
   milestone, and projects, which the prompt alone keeps it from; and other MCP tools are denied by name as for
-  `canopy-worker` (D084). A run is refused where the worktree's OpenCode config names any of that server's tools,
-  since a repository rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and
-  to the tracker nothing but the follow-ups it files, and its report and question go to the journal, not the tracker.
-  An operator's own OpenCode config cannot deny a create tool canopy's definition allows, since the definition is
-  merged after it (D044); `policy.max_follow_ups = 0` has workers file none, and the MCP server's own tool selection,
-  where it has one, is what takes the tool away. The journal holds the operator's replies and the
-  workers' reports, under the operator-only state directory (T2).
+  `canopy-worker` (D084). The operator's `runtime.allow_bash` for `worker-private` is rendered after those denies and
+  can undo the one of `acli` or `jira` (never `gh`, T1): a private ticket's worker allowed `jira issue comment` can
+  write the ticket, which is the operator's to answer for. A run is refused where the worktree's OpenCode config
+  names any of that server's tools, since a repository rule merged after canopy's could reopen one. Its prompt says to
+  write nothing to the ticket, and to the tracker nothing but the follow-ups it files, and its report and question go
+  to the journal, not the tracker. An operator's own OpenCode config cannot deny a create tool canopy's definition
+  allows, since the definition is merged after it (D044); `policy.max_follow_ups = 0` has workers file none, and the
+  MCP server's own tool selection, where it has one, is what takes the tool away. The journal holds the operator's
+  replies and the workers' reports, under the operator-only state directory (T2).
 - A task's worker (DESIGN §36) is the private worker: `canopy-worker-private`, run with `runtime.private_worker_cmd`,
   with that definition's tool lists, so on the tracker only its read tools and the tools that create a ticket, and on
   GitHub the tools of its PR; a run is refused where the slot's OpenCode config names any of the tracker server's

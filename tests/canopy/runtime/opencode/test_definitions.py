@@ -234,9 +234,18 @@ def test_no_bash_allows_render_the_overseer_as_none_did() -> None:
     assert f"{BASH_ALLOWS_MARKER}  #" in none[f"agents/{agents.OVERSEER}.md"].decode()
 
 
-@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER, agents.REVIEWER, agents.CHORE])
-def test_no_other_shipped_agent_takes_bash_allows(agent: str) -> None:
-    # A worker's shell runs every command but those it denies, which an allow could only undo; the rest have none.
+@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER])
+def test_bash_allows_are_the_last_of_a_workers_bash_rules(agent: str) -> None:
+    # A worker's shell runs every command but those it denies; an allow comes after every deny, so it beats them.
+    rendered = definitions.render(definitions.bundled(), replace(PLAIN, bash_allows={agent: ("jira issue view *",)}))
+    text = rendered[f"agents/{agent}.md"].decode()
+    bash = text.split("\n  bash:\n", 1)[1].split("\n  #", 1)[0]
+    rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    assert rules[-1] == '    "jira issue view *": allow'
+
+
+@pytest.mark.parametrize("agent", [agents.PLANNER, agents.REVIEWER, agents.CHORE])
+def test_no_agent_without_a_shell_takes_bash_allows(agent: str) -> None:
     rules = replace(PLAIN, bash_allows={agent: ("jira issue list *",)})
     with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line '# canopy: bash allows'"):
         definitions.render(definitions.bundled(), rules)
