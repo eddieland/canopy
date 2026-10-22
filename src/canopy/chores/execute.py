@@ -111,13 +111,14 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, l
     """Return where chore `name` runs, the command that runs it with `prompt`, and the definitions snapshot's digest.
 
     Raises:
-        SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
+        SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents or
+            names its history server.
     """
     cwd = _cwd(ctx, name, chore)
     # The shipped `canopy-chore` is merged with whatever runtime config its working directory has (D044), and the
     # runtime reads project config from the directories above it too.
     here = cwd.resolve()
-    refused = project_config.refusal((here, *here.parents))
+    refused = project_config.refusal((here, *here.parents), servers=(history.SERVER,))
     if refused is not None:
         raise SetupError(refused)
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd

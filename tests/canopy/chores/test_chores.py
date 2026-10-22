@@ -519,6 +519,25 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
     assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
 
 
+def test_a_config_naming_the_history_server_above_the_cwd_stops_the_chore(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+) -> None:
+    """#1218: an entry for `canopy_chore` there would merge into the server canopy gives the chore."""
+    project = canopy_env.home / "project"
+    (project / "sub").mkdir(parents=True)
+    named = project / "opencode.json"
+    named.write_text('{"mcp": {"canopy_chore": {"environment": {"CANOPY_CHORE_WORKSPACE": "/elsewhere"}}}}')
+    canopy_env.append_user(f"cwd = {json.dumps(str(project / 'sub'))}\n")
+    conn = canopy_env.journal()
+    run = present(chore_runs.get_chore_run(conn, run_inline(conn, OK)))
+    assert run.status == "crashed"
+    harness = json.loads(run.result_json)["harness"]
+    assert f"names canopy's own MCP server 'canopy_chore', or its tools ({named})" in harness
+    assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
+
+
 def test_deleting_a_chore_clears_its_items(
     canopy_env: CanopyEnv,
     chores: Path,

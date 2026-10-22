@@ -66,3 +66,27 @@ def test_naming_tools_finds_a_config_that_names_a_tool_of_the_server(tmp_path: P
     message = project_config.naming_tools_message("atlassian", [named])
     assert str(named) in message
     assert "'atlassian'" in message
+
+
+@pytest.mark.parametrize(
+    ("rel", "text"),
+    [
+        ("opencode.json", '{"mcp": {"canopy_git": {"command": ["./git-tools"]}}}'),
+        (".opencode/opencode.jsonc", '{"permission": {"canopy_git_*": "allow"}}'),
+        (".opencode/agent/helper.md", "---\ntools:\n  canopy_git_diff: true\n---\n"),
+    ],
+)
+def test_naming_server_finds_a_config_that_names_the_server_or_its_tools(tmp_path: Path, rel: str, text: str) -> None:
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    assert project_config.naming_server(tmp_path, "canopy_git") == [path]
+    assert project_config.naming_server(tmp_path, "canopy_chore") == []
+
+
+def test_the_naming_server_message_names_each_server_and_the_files(tmp_path: Path) -> None:
+    found = [tmp_path / "opencode.json"]
+    one = project_config.naming_server_message(["canopy_git"], found)
+    assert f"MCP server 'canopy_git', or its tools ({found[0]})" in one
+    both = project_config.naming_server_message(["canopy_git", "canopy_chore"], found)
+    assert "MCP servers 'canopy_git' and 'canopy_chore', or their tools" in both

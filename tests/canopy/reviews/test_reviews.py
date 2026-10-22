@@ -912,6 +912,23 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
     assert "Your git tools, `canopy_git_merge-base`" in reviewed.prompt
 
 
+def test_a_review_refuses_a_workspace_config_that_names_canopys_git_tools(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
+) -> None:
+    """#1218: a rule there, merged after the reviewer's, could change which of canopy's git tools it may call."""
+    named = reviewing.root / "opencode.json"
+    named.write_text('{"permission": {"canopy_git_*": "allow"}}')
+    row = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).row
+    assert row.status == "crashed"
+    harness = json.loads(row.result_json or "{}")["harness"]
+    assert f"names canopy's own MCP server 'canopy_git', or its tools ({named})" in harness
+    assert not scenario.agent_log.exists()  # the reviewer never ran
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+
+
 TWO_FINDINGS = {
     **FINDINGS,
     "findings": [
