@@ -213,10 +213,11 @@ def _digest(found: memory.Digest, *, served: bool) -> MemoryDigest:
     return MemoryDigest(text=found.text, ids=list(found.ids), left_out=found.left_out, served=served)
 
 
-def _review_order(lesson: records.Memory) -> tuple[bool, str, str]:
+def _review_order(lesson: records.Memory) -> tuple[bool, bool, str, str]:
     # Reported wrong first, then by review date: what calls for the operator comes first, and the lessons longest since
-    # vouched for, which the digest leaves out first, come before those it serves.
-    return (lesson.wrong_at is None, lesson.review_at or "", lesson.key)
+    # vouched for, which the digest leaves out first, come before those it serves. A pinned lesson is never due, so it
+    # comes after every one that will be.
+    return (lesson.wrong_at is None, lesson.pinned_at is not None, lesson.review_at or "", lesson.key)
 
 
 def _ticket_notes(found: memory.TicketNotes) -> TicketNotes:
