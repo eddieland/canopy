@@ -81,3 +81,41 @@ def test_html_text_holds_the_words_and_no_markup(words: list[str], data: st.Data
 def test_a_reflowed_text_reads_the_same(words: list[str], gaps: list[str]) -> None:
     reflowed = "".join(word + (gaps[i % len(gaps)] if gaps else " ") for i, word in enumerate(words))
     assert visible_text("text/markdown", reflowed) == collapse(" ".join(words))
+
+
+def test_a_passage_found_everywhere_in_the_longest_version_is_scored_without_copying_the_text() -> None:
+    # A version as long as the store takes, and a one-letter passage found at every other character: slicing the text
+    # around each copy, as `locate` once did, would copy it a million times over.
+    text = "e " * 999_999 + "e z"
+    assert locate(text, Anchor.of("e", suffix="z")) == len(text) - 3
+    assert locate(text, Anchor.of("e")) == 0
+
+
+@given(text=TEXTS, exact=WORDS, prefix=st.text(max_size=CONTEXT), suffix=st.text(max_size=CONTEXT))
+def test_the_copy_chosen_is_the_one_whose_sides_match_best_and_the_first_of_a_tie(
+    text: str,
+    exact: str,
+    prefix: str,
+    suffix: str,
+) -> None:
+    anchor = Anchor.of(exact, prefix, suffix)
+    copies = [at for at in range(len(text)) if text.startswith(anchor.exact, at)]
+    found = locate(text, anchor)
+    if not copies:
+        assert found is None
+        return
+    scores = [_score(text, at, anchor) for at in copies]
+    assert found == copies[scores.index(max(scores))]
+
+
+def _score(text: str, at: int, anchor: Anchor) -> int:
+    """Score a copy as the plan editor does, by slicing: the characters its sides share with the anchor's."""
+    before, want = text[:at].rstrip(), anchor.prefix.rstrip()
+    after, wanted = text[at + len(anchor.exact) :].lstrip(), anchor.suffix.lstrip()
+    common = 0
+    while common < min(len(before), len(want)) and before[-1 - common] == want[-1 - common]:
+        common += 1
+    ahead = 0
+    while ahead < min(len(after), len(wanted)) and after[ahead] == wanted[ahead]:
+        ahead += 1
+    return common + ahead

@@ -102,13 +102,18 @@ def locate(text: str, anchor: Anchor) -> int | None:
     """
     if not anchor.exact:
         return None
+    prefix, suffix = anchor.prefix.rstrip(), anchor.suffix.lstrip()
+    # Each copy is scored by index, never by slicing the text around it, so a passage found a million times in a long
+    # version costs a million short comparisons rather than a million copies of the version.
     best: int | None = None
     best_score = -1
     at = text.find(anchor.exact)
     while at != -1:
-        score = _common_suffix(text[:at], anchor.prefix) + _common_prefix(text[at + len(anchor.exact) :], anchor.suffix)
+        score = _common_suffix(text, at, prefix) + _common_prefix(text, at + len(anchor.exact), suffix)
         if score > best_score:
             best, best_score = at, score
+            if score == len(prefix) + len(suffix):
+                break
         at = text.find(anchor.exact, at + 1)
     return best
 
@@ -153,27 +158,31 @@ class _Visible(HTMLParser):
             self.parts.append(data)
 
 
-def _common_suffix(text: str, prefix: str) -> int:
-    """Count how many characters `text` ends with of what `prefix` ends with.
+def _common_suffix(text: str, end: int, want: str) -> int:
+    """Count how many characters `text` before `end` ends with of what `want` ends with.
 
     Returns:
-        The count, compared from the end back, either side's trailing whitespace aside.
+        The count, compared from the end back, the text's whitespace just before `end` aside.
     """
-    before, want = text.rstrip(), prefix.rstrip()
+    i = end
+    while i > 0 and text[i - 1].isspace():
+        i -= 1
     n = 0
-    while n < len(before) and n < len(want) and before[-1 - n] == want[-1 - n]:
+    while n < i and n < len(want) and text[i - 1 - n] == want[-1 - n]:
         n += 1
     return n
 
 
-def _common_prefix(text: str, suffix: str) -> int:
-    """Count how many characters `text` starts with of what `suffix` starts with.
+def _common_prefix(text: str, start: int, want: str) -> int:
+    """Count how many characters `text` from `start` starts with of what `want` starts with.
 
     Returns:
-        The count, either side's leading whitespace aside.
+        The count, the text's whitespace at `start` aside.
     """
-    after, want = text.lstrip(), suffix.lstrip()
+    i = start
+    while i < len(text) and text[i].isspace():
+        i += 1
     n = 0
-    while n < len(after) and n < len(want) and after[n] == want[n]:
+    while i + n < len(text) and n < len(want) and text[i + n] == want[n]:
         n += 1
     return n
