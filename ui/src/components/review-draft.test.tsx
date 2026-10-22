@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import { reviewDraft } from '@/api/mocks'
 import type { DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
+import { ToastContext } from '@/hooks/use-toast'
 import { placeFindings } from '@/lib/reviews'
+import type { NewToast } from '@/lib/toasts'
 import { renderRouted } from '@/test-utils'
 
 import { ReviewDiffPanels } from './review-diff'
@@ -19,6 +21,8 @@ let sent: { method: string; path: string; body: unknown }[] = []
 let answer: (path: string, body: unknown) => Response
 // What the panel calls when a link to a comment's card is followed.
 const followed = vi.fn<(file: number) => void>()
+// Every toast the panel showed.
+let toasts: NewToast[] = []
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -32,6 +36,7 @@ const server: Middleware = {
 
 beforeEach(() => {
     sent = []
+    toasts = []
     answer = () => Response.json(reviewDraft({ version: 2, hash: 'aaaaaaaaaaaa', change: 'edited the body' }))
     api.use(server)
 })
@@ -47,7 +52,13 @@ function writes() {
 
 async function panel(draft: ReviewDraft = reviewDraft(), hasDiff = true) {
     await renderRouted(
-        <ReviewDraftPanel run={5} prUrl={PR} sha={SHA} draft={draft} hasDiff={hasDiff} onFollow={followed} />,
+        <ToastContext
+            value={(toast) => {
+                toasts.push(toast)
+            }}
+        >
+            <ReviewDraftPanel run={5} prUrl={PR} sha={SHA} draft={draft} hasDiff={hasDiff} onFollow={followed} />
+        </ToastContext>,
     )
     return screen.getByTestId('review-draft')
 }
@@ -68,39 +79,80 @@ describe('ReviewDraftPanel', () => {
         )
     })
 
-    it('stages the version shown by default, and submits it once ticked, as canopy review publish does', async () => {
-        answer = () =>
-            Response.json({ draft: reviewDraft({ status: 'staged' }), published: 1, failed: null }, { status: 200 })
+    it('says what would post, as whom, on whose PR, and on which commit', async () => {
         const found = await panel()
-        const stage = within(found).getByRole('button', { name: 'Start the review on GitHub' })
-        expect(stage.getAttribute('title')).toBe('canopy review publish 5 3f9a1c27b0de')
-        fireEvent.click(stage)
-        await waitFor(() => {
-            expect(
-                within(found).getByText(/^Staged version 1 of review run 5's draft in a pending review/u),
-            ).toBeTruthy()
-        })
-        expect(writes()).toEqual([
-            { method: 'POST', path: '/api/reviews/5/draft/publish', body: { hash: '3f9a1c27b0de', submit: false } },
-        ])
-
+        expect(within(found).getByTestId('draft-posts').textContent).toBe(
+            "Publish posts the body and 1 comment as your comment review, unmarked, on carol's PR, at a61f7c0: it " +
+                'approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it ' +
+                'there.',
+        )
         cleanup()
-        sent = []
+        const unread = await panel(reviewDraft({ body: '', pr_author: null }))
+        expect(within(unread).getByTestId('draft-posts').textContent).toMatch(
+            /^Publish posts 1 comment, no body, as your comment review, unmarked, on the PR, at a61f7c0:/u,
+        )
+    })
+
+    it('publishes the version shown, or starts the review on GitHub, as canopy review publish does', async () => {
+        const url = `${PR}#pullrequestreview-9`
         answer = () =>
             Response.json({
-                draft: reviewDraft({ status: 'published', published_url: `${PR}#pullrequestreview-9` }),
+                draft: reviewDraft({ status: 'published', published_url: url }),
                 published: 1,
                 failed: null,
             })
-        const again = await panel()
-        fireEvent.click(within(again).getByRole('checkbox', { name: 'Submit it on GitHub now' }))
-        fireEvent.click(within(again).getByRole('button', { name: 'Publish version 1' }))
+        const found = await panel()
+        const publish = within(found).getByRole('button', { name: 'Publish version 1' })
+        expect(publish.getAttribute('title')).toBe('canopy review publish 5 3f9a1c27b0de --submit')
+        fireEvent.click(publish)
         await waitFor(() => {
-            expect(
-                within(again).getByText(`Published version 1 of review run 5's draft: ${PR}#pullrequestreview-9`),
-            ).toBeTruthy()
+            expect(toasts).toEqual([
+                { title: "Published version 1 of review run 5's draft", detail: url, tone: 'done' },
+            ])
         })
-        expect(writes()[0]?.body).toEqual({ hash: '3f9a1c27b0de', submit: true })
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/reviews/5/draft/publish', body: { hash: '3f9a1c27b0de', submit: true } },
+        ])
+        // The draft's own linked line says it once the draft shows published; the raw URL is the toast's alone.
+        expect(within(found).queryByRole('status')).toBeNull()
+
+        cleanup()
+        sent = []
+        toasts = []
+        answer = () => Response.json({ draft: reviewDraft({ status: 'staged' }), published: 1, failed: null })
+        const again = await panel()
+        const stage = within(again).getByRole('button', { name: 'Start the review on GitHub' })
+        expect(stage.getAttribute('title')).toBe('canopy review publish 5 3f9a1c27b0de')
+        fireEvent.click(stage)
+        await waitFor(() => {
+            expect(toasts).toEqual([
+                {
+                    title: "Staged version 1 of review run 5's draft in a review on GitHub",
+                    detail: `${PR}/files`,
+                    tone: 'done',
+                },
+            ])
+        })
+        expect(writes()[0]?.body).toEqual({ hash: '3f9a1c27b0de', submit: false })
+    })
+
+    it('says why a publish posted nothing, with a cross', async () => {
+        answer = () =>
+            Response.json({ draft: reviewDraft({ status: 'waiting' }), published: 1, failed: 'the post failed: 502' })
+        const found = await panel()
+        fireEvent.click(within(found).getByRole('button', { name: 'Publish version 1' }))
+        expect(
+            await within(found).findByText("Version 1 of review run 5's draft was not published: the post failed: 502"),
+        ).toBeTruthy()
+        expect(toasts).toEqual([{ title: "Version 1 of review run 5's draft was not published", tone: 'failed' }])
+    })
+
+    it('offers nothing to publish while the draft is empty', async () => {
+        const found = await panel(reviewDraft({ body: '', comments: [] }))
+        expect(within(found).getByRole('button', { name: 'Publish version 1' }).hasAttribute('disabled')).toBe(true)
+        expect(within(found).getByTestId('draft-posts').textContent).toBe(
+            'Nothing to post yet: it needs a body or a comment.',
+        )
     })
 
     it('names the guard of a refused publish, as the CLI does', async () => {
@@ -135,12 +187,15 @@ describe('ReviewDraftPanel', () => {
         const found = await panel(reviewDraft({ status: 'published', published_url: url }))
         expect(within(found).queryByRole('button', { name: 'edit' })).toBeNull()
         expect(within(found).queryByRole('button', { name: 'Start the review on GitHub' })).toBeNull()
+        expect(within(found).getByTestId('draft-published').textContent).toContain('Published version 1 as your review')
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(url)
     })
 
     it('says where to finish a staged review', async () => {
         const found = await panel(reviewDraft({ status: 'staged' }))
-        expect(within(found).getByTestId('draft-staged').textContent).toContain('It waits in the review you staged.')
+        expect(within(found).getByTestId('draft-staged').textContent).toContain(
+            'Version 1 waits in the review you staged.',
+        )
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(`${PR}/files`)
     })
 })

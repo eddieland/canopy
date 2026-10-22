@@ -281,12 +281,15 @@ Change it until it says what you would:
 Each change is a new version, listed under **Versions** with who made it, and is the same as `canopy review edit`.
 A version holds at most 30 comments, which is more than any review worth reading needs.
 
-**Start the review on GitHub** publishes the version on the page, word for word, as a pending review on the commit the
-review read: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read of the PR records
-which. Tick **Submit it on GitHub now** and the button reads **Publish version N**: canopy submits it for you. Either
-way it is one comment review that approves nothing and requests no change, and it's `canopy review publish RUN HASH`,
-with `--submit` for the second. The hash is the version you looked at, so if anything changed it since, the publish is
-refused as `stale` and you read it again. A draft publishes once; a later commit's review is a draft of its own. If
-the PR has moved on since, the panel says so: your comments would land on the old commit and show as outdated.
+Two buttons sit at the foot, as they do under a PR's thread drafts. **Publish version N** posts the version on the page,
+word for word, on the commit the review read, and submits it. **Start the review on GitHub**, beside it, posts the same
+as a pending review instead: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read
+of the PR records which. The line beside them says exactly what goes out, the body and how many comments, on whose PR
+and which commit, so there's no guessing what your name is about to be attached to. Either way it is one comment review
+that approves nothing and requests no change, and it's `canopy review publish RUN HASH`, with `--submit` for the
+first. A toast says what went and where; the panel keeps a line linking to it on GitHub. The hash is the version you
+looked at, so if anything changed it since, the publish is refused as `stale` and you read it again. A draft publishes
+once; a later commit's review is a draft of its own. If the PR has moved on since, the panel says so: your comments
+would land on the old commit and show as outdated.
 
 canopy can't take a published review back, and nothing on GitHub says a model wrote it but what you leave in.

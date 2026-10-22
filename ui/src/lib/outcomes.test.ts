@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import { draft, mockCapacity } from '@/api/mocks'
+import { draft, mockCapacity, reviewDraft } from '@/api/mocks'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
@@ -27,6 +27,8 @@ import {
     renewedText,
     repliedText,
     reviewDismissedText,
+    reviewDraftPublishedText,
+    reviewDraftPublishedToast,
     reviewRequestedText,
     reviewSentText,
     reviewStoppedText,
@@ -396,5 +398,31 @@ describe('outcomes', () => {
         const forgot = { id: 9, scope: 'lesson', key: 'web-tests', checkpointed: true } as const
         expect(memoryForgottenText(forgot)).toBe('Memory 9 (lesson `web-tests`) is forgotten: its text is deleted.')
         expect(memoryForgottenText({ ...forgot, checkpointed: false })).toContain('may stay in the log')
+    })
+})
+
+describe('reviewDraftPublishedToast', () => {
+    const pr = 'https://github.com/acme/api/pull/14'
+    const published = (status: 'published' | 'unconfirmed') => ({
+        draft: reviewDraft({ status, published_url: status === 'published' ? `${pr}#pullrequestreview-9` : null }),
+        published: 2,
+        failed: null,
+    })
+
+    it('says where a publish went, and crosses one whose outcome a read of the PR settles', () => {
+        expect(reviewDraftPublishedToast(5, pr, published('published'))).toEqual({
+            title: "Published version 2 of review run 5's draft",
+            detail: `${pr}#pullrequestreview-9`,
+            tone: 'done',
+        })
+        expect(reviewDraftPublishedToast(5, pr, published('unconfirmed'))).toEqual({
+            title: "Version 2 of review run 5's draft may have been posted",
+            tone: 'failed',
+        })
+    })
+
+    it('leaves the panel no line of its own for a publish its linked line says', () => {
+        expect(reviewDraftPublishedText(5, published('published'))).toBeNull()
+        expect(reviewDraftPublishedText(5, published('unconfirmed'))).toContain('A read of the PR settles it')
     })
 })

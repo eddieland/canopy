@@ -180,28 +180,52 @@ export function reviewDraftEditedText(run: number, draft: ReviewDraft): string {
 }
 
 /**
- * What a publish of review run `run`'s draft did, as `canopy review publish` says it: published, with where; staged,
- * with where to submit it; perhaps posted, which a read of the PR settles; or not published, and why.
+ * What a publish of review run `run`'s draft did, as `canopy review publish` says it, where the draft's own linked
+ * line does not say it: perhaps posted, which a read of the PR settles; or not published, and why. Null for a publish
+ * that posted or staged it, which that line says.
  */
-export function reviewDraftPublishedText(run: number, prUrl: string, published: ReviewDraftPublished): string {
+export function reviewDraftPublishedText(run: number, published: ReviewDraftPublished): string | null {
     const { draft } = published
-    const version = `version ${published.published} of review run ${run}'s draft`
+    const version = `Version ${published.published} of review run ${run}'s draft`
     switch (draft.status) {
-        case 'published': {
-            return `Published ${version}: ${draft.published_url ?? prUrl}`
-        }
+        case 'published':
         case 'staged': {
-            return `Staged ${version} in a pending review on ${prUrl}; submit or delete it at ${prUrl}/files`
+            return null
         }
         case 'unconfirmed': {
             return (
-                `${capitalized(version)} may have been posted: the post ended without saying. A read of the PR ` +
-                'settles it; canopy posts it no other time.'
+                `${version} may have been posted: the post ended without saying. A read of the PR settles it; canopy ` +
+                'posts it no other time.'
             )
         }
         case 'waiting':
         case 'publishing': {
-            return `${capitalized(version)} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+            return `${version} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+        }
+    }
+}
+
+/**
+ * The toast a publish shows, in the words `canopy review publish` starts with: published, with where it is; staged,
+ * with the PR's files page, where GitHub's own submit is; perhaps posted; or not published. A check only for the
+ * first two.
+ */
+export function reviewDraftPublishedToast(run: number, prUrl: string, published: ReviewDraftPublished): NewToast {
+    const { draft } = published
+    const version = `version ${published.published} of review run ${run}'s draft`
+    switch (draft.status) {
+        case 'published': {
+            return { title: `Published ${version}`, detail: draft.published_url ?? prUrl, tone: 'done' }
+        }
+        case 'staged': {
+            return { title: `Staged ${version} in a review on GitHub`, detail: `${prUrl}/files`, tone: 'done' }
+        }
+        case 'unconfirmed': {
+            return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
+        }
+        case 'waiting':
+        case 'publishing': {
+            return { title: `${capitalized(version)} was not published`, tone: 'failed' }
         }
     }
 }

@@ -399,14 +399,15 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     await expect(draft).toContainText('version 5,')
     await expect(draft.getByTestId('draft-versions')).toContainText('added a comment on api/upstream.py:14')
 
-    // Staged by default; ticked, canopy submits it. The mock answers for canopy's GitHub programs: it posts nowhere.
+    // Publish submits it; the outline button beside it would stage it. The mock answers for canopy's GitHub programs:
+    // it posts nowhere.
     await expect(draft.getByRole('button', { name: 'Start the review on GitHub' })).toBeVisible()
-    await draft.getByRole('checkbox', { name: 'Submit it on GitHub now' }).click()
+    await expect(draft.getByTestId('draft-posts')).toContainText('the body and 2 comments as your comment review')
+    await expect(draft.getByTestId('draft-posts')).toContainText("on carol's PR, at a61f7c0")
     await draft.getByRole('button', { name: 'Publish version 5' }).click()
-    await expect(draft.getByRole('status')).toContainText(
-        "Published version 5 of review run 5's draft: https://github.com/acme/api/pull/14#pullrequestreview-",
-    )
-    await expect(draft.getByTestId('draft-published')).toBeVisible()
+    await expect(page.getByTestId('toast')).toContainText("Published version 5 of review run 5's draft")
+    await expect(page.getByTestId('toast')).toContainText('https://github.com/acme/api/pull/14#pullrequestreview-')
+    await expect(draft.getByTestId('draft-published')).toContainText('Published version 5 as your review on GitHub.')
     // A draft publishes once: nothing on the page changes it now.
     await expect(draft.getByRole('button')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Comment on /u })).toHaveCount(0)

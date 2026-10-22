@@ -21,9 +21,9 @@ import { ListRow } from '@/components/rows'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { useToast } from '@/hooks/use-toast'
 import { MAX_DRAFT_CHARS, draftChars } from '@/lib/drafts'
-import { reviewDraftEditedText, reviewDraftPublishedText } from '@/lib/outcomes'
+import { reviewDraftEditedText, reviewDraftPublishedText, reviewDraftPublishedToast } from '@/lib/outcomes'
 import { REVIEW_DRAFT_TONE, commentAnchor, editable, versionBy } from '@/lib/review-drafts'
 import type { Adding } from '@/lib/review-drafts'
 import { shortSha } from '@/lib/reviews'
@@ -36,14 +36,18 @@ const INTRO = [
     " that approves nothing. The reviewer wrote it from the PR's text, so read it before you publish it.",
 ] as const
 
+// The end of the line by the publish buttons: what the review is not, and what the other button does.
+const POSTS_STAGED =
+    ': it approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it there.'
+
 /**
  * A review of a PR the loop does not own as the comment review canopy would post in the operator's name (DESIGN §34):
  * its newest version word for word, the body here and each comment on its line of the diff, every hidden character
  * named, since the reviewer wrote it from the PR's text. While it waits, the body is edited here, each comment on its
  * card, and a comment added on any line of the diff; each change is a new version, as `canopy review edit` makes.
- * Publishing posts the version shown, named by its hash, as one comment review on the commit the review read: left
- * pending on GitHub for the operator to submit there, or submitted now when they tick it, as `--submit` does. A staged
- * one says where to finish it, a published one links to it. With no diff kept, its comments are listed here.
+ * Publishing posts the version shown, named by its hash, as one comment review on the commit the review read:
+ * submitted now, as `--submit` does, or left pending on GitHub for the operator to submit there. A staged one says
+ * where to finish it, a published one links to it. With no diff kept, its comments are listed here.
  * `onFollow` hears a link followed to a comment's card, by its file's index in the diff.
  */
 export function ReviewDraftPanel({
@@ -131,7 +135,7 @@ export function ReviewDraftPanel({
             </div>
             <CommentList run={run} draft={draft} hasDiff={hasDiff} onFollow={onFollow} />
             <VersionList draft={draft} />
-            <PublishFooter run={run} prUrl={prUrl} draft={draft} said={said} onSaid={setSaid} />
+            <PublishFooter run={run} prUrl={prUrl} sha={sha} draft={draft} said={said} onSaid={setSaid} />
         </Panel>
     )
 }
@@ -229,66 +233,79 @@ function VersionList({ draft }: { draft: ReviewDraft }) {
 }
 
 /**
- * Publishing the version shown, as `canopy review publish RUN HASH`: staged by default, a pending review for the
- * operator to submit on GitHub, or submitted now when they tick it. A draft staged, published, or of unknown outcome
- * says so instead, and where to look.
+ * Publishing the version shown, as `canopy review publish RUN HASH`, as a PR's thread drafts are sent: `Publish
+ * version N` submits it now (`--submit`), and an outline `Start the review on GitHub` beside it stages it, a pending
+ * review for the operator to submit there. A line beside them says what posts, as whom, on whose PR, and on which
+ * commit. A toast says what a publish did; a draft staged or published says so in one linked line, and one of unknown
+ * outcome or not published says why.
  */
 function PublishFooter({
     run,
     prUrl,
+    sha,
     draft,
     said,
     onSaid,
 }: {
     run: number
     prUrl: string
+    sha: string
     draft: ReviewDraft
     said: string | null
-    onSaid: (said: string) => void
+    onSaid: (said: string | null) => void
 }) {
     const client = useQueryClient()
-    const id = useId()
-    const [submit, setSubmit] = useState(false)
+    const toast = useToast()
     const publish = useMutation({
-        mutationFn: () => publishReviewDraft(run, draft.hash, submit),
+        mutationFn: (submit: boolean) => publishReviewDraft(run, draft.hash, submit),
         onSuccess: (published) => {
-            onSaid(reviewDraftPublishedText(run, prUrl, published))
+            onSaid(reviewDraftPublishedText(run, published))
+            toast(reviewDraftPublishedToast(run, prUrl, published))
             void showReviewDraft(client, run, published.draft)
         },
     })
     const empty = draft.body === '' && draft.comments.length === 0
+    // Which of the two is on its way, so only that one says so.
+    const submitting = publish.isPending ? publish.variables : null
     return (
         <PanelFooter>
             {editable(draft) && (
-                <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="flex flex-wrap items-center gap-2">
                     <Button
-                        onClick={() => publish.mutate()}
+                        onClick={() => publish.mutate(true)}
                         disabled={publish.isPending || empty}
-                        variant={submit ? 'default' : 'outline'}
-                        title={`canopy review publish ${run} ${draft.hash}${submit ? ' --submit' : ''}`}
+                        title={`canopy review publish ${run} ${draft.hash} --submit`}
                     >
-                        {submit ? <Send /> : <GitPullRequestDraft />}
-                        {publishLabel(draft.version, { submit, pending: publish.isPending })}
+                        <Send />
+                        {submitting === true ? 'Publishing…' : `Publish version ${draft.version}`}
                     </Button>
-                    <span className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                            id={`${id}-submit`}
-                            checked={submit}
-                            onCheckedChange={(checked) => setSubmit(checked === true)}
-                            disabled={publish.isPending}
-                        />
-                        <label htmlFor={`${id}-submit`}>Submit it on GitHub now</label>
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                        {submit
-                            ? 'canopy submits it as your comment review, now and once: a draft publishes one version.'
-                            : 'It waits on GitHub as a pending review only you see, until you submit it there.'}
+                    <Button
+                        variant="outline"
+                        onClick={() => publish.mutate(false)}
+                        disabled={publish.isPending || empty}
+                        title={`canopy review publish ${run} ${draft.hash}`}
+                    >
+                        <GitPullRequestDraft />
+                        {submitting === false ? 'Starting the review…' : 'Start the review on GitHub'}
+                    </Button>
+                    <span className="text-xs text-muted-foreground" data-testid="draft-posts">
+                        {empty ? (
+                            'Nothing to post yet: it needs a body or a comment.'
+                        ) : (
+                            <>
+                                {`Publish posts ${postsWhat(draft)} as your comment review, unmarked, on `}
+                                {draft.pr_author === null ? 'the PR' : `${draft.pr_author}'s PR`}
+                                {', at '}
+                                <span className="font-mono">{shortSha(sha)}</span>
+                                {POSTS_STAGED}
+                            </>
+                        )}
                     </span>
                 </span>
             )}
             {draft.status === 'staged' && (
                 <p className="text-sm" data-testid="draft-staged">
-                    It waits in the review you staged. Submit or delete it{' '}
+                    Version {draft.version} waits in the review you staged. Submit or delete it{' '}
                     <a
                         href={`${prUrl}/files`}
                         target="_blank"
@@ -302,7 +319,7 @@ function PublishFooter({
             )}
             {draft.status === 'published' && draft.published_url !== null && (
                 <p className="text-sm" data-testid="draft-published">
-                    Published as your review{' '}
+                    Published version {draft.version} as your review{' '}
                     <a
                         href={draft.published_url}
                         target="_blank"
@@ -319,12 +336,14 @@ function PublishFooter({
     )
 }
 
-// What the publish button says: what it does, ticked to submit or not, and that it is doing it while it is.
-function publishLabel(version: number, { submit, pending }: { submit: boolean; pending: boolean }): string {
-    if (submit) {
-        return pending ? 'Publishing…' : `Publish version ${version}`
+// What a publish would post of the draft: its body, its comments, or both.
+function postsWhat(draft: ReviewDraft): string {
+    const n = draft.comments.length
+    const comments = n === 1 ? '1 comment' : `${n} comments`
+    if (draft.body === '') {
+        return `${comments}, no body,`
     }
-    return pending ? 'Starting the review…' : 'Start the review on GitHub'
+    return n === 0 ? 'the body alone' : `the body and ${comments}`
 }
 
 /**

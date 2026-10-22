@@ -272,6 +272,23 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             end_reason="reviewed",
         ),
     )
+    # The reader's last read of Carol's PR, at the commit review 5 read, which names her as its author.
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_prs",
+            url=PR_14,
+            repository="acme/api",
+            number=14,
+            head_sha=SHA_14,
+            base_ref="main",
+            state="open",
+            draft=0,
+            mergeable="mergeable",
+            author="carol",
+            observed_at=at(-29),
+        ),
+    )
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
     sql.execute(
         conn,
