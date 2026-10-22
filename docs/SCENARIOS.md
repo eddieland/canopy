@@ -52,6 +52,11 @@ any OpenCode upgrade, and before relying on a permission they check.
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
   times in `MEASUREMENTS.md`.
+- **S64. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
+  every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
+  MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
+  refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
+  upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes `canopy_sandbox/credentials.py` names.
 
 ## Before a release
 

@@ -24,7 +24,8 @@ that picks the operator's policy template. The prefix is private config (§12, T
 the sandbox denies writes to canopy's config, so no worker can; nothing canopy runs writes it. The wrapper strips the
 environment that would point git elsewhere or run a startup file; refuses a worker or setup outside a linked worktree,
 a desk or review directory that is a git checkout, and a template with no read denials or no network allowlist; and
-gives each run a policy, a private temp directory, the role's cache, and, for a worker or setup, its own `git`. The
+gives each run a policy, a private temp directory, the role's cache and data, and, for a worker or setup, its own
+`git`. The
 prompt passes through `srt`'s quoted shell string byte for byte (D023's revisit clause). Timeouts still end everything;
 on macOS a process that calls `setsid` escapes, as it would unsandboxed.
 
@@ -48,7 +49,8 @@ a deny list of secret paths, which always misses one.
 | The git common dir, except this slot's own directory | yes | no | Shared by every slot (Git state). |
 | This slot's own directory, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its HEAD, index, reflog. |
 | The run's object directory, its temp directory, the role's cache | yes | yes | Commits (§8), scratch, caches. |
-| The runtime's data and state | yes | yes | Sessions and tokens (Open). |
+| The role's own runtime data, and the runtime's state | yes | yes | Sessions, and a copy of the logins (below). |
+| The operator's runtime data | no | no | The host's runtime acts on what is in it (below). |
 | Toolchains, the runtime's config, canopy's agent definitions | yes | no | Tests; a worker must not rewrite its permissions (D040). |
 | The operator's own caches | no | no | The host runs what is in them. |
 | canopy's config, the workspace's `.canopy/`, the rest of `$HOME` | no | no | Config, journal, secrets. |
@@ -56,6 +58,13 @@ a deny list of secret paths, which always misses one.
 A chore's default working directory, inside `.canopy/`, is writable only for a chore that writes. A review writes none
 of its checkout or git directories (§21) and gets no object directory, no wrapper `git`, and no GitHub. Each role has
 a cache of its own, setup sharing the worker's (§9); no role reads another's.
+
+The runtime's data directory is code the host runs too: a login or account planted there makes the overseer's runtime,
+or the operator's, run what a run chose. So each role's runs keep data of their own, and no template lets a run write
+the operator's. The operator settled (2026-10-18) that they log in once: the wrapper copies their logins in before each
+run, and back after it takes only an OAuth refresh of a login they already have, never a new login or a field that
+says where a token goes or whose it is. Rejected: a second login, and copying in alone, which a rotated refresh token
+turns into a logout. A run can still hand back a bad token, or another account's (T4).
 
 ### Git state
 
@@ -89,18 +98,17 @@ A script through the real prefix and shipped templates, no model (unlike D021), 
 the host. Every attempt must fail:
 
 - Read a fake SSH key or anything under `$HOME` outside the policy; write under `$HOME`, canopy's config, the
-  operator's runtime cache, or the state directory; read or write another role's cache.
+  operator's runtime cache or data, or the state directory; read or write another role's cache or data.
 - Move any ref; write the common directory's config or hooks, or the slot's `.git` link, `config.worktree`,
   `commondir`, or `gitdir`; as `review`, write the checkout or its git directories.
 - Connect off the allowlist, to a metadata address, the host's loopback, or a host Unix socket, by the proxy or not.
 
 Positive controls must succeed, so a sandbox that blocks everything cannot pass: commit in the slot, objects only in
-the run's directory, and in a tool's cache repository; keep the role's cache; read the checkout as a review; reach an
-allowed host; use the system temp directory; receive any prompt byte for byte; die at a timeout, leaving no process.
+the run's directory, and in a tool's cache repository; keep the role's cache; read the operator's logins and hand back
+a refreshed token; read the checkout as a review; reach an allowed host; use the system temp directory; receive any
+prompt byte for byte; die at a timeout, leaving no process.
 
 ### Open
 
-- The runtime's data directory is a way out: read outside any sandbox by the overseer's OpenCode and the operator's.
-  Closing it needs data of the sandbox's own, once the operator settles how sandboxed runs get credentials.
 - Bazel's caches: a sandboxed run may not write them, so it builds cold until it has caches of its own.
 - Credential scoping: a GitHub token limited to the pool's repositories closes most of the network residual.

@@ -6,6 +6,7 @@ or npm is installed on the machine running the tests does not matter.
 
 import json
 import os
+import shutil
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -149,7 +150,14 @@ def test_a_template_kept_that_lets_a_run_write_the_operators_caches_is_to_be_cha
     old = json.loads((canopy_sandbox.TEMPLATES / "worker.json").read_text())
     uv = str(canopy_env.home / ".cache" / "uv")
     every_roles = "~/.cache/canopy/sandbox/"
-    old["filesystem"]["allowWrite"] = ["@TMPDIR@", "~/.cache/opencode", uv, every_roles, "~/.cache/canopy/sandbox/x"]
+    old["filesystem"]["allowWrite"] = [
+        "@TMPDIR@",
+        "@DATA@",
+        "~/.cache/opencode",
+        uv,
+        every_roles,
+        "~/.cache/canopy/sandbox/x",
+    ]
     (templates / "worker.json").write_text(json.dumps(old))
 
     report = sandbox.run_setup(SubprocessRunner(), "linux")
@@ -158,6 +166,53 @@ def test_a_template_kept_that_lets_a_run_write_the_operators_caches_is_to_be_cha
     paths = f"~/.cache/opencode, {uv}, {every_roles}:"
     assert todo.startswith(f"{templates / 'worker.json'} lets a sandboxed run write {paths}")
     assert "add @CACHE@" in todo
+
+
+@pytest.mark.parametrize("role", ["worker", "chore", "review"])
+def test_a_template_kept_that_names_the_operators_opencode_data_is_to_be_changed(
+    machine: Machine,
+    canopy_env: CanopyEnv,
+    role: str,
+) -> None:
+    """Templates from before `@DATA@` let a run read and write `~/.local/share/opencode`, whose logins and config the
+    overseer's OpenCode acts on, and gave a run's OpenCode no data directory of its own."""
+    machine.install(*LINUX_COMMANDS)
+    templates = canopy_env.home / ".config" / "canopy" / "sandbox"
+    templates.mkdir(parents=True)
+    old = json.loads((canopy_sandbox.TEMPLATES / f"{role}.json").read_text())
+    for key in ("allowRead", "allowWrite"):
+        entries = old["filesystem"][key]
+        entries[entries.index("@DATA@")] = "~/.local/share/opencode"
+    old["filesystem"]["allowRead"].append(str(canopy_env.home / ".local" / "share" / "opencode" / "auth.json"))
+    (templates / f"{role}.json").write_text(json.dumps(old))
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = report.todo
+    auth = canopy_env.home / ".local" / "share" / "opencode" / "auth.json"
+    assert todo.startswith(f"{templates / f'{role}.json'} lets a sandboxed run read ~/.local/share/opencode, {auth}:")
+    assert "add @DATA@ to\nboth" in todo
+
+
+@pytest.mark.parametrize("key", ["allowRead", "allowWrite"])
+def test_a_template_kept_without_the_runs_own_data_is_to_be_changed(
+    machine: Machine,
+    canopy_env: CanopyEnv,
+    key: str,
+) -> None:
+    """Without `@DATA@`, the run's OpenCode cannot reach the data directory the wrapper copies the logins into."""
+    machine.install(*LINUX_COMMANDS)
+    templates = canopy_env.home / ".config" / "canopy" / "sandbox"
+    templates.mkdir(parents=True)
+    old = json.loads((canopy_sandbox.TEMPLATES / "chore.json").read_text())
+    old["filesystem"][key].remove("@DATA@")
+    (templates / "chore.json").write_text(json.dumps(old))
+    shutil.copy(canopy_sandbox.TEMPLATES / "setup.json", templates)  # setup runs no OpenCode, and needs none
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = report.todo
+    assert todo.startswith(f"{templates / 'chore.json'} leaves @DATA@ out of its allowRead or allowWrite")
 
 
 def test_a_lockfile_that_changed_is_installed_again(machine: Machine, canopy_env: CanopyEnv) -> None:

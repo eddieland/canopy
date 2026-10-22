@@ -1,7 +1,8 @@
 """`canopy sandbox setup`: what running agents in a sandbox needs on this machine (DESIGN §24, docs/SANDBOX.md).
 
 It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there, and says
-when one already there lets a run write the operator's own caches, as templates from before `@CACHE@` did; installs
+when one already there lets a run write the operator's own caches, as templates from before `@CACHE@` did, or read
+the operator's OpenCode data, or leaves out the run's own, as templates from before `@DATA@` did; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
@@ -22,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import canopy_sandbox
+from canopy_sandbox import credentials
 
 from canopy.core import config
 from canopy.infra import procs
@@ -64,6 +66,16 @@ SHARED_CACHE = """\
 {template} lets a sandboxed run write {paths}: your own caches, whose packages and programs your tools run outside
 the sandbox, the agent runtime's for the overseer included. Remove them from its allowWrite and allowRead, and
 add @CACHE@ to both, as the shipped template does (docs/SANDBOX.md)."""
+OPERATOR_DATA = """\
+{template} lets a sandboxed run read {paths}: the agent runtime's own data, whose logins and config your runtime, the
+overseer's included, acts on outside the sandbox. Remove them from its allowRead and allowWrite, and add @DATA@ to
+both, as the shipped template does: a run's runtime keeps its data there, with a copy of your logins
+(docs/SANDBOX.md)."""
+NO_DATA = """\
+{template} leaves @DATA@ out of its allowRead or allowWrite, so a sandboxed run's runtime finds none of your logins.
+Add it to both, as the shipped template does (docs/SANDBOX.md)."""
+# The roles whose command is OpenCode, which keeps its data, logins included, in the run's own data directory.
+RUNTIME_ROLES = ("worker", "chore", "review")
 
 
 @dataclass
@@ -118,6 +130,8 @@ def _copy_templates(report: Report) -> None:
                 report.kept.append(path)
                 if shared := _shared_caches(path):
                     report.todo.append(SHARED_CACHE.format(template=path, paths=", ".join(shared)))
+                if (data := _data_todo(path, role)) is not None:
+                    report.todo.append(data)
                 continue
             path.write_text((canopy_sandbox.TEMPLATES / path.name).read_text(encoding="utf-8"), encoding="utf-8")
             report.written.append(path)
@@ -149,6 +163,37 @@ def _shared_caches(template: Path) -> list[str]:
         if isinstance(entry, str)
         and any(_within(Path(entry).expanduser(), root, but=root / "canopy" / "sandbox") for root in roots)
     ]
+
+
+def _data_todo(template: Path, role: str) -> str | None:
+    """Say what `template`, for `role`, needs changed about OpenCode's data directory, if anything.
+
+    It needs changing when it names the operator's OpenCode data directory, or anything in it, to read or write, or,
+    for a role that runs OpenCode, when it does not name the run's own, `@DATA@`, in both.
+
+    Returns:
+        The paragraph for the operator, or None for a template that needs nothing, or cannot be read.
+    """
+    try:
+        policy = json.loads(template.read_text(encoding="utf-8"))
+        lists: list[object] = [policy["filesystem"].get(key, []) for key in ("allowRead", "allowWrite")]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+    entries = [[e for e in entries if isinstance(e, str)] for entries in lists if isinstance(entries, list)]
+    if len(entries) != len(lists):
+        return None
+    operator = canopy_sandbox.data_home() / credentials.RUNTIME
+    roots = {operator, Path.home() / ".local" / "share" / credentials.RUNTIME}
+    named = [e for e in dict.fromkeys(e for es in entries for e in es) if any(_under(e, root) for root in roots)]
+    if named:
+        return OPERATOR_DATA.format(template=template, paths=", ".join(named))
+    if role in RUNTIME_ROLES and not all("@DATA@" in es for es in entries):
+        return NO_DATA.format(template=template)
+    return None
+
+
+def _under(entry: str, root: Path) -> bool:
+    return not entry.startswith("@") and Path(entry).expanduser().is_relative_to(root)
 
 
 def _within(path: Path, root: Path, *, but: Path) -> bool:
