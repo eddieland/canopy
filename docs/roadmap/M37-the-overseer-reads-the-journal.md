@@ -94,6 +94,8 @@ cursor empty or not a number refuses nothing, nor does a head whose only failure
 and the prompt has the overseer record `flaky_rerun` on a `handled` refusal, a new head or an operator message starting
 the next.
 Left: the cursor check on `canopy ticket set`, journal-numbered cursors and their migration, the mirror's retirement
-with comments recorded in the conversation, the design folded into the sections it names, and the live re-measurement.
+with comments recorded in the conversation, the design folded into the sections it names, pruning
+`observed_check_runs`, which nothing prunes yet (M47's garbage-collection pass would name it), and the live
+re-measurement.
 Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
 required (recommended: required), and how many new items a subject shows before the rest are counted.

@@ -236,9 +236,11 @@ def _check_handled(
     """Refuse a `resume` for CI alone when every failure at the PR's head is one a worker already had (DESIGN §35).
 
     A failure was had when its run is at or behind the unit's `ci` cursor, or when a failure of the same context at the
-    same head is, as `observed_check_runs` keeps them: a re-run that went red again. One with no run, a commit status,
-    is new, as is every failure while the cursor is empty or not a number, as the derivation reads them. A check the
-    repository's `human_checks` names is not CI, and a head with no failure is not refused here.
+    same head is, as `observed_check_runs` keeps them: a re-run that went red again. Every failure is new while the
+    cursor is empty or not a number, as the derivation reads them. One with no run, a commit status, is new here too,
+    though the derivation shows it only while the cursor is empty: with no run id to compare, the guard lets it through
+    rather than refuse what it cannot tell had. A check the repository's `human_checks` names is not CI, and a head with
+    no failure is not refused here.
 
     Raises:
         Refusal: `handled`.
