@@ -133,8 +133,10 @@ export const mockReviews: ReviewSummary[] = [
         ended_at: null,
         cost_usd: 0.04,
         persona: 'canopy',
+        request_id: null,
         news: false,
         seen: false,
+        draft: null,
     },
 ]
 
@@ -253,6 +255,7 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
             },
         ],
         max_comments: 30,
+        in_body: [3],
         versions: [
             {
                 number: 1,
@@ -263,6 +266,7 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
                 created_at: '2026-10-08T11:30:00Z',
             },
         ],
+        pr_author: 'carol',
         moved_head: null,
         published_at: null,
         published_url: null,

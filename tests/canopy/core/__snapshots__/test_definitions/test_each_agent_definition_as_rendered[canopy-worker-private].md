@@ -85,6 +85,10 @@ permission:
     "gh pr edit *": allow
     "gh run view": allow
     "gh run view *": allow
+    # The commands `runtime.allow_bash` names for the private worker are rendered at the marked line, last, so that
+    # each beats a deny above, a tracker CLI's among them, which the operator answers for (DESIGN §13, TRUST_MODEL T6).
+    # canopy refuses git, gh, a shell, a wrapper such as sudo, or its own tools there.
+    # canopy: bash allows
   # MCP tools are permissioned by name, `<server>_<tool>`, as for canopy-worker (D084): the private worker opens and
   # updates its PRs and replies on them, and nothing else. Its PR update tool can close the PR; the prompt keeps it to
   # the PR's own text. tests/canopy/core/test_definitions.py checks these rules against real tool names.

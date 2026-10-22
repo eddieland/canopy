@@ -367,10 +367,21 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
 }) => {
     // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock_reviews.py).
     await page.goto('reviews/5')
+    // The page is the draft's record: its title names whose review it is, and its line says where the draft stands.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:5 Your review of acme/api#14 by carol')
+    await expect(page.getByTestId('draft-state')).toHaveText('waitingversion 1 · posts nothing until you publish it')
     const draft = page.getByTestId('review-draft')
-    await expect(draft).toContainText('version 1,')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 1')
+    // What canopy's reviewer found is folded under the draft until it is opened.
+    const fold = page.getByTestId('reviewer-fold')
+    await expect(fold).not.toContainText('summary')
+    await fold.getByRole('button', { name: 'Show the review' }).click()
+    await expect(fold.getByRole('heading', { name: /^Findings/u })).toBeVisible()
+    // Each finding is one card on the diff, the comment it posts as on it: no comment's card beside a finding's.
+    const points = page.getByTestId('review-point')
+    await expect(points).toHaveCount(3)
     const comments = page.getByTestId('draft-comment')
-    await expect(comments).toHaveCount(2)
+    await expect(comments).toHaveCount(0)
 
     await draft.getByTestId('draft-body').getByRole('button', { name: 'edit' }).click()
     await draft.getByRole('textbox', { name: 'In your words' }).fill('One thing to fix before this goes in.')
@@ -380,37 +391,53 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     )
     await expect(draft.getByTestId('draft-body')).toContainText('One thing to fix before this goes in.')
 
-    // Each comment is edited and dropped on its card, at its line of the diff.
-    const first = comments.filter({ hasText: 'Comment 1' })
-    await first.getByRole('button', { name: 'edit' }).click()
+    // A finding's comment is edited in place on its card, and left out and put back with one control.
+    const first = points.filter({ hasText: 'The last 503 is returned' })
+    await first.getByRole('button', { name: 'Edit' }).click()
     await first.getByRole('textbox', { name: 'In your words' }).fill('Raise once the attempts run out.')
     await first.getByRole('button', { name: 'Save' }).click()
     await expect(first).toContainText('Raise once the attempts run out.')
-    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'drop' }).click()
-    await expect(comments).toHaveCount(1)
+    const second = points.filter({ hasText: 'is never read' })
+    await second.getByRole('button', { name: 'leave out' }).click()
+    await expect(second).toContainText('left out')
+    // Finding 3 went with the body the operator replaced, which held it: left out, not dismissed.
+    await expect(draft.getByTestId('draft-left-out')).toHaveText(
+        'Left out: findings 2 and 3. Put one back on its card.',
+    )
+    await expect(points.filter({ hasText: 'No test stops the backoff' })).toContainText(
+        'To have it back, dismiss the finding, then put it back.',
+    )
+    await second.getByRole('button', { name: 'put back' }).click()
+    await expect(second).toContainText('in your review')
+    await expect(draft.getByTestId('draft-left-out')).toHaveText('Left out: finding 3. Put one back on its card.')
 
-    // A comment of the operator's own, on any line of the diff.
+    // A comment of the operator's own, on any line of the diff, is a card of its own.
     await page.getByRole('button', { name: 'Comment on api/upstream.py:14' }).click()
     const form = page.getByRole('form', { name: 'Comment on api/upstream.py:14' })
     await form.getByRole('textbox', { name: 'In your words' }).fill('Cap the delay?')
     await form.getByRole('button', { name: 'Save' }).click()
-    await expect(comments).toHaveCount(2)
+    await expect(comments).toHaveCount(1)
     await expect(comments.filter({ hasText: 'Cap the delay?' })).toContainText('yours')
-    await expect(draft).toContainText('version 5,')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 6')
+    await expect(draft.getByTestId('draft-versions')).toContainText('dismissed finding 2')
     await expect(draft.getByTestId('draft-versions')).toContainText('added a comment on api/upstream.py:14')
 
-    // Staged by default; ticked, canopy submits it. The mock answers for canopy's GitHub programs: it posts nowhere.
+    // Publish submits it; the outline button beside it would stage it. The mock answers for canopy's GitHub programs:
+    // it posts nowhere.
     await expect(draft.getByRole('button', { name: 'Start the review on GitHub' })).toBeVisible()
-    await draft.getByRole('checkbox', { name: 'Submit it on GitHub now' }).click()
-    await draft.getByRole('button', { name: 'Publish version 5' }).click()
-    await expect(draft.getByRole('status')).toContainText(
-        "Published version 5 of review run 5's draft: https://github.com/acme/api/pull/14#pullrequestreview-",
-    )
-    await expect(draft.getByTestId('draft-published')).toBeVisible()
+    await expect(draft.getByTestId('draft-posts')).toContainText('the body and 3 comments as your comment review')
+    await expect(draft.getByTestId('draft-posts')).toContainText("on carol's PR, at a61f7c0")
+    await draft.getByRole('button', { name: 'Publish version 6' }).click()
+    await expect(page.getByTestId('toast')).toContainText("Published version 6 of review run 5's draft")
+    await expect(page.getByTestId('toast')).toContainText('https://github.com/acme/api/pull/14#pullrequestreview-')
+    await expect(draft.getByTestId('draft-published')).toContainText('Published version 6 as your review on GitHub.')
     // A draft publishes once: nothing on the page changes it now.
     await expect(draft.getByRole('button')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Comment on /u })).toHaveCount(0)
     await expect(comments.getByRole('button')).toHaveCount(0)
+    // A finding's card keeps only its dismissal, which changes the draft no more.
+    await expect(points.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(points.getByRole('button', { name: 'leave out' })).toHaveCount(0)
 })
 
 test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
@@ -557,32 +584,43 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
 
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
-    // Its review is written in skeptic, as `--persona skeptic` asks.
+    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded with the notes.
+    await form.getByRole('button', { name: 'Show persona and notes' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
+    await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
+        /^Plans and reviews by naming the input that would break each claim/u,
+    )
     await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
     await page.keyboard.press('Escape')
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
     await form.getByTestId('review-request-submit').click()
-    await expect(form.getByRole('status')).toHaveText(
-        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
-    )
-    // It is in the reviews list at once, waiting on a tick to start its review.
+    // It opens the PR's page, where the request waits on a tick. canopy only reviews it, so it has no ticket's title
+    // to lead with.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
+    const request = page.getByTestId('review-request')
+    await expect(request).toContainText('canopy reviews its head once')
+    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
+    // It is in the reviews list, waiting on a tick to start its review, and on the pull requests page too.
+    await page.goto('reviews')
     await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
-    // The request waits on the pull requests page too, until the next tick reviews it.
     await page.goto('pull-requests')
     const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
     await expect(row).toContainText('requested')
 
     await row.getByRole('link', { name: 'acme/web#120', exact: true }).click()
-    // canopy only reviews it, so it has no ticket's title to lead with.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
-    const request = page.getByTestId('review-request')
-    await expect(request).toContainText('canopy reviews its head once')
-    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
     await request.getByTestId('review-request-stop').click()
     await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
     await expect(request).toContainText('Your review request ended')
     await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
+    // Asked again from its page, in the personas the request had, and stopped again.
+    await expect(request.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    await request.getByRole('button', { name: 'Review again' }).click()
+    await expect(request.getByRole('status')).toHaveText(
+        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
+    )
+    await request.getByTestId('review-request-stop').click()
+    await expect(request.getByRole('button', { name: 'Review again' })).toBeVisible()
     // Nothing waits on a tick for it any more.
     await page.goto('reviews')
     await expect(page.getByTestId('reviews').getByTestId('review-4')).toBeVisible()

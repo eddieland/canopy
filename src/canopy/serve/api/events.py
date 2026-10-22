@@ -36,7 +36,8 @@ StreamDep = Annotated[live.Stream, Depends(provide_stream, scope="request")]
 
 # FastAPI's SSE support sends `Cache-Control: no-cache` and `X-Accel-Buffering: no`, so a proxy or an SSH forward
 # streams it, and a keepalive comment after 15 idle seconds. Nothing may compress this route: gzip buffers. A stream
-# that `stream_seconds` ends says so last (`StreamEnding`), and the page opens the next one at once.
+# ends after `stream_seconds`, since a forwarder can keep it open after its page has gone; it says so last
+# (`StreamEnding`), and the page opens the next one at once.
 @router.get("/events", operation_id="streamEvents", summary="Stream the events", response_class=EventSourceResponse)
 async def events(stream: StreamDep, options: OptionsDep) -> AsyncIterator[StreamEvent]:
     """Server-sent events: every list a page shows, first whole, then again whenever the journal changes it."""

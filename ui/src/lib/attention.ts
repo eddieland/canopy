@@ -21,9 +21,19 @@ const FAILED = new Set([
     'disk_low',
 ])
 
+// The reasons a review's draft raises (DESIGN §34): a review the operator asked for, done with its draft unpublished,
+// and a draft staged on GitHub or of unknown outcome, until a read settles it.
+const REVIEW_DRAFT_REASONS = new Set(['review_waiting', 'review_unsettled'])
+
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
-// go-ahead (D089), a plan to approve (DESIGN §25), or the replies a run drafted (DESIGN §29).
-const WAITING = new Set(['awaiting_reply', 'untrusted_review', 'plan_review', 'drafts_waiting'])
+// go-ahead (D089), a plan to approve (DESIGN §25), the replies a run drafted (DESIGN §29), or a review's draft (§34).
+const WAITING = new Set([
+    'awaiting_reply',
+    'untrusted_review',
+    'plan_review',
+    'drafts_waiting',
+    ...REVIEW_DRAFT_REASONS,
+])
 
 // Reasons for a PR that is done for now and waits on someone else: a reviewer, or the merge (DESIGN §7). Nothing is
 // stuck while one is open, so they never count as blocking.
@@ -130,15 +140,29 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
  * What an item's reason asks of the operator, which picks the first block of its detail, under its head (ui/DESIGN.md,
  * "The attention detail"): the ticket's latest run, for a run that broke; the PR, for one waiting on someone else; the
  * reply, for an answer; the plan's card, for a plan; the proposals or lessons memory's items name; the PR's threads,
- * for the replies a run drafted; the command to run, for an item about nothing canopy shows that names one. `ticket`
- * is any other ticket's item, which leads with the ticket's own actions; `none`, the rest.
+ * for the replies a run drafted; the review's page, for a review's draft; the command to run, for an item about
+ * nothing canopy shows that names one. `ticket` is any other ticket's item, which leads with the ticket's own actions;
+ * `none`, the rest.
  */
-export type Ask = 'run' | 'pull-request' | 'reply' | 'plan' | 'memory' | 'drafts' | 'command' | 'ticket' | 'none'
+export type Ask =
+    | 'run'
+    | 'pull-request'
+    | 'reply'
+    | 'plan'
+    | 'memory'
+    | 'drafts'
+    | 'review'
+    | 'command'
+    | 'ticket'
+    | 'none'
 
 /** The item's `Ask`. A chore's item and a PR's own are `none`: their detail is the chore's notes, or the PR's limit. */
 export function ask(item: AttentionItem): Ask {
     if (MEMORY_REASONS.has(item.reason) && !item.finding) {
         return 'memory'
+    }
+    if (REVIEW_DRAFT_REASONS.has(item.reason) && !item.finding && reviewOf(item) !== null) {
+        return 'review'
     }
     if (item.ticket_key === null) {
         return item.chore === null && item.pr === null && commandOf(item) !== null ? 'command' : 'none'
@@ -170,6 +194,15 @@ export function shownDetail(item: AttentionItem): string {
 export function commandOf(item: AttentionItem): string | null {
     const command = codeSpans(item.detail).find((piece) => piece.kind === 'code' && piece.text.startsWith('canopy '))
     return command?.text ?? null
+}
+
+// A review run named as the harness writes one, standing as a word of its own.
+const REVIEW_REF = /\breview:(\d+)\b/u
+
+/** The first review run an item's detail names as `review:5`, as a review's draft's items do, or null for none. */
+export function reviewOf(item: AttentionItem): number | null {
+    const match = REVIEW_REF.exec(item.detail)
+    return match?.[1] === undefined ? null : Number(match[1])
 }
 
 /**

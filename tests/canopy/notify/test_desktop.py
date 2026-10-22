@@ -1,18 +1,17 @@
 """The desktop sink canopy ships (DESIGN §20): `notify-send` on Linux, `osascript` on macOS."""
 
-import io
 import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import override
 from unittest import mock
 
 import pytest
 
 from canopy.infra.procs import SubprocessRunner
 from canopy.notify import desktop
-from tests.conftest import executable
+from canopy.notify.desktop import Notifier
+from tests.conftest import executable, invoke
 
 # The fields of a `json` message the desktop sink reads; the rest of one it ignores.
 MESSAGE = {
@@ -22,6 +21,8 @@ MESSAGE = {
     "sent_at": "2026-09-24T19:00:00Z",
     "text": "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x\nFull list: /home/me/attention.md\n",
 }
+#: The sink as it runs on Linux, its notifier run for real.
+LINUX = Notifier(SubprocessRunner(), "linux")
 
 
 @pytest.fixture
@@ -39,7 +40,7 @@ def tools(tmp_path: Path) -> Iterator[Path]:
 
 
 def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
-    assert desktop.run([], io.StringIO(json.dumps(MESSAGE)), runner=SubprocessRunner(), platform="linux") == 0
+    assert invoke(desktop.main, stdin=json.dumps(MESSAGE), obj=LINUX).exit_code == 0
     [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
     assert argv[1:4] == ["--app-name=canopy", "--", "canopy: api"]
     assert argv[4] == "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x"
@@ -47,7 +48,7 @@ def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
 
 def test_the_desktop_sink_passes_text_to_osascript_as_arguments(tools: Path) -> None:
     text = 'canopy attention: 1 new, 0 resolved\n+ PROJ-1 crashed: "quoted" and \\ backslash\nFull list: /x\n'
-    assert desktop.run([], io.StringIO(text), runner=SubprocessRunner(), platform="darwin") == 0
+    assert invoke(desktop.main, stdin=text, obj=Notifier(SubprocessRunner(), "darwin")).exit_code == 0
     [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
     assert argv[1:7] == [
         "-e",
@@ -67,21 +68,18 @@ def test_the_desktop_sink_bounds_its_body() -> None:
     assert len(body.splitlines()) == desktop.MAX_LINES
 
 
-def test_the_desktop_sink_without_its_tool(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_desktop_sink_without_its_tool(tmp_path: Path) -> None:
     with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
-        assert desktop.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
-        assert "notify-send is not installed" in capsys.readouterr().err
-        assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
+        shown = invoke(desktop.main, stdin="hello\n", obj=LINUX)
+        assert shown.exit_code == 2
+        assert "notify-send is not installed" in shown.stderr
+        assert invoke(desktop.main, stdin="", obj=LINUX).exit_code == 2
 
 
-def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exit_:
-        desktop.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux")
-    assert exit_.value.code == 0
-    assert "usage: canopy-notify-desktop" in capsys.readouterr().out
-
-
-class _Unread(io.StringIO):
-    @override
-    def read(self, size: int | None = -1, /) -> str:
-        raise AssertionError(f"--help read stdin ({size})")
+def test_the_command_line_is_read_before_stdin() -> None:
+    helped = invoke(desktop.main, ["--help"], stdin="hello\n", obj=LINUX)
+    assert helped.exit_code == 0
+    assert helped.stdout.startswith("Usage: canopy-notify-desktop [OPTIONS]")
+    refused = invoke(desktop.main, ["--nope"], stdin="hello\n", obj=LINUX)
+    assert refused.exit_code == 2
+    assert "No such option '--nope'" in refused.stderr
