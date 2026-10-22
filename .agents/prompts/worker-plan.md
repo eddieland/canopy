@@ -143,8 +143,8 @@ summary saying why.{{PLAN_REVIEW}}
 
 Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
 when `{{PLAN_OUT}}` holds one: not empty, and at most {{MAX_PLAN_CHARS}} characters, a limit and not a length to aim
-for. The summary is your report to the
-operator: what the plan proposes, in a paragraph. Do not repeat the plan in your messages.
+for. The summary is your report to the operator: what the plan proposes, in a paragraph. Do not repeat the plan in
+your messages.
 
 With `done`, `effort` is how much work the plan is for the worker that follows it: `small`, a change in one place that
 the ticket and the code make plain; `medium`, changes across a few files along patterns the code already has; `large`,
