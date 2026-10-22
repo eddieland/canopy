@@ -27,7 +27,7 @@ from canopy.core import (
     review_runs,
     tasks,
 )
-from canopy.core.vocab import ReplyMode
+from canopy.core.vocab import Decider, ReplyMode
 from canopy.infra import hangup, keys, lock
 from canopy.infra.text import one_line, printable
 from canopy.loop import attention, repeat, reread, tick
@@ -353,7 +353,9 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str
     action_width = max((len(d.action) for d in rows), default=0)
     for key, d in zip(keys, rows, strict=True):
         rationale = " ".join(d.rationale.split())
-        click.echo(f"  {key:<{key_width}}  {d.action:<{action_width}}  {rationale}")
+        # Who made it (TRUST_MODEL T5): the overseer's are most, so only the harness's are marked (DESIGN §37).
+        by = "[harness] " if d.decider is Decider.HARNESS else ""
+        click.echo(f"  {key:<{key_width}}  {d.action:<{action_width}}  {by}{rationale}")
     if not rows:
         click.echo(f"  none for ticket {ticket_key}" if ticket_key is not None else "  none")
     return 0

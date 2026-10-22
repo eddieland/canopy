@@ -28,6 +28,7 @@ from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
     CheckStatus,
     ConnectorRunStatus,
+    Decider,
     Phase,
     PrState,
     ReviewItem,
@@ -182,7 +183,8 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     with none, the attention items the overseer recorded for it; the harness's items, refusals, and mirrors are not
     the overseer's choice. A phase the ticket's own decision moved it to this tick (`MOVES_TO`), such as `running`
     after a dispatch, stands for the row that allowed the decision. A subject with no rows held is compared on the
-    decision only, not its phase. A ticket with a stale subject is `stale`, never a disagreement.
+    decision only, not its phase. A ticket with a stale subject is `stale`, never a disagreement. A ticket the harness
+    decided (DESIGN §37) is not compared: the overseer decided nothing about it.
 
     Returns:
         One comparison per ticket the tick derived, by key.
@@ -199,10 +201,17 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     for row in rows:
         by_ticket.setdefault(row.ticket_key, []).append(row)
     decided: dict[str, list[str]] = {}
+    by_harness: set[str] = set()
     for d in db.decisions_for_tick(conn, tick_id):
-        if d.ticket_key is not None and _overseers(d.action):
+        if d.ticket_key is None:
+            continue
+        if d.decider is Decider.HARNESS and not d.action.startswith(_ATTENTION):
+            by_harness.add(d.ticket_key)
+        elif _overseers(d):
             decided.setdefault(d.ticket_key, []).append(d.action)
-    return [_compared(key, subjects, decided.get(key, [])) for key, subjects in by_ticket.items()]
+    return [
+        _compared(key, subjects, decided.get(key, [])) for key, subjects in by_ticket.items() if key not in by_harness
+    ]
 
 
 def tally(conn: sqlite3.Connection, tick_id: int) -> Counter[Verdict]:
@@ -332,13 +341,15 @@ def is_feedback(review: records.ObservedReview) -> bool:
     )
 
 
-def _overseers(action: str) -> bool:
-    """Whether `action` is the overseer's own choice about a ticket, not the harness's or a guard's.
+def _overseers(decision: records.Decision) -> bool:
+    """Whether `decision` is the overseer's own choice about a ticket, not the harness's or a guard's.
 
     Returns:
-        False for a harness's attention item, a refusal, or a mirror.
+        False for one the harness recorded, a harness's attention item from before the journal said who recorded it,
+        a refusal, or a mirror.
     """
-    if action.startswith("refused:") or action == conversation.MIRROR_ACTION:
+    action = decision.action
+    if decision.decider is Decider.HARNESS or action.startswith("refused:") or action == conversation.MIRROR_ACTION:
         return False
     return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.HARNESS_REASONS)
 

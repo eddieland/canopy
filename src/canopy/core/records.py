@@ -29,6 +29,7 @@ from canopy.core.vocab import (
     CheckStatus,
     ChoreRunStatus,
     ConnectorRunStatus,
+    Decider,
     DraftAuthor,
     DraftKind,
     DraftStance,
@@ -174,7 +175,7 @@ class Forget(Row):
 
 @dataclass(frozen=True)
 class Decision(Row):
-    """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or an attention item."""
+    """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or the harness's own (§37)."""
 
     TABLE: ClassVar[str] = "decisions"
 
@@ -187,6 +188,8 @@ class Decision(Row):
     repo: str | None
     chore: str | None
     pr: str | None
+    #: Who made it; None on a decision recorded before the journal said (TRUST_MODEL T5).
+    decider: Decider | None
 
 
 @dataclass(frozen=True)
