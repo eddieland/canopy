@@ -243,35 +243,38 @@ thing a steered agent could reach. `canopy agents` shows what each of canopy's a
 To take some away, add rules for canopy's agents, by name, to the `agent` block of `~/.config/opencode/opencode.json`.
 OpenCode merges that block into canopy's definitions, which canopy writes to `.canopy/runtime/<digest>/` and renders
 from its own config. Never edit them there: they are read-only, and canopy writes a new snapshot when its config
-changes. For example, with servers named `bigquery` and `kubernetes`:
+changes. The rules reach agents started after you save them; a run already going keeps what it started with. For
+example, with servers named `bigquery` and `kubernetes`, and Jira as the tracker:
 
 ```json
 {
   "agent": {
     "canopy-overseer": {"permission": {"bigquery_*": "deny", "kubernetes_*": "deny"}},
     "canopy-planner": {
-      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-*": "allow"}}
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
     },
     "canopy-reviewer": {
-      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-*": "allow"}}
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
     },
     "canopy-chore": {
-      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-*": "allow"}}
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
     }
   }
 }
 ```
 
 - **A server, whole.** OpenCode names a server's tools `<server>_<tool>`, so `"<server>_*": "deny"` takes every tool of
-  it from that agent, and OpenCode stops sending them. Leave the workers, `canopy-worker` and `canopy-worker-private`,
-  the servers their tickets need.
-- **Skills.** The last rule that matches a skill's name decides, so `"*": "deny"` comes first and `"tracker-*": "allow"`
-  after it, which keeps the tracker skill canopy ships (`tracker-jira`, `tracker-github`): the reviewer's and the
+  it from that agent, and OpenCode stops sending them. The pattern also matches a server whose name starts with
+  `<server>_`, so `github_*` takes `github_enterprise` too; `canopy agents` shows each server's reach. Leave the
+  workers, `canopy-worker` and `canopy-worker-private`, the servers their tickets need, and leave the tracker's server
+  alone: canopy already narrows it to its reads for the agents that read the ticket.
+- **Skills.** The last rule that matches a skill's name decides, so `"*": "deny"` comes first and the tracker skill
+  canopy ships for your tracker, `tracker-jira` or `tracker-github`, is allowed by name after it: the reviewer's and the
   planner's prompts load it. Leave the workers' skills alone, since they work with yours, such as `runtime.pr_skill`.
 - **Deny, rather than allow.** Your rules come before canopy's, so where a rule of canopy's also matches, canopy's
   decides. A pattern canopy's definition also names is the exception: OpenCode keeps it where your block put it, so
   your rules after it come after canopy's and can beat it (D044). Allow only to narrow a deny of your own, as
-  `tracker-*` does, and to widen the overseer's shell, use `runtime.allow_bash` (`examples/config.toml`).
+  the tracker skill's allow does, and to widen the overseer's shell, use `runtime.allow_bash` (`examples/config.toml`).
 - **Not the overseer's skills.** With Jira or GitHub as the tracker, canopy puts the tracker's skill in the overseer's
   prompt and ends its skill rules with `"*": "deny"`, so it is not sent the skill tool at all. A `"*"` rule of yours
   would move that one ahead of canopy's other skill rules, and the tool would be sent again.
