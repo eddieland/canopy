@@ -121,50 +121,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
       }
     },
     {
-      "key": "PROJ-2",
-      "title": "Add a dark mode",
-      "phase": "running",
-      "branch": "agent/PROJ-2-dark",
-      "cursors": {
-        "comment": null,
-        "message": null,
-        "mirror": null
-      },
-      "units": [
-        {
-          "repo": "repo",
-          "branch": "agent/PROJ-2-dark",
-          "pr_url": null,
-          "phase": null,
-          "cursors": {
-            "review": null,
-            "ci": null
-          },
-          "attempts": {
-            "implement": 1,
-            "resume": 0
-          },
-          "ci_cooldown_until": null
-        }
-      ],
-      "needs_human_since": null,
-      "last_seen_at": "2026-10-16T09:55:00.000Z",
-      "last_run": {
-        "run_id": 5,
-        "kind": "implement",
-        "status": "running",
-        "branch": "agent/PROJ-2-dark",
-        "repos": [
-          {
-            "repo": "repo",
-            "base": "main"
-          }
-        ],
-        "started_at": "2026-10-16T09:55:00.000Z",
-        "ended_at": null
-      }
-    },
-    {
       "key": "PROJ-4",
       "title": "Tidy the CLI help",
       "phase": null,
@@ -253,6 +209,13 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
   "recently_done": [
     "PROJ-5"
   ],
+  "harness": [
+    {
+      "ticket": "PROJ-2",
+      "action": "wait",
+      "why": "running: a worker of it is running"
+    }
+  ],
   "chores": [
     {
       "name": "build-health",
@@ -312,18 +275,6 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
             "repo": "repo",
             "observed": "stale",
             "why": "https://example.test/acme/repo/pull/7 never observed"
-          }
-        ]
-      },
-      {
-        "key": "PROJ-2",
-        "observed": "unobserved",
-        "why": "no tracker source observes tickets",
-        "units": [
-          {
-            "repo": "repo",
-            "observed": "stale",
-            "why": "branches of repo not observed since 2026-10-16T09:30:00.000Z"
           }
         ]
       },
