@@ -962,6 +962,31 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/draft/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for a revision of a review's draft
+         * @description `canopy reply review:ID TEXT`: what a revision of the review's draft should change, in the operator's words.
+         *
+         *     The next tick revises the draft with an agent, which reads the PR and the draft and makes a new version, posting
+         *     nothing, unless the operator changes the draft first. Refused as the CLI refuses it: `no_draft`, `not_ours` for a
+         *     PR a ticket holds now, a status past edits (`published`, `staged`, ...), `bad_body` for an empty note or one past
+         *     the bound, `no_diff`, `revising` while a revision of it runs, and `revision_limit` once it has had its revisions.
+         */
+        post: operations["noteReviewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews/{run_id}/draft/publish": {
         parameters: {
             query?: never;
@@ -4578,6 +4603,12 @@ export type components = {
              */
             moved_head: string | null;
             /**
+             * Notes
+             * @description The operator's notes no version has answered, oldest first: while there are any and it waits, the next tick
+             *     revises it, unless they change it first.
+             */
+            notes: components["schemas"]["ReviewDraftNote"][];
+            /**
              * Pr Author
              * @description The PR's author's login as canopy last read the PR, whose PR the review would post on: untrusted text; None
              *     when canopy has not read the PR, or the account is gone.
@@ -4598,6 +4629,17 @@ export type components = {
              * @description What canopy left out as it made that version, and why, in the harness's words.
              */
             refused: string[];
+            /**
+             * Revision Limit
+             * @description How many revisions it may have: `policy.max_revisions_per_draft` plus the operator's grants. A note at it is
+             *     refused.
+             */
+            revision_limit: number;
+            /**
+             * Revisions
+             * @description Its revisions so far, however they ended, newest first.
+             */
+            revisions: components["schemas"]["ReviewDraftRevision"][];
             /** @description Where it stands. */
             status: components["schemas"]["ReviewDraftStatusName"];
             /**
@@ -4706,6 +4748,67 @@ export type components = {
             text: string;
         };
         /**
+         * ReviewDraftNote
+         * @description The operator's note on a review's draft, as `canopy reply review:ID` records it: what to revise in it.
+         */
+        ReviewDraftNote: {
+            /**
+             * After Version
+             * @description The draft's newest version when they wrote it: the note asks for a revision while that is still the newest.
+             */
+            after_version: number;
+            /**
+             * Body
+             * @description The note, in the operator's words: the reviser's only instructions.
+             */
+            body: string;
+            /**
+             * Channel
+             * @description Where they wrote it: `cli` or `web`.
+             */
+            channel: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When they wrote it.
+             */
+            created_at: string;
+            /**
+             * Id
+             * @description The note's id.
+             */
+            id: number;
+        };
+        /**
+         * ReviewDraftNoted
+         * @description What a note recorded, as `canopy reply review:ID` reports it: the note, and the draft as it now stands.
+         */
+        ReviewDraftNoted: {
+            /**
+             * After Version
+             * @description The version it asks a revision of: the draft's newest when it was written.
+             */
+            after_version: number;
+            /** @description The draft, its notes this one among them. */
+            draft: components["schemas"]["ReviewDraft"];
+            /**
+             * Note
+             * @description The note's id.
+             */
+            note: number;
+        };
+        /**
+         * ReviewDraftNoteRequest
+         * @description A note asking for a revision of a review's draft, as `canopy reply review:ID TEXT` takes it.
+         */
+        ReviewDraftNoteRequest: {
+            /**
+             * Text
+             * @description What the revision should change. Bounded again in code at 4000 characters, after stripping, and refused empty.
+             */
+            text: string;
+        };
+        /**
          * ReviewDraftPublished
          * @description What a publish did, as `canopy review publish` reports it: the draft as it now stands.
          */
@@ -4739,6 +4842,42 @@ export type components = {
              * @default false
              */
             submit: boolean;
+        };
+        /**
+         * ReviewDraftRevision
+         * @description One revision of a review's draft (DESIGN §34): a review run on the operator's notes, its result a new version.
+         *
+         *     It runs at the commit the review read, and reads the PR and the draft's newest version.
+         */
+        ReviewDraftRevision: {
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
+            ended_at: string | null;
+            /**
+             * Id
+             * @description The revision's review run id.
+             */
+            id: number;
+            /**
+             * Revised
+             * @description The version it read and revises.
+             */
+            revised: number;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started.
+             */
+            started_at: string;
+            /** @description `done` is done; every other ending is failed. */
+            state: components["schemas"]["RunState"];
+            /**
+             * Status
+             * @description The journal's status: running, done, failed, unknown, timeout, crashed.
+             */
+            status: string;
         };
         /**
          * @description Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; `staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.
@@ -10471,6 +10610,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    noteReviewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDraftNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraftNoted"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

@@ -207,6 +207,41 @@ class ReviewDraftVersion(Model):
     """When it was made."""
 
 
+class ReviewDraftNote(Model):
+    """The operator's note on a review's draft, as `canopy reply review:ID` records it: what to revise in it."""
+
+    id: int
+    """The note's id."""
+    body: str
+    """The note, in the operator's words: the reviser's only instructions."""
+    channel: str
+    """Where they wrote it: `cli` or `web`."""
+    after_version: int
+    """The draft's newest version when they wrote it: the note asks for a revision while that is still the newest."""
+    created_at: datetime
+    """When they wrote it."""
+
+
+class ReviewDraftRevision(Model):
+    """One revision of a review's draft (DESIGN §34): a review run on the operator's notes, its result a new version.
+
+    It runs at the commit the review read, and reads the PR and the draft's newest version.
+    """
+
+    id: int
+    """The revision's review run id."""
+    status: str
+    """The journal's status: running, done, failed, unknown, timeout, crashed."""
+    state: RunState
+    """`done` is done; every other ending is failed."""
+    revised: int
+    """The version it read and revises."""
+    started_at: datetime
+    """When it started."""
+    ended_at: datetime | None = None
+    """When it ended; None while it runs."""
+
+
 class ReviewDraft(Model):
     """A review of a PR the loop does not own as the comment review it would post (DESIGN §34), at its newest version.
 
@@ -251,6 +286,14 @@ class ReviewDraft(Model):
     """When it was published; None until it is."""
     published_url: str | None = None
     """The review's URL on GitHub, once published."""
+    notes: list[ReviewDraftNote]
+    """The operator's notes no version has answered, oldest first: while there are any and it waits, the next tick
+    revises it, unless they change it first."""
+    revisions: list[ReviewDraftRevision]
+    """Its revisions so far, however they ended, newest first."""
+    revision_limit: int
+    """How many revisions it may have: `policy.max_revisions_per_draft` plus the operator's grants. A note at it is
+    refused."""
 
 
 class ReviewDraftBodyRequest(Model):
@@ -276,6 +319,24 @@ class ReviewDraftAddRequest(Model):
     """The line, on the diff's new side."""
     text: Annotated[str, Field(min_length=1, max_length=8000)]
     """The comment's text. Bounded again in code, as the reviewer's text is."""
+
+
+class ReviewDraftNoteRequest(Model):
+    """A note asking for a revision of a review's draft, as `canopy reply review:ID TEXT` takes it."""
+
+    text: Annotated[str, Field(max_length=8000)]
+    """What the revision should change. Bounded again in code at 4000 characters, after stripping, and refused empty."""
+
+
+class ReviewDraftNoted(Model):
+    """What a note recorded, as `canopy reply review:ID` reports it: the note, and the draft as it now stands."""
+
+    note: int
+    """The note's id."""
+    after_version: int
+    """The version it asks a revision of: the draft's newest when it was written."""
+    draft: ReviewDraft
+    """The draft, its notes this one among them."""
 
 
 class ReviewDraftPublishRequest(Model):
