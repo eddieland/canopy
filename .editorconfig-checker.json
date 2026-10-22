@@ -5,6 +5,7 @@
     "\\.md$",
     "\\.gen\\.ts$",
     "^docs/ui-explorations/",
-    "/__snapshots__/"
+    "/__snapshots__/",
+    "/recorded/.*\\.jsonl$"
   ]
 }

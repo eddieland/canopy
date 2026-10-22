@@ -1,0 +1,333 @@
+{
+  "info": {
+    "id": "ses_e9efac2adffehb60wAIBaOM6if",
+    "projectID": "global",
+    "agent": "canopy-worker",
+    "cost": 0.005481250000000001,
+    "tokens": {
+      "input": 510,
+      "output": 110,
+      "reasoning": 0,
+      "cache": {
+        "read": 50,
+        "write": 25
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1792629095993,
+      "updated": 1792629096704,
+      "idle": 1792629096708
+    },
+    "title": "[redacted:session-title:ses_e9efac2adffehb60wAIBaOM6if]",
+    "location": {
+      "directory": "/[redacted:session-directory:ses_e9efac2adffehb60wAIBaOM6if]"
+    }
+  },
+  "messages": [
+    {
+      "id": "msg_161053e5d001U5AM5DLojCDYqv",
+      "time": {
+        "created": 1792629096029
+      },
+      "type": "agent-switched",
+      "agent": "canopy-worker",
+      "previous": "canopy-worker"
+    },
+    {
+      "id": "msg_161053e58001kuKeGAGunyC5K0",
+      "time": {
+        "created": 1792629096196
+      },
+      "text": "[redacted:text:msg_161053e58001kuKeGAGunyC5K0]",
+      "files": [],
+      "type": "user"
+    },
+    {
+      "id": "msg_161053f0f0017IWW1WudAQFBNE",
+      "time": {
+        "created": 1792629096220,
+        "streamed": 1792629096308,
+        "completed": 1792629096425
+      },
+      "type": "assistant",
+      "agent": "canopy-worker",
+      "model": {
+        "id": "stand-in",
+        "providerID": "anthropic"
+      },
+      "content": [
+        {
+          "type": "reasoning",
+          "text": "[redacted:reasoning:msg_161053f0f0017IWW1WudAQFBNE]",
+          "native": {
+            "redacted": "reasoning-native:msg_161053f0f0017IWW1WudAQFBNE"
+          },
+          "time": {
+            "created": 1792629096290,
+            "completed": 1792629096295
+          }
+        },
+        {
+          "type": "tool",
+          "id": "toolu_0_1",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "redacted": "tool-input:msg_161053f0f0017IWW1WudAQFBNE"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "[redacted:tool-output:msg_161053f0f0017IWW1WudAQFBNE]"
+              }
+            ],
+            "metadata": {
+              "redacted": "tool-metadata:msg_161053f0f0017IWW1WudAQFBNE"
+            }
+          },
+          "time": {
+            "created": 1792629096298,
+            "ran": 1792629096304,
+            "completed": 1792629096411
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "end": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.00103625,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 0,
+        "cache": {
+          "read": 10,
+          "write": 5
+        }
+      }
+    },
+    {
+      "id": "msg_161053ffa0011MaWhL26l8qx2I",
+      "time": {
+        "created": 1792629096459,
+        "streamed": 1792629096487,
+        "completed": 1792629096504
+      },
+      "type": "assistant",
+      "agent": "canopy-worker",
+      "model": {
+        "id": "stand-in",
+        "providerID": "anthropic"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "toolu_1_0",
+          "name": "skill",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "redacted": "tool-input:msg_161053ffa0011MaWhL26l8qx2I"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "[redacted:tool-output:msg_161053ffa0011MaWhL26l8qx2I]"
+              }
+            ],
+            "metadata": {
+              "redacted": "tool-metadata:msg_161053ffa0011MaWhL26l8qx2I"
+            }
+          },
+          "time": {
+            "created": 1792629096477,
+            "ran": 1792629096483,
+            "completed": 1792629096494
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "end": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.00106625,
+      "tokens": {
+        "input": 101,
+        "output": 21,
+        "reasoning": 0,
+        "cache": {
+          "read": 10,
+          "write": 5
+        }
+      }
+    },
+    {
+      "id": "msg_161054047001S7dNrra4W7KuHW",
+      "time": {
+        "created": 1792629096534,
+        "streamed": 1792629096567,
+        "completed": 1792629096581
+      },
+      "type": "assistant",
+      "agent": "canopy-worker",
+      "model": {
+        "id": "stand-in",
+        "providerID": "anthropic"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "toolu_2_0",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "redacted": "tool-input:msg_161054047001S7dNrra4W7KuHW"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: shell"
+            }
+          },
+          "time": {
+            "created": 1792629096559,
+            "ran": 1792629096564,
+            "completed": 1792629096572
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "end": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.00109625,
+      "tokens": {
+        "input": 102,
+        "output": 22,
+        "reasoning": 0,
+        "cache": {
+          "read": 10,
+          "write": 5
+        }
+      }
+    },
+    {
+      "id": "msg_161054092001Ij1o3rlveyn7Df",
+      "time": {
+        "created": 1792629096604,
+        "streamed": 1792629096622,
+        "completed": 1792629096636
+      },
+      "type": "assistant",
+      "agent": "canopy-worker",
+      "model": {
+        "id": "stand-in",
+        "providerID": "anthropic"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "toolu_3_0",
+          "name": "read",
+          "executed": false,
+          "state": {
+            "status": "error",
+            "input": {
+              "redacted": "tool-input:msg_161054092001Ij1o3rlveyn7Df"
+            },
+            "error": {
+              "type": "permission.rejected",
+              "message": "Permission denied: external_directory"
+            }
+          },
+          "time": {
+            "created": 1792629096616,
+            "ran": 1792629096620,
+            "completed": 1792629096627
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "end": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_use",
+      "cost": 0.00112625,
+      "tokens": {
+        "input": 103,
+        "output": 23,
+        "reasoning": 0,
+        "cache": {
+          "read": 10,
+          "write": 5
+        }
+      }
+    },
+    {
+      "id": "msg_1610540ca001xDDOSX0Sih7eWn",
+      "time": {
+        "created": 1792629096665,
+        "streamed": 1792629096693,
+        "completed": 1792629096704
+      },
+      "type": "assistant",
+      "agent": "canopy-worker",
+      "model": {
+        "id": "stand-in",
+        "providerID": "anthropic"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "[redacted:text:msg_1610540ca001xDDOSX0Sih7eWn]"
+        },
+        {
+          "type": "text",
+          "text": "[redacted:text:msg_1610540ca001xDDOSX0Sih7eWn]"
+        }
+      ],
+      "snapshot": {
+        "start": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "end": "c15612ec75cc013d4a66f1ae6698a5200374fc22",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "end_turn",
+      "cost": 0.00115625,
+      "tokens": {
+        "input": 104,
+        "output": 24,
+        "reasoning": 0,
+        "cache": {
+          "read": 10,
+          "write": 5
+        }
+      }
+    },
+    {
+      "id": "msg_161054104001P7eXx8V7Fmnm0R",
+      "time": {
+        "created": 1792629096708
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ]
+}
