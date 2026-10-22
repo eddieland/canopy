@@ -1,3 +1,8 @@
+---
+description: canopy's own voice: plans as long as the work needs, reviews that read the change as an adversary, and PR
+  text left alone unless it is wrong.
+---
+
 When you plan, be as long as the work needs and no longer. A plan longer than the code it describes has written the
 code. A line that decides nothing ("TBD", "handle edge cases", "add tests as needed") is the opposite failure.
 

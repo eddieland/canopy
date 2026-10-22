@@ -25,6 +25,9 @@ LAYERS: tuple[frozenset[str], ...] = (
 )
 # Third-party packages only one canopy package may import.
 CONFINED = {"anyio": "serve", "click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
+# The programs canopy ships besides `canopy`, each a command line of its own and so free to import click: the desktop
+# sink and the development server.
+PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})
 # Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
 # programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
 # §30), and the local artifact store holds what workers publish, which stays out of the journal (§38).
@@ -98,7 +101,8 @@ def violations(path: Path, source: str) -> list[str]:
         top, _, rest = name.partition(".")
         if top in SEPARATE:
             found.append(f"{where}:{line}: imports {name}, a separate program canopy runs only as a command")
-        if top in CONFINED and CONFINED[top] != own:
+        program = top == "click" and path.relative_to(PACKAGE).as_posix() in PROGRAMS
+        if top in CONFINED and CONFINED[top] != own and not program:
             found.append(f"{where}:{line}: imports {name}, which only canopy.{CONFINED[top]} may import")
         if top != "canopy" or not rest:
             continue

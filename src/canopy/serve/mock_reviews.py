@@ -2,9 +2,11 @@
 
 PR 88 (ABC-099) was reviewed twice: its first commit had a blocking finding, its second has two smaller ones, anchored
 on its diff. The operator's own API PR, which no ticket opened, was reviewed clean at their request; PR 91's review
-never reported a result. A coworker's PR 95 waits on its review, at the operator's request. Carol's PR 14 was reviewed
-at the operator's request too, so it has a draft of a review on it (DESIGN §34), as the clean review does: two findings
-on its diff's lines are comments, and one about a file it does not touch is in the body (`drafts`).
+never reported a result. Dana's PR 95 waits on its review, at the operator's request, read once so canopy knows whose
+it is. Carol's PR 14 was reviewed at the operator's request too, in two personas, so it has a review and a draft of
+one in each (DESIGN §31, §34), as the clean review has one: review 5's two findings on its diff's lines are comments,
+and one about a file it does not touch is in the body (`drafts`); review 6, the skeptic's, found one thing. Carol's
+wait on the operator to publish one; the clean review's they published, as a comment on their own PR.
 
 The operator has seen every review but the clean one, review 2, which is new to them since they asked for it (DESIGN
 §22). Opening a review's page marks it seen, a write, so no test against the journal that never changes opens review
@@ -18,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db, review_diff, review_drafts, sql
 from canopy.core.review_result import Finding, ReviewResult
+from canopy.core.vocab import ReviewDraftStatus
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -36,7 +39,9 @@ SHA_91 = "c47a91e0" + "5" * 32
 SHA_12 = "0d8e3b57" + "1" * 32
 SHA_14 = "a61f7c08" + "4" * 32
 #: The reviews that have a draft: those of PRs the loop does not own that ended `done`.
-DRAFTED = (2, 5)
+DRAFTED = (2, 5, 6)
+#: The personas the operator asked Carol's PR to be reviewed in, one review each.
+PERSONAS_14 = ("canopy", "skeptic")
 _UNKNOWN = "the reviewer's last line was not a valid result"
 
 _STALE = ReviewResult(
@@ -108,6 +113,22 @@ _CAROL = ReviewResult(
             title="No test stops the backoff",
             location="tests/test_upstream.py",
             detail="Nothing checks that it gives up after five attempts.",
+        ),
+    ],
+)
+# What review 6, the skeptic's, reported on Carol's PR, at the same commit as review 5.
+_CAROL_SKEPTIC = ReviewResult(
+    status="done",
+    verdict="findings",
+    impact="normal",
+    summary="Backing off on a 503 is right; doing it without a cap on the total wait is how a page hangs for a minute.",
+    findings=[
+        Finding(
+            severity="major",
+            title="Five doubling sleeps can wait over 15 seconds",
+            location="api/upstream.py:14",
+            detail="0.5s doubled four times, plus jitter, outlasts most callers' own timeouts. Cap the delay, or "
+            "the whole wait.",
         ),
     ],
 )
@@ -212,6 +233,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         (4, PR_88, SHA_88, "ABC-099", "web", "own", -58, -56, "done", LATEST.model_dump_json(), 0.24, DIFF_88),
         # Its runtime reported no cost, so it leaves the mock's spend, and what the spend pages show, as they were.
         (5, PR_14, SHA_14, None, "api", "request", -32, -30, "done", _CAROL.model_dump_json(), None, DIFF_14),
+        (6, PR_14, SHA_14, None, "api", "request", -32, -29, "done", _CAROL_SKEPTIC.model_dump_json(), None, DIFF_14),
     )
     for run_id, pr, sha, ticket, repo, purpose, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"
@@ -246,6 +268,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             ("review", "3", at(-68), "web"),
             ("review", "4", at(-50), "web"),
             ("review", "5", at(-28), "web"),
+            ("review", "6", at(-28), "web"),
         ],
     )
     # The request review 2 answered, which ended with it (DESIGN §21).
@@ -260,16 +283,38 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             end_reason="reviewed",
         ),
     )
-    # Carol's PR, which the operator asked canopy to review, and its review answered.
-    sql.execute(
+    # Carol's PR, which the operator asked canopy to review in two personas, and its reviews answered.
+    made = sql.execute(
         conn,
         sql.insert(
             "review_requests",
             pr_url=PR_14,
             created_at=at(-34),
             channel="web",
-            ended_at=at(-30),
+            ended_at=at(-29),
             end_reason="reviewed",
+        ),
+    )
+    sql.execute_many(
+        conn,
+        sql.insert_rows("review_request_personas", ["request_id", "persona"]),
+        [(made.lastrowid, persona) for persona in PERSONAS_14],
+    )
+    # The reader's last read of Carol's PR, at the commit review 5 read, which names her as its author.
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_prs",
+            url=PR_14,
+            repository="acme/api",
+            number=14,
+            head_sha=SHA_14,
+            base_ref="main",
+            state="open",
+            draft=0,
+            mergeable="mergeable",
+            author="carol",
+            observed_at=at(-29),
         ),
     )
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
@@ -283,13 +328,46 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             notes="The author asked for a close look at the retry loop; I'm not sure it backs off.",
         ),
     )
+    # The reader's read of it, since an open request watches its PR (DESIGN §21): whose it is, before its review.
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_prs",
+            url=PR_95,
+            repository="acme/web",
+            number=95,
+            base_ref="main",
+            state="open",
+            draft=0,
+            author="dana",
+            observed_at=at(-15),
+        ),
+    )
 
 
-def drafts(conn: sqlite3.Connection) -> None:
-    """Make the drafts of the reviews of PRs the loop does not own, as `_review` does once one ends, at its end."""
+def drafts(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
+    """Make the drafts of the reviews of PRs the loop does not own, as `_review` does once one ends, at its end.
+
+    The clean review's the operator has published since, so the lists show a draft that waits and one that posted.
+    """
     for run_id in DRAFTED:
         review_drafts.make(conn, run_id)
     with db.transaction(conn):
+        sql.execute(
+            conn,
+            sql.update("review_drafts")
+            .set(
+                status=ReviewDraftStatus.PUBLISHED,
+                publish_version=1,
+                publish_started_at=at(-75),
+                publish_channel="web",
+                published_at=at(-75),
+                published_review_id=2_480_000_001,
+                published_url=f"{PR_12}#pullrequestreview-2480000001",
+                published_comments="[]",
+            )
+            .where("review_run_id = ?", 2),
+        )
         sql.execute(
             conn,
             sql.update("review_drafts")

@@ -45,6 +45,10 @@ directory shadows a shipped one, and a new name adds to the set, as prompt overr
 choice of persona are private config (TRUST_MODEL T7): a persona is instructions in every run it reaches, so a shared
 workspace file can neither supply one nor choose one.
 
+A file may open with a front matter naming its `description`, which the menus that list it show; a file without one is
+described by its opening sentence. The description is never instructions: no prompt carries it, and a front matter
+canopy cannot read refuses the persona as any bad file does.
+
 ### Who chooses
 
 - **The operator alone.** A run's persona is the one chosen for its agent's next run alone, else its ticket's

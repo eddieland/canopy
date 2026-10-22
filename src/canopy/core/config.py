@@ -670,8 +670,8 @@ class Runtime(Section):
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.PRIVATE] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
-    #: Commands an agent may run beyond its own bash rules, by its role: only the overseer's take any (DESIGN §13).
-    #: Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
+    #: Commands an agent may run beyond its own bash rules, by its role: the overseer's, the planner's, and the workers'
+    #: (DESIGN §13). Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
     allow_bash: Annotated[dict[BashRole, BashAllows], Scope.PRIVATE] = {}
 
     def worker_template(self, template: str) -> str:
@@ -875,6 +875,9 @@ class Paths(Section):
     #: into `<it>/<workspace>/`, commits, and pushes to its upstream (DESIGN §25). Private, since it sends every plan's
     #: text where it points (TRUST_MODEL T6).
     plan_archive: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: Whether `plan_archive` takes the plans into `<it>/<workspace>/`; off, into its top level, for a clone that
+    #: archives this workspace alone. Private, as `plan_archive` is: it chooses what canopy commits in that clone.
+    plan_archive_workspace_dir: Annotated[StrictBool, Scope.PRIVATE] = True
     #: Whether `plan_archive` also takes the prompt each plan's planner was given, beside its plan. Private, as
     #: `plan_archive` is: a prompt carries the operator's messages and standing instructions.
     plan_archive_prompts: Annotated[StrictBool, Scope.PRIVATE] = True

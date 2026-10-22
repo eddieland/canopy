@@ -14,10 +14,11 @@ Every journal table has a row type. A query that reads some of a table's columns
 
 from __future__ import annotations
 
+import functools
 import sqlite3
 import types
 import typing
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import Field, asdict, dataclass, fields
 from enum import StrEnum
 from typing import Any, ClassVar
@@ -1525,7 +1526,9 @@ def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]])
     return build
 
 
-def _converters(row_type: type[Row]) -> dict[str, _Convert]:
+# Cached: resolving a row type's hints costs about a millisecond, and every fetch of a row would pay it again.
+@functools.cache
+def _converters(row_type: type[Row]) -> Mapping[str, _Convert]:
     """Each field of `row_type`, by name, with what converts its column's value.
 
     Returns:

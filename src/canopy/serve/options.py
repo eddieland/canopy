@@ -13,6 +13,10 @@ from canopy.core.config import LOOPBACK_NAMES, check_base_path, listen_address
 
 #: A DNS name as a Host header carries it, without a port: `canopy-demo.vercel.app`.
 _HOST_NAME_RE = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
+#: How long an event stream stays open before the server ends it, and an open page opens the next one at once. A port
+#: forwarder can keep its side of a stream open after the page has gone (#1299), so the server never hears the page
+#: leave: this ends such a stream, and its polling, on its own.
+STREAM_SECONDS = 300.0
 
 
 class ServeOptions(BaseModel):
@@ -31,9 +35,9 @@ class ServeOptions(BaseModel):
     mock_event_seconds: float | None = Field(default=3.0, gt=0)
     #: The built UI (index.html and assets/). None serves a page saying it is not built.
     ui_dir: Path | None = None
-    #: Seconds an event stream stays open before the server ends it and the browser opens another; None, for as long
-    #: as the page does. For a host that cuts a long request (demo.py).
-    stream_seconds: float | None = Field(default=None, gt=0)
+    #: Seconds an event stream stays open before the server ends it and the browser opens another: shorter for a host
+    #: that cuts a long request (demo.py). The default is read when the options are made, so a test can shorten it.
+    stream_seconds: float = Field(default_factory=lambda: STREAM_SECONDS, gt=0)
     #: Public names the Host and Origin checks allow too, for the demo a host such as Vercel runs (demo.py). Mock data
     #: only (D122): the operator's journal is never served under a public name.
     public_hosts: frozenset[str] = frozenset()

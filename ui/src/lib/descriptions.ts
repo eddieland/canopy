@@ -1,9 +1,20 @@
 // What a detail page's description says: its subject's state, never what every page of its kind shows, which is the
 // title's help (ui/DESIGN.md, the detail skeleton). Each is the facts known, joined as one line: `done · implement`.
 
-import type { ChoreRun, Limit, PullRequest, ReviewSummary, Run, Tick, TicketPlans, TicketSummary } from '@/api/types'
+import type {
+    ChoreRun,
+    Limit,
+    PullRequest,
+    ReviewDraft,
+    ReviewSummary,
+    Run,
+    Tick,
+    TicketPlans,
+    TicketSummary,
+} from '@/api/types'
 import { stuck } from '@/lib/limits'
 import { planWaits } from '@/lib/plan-state'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef, runRef } from '@/lib/refs'
 import { verdictText } from '@/lib/reviews'
 import { NO_TICKET, readable, runKind } from '@/lib/words'
@@ -22,6 +33,32 @@ export function runDescription(run: Pick<Run, 'status' | 'kind' | 'reasons'>): s
  */
 export function reviewDescription(review: Pick<ReviewSummary, 'status'>): string {
     return readable(review.status)
+}
+
+/**
+ * A review's page with a draft: whose review it is, `Your review of acme/api#14 by carol`, or of the PR alone while
+ * canopy has not read who opened it. That page is the draft's record, so its title leads with the draft.
+ */
+export function reviewDraftTitle(prUrl: string, draft: Pick<ReviewDraft, 'pr_author'>): string {
+    const pr = pullRequestLabel(prUrl)
+    return draft.pr_author === null ? `Your review of ${pr}` : `Your review of ${pr} by ${draft.pr_author}`
+}
+
+// What each status of a draft means for the operator, after its chip in the page's description.
+const DRAFT_STATE: Record<ReviewDraft['status'], string> = {
+    waiting: 'posts nothing until you publish it',
+    publishing: 'posting on GitHub now',
+    unconfirmed: "may have posted: canopy's next read of the PR settles it",
+    staged: 'pending on GitHub, for you to submit there',
+    published: 'posted on GitHub',
+}
+
+/**
+ * A review's page with a draft: the draft's version and what its status means, as `version 3 · posts nothing until
+ * you publish it`. The page puts the status's chip ahead of it; the review's own status heads the reviewer's fold.
+ */
+export function reviewDraftDescription(draft: Pick<ReviewDraft, 'status' | 'version'>): string {
+    return line(`version ${draft.version}`, DRAFT_STATE[draft.status])
 }
 
 /**
