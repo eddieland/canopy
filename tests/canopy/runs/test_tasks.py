@@ -1,4 +1,4 @@
-"""One-off tasks (DESIGN §36, ROADMAP M61 stage 1): submitted by the operator, started by a tick, run in a slot."""
+"""One-off tasks (DESIGN §36, ROADMAP M61): submitted by the operator, started by a tick, run in a slot, replied to."""
 
 import io
 import json
@@ -18,8 +18,10 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql, tasks
 from canopy.core.context import Context
+from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
+from canopy.loop import attention
 from canopy.runs import reconcile
 from canopy.runs import tasks as task_starts
 from tests.canopy.helpers import (
@@ -32,6 +34,7 @@ from tests.canopy.helpers import (
     in_run,
     in_tick,
     json_block,
+    messages,
     operator,
     pool_statuses,
     present,
@@ -54,7 +57,8 @@ TICKETS_WORK = (
     sql.select("count(*)").from_("runs"),
     sql.select("count(*)").from_("run_slots"),
     sql.select("count(*)").from_("ticket_units"),
-    sql.select("count(*)").from_("messages"),
+    sql.select("count(*)").from_("messages").where("subject_kind != 'task'"),
+    sql.select("count(*)").from_("messages").where("run_id IS NOT NULL"),
     sql.select("count(*)").from_("starts"),
     sql.select("count(*)").from_("follow_ups"),
     sql.select("count(*)").from_("decisions").where("ticket_key IS NOT NULL"),
@@ -270,7 +274,8 @@ def test_a_pushed_branch_is_recorded_with_its_head_and_the_slot_returned(
     out = capsys.readouterr().out
     assert f"run {run.id}  done" in out
     assert f"{BRANCH}  head {present(run.head)[:12]}" in out
-    assert "summary: found it" in out
+    assert f"message 1, run {run.id}'s report" in out
+    assert "    found it" in out
 
 
 def test_a_task_run_s_models_and_tool_calls_are_recorded_as_it_ends(
@@ -435,6 +440,9 @@ def test_reconcile_closes_a_task_run_whose_process_is_gone_and_returns_its_slot(
     assert json.loads(present(run.result_json)) == {"harness": "the task's process is gone"}
     assert set(pool_statuses(treehouse_state)) == {"available"}
     assert reconciled.capacity.running == 0
+    # Its report is the harness's note, a message naming the run, as the run's own close records one.
+    [report] = tasks.messages_of(inline.conn, 1)
+    assert (report.kind, report.task_run_id, report.body) == ("report", run.id, "the task's process is gone")
 
 
 def test_a_running_task_holds_its_slot_through_reconcile(inline: Context, treehouse_state: Path) -> None:
@@ -458,6 +466,260 @@ def test_the_task_prompt(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAsser
         "BRANCH": BRANCH,
         "BASE": "main",
         "TIMEOUT_MINUTES": "45",
+        "CONVERSATION": None,
     }
     cfg = config.load(canopy_env.root, canopy_env.user_file)
     assert prompts.render_task(cfg, values) == markdown_snapshot
+
+
+def test_a_later_run_s_prompt_carries_the_conversation(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    """A run a reply started, its task's conversation written by hand: run 1's report and question, then the reply."""
+    submit()
+    said = [
+        ("worker", "report", "run", 1, None, "Two ways to fix it: cache the dependencies, or split the job."),
+        ("worker", "question", "run", 1, None, QUESTION),
+        ("operator", "reply", "cli", None, 2, "Cache the dependencies.\nLeave the job as it is."),
+    ]
+    with db.transaction(conn):
+        run = sql.insert(
+            "task_runs",
+            task_id=1,
+            tick_id=db.start_tick(conn, dry_run=False),
+            branch=BRANCH,
+            repo="repo",
+            slot_path="/pool/1/repo",
+            lease_id="l1",
+            lease_holder="canopy:task:1",
+            base_branch="main",
+            pool="treehouse",
+            started_at="2026-10-21T12:00:00.000Z",
+            ended_at="2026-10-21T12:30:00.000Z",
+            status="blocked",
+            log_path="1.log",
+        )
+        sql.execute(conn, run)
+        for n, (source, kind, channel, run_id, answers, body) in enumerate(said):
+            message = sql.insert(
+                "messages",
+                subject_kind="task",
+                subject_id="1",
+                at=f"2026-10-21T12:3{n}:00.000Z",
+                source=source,
+                kind=kind,
+                channel=channel,
+                task_run_id=run_id,
+                answers=answers,
+                body=body,
+            )
+            sql.execute(conn, message)
+    values = {
+        "TASK_ID": "1",
+        "TASK": TEXT,
+        "REPO": "repo",
+        "SLOT": "/pool/1/repo",
+        "BRANCH": BRANCH,
+        "BASE": "main",
+        "TIMEOUT_MINUTES": "45",
+        "CONVERSATION": conversation.prompt_task_conversation(conn, 1, 3),
+    }
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    assert prompts.render_task(cfg, values) == markdown_snapshot
+
+
+# The conversation
+
+QUESTION = "Cache the dependencies, or split the job in two?"
+BLOCKED: dict[str, object] = {
+    "status": "blocked",
+    "summary": "two ways to fix it",
+    "question": QUESTION,
+    "branch": BRANCH,
+    "prs": [],
+}
+
+
+def waiting_items(ctx: Context) -> list[Item]:
+    return [i for i in attention.listed(ctx) if i.reason == "awaiting_reply"]
+
+
+def test_a_reply_starts_the_next_run_on_the_branch_with_the_conversation(
+    capsys: pytest.CaptureFixture[str],
+    inline: Context,
+    git_pool: GitPool,
+    agent_log: Path,
+) -> None:
+    submit()
+    [first] = start(inline)
+    with private_worker_does(*commit_and_push(BRANCH, "task 1: first"), result=BLOCKED):
+        run_task(inline, first.run_id)
+    pushed = present(git_pool.remote_head(BRANCH))
+    # A run follows the operator's word: nothing starts the task again until they answer.
+    assert start(inline) == []
+    capsys.readouterr()
+    assert operator("reply", "task:1", "Cache the dependencies.") == 0
+    out = capsys.readouterr().out
+    assert "Recorded message 3 on task:1, answering message 2." in out
+    assert "The next tick starts its next run, on its branch." in out
+    [second] = start(inline)
+    with private_worker_does(*commit_and_push(BRANCH, "task 1: second"), result=DONE):
+        run = run_task(inline, second.run_id)
+    assert run.status is RunStatus.DONE
+    # It built on what the first run pushed, and never with force.
+    assert git("rev-parse", f"{run.head}^", cwd=git_pool.origin) == pushed
+    first_worker, second_worker = agent_runs(agent_log)
+    assert "The conversation so far" not in first_worker["argv"][-1]
+    prompt = second_worker["argv"][-1]
+    assert TEXT in prompt
+    assert f"Message 1, an earlier worker's report, run {first.run_id}," in prompt
+    assert "> two ways to fix it" in prompt
+    assert f"Message 2, an earlier worker's question, run {first.run_id}," in prompt
+    assert f"> {QUESTION}" in prompt
+    assert "Message 3, the operator's reply to message 2," in prompt
+    assert "> Cache the dependencies." in prompt
+    # The reply was taken: the task is not started a third time.
+    assert start(inline) == []
+    assert operator("show", "task:1") == 0
+    shown = capsys.readouterr().out
+    assert "task:1: done, in repo" in shown
+    assert f"message 2, run {first.run_id}'s question" in shown
+    assert "message 3, your reply to message 2 via cli" in shown
+
+
+def test_a_blocked_run_raises_awaiting_reply_naming_the_task_until_a_reply(inline: Context) -> None:
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result=BLOCKED):
+        run_task(inline, started.run_id)
+    [item] = waiting_items(inline)
+    assert (item.ticket_key, item.reason) == ("task:1", "awaiting_reply")
+    # The item names the task and where to read the question, never the question: the operator reads it in canopy.
+    assert QUESTION not in item.detail
+    assert "`canopy show task:1`" in item.detail
+    assert "`canopy reply task:1`" in item.detail
+    assert attention.for_overseer(inline.conn) == []
+    assert operator("reply", "task:1", "Split the job.") == 0
+    assert waiting_items(inline) == []
+
+
+def test_stopping_a_blocked_task_clears_its_item_and_drops_a_reply_s_run(
+    capsys: pytest.CaptureFixture[str],
+    inline: Context,
+) -> None:
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result=BLOCKED):
+        run_task(inline, started.run_id)
+    assert operator("reply", "task:1", "Split the job.") == 0
+    assert operator("stop", "task:1") == 0
+    assert "task:1 is stopped; it had not started, and nothing starts it now." in capsys.readouterr().out
+    assert start(inline) == []
+    assert waiting_items(inline) == []
+    assert operator("reply", "task:1", "On second thought, cache them.") == 1
+    assert "reply refused (stopped)" in capsys.readouterr().err
+
+
+def test_a_reply_while_a_run_works_starts_the_next_run_once_it_ends(
+    capsys: pytest.CaptureFixture[str],
+    inline: Context,
+) -> None:
+    submit()
+    [first] = start(inline)
+    assert operator("reply", "task:1", "Also look at the test job.") == 0
+    assert f"Its run {first.run_id} is still working" in capsys.readouterr().out
+    # One run per task at a time.
+    assert start(inline) == []
+    with private_worker_does(result=DONE):
+        run_task(inline, first.run_id)
+    [second] = start(inline)
+    assert second.task_id == 1
+
+
+def test_a_reply_to_an_unknown_task_is_refused(capsys: pytest.CaptureFixture[str], inline: Context) -> None:
+    submit()
+    assert operator("reply", "task:9", "go on") == 1
+    assert "reply refused (unknown): canopy has no task:9" in capsys.readouterr().err
+    assert tasks.messages_of(inline.conn, 9) == []
+
+
+def test_a_reply_inside_a_run_is_refused(capsys: pytest.CaptureFixture[str], inline: Context) -> None:
+    submit()
+    with in_run(7):
+        assert main(["reply", "task:1", "go on"]) == 1
+        with pytest.raises(conversation.Refused, match="inside_run"):
+            conversation.reply(inline.conn, conversation.parse_ref("task:1"), "go on", channel="cli")
+    assert "reply refused (inside_run)" in capsys.readouterr().err
+    assert tasks.messages_of(inline.conn, 1) == []
+
+
+def test_a_reply_ends_the_loop_s_wait(inline: Context) -> None:
+    submit()
+    since = db.now()
+    assert not tasks.moved_after(inline.conn, since)
+    assert operator("reply", "task:1", "Look at the cache first.") == 0
+    assert tasks.moved_after(inline.conn, since)
+
+
+def test_task_ended_reaches_only_a_sink_that_lists_tasks(
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    told, deaf = tmp_path / "told.txt", tmp_path / "deaf.txt"
+    sinks = {
+        "told": {"cmd": f"{sink_script} {told}", "events": ["tasks"]},
+        "deaf": {"cmd": f"{sink_script} {deaf}", "events": ["attention", "loop", "runs", "chores", "reviews"]},
+    }
+    scenario.configures(notify={"sinks": sinks})
+    scenario.tick()  # each sink's first publish: from here on it hears every event of its groups
+    submit()
+    with private_worker_does(*commit_and_push(BRANCH), result=BLOCKED):
+        scenario.tick()
+        [run] = every_run(scenario.conn)
+        run = wait_for_task_run(scenario.conn, run.id)
+    scenario.tick()
+    [message] = [json.loads(m) for m in messages(told)]
+    [event] = message["events"]
+    assert {k: event[k] for k in ("kind", "task", "run", "status", "summary", "question", "branch", "head", "pr")} == {
+        "kind": "task.ended",
+        "task": 1,
+        "run": run.id,
+        "status": "blocked",
+        "summary": "two ways to fix it",
+        "question": QUESTION,
+        "branch": BRANCH,
+        "head": git_pool.remote_head(BRANCH),
+        "pr": None,
+    }
+    assert event["line"].startswith(f"< task:1 run {run.id} ended blocked: two ways to fix it question: {QUESTION}")
+    # Nothing of the task's run reached the other sink, though it hears that the task waits on a reply.
+    sent = messages(deaf)
+    assert not [m for m in sent if "task.ended" in m or QUESTION in m]
+    assert [m for m in sent if "task:1" in m]
+
+
+def test_no_event_is_recorded_while_no_sink_takes_tasks(inline: Context) -> None:
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result=DONE):
+        run_task(inline, started.run_id)
+    assert sql.execute(inline.conn, sql.select("count(*)").from_("notify_events")).fetchone()[0] == 0
+
+
+def test_no_row_a_replied_task_writes_names_a_ticket(inline: Context) -> None:
+    submit(TEXT, "--project", "PROJ")
+    [first] = start(inline)
+    with private_worker_does(*commit_and_push(BRANCH), result=BLOCKED):
+        run_task(inline, first.run_id)
+    assert operator("reply", "task:1", "Cache the dependencies.") == 0
+    with in_tick(inline.conn) as tick_id:
+        reconcile.run(inline, logs.for_tick(tick_id))
+    [second] = start(inline)
+    with private_worker_does(result=DONE):
+        run_task(inline, second.run_id)
+    assert [sql.execute(inline.conn, query).fetchone()[0] for query in TICKETS_WORK] == [0] * len(TICKETS_WORK)
+    assert {(m.subject_kind, m.subject_id) for m in tasks.messages_of(inline.conn, 1)} == {("task", "1")}

@@ -1366,8 +1366,9 @@ def insert_message(
     answers: int | None = None,
     submission: str | None = None,
     comment: Comment | None = None,
+    task_run_id: int | None = None,
 ) -> int:
-    """Record a message and return its id.
+    """Record a message and return its id. A worker's names its run: a ticket's in `run_id`, a task's in `task_run_id`.
 
     A submission already recorded for the subject records nothing new: its message's id is returned instead. So does a
     tracker comment already mirrored for the subject.
@@ -1404,6 +1405,7 @@ def insert_message(
         author=comment.author if comment else None,
         commented_at=comment.at if comment else None,
         truncated=int(comment.truncated) if comment else 0,
+        task_run_id=task_run_id,
     )
     return rowid(sql.execute(conn, message))
 

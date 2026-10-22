@@ -536,9 +536,9 @@ def _gap_seconds(ctx: Context) -> float:
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
-    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, a task submitted
-    or stopped (DESIGN §36), or a notice to workers set or cleared, after `since`. A note to a chore waits for the
-    chore's next run, and a config reload waits for the next tick.
+    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, a task submitted,
+    replied to, or stopped (DESIGN §36), or a notice to workers set or cleared, after `since`. A note to a chore waits
+    for the chore's next run, and a config reload waits for the next tick.
 
     Returns:
         The first of those that happened, or None.
@@ -614,7 +614,7 @@ def _log_woken(
     elif woken == "grant":
         log.info("a grant ended the wait", extra={"after": since})
     elif woken == "task":
-        log.info("a task submitted or stopped ended the wait", extra={"after": since})
+        log.info("a task submitted, replied to, or stopped ended the wait", extra={"after": since})
     elif woken == "notice":
         log.info("a notice to workers set or cleared ended the wait", extra={"after": since})
     elif woken == "run":

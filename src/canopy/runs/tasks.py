@@ -1,10 +1,11 @@
 """The tick starts the operator's one-off tasks (DESIGN §36): in code, after reconcile and before the overseer.
 
-The operator's submission authorized each one, and the overseer never sees it. Guards in code hold them, whatever any
-agent asks: one run per task, at most `capacity.max_tasks` task runs at once, and every run that holds a slot, a
-worker's, a review's, or a task's, within `capacity.max_workers`. A task the guards hold waits for a later tick rather
-than being refused, and a dry tick starts none (D036). Each start leases a slot in the task's repository's pool as
-`canopy:task:<id>`, records the run, renders its prompt, and spawns the detached `canopy _task` (`task_run.py`).
+The operator's submission, or their reply to it, authorized each run, and the overseer never sees one. Guards in code
+hold them, whatever any agent asks: one run per task, at most `capacity.max_tasks` task runs at once, and every run
+that holds a slot, a worker's, a review's, or a task's, within `capacity.max_workers`. A task the guards hold waits for
+a later tick rather than being refused, and a dry tick starts none (D036). Each start leases a slot in the task's
+repository's pool as `canopy:task:<id>`, records the run, renders its prompt, and spawns the detached `canopy _task`
+(`task_run.py`).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, notice, pools, prompts, tasks
+from canopy.core import conversation, db, notice, pools, prompts, tasks
 from canopy.core.vocab import RunStatus
 from canopy.infra import lock, logs, procs
 
@@ -165,6 +166,9 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         "BRANCH": run.branch,
         "BASE": lease.base_branch,
         "TIMEOUT_MINUTES": str(ctx.config.runtime.worker_timeout_minutes),
+        # Earlier runs' reports and questions, data, and the operator's replies, instructions, up to the newest message
+        # when the run started (DESIGN §36). None on a task's first run, which leaves the section out.
+        "CONVERSATION": conversation.prompt_task_conversation(ctx.conn, task.id, run.message_id),
     }
     log_path = Path(run.log_path)
     try:
@@ -175,7 +179,7 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=log_path)
     except (OSError, prompts.PromptError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the task's worker: {e}"})
-        tasks.close_run(ctx.conn, run_id, RunStatus.CRASHED, note, head=None)
+        tasks.close_run(ctx.conn, ctx.config, run_id, RunStatus.CRASHED, note, head=None)
         raise _NotStarted(str(e)) from e
     db.claim_run(ctx.conn, "task_runs", run_id, pid)
     return pid

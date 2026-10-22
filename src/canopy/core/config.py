@@ -897,7 +897,7 @@ class Personas(Section):
 SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MAX_SINKS = 5
 # The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
-EventGroup = Literal["attention", "loop", "runs", "chores", "reviews"]
+EventGroup = Literal["attention", "loop", "runs", "chores", "reviews", "tasks"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60

@@ -161,7 +161,7 @@ cmd = ""
 # Optional notification sinks (DESIGN §20): each a command that reads one message on stdin, at most 5.
 # [notify.sinks.desktop]
 # cmd = "canopy-notify-desktop"
-# events = ["attention", "loop", "runs"]        # attention | loop | runs | chores
+# events = ["attention", "loop", "runs"]        # attention | loop | runs | chores | reviews | tasks
 #
 # [notify.sinks.slack]
 # cmd = "canopy-notify-slack"                   # reads its webhook from ~/.config/canopy/slack-webhook, mode 600

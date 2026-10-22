@@ -67,8 +67,8 @@ MAX_ERRORS_NAMED = 3
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 # What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
-# grant, a task submitted or stopped, a notice set or cleared), a run ending, the operator pressing the loop's tick-now
-# key, or the operator asking from the web UI.
+# grant, a task submitted, replied to, or stopped, a notice set or cleared), a run ending, the operator pressing the
+# loop's tick-now key, or the operator asking from the web UI.
 type Woken = Literal["message", "starts", "grant", "task", "notice", "run", "key", "web"]
 # What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
 # length, one a gate shortened, or what ended one early.

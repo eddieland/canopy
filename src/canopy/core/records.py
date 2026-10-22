@@ -320,6 +320,9 @@ class TaskRun(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+    #: The newest message about its task when it started: its prompt carries the conversation up to it, and a reply
+    #: past it queues the next run. None when the task had none.
+    message_id: int | None
 
 
 @dataclass(frozen=True)
@@ -1139,7 +1142,7 @@ class Message(Row):
     TABLE: ClassVar[str] = "messages"
 
     id: int
-    #: `ticket`, and the ticket's key.
+    #: `ticket` and the ticket's key, `chore` and its name, or `task` and its id.
     subject_kind: str
     subject_id: str
     at: str
@@ -1158,6 +1161,8 @@ class Message(Row):
     author: str | None
     commented_at: str | None
     truncated: bool
+    #: A task's run that reported it, as `run_id` names a ticket's (DESIGN §36).
+    task_run_id: int | None
 
 
 @dataclass(frozen=True)

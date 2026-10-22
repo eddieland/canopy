@@ -29,9 +29,11 @@ MAX_LINES = 20
 # Events older than this when a sink next succeeds are counted, not listed.
 STALE_EVENTS = timedelta(hours=24)
 _DONE_LISTED = 10
-# The attention list's subjects that are not tickets: a chore, by `chore:<name>`, and a PR, by `pr:<url>`.
+# The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, and a one-off
+# task, by `task:<id>`, which has no page of its own yet (DESIGN §36).
 _CHORE = "chore:"
 _PR = "pr:"
+_TASK = "task:"
 
 
 def _line(text: object) -> str:
@@ -73,6 +75,14 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
             f"? {f.get('ticket')} run {f.get('run')} filed follow-ups {', '.join(named) or '-'}: "
             "label or `canopy start` each one you want worked",
         )
+    if kind == "task.ended":
+        text = f"< task:{f.get('task')} run {f.get('run')} ended {f.get('status')}"
+        extras = [str(x) for x in (f.get("pr"), f.get("summary")) if x]
+        if f.get("question"):
+            extras.append(f"question: {f.get('question')}")
+        if f.get("branch") and f.get("head"):
+            extras.append(f"{f.get('branch')} at {str(f.get('head'))[:12]}")
+        return _line(f"{text}: {' '.join(extras)}" if extras else text)
     if kind == "chore.ended":
         findings = f.get("findings") or 0
         text = f"< chore:{f.get('chore')} run {f.get('run')} ended {f.get('status')} ({findings} findings)"
@@ -103,7 +113,7 @@ def item_page(ui: str | None, ticket_key: str | None) -> str | None:
     Returns:
         The page's URL under `ui`, or None when `ui` is None.
     """
-    if ticket_key is None:
+    if ticket_key is None or ticket_key.startswith(_TASK):
         return page(ui, "attention")
     if ticket_key.startswith(_CHORE):
         return page(ui, "chores", ticket_key.removeprefix(_CHORE))

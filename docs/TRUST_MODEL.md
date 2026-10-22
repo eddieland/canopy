@@ -165,8 +165,9 @@ Controls:
   never what a worker may do.
 - A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
   channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
-  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so is `canopy stop task:N`. Its text, and the replies a
-  later run takes, are the operator's instructions; what a run reports is data. A task never reaches the overseer: a
+  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so are `canopy reply task:N`, which queues its next run,
+  and `canopy stop task:N`. Its text, and the replies a later run takes, are the operator's instructions; what a run
+  reports, its summary and question, is data, and a later run's prompt says so. A task never reaches the overseer: a
   tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
   or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
   branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
@@ -275,12 +276,12 @@ still sees only what the branch now holds. A worker's bash still reaches the net
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
-unset, or `canopy task submit` to hand canopy a task in the operator's name, or write the journal file directly: the
-refusal stops a worker that follows injected text naively, not one that works around it. The operator accepted this
-(D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A
-steered overseer can dispatch a `resume` for an untrusted reviewer's comments without a go-ahead; the worker's own
-check and human review of the PR remain, and those comments were never
-instructions to it. A steered overseer can mirror text that was never on the ticket, or
+unset, or `canopy task submit` or `canopy reply task:N` to hand canopy a task, or its next run, in the operator's
+name, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one
+that works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on
+untrusted review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted
+reviewer's comments without a go-ahead; the worker's own check and human review of the PR remain, and those comments
+were never instructions to it. A steered overseer can mirror text that was never on the ticket, or
 name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
 stays its source.
 
@@ -530,7 +531,10 @@ Controls:
   not guards: the PR's draft state and its existence at all are agent judgment, and the create tool the definition
   allows is a private worker's residual below. Filing unlabeled tickets in the project the submission names is ROADMAP
   M61's third stage. A task's PR is the operator's like any other: canopy never drives it, and reviews it only when
-  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2).
+  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2). A run's
+  summary, question, branch, head, and PR leave the machine only as a `task.ended` event, to a sink whose events list
+  `tasks`, which none does unless the operator adds it; its `awaiting_reply` item, on every attention sink, names the
+  task and never the question.
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.

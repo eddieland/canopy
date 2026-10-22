@@ -119,7 +119,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             stop.armed = False
             release(ctx, run, link, log)
             stored = outcome.result_json()
-            if not tasks.close_run(ctx.conn, run_id, outcome.status, stored, head=outcome.head):
+            if not tasks.close_run(ctx.conn, ctx.config, run_id, outcome.status, stored, head=outcome.head):
                 log.warning("task run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("task run finished", extra={**fields, "status": outcome.status, "head": outcome.head})
@@ -140,7 +140,7 @@ def end(ctx: Context, run: records.TaskRun, status: RunStatus, note: str, log: l
     # `_task` is gone, but a worker it started may not be. Stop it before its slot goes back to its pool.
     if run.agent_pid is not None and procs.kill_group(run.agent_pid):
         log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": run.agent_pid})
-    if not tasks.close_run(ctx.conn, run.id, status, json.dumps({"harness": note}), head=None):
+    if not tasks.close_run(ctx.conn, ctx.config, run.id, status, json.dumps({"harness": note}), head=None):
         # Its own `_task` closed it first, and returned its slot.
         return set()
     procs.drop_lifelock(Path(run.log_path))
