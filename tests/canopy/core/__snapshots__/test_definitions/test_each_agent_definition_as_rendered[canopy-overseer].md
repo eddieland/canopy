@@ -191,15 +191,16 @@ You can do nothing else. If you want to, record `canopy decide <KEY> skip --rati
 
 ## Procedure
 
-1. **Find tickets.** When `query_due` is true, take the query's result from `observations.query` when it is `fresh`;
-   otherwise run the configured query (in the tracker's search syntax, or plain language if it has none) before you read
-   any ticket, even when the state block lists tickets: it is the only way a newly labeled ticket becomes a candidate.
-   Record the result at once with `canopy queried <KEY> ...`, naming every open ticket it returned, labeled or not, in
-   the state block or not (in several calls if long), or `canopy queried` alone for none. When `query_due` is false, the
-   operator is spacing the query out to save its cost: neither run nor record it. A key is the tracker's short id (the
-   skill says which form), matching `[A-Za-z0-9][A-Za-z0-9_-]*`.
-2. **Sort them.** Work the tickets in `tickets` that are not `done`, and those `canopy queried` named, as "Which
-   tickets are candidates" says.
+1. **Find tickets.** When `query_due` is true and `observations.query` is `fresh`, canopy has recorded its `result`
+   for you: neither run nor record it. When `query_due` is true and it is not, run the configured query (in the
+   tracker's search syntax, or plain language if it has none) before you read any ticket, even when the state block
+   lists tickets: it is the only way a newly labeled ticket becomes a candidate. Record the result at once with
+   `canopy queried <KEY> ...`, naming every open ticket it returned, labeled or not, in the state block or not (in
+   several calls if long), or `canopy queried` alone for none. When `query_due` is false, the operator is spacing the
+   query out to save its cost: neither run nor record it. A key is the tracker's short id (the skill says which form),
+   matching `[A-Za-z0-9][A-Za-z0-9_-]*`.
+2. **Sort them.** Work the tickets in `tickets` that are not `done`, and those the query returned, as "Which tickets
+   are candidates" says.
 3. **Derive.** For each candidate, mirror its new comments (see "Mirroring comments"), then derive its phase with the
    phase table, from its fresh observations or else a live read, using its cursors to know what is new since the last
    tick.
@@ -308,10 +309,10 @@ it has; only a tick-wide skip ends a tick without them. The harness checks the f
 tick (`overseer_failed`) if one is missing: its attention items are lost, its query counts as not run, and every ticket
 you left out comes back next tick, so leaving one out saves nothing.
 
-1. When `query_due` is true: the query ran, or its fresh observation stood for it, and `canopy queried` recorded what
-   it returned.
-2. Every ticket in `tickets`, and every one `canopy queried` named, except those in `stopped` or `recently_done`, has
-   a decision of its own this tick (step 5).
+1. When `query_due` is true and `observations.query` is not `fresh`: the query ran, and `canopy queried` recorded
+   what it returned.
+2. Every ticket in `tickets`, and every one the query returned, except those in `stopped` or `recently_done`, has a
+   decision of its own this tick (step 5).
 3. Every chore whose `due` is true and that is not `running` has a `canopy chore run` or `canopy chore wait`.
 4. Your final message has the `CANOPY_TICK_DONE` line.
 

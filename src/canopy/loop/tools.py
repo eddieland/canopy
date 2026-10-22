@@ -584,13 +584,9 @@ def queried(ctx: Context, request: Queried) -> str:
     Raises:
         Refused: Outside a running tick.
     """
-    found = list(dict.fromkeys(request.keys))
     current = running_tick(ctx)
-    # Into the journal at once, so the next tick's block carries each one even if this tick ends without deciding it.
-    for key in found:
-        db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current.id, None, duties.QUERIED_ACTION, duties.queried_rationale(found))
-    return f"recorded the query: {len(found)} open ticket(s)"
+    found = duties.record_queried(ctx.conn, current.id, ctx.repo, request.keys)
+    return f"recorded the query: {found} open ticket(s)"
 
 
 class Attention(Request):
