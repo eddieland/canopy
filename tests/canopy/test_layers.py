@@ -78,6 +78,11 @@ def modules() -> list[Path]:
     return sorted(p for p in PACKAGE.rglob("*.py") if p != PACKAGE / "__init__.py")
 
 
+def under_tests(pattern: str) -> list[Path]:
+    """Each file under `tests/` that matches `pattern`, but for the npm packages `tests/plugins` installs."""
+    return sorted(p for p in TESTS.rglob(pattern) if "node_modules" not in p.relative_to(TESTS).parts)
+
+
 def test_every_module_is_in_a_layered_package() -> None:
     assert modules()
     for path in modules():
@@ -266,7 +271,7 @@ def run(command: str) -> str:
 
 def test_no_test_module_imports_another() -> None:
     """What two test modules share lives in a helpers module (`tests/canopy/helpers.py`) or a conftest, not in one."""
-    found = [v for path in sorted(TESTS.rglob("*.py")) for v in imported_tests(path, path.read_text())]
+    found = [v for path in under_tests("*.py") for v in imported_tests(path, path.read_text())]
     assert not found, "\n".join(found)
 
 
@@ -311,7 +316,7 @@ def test_the_tests_mirror_the_packages() -> None:
     allowed |= {TESTS / p.parent.name for p in MEMBERS.glob("*/src/*/__init__.py")}
     found = [
         f"{path.relative_to(TESTS.parent)}: in no directory parallel to a package"
-        for path in sorted(TESTS.rglob("test_*.py"))
+        for path in under_tests("test_*.py")
         if path.parent not in allowed
     ]
     assert not found, "\n".join(found)

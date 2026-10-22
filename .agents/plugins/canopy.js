@@ -8,9 +8,11 @@
 // writes nothing, refuses no call, and grants no tool. Each job's hooks run in its own try, in the order of `JOBS`, so
 // a job that throws neither fails a call that has already run nor keeps the jobs after it from theirs.
 //
-// The runtime calls every function the module exports as a plugin, so it exports one.
+// Both of OpenCode's major versions load it, so its one export, the default, holds an entry point for each, and each
+// version reads only its own: OpenCode 1 calls `server` for the jobs' hooks, and OpenCode 2 calls `setup`, which
+// registers the same hooks under 2's names. Each needs the `id`. Neither calls any other export, so it has none.
 //
-// Its types are JSDoc, checked by `make lint` against the pinned runtime's own plugin types (tests/plugins/): a type
+// Its types are JSDoc, checked by `make lint` against each pinned runtime's own plugin types (tests/plugins/): a type
 // import in a comment is no import at all, so the file stays one the runtime loads with nothing installed.
 
 // @ts-check
@@ -25,6 +27,10 @@
  * @typedef {{ content: Array<{ type: string, text?: string }> }} McpResult
  */
 /** @typedef {(...args: any[]) => Promise<void>} AnyHook */
+/** @typedef {import("@opencode/plugin").Plugin.Context} Context2 */
+/** @typedef {Parameters<Parameters<Context2["tool"]["hook"]>[1]>[0]} ToolEvent2 */
+/** @typedef {Extract<ToolEvent2, { status: "completed" }>["result"]} Result2 */
+/** @typedef {Exclude<Result2["content"], string | undefined>[number]} Content2 */
 
 /** The share of the time the run had when the clock loaded that it warns in: its last fifth. */
 const SHARE = 5;
@@ -41,11 +47,18 @@ const MARK = "[canopy]";
 const JOBS = [clock];
 
 /**
- * The plugin: every job's hooks, joined so that each hook the runtime calls runs each job's in turn.
+ * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
  *
- * @type {import("@opencode-ai/plugin").Plugin}
+ * @type {import("@opencode-ai/plugin").PluginModule & import("@opencode/plugin").Plugin.Plugin}
  */
-export const Canopy = async () => {
+export default { id: "canopy", server: async () => hooksOfJobs(), setup };
+
+/**
+ * Every job's hooks, by OpenCode 1's names, joined so that each hook the runtime calls runs each job's in turn.
+ *
+ * @returns {Hooks}
+ */
+function hooksOfJobs() {
     /** @type {Record<string, AnyHook[]>} */
     const hooks = {};
     for (const job of JOBS) {
@@ -60,7 +73,64 @@ export const Canopy = async () => {
         }
     }
     return /** @type {Hooks} */ (Object.fromEntries(Object.entries(hooks).map(([name, each]) => [name, joined(each)])));
-};
+}
+
+/**
+ * OpenCode 2's entry point: the jobs' hooks, each registered under 2's name for it.
+ *
+ * 2 hands `execute.after` every call, failed ones too, with the result as the tool returned it; it truncates the
+ * result after the hook, keeping its head, whatever the tool. So the jobs get each successful call's result as 1 hands
+ * them an MCP tool's, its content as a list (`contentOf`), and the hook puts that list back only when a job changed it.
+ *
+ * @param {Context2} ctx
+ * @returns {Promise<void>}
+ */
+async function setup(ctx) {
+    const after = hooksOfJobs()["tool.execute.after"];
+    if (after === undefined) {
+        return;
+    }
+    await ctx.tool.hook("execute.after", async (event) => {
+        try {
+            if (event.status !== "completed") {
+                return;
+            }
+            const content = contentOf(event.result);
+            const before = content.length;
+            const input = { tool: event.tool, sessionID: event.sessionID, callID: event.id, args: event.input };
+            await after(input, /** @type {any} */ ({ content }));
+            if (content.length !== before) {
+                event.result = { ...event.result, content };
+            }
+        } catch {
+            // A hook that throws fails the call it runs after.
+        }
+    });
+}
+
+/**
+ * A result's content as OpenCode 2 sends it to the model: a string as one text, a list as it is, and, without either,
+ * the output as text, a string as it is and anything else as JSON.
+ *
+ * @param {Result2} result
+ * @returns {Content2[]}
+ */
+function contentOf(result) {
+    const { content, output } = result;
+    if (typeof content === "string") {
+        return [{ type: "text", text: content }];
+    }
+    if (content !== undefined && content.length > 0) {
+        return [...content];
+    }
+    let text;
+    try {
+        text = typeof output === "string" ? output : (JSON.stringify(output) ?? String(output));
+    } catch {
+        text = String(output);
+    }
+    return [{ type: "text", text }];
+}
 
 /**
  * One hook that runs each job's in turn, each in its own try: a hook that throws must not fail the call.

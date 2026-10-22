@@ -38,6 +38,8 @@ def rule(permission: str, action: str = "deny", pattern: str = "*") -> dict[str,
 
 #: The rules OpenCode starts every agent from, as `opencode debug agent` prints them first.
 DEFAULTS = [rule("*", "allow"), rule("doom_loop", "ask"), rule("external_directory", "ask")]
+#: What OpenCode writes of its stdout to a pipe before it exits: what the pipe's buffer holds.
+PIPE_BUFFER = 64 * 1024
 
 
 @dataclass
@@ -46,6 +48,7 @@ class Debug:
 
     rules: Mapping[str, Sequence[dict[str, str]]]
     config: object = field(default_factory=lambda: CONFIG)
+    skills: object = field(default_factory=lambda: SKILLS)
     fail: Callable[[Sequence[str]], procs.Result | None] = lambda _: None
     #: The built-in tools `debug agent` says each agent keeps.
     tools: Mapping[str, bool] = field(default_factory=dict)
@@ -63,7 +66,7 @@ class Debug:
         timeout: float | None = None,  # noqa: ARG002
         on_start: Callable[[int], None] | None = None,  # noqa: ARG002
         on_line: Callable[[str], None] | None = None,  # noqa: ARG002
-        stdout_to_file: bool = False,  # noqa: ARG002
+        stdout_to_file: bool = False,
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, env))
         failed = self.fail(args)
@@ -75,14 +78,15 @@ class Debug:
             case ["opencode", "debug", "config"]:
                 printed: object = self.config
             case ["opencode", "debug", "skill"]:
-                printed = SKILLS
+                printed = self.skills
             case ["opencode", "debug", "agent", name]:
                 permission = [*DEFAULTS, *self.rules[name]]
                 printed = {"name": name, "mode": "primary", "permission": permission, "tools": self.tools}
             case _:
                 raise AssertionError(args)
         before, after = self.around
-        return procs.Result(tuple(args), 0, f"{before}{json.dumps(printed, indent=2)}\n{after}", "")
+        stdout = f"{before}{json.dumps(printed, indent=2)}\n{after}"
+        return procs.Result(tuple(args), 0, stdout if stdout_to_file else stdout[:PIPE_BUFFER], "")
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002
         raise AssertionError(args)
@@ -122,6 +126,13 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     assert {(cwd, tuple(sorted((env or {}).items()))) for _, cwd, env in debug.ran} == {
         (Path("/ws"), (("OPENCODE_CONFIG_DIR", "/defs"),)),
     }
+
+
+def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:
+    long = {"name": "long", "description": "d", "location": "/defs/skills/long/SKILL.md", "content": "x" * PIPE_BUFFER}
+    found = offered(Debug({"canopy-worker": []}, skills=[*SKILLS, long]), "canopy-worker")
+    assert found.error is None
+    assert "long" in found.skills
 
 
 def test_a_later_rule_wins_over_an_earlier_one() -> None:
