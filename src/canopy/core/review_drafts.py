@@ -394,7 +394,7 @@ def _placed(
 def _text(finding: review_result.Finding) -> str:
     """A finding as a comment on its line says it: its title, and its detail.
 
-    The severity stays canopy's: what posts is the reviewer's words alone, so a persona that labels its titles (a
+    canopy adds no severity: what posts is the reviewer's words alone, so a persona that labels its titles (a
     Conventional Comments `suggestion:`) has its label open the comment.
 
     Returns:
