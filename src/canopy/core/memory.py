@@ -464,14 +464,16 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
     stamp = db.format_time(now)
     review = db.format_time(now + timedelta(days=REVIEW_DAYS))
     for m in used:
-        # A lesson in use is pushed back from review: one that helps keeps being served without the operator's look.
+        # A lesson in use is pushed back from review: one that helps keeps being served without the operator's look. A
+        # pinned one is never due, so it keeps no review date to push.
         sql.execute(
             conn,
             sql.update("memories")
             .set(last_used_at=stamp)
             .set_to("use_count = use_count + 1")
             .set_to(
-                "review_at = CASE WHEN scope = ? THEN max(coalesce(review_at, ''), ?) ELSE review_at END",
+                "review_at = CASE WHEN scope = ? AND pinned_at IS NULL THEN max(coalesce(review_at, ''), ?) "
+                "ELSE review_at END",
                 MemoryScope.LESSON,
                 review,
             )
@@ -984,18 +986,23 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
     """Return the lessons a run in `repos` would be served at `use`, or with `repos` None every lesson (DESIGN §28).
 
     The operator's words, framed as the standing instructions are, with the prompt's obligations first. Each active
-    lesson in key order with its id, key, and repository if it names one; a lesson naming a repository renders only for
-    a run in it. Past `MAX_LESSONS_DIGEST` bytes the ones longest since promoted, renewed, or used are left out, and
-    counted. `cite` asks the run to name in its result the lessons it relied on, or found wrong, which only a run with
-    the memory contract can.
+    lesson with its id, key, and repository if it names one, the pinned ones first, each part in key order; a lesson
+    naming a repository renders only for a run in it. Past `MAX_LESSONS_DIGEST` bytes the ones longest since promoted,
+    renewed, or used are left out, and counted, a pinned one only once no lesson but a pinned one is left. `cite` asks
+    the run to name in its result the lessons it relied on, or found wrong, which only a run with the memory contract
+    can.
 
     Returns:
         The section, starting with its heading, the ids it holds, and the count left out.
     """
     lessons = [m for m in active_lessons(conn) if m.repo is None or repos is None or m.repo in repos]
-    # The lessons most recently vouched for first, those kept when the cap leaves some out: a lesson's review date is
-    # set 90 days after it was promoted, renewed, or used, whichever came last.
-    by_vouched = sorted(lessons, key=lambda m: (m.review_at or m.approved_at or m.created_at, m.id), reverse=True)
+    # The pinned lessons first, then the ones most recently vouched for, those kept when the cap leaves some out: a
+    # lesson's review date is set 90 days after it was promoted, renewed, or used, whichever came last.
+    by_vouched = sorted(
+        lessons,
+        key=lambda m: (m.pinned_at is not None, m.review_at or m.approved_at or m.created_at, m.id),
+        reverse=True,
+    )
     kept: list[records.Memory] = []
     size = 0
     for lesson in by_vouched:
@@ -1003,7 +1010,7 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
         if size > MAX_LESSONS_DIGEST:
             break
         kept.append(lesson)
-    kept.sort(key=lambda m: (m.key, m.id))
+    kept.sort(key=lambda m: (m.pinned_at is None, m.key, m.id))
     left_out = len(lessons) - len(kept)
     intro = (
         "Lessons the operator promoted for every run in this workspace, from what earlier workers proposed. They are "

@@ -273,6 +273,10 @@ export type MemoryPromoted = Schemas['MemoryPromoted']
 export type MemoryRejected = Schemas['MemoryRejected']
 /** A lesson the operator renewed, and when it is next due for review. */
 export type MemoryRenewed = Schemas['MemoryRenewed']
+/** A lesson the operator pinned: never due for review, and served before the rest. */
+export type MemoryPinned = Schemas['MemoryPinned']
+/** A lesson the operator unpinned: due for review again later. */
+export type MemoryUnpinned = Schemas['MemoryUnpinned']
 /** A memory whose text a forget deleted, its row left. */
 export type MemoryForgotten = Schemas['MemoryForgotten']
 /** An edit, as `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]` takes it. */

@@ -1361,13 +1361,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying
-  nothing is posted on the PR, the PR's URL in a monospace field, and a `Review` button beside it, the form's submit,
-  with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
-  request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its
-  Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
-  Stop did goes under it (`Notice`).
-- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posting nothing itself (D114): the
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying its review
+  is a draft the operator may publish as their own, the PR's URL in a monospace field, and a `Review` button beside it,
+  the form's submit, with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21).
+  A PR with an open request wears a `requested` chip after its review in the list. On a PR's page the request is a line
+  in the foot of its Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended
+  once it has; what Stop did goes under it (`Notice`).
+- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop does not
+  own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page holds the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
   once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
   with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the

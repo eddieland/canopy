@@ -28,5 +28,8 @@ When a PR already has a body, edit it only if a sentence in it is wrong or missi
 
 When you reply to a review comment, reply in a sentence: what you changed, or why you did not.
 
-When you plan, plan the smallest change that does the ticket, walk the list above for each part of it, and name what
-you left out on purpose.
+When you plan, plan the smallest change that does the ticket: walk the list above for each part of it, and write down
+what it decided, not the walk. Keep the plan as small as the change; a plan longer than the code it describes has
+written the code. Say each thing once, in its section, and leave out what the worker will read anyway: the ticket, the
+repository's docs, code it need not change. A section with nothing for this ticket is `None.`, and `Out of scope` names
+what you left out on purpose.

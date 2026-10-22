@@ -73,7 +73,8 @@ def items(conn: sqlite3.Connection, config: Config, now: datetime | None = None)
     if due:
         detail = (
             f"{_named('lesson', due)} {'is' if len(due) == 1 else 'are'} due for review: renew each with "
-            "`canopy memory renew ID`, graduate it into a repository's AGENTS.md or a skill, or forget it"
+            "`canopy memory renew ID`, pin it for good with `canopy memory pin ID`, graduate it into a repository's "
+            "AGENTS.md or a skill, or forget it"
         )
         found.append(Item(None, memory.REVIEW_REASON, detail))
     wrong = [f"{m.id} (run {m.wrong_run_id})" for m in lessons if m.wrong_at is not None]

@@ -327,8 +327,11 @@ def test_review_dates_raise_one_lesson_review_once_lessons_are_in_use(
     assert str(fresh.id) not in item.detail.split(" are due")[0]
 
 
-@pytest.mark.parametrize("args", [["promote", "1"], ["reject", "1"], ["renew", "1"], ["edit", "1", "--text", "x"]])
-def test_promote_reject_renew_and_edit_refuse_inside_a_run(
+@pytest.mark.parametrize(
+    "args",
+    [["promote", "1"], ["reject", "1"], ["renew", "1"], ["pin", "1"], ["unpin", "1"], ["edit", "1", "--text", "x"]],
+)
+def test_promote_reject_renew_pin_and_edit_refuse_inside_a_run(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
     args: list[str],
@@ -774,3 +777,117 @@ def test_many_lessons_due_raise_one_short_item_naming_the_longest_overdue(
     [item] = memory_attention.items(conn, load(canopy_env.root, canopy_env.user_file))
     named = ", ".join(map(str, ids[::-1][: memory_attention.MAX_NAMED]))
     assert item.detail.startswith(f"lessons {named}, and 15 more are due for review")
+
+
+def test_a_pinned_lesson_is_never_due_and_the_digest_serves_it_before_the_rest(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_memory(canopy_env, proposals="use")
+    # Enough lessons of 500 characters that the cap leaves some out, whatever it is.
+    count = memory.MAX_LESSONS_DIGEST // 500 + 2
+    ids = [promoted(conn, canopy_env, f"lesson {i} " + "z" * 500, key=f"k{i:02}").id for i in range(count)]
+    # The last key was vouched for longest ago and is overdue: the cap leaves it out first.
+    now = datetime.now(UTC)
+    conn.executemany(
+        "UPDATE memories SET review_at = ? WHERE id = ?",
+        [(db.format_time(now + timedelta(days=90 - n)), i) for n, i in enumerate(ids[:-1])],
+    )
+    conn.execute("UPDATE memories SET review_at = ? WHERE id = ?", (db.format_time(now - timedelta(days=1)), ids[-1]))
+    assert ids[-1] not in memory.lessons_digest(conn, None, cite=False).ids
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert [i.reason for i in memory_attention.items(conn, cfg)] == ["lesson_review"]
+    capsys.readouterr()
+    assert main(["memory", "pin", str(ids[-1])]) == 0
+    assert capsys.readouterr().out == (
+        f"Lesson {ids[-1]} is pinned: never due for review, and served before every lesson not pinned.\n"
+    )
+    pinned = present(memory.get(conn, ids[-1]))
+    assert pinned.review_at is None
+    assert pinned.pinned_at is not None
+    assert memory_attention.items(conn, cfg) == []
+    digest = memory.lessons_digest(conn, None, cite=False)
+    # Kept past the cap, and rendered before the lessons not pinned, which keep their key order.
+    assert digest.ids[0] == ids[-1]
+    assert list(digest.ids[1:]) == sorted(digest.ids[1:])
+    assert digest.text.index(f"Lesson {ids[-1]},") < digest.text.index(f"Lesson {ids[0]},")
+    assert main(["memory", "lessons"]) == 0
+    assert f"  {ids[-1]}  `k{count - 1:02}`; promoted at {pinned.approved_at} from proposal" in capsys.readouterr().out
+    assert main(["memory", "lessons", "--json"]) == 0
+    found = {m["id"]: m for m in json.loads(capsys.readouterr().out)["lessons"]}
+    assert (found[ids[-1]]["pinned_at"], found[ids[-1]]["review_at"]) == (pinned.pinned_at, None)
+    assert found[ids[0]]["pinned_at"] is None
+    assert main(["memory", "pin", str(ids[-1])]) == 1
+    assert f"pin refused (pinned): lesson {ids[-1]} is pinned already" in capsys.readouterr().err
+    assert main(["memory", "unpin", str(ids[-1])]) == 0
+    unpinned = present(memory.get(conn, ids[-1]))
+    assert unpinned.pinned_at is None
+    assert unpinned.review_at is not None
+    assert unpinned.review_at > db.format_time(now + timedelta(days=89))
+    assert capsys.readouterr().out == f"Lesson {ids[-1]} is unpinned: due for review at {unpinned.review_at}.\n"
+    assert main(["memory", "unpin", str(ids[-1])]) == 1
+    assert f"unpin refused (not_pinned): lesson {ids[-1]} is not pinned" in capsys.readouterr().err
+
+
+def test_pin_takes_only_a_lesson_in_force_and_needs_proposals_on(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    lesson = promoted(conn, canopy_env)
+    capsys.readouterr()
+    assert main(["memory", "pin", str(lesson.promoted_from)]) == 1
+    assert f"pin refused (unknown): no lesson in force has id {lesson.promoted_from}" in capsys.readouterr().err
+    with_memory(canopy_env, ticket_notes="use")
+    assert main(["memory", "pin", str(lesson.id)]) == 1
+    assert "pin refused (off): memory.proposals is off" in capsys.readouterr().err
+    assert present(memory.get(conn, lesson.id)).pinned_at is None
+
+
+def test_a_pin_stays_through_an_edit_and_a_promote_under_its_key(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_memory(canopy_env, proposals="use")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    first = promoted(conn, canopy_env)
+    stamp = memory_manage.pin(conn, cfg, first.id)
+    capsys.readouterr()
+    assert main(["memory", "edit", str(first.id), "--text", "Newer words."]) == 0
+    edited = memories(conn)[-1]
+    assert (edited.pinned_at, edited.review_at) == (stamp, None)
+    assert f"version 2, pinned, never due for review. Lesson {first.id} stays" in capsys.readouterr().out
+    again = memory_manage.promote(conn, cfg, proposed(conn, "Different words."))
+    assert again.superseded == edited.id
+    assert (again.lesson.pinned_at, again.lesson.review_at) == (stamp, None)
+    # A lesson under another key is not pinned by it.
+    other = promoted(conn, canopy_env, "Another lesson.", key="other")
+    assert other.pinned_at is None
+    assert other.review_at is not None
+
+
+def test_a_pinned_lesson_a_run_uses_keeps_no_review_date_and_one_reported_wrong_still_asks(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    conn, canopy_env = scenario.conn, scenario.env
+    scenario.configures("private", memory=memory_modes(proposals="use"))
+    used = promoted(conn, canopy_env)
+    wrong = promoted(conn, canopy_env, "Never run the linter.", key="lint")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    memory_manage.pin(conn, cfg, used.id)
+    memory_manage.pin(conn, cfg, wrong.id)
+    scenario.run(WORK, worker=pushes(memory_used=[used.id], memory_wrong=[wrong.id]))
+    after_used = present(memory.get(conn, used.id))
+    assert (after_used.use_count, after_used.review_at) == (1, None)
+    [item] = memory_attention.items(conn, cfg)
+    assert item.reason == "lesson_wrong"
+    out = scenario.operator("memory", "renew", str(wrong.id)).out
+    assert out == f"Lesson {wrong.id} is renewed: any report that it is wrong is cleared. Pinned, it is never due.\n"
+    after_wrong = present(memory.get(conn, wrong.id))
+    assert (after_wrong.wrong_at, after_wrong.review_at) == (None, None)
+    assert after_wrong.pinned_at is not None
+    assert memory_attention.items(conn, cfg) == []

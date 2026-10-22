@@ -59,9 +59,9 @@ export function ProposalsWaiting({ ticketKey }: { ticketKey: string }) {
 }
 
 /**
- * A `lesson_review` item: the lessons whose review date has come, the longest overdue first, each renewed from its
- * row. Graduating one into a repository's AGENTS.md or a skill is a ticket and a PR; forgetting one is the memory
- * page's.
+ * A `lesson_review` item: the lessons whose review date has come, the longest overdue first, each renewed or pinned
+ * from its row. Graduating one into a repository's AGENTS.md or a skill is a ticket and a PR; forgetting one is the
+ * memory page's.
  */
 export function LessonsDue() {
     const { data, error } = useQuery(memoryQuery)
@@ -86,8 +86,8 @@ export function LessonsDue() {
             )}
             <MemorySaid said={said} className="border-t px-3 py-2" />
             <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-                Renew each you keep. Graduate one into a repository&apos;s AGENTS.md or a skill through a ticket, or
-                forget it on the{' '}
+                Renew each you keep, or pin one to keep it for good. Graduate one into a repository&apos;s AGENTS.md or
+                a skill through a ticket, or forget it on the{' '}
                 <Link to="/memory" className="text-accent underline underline-offset-4 hover:decoration-2">
                     memory page
                 </Link>
