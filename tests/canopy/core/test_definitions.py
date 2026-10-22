@@ -785,6 +785,25 @@ def test_the_overseer_may_run_the_commands_config_allows_it_and_its_snapshot_say
     assert definitions.digest(config.load(canopy_env.root, canopy_env.user_file)) == definitions.digest(before)
 
 
+def test_the_private_worker_may_run_the_tracker_reads_config_allows_it_and_no_more(canopy_env: CanopyEnv) -> None:
+    before = config.load(canopy_env.root, canopy_env.user_file)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"worker-private": ["jira issue view *"]}}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    rendered = definitions.sources(cfg)
+    rules = _rules_in(rendered[f"agents/{agents.PRIVATE_WORKER}.md"].decode(), "bash")
+    assert rules[-1] == ("jira issue view *", "allow")
+    assert _allowed(rules, "jira issue view PROJ-1 --plain")
+    for refused in (
+        "jira issue comment add PROJ-1",
+        "acli jira workitem view PROJ-1",
+        "gh issue view 1",
+        "canopy tick",
+    ):
+        assert not _allowed(rules, refused), refused
+    shipped = definitions.sources(before)
+    assert [rel for rel in rendered if rendered[rel] != shipped[rel]] == [f"agents/{agents.PRIVATE_WORKER}.md"]
+
+
 @pytest.mark.parametrize("agent", runtime_definitions.agent_names())
 def test_each_agent_definition_as_rendered(
     canopy_env: CanopyEnv,
