@@ -56,7 +56,8 @@ the worker start from a plan you have read rather than correcting its PR afterwa
 what comes back to a PR is planned the same way before the worker acts on it (§32, in progress).
 
 A private ticket's conversation stays in canopy: canopy posts none of the agents' questions or your answers to the
-tracker, though its PRs are as public as any. `private = true` under `[tracker]` works labeled tickets the same way (§22).
+tracker, though its PRs are as public as any. `private = true` under `[tracker]` works labeled tickets the same way
+(§22).
 
 ## Reviewing other people's PRs
 
