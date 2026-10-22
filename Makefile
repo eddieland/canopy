@@ -23,7 +23,7 @@ fmt: ui-fmt ## Run autoformatters (ruff imports and trailing commas, ruff format
 
 # ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
 # zizmor runs offline, so the lint needs no GitHub token and gives the same answer on every machine.
-# tsc checks the JSDoc types of the plugin canopy ships for its agents against the pinned runtime's own (tests/plugins).
+# tsc checks the JSDoc types of the plugin canopy ships for its agents against each pinned OpenCode's (tests/plugins).
 lint: tests/plugins/node_modules ## Lint and type check: ruff, pyrefly, rumdl, ec, shellcheck, actionlint, zizmor, tsc
 	uv run ruff format --check .
 	uv run ruff check .
