@@ -4,13 +4,19 @@
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The planner writes one file, its plan, and nothing else anywhere (DESIGN §25, TRUST_MODEL T1, T6). It reads the
 # worktrees linked from its desk with OpenCode's read, list, glob, and grep tools, and the ticket with the tracker's
-# read tools only. canopy renders this file into its definitions directory with the tracker's MCP server and tools from
-# the operator's config (`tracker.mcp_server`, `tracker.read_tools`), at the marked line below, as for
-# canopy-worker-private. As shipped it names none, and dispatch refuses a plan then (`no_read_tools`).
+# read tools only, or the commands the operator allows it below. canopy renders this file into its definitions
+# directory with the tracker's MCP server and tools from the operator's config (`tracker.mcp_server`,
+# `tracker.read_tools`), at the marked line below, as for canopy-worker-private. As shipped it names none, and
+# dispatch refuses a plan then (`no_read_tools`).
 description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
 mode: primary
 permission:
-  bash: deny
+  bash:
+    "*": deny
+    # The commands `runtime.allow_bash` names for the planner, such as a tracker's CLI reads while its MCP server is
+    # down, are rendered at the marked line, last, so that each is allowed (DESIGN §13). canopy refuses a shell, an
+    # interpreter, git, gh, or its own tools there.
+    # canopy: bash allows
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny

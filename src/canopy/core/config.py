@@ -670,8 +670,8 @@ class Runtime(Section):
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.PRIVATE] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
-    #: Commands an agent may run beyond its own bash rules, by its role: the overseer's and the workers' (DESIGN §13).
-    #: Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
+    #: Commands an agent may run beyond its own bash rules, by its role: the overseer's, the planner's, and the workers'
+    #: (DESIGN §13). Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
     allow_bash: Annotated[dict[BashRole, BashAllows], Scope.PRIVATE] = {}
 
     def worker_template(self, template: str) -> str:
