@@ -192,11 +192,13 @@ test('settings prefers the personas a review request starts from, apart from the
     await page.goto('reviews')
     await settled(page)
     const form = page.getByTestId('review-request-form')
+    // Folded, the form names them; opened, its menu holds them.
+    await expect(form.getByTestId('review-request-chosen')).toHaveText('in skeptic, as Settings prefers')
+    await form.getByRole('button', { name: 'Show persona and notes' }).click()
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
-    await expect(form).toContainText('as Settings prefers')
     await page.reload()
     await settled(page)
-    await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    await expect(form.getByTestId('review-request-chosen')).toHaveText('in skeptic, as Settings prefers')
 
     // The default goes back to the config's reviewer.
     await page.goto('settings')
@@ -205,5 +207,5 @@ test('settings prefers the personas a review request starts from, apart from the
     await page.getByRole('menuitem', { name: 'Use the default' }).click()
     await page.goto('reviews')
     await settled(page)
-    await expect(form.getByRole('button', { name: 'Persona: canopy (default)' })).toBeVisible()
+    await expect(form.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
 })

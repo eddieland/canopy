@@ -13,6 +13,7 @@ none of the characters a lesson may not (DESIGN §28, Bounds).
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -50,6 +51,8 @@ BAD = "bad_persona"
 UNKNOWN = "unknown_persona"
 #: Where an agent's next persona comes from: the ticket's override, `[personas]`, or canopy's own default.
 Source = Literal["ticket", "config", "default"]
+#: The most characters of a persona's description, its opening sentence, a menu shows beside its name.
+DESCRIPTION_CHARS = 160
 
 
 class PersonaError(Exception):
@@ -88,6 +91,8 @@ class Listed:
     defaults: Sequence[Agent]
     #: Why a run would refuse it, or None when it would render.
     error: str | None = None
+    #: What it is, in its own words: the opening sentence of its text (`description`); None when it is refused.
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -375,17 +380,39 @@ def listed(config: Config) -> list[Listed]:
         if path is None:
             continue
         try:
-            _read(name, path)
-            error = None
+            described, error = description(_read(name, path)), None
         except PersonaError as e:
-            error = e.reason
+            described, error = None, e.reason
         defaults: tuple[Agent, ...] = tuple(
             a
             for a in AGENTS
             if getattr(config.personas, a) == name or (a == "reviewer" and name in config.personas.reviewers)
         )
-        found.append(Listed(name, path, name in yours, name in yours and name in shipped, defaults, error))
+        shadows = name in yours and name in shipped
+        found.append(Listed(name, path, name in yours, shadows, defaults, error, described))
     return found
+
+
+def description(text: str) -> str | None:
+    """Return what a persona is, in its own words, for a menu to show beside its name: its text's opening sentence.
+
+    A persona has no description of its own, since every word of its file is instructions to the agent; its opening
+    sentence says what it is (`Work like the lazy senior developer...`). Its first paragraph that is not a heading is
+    read, its lines joined, up to the end of its first sentence, cut at a word to `DESCRIPTION_CHARS`.
+
+    Returns:
+        The sentence, or None for a text with no paragraph but headings.
+    """
+    paragraphs = (p.strip() for p in re.split(r"\n\s*\n", text))
+    words = " ".join(next((p for p in paragraphs if p and not p.startswith("#")), "").split())
+    if not words:
+        return None
+    end = re.search(r"[.!?](?=\s|$)", words)
+    sentence = words[: end.end()] if end is not None else words
+    if len(sentence) <= DESCRIPTION_CHARS:
+        return sentence
+    cut = sentence[: DESCRIPTION_CHARS - 1].rsplit(" ", 1)[0]
+    return f"{cut.rstrip(',;:')}…"
 
 
 def _names(directory: Path) -> set[str]:

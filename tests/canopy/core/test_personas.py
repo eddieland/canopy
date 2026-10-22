@@ -226,6 +226,27 @@ def test_canopy_personas_names_an_agent_whose_runs_would_refuse(scenario: Scenar
     )
 
 
+def test_a_persona_is_described_by_its_opening_sentence_past_any_heading() -> None:
+    assert personas.description("# Pirate\n\nTalk like a pirate,\nalways. Never walk the plank.\n") == (
+        "Talk like a pirate, always."
+    )
+    assert personas.description("Be terse") == "Be terse"
+    assert personas.description("# Only a heading\n") is None
+    long = personas.description(f"{'word ' * 60}end.")
+    assert long is not None
+    assert len(long) <= personas.DESCRIPTION_CHARS
+    assert long.endswith("word…")
+
+
+def test_a_persona_canopy_would_refuse_has_no_description(canopy_env: CanopyEnv) -> None:
+    yours = personas_dir(canopy_env)
+    (yours / "loud.md").write_text("Shout.\u200b\n")
+    (yours / "terse.md").write_text("Be terse. Very.\n")
+    got = {p.name: p.description for p in personas.listed(load(canopy_env.root, canopy_env.user_file))}
+    assert got["terse"] == "Be terse."
+    assert got["loud"] is None
+
+
 def _render(cfg: Config, agent: str, persona: personas.Persona | None) -> str:
     # `agent`'s prompt, rendered as a run renders it, in `persona`.
     if agent == "reviewer":

@@ -1350,6 +1350,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   header's Pause and Tick now say the same on hover. A public ticket
   has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
   `Public: remove its queue label to stop it, or start it privately.`
+- **A choice of persona** is a menu (`DropdownMenu`) on an outline `xs` button naming the choice
+  (`src/components/personas-menu.tsx`): a ticket's agent's picks one (`PersonaRadioItem`), a review request's checks
+  several (`PersonasMenu`). Each item is the persona's name in monospace over its description, the opening sentence of
+  its file, in muted `text-xs`: the name is the item's accessible name, the description its accessible description.
+  A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
+  to the config: `Clear the override`, or `Use the default`.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
   on its attention item (The answer, above), but under the run on a broken run's item, which asks for another try
   first, and in the foot of a PR's Pull request panel, under the operator's review request. While something is stuck
@@ -1363,14 +1369,19 @@ sliver beside four others; and its axis names short call numbers without measuri
   something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying its review
-  is a draft the operator may publish as their own, the PR's URL in a monospace field, and a `Review` button beside it,
-  the form's submit, with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21).
-  A PR with an open request wears a `requested` chip after its review in the list. On a PR's page the request is a line
-  in the foot of its Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended
-  once it has; what Stop did goes under it (`Notice`). Until its review starts, the reviews list has a `requested` row
-  for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR, since it has no
-  ticket.
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, as compact as a ticket's
+  `Start privately` (`StartTicket`): the PR's URL in a monospace field and an outline `Review` beside it, the form's
+  submit, with the CLI's command on hover; under them `Show persona and notes`, a `Disclosure`, beside a muted line
+  naming the personas it will use, and a `Notice` saying its review is a draft the operator may publish as their own,
+  which a refusal replaces. The send key's keycap shows only while the notes are open. On success the form opens the
+  PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open request wears a
+  `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its Pull request
+  panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has. While none is
+  open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas menu and an outline
+  `Review this PR`, `Review again` once the PR has a review or an ended request; the loop's own PR without a request
+  has no line. What either button did goes under it (`Notice`). Until its review starts, the reviews list has a
+  `requested` row for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR,
+  since it has no ticket.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop does not
   own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page holds the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
