@@ -20,6 +20,7 @@ import type {
     Replied,
     ReviewDismissed,
     ReviewDraft,
+    ReviewDraftNoted,
     ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
@@ -192,6 +193,14 @@ export function reviewSentText(sent: ReviewSent): string {
 /** What a change to review run `run`'s draft did, as `canopy review edit` says it: its version and hash now. */
 export function reviewDraftEditedText(run: number, draft: ReviewDraft): string {
     return `Review run ${run}'s draft is version ${draft.version} now, hash ${draft.hash}: ${draft.change}.`
+}
+
+/** What a note on review run `run`'s draft recorded, as `canopy reply review:ID` says it. */
+export function reviewDraftNotedText(run: number, noted: ReviewDraftNoted): string {
+    return (
+        `Recorded note ${noted.note} on review run ${run}'s draft, at version ${noted.after_version}. The next tick ` +
+        'revises it, unless you change the draft first.'
+    )
 }
 
 /**

@@ -325,6 +325,16 @@ taking its dismissal back, so dismiss it, then **put back**. Two clicks, and the
 Each change is a new version, listed under **Versions** with who made it, and is the same as `canopy review edit`.
 A version holds at most 30 comments, which is more than any review worth reading needs.
 
+Or have an agent do the rewording. Under **Revision**, say what should change in **What should change** and press
+**Ask for a revision**, the same as `canopy reply review:ID`. The next tick starts a revision: an agent reads the PR and
+the version on the page, with your note as its only instructions, and makes a new version, listed **by a revision**.
+It posts nothing. Write the note as you'd brief a colleague who takes every word literally, because this one does.
+Until then the panel shows your note and says a revision is asked for, then running; if you edit the draft first, your
+version answers the note and no revision starts. A note is refused while a revision runs, and once the draft has had
+its revisions (`policy.max_revisions_per_draft`, 3 by default), which `canopy grant review:ID revision` raises from
+your shell. A revision that fails leaves the draft as it was, and the panel says how it ended. The page shows what a
+revision did when you next read it; it doesn't follow the run as it goes, so reload to see the new version.
+
 Two buttons sit at the foot, as they do under a PR's thread drafts. **Publish version N** posts the version on the page,
 word for word, on the commit the review read, and submits it. **Start the review on GitHub**, beside it, posts the same
 as a pending review instead: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read

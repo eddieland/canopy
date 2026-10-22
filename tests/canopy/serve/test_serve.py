@@ -1096,6 +1096,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/reviews/{run_id}/draft/comments",
         "/api/reviews/{run_id}/draft/comments/{number}/edit",
         "/api/reviews/{run_id}/draft/comments/{number}/drop",
+        "/api/reviews/{run_id}/draft/notes",
         "/api/reviews/{run_id}/draft/publish",
         "/api/seen",
         "/api/pull-requests",

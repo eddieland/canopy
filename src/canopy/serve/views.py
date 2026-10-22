@@ -26,7 +26,7 @@ from canopy.core import (
     run_models,
 )
 from canopy.core.items import fingerprint
-from canopy.core.vocab import ModelsRead, RunStatus
+from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
 from canopy.serve import draft_views, memory_views
 from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
@@ -408,6 +408,23 @@ def _run_state(status: str) -> RunState:
             return "failed"
         case _:
             assert_never(known)
+
+
+def review_state(status: ReviewRunStatus) -> RunState:
+    """What the web UI colors a review run that has `status` as, a revision of a review's draft among them.
+
+    Returns:
+        The run's state: every ending but `done` is failed.
+    """
+    match status:
+        case ReviewRunStatus.RUNNING:
+            return "running"
+        case ReviewRunStatus.DONE:
+            return "done"
+        case ReviewRunStatus.FAILED | ReviewRunStatus.UNKNOWN | ReviewRunStatus.TIMEOUT | ReviewRunStatus.CRASHED:
+            return "failed"
+        case _:
+            assert_never(status)
 
 
 def new_tokens(row: sqlite3.Row | records.Row) -> int | None:

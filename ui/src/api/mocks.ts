@@ -271,6 +271,9 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
         moved_head: null,
         published_at: null,
         published_url: null,
+        notes: [],
+        revisions: [],
+        revision_limit: 3,
         ...fields,
     }
 }

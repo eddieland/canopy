@@ -142,3 +142,32 @@ export function versionBy(version: Pick<ReviewDraftVersion, 'author' | 'channel'
 export function editable(draft: Pick<ReviewDraft, 'status'>): boolean {
     return draft.status === 'waiting'
 }
+
+/** The most characters a note on a draft may hold, after trimming: the operator's bound in canopy's core. */
+export const MAX_NOTE_CHARS = 4000
+
+/**
+ * Where a draft's revisions stand (DESIGN §34): one running, which holds a note and a publish until it ends; spent,
+ * past its limit, `asked` when a note still waits on a grant; a note asking the next tick for one; or none asked.
+ */
+export type RevisionStanding =
+    | { kind: 'running'; run: number }
+    | { kind: 'spent'; asked: boolean }
+    | { kind: 'asked' }
+    | { kind: 'open' }
+
+/** The fields of a draft its revisions' standing reads. */
+type Revisable = Pick<ReviewDraft, 'status' | 'notes' | 'revisions' | 'revision_limit'>
+
+/** Where `draft`'s revisions stand, in the order canopy refuses a note: a revision running first, then the limit. */
+export function revisionStanding(draft: Revisable): RevisionStanding {
+    const running = draft.revisions.find((revision) => revision.state === 'running')
+    if (running !== undefined) {
+        return { kind: 'running', run: running.id }
+    }
+    const asked = editable(draft) && draft.notes.length > 0
+    if (draft.revisions.length >= draft.revision_limit) {
+        return { kind: 'spent', asked }
+    }
+    return asked ? { kind: 'asked' } : { kind: 'open' }
+}

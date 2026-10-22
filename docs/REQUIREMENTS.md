@@ -229,8 +229,8 @@ watched, reviewed again at each new commit until it merges or closes. Before M42
 loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so one PR meant
 editing config and editing it back. The review is what any canopy review is: findings in the journal for the
 operator, posted nowhere unless the operator publishes it (D114), with no worker and no ticket. Publishing one on the
-PR, word for word as the operator approved it after editing it in canopy, is built from the CLI; iterating on it with
-an agent, and doing it from the web UI, are planned (M43, §34).
+PR, word for word as the operator approved it after editing it by hand or with an agent, is built, from the CLI and
+the web UI (M43, §34).
 
 ### R18. Plan a ticket before implementing it, and keep the plan
 
