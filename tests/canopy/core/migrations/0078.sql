@@ -1,4 +1,3 @@
--- sha256 of 0078_observed_check_runs.sql: 7fee17ebd4afb195c7d2d0cb6c2363858b3fa8f0142bb50197dec3030468d425
+-- sha256 of 0078_decision_decider.sql: 5300290afff0d771aa4d3d4052b27e5c327d692fb656609b5a06fab81beb7b68
 
-INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at)
-VALUES ('https://e.test/pr/7', 10, 'build', 'abc1234', 'failure', 'x');
+INSERT INTO decisions (tick_id, ticket_key, action, rationale, decider) VALUES (1, 'OLD-1', 'wait', 'r', 'harness');

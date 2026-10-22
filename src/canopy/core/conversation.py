@@ -42,7 +42,7 @@ from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
 from canopy.infra import lock
-from canopy.infra.text import printable
+from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -1108,7 +1108,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str | None:
         ended = f" at {run['ended_at']}" if run["ended_at"] else ""
         lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
         for m in db.run_messages(conn, int(run["id"])):
-            lines += [f"Its {m.kind}:", _quoted(m.body)]
+            lines += [f"Its {m.kind}:", quoted(m.body)]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks) or None
 
@@ -1176,12 +1176,7 @@ def _prompt_message(m: records.Message) -> str:
     else:
         run = m.run_id or m.task_run_id
         what = f"an earlier worker's {m.kind}" + (f", run {run}" if run else "")
-    return f"Message {m.id}, {what}, at {m.at}:\n{_quoted(m.body)}"
-
-
-def _quoted(text: str) -> str:
-    # A message's body as a quote, one `> ` line per line, without control characters.
-    return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
+    return f"Message {m.id}, {what}, at {m.at}:\n{quoted(m.body)}"
 
 
 # A tick's note

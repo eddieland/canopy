@@ -335,6 +335,9 @@ class Decision(Model):
     rationale: str
     """The overseer's text, untrusted: control characters dropped and line breaks kept. Bounded at 2000 characters
     when it was recorded."""
+    decider: Literal["overseer", "harness"] | None = None
+    """Who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37); None for one
+    recorded before the journal said."""
 
 
 class Limit(Model):
