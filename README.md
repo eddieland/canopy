@@ -2,12 +2,18 @@
 
 [![codecov](https://codecov.io/gh/eddieland/canopy/graph/badge.svg)](https://codecov.io/gh/eddieland/canopy)
 
-An unattended, local agent loop driven by your issue tracker.
+An unattended, local agent loop that takes a ticket from your issue tracker to a green, reviewed PR, and keeps it there
+until you merge it.
 
-Label a ticket. When there is capacity, an overseer agent leases a worktree from a
-[treehouse](https://github.com/kunchenguid/treehouse) pool and dispatches a worker agent, which does the work, pushes a
-branch, and opens a PR; then the worktree goes back to the pool. Later ticks pick up CI failures and review comments. A
-running attention list tells you what actually needs a human.
+Start a ticket in canopy, or label it in your tracker. canopy can plan the work first and revise the plan with you until
+it is right, before any worker spends a run on code. Then it implements the plan and opens the PR, and keeps the PR
+moving: it fixes red CI, brings in a base that moved, and answers review comments, each in a fresh run on the same
+branch. You step in only where judgment is needed: shaping and approving the plan, answering a worker's question,
+deciding what to do with a comment from someone you have not trusted, and approving and merging. A running attention
+list tells you which of those is waiting on you.
+
+canopy reviews other people's PRs the same way, on request: its reviewer reads the PR, you revise the review with an
+agent until it says what you mean, and only then is it posted, as your own.
 
 Everything runs on your machine, under your credentials. No hosted service holds standing write access to your
 repositories, your tracker, or your internal tools.
@@ -16,11 +22,62 @@ repositories, your tracker, or your internal tools.
 
 ![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
 
-**Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). Built: the loop, in the
-foreground or detached; the web UI; chores; notifications; private tickets; joint runs across repositories; plans
-before implementing; and reviews, of canopy's own PRs and of coworkers' on request. In progress: sandboxed workers
-(M26), canopy's own worktree pools in place of treehouse (M45), agent memory (M50), and cutting the overseer's spend
-(M36 to M39, starting with M36).
+## The loop
+
+```text
+you start a ticket in canopy, or label it in your tracker
+  -> plan (optional)        -> you reply with changes and it plans again, or edit it, until you approve it
+  -> implement              -> the worker pushes a branch and opens the PR
+  -> the PR waits on CI and reviewers, holding no worktree
+       CI red, or a conflict with its base  \
+                                             > resume: a fresh run on the same branch, then wait again
+       a reviewer you trust comments        /  (canopy's own reviewer, if you trust it)
+       anyone else comments                 -> attention: you say what to do with it
+  -> green and reviewed     -> attention: you approve and merge
+  -> merged                 -> done
+```
+
+| Stage | canopy does | You do |
+| --- | --- | --- |
+| Intake | picks up a started or labeled ticket when there is capacity; can stack a ticket on its blocker's branch once that PR is green (`policy.stacking`) | `canopy start KEY` to work it privately, with no label and nothing written to the ticket; or add your queue label |
+| Plan, if `policy.plan` asks for one | a planner reads the ticket and the code and writes how the work will be done; each reply of yours has it plan again; nothing is implemented until the plan is approved, by you unless you let the planner approve its own (`policy.planner_may_approve`) | read the plan, reply with what to change or edit it yourself, and approve it when it is right |
+| Implement | leases a worktree, runs a worker that implements, pushes, and opens the PR, then returns the worktree | answer with `canopy reply` or the web UI, if the worker asks |
+| CI | waits without a worktree; on red or a conflict, resumes the worker to fix it, within an attempt limit and a cooldown | `canopy grant` another attempt past the limit, or `canopy notice` an outage |
+| Review | reviews the head with its own reviewer agent, if `[review]` is on; resumes the worker for feedback from `trust.trusted_reviewers`, `canopy:review` naming its own | review the PR; say what to do with anyone else's comments |
+| Merge | marks the ticket done in its own journal once its PRs are merged and no repository is left to change; it never moves the ticket in your tracker | approve and merge, and close the ticket |
+
+Between stages a ticket holds no worktree and no capacity: its pushed branch is the checkpoint, and each run is a fresh
+worker on it (§9). Each tick, an overseer agent reads the tracker, GitHub, and canopy's journal, derives each ticket's
+phase, and picks its next step (§7). The judgment is the overseer's; the guards are code: capacity, attempt limits,
+cooldowns, one worker per ticket, and never approving or merging a PR, whatever the overseer asks for (§4).
+
+The plan is the cheapest place to steer. A planning round costs one run and touches no branch, so iterate there, and let
+the worker start from a plan you have read rather than correcting its PR afterwards (§25). With `policy.feedback_plan`,
+what comes back to a PR is planned the same way before the worker acts on it (§32, in progress).
+
+A private ticket's conversation stays in canopy: canopy posts none of the agents' questions or your answers to the
+tracker, though its PRs are as public as any. `private = true` under `[tracker]` works labeled tickets the same way
+(§22).
+
+## Reviewing other people's PRs
+
+Ask canopy to review a coworker's PR, with `canopy start PR_URL --review` or the web UI's reviews page, or every PR
+`review.query` matches. Its reviewer agent reads the PR at its head and reports findings on the lines of the diff, in
+canopy, posting nothing. The review is a draft you iterate on: dismiss findings, edit the text, or reply with what to
+change, `canopy reply review:ID`, and an agent revises it into a new version. When it says what you mean,
+`canopy review publish RUN_ID HASH` posts that one version, word for word, as your comment review: pending on GitHub for
+you to submit there, or submitted with `--submit`. Ask again after the author pushes, and the new head gets a review of
+its own. Publishing and revising are built from the CLI; asking for a revision from the review's page is still to come
+(§21, §34).
+
+Beside the loop, canopy also runs chores, scheduled agents that read your CI, PRs, or tracker and report what matters,
+changing nothing, and notifies you on your desktop or in Slack when the attention list changes.
+
+**Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). Every stage of the loop above
+is built, in the foreground or detached, with the web UI, private tickets, joint runs across repositories, and the
+work beside the loop. In progress: sandboxed workers (M26), canopy's own worktree pools in place of treehouse (M45),
+agent memory (M50), one-off tasks in your own words (M61), and cutting the overseer's spend (M36 to M39, starting with
+M36).
 
 - Milestones: [docs/roadmap/](docs/roadmap/README.md)
 - Live checks still to run: [docs/SCENARIOS.md](docs/SCENARIOS.md)
@@ -33,31 +90,17 @@ Codes such as D046 name entries in [docs/DECISIONS.md](docs/DECISIONS.md), and �
 
 - Hosted "label a ticket, get a PR" agents cannot reach systems behind your own auth, and they require granting a
   vendor write access to your code and tracker. canopy runs where your credentials already are.
-- Juggling checkouts is the real daily cost of running several agents at once. treehouse already solves that; canopy
-  builds on it instead of reinventing it.
+- Getting the first PR up is the easy part. The daily cost of running several agents is everything after: checkouts to
+  juggle, CI to watch, review comments to route back, and remembering which PR is waiting on whom. canopy owns that
+  stretch and leaves you the decisions.
 - Orchestration is a prompt, not a workflow engine. The overseer decides what to do each tick from live state, so
   ticket dependencies and branch stacking need no DSL and no schema change.
 
-## How it works, briefly
+## Under the hood
 
-```text
-canopy loop
-  take the loop lock
-  until Ctrl-C:
-    canopy tick (below)
-    print what it did, then wait loop.interval_minutes, doubling after each idle tick up to loop.idle_max_minutes
-
-canopy tick
-  acquire lock, run migrations
-  reconcile: dead workers, stale leases
-  run the overseer agent:
-    read the world (tracker and GitHub via MCP, treehouse pool)
-    derive each ticket's phase
-    decide a next action per ticket
-    dispatch workers up to capacity
-    update the attention list
-  exit
-```
+`canopy loop` runs one tick after another until you press Ctrl-C, waiting `loop.interval_minutes` between them, and
+longer while nothing changes. A tick takes a lock, returns the worktrees of dead workers, runs the overseer, and exits.
+Worktrees come from a [treehouse](https://github.com/kunchenguid/treehouse) pool.
 
 canopy has no tracker code. Agents reach the tracker through its MCP server, guided by a short provider-neutral contract
 and, where it helps, a provider skill (Jira and GitHub Issues ship). See [DESIGN §17](docs/design/WORKSPACES.md#17-trackers).
@@ -134,9 +177,10 @@ from the foot of the rail, says what each page holds and how to act on it. To lo
 `uv run python -m canopy.serve --mock --port 8766` in a checkout, after `make ui-build`: it serves the same pages over
 the sample journal in `src/canopy/serve/mock.py`, with no sign-in and `mock` shown in the header.
 
-Your part is to label tickets with your queue label, answer the agents' questions on the ticket, and review their PRs.
-Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR
-on their own; anyone else's comments wait on the attention list as `untrusted_review` until you reply.
+Your part is the one in [The loop](#the-loop): start or label tickets, shape and approve their plans, answer the
+agents' questions, and review their PRs. Humans approve and merge; the agent never does. Only reviewers in
+`trust.trusted_reviewers` send a worker back to a PR on their own; anyone else's comments wait on the attention list as
+`untrusted_review` until you reply.
 
 | A ticket's conversation, waiting on your answer | A run's transcript: each tool call, and what it cost |
 | --- | --- |
