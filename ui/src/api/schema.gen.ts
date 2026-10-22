@@ -2503,6 +2503,8 @@ export type components = {
              * @description Whether the operator edited it.
              */
             edited: boolean;
+            /** @description For a thread's draft whose run followed a feedback plan covering its thread, the item it started from. */
+            from_plan: components["schemas"]["DraftFromPlan"] | null;
             /**
              * Hash
              * @description The name of that text and reaction, which a send carries so what posts is what the operator read.
@@ -2602,6 +2604,39 @@ export type components = {
              * @description Why nothing was posted, in the harness's words.
              */
             why: string;
+        };
+        /**
+         * DraftFromPlan
+         * @description The feedback plan item a thread's draft started from (DESIGN §32), compared in code with what the run wrote.
+         */
+        DraftFromPlan: {
+            /**
+             * Departs
+             * @description Whether the run's own text, or what it says it did, is other than the plan proposed: the operator rereads it.
+             */
+            departs: boolean;
+            /**
+             * Item Id
+             * @description The review comment's id canopy observed for the item.
+             */
+            item_id: number;
+            /**
+             * Left Out
+             * @description Whether the operator's approval left the item out.
+             */
+            left_out: boolean;
+            /**
+             * Number
+             * @description The item's number in its plan, which the operator names it by.
+             */
+            number: number;
+            /** @description What the plan proposed for it. */
+            proposal: components["schemas"]["ProposalName"];
+            /**
+             * Reply
+             * @description The reply the plan proposed, model text: plain text, never Markdown, here. None when it proposed none.
+             */
+            reply: string | null;
         };
         /**
          * @description Where a draft goes: a reply on a review thread, its PR's one comment, or the ticket's.
@@ -3981,6 +4016,11 @@ export type components = {
              */
             text?: string | null;
         };
+        /**
+         * @description What a feedback plan proposes for an item (DESIGN §32).
+         * @enum {string}
+         */
+        ProposalName: "change" | "decline" | "ask" | "leave";
         /**
          * PullRequest
          * @description A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is.

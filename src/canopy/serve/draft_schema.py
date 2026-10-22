@@ -31,6 +31,28 @@ type ReactionName = Annotated[
     Field(description="A reaction a thread's draft stages on the comment it names, by GitHub's name for it."),
 ]
 
+type ProposalName = Annotated[
+    Literal["change", "decline", "ask", "leave"],
+    Field(description="What a feedback plan proposes for an item (DESIGN §32)."),
+]
+
+
+class DraftFromPlan(Model):
+    """The feedback plan item a thread's draft started from (DESIGN §32), compared in code with what the run wrote."""
+
+    number: int
+    """The item's number in its plan, which the operator names it by."""
+    item_id: int
+    """The review comment's id canopy observed for the item."""
+    proposal: ProposalName
+    """What the plan proposed for it."""
+    reply: str | None = None
+    """The reply the plan proposed, model text: plain text, never Markdown, here. None when it proposed none."""
+    left_out: bool
+    """Whether the operator's approval left the item out."""
+    departs: bool
+    """Whether the run's own text, or what it says it did, is other than the plan proposed: the operator rereads it."""
+
 
 class Draft(Model):
     """A comment a run drafted in place of posting it: a worker's text, untrusted until the operator sends it."""
@@ -72,6 +94,8 @@ class Draft(Model):
     """The reaction a send added on GitHub, which stays there though the rest of that send posted nothing."""
     created_at: datetime
     """When the run drafted it."""
+    from_plan: DraftFromPlan | None = None
+    """For a thread's draft whose run followed a feedback plan covering its thread, the item it started from."""
 
 
 class ThreadComment(Model):
