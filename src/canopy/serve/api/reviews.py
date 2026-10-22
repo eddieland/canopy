@@ -136,6 +136,8 @@ def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -
             conversation.dismiss(ctx.conn, ref, [str(body.finding)], channel=WEB, chores=defined, undo=body.undo)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        # A requested review's draft emptied of all it would post waits on nobody (DESIGN §34).
+        backend.write_attention(ctx)
     _log.info(
         "finding dismissal taken back" if body.undo else "finding dismissed",
         extra={"subject": str(ref), "finding": body.finding, "channel": WEB},
@@ -197,6 +199,7 @@ def draft_body(run_id: ReviewId, body: ReviewDraftBodyRequest, backend: BackendD
             version = review_drafts_manage.edit_body(ctx.conn, run_id, body.text, channel=WEB)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
         _log.info("review draft edited", extra={"run_id": run_id, "version": version.number, "channel": WEB})
         return _draft(ctx.conn, run_id)
 
@@ -269,6 +272,7 @@ def draft_drop(run_id: ReviewId, number: CommentNumber, backend: BackendDep) -> 
             version = review_drafts_manage.drop_comment(ctx.conn, run_id, number, channel=WEB)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
         _log.info("review draft edited", extra={"run_id": run_id, "version": version.number, "channel": WEB})
         return _draft(ctx.conn, run_id)
 
@@ -303,6 +307,8 @@ def draft_publish(run_id: ReviewId, body: ReviewDraftPublishRequest, backend: Ba
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        # Published or staged, a requested review waits on the operator no more (DESIGN §34).
+        backend.write_attention(ctx)
         _log.info(
             "review draft published",
             extra={

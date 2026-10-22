@@ -2,12 +2,14 @@ import type { RequestedReview, ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewDraftChip } from '@/components/review-draft-chip'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Tip } from '@/components/tip'
-import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import { requestGroups, shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import { reviewRef } from '@/lib/refs'
 import { isNew } from '@/lib/seen-reviews'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
@@ -23,7 +25,11 @@ const NONE_REQUESTED: RequestedReview[] = []
  * reviews page passes the PRs the operator asked to have reviewed that no review of has started yet as `requested`, a
  * row each, before the runs, or after them with `requestedLast`: what comes next is the newest end of the list. A
  * review whose result is new to the operator (src/lib/seen-reviews.ts) has a dot in the accent after its verdict, said
- * `new` on hover and to a screen reader.
+ * `new` on hover and to a screen reader. A review of a PR the loop does not own says where its draft stands after
+ * that (`ReviewDraftChip`), so the list shows which hold a review the operator has yet to publish or submit. A request
+ * the operator made in several personas has a review of each commit in each (DESIGN §31): those rows sit together
+ * where the first of them is, with no rule between them, and each after the first names only its persona in the PR's
+ * place, so the request reads as one entry with its reviews side by side (`requestGroups`).
  */
 export function ReviewsTable({
     reviews,
@@ -40,9 +46,17 @@ export function ReviewsTable({
     return (
         <ul className="divide-y" data-testid="reviews">
             {!requestedLast && waiting}
-            {reviews.map((review) => (
-                <ReviewRow key={review.id} review={review} pr={pr} />
-            ))}
+            {requestGroups(reviews).flatMap((group) =>
+                group.map((review, i) => (
+                    <ReviewRow
+                        key={review.id}
+                        review={review}
+                        pr={pr}
+                        lead={i === 0 ? undefined : group[0]?.id}
+                        joined={i < group.length - 1}
+                    />
+                )),
+            )}
             {requestedLast && waiting}
         </ul>
     )
@@ -50,8 +64,9 @@ export function ReviewsTable({
 
 /**
  * A PR the operator asked to have reviewed, waiting on a tick to start its review: a hollow ring, as nothing runs for
- * it yet, then `requested`, its PR, which opens its page with **Stop**, and how long it has waited. It has no review
- * id, impact, commit, or cost until its review starts, and then the review's own row takes its place.
+ * it yet, then `requested`, its author where a ticket would be once canopy has read the PR (it has no ticket: canopy
+ * only reviews it), its PR, which opens its page with **Stop**, and how long it has waited. It has no review id,
+ * impact, commit, or cost until its review starts, and then the review's own row takes its place.
  */
 function RequestedRow({ request }: { request: RequestedReview }) {
     return (
@@ -63,8 +78,14 @@ function RequestedRow({ request }: { request: RequestedReview }) {
                 </Tip>
             </span>
             <span />
-            <span className="truncate">
-                <None reason={NO_TICKET} brief className="font-mono text-xs" />
+            <span className="flex min-w-0">
+                {request.author === null ? (
+                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
+                ) : (
+                    <Tip fact="The PR's author: canopy only reviews it, so it has no ticket">
+                        <span className="truncate font-mono text-xs text-muted-foreground">{request.author}</span>
+                    </Tip>
+                )}
             </span>
             <span />
             <span className="flex min-w-0 items-center gap-3">
@@ -76,7 +97,22 @@ function RequestedRow({ request }: { request: RequestedReview }) {
     )
 }
 
-function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
+/**
+ * One review's row. `lead` is the review whose row heads its request's group, on every other row of the group, which
+ * then names only its persona where the PR and commit would repeat the lead's; `joined` drops the rule under a row
+ * the next of its group follows.
+ */
+function ReviewRow({
+    review,
+    pr,
+    lead,
+    joined = false,
+}: {
+    review: ReviewSummary
+    pr: boolean
+    lead?: number
+    joined?: boolean
+}) {
     const sha = (
         <Tip fact={review.sha} mono>
             <span className="readout shrink-0 text-xs text-muted-foreground">
@@ -94,10 +130,26 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             </span>
         </Tip>
     )
+    // The rest of a request's group: its PR and commit are the lead's, so its persona alone tells it apart, shown at
+    // any width since nothing else does.
+    const named =
+        lead === undefined ? (
+            <>
+                {pr && <PullRequestLink url={review.pr_url} />}
+                {sha}
+                {persona}
+            </>
+        ) : (
+            <Tip fact={`Reviewed from the same request, of the same commit, as ${reviewRef(lead)}, in another persona`}>
+                <span className="readout min-w-0 truncate text-xs text-muted-foreground" data-testid="sibling-persona">
+                    as {review.persona ?? 'another persona'}
+                </span>
+            </Tip>
+        )
     return (
         <ListRow
             kind={pr ? 'review' : 'own-review'}
-            className="text-sm"
+            className={cn('text-sm', joined && 'border-b-0 pb-1', lead !== undefined && 'pt-1')}
             data-testid={pr ? `review-${review.id}` : `pull-request-review-${review.id}`}
         >
             {/* The dot is how its run ended; the verdict's color, its worst finding. */}
@@ -111,30 +163,21 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
                         </span>
                     </Tip>
                 )}
+                {review.draft !== null && <ReviewDraftChip status={review.draft} />}
             </span>
             <ReviewLink id={review.id} />
             {pr && (
                 <span className="truncate">
-                    {review.ticket_key === null ? (
-                        <None reason={NO_TICKET} brief className="font-mono text-xs" />
-                    ) : (
-                        <TicketLink ticketKey={review.ticket_key} />
-                    )}
+                    {lead === undefined &&
+                        (review.ticket_key === null ? (
+                            <None reason={NO_TICKET} brief className="font-mono text-xs" />
+                        ) : (
+                            <TicketLink ticketKey={review.ticket_key} />
+                        ))}
                 </span>
             )}
             <span className="flex">{review.impact !== null && <Chip word={`${review.impact} impact`} />}</span>
-            {pr ? (
-                <span className="flex min-w-0 items-center gap-3">
-                    <PullRequestLink url={review.pr_url} />
-                    {sha}
-                    {persona}
-                </span>
-            ) : (
-                <span className="flex min-w-0 items-center gap-3">
-                    {sha}
-                    {persona}
-                </span>
-            )}
+            <span className="flex min-w-0 items-center gap-3">{named}</span>
             <Cost usd={review.cost_usd} className="text-right text-xs text-muted-foreground" />
             <Age variant="span" started={review.started_at} ended={review.ended_at} className="text-right" />
         </ListRow>

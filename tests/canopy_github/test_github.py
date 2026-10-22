@@ -1,7 +1,6 @@
 """canopy's GitHub programs (DESIGN §29), against a local stand-in for GitHub's GraphQL API."""
 
 import contextlib
-import io
 import json
 import os
 import re
@@ -14,15 +13,16 @@ from typing import Any, ClassVar, override
 from unittest import mock
 
 import canopy_github
+import click
 import pytest
-from canopy_github import connect, post
+from canopy_github import Hosts, connect, post
 from canopy_github import read as read_module
 from canopy_github import repository as repository_module
 
 from canopy.core import config, observe, records, sql
 from canopy.core.vocab import CheckStatus, ConnectorRunStatus, MergeState
 from canopy.infra import logs, procs
-from tests.conftest import CanopyEnv, executable
+from tests.conftest import CanopyEnv, executable, invoke
 
 PR = "https://github.com/acme/api/pull/7"
 HEAD = "9b2f4c6e1a7d"
@@ -450,23 +450,19 @@ def read(
     *,
     token_of: Callable[[str], str] = lambda _: "t",
 ) -> tuple[int, list[dict[str, Any]], str]:
-    out, err = io.StringIO(), io.StringIO()
 
     def endpoint_of(host: str) -> str:
         if hosts is not None:
             hosts.append(host)
         return url
 
-    with contextlib.redirect_stderr(err):
-        code = connect.run([], io.StringIO(json.dumps(request)), out, endpoint_of=endpoint_of, token_of=token_of)
-    return code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue()
+    result = invoke(connect.main, stdin=json.dumps(request), obj=Hosts(endpoint_of, token_of))
+    return result.exit_code, [json.loads(line) for line in result.stdout.splitlines()], result.stderr
 
 
 def send(url: str, request: object) -> tuple[int, list[dict[str, Any]], str]:
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stderr(err):
-        code = post.run([], io.StringIO(json.dumps(request)), out, endpoint_of=lambda _: url, token_of=lambda _: "t")
-    return code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue()
+    result = invoke(post.main, stdin=json.dumps(request), obj=Hosts(lambda _: url, lambda _: "t"))
+    return result.exit_code, [json.loads(line) for line in result.stdout.splitlines()], result.stderr
 
 
 # Reading
@@ -862,19 +858,11 @@ class InProcess:
     ) -> procs.Result:
         del cwd, env, timeout, on_start, stdout_to_file
         assert args[0] == "canopy-connect-github"
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stderr(err):
-            code = connect.run(
-                args[1:],
-                io.StringIO(stdin or ""),
-                out,
-                endpoint_of=lambda _: self.url,
-                token_of=lambda _: "t",
-            )
-        for line in out.getvalue().splitlines(keepends=True):
+        result = invoke(connect.main, args[1:], stdin=stdin or "", obj=Hosts(lambda _: self.url, lambda _: "t"))
+        for line in result.stdout.splitlines(keepends=True):
             if on_line is not None:
                 on_line(line)
-        return procs.Result(tuple(args), code, out.getvalue(), err.getvalue())
+        return procs.Result(tuple(args), result.exit_code, result.stdout, result.stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         raise AssertionError(f"a connector is run, never spawned: {args}, {cwd}, {log_path}")
@@ -1289,14 +1277,12 @@ def test_the_poster_refuses_what_it_cannot_use(github: tuple[Fake, str], request
     assert not fake.seen
 
 
-@pytest.mark.parametrize("main", [connect.run, post.run], ids=["connect", "post"])
-def test_help_never_reads_stdin(main: Callable[..., int], capsys: pytest.CaptureFixture[str]) -> None:
-    class Unread(io.StringIO):
-        @override
-        def read(self, size: int | None = -1, /) -> str:
-            raise AssertionError("read stdin")
-
-    with pytest.raises(SystemExit) as exit_:
-        main(["--help"], Unread(), io.StringIO())
-    assert exit_.value.code == 0
-    assert "usage: canopy-" in capsys.readouterr().out
+@pytest.mark.parametrize("main", [connect.main, post.main], ids=["connect", "post"])
+def test_the_command_line_is_read_before_stdin(main: click.Command) -> None:
+    helped = invoke(main, ["--help"], stdin="not JSON")
+    assert helped.exit_code == 0
+    assert helped.stdout.startswith(f"Usage: {main.name} [OPTIONS]")
+    refused = invoke(main, ["--nope"], stdin="not JSON")
+    assert refused.exit_code == 2
+    assert "No such option '--nope'" in refused.stderr
+    assert "stdin" not in refused.stderr

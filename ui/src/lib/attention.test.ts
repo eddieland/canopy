@@ -12,6 +12,7 @@ import {
     countBySeverity,
     nextWaiting,
     pullRequestOf,
+    reviewOf,
     severity,
     shownDetail,
 } from './attention'
@@ -64,6 +65,8 @@ describe('severity', () => {
         expect(severity(item('a', 'untrusted_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'drafts_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'plan_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'review_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'review_unsettled', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe('other')
         expect(severity(item('a', 'repo_missing', '2026-10-08T12:00:00Z'))).toBe('other')
         // A finding's reason is the chore's own id, which may collide with a ticket reason: it is a finding first.
@@ -160,6 +163,34 @@ describe('ask', () => {
         expect(commandOf({ ...missing, detail: 'run `git fetch`' })).toBeNull()
         // A chore's item has its notes to show, whatever its detail names.
         expect(ask({ ...missing, chore: 'deps', detail: 'run `canopy show chore:deps`' })).toBe('none')
+    })
+})
+
+describe("a review's draft", () => {
+    const at = '2026-10-08T12:00:00Z'
+    const pr = 'https://github.com/acme/api/pull/14'
+    const review = (reason: string, detail: string): AttentionItem => ({
+        ...item(`pr:${pr}`, reason, at),
+        ticket_key: null,
+        pr,
+        detail,
+    })
+
+    it("leads to the review's page, the run its detail names", () => {
+        const waiting = review(
+            'review_waiting',
+            `review:5, which you asked for, is done: its draft of ${pr} waits on you to publish or stage it`,
+        )
+        expect(ask(waiting)).toBe('review')
+        expect(reviewOf(waiting)).toBe(5)
+        const staged = review('review_unsettled', `review:12's draft is in the review you staged on ${pr}`)
+        expect(ask(staged)).toBe('review')
+        expect(reviewOf(staged)).toBe(12)
+    })
+
+    it('asks for nothing of its own when its detail names no review, nor reads one out of a word', () => {
+        expect(ask(review('review_waiting', `a draft of ${pr} waits`))).toBe('none')
+        expect(reviewOf(review('review_waiting', 'prereview:5 and review:x'))).toBeNull()
     })
 })
 

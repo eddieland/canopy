@@ -15,31 +15,31 @@ repositories are on, or on github.com when none is named. What could not be read
 on stderr, so a cut-off read never looks like a PR with no checks or a repository with no branches. Nothing is
 written to GitHub.
 
-Exit codes: 0 everything was read; 1 something was not, and the `end` line names what was; 2 stdin is not usable, and
-nothing was read.
+Exit codes: 0 everything was read; 1 something was not, and the `end` line names what was; 2 stdin or the command line
+is not usable, and nothing was read.
 """
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TextIO
 
+import click
+
 from canopy_github import (
     Client,
     Endpoint,
     GitHubError,
+    Hosts,
     InputError,
     Ref,
     Repository,
     Token,
     client_for,
     emit,
-    endpoint,
-    gh_token,
     parse_pr,
     parse_repository,
     read_input,
@@ -76,29 +76,20 @@ class Request:
     review_query: str | None = None
 
 
-def run(
-    argv: Sequence[str],
-    stdin: TextIO,
-    stdout: TextIO,
-    *,
-    endpoint_of: Endpoint = endpoint,
-    token_of: Token = gh_token,
-) -> int:
-    """Read what `stdin` names, and print what was read on `stdout`.
+@click.command("canopy-connect-github", context_settings={"help_option_names": ["-h", "--help"]})
+@click.pass_context
+def main(ctx: click.Context) -> None:
+    """Read GitHub's PRs and branches into canopy's journal: canopy's vcs source (DESIGN §29, §30).
 
-    `endpoint_of` and `token_of` map a host to its GraphQL endpoint and its token.
-
-    Returns:
-        The exit code: 0 everything read, 1 something was not, 2 nothing was read.
+    The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
     """
-    parser = argparse.ArgumentParser(prog="canopy-connect-github", description=__doc__.split("\n", 1)[0])
-    parser.parse_args(argv)
+    hosts = ctx.find_object(Hosts) or Hosts()
     try:
-        request = _request(read_input(stdin))
+        request = _request(read_input(sys.stdin))
     except InputError as e:
         _say(str(e))
-        return 2
-    reader = _Reader(stdout, endpoint_of, token_of)
+        ctx.exit(2)
+    reader = _Reader(sys.stdout, hosts.endpoint_of, hosts.token_of)
     reader.prs(request.prs)
     end: dict[str, object] = {"kind": "end", "prs": reader.whole_prs}
     repositories = [] if request.repositories is None else reader.repositories(request)
@@ -108,17 +99,8 @@ def run(
         found = reader.review_query(request.review_query, repositories)
         if found is not None:
             end["review_query"] = found
-    emit(stdout, end)
-    return 1 if reader.failed else 0
-
-
-def main() -> int:
-    """The `canopy-connect-github` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:], sys.stdin, sys.stdout)
+    emit(sys.stdout, end)
+    ctx.exit(1 if reader.failed else 0)
 
 
 def _request(raw: Mapping[str, object]) -> Request:

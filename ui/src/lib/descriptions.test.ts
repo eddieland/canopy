@@ -7,6 +7,8 @@ import {
     counted,
     pullRequestDescription,
     reviewDescription,
+    reviewDraftDescription,
+    reviewDraftTitle,
     runDescription,
     tickDescription,
     ticketDescription,
@@ -30,8 +32,10 @@ const REVIEW: ReviewSummary = {
     ended_at: '2026-10-08T11:04:00Z',
     cost_usd: 0.24,
     persona: 'canopy',
+    request_id: null,
     news: true,
     seen: true,
+    draft: null,
 }
 
 describe('runDescription', () => {
@@ -50,6 +54,25 @@ describe('reviewDescription', () => {
     it('says how it ended, and leaves its verdict and commit to its panel', () => {
         expect(reviewDescription(REVIEW)).toBe('done')
         expect(reviewDescription({ status: 'running' })).toBe('running')
+    })
+})
+
+describe('reviewDraftTitle', () => {
+    it("names the review as the operator's, of the PR and its author when canopy has read who opened it", () => {
+        const url = 'https://github.com/acme/api/pull/14'
+        expect(reviewDraftTitle(url, { pr_author: 'carol' })).toBe('Your review of acme/api#14 by carol')
+        expect(reviewDraftTitle(url, { pr_author: null })).toBe('Your review of acme/api#14')
+    })
+})
+
+describe('reviewDraftDescription', () => {
+    it('says the version and what its status means for the operator', () => {
+        expect(reviewDraftDescription({ status: 'waiting', version: 3 })).toBe(
+            'version 3 · posts nothing until you publish it',
+        )
+        expect(reviewDraftDescription({ status: 'staged', version: 1 })).toBe(
+            'version 1 · pending on GitHub, for you to submit there',
+        )
     })
 })
 
