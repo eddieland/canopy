@@ -11,18 +11,16 @@ Until it is built, §5, §6, §11, §13, §15, §35, §37, and TRUST_MODEL descr
 changes, and the PR that builds it changes those sections and cuts this one to what is left.
 
 Once the harness decides what needs no judgment (§37), most ticks leave the overseer nothing: overnight, while PRs wait
-on a human, after a run ends with nothing to classify. In the window measured, about half the ticks had nothing to
-judge, and the series modelled to this step cost about three quarters less than what ran (MEASUREMENTS 2026-10-15).
-The connectors' polls (§6) already read the world every few minutes, so the loop can tick when they see a change rather
-than when a timer runs out. So the overseer runs only when the journal leaves it something to judge, and an event in
-the world is acted on within a poll.
+on a human, after a run ends with nothing to classify. The connectors' polls (§6) already read the world every few
+minutes, so the loop can tick when they see a change rather than when a timer runs out. So the overseer runs only when
+the journal leaves it something to judge, and an event in the world is acted on within a poll.
 
 ### When the tick runs no overseer
 
 A tick does §6's steps 1 to 3 whole, as today: reconcile, the operator's tasks (§36), the sources, the harness's
 items. The harness then records its decisions (§37). When they leave the overseer nothing, no ticket and no due chore
-with a `when`, the tick makes the harness's dispatches, closes `ok`, and publishes the attention list, without running
-it. A tick the operator asks for is no different: the overseer would be handed an empty block.
+with a `when`, the tick makes the harness's dispatches and closes `ok` with the attention list as it stands, without
+running it. A tick the operator asks for is no different: the overseer would be handed an empty block.
 
 - The disk check still holds the harness's dispatches, which fill a disk as the overseer's do. The check that
   `canopy` runs is the overseer's and is skipped with it, and nothing is owed: the duties (§6) are owed only for what
@@ -62,9 +60,10 @@ wait as today, and `loop.min_gap_minutes` holds every wake. The tick records the
 in the world is then acted on within a poll, not up to `loop.idle_max_minutes` later: the trade §6 states is lifted.
 Rejected: a tick on every poll, which writes a tick's rows every few minutes to learn what one comparison answers.
 
-Idle pacing paces only the overseer's runs. The timer is now the overseer's second look at what it was left and waited
-on, since the polls see the rest: the wait lengthens after each idle tick that ran the overseer, as today, and a tick
-that ran none leaves the count as it was, having cost nothing.
+Idle pacing paces only the overseer's runs. A ticket the overseer waited on stays listed to it while its row holds
+(§37), so the polls wake nothing for it, and the tick the timer brings runs the overseer on it again: the timer is the
+overseer's second look at what it waited on, since the polls see the rest. The wait lengthens after each idle tick
+that ran the overseer, as today, and a tick that ran none leaves the count as it was, having cost nothing.
 
 A poll whose source fails, or reads less than it was asked, ends the wait once, so a tick runs the sources again at
 once and raises `connector_failed` if they still fail (§30); a flake that the tick's read clears raises nothing. Until
@@ -81,9 +80,8 @@ question.
 Should §30's measurement leave the derivation untrusted, so §37 takes no row, the gate can be taken from the
 observations alone, without §35 or §37: the loop ticks only when an observation changed since the last tick, a gate
 came due, a run ended, or the operator acted, with `loop.idle_max_minutes` as its backstop. Every tick still runs the
-overseer, which keeps its MCP servers, and the attention list stays the latest `ok` tick's. That buys the latency and
-the timer ticks with nothing new, not the ticks with nothing to judge, nor the trust change. Rejected, either way: a
-probe program that fingerprints the world for the gate, a second reader of what the sources already observe.
+overseer, with its MCP servers: this buys the latency, not the ticks with nothing to judge nor the trust change.
+Rejected, either way: a probe program that fingerprints the world, a second reader of what the sources observe.
 
 ### Trust model changes, when built
 
@@ -92,7 +90,7 @@ probe program that fingerprints the world for the gate, a second reader of what 
   (§35). Workers, planners, and reviewers still read the world live, as before.
 - T3: an early tick is held by `loop.min_gap_minutes` as every wake is, and a poll that changes nothing wakes nothing,
   so the polls cannot spin the loop. A tick that runs no overseer spends nothing, and a poll costs what its sources
-  cost (MEASUREMENTS 2026-10-15).
+  cost.
 - T6: the overseer reaches no server but canopy's.
 
 ### Open

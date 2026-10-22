@@ -4,7 +4,7 @@ DESIGN §39. Needs M38 and M21's overnight run (SCENARIOS S27) with its re-measu
 trust change: the overseer runs when the journal leaves it something to judge, not when a fingerprint moved.
 
 - When the harness's decisions (M38) leave nothing for the overseer, no ticket and no due chore with a `when`, the
-  tick makes the harness's dispatches, closes `ok`, publishes the attention list, and does not run the overseer: the
+  tick makes the harness's dispatches and closes `ok` with the attention list as it stands, without the overseer: the
   common tick overnight, and after a run ends with nothing to classify. The disk check still holds the dispatches; the
   `canopy` check and the duties go with the overseer. It needs M38's attention list held in code, without which such a
   tick would clear the overseer's items. `ticks` says whether the overseer ran, and M33's spend page and `canopy spend`
