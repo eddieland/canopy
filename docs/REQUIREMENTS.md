@@ -173,7 +173,7 @@ Built in M19, live acceptance pending. Every ticket's conversation, public or pr
 web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
 For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
 mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
-operator's replies. Gap: PR review comments, which join with PR subjects (M14).
+operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
 
 ### R13. Trusted and untrusted reviewers
 
@@ -355,8 +355,8 @@ and a connector, with the operator's own token, and pulls comments rather than l
 
 - Mobile access, remote relay, team or hosted features. Aligned: DESIGN §3, TRUST_MODEL §4.
 - A new CLI that coworkers must learn to get value. Aligned: coworkers' surface is labels, ticket comments, and PR
-  review (DESIGN §2, §4). Only the operator runs `canopy`. M14's sketch authorizes PR work with a label for the same
-  reason.
+  review (DESIGN §2, §4). Only the operator runs `canopy`. M14's sketch, closed unbuilt, authorized PR work with a
+  label for the same reason.
 
 ## Conflicts
 
