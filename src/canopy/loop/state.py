@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from canopy.core.notice import Notice
     from canopy.core.workspace import Workspace
     from canopy.loop.attention import OpenItem
+    from canopy.loop.observations import ObservationsState
     from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
 
@@ -27,7 +28,7 @@ class OverseerState(TypedDict):
     """The state block's JSON: what the journal knows, the config the overseer decides by, and this tick.
 
     It has `chores` only when chores are configured, `reviews` only when reviews are on, and `notices` only when the
-    operator set a notice lately.
+    operator set a notice lately. `observations` is the world as the connectors last read it (DESIGN §35).
     """
 
     repository: str
@@ -43,6 +44,7 @@ class OverseerState(TypedDict):
     reviews: NotRequired[ReviewsSection]
     notices: NotRequired[list[NoticeState]]
     attention: list[OpenItem]
+    observations: ObservationsState
     capacity: CapacityState
     running_workers: list[RunningWorker]
     mirror: MirrorState
@@ -234,6 +236,7 @@ def state_block(
     attention: list[OpenItem] | None = None,
     query_due: bool,
     operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
+    observations: ObservationsState,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
@@ -257,7 +260,8 @@ def state_block(
     out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or works the
     tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments and
     reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no `operator_sent`
-    key (DESIGN §29).
+    key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists or the query
+    returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -375,7 +379,8 @@ def state_block(
         # What the overseer keeps on the attention list by recording it again: leaving one out resolves it (§14).
         "attention": attention or [],
         # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
-        # (DESIGN §6).
+        # (DESIGN §6): the observations first, which change with the world and age every tick (DESIGN §35).
+        "observations": observations,
         "capacity": {
             "max_workers": capacity.max_workers,
             "running": capacity.running,

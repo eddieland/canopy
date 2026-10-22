@@ -295,6 +295,58 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
       "since": "2026-10-16T09:40:00.000Z"
     }
   ],
+  "observations": {
+    "max_age_minutes": 30,
+    "max_new_items": 10,
+    "query": {
+      "observed": "unobserved",
+      "why": "no tracker source observes tickets"
+    },
+    "tickets": [
+      {
+        "key": "PROJ-1",
+        "observed": "unobserved",
+        "why": "no tracker source observes tickets",
+        "units": [
+          {
+            "repo": "repo",
+            "observed": "stale",
+            "why": "https://example.test/acme/repo/pull/7 never observed"
+          }
+        ]
+      },
+      {
+        "key": "PROJ-2",
+        "observed": "unobserved",
+        "why": "no tracker source observes tickets",
+        "units": [
+          {
+            "repo": "repo",
+            "observed": "stale",
+            "why": "branches of repo not observed since 2026-10-16T09:30:00.000Z"
+          }
+        ]
+      },
+      {
+        "key": "PROJ-4",
+        "observed": "unobserved",
+        "why": "no tracker source observes tickets",
+        "units": [
+          {
+            "repo": "repo",
+            "observed": "stale",
+            "why": "branches of repo not observed since 2026-10-16T09:30:00.000Z"
+          }
+        ]
+      },
+      {
+        "key": "PROJ-6",
+        "observed": "unobserved",
+        "why": "no tracker source observes tickets",
+        "units": []
+      }
+    ]
+  },
   "capacity": {
     "max_workers": 2,
     "running": 1,
