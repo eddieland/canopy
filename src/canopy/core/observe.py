@@ -6,7 +6,9 @@ and last an `end` line naming the subjects it read whole: tickets, PRs, and repo
 bounded here before anything is written. A line of a kind its source does not own, or of no kind canopy reads, is
 skipped; one that does not validate is refused and counted, and its subject is not whole this run, whatever `end` says.
 A subject read whole has its rows replaced in one transaction; one not read whole keeps its old rows and their age, so
-a cut-off read never looks like a check, review, or branch gone. A run with no `end` line records nothing.
+a cut-off read never looks like a check, review, or branch gone. Each completed check run is also kept by its run id
+across reads, so a re-run at the same head is told from the run it repeats (§35). A run with no `end` line records
+nothing.
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
 draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do.
@@ -660,6 +662,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
                     observed_at=now,
                 ).or_replace(),
             )
+            _keep_check_run(conn, line, now)
         case _Branch():
             sql.execute(
                 conn,
@@ -730,6 +733,28 @@ def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
             resolved=None if thread is None else thread.resolved,
             observed_at=now,
         ).or_replace(),
+    )
+
+
+def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> None:
+    """Keep a completed check run in `observed_check_runs`, once per run id, as it was first observed (DESIGN §35).
+
+    A later read replaces the PR's `observed_checks` with the newest run of each context, so this is what tells a
+    re-run at the same head from the run it repeats. A commit status has no run to keep.
+    """
+    if line.status is not CheckStatus.COMPLETED or line.run_id is None or line.conclusion is None:
+        return
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_check_runs",
+            pr_url=line.pr,
+            run_id=line.run_id,
+            name=line.name,
+            head_sha=line.head_sha,
+            conclusion=line.conclusion,
+            observed_at=now,
+        ).or_ignore(),
     )
 
 
