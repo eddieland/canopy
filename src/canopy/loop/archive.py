@@ -1,9 +1,9 @@
 """Plans archived to a clone of the operator's own each tick (DESIGN §25): exported, committed, and pushed.
 
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`
-(`plan_export`), each with its planner's prompt unless `paths.plan_archive_prompts` is off, commits what changed there
-and nothing else, under a message naming each plan it adds or changes, and pushes the clone's branch to its upstream. A
-dry run only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its
+(`plan_export`), each with its planner's prompt unless `paths.plan_archive_prompts` is off, and each planned ticket's
+conversation with `paths.plan_archive_conversations`, commits what changed there and nothing else, under a message
+naming each file it adds or changes, and pushes the clone's branch to its upstream. A dry run only reads the clone. Either way the tick raises `archive_unpushed` while the archive is not all on its
 upstream, so a push that failed is retried each live tick and the operator sees why until one succeeds. A tick writes
 at most `PER_TICK` files, so a long history goes in over several ticks, each commit and push bounded, and the item
 stays open until it all has.
@@ -74,6 +74,7 @@ def _archive(ctx: Context, git: _Git, name: str, log: logs.TickAdapter) -> str |
             git.clone / name,
             limit=PER_TICK,
             prompts=ctx.config.paths.plan_archive_prompts,
+            conversations=ctx.config.paths.plan_archive_conversations,
         )
     except plan_export.ExportError as e:
         log.warning("plans not archived", extra={"error": str(e)})
@@ -88,10 +89,8 @@ def _archive(ctx: Context, git: _Git, name: str, log: logs.TickAdapter) -> str |
         log.info("plans archived", extra=extra)
     failure = _commit_and_push(git, name, log, exported.removed)
     if failure is None and exported.left:
-        return (
-            f"{exported.left} {'plans wait' if exported.left != 1 else 'plan waits'} for the next tick's archive: "
-            f"a tick archives at most {PER_TICK} files"
-        )
+        waiting = "plans or conversations wait" if exported.left != 1 else "plan or conversation waits"
+        return f"{exported.left} {waiting} for the next tick's archive: a tick archives at most {PER_TICK} files"
     return failure
 
 
@@ -155,10 +154,11 @@ def _commit(git: _Git, name: str) -> str | None:
 
 
 def _message(git: _Git, name: str) -> str:
-    """A commit message for what is staged under `name/`: how many plans and prompts of which tickets, then each file.
+    """A commit message for what is staged under `name/`: how many files of each sort, of which tickets, then each.
 
     A plan's file is named for its run, status, and title (`plan_export.name`), so the file's name says what each plan
-    is, and a plan whose status changed shows as its rename. A prompt is named for its run alone.
+    is, and a plan whose status changed shows as its rename. A prompt is named for its run alone, and a conversation
+    for nothing but its ticket.
 
     Returns:
         The message; a subject alone when git cannot say what is staged.
@@ -172,8 +172,10 @@ def _message(git: _Git, name: str) -> str:
     named = ", ".join(keys[:_SUBJECT_KEYS])
     if len(keys) > _SUBJECT_KEYS:
         named += f" and {len(keys) - _SUBJECT_KEYS} more"
-    prompts = sum(plan_export.is_prompt(path.rpartition("/")[2]) for _, path, _ in changes)
-    counts = [(len(changes) - prompts, "plan"), (prompts, "prompt")]
+    file_names = [path.rpartition("/")[2] for _, path, _ in changes]
+    prompts = sum(map(plan_export.is_prompt, file_names))
+    conversations = sum(map(plan_export.is_conversation, file_names))
+    counts = [(len(changes) - prompts - conversations, "plan"), (prompts, "prompt"), (conversations, "conversation")]
     counted = " and ".join(f"{n} {noun}{'s' if n != 1 else ''}" for n, noun in counts if n)
     lines = [f"Archive {counted} of {name}: {named}"]
     headings = list(dict.fromkeys(_CHANGES.values()))

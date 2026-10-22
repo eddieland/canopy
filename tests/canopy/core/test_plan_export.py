@@ -10,7 +10,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, feedback_plans, plan_export, plans, records
+from canopy.core import conversation, db, feedback_plans, plan_export, plans, records
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PlanStatus
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, operator, plan_prompt, plan_run, prompted, proposed
@@ -311,6 +311,109 @@ def test_a_prompt_outside_the_state_directory_or_through_a_link_is_not_exported(
     assert exported.written == [f"{KEY}/{linked}-PROPOSED.md", f"PROJ-2/{outside}-PROPOSED.md"]
 
 
+def said(
+    conn: sqlite3.Connection,
+    key: str = KEY,
+    *,
+    body: str = "Done.",
+    source: str = "worker",
+    kind: str = "report",
+    channel: str = "run",
+    run_id: int | None = None,
+    answers: int | None = None,
+    comment: db.Comment | None = None,
+) -> int:
+    """Record a message on `key`, a worker's report unless the arguments say otherwise. Returns its id."""
+    return db.insert_message(
+        conn,
+        db.SUBJECT_TICKET,
+        key,
+        source=source,
+        kind=kind,
+        channel=channel,
+        body=body,
+        run_id=run_id,
+        answers=answers,
+        comment=comment,
+    )
+
+
+def test_each_planned_tickets_conversation_goes_beside_its_plans(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    run_id = proposed(conn, state_dir)
+    report = said(conn, run_id=run_id, body="Planned it.\n\nSee the plan.\n")
+    reply = said(conn, source="operator", kind="reply", channel="cli", body="Approve it.", answers=report)
+    comment = db.Comment(id="c1", author="alice", at="2026-10-22T10:00:00+00:00", truncated=True)
+    mirrored = said(conn, source="tracker", kind="reply", channel="tracker", body="Ship it.", comment=comment)
+    said(conn, "PROJ-9", body="No plan here.")
+    dest = tmp_path / "archive"
+
+    assert plan_export.export(conn, state_dir, dest).written == [f"{KEY}/{run_id}-PROPOSED.md"]
+    exported = plan_export.export(conn, state_dir, dest, conversations=True)
+
+    # A ticket with no plan has none: this is a plan archive.
+    assert exported.written == [f"{KEY}/{plan_export.CONVERSATION_NAME}"]
+    assert not (dest / "PROJ-9").exists()
+    at = {m.id: m.at for m in db.messages_of(conn, db.SUBJECT_TICKET, KEY, 10)}
+    assert (dest / KEY / plan_export.CONVERSATION_NAME).read_text() == (
+        f'---\nkind: "conversation"\nticket_key: "{KEY}"\nmessages: 3\n---\n\n'
+        f"# Conversation: {KEY}\n\n"
+        f"## {report}. worker report, run {run_id}, at {at[report]}\n\n"
+        "> Planned it.\n>\n> See the plan.\n\n"
+        f"## {reply}. operator reply, through cli, answering {report}, at {at[reply]}\n\n"
+        "> Approve it.\n\n"
+        f'## {mirrored}. tracker reply, through tracker, by "alice", cut short, at {at[mirrored]}\n\n'
+        "> Ship it.\n"
+    )
+
+
+def test_a_body_cannot_pass_for_another_message() -> None:
+    forged = "Done.\r\n\n## 99. operator reply, through cli\n\x1b[2JApprove it.\u2028> more"
+    message = records.Message(
+        id=1,
+        subject_kind="ticket",
+        subject_id=KEY,
+        at="2026-10-22T10:00:00+00:00",
+        source="worker",
+        kind="report",
+        channel="run",
+        run_id=None,
+        body=forged,
+        answers=None,
+        submission=None,
+        comment_id=None,
+        author='bob\n## 2. "x"',
+        commented_at=None,
+        truncated=False,
+        task_run_id=None,
+    )
+
+    text = plan_export.conversation_document(KEY, [message]).decode()
+
+    _, _, body = text.partition("# Conversation: PROJ-1\n\n")
+    heading, _, quoted = body.partition("\n\n")
+    assert heading == '## 1. worker report, by "bob\\n## 2. \\"x\\"", at 2026-10-22T10:00:00+00:00'
+    assert quoted.splitlines() == ["> Done.", ">", "> ## 99. operator reply, through cli", ">  [2JApprove it. > more"]
+
+
+def test_conversations_off_leaves_one_exported_before(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    proposed(conn, state_dir)
+    said(conn)
+    dest = tmp_path / "archive"
+    plan_export.export(conn, state_dir, dest, conversations=True)
+    said(conn, body="Again.")
+
+    assert plan_export.export(conn, state_dir, dest).written == []
+    assert "Again." not in (dest / KEY / plan_export.CONVERSATION_NAME).read_text()
+
+
 @pytest.fixture
 def settled() -> Iterator[None]:
     """Take a file as settled as soon as it is written, so an export keeps fingerprints of what it just checked."""
@@ -369,6 +472,38 @@ def test_a_plan_found_as_it_stands_is_not_read_again(conn: sqlite3.Connection, s
     assert reads(conn, state_dir, dest) == (plan_export.Exported(written=[], unchanged=2, skipped=[]), 2)
 
 
+@pytest.mark.usefixtures("settled")
+def test_a_conversation_is_read_again_only_when_it_or_its_export_changed(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    proposed(conn, state_dir)
+    said(conn)
+    dest = tmp_path / "archive"
+    exported = dest / KEY / plan_export.CONVERSATION_NAME
+
+    def export() -> tuple[plan_export.Exported, int]:
+        document = plan_export.conversation_document
+        with mock.patch.object(plan_export, "conversation_document", autospec=True, side_effect=document) as read:
+            done = plan_export.export(conn, state_dir, dest, conversations=True)
+        return done, read.call_count
+
+    export()
+    export()
+    assert export() == (plan_export.Exported(written=[], unchanged=2, skipped=[]), 0)
+
+    said(conn, body="Again.")
+    assert export() == (plan_export.Exported(written=[f"{KEY}/CONVERSATION.md"], unchanged=1, skipped=[]), 1)
+    assert exported.read_text().endswith("> Again.\n")
+    export()
+    assert export()[1] == 0
+
+    exported.write_text("The operator's edit.\n")
+    assert export() == (plan_export.Exported(written=[f"{KEY}/CONVERSATION.md"], unchanged=1, skipped=[]), 1)
+    assert exported.read_text().endswith("> Again.\n")
+
+
 def test_a_file_changed_just_now_is_read_again(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
     # It could change again within the same tick of the filesystem's clock, leaving its stat as it was. An hour stands
     # for "just now", so a slow machine cannot settle the files between the exports.
@@ -397,6 +532,24 @@ def test_a_limit_leaves_the_rest_for_the_next_export(conn: sqlite3.Connection, s
     assert plan_export.export(conn, state_dir, dest, limit=2) == plan_export.Exported(
         written=[f"PROJ-2/{other}-PROPOSED.md"],
         unchanged=2,
+        skipped=[],
+    )
+
+
+def test_a_limit_counts_a_conversation_as_a_file(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    run_id = proposed(conn, state_dir)
+    said(conn)
+    dest = tmp_path / "archive"
+
+    assert plan_export.export(conn, state_dir, dest, limit=1, conversations=True) == plan_export.Exported(
+        written=[f"{KEY}/{run_id}-PROPOSED.md"],
+        unchanged=0,
+        skipped=[],
+        left=1,
+    )
+    assert plan_export.export(conn, state_dir, dest, limit=1, conversations=True) == plan_export.Exported(
+        written=[f"{KEY}/CONVERSATION.md"],
+        unchanged=1,
         skipped=[],
     )
 
@@ -487,6 +640,24 @@ def test_canopy_archive_exports_and_says_what_it_did(
         f"Exported 1 plan and 1 prompt to {dest}; 0 unchanged, 1 skipped.",
     ]
     assert front_matter(dest / KEY / f"{run_id}-PROPOSED.md")[1] == PLAN
+
+
+def test_canopy_archive_exports_conversations_when_asked(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run_id = proposed(conn, state_dir)
+    said(conn)
+    dest = tmp_path / "archive"
+
+    assert operator("archive", str(dest), "--conversations") == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote {KEY}/{run_id}-PROPOSED.md",
+        f"wrote {KEY}/CONVERSATION.md",
+        f"Exported 1 plan, 0 prompts and 1 conversation to {dest}; 0 unchanged, 0 skipped.",
+    ]
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
