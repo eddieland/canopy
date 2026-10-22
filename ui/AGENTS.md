@@ -155,7 +155,10 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold (a
   token's small shift) leaves the old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite
   every one.
-  `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not match.
+  The workflow stays CI's way. `make screenshots` renders the same images locally in Docker (it needs Docker), from
+  Playwright's Ubuntu image at the pinned version, with the same spec files and oxipng, and writes only the images that
+  changed into the checkout; `UPDATE=all` rewrites every one and `UPDATE=check` only compares.
+  `npx playwright test --update-snapshots=changed` outside Docker runs on a machine whose rendering may not match.
 - On CI, Playwright runs a failed test once more, and one that passes then still fails the run, named flaky in the
   report: fix it, as a broken one is. The lint holds `e2e/` to eslint-plugin-playwright's recommended rules, which
   refuse most of what makes a browser test flaky.
