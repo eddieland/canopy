@@ -88,12 +88,69 @@ def test_a_chosen_persona_takes_the_place_of_canopys_voice(canopy_env: CanopyEnv
     assert personas.load(cfg, personas.DEFAULT).text not in prompt
 
 
-def test_a_persona_is_its_file_less_its_surrounding_blank_lines_and_its_digest_that_texts(
+def test_a_persona_is_its_file_less_its_front_matter_and_surrounding_blank_lines_and_its_digest_that_texts(
     canopy_env: CanopyEnv,
 ) -> None:
     shipped = (resources.personas_dir() / "canopy.md").read_text(encoding="utf-8")
+    assert shipped.startswith("---\ndescription: ")
+    body = shipped.split("\n---\n", 1)[1].strip()
     found = personas.load(load(canopy_env.root, canopy_env.user_file), "canopy")
-    assert found == personas.Persona("canopy", shipped.strip(), hashlib.sha256(shipped.strip().encode()).hexdigest())
+    assert found == personas.Persona("canopy", body, hashlib.sha256(body.encode()).hexdigest())
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_a_personas_front_matter_reaches_no_prompt(canopy_env: CanopyEnv, agent: str) -> None:
+    yours = personas_dir(canopy_env)
+    (yours / "plain.md").write_text(f"\n{SHADOW}\n")
+    (yours / "fronted.md").write_text(f"---\ndescription: Notes from the field.\n# a comment\n---\n\n{SHADOW}")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    plain, fronted = personas.load(cfg, "plain"), personas.load(cfg, "fronted")
+    # A file without a front matter is read as it always was: its whole text, less its surrounding blank lines.
+    assert plain.text == SHADOW.strip()
+    assert (fronted.text, fronted.digest) == (plain.text, plain.digest)
+    prompt = _render(cfg, agent, fronted)
+    assert prompt == _render(cfg, agent, plain)
+    assert "Notes from the field" not in prompt
+    assert "description:" not in prompt
+
+
+def test_a_personas_front_matter_names_its_description(canopy_env: CanopyEnv) -> None:
+    yours = personas_dir(canopy_env)
+    (yours / "pirate.md").write_text("---\ndescription: Talks like\n  a pirate.\n---\nArr. Walk the plank.\n")
+    (yours / "quoted.md").write_text("---\ndescription: 'Says: \"ahoy\"'\n---\nArr.\n")
+    (yours / "long.md").write_text(f"---\ndescription: {'word ' * 60}end.\n---\nArr.\n")
+    (yours / "bare.md").write_text("---\n# only a comment\n---\nTalk plainly. Always.\n")
+    got = {p.name: p.description for p in personas.listed(load(canopy_env.root, canopy_env.user_file))}
+    assert got["pirate"] == "Talks like a pirate."
+    assert got["quoted"] == 'Says: "ahoy"'
+    assert got["long"] is not None
+    assert len(got["long"]) <= personas.DESCRIPTION_CHARS
+    assert got["long"].endswith("word…")
+    # A front matter that names no description falls back to the opening sentence, as no front matter does.
+    assert got["bare"] == "Talk plainly."
+    assert got["canopy"] == (
+        "canopy's own voice: plans as long as the work needs, reviews that read the change as an adversary, and PR "
+        "text left alone unless it is wrong."
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "why"),
+    [
+        ("---\ndescription: Loud.\nShout.\n", "opens a front matter with `---` and never closes it"),
+        ("---\nname: loud\n---\nShout.\n", "has front matter key 'name'; only 'description' is read"),
+        ("---\ndescription: a\ndescription: b\n---\nShout.\n", "names its description twice"),
+        ("---\ndescription: ''\n---\nShout.\n", "has an empty description"),
+        ("---\n- loud\n---\nShout.\n", "has a front matter line that is not `key: value`: '- loud'"),
+    ],
+    ids=["unclosed", "unknown-key", "twice", "empty", "not-a-field"],
+)
+def test_a_front_matter_canopy_cannot_read_refuses_the_persona(canopy_env: CanopyEnv, text: str, why: str) -> None:
+    path = personas_dir(canopy_env) / "loud.md"
+    path.write_text(text)
+    with pytest.raises(personas.PersonaError) as refused:
+        personas.load(load(canopy_env.root, canopy_env.user_file), "loud")
+    assert (refused.value.guard, refused.value.reason) == (personas.BAD, f"persona loud at {path} {why}")
 
 
 def test_each_agent_gets_the_persona_its_config_names(canopy_env: CanopyEnv) -> None:
@@ -224,6 +281,27 @@ def test_canopy_personas_names_an_agent_whose_runs_would_refuse(scenario: Scenar
     assert printed.out.endswith(
         "[personas] worker names terse, which has no file: its runs refuse (persona_missing).\n",
     )
+
+
+def test_a_persona_without_a_description_is_described_by_its_opening_sentence_past_any_heading() -> None:
+    assert personas.description("# Pirate\n\nTalk like a pirate,\nalways. Never walk the plank.\n") == (
+        "Talk like a pirate, always."
+    )
+    assert personas.description("Be terse") == "Be terse"
+    assert personas.description("# Only a heading\n") is None
+    long = personas.description(f"{'word ' * 60}end.")
+    assert long is not None
+    assert len(long) <= personas.DESCRIPTION_CHARS
+    assert long.endswith("word…")
+
+
+def test_a_persona_canopy_would_refuse_has_no_description(canopy_env: CanopyEnv) -> None:
+    yours = personas_dir(canopy_env)
+    (yours / "loud.md").write_text("Shout.\u200b\n")
+    (yours / "terse.md").write_text("Be terse. Very.\n")
+    got = {p.name: p.description for p in personas.listed(load(canopy_env.root, canopy_env.user_file))}
+    assert got["terse"] == "Be terse."
+    assert got["loud"] is None
 
 
 def _render(cfg: Config, agent: str, persona: personas.Persona | None) -> str:

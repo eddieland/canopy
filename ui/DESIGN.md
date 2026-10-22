@@ -98,8 +98,9 @@ Rules:
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
   only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
-  off-white, a warm paper, and the light tones of Solarized, Nord, and Gruvbox; dark has grey (the near-colorless
-  neutrals the 2026-10-19 exploration drew for Mailroom), black, and the dark tones of Solarized and Gruvbox. A light
+  off-white, a warm paper, sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the
+  near-colorless neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of
+  Solarized, Gruvbox, and Monokai. A light
   canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
   knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
   whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`
@@ -463,8 +464,9 @@ Rules:
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
-and the leaf a cleared item drops, and the lightswitch rave. Fun is ancillary, so this design holds only the rules it
-all keeps; what each one does is written in its code. None of it is journal text.
+and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
+staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
+does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
@@ -590,7 +592,11 @@ side.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
-  `ownPr` leaves that PR out of them, as it does from `Decisions`.
+  `ownPr` leaves that PR out of them, as it does from `Decisions`. The reviews one request made of one commit, one per
+  persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
+  them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
+  `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
+  card: the request is one entry read down its personas.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
@@ -633,6 +639,12 @@ side.
   A `sticky` foot stays at the bottom of the page while its panel scrolls over it, as a sticky header stays at its
   top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
   what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
+- **A draft's card** (`DraftCardFrame`, `src/components/draft-card.tsx`): text canopy holds that would post as the
+  operator on a PR, a thread's reply (`DraftCard`) or a review's comment (`DraftCommentCard`, `NewCommentCard`,
+  `ReviewPointCard`), is one card: `surface`, a `status-blocked/40` border while it waits on the operator, a header of
+  its `panel-label` and what names it, its text, then its verbs in a row under it, `sm` buttons with the CLI's command
+  on hover, `Edit` outline (`EditVerb`) and `Drop` ghost (`DropVerb`). `Edit` opens `DraftForm`: a `Textarea` with its
+  count against 4,000, `Save` disabled past it or while the text is not one the draft may hold, and `Cancel`.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
   name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
@@ -890,13 +902,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
-  `bare`). An item about nothing the page shows
+  `bare`). A review's draft (`review_waiting`, `review_unsettled`): an outline `Read the draft of review:N` (`See`
+  for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. An item
+  about nothing the page shows
   whose detail names a `canopy` command to run (`repo_missing`): the command,
   `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as
   what it asks for. A ticket's item then shows its answer (below): its conversation, the reply form, and on the
   reasons above the ticket's own verbs (Start or Stop, Forget) and any other limit as a quiet row under the reply,
   Start and Stop as ghost buttons; on any other reason the verbs and the limit lead, under the head, as what it asks.
-  An item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
+  Any other item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
   the chore's notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in
   place of its detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says
   of itself, then its link on its own line, where the item's detail runs title and link together; an item about none of
@@ -1308,8 +1322,9 @@ sliver beside four others; and its axis names short call numbers without measuri
     then its order, By call, and All open.
   - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
     header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
-    only once opened. A run's Memory is one, and the Prompt on a run's, a tick's, and a chore run's pages
-    (`PromptPanel`), its length and a copy button as its readout, `none kept` alone when canopy kept none.
+    only once opened. A run's Memory is one, a review draft's `What the reviewer found`, and the Prompt on a run's, a
+    tick's, and a chore run's pages (`PromptPanel`), its length and a copy button as its readout, `none kept` alone
+    when canopy kept none.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
@@ -1348,6 +1363,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   header's Pause and Tick now say the same on hover. A public ticket
   has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
   `Public: remove its queue label to stop it, or start it privately.`
+- **A choice of persona** is a menu (`DropdownMenu`) on an outline `xs` button naming the choice
+  (`src/components/personas-menu.tsx`): a ticket's agent's picks one (`PersonaRadioItem`), a review request's checks
+  several (`PersonasMenu`). Each item is the persona's name in monospace over its description, its file's own or
+  else its opening sentence, in muted `text-xs`: the name is the item's accessible name, the description its accessible
+  description.
+  A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
+  to the config: `Clear the override`, or `Use the default`.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
   on its attention item (The answer, above), but under the run on a broken run's item, which asks for another try
   first, and in the foot of a PR's Pull request panel, under the operator's review request. While something is stuck
@@ -1361,13 +1383,21 @@ sliver beside four others; and its axis names short call numbers without measuri
   something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying
-  nothing is posted on the PR, the PR's URL in a monospace field, and a `Review` button beside it, the form's submit,
-  with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
-  request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its
-  Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
-  Stop did goes under it (`Notice`).
-- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posting nothing itself (D114): the
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, as compact as a ticket's
+  `Start privately` (`StartTicket`): the PR's URL in a monospace field and an outline `Review` beside it, the form's
+  submit, with the CLI's command on hover; under them `Show persona and notes`, a `Disclosure`, beside a muted line
+  naming the personas it will use, and a `Notice` saying its review is a draft the operator may publish as their own,
+  which a refusal replaces. The send key's keycap shows only while the notes are open. On success the form opens the
+  PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open request wears a
+  `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its Pull request
+  panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has. While none is
+  open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas menu and an outline
+  `Review this PR`, `Review again` once the PR has a review or an ended request; the loop's own PR without a request
+  has no line. What either button did goes under it (`Notice`). Until its review starts, the reviews list has a
+  `requested` row for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR,
+  since it has no ticket.
+- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop does not
+  own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page holds the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
   once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
   with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the
@@ -1420,36 +1450,61 @@ sliver beside four others; and its axis names short call numbers without measuri
   every finding is that bad); the review's link; its ticket
   (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`) and the commit's
   first 7 characters, then cost and age. A review's page colors its verdict the same way.
-- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, sits under the
-  findings: a `Draft review` panel, its status chip (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`,
-  publishing as running, the rest plain, since nothing waits on a draft) and its version and hash in muted monospace at
-  the header's end; a muted line saying it is what would post, word for word, on which commit, and what made the
-  version; a `status-blocked` line when the PR's head has moved past that commit; the body as `MemoryText` with a ghost
-  `xs` `edit`; its comments as rows linking to their cards; every version in muted monospace, the newest in the
-  foreground; and in its foot an outline `Start the review on GitHub`, which stages it, with a `Submit it on GitHub now`
-  checkbox that turns it into a default `Publish version N`, each with its command on hover. Staged or published, the
-  foot says so with a link to GitHub instead. Each comment's card (`DraftCommentCard`, `surface`, an `accent/40` border
-  to tell it from a finding's `surface-raised`) sits under its line after the findings there, with ghost `xs` `edit` and
-  `drop`. While the draft waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`),
-  shown on the row's hover or its focus, which opens a new comment's form under the line. Each form is a `Textarea` with
-  its count against 4,000, as a draft's.
+- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, leads its page,
+  which is the draft's one record: the title is `review:5 Your review of acme/api#14 by carol` (the PR alone while
+  canopy has not read its author), and the description the draft's state (`ReviewDraftState`), its status chip
+  (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`, publishing as running, the rest plain, since nothing
+  waits on a draft), its version, and what the status means. The `Draft review` panel comes first; canopy's Review
+  fields and Findings fold under it into one `FoldPanel`, `What the reviewer found`, its readout the run's status and
+  verdict, its findings an `h3` under the fields; the diff follows. A review with no draft keeps the page above. The
+  panel's header names the version in a muted readout, what made it and its hash in its `Tip`; then a muted line saying
+  it is what would post, word for word, on which commit, and to read it first; a `status-blocked` line when the PR's
+  head has moved past that commit; the body as `MemoryText` with a ghost `xs` `edit`; its comments as rows linking to
+  their cards (a `draft-comment` row: its number, `finding N` or `yours`, its first line, its line), and a muted line
+  under them naming the findings it leaves out; every version in muted monospace, the newest in the foreground; and in
+  its foot the one way canopy posts as the operator, as a PR's thread drafts are sent (A PR's threads, below): a default
+  `Publish version N`, which submits it, and beside it an outline `Start the review on GitHub`, which stages it, each
+  with its command on hover, and a muted line by them saying what posts: as you, on the PR's author's PR (`the PR` when
+  canopy has not read it), the body and how many comments, on which commit. A publish says what it did in a toast;
+  staged or published, the foot says so in one line linked to GitHub instead, never a raw URL. On the diff, one card per
+  point of the review: each finding's card is its comment's too (`ReviewPointCard`, a draft's card, above, never a
+  `FindingCard` beside a comment's card). It heads with the finding's number, severity, title, and location, then a
+  chip, `in your review` or `left out`; in the review as a comment, its text is that comment as it will post, with
+  `Edit` while the draft waits; through the body, or left out, the reviewer's detail, and a muted line saying where it
+  posts or how to have it back. One ghost `xs` control ends its head line where a finding's `dismiss` is: `leave out`
+  dismisses it, `put back` takes that back (`useDismissReviewFinding` with the draft's words), so the two are one
+  choice, as DESIGN §34 ties them. A finding left out by a drop or a body edit rather than a dismissal shows `dismiss`,
+  since the server puts a finding back only by taking its dismissal back. Once the draft is published or on its way, the
+  control is the plain `dismiss` or `undo`. A comment the operator added keeps a card of its own (`DraftCommentCard`)
+  under its line after the findings there, with `Edit` and `Drop` while the draft waits; with no diff kept, every
+  comment's card is in the panel's list, as before. While it waits, each line of the new side has a ghost `+` beside its
+  number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new comment's card under the
+  line, its form open.
+  A review whose request made others of the same commit in other personas names them in a muted line under the intro,
+  `Also reviewed as skeptic, eddie`, each persona a `ReviewLink` to its page, and that each is a draft of its own:
+  the operator picks one to publish, and publishing it changes none of the others.
+  Outside its review's page a draft is its status alone (`ReviewDraftChip`): `draft` while it waits, else the
+  journal's word, in `REVIEW_DRAFT_TONE`, with the word and what it means on hover. A review's row and a PR's carry it
+  after the verdict (a PR's, its newest review's draft that has one), where its state is, so the list's left edge says
+  which of the operator's reviews wait on them; the verdict is cut first. A PR's Pull request panel carries it as
+  `your review`, with the review's `review:N`.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does (a pulsing dot and `run:N`), then its latest review (its state's dot unless a
-  run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted) and `requested` while
-  the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a chip; then its
-  ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The ticket shares the
-  free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
-  page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its ticket's,
-  with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review and that
-  review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the run
-  working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how many
-  reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
+  run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted), its draft's chip, and
+  `requested` while the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a
+  chip; then its ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The
+  ticket shares the free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px
+  window. Its page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its
+  ticket's, with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review
+  and that review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the
+  run working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how
+  many reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
   (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
   ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
   with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
-  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`),
-  and its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no
-  ticket, since runs are a ticket's.
+  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and
+  its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no ticket,
+  since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
@@ -1479,7 +1534,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
   `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.
-  A draft's card (`DraftCard`, `surface`, a `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and
+  A draft's card (`DraftCard`, a draft's card, above) heads with `Draft`, `run:N` and
   its number, its status as a chip (`DRAFT_TONE`: waiting, unconfirmed, and staged in `status-blocked`, refused in
   `status-failed`, sending as running, the rest plain), the run's stance as a muted word, `your text` once edited, and
   its hash at the end in muted monospace, the one a send carries; then the harness's reason for a status other than
@@ -1488,9 +1543,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   left out when the draft sends its reaction alone. A thread's draft that stages a reaction says so in a muted line
   under the text (`draft-reaction`): the emoji, hidden from screen readers, then its name and whether it goes with the
   reply or alone; one a failed send already added says so in `status-blocked` (`draft-reacted`). Its
-  verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
-  ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
-  the text in a `Textarea` with its count against 4,000, `Save` disabled past it, and on a thread's draft a `Reaction`
+  verbs: `Send` (default) on a waiting draft, `Edit` and `Drop` on one waiting or unchecked, ghost `Undo` on a dropped
+  one, and a `LinkOut` to a sent one. `Edit`'s form holds, on a thread's draft, a `Reaction`
   `ToggleGroup` of GitHub's eight in its picker's order, each an emoji named for screen readers, the lit one pressed
   again for none; `Save` also takes an empty text beside a reaction. What each verb did goes under it
   (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send

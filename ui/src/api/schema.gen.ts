@@ -479,6 +479,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/{memory_id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pin a lesson
+         * @description `canopy memory pin ID`: the lesson is never due for review, and runs are served it before the rest.
+         *
+         *     Refused `off`, `unknown` for an id no lesson in force has, or `pinned` for one pinned already, as the CLI refuses
+         *     it.
+         */
+        post: operations["pinMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/{memory_id}/promote": {
         parameters: {
             query?: never;
@@ -537,9 +560,32 @@ export type paths = {
          * Renew a lesson
          * @description `canopy memory renew ID`: the lesson comes up for review again later, and a run's report it is wrong is cleared.
          *
-         *     Refused `off`, or `unknown` for an id no lesson in force has, as the CLI refuses it.
+         *     A pinned lesson is never due, so `review_at` is null. Refused `off`, or `unknown` for an id no lesson in force has,
+         *     as the CLI refuses it.
          */
         post: operations["renewMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/{memory_id}/unpin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unpin a lesson
+         * @description `canopy memory unpin ID`: the lesson comes up for review again later, and is served as any other.
+         *
+         *     Refused `off`, `unknown` for an id no lesson in force has, or `not_pinned`, as the CLI refuses it.
+         */
+        post: operations["unpinMemory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2362,6 +2408,12 @@ export type components = {
              */
             chore: string | null;
             /**
+             * Decider
+             * @description Who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37); None for one
+             *     recorded before the journal said.
+             */
+            decider: ("overseer" | "harness") | null;
+            /**
              * Id
              * @description The decision's id.
              */
@@ -3213,6 +3265,11 @@ export type components = {
              */
             origin: components["schemas"]["MemoryOrigin"] | null;
             /**
+             * Pinned At
+             * @description When the operator pinned a lesson, which runs are served before every lesson not pinned; None if not pinned.
+             */
+            pinned_at: string | null;
+            /**
              * Private
              * @description Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
              *     tracker.
@@ -3236,7 +3293,7 @@ export type components = {
             repo: string | null;
             /**
              * Review At
-             * @description A lesson's next review.
+             * @description A lesson's next review; None for a pinned one, which is never due.
              */
             review_at: string | null;
             /**
@@ -3423,6 +3480,23 @@ export type components = {
             tickets: components["schemas"]["TicketNotes"][];
         };
         /**
+         * MemoryPinned
+         * @description A lesson the operator pinned: never due for review, and served before every lesson not pinned.
+         */
+        MemoryPinned: {
+            /**
+             * Id
+             * @description The lesson's id.
+             */
+            id: number;
+            /**
+             * Pinned At
+             * Format: date-time
+             * @description When it was pinned.
+             */
+            pinned_at: string;
+        };
+        /**
          * MemoryPromoted
          * @description What a promote made: the lesson, what it came from, the lesson it superseded, and whether runs read it now.
          */
@@ -3527,10 +3601,9 @@ export type components = {
             id: number;
             /**
              * Review At
-             * Format: date-time
-             * @description When it is next due for review.
+             * @description When it is next due for review; None for a pinned lesson, which never is.
              */
-            review_at: string;
+            review_at: string | null;
         };
         /**
          * @description What a memory is: a ticket's note, a worker's proposal, or the operator's lesson.
@@ -3584,6 +3657,23 @@ export type components = {
              * @description Its mode in words: `off`, `recording`, or `in use`. No two modes share them.
              */
             words: string;
+        };
+        /**
+         * MemoryUnpinned
+         * @description A lesson the operator unpinned: it comes up for review again later, and is served as any other.
+         */
+        MemoryUnpinned: {
+            /**
+             * Id
+             * @description The lesson's id.
+             */
+            id: number;
+            /**
+             * Review At
+             * Format: date-time
+             * @description When it is next due for review.
+             */
+            review_at: string;
         };
         /**
          * Message
@@ -3786,6 +3876,12 @@ export type components = {
              * @default []
              */
             defaults: components["schemas"]["PersonaAgent"][];
+            /**
+             * Description
+             * @description What it is: its front matter's `description`, else its text's opening sentence; None for one a run would
+             *     refuse.
+             */
+            description: string | null;
             /**
              * Error
              * @description Why a run would refuse it, or None when it would render.
@@ -4242,8 +4338,16 @@ export type components = {
              * @description The unit's branch; None for a PR no unit records.
              */
             branch: string | null;
+            /** @description The newest of its reviews' drafts; None when none has one, as no review of the loop's own PRs does. */
+            draft: components["schemas"]["PullRequestDraft"] | null;
             /** @description Its newest review run, or None when canopy has not reviewed it. */
             latest_review: components["schemas"]["ReviewSummary"] | null;
+            /**
+             * Loop Pr
+             * @description Whether a ticket's unit records it: one of the loop's own PRs, which a review request refuses (`loop_pr`).
+             * @default false
+             */
+            loop_pr: boolean;
             /**
              * Phase
              * @description The unit's phase as the overseer last derived it, for display; None for a PR no unit records.
@@ -4321,6 +4425,19 @@ export type components = {
              * @default false
              */
             threads: boolean;
+        };
+        /**
+         * PullRequestDraft
+         * @description The newest draft of a review of a PR the loop does not own (DESIGN §34): the operator's review of it.
+         */
+        PullRequestDraft: {
+            /**
+             * Review Id
+             * @description The review run whose draft it is, whose page holds it.
+             */
+            review_id: number;
+            /** @description Where it stands. */
+            status: components["schemas"]["ReviewDraftStatusName"];
         };
         /**
          * PullRequestThreads
@@ -4493,6 +4610,11 @@ export type components = {
          * @description A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21).
          */
         RequestedReview: {
+            /**
+             * Author
+             * @description The PR's author, as canopy's reader last read the PR; None until it has.
+             */
+            author: string | null;
             /**
              * Channel
              * @description Where they asked: `cli` or `web`.
@@ -4689,6 +4811,12 @@ export type components = {
              */
             hash: string;
             /**
+             * In Body
+             * @description The review's findings, by number, whose text the body holds, where no line of the diff took them: each still a
+             *     point of the review, though no comment carries it.
+             */
+            in_body: number[];
+            /**
              * Max Comments
              * @description How many comments a version may carry; an addition past it is refused.
              */
@@ -4699,6 +4827,12 @@ export type components = {
              *     as outdated there. None when canopy has not read the PR, or its head is that commit.
              */
             moved_head: string | null;
+            /**
+             * Pr Author
+             * @description The PR's author's login as canopy last read the PR, whose PR the review would post on: untrusted text; None
+             *     when canopy has not read the PR, or the account is gone.
+             */
+            pr_author: string | null;
             /**
              * Published At
              * @description When it was published; None until it is.
@@ -5121,6 +5255,8 @@ export type components = {
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
              */
             cost_usd: number | null;
+            /** @description Where its draft stands (DESIGN §34); None for a review that has none, such as one of the loop's own PRs. */
+            draft: components["schemas"]["ReviewDraftStatusName"] | null;
             /**
              * Ended At
              * @description When it ended; None while it runs.
@@ -5161,6 +5297,12 @@ export type components = {
              * @description The PR's repository, as the workspace names it.
              */
             repo: string | null;
+            /**
+             * Request Id
+             * @description The operator's review request it answers (DESIGN §21), which its reviews in the request's other personas share
+             *     (§31); None for a review the loop started on its own.
+             */
+            request_id: number | null;
             /**
              * Seen
              * @description Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run with news
@@ -8836,6 +8978,92 @@ export interface operations {
             };
         };
     };
+    pinMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryPinned"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     promoteMemory: {
         parameters: {
             query?: never;
@@ -9031,6 +9259,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoryRenewed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unpinMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryUnpinned"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

@@ -23,6 +23,13 @@ type FindingSeverity = Annotated[
     Literal["blocking", "major", "minor"],
     Field(description="How much a review finding matters (DESIGN §21)."),
 ]
+type ReviewDraftStatusName = Annotated[
+    Literal["waiting", "publishing", "unconfirmed", "staged", "published"],
+    Field(
+        description="Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; "
+        "`staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.",
+    ),
+]
 type DiffLineKind = Annotated[
     Literal["add", "del", "ctx"],
     Field(description="Whether a diff line is added, deleted, or context."),
@@ -66,12 +73,17 @@ class ReviewSummary(Model):
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
     persona: str | None = None
     """The persona it ran in (DESIGN §31); None for a review from before canopy recorded it."""
+    request_id: int | None = None
+    """The operator's review request it answers (DESIGN §21), which its reviews in the request's other personas share
+    (§31); None for a review the loop started on its own."""
     news: bool = False
     """Whether it has a result for the operator to read: it ended with a verdict that found something, or with any
     verdict when they asked for it. A clean review the loop started on its own has none."""
     seen: bool = False
     """Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run with news
     that is not seen is new to them."""
+    draft: ReviewDraftStatusName | None = None
+    """Where its draft stands (DESIGN §34); None for a review that has none, such as one of the loop's own PRs."""
 
 
 class RequestedReview(Model):
@@ -83,6 +95,8 @@ class RequestedReview(Model):
     """When the operator asked."""
     channel: str
     """Where they asked: `cli` or `web`."""
+    author: str | None = None
+    """The PR's author, as canopy's reader last read the PR; None until it has."""
 
 
 class ReviewFinding(Model):
@@ -151,13 +165,6 @@ class ReviewDiff(Model):
     """A bound left something out."""
 
 
-type ReviewDraftStatusName = Annotated[
-    Literal["waiting", "publishing", "unconfirmed", "staged", "published"],
-    Field(
-        description="Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; "
-        "`staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.",
-    ),
-]
 type ReviewDraftAuthorName = Annotated[
     Literal["reviewer", "reviser", "operator"],
     Field(description="Who wrote a version of a review's draft: the review, a revision, or the operator."),
@@ -229,8 +236,14 @@ class ReviewDraft(Model):
     """Its comments, in the order they post."""
     max_comments: int
     """How many comments a version may carry; an addition past it is refused."""
+    in_body: list[int]
+    """The review's findings, by number, whose text the body holds, where no line of the diff took them: each still a
+    point of the review, though no comment carries it."""
     versions: list[ReviewDraftVersion]
     """Every version, oldest first."""
+    pr_author: str | None = None
+    """The PR's author's login as canopy last read the PR, whose PR the review would post on: untrusted text; None
+    when canopy has not read the PR, or the account is gone."""
     moved_head: str | None = None
     """The PR's head when canopy last read it, when that is past the commit the review read: its comments would show
     as outdated there. None when canopy has not read the PR, or its head is that commit."""
@@ -375,6 +388,15 @@ class ReviewRequestStopped(Model):
     """A review run of the PR still running, which finishes; None when none is."""
 
 
+class PullRequestDraft(Model):
+    """The newest draft of a review of a PR the loop does not own (DESIGN §34): the operator's review of it."""
+
+    review_id: int
+    """The review run whose draft it is, whose page holds it."""
+    status: ReviewDraftStatusName
+    """Where it stands."""
+
+
 class PullRequest(Model):
     """A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is."""
 
@@ -382,6 +404,8 @@ class PullRequest(Model):
     """The PR's URL: an opaque https:// string canopy never parses."""
     ticket_key: str | None = None
     """The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns."""
+    loop_pr: bool = False
+    """Whether a ticket's unit records it: one of the loop's own PRs, which a review request refuses (`loop_pr`)."""
     ticket_title: str | None = None
     """That ticket's title, as the overseer named it; None until it does."""
     title: str | None = None
@@ -402,6 +426,8 @@ class PullRequest(Model):
     """Its newest review run, or None when canopy has not reviewed it."""
     review_request: ReviewRequest | None = None
     """The operator's latest review request on it, open or ended; None when they never made one."""
+    draft: PullRequestDraft | None = None
+    """The newest of its reviews' drafts; None when none has one, as no review of the loop's own PRs does."""
 
 
 class PullRequestDetail(Model):

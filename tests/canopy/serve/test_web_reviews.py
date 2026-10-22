@@ -22,17 +22,19 @@ from tests.canopy.web_helpers import SECRET, client, signed_in
 def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> None:
     listed = client(None, backend).get("/api/reviews").json()
     assert [(r["id"], r["pr_url"], r["state"], r["verdict"], r["findings"]) for r in listed] == [
+        (6, mock_reviews.PR_14, "done", "findings", 1),
         (5, mock_reviews.PR_14, "done", "findings", 3),
         (4, mock_reviews.PR_88, "done", "findings", 3),
         (3, mock_reviews.PR_91, "failed", None, 0),
         (2, mock_reviews.PR_12, "done", "clean", 0),
         (1, mock_reviews.PR_88, "done", "findings", 1),
     ]
-    assert (listed[1]["sha"], listed[1]["ticket_key"], listed[1]["repo"]) == (mock_reviews.SHA_88, "ABC-099", "web")
-    assert listed[3]["ticket_key"] is None  # a PR review.query matched, with no ticket
+    assert (listed[2]["sha"], listed[2]["ticket_key"], listed[2]["repo"]) == (mock_reviews.SHA_88, "ABC-099", "web")
+    assert listed[4]["ticket_key"] is None  # a PR review.query matched, with no ticket
     # Its worst finding, which colors its verdict, and how many are that bad, which its verdict says: none for a clean
     # review or one that reported nothing.
     assert [(r["worst"], r["worst_count"]) for r in listed] == [
+        ("major", 1),
         ("major", 1),
         ("major", 1),
         (None, 0),
@@ -40,7 +42,15 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
         ("blocking", 1),
     ]
     # The persona each wrote in, which tells apart the reviews of one commit in several (DESIGN §31).
-    assert [r["persona"] for r in listed] == ["canopy", "skeptic", "canopy", "canopy", "canopy"]
+    assert [r["persona"] for r in listed] == ["skeptic", "canopy", "skeptic", "canopy", "canopy", "canopy"]
+    # Where each one's draft stands (DESIGN §34): Carol's wait, the clean one's was published, and the loop's own
+    # PRs' reviews have none.
+    assert [r["draft"] for r in listed] == ["waiting", "waiting", None, None, "published", None]
+    # The request each answers (DESIGN §21): Carol's two share one, asked in two personas; the loop's own have none.
+    asked = [r["request_id"] for r in listed]
+    assert asked[0] == asked[1] is not None
+    assert asked[2:] == [None, None, asked[4], None]
+    assert asked[4] not in {None, asked[0]}
 
 
 def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(backend: Backend) -> None:
@@ -48,7 +58,8 @@ def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(back
         ctx.conn.execute("DELETE FROM pr_titles WHERE pr_url IN (?, ?)", (mock_reviews.PR_91, mock_reviews.PR_12))
     listed = client(None, backend).get("/api/reviews").json()
     assert [(r["id"], r["title"]) for r in listed] == [
-        (5, "Retry the upstream on a 503, with backoff"),  # a coworker's PR, titled by its own title
+        (6, "Retry the upstream on a 503, with backoff"),  # a coworker's PR, titled by its own title
+        (5, "Retry the upstream on a 503, with backoff"),
         (4, "ABC-099: debounce the search box by 250 ms"),
         (3, "Move billing to the v2 API"),  # ABC-103's, its PR having reported none
         (2, None),  # no title of its own, and no ticket
@@ -63,6 +74,11 @@ def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_a
     c = client(None, backend)
     # Asked for from the web UI, and no review of it has run yet: the reviews page shows it waiting on a tick.
     assert [(r["pr_url"], r["channel"]) for r in c.get("/api/review-requests").json()] == [(mock_reviews.PR_95, "web")]
+    # Whose it is, from canopy's read of it, since an open request watches its PR; none before a read.
+    assert c.get("/api/review-requests").json()[0]["author"] == "dana"
+    with backend.open() as ctx:
+        ctx.conn.execute("DELETE FROM observed_prs WHERE url = ?", (mock_reviews.PR_95,))
+    assert c.get("/api/review-requests").json()[0]["author"] is None
     with backend.open() as ctx:
         run_id = review_runs.insert_review_run(
             ctx.conn,
@@ -289,7 +305,7 @@ def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backe
     def seen() -> list[tuple[int, bool]]:
         return [(r["id"], r["seen"]) for r in c.get("/api/reviews").json()]
 
-    assert seen() == [(5, True), (4, True), (3, True), (2, False), (1, True)]
+    assert seen() == [(6, True), (5, True), (4, True), (3, True), (2, False), (1, True)]
     assert c.get("/api/reviews/2").json()["review"]["seen"] is False
     assert c.post("/api/seen", json={"refs": ["review:2"]}, headers={"origin": headers["origin"]}).status_code == 403
     assert c.post("/api/seen", json={"refs": []}, headers=headers).status_code == 422
@@ -307,7 +323,7 @@ def test_a_review_seen_from_the_web_is_marked_as_the_cli_marks_it(backend: Backe
     for ref, guard in [(f"review:{running}", "running"), ("review:99", "unknown"), ("ABC-099", "unsupported")]:
         refused = c.post("/api/seen", json={"refs": ["review:2", ref]}, headers=headers)
         assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
-    assert seen()[4] == (2, False)
+    assert seen()[5] == (2, False)
 
     marked = c.post("/api/seen", json={"refs": ["review:2", "review:4", "review:2"]}, headers=headers).json()
     assert marked == {"refs": ["review:2", "review:4"], "new": ["review:2"]}

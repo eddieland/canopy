@@ -41,10 +41,10 @@ plan, waits on the operator, who has had a word on it. The sinks hear of it (§2
 
 A plan runs in a desk of worktrees at their bases (§18), with no branch and nothing pushed, within
 `capacity.max_workers`; under `tracker.private` (§22), a ticket's first plan starts it privately. The planner,
-`canopy-planner` (§13), has no shell, web fetch, or subagent tools, reads only inside its desk, its worktrees' history
-through canopy's read-only git tools (§27), and the ticket through the private worker's tracker read tools (§22),
-without which it is not run, and writes one file, its plan. The ticket's text and the
-code are data to it (T1).
+`canopy-planner` (§13), has no web fetch or subagent tools, and no shell but what `runtime.allow_bash` names for it
+(§13), reads only inside its desk, its worktrees' history through canopy's read-only git tools (§27), and the ticket
+through the private worker's tracker read tools (§22), without which it is not run, and writes one file, its plan.
+The ticket's text and the code are data to it (T1).
 Result contract, the last line of its text (§13), validated (D026):
 
 ```json
@@ -82,16 +82,21 @@ record or through a link, and shows a missing file as missing, never as an empty
 (§24); a plan's event to sinks (§20) carries none of its text.
 
 `canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
-of theirs, each under a front matter of its row, since status and approval live only in the journal, and named for its
-run, status, and title, so a listing reads without opening a plan. Beside each goes the prompt its planner was given,
-named for its run, so a plan can be read with what it was written from; a plan run keeps its prompt as long as its plan
-(§26). It rewrites a file only when its plan or row changed, and removes only a plan's own earlier name when its status
-or title moved it, so the directory can be a repository the operator pushes and git sees a rename. Asked to, it also
-writes each planned ticket's conversation (§22) beside its plans, every message oldest first, each body quoted under a
-heading canopy writes, so no body can pass for another message.
-With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, prompts too unless
-`paths.plan_archive_prompts` is off, conversations only with `paths.plan_archive_conversations`, commits that directory
-alone, and pushes to the clone's upstream, never forcing; `archive_unpushed` stays open while the archive is not all
+of theirs, each under a front matter of its row and its planner's persona, since status, approval, and voice live only
+in the journal, and named for its run, status, and title, so a listing reads without opening a plan. Beside each goes
+the prompt its planner was given, named for its run, so a plan can be read with what it was written from; a plan run
+keeps its prompt as long as its plan (§26). It rewrites a file only when its plan or row changed, and removes only a
+plan's own earlier name when its status or title moved it, so the directory can be a repository the operator pushes
+and git sees a rename. Asked to, it also writes each planned ticket's conversation (§22) beside its plans, every message
+oldest first, each body quoted under a heading canopy writes, so no body can pass for another message. A `README.md` in
+each ticket's directory lists its plans, and one in the directory every ticket, so a forge shows the listing; an index
+is canopy's only while its first line says so, so the operator's own is never touched, and a title in one is escaped
+text, never inside a link (T1).
+With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, or into the top
+level itself with `paths.plan_archive_workspace_dir` off, prompts too unless `paths.plan_archive_prompts` is off,
+conversations only with `paths.plan_archive_conversations`, commits what it wrote there alone (at the top level, each
+planned ticket's directory and its own index, never the operator's files beside them), and pushes to the clone's
+upstream, never forcing; `archive_unpushed` stays open while the archive is not all
 there, so a failed push is retried each tick. A tick writes at most a thousand files, so a long history goes in over
 several, each push bounded, and reads again only the plans whose row or files changed, and the conversations with a new
 message, since it last found them as they stand. A dry run only reads the clone (TRUST_MODEL T6).

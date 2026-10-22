@@ -65,6 +65,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy memory list`, `proposals`, `lessons`, `search` | Read memory: see Reading memory. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory renew ID` | Keeps a lesson due for review. |
+| `canopy memory pin ID` | Pins a lesson: never due for review, served first; `unpin` undoes it. |
 | `canopy memory edit ID --text T` | Rewrites a lesson (`--repo R`, `--every-repo`); the old version stays in its history. |
 | `canopy memory history ID` | Every version of a lesson or note, newest first, with how each was made. |
 | `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
@@ -184,6 +185,8 @@ The overseer may record other reasons; the detail says what it wants.
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
 | `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
+| `review_waiting` | A review you asked for is done: `canopy review draft ID`, then edit it and `canopy review publish`. |
+| `review_unsettled` | A review you staged waits for you to submit or delete it on GitHub, or a publish's outcome is unknown. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `disk_low` | `.canopy/` or the workspace has under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide, or ask for a split (below). |

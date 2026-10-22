@@ -10,9 +10,12 @@ import type {
     Forgot,
     Granted,
     MemoryEdited,
+    MemoryEntry,
     MemoryForgotten,
+    MemoryPinned,
     MemoryPromoted,
     MemoryRenewed,
+    MemoryUnpinned,
     NoticeChanged,
     PlanChanged,
     Replied,
@@ -165,6 +168,18 @@ export function reviewDismissedText(dismissed: ReviewDismissed): string {
     return `${head} is no longer dismissed: a resume hands it to the worker again.`
 }
 
+/**
+ * What dismissing a finding of a review with a draft did, in the draft's terms (DESIGN §34): left out of the operator's
+ * review, or back in it, in the reviewer's words.
+ */
+export function reviewPointText(dismissed: ReviewDismissed): string {
+    const head = `review:${dismissed.run} finding ${dismissed.finding}`
+    if (dismissed.dismissed) {
+        return `${head} is dismissed: left out of your review.`
+    }
+    return `${head} is no longer dismissed: back in your review, in the reviewer's words.`
+}
+
 /** What sending a review's findings did, as `canopy send review:ID N...` says it. */
 export function reviewSentText(sent: ReviewSent): string {
     const head = `review:${sent.run} findings ${sent.findings.join(', ')}`
@@ -181,28 +196,52 @@ export function reviewDraftEditedText(run: number, draft: ReviewDraft): string {
 }
 
 /**
- * What a publish of review run `run`'s draft did, as `canopy review publish` says it: published, with where; staged,
- * with where to submit it; perhaps posted, which a read of the PR settles; or not published, and why.
+ * What a publish of review run `run`'s draft did, as `canopy review publish` says it, where the draft's own linked
+ * line does not say it: perhaps posted, which a read of the PR settles; or not published, and why. Null for a publish
+ * that posted or staged it, which that line says.
  */
-export function reviewDraftPublishedText(run: number, prUrl: string, published: ReviewDraftPublished): string {
+export function reviewDraftPublishedText(run: number, published: ReviewDraftPublished): string | null {
     const { draft } = published
-    const version = `version ${published.published} of review run ${run}'s draft`
+    const version = `Version ${published.published} of review run ${run}'s draft`
     switch (draft.status) {
-        case 'published': {
-            return `Published ${version}: ${draft.published_url ?? prUrl}`
-        }
+        case 'published':
         case 'staged': {
-            return `Staged ${version} in a pending review on ${prUrl}; submit or delete it at ${prUrl}/files`
+            return null
         }
         case 'unconfirmed': {
             return (
-                `${capitalized(version)} may have been posted: the post ended without saying. A read of the PR ` +
-                'settles it; canopy posts it no other time.'
+                `${version} may have been posted: the post ended without saying. A read of the PR settles it; canopy ` +
+                'posts it no other time.'
             )
         }
         case 'waiting':
         case 'publishing': {
-            return `${capitalized(version)} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+            return `${version} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+        }
+    }
+}
+
+/**
+ * The toast a publish shows, in the words `canopy review publish` starts with: published, with where it is; staged,
+ * with the PR's files page, where GitHub's own submit is; perhaps posted; or not published. A check only for the
+ * first two.
+ */
+export function reviewDraftPublishedToast(run: number, prUrl: string, published: ReviewDraftPublished): NewToast {
+    const { draft } = published
+    const version = `version ${published.published} of review run ${run}'s draft`
+    switch (draft.status) {
+        case 'published': {
+            return { title: `Published ${version}`, detail: draft.published_url ?? prUrl, tone: 'done' }
+        }
+        case 'staged': {
+            return { title: `Staged ${version} in a review on GitHub`, detail: `${prUrl}/files`, tone: 'done' }
+        }
+        case 'unconfirmed': {
+            return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
+        }
+        case 'waiting':
+        case 'publishing': {
+            return { title: `${capitalized(version)} was not published`, tone: 'failed' }
         }
     }
 }
@@ -466,7 +505,7 @@ export function promotedText(promoted: MemoryPromoted): string {
     const { lesson, source } = promoted
     const kind = source.scope === 'proposal' ? 'Proposal' : 'Note'
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+    const due = dueText(lesson)
     const head = `${kind} ${source.id} is lesson ${lesson.id} (\`${lesson.key}\`)${where}${due}.`
     const replaces =
         promoted.superseded === null ? '' : ` It replaces lesson ${promoted.superseded}, under the same key.`
@@ -492,7 +531,7 @@ export const PRIVATE_WORDS =
 export function editedText(edited: MemoryEdited): string {
     const { lesson, replaced } = edited
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+    const due = dueText(lesson)
     const head =
         `Lesson ${replaced.id} is edited into lesson ${lesson.id} (\`${lesson.key}\`)${where}, version ` +
         `${lesson.version}${due}. Lesson ${replaced.id} stays in its history.`
@@ -502,14 +541,39 @@ export function editedText(edited: MemoryEdited): string {
     return `${head}${served}`
 }
 
+// When a lesson a promote or an edit made is due for review, as `canopy memory` says it after the lesson's name; a
+// pinned one never is.
+function dueText(lesson: MemoryEntry): string {
+    if (lesson.pinned_at !== null) {
+        return ', pinned, never due for review'
+    }
+    return lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+}
+
 /** What a reject did, as `canopy memory reject` says it. */
 export function rejectedText(id: number): string {
     return `Proposal ${id} is rejected.`
 }
 
-/** What a renew did, as `canopy memory renew` says it: when the lesson is next due for review. */
+/**
+ * What a renew did, as `canopy memory renew` says it: when the lesson is next due for review, or for a pinned one,
+ * which never is, that a run's report it is wrong is cleared.
+ */
 export function renewedText(renewed: MemoryRenewed): string {
+    if (renewed.review_at === null) {
+        return `Lesson ${renewed.id} is renewed: any report that it is wrong is cleared. Pinned, it is never due.`
+    }
     return `Lesson ${renewed.id} is renewed: due for review at ${localTime(renewed.review_at, currentClock())}.`
+}
+
+/** What a pin did, as `canopy memory pin` says it. */
+export function pinnedText(pinned: MemoryPinned): string {
+    return `Lesson ${pinned.id} is pinned: never due for review, and served before every lesson not pinned.`
+}
+
+/** What an unpin did, as `canopy memory unpin` says it: when the lesson is next due for review. */
+export function unpinnedText(unpinned: MemoryUnpinned): string {
+    return `Lesson ${unpinned.id} is unpinned: due for review at ${localTime(unpinned.review_at, currentClock())}.`
 }
 
 /**

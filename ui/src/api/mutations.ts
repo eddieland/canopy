@@ -17,9 +17,11 @@ import type {
     LessonEditRequest,
     MemoryEdited,
     MemoryForgotten,
+    MemoryPinned,
     MemoryPromoted,
     MemoryRejected,
     MemoryRenewed,
+    MemoryUnpinned,
     NoticeChanged,
     PauseChanged,
     PlanChanged,
@@ -49,8 +51,9 @@ import type {
  * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
  * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
  * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, `edit`, and `forget`, `draft edit`, `drop`, and `send`, and `review edit` and
- * `publish`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
+ * `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`, and `send`, and
+ * `review edit` and `publish`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming
+ * its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -116,8 +119,8 @@ export async function grantLimit(ticketKey: string | null, limit: Limit): Promis
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME`: canopy reviews a PR it does not own, once, at its head, its
- * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing is posted on
- * the PR; the next tick reviews it.
+ * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing posts on the
+ * PR until the operator publishes its draft; the next tick reviews it.
  */
 export async function requestReview(
     url: string,
@@ -442,6 +445,16 @@ export async function rejectMemory(id: number): Promise<MemoryRejected> {
 /** `canopy memory renew ID`: the lesson comes up for review later, and a run's report that it is wrong is cleared. */
 export async function renewMemory(id: number): Promise<MemoryRenewed> {
     return unwrap(await api.POST('/api/memory/{memory_id}/renew', { params: { path: { memory_id: id } } }))
+}
+
+/** `canopy memory pin ID`: the lesson is never due for review, and runs are served it before the rest. */
+export async function pinMemory(id: number): Promise<MemoryPinned> {
+    return unwrap(await api.POST('/api/memory/{memory_id}/pin', { params: { path: { memory_id: id } } }))
+}
+
+/** `canopy memory unpin ID`: the lesson comes up for review again later, and is served as any other. */
+export async function unpinMemory(id: number): Promise<MemoryUnpinned> {
+    return unwrap(await api.POST('/api/memory/{memory_id}/unpin', { params: { path: { memory_id: id } } }))
 }
 
 /**

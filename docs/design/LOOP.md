@@ -53,12 +53,13 @@ in order:
    standing, so an outage does not resolve and re-raise every item. What it started before the skip stands: an outage
    of one server does not hold work that needs nothing from it (§15).
 
-   **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7); a
-   decision for every ticket in the block and every ticket the query returned, except those stopped or recently done;
-   and a run, wait, or refusal for every chore due. A duty left undone closes the tick `overseer_failed`, naming each,
-   so the attention list stands and the query stays due; its dispatches stand. Why: the prompt alone did not hold a
-   cheaper overseer to the procedure, and a skipped query stalls new work with no tick failing (MEASUREMENTS
-   2026-10-15). The check sees that a duty was done, not that it was done well.
+   **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7),
+   unless a source read it fresh, when the harness records its result before the overseer runs; a decision for every
+   ticket in the block and every ticket the query returned, except those stopped, recently done, or decided by the
+   harness (§37); and a run, wait, or refusal for every chore due. A duty left undone closes the tick
+   `overseer_failed`, naming each, so the attention list stands and the query stays due; its dispatches stand. Why:
+   the prompt alone did not hold a cheaper overseer to the procedure, and a skipped query stalls new work with no tick
+   failing (MEASUREMENTS 2026-10-15). The check sees that a duty was done, not that it was done well.
 
    In a dry run (D036), dispatch checks the live guards (§8) and starts nothing, no cursor advances, and nothing is
    marked done. What the overseer writes is rendered into a later prompt, so the CLI validates its keys, verbs,
@@ -198,9 +199,10 @@ reviews, review comments, and canopy's review runs.
 
 The overseer runs the configured query every tick it is due, before it reads any ticket: the block holds only tickets
 the loop has seen, so the query is the only way a newly labeled ticket becomes a candidate. `canopy queried [KEY]...`
-records it and the open tickets it returned, touching each into the journal (§11). `tracker.query_every_minutes`
-(default 0, every tick) spaces it out, through the block's `query_due`, which delays only how soon a new ticket is
-found; a ticket the operator starts is in the block already.
+records it and the open tickets it returned, touching each into the journal (§11); when the block shows the query
+`fresh` (§35), the harness records it so itself, and the overseer neither runs nor records it.
+`tracker.query_every_minutes` (default 0, every tick) spaces it out, through the block's `query_due`, which delays only
+how soon a new ticket is found; a ticket the operator starts is in the block already.
 
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
 and has no phase: the overseer marks it done (decision `done`, rationale `closed`), whatever its labels, branch, or PR,
@@ -331,7 +333,8 @@ Three steps, all the operator's, in the order they run:
 2. **`post_create` hooks**, in the user-level treehouse config, run on the base when a slot is made or reused. A
    failing hook does not fail the lease. canopy's own pool backend (§18) runs none.
 3. **`runtime.setup_cmd`**, private, runs in each slot of a worker run after its branch is checked out (§8 `_run` step
-   2), and fails the run when it fails. Plans and reviews run none: their agents have no shell.
+   2), and fails the run when it fails. Plans and reviews run none, so a command `runtime.allow_bash` names for the
+   planner runs without it.
 
 `setup_cmd` runs the branch's code on the operator's machine, outside the agent runtime's permissions, so it is wrapped
 as the worker is (§24, TRUST_MODEL T4). A broken setup crashes every run it meets, each spending an attempt (D030).

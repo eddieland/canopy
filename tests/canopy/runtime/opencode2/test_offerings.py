@@ -69,6 +69,8 @@ EVERY_TOOL = (
 )
 #: The rules OpenCode 2 starts every agent from.
 DEFAULTS = [rule("*", "allow"), rule("read", "ask", "*.env"), rule("read", "ask", "*.env.*")]
+#: What OpenCode writes of its stdout to a pipe before it exits: what the pipe's buffer holds.
+PIPE_BUFFER = 64 * 1024
 
 
 @dataclass
@@ -77,6 +79,7 @@ class Serve:
 
     rules: Mapping[str, Sequence[dict[str, str]]]
     config: object = field(default_factory=lambda: CONFIG)
+    skills: object = field(default_factory=lambda: SKILLS)
     #: How many times `agent.list` answers that no agent has loaded yet.
     loading: int = 0
     #: What answers in place of the play, for a command it is given.
@@ -93,7 +96,7 @@ class Serve:
         timeout: float | None = None,  # noqa: ARG002
         on_start: Callable[[int], None] | None = None,  # noqa: ARG002
         on_line: Callable[[str], None] | None = None,
-        stdout_to_file: bool = False,  # noqa: ARG002
+        stdout_to_file: bool = False,
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, dict(env or {})))
         failed = self.fail(args)
@@ -112,7 +115,8 @@ class Serve:
                 printed = self._answer(operation)
             case _:
                 raise AssertionError(args)
-        return procs.Result(tuple(args), 0, json.dumps(printed), "")
+        stdout = json.dumps(printed)
+        return procs.Result(tuple(args), 0, stdout if stdout_to_file else stdout[:PIPE_BUFFER], "")
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002
         raise AssertionError(args)
@@ -128,7 +132,7 @@ class Serve:
                 agents = [{"id": n, "mode": "primary", "permissions": [*DEFAULTS, *r]} for n, r in self.rules.items()]
                 return {"location": location, "data": [{"id": "build", "permissions": DEFAULTS}, *agents]}
             case "skill.list":
-                return {"location": location, "data": SKILLS}
+                return {"location": location, "data": self.skills}
             case "config.get":
                 return self.config
             case _:
@@ -191,6 +195,13 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     asked = [argv[-1] for argv, _, _ in serve.ran[1:]]
     assert asked == ["agent.list"] * 3 + ["skill.list", "config.get"]
     assert all(e == env for _, _, e in serve.ran)
+
+
+def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:
+    long = {"id": "long", "name": "long", "description": "x" * PIPE_BUFFER}
+    found = offered(Serve({"canopy-worker": []}, skills=[*SKILLS, long]), "canopy-worker")
+    assert found.error is None
+    assert "long" in found.skills
 
 
 def test_a_tool_is_kept_from_an_agent_only_by_a_deny_of_every_resource() -> None:

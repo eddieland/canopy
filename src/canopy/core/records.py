@@ -14,10 +14,11 @@ Every journal table has a row type. A query that reads some of a table's columns
 
 from __future__ import annotations
 
+import functools
 import sqlite3
 import types
 import typing
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import Field, asdict, dataclass, fields
 from enum import StrEnum
 from typing import Any, ClassVar
@@ -29,6 +30,7 @@ from canopy.core.vocab import (
     CheckStatus,
     ChoreRunStatus,
     ConnectorRunStatus,
+    Decider,
     DraftAuthor,
     DraftKind,
     DraftStance,
@@ -173,7 +175,7 @@ class Forget(Row):
 
 @dataclass(frozen=True)
 class Decision(Row):
-    """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or an attention item."""
+    """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or the harness's own (§37)."""
 
     TABLE: ClassVar[str] = "decisions"
 
@@ -186,6 +188,8 @@ class Decision(Row):
     repo: str | None
     chore: str | None
     pr: str | None
+    #: Who made it; None on a decision recorded before the journal said (TRUST_MODEL T5).
+    decider: Decider | None
 
 
 @dataclass(frozen=True)
@@ -652,6 +656,8 @@ class Memory(Row):
     invalidated_at: str | None
     wrong_at: str | None
     wrong_run_id: int | None
+    #: When the operator pinned a lesson, which is then never due for review and served first; None if not pinned.
+    pinned_at: str | None
 
 
 @dataclass(frozen=True)
@@ -1520,7 +1526,9 @@ def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]])
     return build
 
 
-def _converters(row_type: type[Row]) -> dict[str, _Convert]:
+# Cached: resolving a row type's hints costs about a millisecond, and every fetch of a row would pay it again.
+@functools.cache
+def _converters(row_type: type[Row]) -> Mapping[str, _Convert]:
     """Each field of `row_type`, by name, with what converts its column's value.
 
     Returns:

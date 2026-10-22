@@ -9,8 +9,8 @@ import { E2E_SECRET } from './secret.ts'
 export const STORAGE_KEY = 'canopy-theme'
 /** Each theme's palettes besides its default (lavender, indigo), as src/theme/palette.ts names them. */
 export const OTHER_PALETTES = {
-    light: ['off-white', 'solarized', 'nord', 'gruvbox'],
-    dark: ['grey', 'black', 'solarized', 'gruvbox'],
+    light: ['off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine'],
+    dark: ['grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'monokai'],
 } as const
 /** Where the page keeps each theme's palette: the same key as src/theme/palette.ts. */
 export const PALETTE_KEY = 'canopy-palette'

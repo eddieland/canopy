@@ -6,9 +6,12 @@ runs, and what it leaves to the overseer's judgment. Sections are numbered acros
 
 ## 37. The harness decides what needs no judgment
 
-Designed, not built (ROADMAP M38). It waits on §35, and each row on a measurement (below). Until it is built, §6, §7,
-§8, §14, §19, §21, and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that builds it
-changes those sections and cuts this one to what is left.
+Being built (ROADMAP M38). It waits on §35, and each row on a measurement (below). Built: the decisions the harness
+records before the overseer, each marked as its own; a ticket taken or left whole; `decided`; the duties owed only for
+the tickets left (§6); and the state block's `harness`, naming each ticket taken. The rows enabled are those read from
+the journal alone: `wait` for `running`, and for a private ticket's `needs_human`. The rest, from "Order and capacity"
+on, is designed, not built. Until it is, §7, §8, §14, §19, §21, and TRUST_MODEL describe canopy as it is; this section
+says what changes, and the PR that finishes it changes those sections and cuts this one to what is left.
 
 Once the overseer reads the journal (§35), most of what it decides follows from the observations alone: applied by
 hand, §7's rows that are facts agreed with it on all but six of 943 decisions, and an overseer given only the tickets

@@ -25,6 +25,9 @@ LAYERS: tuple[frozenset[str], ...] = (
 )
 # Third-party packages only one canopy package may import.
 CONFINED = {"anyio": "serve", "click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
+# The programs canopy ships besides `canopy`, each a command line of its own and so free to import click: the desktop
+# sink and the development server.
+PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})
 # Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
 # programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
 # §30), and the local artifact store holds what workers publish, which stays out of the journal (§38).
@@ -78,6 +81,11 @@ def modules() -> list[Path]:
     return sorted(p for p in PACKAGE.rglob("*.py") if p != PACKAGE / "__init__.py")
 
 
+def under_tests(pattern: str) -> list[Path]:
+    """Each file under `tests/` that matches `pattern`, but for the npm packages `tests/plugins` installs."""
+    return sorted(p for p in TESTS.rglob(pattern) if "node_modules" not in p.relative_to(TESTS).parts)
+
+
 def test_every_module_is_in_a_layered_package() -> None:
     assert modules()
     for path in modules():
@@ -93,7 +101,8 @@ def violations(path: Path, source: str) -> list[str]:
         top, _, rest = name.partition(".")
         if top in SEPARATE:
             found.append(f"{where}:{line}: imports {name}, a separate program canopy runs only as a command")
-        if top in CONFINED and CONFINED[top] != own:
+        program = top == "click" and path.relative_to(PACKAGE).as_posix() in PROGRAMS
+        if top in CONFINED and CONFINED[top] != own and not program:
             found.append(f"{where}:{line}: imports {name}, which only canopy.{CONFINED[top]} may import")
         if top != "canopy" or not rest:
             continue
@@ -266,7 +275,7 @@ def run(command: str) -> str:
 
 def test_no_test_module_imports_another() -> None:
     """What two test modules share lives in a helpers module (`tests/canopy/helpers.py`) or a conftest, not in one."""
-    found = [v for path in sorted(TESTS.rglob("*.py")) for v in imported_tests(path, path.read_text())]
+    found = [v for path in under_tests("*.py") for v in imported_tests(path, path.read_text())]
     assert not found, "\n".join(found)
 
 
@@ -311,7 +320,7 @@ def test_the_tests_mirror_the_packages() -> None:
     allowed |= {TESTS / p.parent.name for p in MEMBERS.glob("*/src/*/__init__.py")}
     found = [
         f"{path.relative_to(TESTS.parent)}: in no directory parallel to a package"
-        for path in sorted(TESTS.rglob("test_*.py"))
+        for path in under_tests("test_*.py")
         if path.parent not in allowed
     ]
     assert not found, "\n".join(found)

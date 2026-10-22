@@ -32,7 +32,8 @@ canopy's voice today is spread through its prompts, such as the reviewer reading
 leaving alone the PR text it was not asked to change. That voice moves into a shipped persona, `canopy`, which every
 run gets unless another is chosen, and the prompts keep only the task, its obligations, and its contracts. A chosen
 persona then replaces canopy's voice rather than arguing with it. What a guard or a contract leans on stays in the
-prompt, the reviewer's rules for a finding among it.
+prompt, the reviewer's result contract among it. How the reviewer presents and ranks its findings, their words,
+severity, and order, is the persona's: the prompt gives only defaults, and canopy posts a finding's words as written.
 
 Rejected: an empty default over today's prompts, where a chosen persona and the built-in voice pull against each other
 and the result turns on which the model weighs more.
@@ -43,6 +44,10 @@ canopy ships a few beside its prompts (§5), `canopy` among them. A file of the 
 directory shadows a shipped one, and a new name adds to the set, as prompt overrides do (§12). The directory and the
 choice of persona are private config (TRUST_MODEL T7): a persona is instructions in every run it reaches, so a shared
 workspace file can neither supply one nor choose one.
+
+A file may open with a front matter naming its `description`, which the menus that list it show; a file without one is
+described by its opening sentence. The description is never instructions: no prompt carries it, and a front matter
+canopy cannot read refuses the persona as any bad file does.
 
 ### Who chooses
 

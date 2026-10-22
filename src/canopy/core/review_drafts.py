@@ -124,6 +124,12 @@ def of_review(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | No
     return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("review_run_id = ?", run_id))
 
 
+def of_reviews(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int, records.ReviewDraft]:
+    """Return the drafts of those of review runs `run_ids` that have one, by run id."""
+    found = records.fetch_all(conn, records.ReviewDraft, _DRAFTS.where_in("review_run_id", run_ids))
+    return {draft.review_run_id: draft for draft in found}
+
+
 def get(conn: sqlite3.Connection, draft_id: int) -> records.ReviewDraft | None:
     """Return draft `draft_id`, or None."""
     return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("id = ?", draft_id))
@@ -230,6 +236,15 @@ def checked(text: object) -> str:
         TextRefused: canopy would not keep it as a draft's text, for the reason it says.
     """
     return check_text(text, MAX_DRAFT_CHARS)
+
+
+def in_body(body: str, findings: Sequence[review_result.Finding]) -> list[int]:
+    """The findings, by number, whose text `body` holds, put there where no line of the diff took them.
+
+    Returns:
+        Their numbers, from 1, in order.
+    """
+    return [number for number, finding in enumerate(findings, 1) if _held(body, _block(finding))]
 
 
 def dismissed(
@@ -392,13 +407,15 @@ def _placed(
 
 
 def _text(finding: review_result.Finding) -> str:
-    """A finding as a comment on its line says it: its severity, its title, and its detail.
+    """A finding as a comment on its line says it: its title, and its detail.
+
+    canopy adds no severity: what posts is the reviewer's words alone, so a persona that labels its titles (a
+    Conventional Comments `suggestion:`) has its label open the comment.
 
     Returns:
         The text.
     """
-    head = f"**{finding.severity}**: {finding.title}"
-    return f"{head}\n\n{finding.detail.strip()}" if finding.detail.strip() else head
+    return f"{finding.title}\n\n{finding.detail.strip()}" if finding.detail.strip() else finding.title
 
 
 def _block(finding: review_result.Finding) -> str:
@@ -407,9 +424,8 @@ def _block(finding: review_result.Finding) -> str:
     Returns:
         The text, trimmed as a checked text is.
     """
-    at = f" at `{finding.location.strip()}`" if finding.location.strip() else ""
-    head = f"**{finding.severity}**{at}: {finding.title}"
-    return (f"{head}\n\n{finding.detail.strip()}" if finding.detail.strip() else head).strip()
+    at = f"`{finding.location.strip()}`\n\n" if finding.location.strip() else ""
+    return f"{at}{_text(finding)}".strip()
 
 
 def _held(body: str, block: str) -> bool:

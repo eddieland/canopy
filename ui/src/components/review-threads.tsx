@@ -1,16 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Eraser, GitPullRequestDraft, Pencil, Send, Trash2, Undo2 } from 'lucide-react'
+import { Eraser, GitPullRequestDraft, Send, Undo2 } from 'lucide-react'
 import { useId, useState } from 'react'
-import type { SubmitEvent } from 'react'
 
 import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
 import type { Draft, FeedbackPlanItem, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
 import { CommentText } from '@/components/comment-text'
+import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
 import { FeedbackPlanPanel, PlanProposal } from '@/components/feedback-plan'
-import { Textarea } from '@/components/input'
 import { LinkOut } from '@/components/link-out-icon'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
@@ -19,18 +18,15 @@ import { DiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
-import { SendKeycap } from '@/components/send-keycap'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useToast } from '@/hooks/use-toast'
 import {
     DRAFT_TONE,
-    MAX_DRAFT_CHARS,
     REACTIONS,
     REACTION_LOOKS,
     draftAnchor,
-    draftChars,
     listDrafts,
     movedHead,
     open,
@@ -50,7 +46,6 @@ import {
     draftsStagedToast,
 } from '@/lib/outcomes'
 import { shortSha } from '@/lib/reviews'
-import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 /**
@@ -439,27 +434,26 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
     // Only a review comment takes a reaction.
     const reacts = draft.kind === 'thread'
     return (
-        <article
+        <DraftCardFrame
             id={draftAnchor(draft)}
-            className={cn(
-                'scroll-mt-16 rounded-md border bg-surface p-3 text-sm',
-                draft.status === 'waiting' && 'border-status-blocked/40',
-            )}
-            data-testid="draft"
-            data-status={draft.status}
+            waiting={draft.status === 'waiting'}
+            testId="draft"
+            status={draft.status}
+            header={
+                <>
+                    <span className="panel-label">Draft</span>
+                    <span className="readout text-xs text-muted-foreground">
+                        <RunLink id={draft.run} /> {draft.number}
+                    </span>
+                    <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} />
+                    {draft.stance !== null && <Word word={draft.stance} className="text-xs text-muted-foreground" />}
+                    {draft.edited && <Chip>your text</Chip>}
+                    <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a send carries">
+                        {draft.hash}
+                    </span>
+                </>
+            }
         >
-            <header className="flex flex-wrap items-center gap-2">
-                <span className="panel-label">Draft</span>
-                <span className="readout text-xs text-muted-foreground">
-                    <RunLink id={draft.run} /> {draft.number}
-                </span>
-                <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} />
-                {draft.stance !== null && <Word word={draft.stance} className="text-xs text-muted-foreground" />}
-                {draft.edited && <Chip>your text</Chip>}
-                <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a send carries">
-                    {draft.hash}
-                </span>
-            </header>
             {draft.why !== null && draft.status !== 'waiting' && (
                 <p className="mt-1 text-xs text-muted-foreground">{draft.why}</p>
             )}
@@ -508,7 +502,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
             )}
             {!editing &&
                 (open(draft) || draft.status === 'dropped' || draft.status === 'staged' || draft.sent_url !== null) && (
-                    <span className="mt-2 flex flex-wrap items-center gap-2">
+                    <DraftVerbs>
                         {draft.status === 'waiting' && (
                             <Button
                                 size="sm"
@@ -522,26 +516,16 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                         )}
                         {open(draft) && (
                             <>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
+                                <EditVerb
                                     onClick={() => setEditing(true)}
                                     disabled={busy}
                                     title={`canopy draft edit ${ref} --text TEXT${reacts ? ' --react NAME' : ''}`}
-                                >
-                                    <Pencil />
-                                    Edit
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
+                                />
+                                <DropVerb
                                     onClick={() => drop.mutate(false)}
                                     disabled={busy}
                                     title={`canopy draft drop ${ref}`}
-                                >
-                                    <Trash2 />
-                                    Drop
-                                </Button>
+                                />
                             </>
                         )}
                         {draft.status === 'dropped' && (
@@ -567,12 +551,12 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                                 It is in the review you staged, for you to submit on GitHub.
                             </span>
                         )}
-                    </span>
+                    </DraftVerbs>
                 )}
             <Notice error={send.error ?? drop.error} className="mt-1.5">
                 {said}
             </Notice>
-        </article>
+        </DraftCardFrame>
     )
 }
 
@@ -606,51 +590,18 @@ function EditDraft({
     onCancel: () => void
 }) {
     const id = useId()
-    const sendKeys = useSendKeys()
     const [text, setText] = useState(draft.text)
     const [reaction, setReaction] = useState(draft.reaction)
-    const edit = useMutation({
-        mutationFn: () => editDraft(draft.run, draft.number, text, reaction),
-        onSuccess: (edited) => onSaved(draftEditedText(edited)),
-    })
-    const chars = draftChars(text)
-    const said = text.trim() !== '' || (reaction !== null && text === '')
-    const fits = said && chars <= MAX_DRAFT_CHARS
-
-    function submit(event: SubmitEvent<HTMLFormElement>) {
-        event.preventDefault()
-        if (fits && !edit.isPending) {
-            edit.mutate()
-        }
-    }
-
     return (
-        <form
-            onSubmit={submit}
-            aria-label={`Edit run:${draft.run}'s draft ${draft.number}`}
-            className="mt-1.5 flex flex-col gap-2"
+        <DraftForm
+            label={`Edit run:${draft.run}'s draft ${draft.number}`}
+            text={text}
+            onText={setText}
+            fits={text.trim() !== '' || (reaction !== null && text === '')}
+            save={() => editDraft(draft.run, draft.number, text, reaction)}
+            onSaved={(edited) => onSaved(draftEditedText(edited))}
+            onCancel={onCancel}
         >
-            <span className="flex items-baseline justify-between gap-3">
-                <label className="panel-label" htmlFor={`${id}-text`}>
-                    In your words
-                </label>
-                <span
-                    className={cn(
-                        'readout text-xs text-muted-foreground',
-                        chars > MAX_DRAFT_CHARS && 'text-status-failed',
-                    )}
-                >
-                    {chars} of {MAX_DRAFT_CHARS}
-                </span>
-            </span>
-            <Textarea
-                id={`${id}-text`}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                onKeyDown={sendKeys.onKeyDown}
-                spellCheck
-                className="min-h-20"
-            />
             {draft.kind === 'thread' && (
                 <span className="flex flex-wrap items-center gap-2">
                     <span className="panel-label" id={`${id}-reaction`}>
@@ -688,21 +639,6 @@ function EditDraft({
                     )}
                 </span>
             )}
-            <span className="flex flex-wrap items-center gap-2">
-                <Button
-                    type="submit"
-                    size="sm"
-                    disabled={edit.isPending || !fits}
-                    aria-keyshortcuts={sendKeys.shortcut}
-                >
-                    Save
-                    <SendKeycap keys={sendKeys.shortcut} />
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={edit.isPending}>
-                    Cancel
-                </Button>
-            </span>
-            <Notice error={edit.error} />
-        </form>
+        </DraftForm>
     )
 }
