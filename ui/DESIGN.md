@@ -1315,8 +1315,9 @@ sliver beside four others; and its axis names short call numbers without measuri
     then its order, By call, and All open.
   - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
     header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
-    only once opened. A run's Memory is one, and the Prompt on a run's, a tick's, and a chore run's pages
-    (`PromptPanel`), its length and a copy button as its readout, `none kept` alone when canopy kept none.
+    only once opened. A run's Memory is one, a review draft's `What the reviewer found`, and the Prompt on a run's, a
+    tick's, and a chore run's pages (`PromptPanel`), its length and a copy button as its readout, `none kept` alone
+    when canopy kept none.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
@@ -1428,21 +1429,26 @@ sliver beside four others; and its axis names short call numbers without measuri
   every finding is that bad); the review's link; its ticket
   (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`) and the commit's
   first 7 characters, then cost and age. A review's page colors its verdict the same way.
-- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, sits under the
-  findings: a `Draft review` panel, its status chip (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`,
-  publishing as running, the rest plain, since nothing waits on a draft) and its version and hash in muted monospace at
-  the header's end; a muted line saying it is what would post, word for word, on which commit, and what made the
-  version; a `status-blocked` line when the PR's head has moved past that commit; the body as `MemoryText` with a ghost
-  `xs` `edit`; its comments as rows linking to their cards; every version in muted monospace, the newest in the
-  foreground; and in its foot the one way canopy posts as the operator, as a PR's thread drafts are sent (A PR's
-  threads, below): a default `Publish version N`, which submits it, and beside it an outline `Start the review on
-  GitHub`, which stages it, each with its command on hover, and a muted line by them saying what posts: as you, on the
-  PR's author's PR (`the PR` when canopy has not read it), the body and how many comments, on which commit. A publish
-  says what it did in a toast; staged or published, the foot says so in one line linked to GitHub instead, never a raw
-  URL. Each comment's card (`DraftCommentCard`, a draft's card, above: its `surface` tells it from a finding's
-  `surface-raised`) sits under its line after the findings there, with `Edit` and `Drop` while the draft waits. While it
-  waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`), shown on the row's hover
-  or its focus, which opens a new comment's card under the line, its form open.
+- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, leads its page,
+  which is the draft's one record: the title is `review:5 Your review of acme/api#14 by carol` (the PR alone while
+  canopy has not read its author), and the description the draft's state (`ReviewDraftState`), its status chip
+  (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`, publishing as running, the rest plain, since nothing
+  waits on a draft), its version, and what the status means. The `Draft review` panel comes first; canopy's Review
+  fields and Findings fold under it into one `FoldPanel`, `What the reviewer found`, its readout the run's status and
+  verdict, its findings an `h3` under the fields; the diff follows. A review with no draft keeps the page above. The
+  panel's header names the version in a muted readout, what made it and its hash in its `Tip`; then a muted line saying
+  it is what would post, word for word, on which commit, and to read it first; a `status-blocked` line when the PR's
+  head has moved past that commit; the body as `MemoryText` with a ghost `xs` `edit`; its comments as rows linking to
+  their cards; every version in muted monospace, the newest in the foreground; and in its foot the one way canopy posts
+  as the operator, as a PR's thread drafts are sent (A PR's threads, below): a default `Publish version N`, which
+  submits it, and beside it an outline `Start the review on GitHub`, which stages it, each with its command on hover,
+  and a muted line by them saying what posts: as you, on the PR's author's PR (`the PR` when canopy has not read it),
+  the body and how many comments, on which commit. A publish says what it did in a toast; staged or published, the foot
+  says so in one line linked to GitHub instead, never a raw URL. Each comment's card (`DraftCommentCard`, a draft's
+  card, above: its `surface` tells it from a finding's `surface-raised`) sits under its line after the findings there,
+  with `Edit` and `Drop` while the draft waits. While it waits, each line of the new side has a ghost `+` beside its
+  number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new comment's card under the
+  line, its form open.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does (a pulsing dot and `run:N`), then its latest review (its state's dot unless a
   run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted) and `requested` while

@@ -19,8 +19,10 @@ import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
+import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { reviewDraftDescription } from '@/lib/descriptions'
 import { reviewDraftEditedText, reviewDraftPublishedText, reviewDraftPublishedToast } from '@/lib/outcomes'
 import { REVIEW_DRAFT_TONE, commentAnchor, editable, versionBy } from '@/lib/review-drafts'
 import type { Adding } from '@/lib/review-drafts'
@@ -38,14 +40,29 @@ const POSTS_STAGED =
     ': it approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it there.'
 
 /**
+ * A draft's state, for the description of the review's page it leads: its status's chip in its tone, then its version
+ * and what the status means for the operator (`reviewDraftDescription`).
+ */
+export function ReviewDraftState({ draft }: { draft: ReviewDraft }) {
+    return (
+        <span className="inline-flex flex-wrap items-center gap-x-2" data-testid="draft-state">
+            <Chip tone={REVIEW_DRAFT_TONE[draft.status]} word={draft.status} />
+            {reviewDraftDescription(draft)}
+        </span>
+    )
+}
+
+/**
  * A review of a PR the loop does not own as the comment review canopy would post in the operator's name (DESIGN §34):
  * its newest version word for word, the body here and each comment on its line of the diff, every hidden character
  * named, since the reviewer wrote it from the PR's text. While it waits, the body is edited here, each comment on its
  * card, and a comment added on any line of the diff; each change is a new version, as `canopy review edit` makes.
  * Publishing posts the version shown, named by its hash, as one comment review on the commit the review read:
  * submitted now, as `--submit` does, or left pending on GitHub for the operator to submit there. A staged one says
- * where to finish it, a published one links to it. With no diff kept, its comments are listed here.
- * `onFollow` hears a link followed to a comment's card, by its file's index in the diff.
+ * where to finish it, a published one links to it. With no diff kept, its comments are listed here. It leads the
+ * review's page, whose description says its status (`ReviewDraftState`), so its header names only its version, with
+ * what made it and its hash on hover. `onFollow` hears a link followed to a comment's card, by its file's index in
+ * the diff.
  */
 export function ReviewDraftPanel({
     run,
@@ -69,17 +86,23 @@ export function ReviewDraftPanel({
     return (
         <Panel data-testid="review-draft">
             <PanelHeader label="Draft review">
-                <Chip tone={REVIEW_DRAFT_TONE[draft.status]} word={draft.status} />
-                <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a publish carries">
-                    version {draft.version}, {draft.hash}
-                </span>
+                {/* Its status is the page's description; what made the version, and its hash, are on hover. */}
+                <Tip
+                    fact={
+                        `Version ${draft.version}: ${draft.change}, ${versionBy(draft)}. ` +
+                        `A publish carries its hash, ${draft.hash}.`
+                    }
+                >
+                    <span className="readout text-xs text-muted-foreground" data-testid="draft-version">
+                        version {draft.version}
+                    </span>
+                </Tip>
             </PanelHeader>
             <div className="flex flex-col gap-2 p-3 text-sm">
                 <p className="text-muted-foreground">
                     {INTRO[0]}
                     <span className="font-mono text-xs">{shortSha(sha)}</span>
                     {INTRO[1]}
-                    {` Version ${draft.version}: ${draft.change}, ${versionBy(draft)}.`}
                 </p>
                 {draft.moved_head !== null && (
                     <p className="text-status-blocked" data-testid="draft-head-moved">

@@ -11,13 +11,14 @@ import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
 import { Field, Fields } from '@/components/fields'
+import { FoldPanel } from '@/components/fold-panel'
 import { PersonaField } from '@/components/persona-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
-import { ReviewDraftPanel } from '@/components/review-draft'
+import { ReviewDraftPanel, ReviewDraftState } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
@@ -26,7 +27,7 @@ import { TicketField } from '@/components/ticket-field'
 import { Timestamp } from '@/components/timestamp'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { reviewDescription } from '@/lib/descriptions'
+import { reviewDescription, reviewDraftTitle } from '@/lib/descriptions'
 import { reviewSentText } from '@/lib/outcomes'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef } from '@/lib/refs'
@@ -80,27 +81,46 @@ function Loaded({ id }: { id: number }) {
         )
     }
     const placed = placeFindings(data.findings, data.diff !== null)
+    const { draft } = data
+    const follow = (file: number) => setWanted({ file })
     return (
         <>
-            <PageHeader
-                title={`${reviewRef(data.review.id)} ${pullRequestLabel(data.review.pr_url)}`}
-                subject={data.ticket_title}
-                help={HELP}
-            >
-                {reviewDescription(data.review)}
-            </PageHeader>
+            {/* With a draft, the page is the draft's record: the operator's review leads, its state the line. */}
+            {draft === null ? (
+                <PageHeader
+                    title={`${reviewRef(data.review.id)} ${pullRequestLabel(data.review.pr_url)}`}
+                    subject={data.ticket_title}
+                    help={HELP}
+                >
+                    {reviewDescription(data.review)}
+                </PageHeader>
+            ) : (
+                <PageHeader
+                    title={reviewRef(data.review.id)}
+                    subject={reviewDraftTitle(data.review.pr_url, draft)}
+                    help={HELP}
+                >
+                    <ReviewDraftState draft={draft} />
+                </PageHeader>
+            )}
             <div className="stagger flex flex-col gap-6">
-                <ReviewPanel detail={data} />
-                {data.findings.length > 0 && <FindingsPanel detail={data} onFollow={(file) => setWanted({ file })} />}
-                {data.draft !== null && (
-                    <ReviewDraftPanel
-                        run={data.review.id}
-                        prUrl={data.review.pr_url}
-                        sha={data.review.sha}
-                        draft={data.draft}
-                        hasDiff={data.diff !== null}
-                        onFollow={(file) => setWanted({ file })}
-                    />
+                {draft === null ? (
+                    <>
+                        <ReviewPanel detail={data} />
+                        {data.findings.length > 0 && <FindingsPanel detail={data} onFollow={follow} />}
+                    </>
+                ) : (
+                    <>
+                        <ReviewDraftPanel
+                            run={data.review.id}
+                            prUrl={data.review.pr_url}
+                            sha={data.review.sha}
+                            draft={draft}
+                            hasDiff={data.diff !== null}
+                            onFollow={follow}
+                        />
+                        <ReviewerFold detail={data} onFollow={follow} />
+                    </>
                 )}
                 {/* With no diff, the findings list is their cards, so each finding shows once. */}
                 {data.diff === null ? (
@@ -153,75 +173,123 @@ function NoReview({ title, children }: { title: string; children: string }) {
  * and spend, is the run's own page, opened from the `run` field: read now and then, not each time.
  */
 function ReviewPanel({ detail }: { detail: ReviewDetail }) {
-    const { review } = detail
-    const others = detail.runs.filter((r) => r.id !== review.id)
     return (
         <Panel>
             <PanelHeader label="Review" />
-            <Fields>
-                {detail.summary !== null && (
-                    <Field label="summary">
-                        <RichText text={detail.summary} />
-                    </Field>
-                )}
-                {detail.note !== null && (
-                    <Field label="harness">
-                        <span className="text-status-failed">{detail.note}</span>
-                    </Field>
-                )}
-                <Field label="verdict">
-                    <span className="flex items-center gap-2">
-                        <span className={cn('font-mono text-xs', verdictTone(review))}>{verdictText(review)}</span>
-                        {review.impact !== null && <Chip word={`${review.impact} impact`} />}
+            <ReviewFields detail={detail} />
+        </Panel>
+    )
+}
+
+/**
+ * On a review with a draft, what canopy's reviewer made of the PR, which the operator's draft was written from: the
+ * Review panel's fields and the findings in one panel, folded under the draft, since the draft is what the page is for.
+ * Its header says the review's status and verdict, which the page's description, the draft's state, leaves out.
+ */
+function ReviewerFold({ detail, onFollow }: { detail: ReviewDetail; onFollow: (file: number) => void }) {
+    const { review } = detail
+    return (
+        <FoldPanel
+            label="What the reviewer found"
+            readout={
+                <span className="readout text-xs text-muted-foreground">
+                    {reviewDescription(review)} · <span className={verdictTone(review)}>{verdictText(review)}</span>
+                </span>
+            }
+            what="the review"
+            data-testid="reviewer-fold"
+        >
+            <ReviewFields detail={detail} />
+            {detail.findings.length > 0 && (
+                <section className="border-t">
+                    <h3 className="flex items-center gap-2 px-3 pt-3 panel-label">
+                        Findings
+                        <span className="readout text-xs text-muted-foreground">{detail.findings.length}</span>
+                    </h3>
+                    <FindingsBody detail={detail} onFollow={onFollow} />
+                </section>
+            )}
+        </FoldPanel>
+    )
+}
+
+// The Review panel's fields, in the panel or in the reviewer's fold.
+function ReviewFields({ detail }: { detail: ReviewDetail }) {
+    const { review } = detail
+    const others = detail.runs.filter((r) => r.id !== review.id)
+    return (
+        <Fields>
+            {detail.summary !== null && (
+                <Field label="summary">
+                    <RichText text={detail.summary} />
+                </Field>
+            )}
+            {detail.note !== null && (
+                <Field label="harness">
+                    <span className="text-status-failed">{detail.note}</span>
+                </Field>
+            )}
+            <Field label="verdict">
+                <span className="flex items-center gap-2">
+                    <span className={cn('font-mono text-xs', verdictTone(review))}>{verdictText(review)}</span>
+                    {review.impact !== null && <Chip word={`${review.impact} impact`} />}
+                </span>
+            </Field>
+            <Field label="pull request" mono>
+                <PullRequestLink url={review.pr_url} className="text-sm" />
+                {others.length > 0 && (
+                    <span className="mt-0.5 flex flex-wrap gap-x-3 text-muted-foreground" data-testid="other-reviews">
+                        <span>also</span>
+                        {others.map((r) => (
+                            <span key={r.id} className="readout">
+                                <ReviewLink id={r.id} />, <span className={verdictTone(r)}>{verdictText(r)}</span>
+                            </span>
+                        ))}
                     </span>
-                </Field>
-                <Field label="pull request" mono>
-                    <PullRequestLink url={review.pr_url} className="text-sm" />
-                    {others.length > 0 && (
-                        <span
-                            className="mt-0.5 flex flex-wrap gap-x-3 text-muted-foreground"
-                            data-testid="other-reviews"
-                        >
-                            <span>also</span>
-                            {others.map((r) => (
-                                <span key={r.id} className="readout">
-                                    <ReviewLink id={r.id} />, <span className={verdictTone(r)}>{verdictText(r)}</span>
-                                </span>
-                            ))}
-                        </span>
+                )}
+            </Field>
+            <TicketField ticketKey={review.ticket_key} title={detail.ticket_title} />
+            <PersonaField persona={detail.persona} digest={detail.persona_digest} />
+            <Field label="commit" mono>
+                <Copyable text={review.sha} label="commit">
+                    <span title={review.sha}>{shortSha(review.sha)}</span>
+                </Copyable>
+                {detail.base_branch !== null && (
+                    <span className="text-muted-foreground"> against {detail.base_branch}</span>
+                )}
+            </Field>
+            <Field label="run" mono>
+                <span className="flex flex-wrap items-baseline gap-x-2">
+                    {review.ended_at === null ? (
+                        'still reviewing'
+                    ) : (
+                        <>
+                            <Timestamp at={review.ended_at} />
+                            <Age at={review.ended_at} variant="ago" />
+                        </>
                     )}
-                </Field>
-                <TicketField ticketKey={review.ticket_key} title={detail.ticket_title} />
-                <PersonaField persona={detail.persona} digest={detail.persona_digest} />
-                <Field label="commit" mono>
-                    <Copyable text={review.sha} label="commit">
-                        <span title={review.sha}>{shortSha(review.sha)}</span>
-                    </Copyable>
-                    {detail.base_branch !== null && (
-                        <span className="text-muted-foreground"> against {detail.base_branch}</span>
-                    )}
-                </Field>
-                <Field label="run" mono>
-                    <span className="flex flex-wrap items-baseline gap-x-2">
-                        {review.ended_at === null ? (
-                            'still reviewing'
-                        ) : (
-                            <>
-                                <Timestamp at={review.ended_at} />
-                                <Age at={review.ended_at} variant="ago" />
-                            </>
-                        )}
-                        <Link
-                            to="/reviews/$id/run"
-                            params={{ id: String(review.id) }}
-                            className="text-accent underline-offset-4 hover:underline"
-                            data-testid="review-run-link"
-                        >
-                            transcript and log
-                        </Link>
-                    </span>
-                </Field>
-            </Fields>
+                    <Link
+                        to="/reviews/$id/run"
+                        params={{ id: String(review.id) }}
+                        className="text-accent underline-offset-4 hover:underline"
+                        data-testid="review-run-link"
+                    >
+                        transcript and log
+                    </Link>
+                </span>
+            </Field>
+        </Fields>
+    )
+}
+
+/** The findings in a panel of their own, on a review with no draft. */
+function FindingsPanel({ detail, onFollow }: { detail: ReviewDetail; onFollow: (file: number) => void }) {
+    return (
+        <Panel>
+            <PanelHeader label="Findings">
+                <span className="readout text-xs text-muted-foreground">{detail.findings.length}</span>
+            </PanelHeader>
+            <FindingsBody detail={detail} onFollow={onFollow} />
         </Panel>
     )
 }
@@ -233,7 +301,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
  * `canopy send review:ID N...`: a reply on the ticket naming them, which the next tick reads as the operator's go-ahead
  * (DESIGN §21). `onFollow` hears a link followed to a finding on a file, by the file's index in the diff.
  */
-function FindingsPanel({ detail, onFollow }: { detail: ReviewDetail; onFollow: (file: number) => void }) {
+function FindingsBody({ detail, onFollow }: { detail: ReviewDetail; onFollow: (file: number) => void }) {
     const { review } = detail
     const client = useQueryClient()
     const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
@@ -274,10 +342,7 @@ function FindingsPanel({ detail, onFollow }: { detail: ReviewDetail; onFollow: (
         )
 
     return (
-        <Panel>
-            <PanelHeader label="Findings">
-                <span className="readout text-xs text-muted-foreground">{detail.findings.length}</span>
-            </PanelHeader>
+        <>
             {detail.diff === null ? (
                 <ol className="flex flex-col gap-2 p-3">
                     {detail.findings.map((finding, i) => (
@@ -314,7 +379,7 @@ function FindingsPanel({ detail, onFollow }: { detail: ReviewDetail; onFollow: (
                     )}
                 </div>
             )}
-        </Panel>
+        </>
     )
 }
 
