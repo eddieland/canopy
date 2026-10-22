@@ -79,7 +79,7 @@ def test_a_done_review_of_someone_elses_pr_drafts_a_review_its_finding_off_the_d
     assert (draft.status, draft.pr_url) == (ReviewDraftStatus.WAITING, THEIRS)
     shown = scenario.operator("review", "draft", str(reviewed)).out
     assert f"Version 1, hash {first.hash}: made from review run {reviewed}'s summary and findings" in shown
-    assert "Comment 1, on retry.py:1 (finding 1):\n    **blocking**: loops forever\n" in shown
+    assert "Comment 1, on retry.py:1 (finding 1):\n    loops forever\n" in shown
     assert f"canopy review publish {reviewed} {first.hash}" in shown
     # A review of one of the loop's own PRs has none: its findings go to a worker.
     own = scenario.review(reviews(feature_head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
@@ -456,7 +456,7 @@ def test_a_note_starts_a_revision_on_the_next_tick_whose_result_is_the_new_versi
     assert revision.prompt.startswith("# canopy reviser\n")
     assert f"> {NOTE}" in revision.prompt
     assert "The body:\n> Two defects." in revision.prompt
-    assert "Comment 1, on `retry.py:1`:\n> **blocking**: loops forever" in revision.prompt
+    assert "Comment 1, on `retry.py:1`:\n> loops forever" in revision.prompt
     second = newest(scenario, reviewed)
     assert (second.number, second.author, second.channel) == (2, ReviewDraftAuthor.REVISER, None)
     assert second.change == f"revision run {revision.id} revised version 1 on the operator's notes"

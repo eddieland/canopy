@@ -655,6 +655,8 @@ class Memory(Row):
     invalidated_at: str | None
     wrong_at: str | None
     wrong_run_id: int | None
+    #: When the operator pinned a lesson, which is then never due for review and served first; None if not pinned.
+    pinned_at: str | None
 
 
 @dataclass(frozen=True)
@@ -1067,7 +1069,7 @@ class Draft(Row):
     #: The reaction a send added on GitHub, which stays there even when the send's review then failed.
     reacted: Reaction | None
     reacted_at: str | None
-    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0079).
+    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0080).
     plan_item: int | None
 
 

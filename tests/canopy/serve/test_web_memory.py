@@ -173,16 +173,19 @@ def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(can
             runs_dir=Path("/r"),
         )
     ctx.conn.executemany(
-        "INSERT INTO memories (id, scope, key, body, status, author, created_at, review_at, wrong_at, wrong_run_id) "
-        "VALUES (?, 'lesson', ?, 'A lesson.', 'active', 'operator', '2026-10-01T00:00:00.000Z', ?, ?, ?)",
+        "INSERT INTO memories (id, scope, key, body, status, author, created_at, review_at, wrong_at, wrong_run_id, "
+        "pinned_at) VALUES (?, 'lesson', ?, 'A lesson.', 'active', 'operator', '2026-10-01T00:00:00.000Z', ?, ?, ?, ?)",
         [
-            (1, "a-due-last", "2027-03-01T00:00:00.000Z", None, None),
-            (2, "b-due-first", "2027-01-01T00:00:00.000Z", None, None),
-            (3, "c-reported-wrong", "2027-06-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", run_id),
+            (1, "a-due-last", "2027-03-01T00:00:00.000Z", None, None, None),
+            (2, "b-due-first", "2027-01-01T00:00:00.000Z", None, None, None),
+            (3, "c-reported-wrong", "2027-06-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", run_id, None),
+            # Never due, so after every lesson that will be; reported wrong, with the lessons reported wrong.
+            (4, "0-pinned", None, None, None, "2026-10-01T00:00:00.000Z"),
+            (5, "d-pinned-wrong", None, "2026-10-02T00:00:00.000Z", run_id, "2026-10-01T00:00:00.000Z"),
         ],
     )
     c, _ = signed_in_client(ctx)
-    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 2, 1]
+    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 5, 2, 1, 4]
 
 
 # A write to the mock needs no session, but an Origin naming the server (guard.py).
@@ -261,6 +264,24 @@ def test_renew_pushes_a_lessons_review_out(backend: Backend) -> None:
     assert renewed["id"] == 8
     assert abs(due - (datetime.now(UTC) + timedelta(days=90))) < timedelta(minutes=5)
     assert refused(c.post("/api/memory/5/renew", headers=WRITE)) == "unknown: no lesson in force has id 5"
+
+
+def test_pin_keeps_a_lesson_from_review_and_unpin_brings_it_back(backend: Backend) -> None:
+    c = client(None, backend)
+    pinned = c.post("/api/memory/8/pin", headers=WRITE).json()
+    assert pinned["id"] == 8
+    assert abs(datetime.fromisoformat(pinned["pinned_at"]) - datetime.now(UTC)) < timedelta(minutes=5)
+    [lesson] = c.get("/api/memory").json()["lessons"]
+    assert (lesson["pinned_at"], lesson["review_at"]) == (pinned["pinned_at"], None)
+    assert refused(c.post("/api/memory/8/pin", headers=WRITE)).startswith("pinned: lesson 8 is pinned already")
+    # A pinned lesson is never due: renewing it clears a report, and sets no review date.
+    assert c.post("/api/memory/8/renew", headers=WRITE).json() == {"id": 8, "review_at": None}
+    unpinned = c.post("/api/memory/8/unpin", headers=WRITE).json()
+    due = datetime.fromisoformat(unpinned["review_at"])
+    assert abs(due - (datetime.now(UTC) + timedelta(days=90))) < timedelta(minutes=5)
+    assert c.get("/api/memory").json()["lessons"][0]["pinned_at"] is None
+    assert refused(c.post("/api/memory/8/unpin", headers=WRITE)) == "not_pinned: lesson 8 is not pinned"
+    assert refused(c.post("/api/memory/5/pin", headers=WRITE)) == "unknown: no lesson in force has id 5"
 
 
 def test_edit_makes_a_lessons_next_version_and_its_history_lists_both(backend: Backend) -> None:
@@ -363,6 +384,8 @@ def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) 
         ("promote", {}),
         ("reject", None),
         ("renew", None),
+        ("pin", None),
+        ("unpin", None),
         ("edit", {"text": "Other words."}),
         ("forget", {"confirm": "memory:6"}),
     ],
@@ -370,20 +393,22 @@ def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) 
 def test_every_verb_is_refused_inside_a_run(backend: Backend, verb: str, body: dict[str, str] | None) -> None:
     c = client(None, backend)
     before = c.get("/api/memory").json()
-    memory_id = 8 if verb in {"renew", "edit"} else 6
+    memory_id = 8 if verb in {"renew", "pin", "unpin", "edit"} else 6
     with in_run(7):
         response = c.post(f"/api/memory/{memory_id}/{verb}", json=body, headers=WRITE)
     assert refused(response).startswith("inside_run")
     assert c.get("/api/memory").json() == before
 
 
-def test_with_proposals_off_promote_reject_renew_and_edit_are_refused(canopy_env: CanopyEnv) -> None:
+def test_with_proposals_off_promote_reject_renew_pin_and_edit_are_refused(canopy_env: CanopyEnv) -> None:
     with_memory(canopy_env, ticket_notes="record")
     c, headers = signed_in_client(migrated(canopy_env))
     calls: list[tuple[str, dict[str, str] | None]] = [
         ("promote", {}),
         ("reject", None),
         ("renew", None),
+        ("pin", None),
+        ("unpin", None),
         ("edit", {"text": "Other words."}),
     ]
     for verb, body in calls:

@@ -44,9 +44,9 @@ REPORT = {
     ],
 }
 #: What `REPORT`'s draft makes of its finding on a line of the diff: a comment on it.
-ON_LINE = Comment("retry.py", 1, "**blocking**: loops forever\n\nNothing ends it.", finding=1)
+ON_LINE = Comment("retry.py", 1, "loops forever\n\nNothing ends it.", finding=1)
 #: What it makes of its finding off the diff: a part of the body.
-OFF_DIFF = "**minor** at `tests/test_retry.py:3`: no tests\n\nAdd one."
+OFF_DIFF = "`tests/test_retry.py:3`\n\nno tests\n\nAdd one."
 
 
 def run_inline(

@@ -127,10 +127,12 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
     """Export every plan into DIR, superseded and feedback plans included, each with what the journal records of it.
 
     Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-APPROVED-export-reports-as-csv.md, as its
-    file stands now under a front matter of its status, hashes, and approval, and beside it the prompt its planner was
-    given, as RUN-PROMPT.md. A file is rewritten only when its plan changed, and removed only when it moved to a
-    new name, so DIR can be a clone of a repository of yours that you commit and push. Plans hold what the planners
-    read of your tickets, and prompts your messages and standing instructions: keep that repository private.
+    file stands now under a front matter of its status, hashes, approval, and its planner's persona, and beside it the
+    prompt its planner was given, as RUN-PROMPT.md. Each ticket's DIR/KEY/README.md lists its plans, and DIR/README.md
+    every ticket, unless one there is your own: canopy rewrites only a README.md its first line says canopy wrote. A
+    file is rewritten only when its plan changed, and removed only when it moved to a new name, so DIR can be a clone
+    of a repository of yours that you commit and push. Plans hold what the planners read of your tickets, and prompts
+    your messages and standing instructions: keep that repository private.
 
     --conversations adds each planned ticket's conversation, every message canopy records on it, as
     DIR/KEY/CONVERSATION.md: workers' reports and questions, your replies, and mirrored tracker comments, a private
@@ -145,7 +147,7 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
         raise CliError(f"archive refused ({r.guard}): {r.reason}") from None
     ctx = open_context(click_ctx)
     try:
-        exported = plan_export.export(ctx.conn, ctx.state_dir, dest, conversations=conversations)
+        exported = plan_export.export(ctx.conn, ctx.state_dir, dest, conversations=conversations, indexes=True)
     except plan_export.ExportError as e:
         raise CliError(f"archive failed: {e}") from None
     logs.for_tick(None).info(
@@ -161,9 +163,11 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
     names = [Path(name).name for name in exported.written]
     prompts = sum(map(plan_export.is_prompt, names))
     exported_conversations = sum(map(plan_export.is_conversation, names))
-    counted = [(len(names) - prompts - exported_conversations, "plan"), (prompts, "prompt")]
+    readmes = sum(map(plan_export.is_index, names))
+    counted = [(len(names) - prompts - exported_conversations - readmes, "plan"), (prompts, "prompt")]
     if conversations:
         counted.append((exported_conversations, "conversation"))
+    counted.append((readmes, "README"))
     written = ", ".join(f"{n} {noun}{'s' if n != 1 else ''}" for n, noun in counted[:-1])
     last, noun = counted[-1]
     click.echo(

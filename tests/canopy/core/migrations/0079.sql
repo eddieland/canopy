@@ -1,3 +1,4 @@
--- sha256 of 0079_draft_plan_items.sql: 07e198f4a19cff80ef042e1d8af271cbd2ff928371cc4d4c4156fc6c6fafe3c2
+-- sha256 of 0079_lesson_pins.sql: ac2ac083fc10f9c2176f1259ed5cad5d0be46b6319042675bb139857023e8322
 
--- Creates no table, so seeds no row.
+INSERT INTO memories (scope, key, body, status, author, created_at, approved_at, pinned_at)
+VALUES ('lesson', 'tests-need-docker', 'Start Docker before the tests.', 'active', 'operator', 'x', 'x', 'x');
