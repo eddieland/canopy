@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "canopy",
+    "canopy-artifacts",
     "canopy-github",
     "canopy-jira",
     "canopy-notify-slack",
@@ -53,6 +54,7 @@ name = "canopy"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
+    { name = "canopy-artifacts" },
     { name = "canopy-github" },
     { name = "canopy-jira" },
     { name = "canopy-notify-slack" },
@@ -85,6 +87,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.15.1" },
+    { name = "canopy-artifacts", editable = "packages/canopy-artifacts" },
     { name = "canopy-github", editable = "packages/canopy-github" },
     { name = "canopy-jira", editable = "packages/canopy-jira" },
     { name = "canopy-notify-slack", editable = "packages/canopy-notify-slack" },
@@ -112,6 +115,20 @@ dev = [
     { name = "shellcheck-py", specifier = ">=0.11.0.1" },
     { name = "syrupy", specifier = ">=6.1.1" },
     { name = "zizmor", specifier = ">=1.31.1" },
+]
+
+[[package]]
+name = "canopy-artifacts"
+source = { editable = "packages/canopy-artifacts" }
+dependencies = [
+    { name = "click" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.5.0" },
+    { name = "pydantic", specifier = ">=2.14.1" },
 ]
 
 [[package]]

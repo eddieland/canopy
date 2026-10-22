@@ -6,8 +6,8 @@ leave on them, and how those comments come back to a ticket. Sections are number
 
 ## 38. Artifacts and Louvre
 
-Designed, not built (ROADMAP M62). Until it is built, a worker's output reaches people as a PR, a ticket comment, or a
-plan (§25).
+The local store is built; publishing from runs, and comments back to the ticket, are designed, not built (ROADMAP
+M62). Until they are, a worker's output reaches people as a PR, a ticket comment, or a plan (§25).
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.
@@ -51,7 +51,8 @@ artifact updated  <---------------------- a worker revises it
 
 ### What canopy needs of a store
 
-The contract in full, field by field and tool by tool, is in ROADMAP M62 until a store is built. What canopy relies on:
+The contract in full, field by field and tool by tool, is the local store's README
+([packages/canopy-artifacts](../../packages/canopy-artifacts/README.md)). What canopy relies on:
 
 - **Versions and origin.** A revision is a new version of the same artifact, so its threads carry over. Each artifact
   carries origin keys canopy sets (workspace, ticket, run), opaque to the store, which a reader filters on.
