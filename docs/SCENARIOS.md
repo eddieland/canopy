@@ -408,6 +408,12 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   that crossed their retention in between, with `failures` 0; `canopy.log` rotated past `log_max_mib`, with no more
   than `log_keep` rotated files; and every transcript, prompt, output, and diff the operator opens shown, or saying
   "removed after N days", never failing. Record the rows and the dry runs in `MEASUREMENTS.md`.
+- **S62. The journal across a pass** (M47, stage 3's check). On the live workspace, shortly before a pass is due, save
+  `attention.md`, `canopy status`, and `canopy gc --dry-run --json`; after the pass, expect the attention list, each
+  item's age, and `canopy status` unchanged, and the `gc_passes` row's `rows` for the harness's attention, connector
+  runs, and derivations equal to the dry run's `removable`. Then, between ticks, run `canopy gc --vacuum` and expect
+  the journal to shrink by about the dry run's free pages plus the rows' pages the pass freed, and the next tick to run
+  normally. Record the sizes and counts in `MEASUREMENTS.md`.
 
 ## Retired
 

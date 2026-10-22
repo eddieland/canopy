@@ -2,7 +2,8 @@
 
 `measure` reports each kind of §26's table that M47 changes: how many there are, their bytes, and what a pass with
 the configured `[retention]` would remove of them. It removes nothing, and runs nothing but `git count-objects`.
-`file_kinds` finds the files a pass removes, for the pass (`gc_pass.py`) and the dry run alike, so the two agree.
+`file_kinds` finds the files a pass removes, and `row_kinds` the journal's rows, for the pass (`gc_pass.py`) and the
+dry run alike, so the two agree.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import stat
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from canopy.chores import start as chore_start
 from canopy.core import db, hostgit, review_diff, sql
@@ -38,11 +39,22 @@ UNRECORDED_AGE = timedelta(hours=1)
 KIB = 1024
 MIB = KIB * KIB
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
-# The bytes of an attention row's text: what it holds, not the pages it fills.
-_ROW_BYTES = sql.frag(
+#: A table of the journal a pass removes rows of (DESIGN §26, The journal).
+type RowTable = Literal["decisions", "connector_runs", "derivations"]
+# The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
+_DECISION_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
     "coalesce(length(CAST(ticket_key AS BLOB)), 0) + coalesce(length(CAST(repo AS BLOB)), 0) + "
     "coalesce(length(CAST(chore AS BLOB)), 0) + coalesce(length(CAST(pr AS BLOB)), 0)",
+)
+_RUN_BYTES = sql.frag(
+    "length(CAST(request AS BLOB)) + length(CAST(recorded AS BLOB)) + length(CAST(refused AS BLOB)) + "
+    "length(CAST(stderr AS BLOB)) + coalesce(length(CAST(missed AS BLOB)), 0) + "
+    "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)",
+)
+_DERIVED_BYTES = sql.frag(
+    "length(CAST(ticket_key AS BLOB)) + coalesce(length(CAST(repo AS BLOB)), 0) + length(CAST(phases AS BLOB)) + "
+    "coalesce(length(CAST(stale AS BLOB)), 0) + coalesce(length(CAST(overseer_phase AS BLOB)), 0)",
 )
 
 
@@ -92,6 +104,53 @@ class FileKind:
 
 
 @dataclass(frozen=True)
+class RowKind:
+    """A kind of row in the journal, as the dry run names it, with the conditions that pick its rows.
+
+    The dry run counts the rows `removable` picks, and the pass deletes those same rows, so the two agree.
+    """
+
+    name: str
+    table: RowTable
+    #: Which of the table's rows are of this kind.
+    rows: sql.Fragment
+    #: A row's bytes: what it holds, not the pages it fills.
+    size: sql.Fragment
+    #: Which of the kind's rows a pass removes.
+    removable: sql.Fragment
+    rule: str
+
+    def kind(self, conn: sqlite3.Connection) -> Kind:
+        """Tally the rows as the dry run reports them.
+
+        Returns:
+            The kind, its count the rows of it.
+        """
+        found = sql.execute(
+            conn,
+            sql.select(
+                "count(*), sum({}), sum(coalesce({}, 0)), sum(CASE WHEN {} THEN {} END)",
+                self.size,
+                self.removable,
+                self.removable,
+                self.size,
+            )
+            .from_(self.table)
+            .where("{}", self.rows),
+        ).fetchone()
+        count, size, removable, removable_size = (int(v or 0) for v in found)
+        return Kind(self.name, "rows", count, size, removable, removable_size, self.rule)
+
+    def delete(self) -> sql.Delete:
+        """The statement that deletes the rows the dry run counts as removable.
+
+        Returns:
+            The DELETE.
+        """
+        return sql.delete(self.table).where("{}", self.rows).where("{}", self.removable)
+
+
+@dataclass(frozen=True)
 class Report:
     """What `canopy gc --dry-run` reports: each kind, the journal's size in bytes, and what could not be read."""
 
@@ -113,9 +172,8 @@ def measure(ctx: Context, now: datetime) -> Report:
     kinds = [
         *(k.kind() for k in file_kinds(ctx, now)),
         _log_files(ctx.state_dir, retention),
-        *_attention(ctx.conn, now, retention),
-        _connector_runs(ctx.conn, now, retention),
-        _derivations(ctx.conn, now, retention),
+        *(k.kind(ctx.conn) for k in row_kinds(ctx.conn, now, retention)),
+        _overseer_attention(ctx.conn),
         *_journal_space(ctx.conn, journal),
         *_git_objects(ctx, notes),
         _sandbox_caches(),
@@ -158,6 +216,53 @@ def retention_cutoff(now: datetime, days: int) -> str:
         The time as the journal stores it; for `days` 0, which keeps the kind forever, "", which no time is before.
     """
     return db.format_time(now - timedelta(days=days)) if days else ""
+
+
+def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> list[RowKind]:
+    """The rows a pass removes from the journal: the harness's attention items, connector runs, and derivations.
+
+    A row goes once it is older than `journal_days` and outside the attention list's window, the newest
+    `attention.HISTORY_TICKS` ticks that closed `ok`, so the list, each item's open-since, and what the sinks are told
+    stay as they were; a journal with fewer `ok` ticks than the window has none outside it. A poll's connector run,
+    made between ticks, is outside once it started before the window's oldest tick. Each source's newest run and its
+    newest that recorded the query's result stay whatever their age (DESIGN §26, §30).
+
+    Returns:
+        The kinds, in the order of §26's table.
+    """
+    cutoff = retention_cutoff(now, retention.journal_days)
+    window = _window(conn)
+    rule = f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks"
+    return [
+        RowKind(
+            "harness attention",
+            "decisions",
+            sql.in_("action", _harness()),
+            _DECISION_BYTES,
+            sql.frag("tick_id < ? AND created_at < ?", window.tick_id, cutoff),
+            rule,
+        ),
+        RowKind(
+            "connector runs",
+            "connector_runs",
+            sql.frag("1"),
+            _RUN_BYTES,
+            sql.all_of(
+                sql.frag("coalesce(tick_id < ?, started_at < ?)", window.tick_id, window.started_at),
+                sql.frag("started_at < ?", cutoff),
+                sql.not_in("id", _newest_runs(conn)),
+            ),
+            f"{rule}, newest kept",
+        ),
+        RowKind(
+            "derivations",
+            "derivations",
+            sql.frag("1"),
+            _DERIVED_BYTES,
+            sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
+            rule,
+        ),
+    ]
 
 
 @dataclass(frozen=True)
@@ -332,168 +437,70 @@ def _log_files(state_dir: Path, retention: Retention) -> Kind:
     return tally.kind("canopy.log", "files", rule + (", due to rotate" if rotates else ""))
 
 
-def _attention(conn: sqlite3.Connection, now: datetime, retention: Retention) -> list[Kind]:
-    """The attention rows the harness raised, and the overseer's, which a pass keeps (DESIGN §26, Open).
-
-    A harness row is removable once its tick is older than the attention list's window, the newest
-    `attention.HISTORY_TICKS` ticks that closed `ok`, and it was recorded before `journal_days`. A journal with fewer
-    ticks than the window has none.
+def _overseer_attention(conn: sqlite3.Connection) -> Kind:
+    """The attention rows the overseer recorded, which a pass keeps: the evaluation corpus (DESIGN §26, Open).
 
     Returns:
-        The harness's kind, then the overseer's.
+        The kind, nothing of it removable.
     """
-    window = _window(conn)
-    cutoff = retention_cutoff(now, retention.journal_days)
-    harness = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
-    attended = (
-        sql.select("action, tick_id, created_at, {} AS bytes", _ROW_BYTES)
-        .from_("decisions")
-        .where("action LIKE ?", f"{attention.ACTION_PREFIX}%")
-    )
-    tallied = (
-        sql.select(
-            "{} AS harness, count(*) AS n, sum(bytes) AS b, sum(tick_id < ? AND created_at < ?) AS rn, "
-            "sum(CASE WHEN tick_id < ? AND created_at < ? THEN bytes END) AS rb",
-            sql.in_("action", harness),
-            window,
-            cutoff,
-            window,
-            cutoff,
-        )
-        .from_("({})", attended)
-        .group_by("harness")
-    )
-    rows = sql.execute(conn, tallied).fetchall()
-    by = {bool(r["harness"]): r for r in rows}
-    found = by.get(True)
-    raised = Kind(
-        "harness attention",
-        "rows",
-        int(found["n"]) if found is not None else 0,
-        int(found["b"] or 0) if found is not None else 0,
-        int(found["rn"] or 0) if found is not None else 0,
-        int(found["rb"] or 0) if found is not None else 0,
-        f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks",
-    )
-    kept = by.get(False)
-    overseer = Kind(
+    recorded = sql.all_of(sql.frag("action LIKE ?", f"{attention.ACTION_PREFIX}%"), sql.not_in("action", _harness()))
+    return RowKind(
         "overseer attention",
-        "rows",
-        int(kept["n"]) if kept is not None else 0,
-        int(kept["b"] or 0) if kept is not None else 0,
-        0,
-        0,
+        "decisions",
+        recorded,
+        _DECISION_BYTES,
+        sql.frag("0"),
         "kept: the evaluation corpus",
-    )
-    return [raised, overseer]
+    ).kind(conn)
 
 
-def _window(conn: sqlite3.Connection) -> int:
+def _harness() -> list[str]:
+    """The actions of the attention items the harness raises itself.
+
+    Returns:
+        Each `attention:<reason>`, in order.
+    """
+    return [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
+
+
+@dataclass(frozen=True)
+class _Window:
+    """The oldest tick inside the attention list's window, and when it started; 0 and None while there is none."""
+
+    tick_id: int
+    started_at: str | None
+
+
+def _window(conn: sqlite3.Connection) -> _Window:
     """The oldest tick inside the attention list's window, the newest `attention.HISTORY_TICKS` that closed `ok`.
 
     Returns:
-        Its id, or 0 when the journal has fewer `ok` ticks than the window.
+        It, or tick 0, which no tick is before, when the journal has fewer `ok` ticks than the window.
     """
     oldest = sql.execute(
         conn,
-        sql.select("id")
+        sql.select("id, started_at")
         .from_("ticks")
         .where("status = ?", TickStatus.OK)
         .order_by("id DESC")
         .limit(1, offset=attention.HISTORY_TICKS - 1),
     ).fetchone()
-    return int(oldest[0]) if oldest is not None else 0
+    return _Window(0, None) if oldest is None else _Window(int(oldest["id"]), str(oldest["started_at"]))
 
 
-# The bytes of a connector run's row: what it holds, not the pages it fills.
-_RUN_BYTES = sql.frag(
-    "length(CAST(request AS BLOB)) + length(CAST(recorded AS BLOB)) + length(CAST(refused AS BLOB)) + "
-    "length(CAST(stderr AS BLOB)) + coalesce(length(CAST(missed AS BLOB)), 0) + "
-    "coalesce(length(CAST(query_result AS BLOB)), 0) + coalesce(length(CAST(review_query_result AS BLOB)), 0)",
-)
+def _newest_runs(conn: sqlite3.Connection) -> list[int]:
+    """Each source's newest run, and its newest that recorded the query's result, which a pass keeps.
 
-
-def _connector_runs(conn: sqlite3.Connection, now: datetime, retention: Retention) -> Kind:
-    """The connectors' runs (DESIGN §30), which a pass removes as it does the harness's attention rows.
-
-    One goes once it is outside the attention list's window and older than `journal_days`, unless it is its source's
-    newest run, or its newest that recorded the query's result. A poll's run, made between ticks, is outside the window
-    once it started before the window's oldest tick.
+    `canopy status` and `connector_failed` read the first, and the derivation the second (DESIGN §30).
 
     Returns:
-        The kind.
+        Their ids.
     """
-    cutoff = retention_cutoff(now, retention.journal_days)
-    window = _window(conn)
     newest = sql.union(
         sql.select("max(id)").from_("connector_runs").group_by("source"),
         sql.select("max(id)").from_("connector_runs").where("query_result IS NOT NULL").group_by("source"),
     )
-    runs = sql.select(
-        "*, coalesce(tick_id < ?, started_at < (SELECT started_at FROM ticks WHERE id = ?)) "
-        "AND started_at < ? AND id NOT IN ({}) AS removable",
-        window,
-        window,
-        cutoff,
-        newest,
-    ).from_("connector_runs")
-    row = sql.execute(
-        conn,
-        sql.select(
-            "count(*) AS n, sum({}) AS b, sum(removable) AS rn, sum(CASE WHEN removable THEN {} END) AS rb",
-            _RUN_BYTES,
-            _RUN_BYTES,
-        ).from_("({})", runs),
-    ).fetchone()
-    return Kind(
-        "connector runs",
-        "rows",
-        int(row["n"]),
-        int(row["b"] or 0),
-        int(row["rn"] or 0),
-        int(row["rb"] or 0),
-        f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks, newest kept",
-    )
-
-
-def _derivations(conn: sqlite3.Connection, now: datetime, retention: Retention) -> Kind:
-    """What each tick derived in shadow (DESIGN §30), which a pass removes as it does the harness's attention rows.
-
-    A tick's go once it is outside the attention list's window and started before `journal_days`: the measurement in
-    `MEASUREMENTS.md` outlives them.
-
-    Returns:
-        The kind.
-    """
-    cutoff = retention_cutoff(now, retention.journal_days)
-    window = _window(conn)
-    rows = (
-        sql.select("{} AS bytes, d.tick_id < ? AND t.started_at < ? AS removable", _DERIVED_BYTES, window, cutoff)
-        .from_("derivations d")
-        .join("ticks t ON t.id = d.tick_id")
-    )
-    row = sql.execute(
-        conn,
-        sql.select(
-            "count(*) AS n, sum(bytes) AS b, sum(removable) AS rn, sum(CASE WHEN removable THEN bytes END) AS rb",
-        ).from_("({})", rows),
-    ).fetchone()
-    return Kind(
-        "derivations",
-        "rows",
-        int(row["n"]),
-        int(row["b"] or 0),
-        int(row["rn"] or 0),
-        int(row["rb"] or 0),
-        f"journal_days = {retention.journal_days}, outside {attention.HISTORY_TICKS} ok ticks",
-    )
-
-
-# The bytes of a derivation's row: what it holds, not the pages it fills.
-_DERIVED_BYTES = sql.frag(
-    "length(CAST(d.ticket_key AS BLOB)) + coalesce(length(CAST(d.repo AS BLOB)), 0) + length(CAST(d.phases AS BLOB)) + "
-    "coalesce(length(CAST(d.stale AS BLOB)), 0) + coalesce(length(CAST(d.overseer_phase AS BLOB)), 0)",
-)
+    return [int(r[0]) for r in sql.execute(conn, newest)]
 
 
 def _journal_space(conn: sqlite3.Connection, journal: Path) -> list[Kind]:

@@ -242,16 +242,7 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     Raises:
         MigrationError: A run, chore run, review run, or task run is `running` and its process is alive.
     """
-    live: list[str] = []
-    # Every table of detached runs: each process writes its own row when it ends.
-    for table in RUN_TABLES:
-        if not sql.execute(conn, _table_named(table)).fetchone():
-            continue
-        rows = sql.execute(
-            conn,
-            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
-        )
-        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+    live = live_runs(conn)
     if live:
         runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(
@@ -653,6 +644,27 @@ _RUN_SELECT: Mapping[RunTable, sql.Select] = {
 def running_runs(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
     """Return `table`'s runs with status `running`, oldest first."""
     return sql.execute(conn, _RUN_SELECT[table].where("r.status = 'running'").order_by("r.started_at")).fetchall()
+
+
+def live_runs(conn: sqlite3.Connection) -> list[str]:
+    """Every detached run that is `running` and whose own process is alive, of every run table the journal has yet.
+
+    A run whose process is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+
+    Returns:
+        Each as `run 3`, `review run 5`, by table, then by id.
+    """
+    live: list[str] = []
+    # Every table of detached runs: each process writes its own row when it ends.
+    for table in RUN_TABLES:
+        if not sql.execute(conn, _table_named(table)).fetchone():
+            continue
+        rows = sql.execute(
+            conn,
+            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
+        )
+        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+    return live
 
 
 def busy_workers(conn: sqlite3.Connection) -> int:
