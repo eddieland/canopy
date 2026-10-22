@@ -32,7 +32,8 @@ canopy's voice today is spread through its prompts, such as the reviewer reading
 leaving alone the PR text it was not asked to change. That voice moves into a shipped persona, `canopy`, which every
 run gets unless another is chosen, and the prompts keep only the task, its obligations, and its contracts. A chosen
 persona then replaces canopy's voice rather than arguing with it. What a guard or a contract leans on stays in the
-prompt, the reviewer's rules for a finding among it.
+prompt, the reviewer's result contract among it. How the reviewer presents and ranks its findings, their words,
+severity, and order, is the persona's: the prompt gives only defaults, and canopy posts a finding's words as written.
 
 Rejected: an empty default over today's prompts, where a chosen persona and the built-in voice pull against each other
 and the result turns on which the model weighs more.

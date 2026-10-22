@@ -15,7 +15,8 @@
     "types": ["node"],
     "typeRoots": ["./node_modules/@types"],
     "paths": {
-      "@opencode-ai/plugin": ["./node_modules/@opencode-ai/plugin/dist/index.d.ts"]
+      "@opencode-ai/plugin": ["./node_modules/@opencode-ai/plugin/dist/index.d.ts"],
+      "@opencode/plugin": ["./node_modules/@opencode/plugin/dist/promise/index.d.ts"]
     }
   },
   "files": ["../../.agents/plugins/canopy.js"]

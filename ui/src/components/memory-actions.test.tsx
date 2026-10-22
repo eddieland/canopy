@@ -26,6 +26,7 @@ const ENTRY: MemoryEntry = {
     used_by: [],
     last_used_at: null,
     review_at: null,
+    pinned_at: null,
     wrong_at: null,
     wrong_run_id: null,
     promoted_from: null,
@@ -611,9 +612,35 @@ describe('LessonActions', () => {
         })
     })
 
-    it('offers Renew alone on a lesson_review item', () => {
+    it('offers Renew and Pin alone on a lesson_review item', () => {
         renderIn(<LessonActions lesson={LESSON} edit={false} forget={false} onSaid={vi.fn<(said: string) => void>()} />)
-        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Renew'])
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Renew', 'Pin'])
+    })
+
+    it('pins a lesson as `canopy memory pin` does, and says so', async () => {
+        answer = Response.json({ id: 8, pinned_at: '2026-10-08T12:00:00Z' })
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<LessonActions lesson={LESSON} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Pin' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledWith(
+                'Lesson 8 is pinned: never due for review, and served before every lesson not pinned.',
+            )
+        })
+        expect(sent).toEqual([{ path: '/api/memory/8/pin', body: undefined }])
+    })
+
+    it('unpins a pinned lesson, and says when it is next due', async () => {
+        answer = Response.json({ id: 8, review_at: '2027-01-16T12:00:00Z' })
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<LessonActions lesson={{ ...LESSON, pinned_at: '2026-10-01T12:00:00Z' }} onSaid={onSaid} />)
+        expect(screen.queryByRole('button', { name: 'Pin' })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Unpin' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledOnce()
+        })
+        expect(onSaid.mock.calls[0]?.[0]).toMatch(/^Lesson 8 is unpinned: due for review at .+\.$/u)
+        expect(sent).toEqual([{ path: '/api/memory/8/unpin', body: undefined }])
     })
 })
 
