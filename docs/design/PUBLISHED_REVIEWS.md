@@ -28,13 +28,14 @@ staged or of unknown outcome raises `review_unsettled` until a read settles it. 
 nobody, and none need ever be published.
 
 A version is exactly what would post: a body, and comments, each on a line of the diff the review kept (§21, The diff),
-on the commit's side. canopy makes the first from the review's summary and findings, a comment for each finding at its
-`path:line`; a finding, or a reviser's comment, whose location is on no such line goes into the body under its
-location as the version is made. So what the operator reads is what posts, and canopy composes nothing when it
-publishes. Each text is held to §29's bounds for a draft and refused alone, with a note on the review, never cut or
-cleaned; the operator's edits are held to the same. A version carries at most as many comments as one run's drafts,
-30, which is what one review canopy posts already holds and more than a review reports findings; a comment past it is
-refused.
+on the commit's side. canopy makes the first from the review's body, what the reviewer would tell the PR's author and
+often empty, and its findings, a comment for each finding at its `path:line`; a finding, or a reviser's comment, whose
+location is on no such line goes into the body under its location as the version is made. So what the operator reads
+is what posts, and canopy composes nothing when it publishes. The review's summary briefs the operator and stays out:
+the PR's author needs no account of their own change. Each text is held to §29's bounds for a draft and refused alone,
+with a note on the review, never cut or cleaned; the operator's edits are held to the same. A version carries at most
+as many comments as one run's drafts, 30, which is what one review canopy posts already holds and more than a review
+reports findings; a comment past it is refused.
 
 The operator edits the body or a comment, drops a comment, or adds one on a line of the diff, each a new version.
 Dismissing a finding (§21) drops its comment, one control rather than two, and taking the dismissal back restores it.

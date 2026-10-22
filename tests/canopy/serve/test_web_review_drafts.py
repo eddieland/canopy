@@ -39,7 +39,7 @@ def test_a_reviews_page_carries_its_draft_each_comment_on_its_line_of_the_diff(
     c, _ = signed_in_client(ctx)
     draft = draft_of(c, reviewed)
     assert (draft["status"], draft["version"], draft["author"], draft["channel"]) == ("waiting", 1, "reviewer", None)
-    assert draft["body"] == f"Two defects.\n\n{OFF_DIFF}"
+    assert draft["body"] == OFF_DIFF
     # The finding off the diff is a point of the review all the same, held by the body rather than a comment.
     assert draft["in_body"] == [2]
     [comment] = draft["comments"]
@@ -144,7 +144,7 @@ def test_the_page_publishes_the_version_it_showed_verbatim_once(
         "pr": THEIRS,
         "commit": sha,
         "delete_pending": None,
-        "body": f"Two defects.\n\n{OFF_DIFF}",
+        "body": OFF_DIFF,
         "comments": [
             {"path": "retry.py", "line": 1, "text": ON_LINE.text},
             {"path": "retry.py", "line": 2, "text": "Why?"},

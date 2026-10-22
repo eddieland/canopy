@@ -5,9 +5,10 @@ review on that PR, which the operator may edit, and publish in their own name (`
 names a ticket, or of a PR a ticket's unit holds, has none: the loop's own PRs keep §21's send.
 
 A version is exactly what would post: a body, and comments, each on a line of the diff the review kept (`review_diff`),
-on the commit's side. canopy makes the first from the review's summary and findings, a comment for each finding at its
+on the commit's side. canopy makes the first from the review's body and findings, a comment for each finding at its
 `path:line`; a finding whose location is on no such line goes into the body under its location as the version is
-made, so canopy composes nothing when it publishes. Each text is held to a draft's bounds (DESIGN §29) and refused
+made, so canopy composes nothing when it publishes. The review's summary is not in it: it briefs the operator on the
+PR, and its author needs no briefing on their own change. Each text is held to a draft's bounds (DESIGN §29) and refused
 alone, recorded on the version, never cut or cleaned. Dismissing a finding drops what it made, and taking the
 dismissal back restores it, each a new version.
 
@@ -340,7 +341,7 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     )
     draft_id = int(cursor.lastrowid or 0)
     body, comments, refused = _first(stored, review_runs.review_dismissals(conn, run.id), diff_of(run))
-    change = f"made from review run {run.id}'s summary and findings"
+    change = f"made from review run {run.id}'s body and findings"
     _insert_version(
         conn,
         draft_id,
@@ -360,18 +361,18 @@ def _first(
     dismissed: Collection[int],
     diff: review_diff.Diff | None,
 ) -> tuple[str, list[Comment], list[str]]:
-    """The first version of a review's draft: its summary as the body, and a comment for each finding kept.
+    """The first version of a review's draft: the review's body, and a comment for each finding kept, or in the body.
 
     Returns:
         The body, the comments, and what was left out, and why.
     """
     refused: list[str] = []
     body = ""
-    if stored.summary.strip():
+    if stored.body.strip():
         try:
-            body = checked(stored.summary)
+            body = checked(stored.body)
         except TextRefused as e:
-            refused.append(f"the summary: {e}")
+            refused.append(f"the body: {e}")
     comments: list[Comment] = []
     for number, finding in enumerate(stored.findings, 1):
         if number not in dismissed:
