@@ -48,6 +48,15 @@ def reviewed(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_pa
 
 
 @pytest.fixture
+def requested(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool, tmp_path: Path) -> int:
+    """A `done` review of `THEIRS` the operator asked for, at `feature_commit`'s commit. Returns its run's id."""
+    del reviewing
+    sha = feature_commit(git_pool, tmp_path)
+    scenario.operator("start", THEIRS, "--review")
+    return scenario.review(reviews(sha, THEIRS), reviewer=reviewer_reports(REPORT)).id
+
+
+@pytest.fixture
 def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     """The workspace's journal, migrated."""
     return canopy_env.journal()
