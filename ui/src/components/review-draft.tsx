@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { GitPullRequestDraft, Pencil, Send, Trash2 } from 'lucide-react'
-import { useId, useState } from 'react'
-import type { SubmitEvent } from 'react'
+import { GitPullRequestDraft, Pencil, Send } from 'lucide-react'
+import { useState } from 'react'
 
 import {
     addReviewDraftComment,
@@ -13,21 +12,18 @@ import {
     showReviewDraft,
 } from '@/api/mutations'
 import type { ReviewDraft, ReviewDraftComment } from '@/api/types'
-import { Textarea } from '@/components/input'
+import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { ListRow } from '@/components/rows'
-import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { MAX_DRAFT_CHARS, draftChars } from '@/lib/drafts'
 import { reviewDraftEditedText, reviewDraftPublishedText, reviewDraftPublishedToast } from '@/lib/outcomes'
 import { REVIEW_DRAFT_TONE, commentAnchor, editable, versionBy } from '@/lib/review-drafts'
 import type { Adding } from '@/lib/review-drafts'
 import { shortSha } from '@/lib/reviews'
-import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 // What the draft is, around the commit the review read.
@@ -369,44 +365,20 @@ export function DraftCommentCard({
     })
     const open = editable(draft)
     return (
-        <article
+        <DraftCardFrame
             id={commentAnchor(comment.number)}
-            className="scroll-mt-16 rounded-md border border-accent/40 bg-surface p-3 text-sm"
-            data-testid="draft-comment"
-        >
-            <header className="flex flex-wrap items-center gap-2">
-                <span className="panel-label">Comment {comment.number}</span>
-                <Chip>{comment.finding === null ? 'yours' : `from finding ${comment.finding}`}</Chip>
-                <span className="font-mono text-xs break-all text-muted-foreground">
-                    {comment.path}:{comment.line}
-                </span>
-                {open && !editing && (
-                    <span className="ml-auto flex items-center gap-1">
-                        <Button
-                            size="xs"
-                            variant="ghost"
-                            className="-my-1 text-muted-foreground"
-                            onClick={() => setEditing(true)}
-                            disabled={drop.isPending}
-                            title={`canopy review edit ${run} --comment ${comment.number} --text TEXT`}
-                        >
-                            <Pencil />
-                            edit
-                        </Button>
-                        <Button
-                            size="xs"
-                            variant="ghost"
-                            className="-my-1 text-muted-foreground"
-                            onClick={() => drop.mutate()}
-                            disabled={drop.isPending}
-                            title={`canopy review edit ${run} --drop ${comment.number}`}
-                        >
-                            <Trash2 />
-                            drop
-                        </Button>
+            waiting={open}
+            testId="draft-comment"
+            header={
+                <>
+                    <span className="panel-label">Comment {comment.number}</span>
+                    <Chip>{comment.finding === null ? 'yours' : `from finding ${comment.finding}`}</Chip>
+                    <span className="font-mono text-xs break-all text-muted-foreground">
+                        {comment.path}:{comment.line}
                     </span>
-                )}
-            </header>
+                </>
+            }
+        >
             {editing ? (
                 <DraftTextForm
                     label={`Edit comment ${comment.number} of review run ${run}'s draft`}
@@ -422,10 +394,24 @@ export function DraftCommentCard({
             ) : (
                 <MemoryText text={comment.text} lines className="mt-1.5 block" />
             )}
+            {open && !editing && (
+                <DraftVerbs>
+                    <EditVerb
+                        onClick={() => setEditing(true)}
+                        disabled={drop.isPending}
+                        title={`canopy review edit ${run} --comment ${comment.number} --text TEXT`}
+                    />
+                    <DropVerb
+                        onClick={() => drop.mutate()}
+                        disabled={drop.isPending}
+                        title={`canopy review edit ${run} --drop ${comment.number}`}
+                    />
+                </DraftVerbs>
+            )}
             <Notice error={drop.error} className="mt-1.5">
                 {said}
             </Notice>
-        </article>
+        </DraftCardFrame>
     )
 }
 
@@ -436,13 +422,18 @@ export function DraftCommentCard({
 export function NewCommentCard({ run, adding, onDone }: { run: number; adding: Adding; onDone: () => void }) {
     const client = useQueryClient()
     return (
-        <article className="rounded-md border border-accent/40 bg-surface p-3 text-sm" data-testid="new-draft-comment">
-            <header className="flex flex-wrap items-center gap-2">
-                <span className="panel-label">New comment</span>
-                <span className="font-mono text-xs break-all text-muted-foreground">
-                    {adding.path}:{adding.line}
-                </span>
-            </header>
+        <DraftCardFrame
+            waiting
+            testId="new-draft-comment"
+            header={
+                <>
+                    <span className="panel-label">New comment</span>
+                    <span className="font-mono text-xs break-all text-muted-foreground">
+                        {adding.path}:{adding.line}
+                    </span>
+                </>
+            }
+        >
             <DraftTextForm
                 label={`Comment on ${adding.path}:${adding.line}`}
                 initial=""
@@ -453,7 +444,7 @@ export function NewCommentCard({ run, adding, onDone }: { run: number; adding: A
                 }}
                 onCancel={onDone}
             />
-        </article>
+        </DraftCardFrame>
     )
 }
 
@@ -476,60 +467,16 @@ function DraftTextForm({
     onSaved: (saved: ReviewDraft) => void
     onCancel: () => void
 }) {
-    const id = useId()
-    const sendKeys = useSendKeys()
     const [text, setText] = useState(initial)
-    const edit = useMutation({ mutationFn: () => save(text), onSuccess: onSaved })
-    const chars = draftChars(text)
-    const fits = (allowEmpty || text.trim() !== '') && chars <= MAX_DRAFT_CHARS
-
-    function submit(event: SubmitEvent<HTMLFormElement>) {
-        event.preventDefault()
-        if (fits && !edit.isPending) {
-            edit.mutate()
-        }
-    }
-
     return (
-        <form onSubmit={submit} aria-label={label} className="mt-1.5 flex flex-col gap-2">
-            <span className="flex items-baseline justify-between gap-3">
-                <label className="panel-label" htmlFor={`${id}-text`}>
-                    In your words
-                </label>
-                <span
-                    className={cn(
-                        'readout text-xs text-muted-foreground',
-                        chars > MAX_DRAFT_CHARS && 'text-status-failed',
-                    )}
-                >
-                    {chars} of {MAX_DRAFT_CHARS}
-                </span>
-            </span>
-            <Textarea
-                id={`${id}-text`}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                onKeyDown={sendKeys.onKeyDown}
-                spellCheck
-                // oxlint-disable-next-line jsx-a11y/no-autofocus -- the form opens on the operator's click, to type in.
-                autoFocus
-                className="min-h-20"
-            />
-            <span className="flex flex-wrap items-center gap-2">
-                <Button
-                    type="submit"
-                    size="sm"
-                    disabled={edit.isPending || !fits}
-                    aria-keyshortcuts={sendKeys.shortcut}
-                >
-                    Save
-                    <SendKeycap keys={sendKeys.shortcut} />
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={edit.isPending}>
-                    Cancel
-                </Button>
-            </span>
-            <Notice error={edit.error} />
-        </form>
+        <DraftForm
+            label={label}
+            text={text}
+            onText={setText}
+            fits={allowEmpty || text.trim() !== ''}
+            save={() => save(text)}
+            onSaved={onSaved}
+            onCancel={onCancel}
+        />
     )
 }

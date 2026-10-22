@@ -382,11 +382,11 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
 
     // Each comment is edited and dropped on its card, at its line of the diff.
     const first = comments.filter({ hasText: 'Comment 1' })
-    await first.getByRole('button', { name: 'edit' }).click()
+    await first.getByRole('button', { name: 'Edit' }).click()
     await first.getByRole('textbox', { name: 'In your words' }).fill('Raise once the attempts run out.')
     await first.getByRole('button', { name: 'Save' }).click()
     await expect(first).toContainText('Raise once the attempts run out.')
-    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'drop' }).click()
+    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'Drop' }).click()
     await expect(comments).toHaveCount(1)
 
     // A comment of the operator's own, on any line of the diff.
