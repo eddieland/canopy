@@ -24,8 +24,6 @@ differently. They are your instructions. Do what they ask and keep the rest of t
 Version 1.
 
 The body:
-> Two defects.
-> 
 > `tests/test_retry.py:3`
 > 
 > no tests

@@ -281,12 +281,14 @@ Result contract, the last line of the reviewer's text (§13), validated (D026); 
 
 ```json
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",
- "summary":"a paragraph, line breaks sparingly","pr_title":"the PR's title as it stands",
+ "summary":"a paragraph, line breaks sparingly","body":"what to tell the PR's author beyond the findings, or nothing",
+ "pr_title":"the PR's title as it stands",
  "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
 ```
 
 `verdict` is `findings` exactly when there are findings, and `low` without `review.low_impact` is recorded as `normal`.
-`pr_title` is the PR author's text, for display only (§8).
+`pr_title` is the PR author's text, for display only (§8). `summary` is for the operator; `body` is for the PR's author,
+and only a draft (§34) uses it.
 
 ### The overseer's part
 
