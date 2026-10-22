@@ -113,6 +113,9 @@ not go in the middle of the sequence.
   - [37. The harness decides what needs no judgment](HARNESS_DECIDES.md#37-the-harness-decides-what-needs-no-judgment)
 - [Artifacts](ARTIFACTS.md): pages workers publish, the comments people leave on them, and how those come back.
   - [38. Artifacts and Louvre](ARTIFACTS.md#38-artifacts-and-louvre)
+- [A tick without the overseer](WITHOUT_THE_OVERSEER.md): the tick that runs no overseer when nothing is left to
+  judge, and the loop that ticks when the connectors see a change.
+  - [39. A tick without the overseer](WITHOUT_THE_OVERSEER.md#39-a-tick-without-the-overseer)
 
 ## 1. Problem
 
