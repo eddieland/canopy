@@ -84,14 +84,15 @@ overseer_instructions = "~/.config/canopy/overseer-instructions.md"
   `overseer_instructions` goes at the end of the overseer's prompt and never reaches a worker.
 - They are yours alone: set them in your user file or the private one, never the shared workspace file.
 - Each file is at most 4 KiB. One canopy cannot read, or over the limit, refuses the run as `bad_prompt`, and fails the
-  tick for the overseer's, rather than running without it. A prompt override of yours must keep `{{STANDING_SECTION}}`.
+  tick for the overseer's, rather than running without it. A prompt override of yours must keep
+  `{{STANDING_SECTION}}`, or the older `{{STANDING_INSTRUCTIONS}}`.
 - `reviewer_instructions` and `chore_instructions` do the same for reviews and chore runs.
 
 **The overseer's lines pay off most when they say how to call the tracker.** For a Jira tracker,
 `overseer-instructions.md` might read:
 
 ```markdown
-- Our Jira site is example.atlassian.net, cloud id `<cloud-id>`. Pass it on every Jira call. Never use
+- Our Jira site is example.atlassian.net, cloud id `<cloud-id>`. Pass it on every Jira call that takes one. Never use
   example-sandbox.atlassian.net or another site the server lists.
 - In a JQL search, request only the fields `summary, status, labels, issuelinks, updated`. Read a ticket's comments
   with a call for that ticket alone.
