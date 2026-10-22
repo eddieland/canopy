@@ -36,7 +36,8 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Tickets](/tickets): every ticket canopy has worked on, and a form to start a new one.
 - [Pull requests](/pull-requests): every PR canopy knows about, the ones it opened and the ones it reviewed, with their
   runs and reviews.
-- [Reviews](/reviews): the PR reviews canopy kept to itself instead of posting, with their findings pinned to the diff.
+- [Reviews](/reviews): canopy's PR reviews, kept in the journal, with their findings pinned to the diff. One of a
+  coworker's PR is also a draft you may publish as your own; nothing posts until you do.
 - [Runs](/runs): every agent canopy runs, workers, reviews, and chores alike, the ones running now first, and how
   full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
   thinking, this is the receipt.

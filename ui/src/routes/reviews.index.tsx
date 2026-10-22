@@ -17,11 +17,11 @@ import { repoListOf } from '@/lib/repo-filter'
 import { unseenOf, useMarkSeen } from '@/lib/seen-reviews'
 
 /**
- * canopy's latest review runs, newest first: the shadow PR reviews it keeps instead of posting them. A PR the operator
- * asked to have reviewed is a row from the moment they ask, waiting on a tick, until its review starts. `?repo=` keeps
- * the reviews of PRs in its repositories, and `?q=` those whose PR, ticket, or commit holds every word. A result new to
- * the operator is marked so, as the nav counts it, until its page shows it or the header's button marks every one
- * seen.
+ * canopy's latest review runs, newest first: the shadow PR reviews it keeps, each on a PR the loop does not own also a
+ * draft the operator may publish. A PR the operator asked to have reviewed is a row from the moment they ask, waiting
+ * on a tick, until its review starts. `?repo=` keeps the reviews of PRs in its repositories, and `?q=` those whose PR,
+ * ticket, or commit holds every word. A result new to the operator is marked so, as the nav counts it, until its page
+ * shows it or the header's button marks every one seen.
  */
 export const Route = createFileRoute('/reviews/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
