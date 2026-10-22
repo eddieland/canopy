@@ -36,9 +36,10 @@ class Duties:
     """What a tick's state block asked of the overseer.
 
     `tickets` are the block's tickets, each owed a decision. The tickets `canopy queried` names are owed one too, read
-    when the tick ends, except the block's `stopped` and `recently_done`, which are owed nothing. `chores` are the
-    chores due and not running, each owed `chore run` or `chore wait`. `harness` is the newest decision recorded before
-    the overseer ran: those are the harness's, and never count as the overseer's.
+    when the tick ends, except the block's `stopped` and `recently_done`, and those the harness decided this tick
+    (DESIGN §37), which are owed nothing. `chores` are the chores due and not running, each owed `chore run` or `chore
+    wait`. `harness` is the newest decision recorded before the overseer ran: those are the harness's, and never count
+    as the overseer's.
     """
 
     query_due: bool
@@ -56,9 +57,12 @@ def owed(
     tickets: Iterable[records.Ticket],
     stopped: Iterable[str],
     recently_done: Iterable[sqlite3.Row],
+    decided: Iterable[str] = (),
     chores: Iterable[chore_view.ChoreSummary],
 ) -> Duties:
     """What the state block rendered from these asks of the overseer, read just before it runs.
+
+    `decided` are the tickets the harness decided this tick, which the block names instead of listing (DESIGN §37).
 
     Returns:
         The tick's duties.
@@ -67,7 +71,7 @@ def owed(
     return Duties(
         query_due=query_due,
         tickets=frozenset(t.key for t in tickets),
-        exempt=frozenset([*stopped, *(str(t["key"]) for t in recently_done)]),
+        exempt=frozenset([*stopped, *(str(t["key"]) for t in recently_done), *decided]),
         chores=frozenset(c["name"] for c in chores if c["due"] and not c["running"]),
         harness=max((d.id for d in recorded), default=0),
     )

@@ -54,7 +54,8 @@ in order:
    of one server does not hold work that needs nothing from it (§15).
 
    **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7); a
-   decision for every ticket in the block and every ticket the query returned, except those stopped or recently done;
+   decision for every ticket in the block and every ticket the query returned, except those stopped, recently done, or
+   decided by the harness (§37);
    and a run, wait, or refusal for every chore due. A duty left undone closes the tick `overseer_failed`, naming each,
    so the attention list stands and the query stays due; its dispatches stand. Why: the prompt alone did not hold a
    cheaper overseer to the procedure, and a skipped query stalls new work with no tick failing (MEASUREMENTS

@@ -38,7 +38,7 @@ from pydantic_core import PydanticUndefined
 from canopy.core import config, contract, conversation, db, memory, vocab
 from canopy.core.vocab import ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
-from canopy.loop import attention, claims, duties
+from canopy.loop import attention, claims, duties, harness
 from canopy.reviews import findings, grants
 from canopy.runs import dispatch, policy
 
@@ -66,6 +66,8 @@ MAX_TITLE = 80
 MAX_PR_URL = 300
 #: What `decide` records.
 DECIDE_ACTIONS = ("wait", "skip", "done")
+#: The guard that refuses what the overseer records about a ticket the harness decided (DESIGN §37).
+DECIDED = "decided"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
 
@@ -400,6 +402,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
     unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
     tick_id = current.id
+    _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
     handles = _handles(cursor_pairs, request.review_run)
@@ -549,10 +552,11 @@ def decide(ctx: Context, request: Decide) -> str:
         What the command prints.
 
     Raises:
-        Refused: Outside a running tick.
+        Refused: Outside a running tick, or about a ticket the harness decided this tick, which is recorded.
     """
     current = running_tick(ctx)
     if request.key is not None:
+        _refuse_decided(ctx, current.id, request.key, "decide")
         db.touch_ticket(ctx.conn, request.key, ctx.repo)
     db.record_decision(ctx.conn, current.id, request.key, request.action, request.rationale)
     return f"recorded {request.action} for {request.key or 'this tick'}"
@@ -624,12 +628,14 @@ def attend(ctx: Context, request: Attention) -> str:
         What the command prints.
 
     Raises:
-        Refused: Outside a running tick, or `repo` is not a repository in this workspace.
+        Refused: Outside a running tick, `repo` is not a repository in this workspace, or the item is about a ticket
+            the harness decided this tick, which is recorded.
     """
     current = running_tick(ctx)
     key, pr, detail = request.key, request.pr, request.detail
     unit = _unit(ctx, request.repo)
     if key is not None:
+        _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
     if request.reason == "review_limit" and pr is not None:
         # However the overseer words it, the item names what lifts the limit (DESIGN §21).
@@ -694,7 +700,8 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
         What the command prints, naming what a dry run did not do.
 
     Raises:
-        Refused: CANOPY_TICK_ID names no running tick, or `repo` is not a repository in this workspace.
+        Refused: CANOPY_TICK_ID names no running tick, `repo` is not a repository in this workspace, or inside a tick
+            the harness decided the ticket in, which is recorded.
     """
     key, phase, done = request.key, request.phase, request.done
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
@@ -702,6 +709,8 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
     unit_phase = phase if phase in vocab.UNIT_PHASES else None
     unit = _unit(ctx, request.repo)
     current = current_tick(ctx)
+    if current is not None:
+        _refuse_decided(ctx, current.id, key, "ticket set")
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
     dry_run = current is not None and current.dry_run
@@ -824,6 +833,23 @@ def running_tick(ctx: Context) -> records.Tick:
             f"no tick is running ({conversation.TICK_ID_ENV} is not set); the overseer's verbs run only inside one",
         )
     return row
+
+
+def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
+    """Refuse the overseer's `verb` about ticket `key` when the harness decided it in tick `tick_id` (DESIGN §37).
+
+    The overseer was not shown the ticket, and the harness's decision stands: a steered overseer cannot overrule it
+    (TRUST_MODEL T1). The refusal is recorded, as a guard's is.
+
+    Raises:
+        Refused: The harness decided the ticket this tick.
+    """
+    if not harness.decided(ctx.conn, tick_id, key):
+        return
+    reason = f"the harness decided {key} this tick (the state block's `harness`); record nothing about it"
+    db.record_decision(ctx.conn, tick_id, key, f"refused:{DECIDED}", reason)
+    logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
+    raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
 
 
 # How the verbs above do their parts.

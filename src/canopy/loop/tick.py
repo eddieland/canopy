@@ -31,9 +31,20 @@ from canopy.core import (
 )
 from canopy.core.config import render_command
 from canopy.core.items import one_line
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import Decider, TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, archive, attention, connectors, duties, gc_pass, observations, phases, state
+from canopy.loop import (
+    acknowledge,
+    archive,
+    attention,
+    connectors,
+    duties,
+    gc_pass,
+    harness,
+    observations,
+    phases,
+    state,
+)
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -184,7 +195,10 @@ def _render(
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
-    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped]
+    # A ticket the harness decided is named with its decision, and nothing else of it is shown (DESIGN §37).
+    by_harness = harness.recorded(ctx.conn, tick_id)
+    decided = frozenset(str(d.ticket_key) for d in by_harness)
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
     planned = _plans(ctx, tickets)
@@ -206,6 +220,7 @@ def _render(
         tickets=tickets,
         stopped=stopped,
         recently_done=recently_done,
+        harness=harness.section(by_harness),
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, shown),
@@ -225,7 +240,7 @@ def _render(
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
-        observations=observations.section(ctx, tick_id, now, tickets),
+        observations=observations.section(ctx, tick_id, now, tickets, decided=decided),
     )
     owed = duties.owed(
         ctx.conn,
@@ -234,6 +249,7 @@ def _render(
         tickets=tickets,
         stopped=stopped,
         recently_done=recently_done,
+        decided=decided,
         chores=chores,
     )
     title = session_title(
@@ -352,11 +368,13 @@ def _steps(
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)
     # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
     feedback_plans.note_moves(ctx.conn, ctx.config)
-    _derive(ctx, tick_id, log)
+    derived = _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
     _record_harness_items(ctx, tick_id, archive_unpushed)
+    # Before the overseer, which is then shown only the tickets left to it (DESIGN §37).
+    _harness_decides(ctx, tick_id, derived, log)
 
     now = datetime.now(UTC)
     query_due = _query_due(ctx, now)
@@ -401,19 +419,40 @@ def _steps(
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
-def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.Derived]:
     """Derive §7's table from what the connectors observed, and record it beside the decisions (DESIGN §30).
 
-    In shadow: what it raises is logged, never the tick's outcome, and nothing the overseer reads changes.
+    What it raises is logged, never the tick's outcome: the harness then decides nothing, and every ticket is the
+    overseer's.
+
+    Returns:
+        What it derived; nothing when it raised.
     """
     try:
         derived = phases.derive(ctx, datetime.now(UTC))
         phases.record(ctx.conn, tick_id, derived)
     except Exception as e:
         log.exception("deriving the phases raised", extra={"error": str(e)})
-        return
+        return []
     stale = sum(d.stale is not None for d in derived)
     log.info("phases derived", extra={"subjects": len(derived), "stale": stale})
+    return derived
+
+
+def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derived], log: logs.TickAdapter) -> None:
+    """Record the decisions the harness makes in code from the derivation, before the overseer runs (DESIGN §37).
+
+    What it raises is logged, never the tick's outcome: what it recorded is undone with it, so every ticket is the
+    overseer's.
+    """
+    try:
+        decided = harness.decide(ctx, derived)
+        harness.record(ctx.conn, tick_id, ctx.repo, decided)
+    except Exception as e:
+        log.exception("the harness's decisions raised", extra={"error": str(e)})
+        return
+    if decided:
+        log.info("harness decided", extra={"tickets": [d.key for d in decided]})
 
 
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
@@ -446,52 +485,50 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
     `archive_unpushed` is what this tick's archive pass found not pushed, if anything (DESIGN §25).
     """
     for item in attention.from_runs(ctx.conn):
-        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+        _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
     # public ticket, since the planner writes nothing to the ticket (DESIGN §25).
     for waiting in [*conversation.awaiting(ctx.conn), *plans.awaiting(ctx.conn)]:
-        db.record_decision(
-            ctx.conn,
-            tick_id,
-            waiting.key,
-            f"{attention.ACTION_PREFIX}awaiting_reply",
-            attention.awaiting_detail(waiting),
-        )
+        _harness_item(ctx, tick_id, waiting.key, "awaiting_reply", attention.awaiting_detail(waiting))
     # The tickets runs reported that the journal could not record (§18). Those it recorded the sinks heard of once.
     for item in follow_ups.unrecorded(ctx.conn):
-        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+        _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
-        action = f"{attention.ACTION_PREFIX}{remembered.reason}"
-        db.record_decision(ctx.conn, tick_id, remembered.ticket_key, action, remembered.detail)
+        _harness_item(ctx, tick_id, remembered.ticket_key, remembered.reason, remembered.detail)
     for draft in drafted.waiting(ctx.conn):
-        action = f"{attention.ACTION_PREFIX}{drafted.WAITING_REASON}"
-        db.record_decision(ctx.conn, tick_id, draft.ticket_key, action, draft.detail, repo=draft.repo)
+        _harness_item(ctx, tick_id, draft.ticket_key, drafted.WAITING_REASON, draft.detail, repo=draft.repo)
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
-        action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
-        db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
+        _harness_item(ctx, tick_id, None, chore_view.FAILED_REASON, failed.detail, chore=failed.chore)
     _record_connector_failed(ctx, tick_id)
     if archive_unpushed is not None:
-        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{archive.REASON}", archive_unpushed)
+        _harness_item(ctx, tick_id, None, archive.REASON, archive_unpushed)
     for repo in ctx.workspace.repos:
         # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
         if not repo.cloned:
             detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
-            db.record_decision(
-                ctx.conn,
-                tick_id,
-                None,
-                f"{attention.ACTION_PREFIX}repo_missing",
-                detail,
-                repo=repo.name,
-            )
+            _harness_item(ctx, tick_id, None, "repo_missing", detail, repo=repo.name)
+
+
+def _harness_item(
+    ctx: Context,
+    tick_id: int,
+    key: str | None,
+    reason: str,
+    detail: str,
+    *,
+    repo: str | None = None,
+    chore: str | None = None,
+) -> None:
+    """Record an attention item the harness raises, marked as its own (DESIGN §37, TRUST_MODEL T5)."""
+    action = f"{attention.ACTION_PREFIX}{reason}"
+    db.record_decision(ctx.conn, tick_id, key, action, detail, repo=repo, chore=chore, decider=Decider.HARNESS)
 
 
 def _record_connector_failed(ctx: Context, tick_id: int) -> None:
     """Record one item for every source whose run this tick read less than it was asked, each named in its detail."""
     sources = connector_runs.failures(ctx.conn, tick_id)
     if sources:
-        action = f"{attention.ACTION_PREFIX}{connector_runs.FAILED_REASON}"
-        db.record_decision(ctx.conn, tick_id, None, action, "; ".join(s.detail for s in sources))
+        _harness_item(ctx, tick_id, None, connector_runs.FAILED_REASON, "; ".join(s.detail for s in sources))
 
 
 def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
@@ -511,8 +548,7 @@ def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus
             return None
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
         then = "Make `canopy --version` work where the loop runs"
-    detail = f"{summary}; the overseer did not run. {then}"
-    db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{status}", detail)
+    _harness_item(ctx, tick_id, None, status, f"{summary}; the overseer did not run. {then}")
     return status, summary
 
 
