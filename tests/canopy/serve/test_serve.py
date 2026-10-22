@@ -49,7 +49,7 @@ from canopy.serve.event_schema import (
     TickUpdated,
 )
 from canopy.serve.guard import MAX_BODY_BYTES, host_name
-from canopy.serve.options import ServeOptions
+from canopy.serve.options import STREAM_SECONDS, ServeOptions
 from canopy.serve.schema import TicketSummary
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
@@ -589,6 +589,14 @@ def test_a_stream_with_a_lifetime_ends_on_its_own_after_its_first_events(ui: Pat
     assert {type(e.root) for e in events} >= {AttentionUpdated, RunsUpdated, TicketsUpdated}
     assert isinstance(events[-1].root, StreamEnding)
     assert not any(isinstance(e.root, StreamEnding) for e in events[:-1])
+
+
+def test_every_server_ends_its_streams_unless_told_a_shorter_lifetime() -> None:
+    # A forwarder can hold a stream open after its page has gone (#1299): only the lifetime ends it then.
+    assert ServeOptions().stream_seconds == STREAM_SECONDS
+    assert ServeOptions(stream_seconds=60).stream_seconds == 60
+    with pytest.raises(ValidationError):
+        ServeOptions.model_validate({"stream_seconds": None})
 
 
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
