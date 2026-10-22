@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, feedback_items, feedback_plans, plans
+from canopy.core import conversation, db, feedback_items, feedback_plans, plans, records
 from canopy.core.config import load
 from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
 from tests.canopy.helpers import (
@@ -166,6 +166,144 @@ def test_a_resume_for_no_pr_alone_waits_on_no_plan(scenario: Scenario) -> None:
     assert run.row["feedback_plan_id"] is None
 
 
+#: The planner's result for a plan that changes nothing: a decline for alice's comment, and bob's left alone.
+NOTHING = {
+    "status": "done",
+    "summary": "planned the round",
+    "items": [
+        {"id": 501, "proposal": "decline", "reply": "Kept: the name is the API's."},
+        {"id": 502, "proposal": "leave"},
+    ],
+}
+GREEN = {"name": "build", "status": "completed", "conclusion": "success"}
+
+
+def planned_nothing(scenario: Scenario, github_state: Path) -> records.FeedbackPlan:
+    """A feedback plan run on alice's and bob's comments, `build` green, that proposes no change for either.
+
+    Returns:
+        Its plan.
+    """
+    github_shows(github_state, ALICE, BOB, checks=(GREEN,))
+    run = scenario.run(FEEDBACK_PLAN, worker=planner_does(plan=TEXT, result=NOTHING))
+    assert run.status == RunStatus.DONE, run
+    return present(feedback_plans.current(scenario.conn, KEY))
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_plan_that_changes_nothing_goes_ahead_without_approval_once(scenario: Scenario, github_state: Path) -> None:
+    # Under `trust.review_replies = "approve"`, its default, the resume only drafts replies, which wait on the operator.
+    conn = scenario.conn
+    with_a_pr(scenario)
+    plan = planned_nothing(scenario, github_state)
+    newest = read_again(scenario)
+    assert (newest["status"], newest["goes_ahead"]) == ("proposed", True)
+
+    resume = scenario.run(RESUME)
+    assert resume.status == RunStatus.DONE
+    assert resume.row["feedback_plan_id"] == plan.id
+    assert "is the feedback plan its planner wrote for this round of the PR's feedback" in resume.prompt
+    assert "Change no code, and commit and push nothing" in resume.prompt
+    assert f"1. id 501, on {PR}: decline\n2. id 502, on {PR}: leave" in resume.prompt
+    # Its go-ahead is recorded as its approval, never the operator's, and spent as one is: it goes ahead once.
+    spent = present(feedback_plans.get(conn, plan.id))
+    assert (spent.status, spent.approved_channel, spent.spent_run_id) == (
+        PlanStatus.APPROVED,
+        feedback_plans.CHANGES_NOTHING,
+        resume.id,
+    )
+    assert spent.approved_sha256 == plan.sha256
+    assert spent.approved_message_id is None
+    shown = scenario.operator("show", KEY).out
+    assert "ago without approval: it changes no code, and the replies its resume drafts wait on the operator" in shown
+    [(action, reason)] = scenario.refuses(RESUME)
+    assert action == "refused:unplanned"
+    assert f"feedback plan {plan.id} went ahead with run {resume.id} already" in reason
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_plan_that_changes_nothing_is_approved_as_any_is_under_post_replies(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    # Under `post`, its replies would go out unseen.
+    with_a_pr(scenario)
+    scenario.configures("private", trust={"review_replies": "post"})
+    plan = planned_nothing(scenario, github_state)
+    assert read_again(scenario)["goes_ahead"] is False
+    [(action, reason)] = scenario.refuses(RESUME)
+    assert action == "refused:unplanned"
+    assert reason.endswith(
+        f"feedback plan {plan.id}, which the operator has not approved, and it needs their approval: "
+        'trust.review_replies is "post", so the replies it proposes would go out unseen',
+    )
+    scenario.operator("plan", KEY, "--approve")
+    resume = scenario.run(RESUME)
+    assert "is the feedback plan the operator approved" in resume.prompt
+    assert present(feedback_plans.get(scenario.conn, plan.id)).spent_run_id == resume.id
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize(
+    ("result", "reasons", "why"),
+    [
+        pytest.param(PLANNED, [ResumeReason.REVIEW], "it proposes a change, or covers no review item", id="a change"),
+        pytest.param(
+            {"status": "done", "summary": "planned the round"},
+            [ResumeReason.REVIEW],
+            "it proposes a change, or covers no review item",
+            id="no item",
+        ),
+        pytest.param(
+            NOTHING,
+            [ResumeReason.REVIEW, ResumeReason.CONFLICT],
+            "a resume for more than review feedback changes code whatever its items propose",
+            id="more than review",
+        ),
+    ],
+)
+def test_a_plan_that_may_change_code_still_waits_on_the_operator(
+    scenario: Scenario,
+    github_state: Path,
+    result: dict[str, object],
+    reasons: list[ResumeReason],
+    why: str,
+) -> None:
+    with_a_pr(scenario)
+    github_shows(github_state, ALICE, BOB, checks=(GREEN,))
+    scenario.run(FEEDBACK_PLAN, worker=planner_does(plan=TEXT, result=result))
+    assert read_again(scenario)["goes_ahead"] is (result is NOTHING)
+    [(action, reason)] = scenario.refuses(dispatches(kind=RunKind.RESUME, reasons=reasons))
+    assert action == "refused:unplanned"
+    assert reason.endswith(f"and it needs their approval: {why}")
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_plan_that_changes_nothing_waits_once_stale_edited_or_answered(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    with_a_pr(scenario)
+    plan = planned_nothing(scenario, github_state)
+    # The operator edits its file: it is no longer as its planner wrote it.
+    path = plan_file(scenario.env, plan.run_id)
+    path.write_text(f"{TEXT}\nChange it after all.\n")
+    assert read_again(scenario)["goes_ahead"] is False
+    assert scenario.refuses(RESUME)[0][1].endswith("its file is no longer as its planner wrote it")
+    path.write_text(TEXT)
+    # A reply on the ticket asks for changes to it.
+    scenario.operator("reply", KEY, "Rename it after all.")
+    assert scenario.refuses(RESUME)[0][1].endswith("the operator asked for changes to it")
+
+    # A new comment makes the plan stale: it is planned again, never followed.
+    again = planned_nothing(scenario, github_state)
+    github_shows(github_state, ALICE, BOB, comment(601, "PRRT_3", author="carol", body="And this."), checks=(GREEN,))
+    newest = read_again(scenario)
+    assert (newest["id"], newest["stale"], newest["goes_ahead"]) == (again.id, True, False)
+    assert scenario.refuses(RESUME)[0][1].endswith("its PRs changed since it was written")
+    assert present(feedback_plans.get(scenario.conn, again.id)).status is PlanStatus.PROPOSED
+
+
 @pytest.mark.usefixtures("git_pool")
 def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario, github_state: Path) -> None:
     with_a_pr(scenario, approve=False)
@@ -293,6 +431,7 @@ def test_the_state_block_carries_the_feedback_plan_only_while_feedback_plans_tou
             "spent": False,
             "stale": False,
             "quiet_passed": True,
+            "goes_ahead": False,
         },
         "changes_asked": False,
         "blocked": False,

@@ -811,6 +811,8 @@ def _show_feedback_plan(ctx: Context, key: str) -> None:
     if plan.approved_at is not None and plan.approved_channel == plans.PLANNER:
         reason = conversation.printable(plan.approved_reason or "")
         click.echo(f"  approved {attention.age(plan.approved_at)} ago by the planner: {reason}")
+    elif plan.approved_at is not None and plan.approved_channel == feedback_plans.CHANGES_NOTHING:
+        click.echo(f"  went ahead {attention.age(plan.approved_at)} ago without approval: {feedback_plans.WENT_AHEAD}")
     elif plan.approved_at is not None:
         message = f", message {plan.approved_message_id}" if plan.approved_message_id is not None else ""
         click.echo(f"  approved {attention.age(plan.approved_at)} ago via {plan.approved_channel}{message}")

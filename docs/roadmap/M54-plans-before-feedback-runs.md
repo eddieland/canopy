@@ -115,6 +115,15 @@ out goes to the next plan as an uncovered item does; and the overseer gives the 
 named by its number on input, and by number and id wherever canopy mentions it; and an approval answers no question a
 run asked, which still waits on a reply. Settled for it, open to the operator: an approved plan not yet spent may be
 approved again for other items or with a message, which writes a new message; whole approval writes a message too; and
-an item left out is not marked handled, so its next plan offers it whatever changed. Left: the PR page's threads view
-and T8's web approval, drafts starting from the plan, the plan that changes nothing, and failed checks and conflicts as
-items with ids of their own.
+an item left out is not marked handled, so its next plan offers it whatever changed. Built 2026-10-22, against the
+fakes, the plan that changes nothing: under `trust.review_replies = "approve"`, a waiting plan whose items are all
+`decline`, `ask`, or `leave` lets a `resume` for `review` alone through `unplanned` without approval, its prompt naming
+its items as an approved plan's does and saying to change no code and push nothing; the `resume` that starts records
+its go-ahead as the plan's approval, of the file as written, by channel `changes-nothing`, and spends it, so it goes
+ahead once (TRUST_MODEL T1). The state block's `newest.goes_ahead` says so, and the overseer then gives its unit the
+phase from the table and raises no `plan_review`. Under `post` it is refused `unplanned` until approved. Settled for
+it, open to the operator: a plan that covers no item is not one, since its `resume` works the round's other reasons,
+such as red CI; a `resume` with any reason but `review` needs approval whatever its items propose; and a plan stale,
+edited since its planner wrote it, or replied to waits on the operator as any does, so it is planned again or
+approved, never followed as it stands. Left: the PR page's threads view and T8's web approval, drafts starting from
+the plan, and failed checks and conflicts as items with ids of their own.

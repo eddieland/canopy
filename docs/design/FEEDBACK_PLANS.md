@@ -7,7 +7,7 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 ## 32. Plans before feedback runs
 
 Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole or by item from the CLI and
-its message, the guards, and planning again.
+its message, the guards, planning again, and the plan that changes nothing.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from
@@ -68,9 +68,10 @@ the `resume` that starts; its items stay handled unless that run ends other than
 plan gets them, as it gets the items left out. Later feedback waits for the next plan.
 
 **A plan that changes nothing.** A plan whose items are all `decline`, `ask`, or `leave` changes no code. Under
-`trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` through: that run
-only drafts the replies, which wait on the operator anyway. Under `post` it is approved as any plan is, since its
-replies would go out unseen.
+`trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` for review feedback
+alone through while the plan stands as its planner wrote it, unchanged under it: that run only drafts the replies,
+which wait on the operator anyway, and spends the plan as an approval is spent. Under `post` it is approved as any plan
+is, since its replies would go out unseen.
 
 ### Planning again
 
@@ -89,10 +90,10 @@ handed back and what no plan covered.
 ### The overseer's part
 
 In §7's table, under `approve`, each phase whose next action is a `resume`, but `pushed_no_pr`, whose `resume` has the
-reason `no_pr`, dispatches a feedback plan first, and the `resume` once it is approved. While the unit's plan waits it
-is `plan_proposed`, with `plan_review` naming its PR (§14). The state block gives each unit's plan status, attempts, and
-facts the harness computes, whether it is stale and whether its quiet period has passed, so the overseer compares no
-times; never the plan's text.
+reason `no_pr`, dispatches a feedback plan first, and the `resume` once it is approved. While the unit's plan waits on
+the operator it is `plan_proposed`, with `plan_review` naming its PR (§14). The state block gives each unit's plan
+status, attempts, and facts the harness computes, whether it is stale, whether its quiet period has passed, and whether
+it changes nothing and goes ahead, so the overseer compares no times; never the plan's text.
 
 ### On the PR, and the drafts after
 

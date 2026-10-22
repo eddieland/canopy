@@ -277,7 +277,15 @@ def _feedback_plans(
         repos = [str(u.repo) for u in units.get(t.key, [])]
         attempts = {r: done.get(policy.unit(t.key, r), 0) for r in repos}
         limits = {r: policy.feedback_plan_limit(ctx.config, granted.get(policy.unit(t.key, r), {})) for r in repos}
-        section = feedback_plans.state_section(ctx.conn, ctx.config, t, attempts=attempts, limits=limits, now=now)
+        section = feedback_plans.state_section(
+            ctx.conn,
+            ctx.config,
+            t,
+            state_dir=ctx.state_dir,
+            attempts=attempts,
+            limits=limits,
+            now=now,
+        )
         if section is not None:
             found[t.key] = section
     return found
