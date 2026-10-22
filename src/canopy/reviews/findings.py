@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, review_requests, review_runs
 from canopy.core import review_result as result
-from canopy.core.conversation import printable
 from canopy.core.vocab import ReviewRunStatus, SeenKind
+from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
     import sqlite3
@@ -93,7 +93,7 @@ def _review_block(conn: sqlite3.Connection, run: records.ReviewRun, stored: resu
         ),
     ]
     if stored.summary:
-        lines += ["", "Its summary:", *(f"> {line}" for line in printable(stored.summary).splitlines())]
+        lines += ["", "Its summary:", quoted(stored.summary)]
     kept = _findings(stored, review_runs.review_dismissals(conn, run.id), keep_dismissed=False)
     if kept:
         lines += ["", "Its findings:", *kept]
