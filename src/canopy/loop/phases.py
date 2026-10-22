@@ -335,6 +335,20 @@ def newer(stamp: str | None, cursor: datetime | None) -> bool:
     return db.parse_time(stamp).replace(microsecond=0) > cursor.replace(microsecond=0)
 
 
+def is_feedback(review: records.ObservedReview) -> bool:
+    """Whether an observed review or review comment is feedback (DESIGN §7).
+
+    Returns:
+        True for a review comment, a change request, and a review with something to say; False for an approval, a
+        dismissal, and an empty review.
+    """
+    if review.item is ReviewItem.COMMENT:
+        return True
+    return review.state is ReviewState.CHANGES_REQUESTED or (
+        review.state is ReviewState.COMMENTED and bool(review.body.strip())
+    )
+
+
 def _overseers(action: str) -> bool:
     """Whether `action` is the overseer's own choice about a ticket, not the harness's or a guard's.
 
@@ -675,7 +689,7 @@ class _World:
         new = [
             r
             for r in self.reviews.get(pr.url, [])
-            if _feedback(r)
+            if is_feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
             and newer(r.created_at, cursor)
         ]
@@ -745,15 +759,6 @@ def _query_result(conn: sqlite3.Connection) -> list[str]:
 
 def _done(conn: sqlite3.Connection) -> set[str]:
     return {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
-
-
-# Whether an observed review or review comment is feedback: not an approval, a dismissal, or an empty review.
-def _feedback(review: records.ObservedReview) -> bool:
-    if review.item is ReviewItem.COMMENT:
-        return True
-    return review.state is ReviewState.CHANGES_REQUESTED or (
-        review.state is ReviewState.COMMENTED and bool(review.body.strip())
-    )
 
 
 def _approved(reviews: Collection[records.ObservedReview]) -> bool:

@@ -143,8 +143,8 @@ from unittest import mock
 from canopy.cli.main import main
 from canopy.core import db, records, review_runs
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
-from canopy.infra import procs
-from canopy.loop import attention
+from canopy.infra import logs, procs
+from canopy.loop import attention, poll
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
@@ -158,6 +158,7 @@ from tests.canopy.helpers import (
     blocked_result,
     canopy,
     commit_and_push,
+    context,
     in_tick,
     last_run,
     last_tick,
@@ -700,6 +701,12 @@ class Scenario:
         started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
         assert started == 0, list(refused)
         return refused
+
+    def polls(self) -> None:
+        """The connectors read the world between ticks, as the loop's poll does (DESIGN §6): a PR a run opened is then
+        observed, as the next tick's sources would observe it before its dispatches rest on it (DESIGN §35)."""
+        assert poll.run(context(self.env), logs.for_tick(None)) is not None, "a tick holds the lock"
+        self.story.append("the connectors poll")
 
     def time_passes(self, *, hours: float = 0, minutes: float = 0) -> None:
         """Move every time the journal recorded, in a column of its own, `hours` and `minutes` into the past.
