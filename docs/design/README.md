@@ -75,7 +75,7 @@ not go in the middle of the sequence.
   - [21. Reviews](CHORES_NOTIFICATIONS_REVIEWS.md#21-reviews)
 - [Conversations](CONVERSATIONS.md): the journal's conversation, private tickets, its channels, and the web UI.
   - [22. Conversations](CONVERSATIONS.md#22-conversations)
-- [Flaky CI](FLAKY_CI.md): triage of a CI failure before a `resume` is sent to fix it.
+- [Flaky CI](FLAKY_CI.md): what happens to a CI failure the change did not cause.
   - [23. Flaky CI](FLAKY_CI.md#23-flaky-ci)
 - [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
   - [24. Sandboxed runs](SANDBOXING.md#24-sandboxed-runs)

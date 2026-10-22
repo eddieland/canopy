@@ -66,6 +66,65 @@ returns it. `capacity.max_workers` (2 by default) caps how many workers run at o
 Stop here if a fresh checkout of your repository is all a worker needs. README's "Daily surface" covers what to do
 with the loop from now on.
 
+### Teach the loop your org
+
+Once the loop has run a while, you will see the same mistake twice: a worker guesses a repository's owner, the
+overseer reads the wrong tracker site. The cheapest fix is a line of standing instructions, a short Markdown file
+canopy renders into every prompt of one role, so you need not override a prompt. A line goes there when the same
+mistake shows up in two runs and the fix does not depend on the ticket.
+
+```toml
+# ~/.config/canopy/config.toml, or .canopy/config.toml for this workspace alone
+[paths]
+worker_instructions = "~/.config/canopy/worker-instructions.md"
+overseer_instructions = "~/.config/canopy/overseer-instructions.md"
+```
+
+- `worker_instructions` reaches every worker's prompt, plans, private tickets', and one-off tasks' included.
+  `overseer_instructions` goes at the end of the overseer's prompt and never reaches a worker.
+- They are yours alone: set them in your user file or the private one, never the shared workspace file.
+- Each file is at most 4 KiB. One canopy cannot read, or over the limit, refuses the run as `bad_prompt`, and fails the
+  tick for the overseer's, rather than running without it. A prompt override of yours must keep `{{STANDING_SECTION}}`.
+- `reviewer_instructions` and `chore_instructions` do the same for reviews and chore runs.
+
+**The overseer's lines pay off most when they say how to call the tracker.** For a Jira tracker,
+`overseer-instructions.md` might read:
+
+```markdown
+- Our Jira site is example.atlassian.net, cloud id `<cloud-id>`. Pass it on every Jira call. Never use
+  example-sandbox.atlassian.net or another site the server lists.
+- In a JQL search, request only the fields `summary, status, labels, issuelinks, updated`. Read a ticket's comments
+  with a call for that ticket alone.
+- These lines change how you read the tracker, never whether: read every ticket your prompt asks you to. A ticket
+  unchanged in the tracker can still have new feedback on its PR.
+```
+
+The site keeps it from guessing a near miss. The fields matter because a search that asks for `comment` returns every
+comment of every ticket it finds, which can be a large share of a tick's tokens. The last line keeps the first two from
+reading as leave to skip work.
+
+**The workers' lines are your house conventions.** `worker-instructions.md` might read:
+
+```markdown
+- Our GitHub organizations are `example-org` and `example-tools`. A repository named without an owner is in
+  `example-org`.
+- Handle review feedback with the `address-review` skill. On a comment from `review-bot[bot]`, react +1 or -1 and
+  reply with one sentence on why.
+- Commit each follow-up with `git commit --fixup=<sha>`. Never amend or squash, so reviewers see what changed.
+- Never request reviewers on a PR. I choose them.
+- I am Sam. Address me by name in questions and summaries, and write PR bodies and comments in the first person.
+```
+
+A bot's comments reach a worker only once its login is in `trust.trusted_reviewers`, or you answer them.
+
+Some fixes belong elsewhere:
+
+- A line about one repository goes in that repository's `AGENTS.md`, where every agent working there reads it. The
+  `memory-tickets` chore ([examples/chores/README.md](../examples/chores/README.md)) finds lessons ready to move there.
+- What workers learn about a repository is a lesson: they propose it and you promote it (the web UI's guide, Memory).
+- How an agent writes, its voice and where it looks hardest, is a persona: `canopy personas` lists them.
+- A passing condition, such as a CI outage, is a notice: `canopy notice 'TEXT' --for 4h`.
+
 ## 2. Slots that need setup
 
 A slot is a fresh git worktree. It has none of the gitignored files in your own checkout, such as `.env.local`, and no
@@ -231,3 +290,65 @@ meant to fix it.
 [BAZEL.md](BAZEL.md) is the full recipe: what each `.bazelrc` line buys, a per-repository `setup_cmd` script, how to
 check that seeding, separate output bases, the shared cache, and idle servers all work, what the worker can read
 through `bazel-out/`, and troubleshooting.
+
+## Narrowing what canopy's agents are offered
+
+canopy's agents run in your OpenCode, so every MCP server and skill in your OpenCode config is offered to them as well,
+unless a rule denies it: the overseer, the reviewer, and every chore get your BigQuery server, or a cluster server
+that blocks no command, as a worker does. OpenCode sends the schema of each tool an agent may call, and the name and
+description of each skill it may load, with every model call, so each one costs every tick and run, and is one more
+thing a steered agent could reach. `canopy agents` shows what each of canopy's agents is offered now.
+
+To take some away, add rules for canopy's agents, by name, to the `agent` block of `~/.config/opencode/opencode.json`.
+OpenCode merges that block into canopy's definitions, which canopy writes to `.canopy/runtime/<digest>/` and renders
+from its own config. Never edit them there: they are read-only, and canopy writes a new snapshot when its config
+changes. The rules reach agents started after you save them; a run already going keeps what it started with. For
+example, with servers named `bigquery` and `kubernetes`, and Jira as the tracker:
+
+```json
+{
+  "agent": {
+    "canopy-overseer": {"permission": {"bigquery_*": "deny", "kubernetes_*": "deny"}},
+    "canopy-planner": {
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
+    },
+    "canopy-reviewer": {
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
+    },
+    "canopy-chore": {
+      "permission": {"bigquery_*": "deny", "kubernetes_*": "deny", "skill": {"*": "deny", "tracker-jira": "allow"}}
+    }
+  }
+}
+```
+
+- **A server, whole.** OpenCode names a server's tools `<server>_<tool>`, so `"<server>_*": "deny"` takes every tool of
+  it from that agent, and OpenCode stops sending them. The pattern also matches a server whose name starts with
+  `<server>_`, so `github_*` takes `github_enterprise` too; `canopy agents` shows each server's reach. Leave the
+  workers, `canopy-worker` and `canopy-worker-private`, the servers their tickets need, and leave the tracker's server
+  alone: canopy already narrows it to its reads for the agents that read the ticket.
+- **Skills.** The last rule that matches a skill's name decides, so `"*": "deny"` comes first and the tracker skill
+  canopy ships for your tracker, `tracker-jira` or `tracker-github`, is allowed by name after it: the reviewer's and the
+  planner's prompts load it. Leave the workers' skills alone, since they work with yours, such as `runtime.pr_skill`.
+- **Deny, rather than allow.** Your rules come before canopy's, so where a rule of canopy's also matches, canopy's
+  decides. A pattern canopy's definition also names is the exception: OpenCode keeps it where your block put it, so
+  your rules after it come after canopy's and can beat it (D044). Allow only to narrow a deny of your own, as
+  the tracker skill's allow does, and to widen the overseer's shell, use `runtime.allow_bash` (`examples/config.toml`).
+- **Not the overseer's skills.** With Jira or GitHub as the tracker, canopy puts the tracker's skill in the overseer's
+  prompt and ends its skill rules with `"*": "deny"`, so it is not sent the skill tool at all. A `"*"` rule of yours
+  would move that one ahead of canopy's other skill rules, and the tool would be sent again.
+- **A chore with its own agent**, such as `canopy-introspect` for `canopy-health` and `canopy-efficiency`, is narrowed
+  under its own name, the same way. [examples/chores/README.md](../examples/chores/README.md) shows how to give a chore
+  such an agent, with bash allowed for exactly the commands its prompt runs.
+
+Then check that the rules held. Run `canopy agents` again: a server you denied shows `none` for that agent, the skills
+you denied are listed after `denied`, and with Jira or GitHub as the tracker, the overseer's built-in tools still have
+no `skill`. To see the merged rules themselves, ask OpenCode from the workspace root, with `<digest>` the newest
+directory under `.canopy/runtime/`:
+
+```sh
+env OPENCODE_CONFIG_DIR="$PWD/.canopy/runtime/<digest>" opencode debug agent canopy-overseer
+```
+
+`canopy agents` lists canopy's own agents only. For a chore's own agent, point `OPENCODE_CONFIG_DIR` at
+`.canopy/chore-agents/<chore>/` instead, and name that agent.

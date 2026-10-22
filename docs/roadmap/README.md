@@ -61,7 +61,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M22. Trusted reviewers](M22-trusted-reviewers.md): done 2026-10-13.
 - [M23. Chores in the web UI](M23-chores-in-the-web-ui.md): done 2026-10-13.
 - [M24. Ticks in the web UI](M24-ticks-in-the-web-ui.md): done 2026-10-13.
-- [M25. Flaky CI triage](M25-flaky-ci-triage.md): deferred 2026-10-15.
+- [M25. Workers report flaky CI](M25-workers-report-flaky-ci.md): in progress.
 - [M26. Sandboxed workers, opt-in](M26-sandboxed-workers-opt-in.md): in progress.
 - [M27. Session transcripts in the web UI](M27-session-transcripts-in-the-web-ui.md): done 2026-10-13.
 - [M28. Overseer reliability from the first live session](M28-overseer-reliability.md): done 2026-10-14.
@@ -119,7 +119,5 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than
   read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server authentication on
   the pinned version is checked first.
-- Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on failures the change did not cause. The
-  design (DESIGN §23) and the milestone's bullets stand as written.
 - Triage before a plan (M55): when the spend page shows plan runs on tickets the operator calls trivial costing enough
   that a cheaper judge would pay for its own runs. The bullets stand as a sketch; DESIGN §25 no longer describes it.

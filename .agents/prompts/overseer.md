@@ -278,9 +278,12 @@ whose PR needs work comes before one that waits. The Action column is shorthand 
   comment is the reference point for `needs_human` and `human_replied`.
 - Dispatch a `resume` only for a phase whose action is one (`changes_requested` and `review_findings` once classified
   for a worker), its `--context` naming what that phase found: a `ci_running` unit has nothing new to address.
-- A `ci_red` failure not newer than the `ci` cursor was already handed to a worker. If that run ended `done` and the
-  same check run still fails, its fix has not reached CI or did not help: `wait` until a newer check run exists. If it
-  ended `blocked`, the ticket is `needs_human`.
+- A `ci_red` failure not newer than the `ci` cursor was already handed to a worker. If that run ended `done` with
+  `flaky` true and the same check run still fails, the worker judged it a failure a rerun would pass and changed nothing
+  for it, so no newer run will come: record `canopy attention <KEY> flaky_rerun --repo <the unit> --detail '<the check,
+  its run link, and run <id>>'`, and dispatch no `resume` for it. Otherwise, if it ended `done` and the same check run
+  still fails, its fix has not reached CI or did not help: `wait` until a newer check run exists. If it ended
+  `blocked`, the ticket is `needs_human`.
 
 Read a PR's mergeability first: GitHub runs no checks on a PR it cannot merge, so a conflicting PR's checks look
 pending with nothing running, or show an earlier head's. A conflict (`mergeable` false, `mergeable_state` `dirty`)
