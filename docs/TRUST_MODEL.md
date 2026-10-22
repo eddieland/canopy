@@ -99,6 +99,14 @@ Controls:
   shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused `stale`. A
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
   guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
+- The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
+  `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
+  each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
+  these, none stale and no item the overseer holds open on it. Such a ticket's text reaches no overseer that tick, and
+  whatever the overseer records about it, a decision, dispatch, attention item, or `ticket set`, is refused `decided`,
+  through a tool and its command alike, so a steered overseer cannot overrule the harness. Residual: the harness
+  reads the absence of every other row from the derivation, so a row it misses waits until the overseer is given the
+  ticket again; it starts no run.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -475,7 +483,9 @@ but must be distinguishable:
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
-  loop did and why. Each worker run and review records the persona it ran in (DESIGN §31), by name and a digest of its
+  loop did and why. Each decision records who made it: the overseer, through one of its verbs, or the harness on its
+  own, its attention items and the decisions that need no judgment (DESIGN §37); `canopy decisions` marks the
+  harness's. Each worker run and review records the persona it ran in (DESIGN §31), by name and a digest of its
   text as the prompt carried it, so a persona edited between runs splits them.
 - canopy's reviews post nothing the operator has not published (D114). A review of a PR the loop does not own may
   be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
