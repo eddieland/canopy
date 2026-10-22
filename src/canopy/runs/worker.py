@@ -886,21 +886,12 @@ def _place_copy(run: sqlite3.Row, slots: Sequence[_Slot], copy: str | None) -> d
 def _write_copy(slot: _Slot, text: str) -> None:
     """Write the worker's copy of the plan at the root of its worktree, ignored by git there (DESIGN §25).
 
-    The repository's exclude file, which every slot shares, gets the copy's line once, so `git add -A` leaves it out.
-
     Raises:
         SetupError: git could not name the repository's git directory, or the exclude file or the copy could not be
             written.
     """
-    common = Path(slot.git.run("rev-parse", "--path-format=absolute", "--git-common-dir"))
-    exclude = common / "info" / "exclude"
-    line = f"/{plans.COPY}"
+    checkpoint.ignore(slot.git, plans.COPY)
     try:
-        held = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
-        if line not in held.splitlines():
-            exclude.parent.mkdir(parents=True, exist_ok=True)
-            with exclude.open("a", encoding="utf-8") as f:
-                f.write(f"{'' if not held or held.endswith(chr(10)) else chr(10)}{line}\n")
         logs.write_private(slot.path / plans.COPY, text)
     except OSError as e:
         raise SetupError(f"{slot.git.where}could not write the plan's copy: {e}") from e

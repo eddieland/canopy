@@ -283,7 +283,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `multi_repo` and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and
 `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), `drafts_waiting` (§29), `connector_failed`
-(§30), and `persona_missing` and `bad_persona` (§31). An item about one unit names its repository, shown as `KEY (repo)`.
+(§30), `persona_missing` and `bad_persona` (§31), and `task_ticket_unrecorded` (§36). An item about one unit names its
+repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The

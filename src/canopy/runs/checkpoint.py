@@ -7,6 +7,7 @@ harness's flags (D107), and no step makes a local branch (D109): the pushed bran
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import hostgit
@@ -14,7 +15,6 @@ from canopy.infra import procs
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
     from canopy.infra import logs
 
@@ -159,6 +159,28 @@ def remote_head(git: Git, branch: str) -> str:
     """
     listed = git.run("ls-remote", "origin", f"refs/heads/{branch}")
     return listed.split()[0] if listed else ""
+
+
+def ignore(git: Git, name: str) -> None:
+    """Have git ignore `name` at a worktree's root in every slot of the repository, so `git add -A` leaves it out.
+
+    The line goes in the repository's exclude file, which every slot shares, once. A file canopy writes into a slot
+    for one run, a plan's copy (DESIGN §25) or a task's report (§36), is ignored so.
+
+    Raises:
+        SetupError: git could not name the repository's git directory, or the exclude file could not be written.
+    """
+    common = Path(git.run("rev-parse", "--path-format=absolute", "--git-common-dir"))
+    exclude = common / "info" / "exclude"
+    line = f"/{name}"
+    try:
+        held = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+        if line not in held.splitlines():
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            with exclude.open("a", encoding="utf-8") as f:
+                f.write(f"{'' if not held or held.endswith(chr(10)) else chr(10)}{line}\n")
+    except OSError as e:
+        raise SetupError(f"{git.where}could not have git ignore {name}: {e}") from e
 
 
 def _drop_local_branch(git: Git, branch: str, target: str) -> None:
