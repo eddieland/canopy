@@ -253,7 +253,8 @@ Controls:
   and canopy renders each pattern last of its bash rules, so it wins, and lists them in `canopy agents`. The same key
   takes allows for both workers, rendered last of theirs: a worker's shell already runs all but what it denies, so
   there an allow undoes a deny, which the checks below keep from git, `gh`, `sudo`, and the loop's own tools, and leave
-  open for the private worker's tracker CLIs (T6). In code, canopy refuses an allow for the agents with no shell, a
+  open for the private worker's tracker CLIs (T6). The planner takes them too, as the overseer does: its shell runs
+  nothing else. In code, canopy refuses an allow for the agents with no shell, a
   pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`, redirect, backslash, brace, or newline), a
   command named by a wildcard or a path, and one that runs a command it is given (a shell, an interpreter, a wrapper
   such as `env`, `xargs`, or `timeout`, a package or build runner, `find`, a pager, a database shell), fetches pages
@@ -526,8 +527,9 @@ Controls:
   whole. A ticket's body is text the worker wrote, so a steered worker can publish what it read in one, as it can in a
   comment.
 - The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
-  path but that file's name, and it has no shell, web, or subagent tools; it reads git through canopy's read-only
-  tools, as the reviewer does (T4). Its definition is rendered
+  path but that file's name, and it has no web or subagent tools, and no shell but the commands the operator names for
+  it in `runtime.allow_bash` (above), such as a tracker CLI's reads while its MCP server is down; it reads git through
+  canopy's read-only tools, as the reviewer does (T4). Its definition is rendered
   as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are
   allowed, never the private worker's create or PR tools even where that list names them, and other servers' write
   tools are denied by name. A plan is refused (`no_read_tools`) when no read tools

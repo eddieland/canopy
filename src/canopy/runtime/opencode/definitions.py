@@ -360,7 +360,7 @@ def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
 
     The last matching rule wins (D021), so each allow beats the definition's denies, its catch-all or a worker's named
     ones, and no rule of canopy's comes after it to beat it in turn. The shipped definitions mark the line in the
-    overseer's and the workers'; the agents with no shell deny bash whole, and mark none.
+    overseer's, the planner's, and the workers'; the agents with no shell deny bash whole, and mark none.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the allows at, or an allow is not a rule canopy renders.
