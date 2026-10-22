@@ -35,6 +35,9 @@ def test_each_role_chooses_for_its_agents(canopy_env: CanopyEnv) -> None:
         ({"tester": MODEL}, "runtime.models[tester]: Value error, 'tester' is not an agent runtime.models chooses"),
         ({"worker": "claude"}, "runtime.models[worker]: Value error, 'claude' must be a model as OpenCode names it"),
         ({"worker": 'acme/x" injected'}, "runtime.models[worker]: Value error"),
+        # Nothing that would end the commit trailer's name, or the backticks a prompt quotes it in.
+        ({"worker": "acme/x`y"}, "runtime.models[worker]: Value error"),
+        ({"worker": "acme/x <y@z>"}, "runtime.models[worker]: Value error"),
         ({"worker": ""}, "runtime.models[worker]: Value error"),
     ],
 )
