@@ -216,7 +216,11 @@ def escape(text: object) -> str:
     Returns:
         `text` as a string on one line, its runs of whitespace made single spaces, and `&`, `<` and `>` escaped.
     """
-    return " ".join(str(text).split()).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return _escaped(" ".join(str(text).split()))
+
+
+def _escaped(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _subject(ticket: object, repo: object) -> str:
@@ -310,7 +314,11 @@ _SPENT = (
     ("reviews", "reviews"),
     ("dry_run", "dry runs"),
 )
-_URL = re.compile(r"https?://[^\s|]+")
+# A URL in journal text: it runs to a space or an angle bracket, and starts a word or follows punctuation.
+_URL = re.compile(r"(?<![\w/])https?://[^\s<>]+")
+# What ends a sentence or wraps a URL, never the URL's own last character.
+_TRAILING = ".,:;!?'\"`*_~"
+_CLOSING = {")": "(", "]": "["}
 # A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
 # can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
 _PAGE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
@@ -348,12 +356,37 @@ def _context(*parts: str) -> Block:
 def _linked(text: object) -> str:
     """`text`, escaped, each URL in it a link that shows the URL itself.
 
-    A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
+    The punctuation around a URL stays out of its link: a trailing `.`, `:` or quote, and a `)` or `]` the URL does
+    not open. A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
 
     Returns:
         The escaped Slack text.
     """
-    return " ".join(f"<{word}>" if _URL.fullmatch(word) else word for word in escape(text).split(" "))
+    flat = " ".join(str(text).split())
+    out: list[str] = []
+    at = 0
+    for match in _URL.finditer(flat):
+        url = _trimmed(match.group())
+        if "|" in match.group() or url.endswith("//"):
+            continue
+        out += [_escaped(flat[at : match.start()]), f"<{_escaped(url)}>"]
+        at = match.start() + len(url)
+    return "".join([*out, _escaped(flat[at:])])
+
+
+def _trimmed(url: str) -> str:
+    """`url` without the punctuation that ends it in prose: what `_TRAILING` names, and an unopened `)` or `]`.
+
+    Returns:
+        The URL as it was meant.
+    """
+    while url:
+        last = url[-1]
+        if last in _TRAILING or (last in _CLOSING and url.count(last) > url.count(_CLOSING[last])):
+            url = url[:-1]
+        else:
+            break
+    return url
 
 
 def _open(page: object) -> str:
