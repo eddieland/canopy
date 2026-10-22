@@ -93,6 +93,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "plan_archive = '/tmp/x'"),
         # Turning prompts back on would push the operator's messages to a remote they chose for plans alone.
         ("paths", "plan_archive_prompts = true"),
+        # A conversation, a private ticket's too, would go to a remote the operator never chose for it.
+        ("paths", "plan_archive_conversations = true"),
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),

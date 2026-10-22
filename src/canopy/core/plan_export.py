@@ -18,6 +18,11 @@ wrote them beside the run's log. It never changes, so its name changes only wher
 `<run>-prompt.md`. A plan whose run has no prompt there, as one from before prompts were kept, has none exported, and
 one exported before is left.
 
+Beside a ticket's plans goes its conversation (DESIGN §22) when `conversations` is on: `CONVERSATION.md`, every message
+the journal records on the ticket, oldest first, each body quoted under a heading of what canopy recorded of it, so no
+body can pass for another message. A message is never changed or deleted, so the file changes only when one is added;
+one exported before is left when `conversations` is off.
+
 A history of thousands of plans is exported each tick, so an export reads only what may have changed: for each plan it
 found exported as it stands, it keeps a fingerprint of its row and of every file's stat in the state directory, and
 next time skips a plan whose fingerprint still matches with a stat of each file and no read (`_Seen`). With `limit`,
@@ -41,8 +46,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 
-from canopy.core import plans, records, sql
+from canopy.core import db, plans, records, sql
 from canopy.core.vocab import PlanStatus
+from canopy.infra.text import printable
 
 if TYPE_CHECKING:
     import sqlite3
@@ -51,6 +57,8 @@ if TYPE_CHECKING:
 #: Which of a ticket's plans a file is: the plan before its implement (§25), or one before a resume (§32).
 type Kind = Literal["plan", "feedback plan"]
 
+#: A ticket's conversation's name in an export, beside its plans.
+CONVERSATION_NAME = "CONVERSATION.md"
 #: Where, under the state directory, each destination's fingerprints are kept (`_Seen`), one file for each.
 SEEN_DIR = "plan-exports"
 _DIR_MODE = 0o700
@@ -86,11 +94,11 @@ class Exported:
 
     #: The files it wrote, new or changed, relative to `dest`.
     written: Sequence[str]
-    #: How many plans it found already exported as they stand.
+    #: How many plans and conversations it found already exported as they stand.
     unchanged: int
     #: The plans it could not export.
     skipped: Sequence[Skipped]
-    #: How many plans it left unchecked, having written its `limit` of files first.
+    #: How many plans and conversations it left unchecked, having written its `limit` of files first.
     left: int = 0
     #: The files it removed, relative to `dest`: each a plan's or prompt's earlier name, the file now under a new one.
     #: On a filesystem that ignores case, a name that differs in case alone names the new file, so is gone, not removed.
@@ -108,15 +116,16 @@ def export(
     *,
     limit: int | None = None,
     prompts: bool = True,
+    conversations: bool = False,
 ) -> Exported:
     """Export every plan and feedback plan in the journal into `dest`, made operator-only if it is missing.
 
     With `limit`, stop once that many files are written; the plans after them are left for the next export. With
-    `prompts`, each plan's prompt goes beside it.
+    `prompts`, each plan's prompt goes beside it, and with `conversations`, each planned ticket's conversation.
 
     Returns:
         The files written and removed, how many were already as they stand, the plans whose files are not plans, and
-        how many plans `limit` left unchecked.
+        how many plans and conversations `limit` left unchecked.
 
     Raises:
         ExportError: `dest`, or a ticket's directory in it, is a link or not a directory, or a file could not be
@@ -131,6 +140,10 @@ def export(
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
     prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
+    planned = {row.ticket_key for _, row in rows}
+    last_messages: dict[str, int] = (
+        {k: m for k, m in _last_messages(conn).items() if k in planned} if conversations else {}
+    )
     tally = _Tally()
     checked = 0
     # Before any file is read: one changed after this is never taken as settled.
@@ -148,11 +161,15 @@ def export(
                     checked += 1
                     prompt = None if prompt_paths is None else _Prompt(prompt_paths.get(row.run_id))
                     _export_plan(kind, row, dirs, seen, tally, prompt=prompt, settled_before=settled_before)
+                last = last_messages.get(key)
+                if last is not None and (limit is None or len(tally.written) < limit):
+                    checked += 1
+                    _export_conversation(conn, last, dirs, seen, tally, settled_before=settled_before)
     return Exported(
         written=tally.written,
         unchanged=tally.unchanged,
         skipped=tally.skipped,
-        left=len(rows) - checked,
+        left=len(rows) + len(last_messages) - checked,
         removed=tally.removed,
     )
 
@@ -209,6 +226,41 @@ def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str) ->
         if value is not None:
             lines.append(f"{field.name}: {json.dumps(value)}\n")
     lines.extend([_FRONT_MATTER, "\n", text])
+    return "".join(lines).encode("utf-8")
+
+
+def is_conversation(file_name: str) -> bool:
+    """Whether `file_name` in an export is a ticket's conversation rather than a plan or a prompt.
+
+    Returns:
+        True for `CONVERSATION_NAME`.
+    """
+    return file_name == CONVERSATION_NAME
+
+
+def conversation_document(key: str, messages: Sequence[records.Message]) -> bytes:
+    """A ticket's conversation as it is exported: a front matter, then each message under a heading, its body quoted.
+
+    A body is a worker's, a tracker commenter's, or the operator's text, so every line of it is quoted, control
+    characters made spaces, and nothing in it can end the quote or start a heading of its own. A heading holds what
+    canopy recorded of the message, a commenter's name as JSON.
+
+    Returns:
+        The file's bytes, UTF-8.
+    """
+    lines = [
+        _FRONT_MATTER,
+        f"kind: {json.dumps('conversation')}\n",
+        f"ticket_key: {json.dumps(key)}\n",
+        f"messages: {len(messages)}\n",
+        _FRONT_MATTER,
+        "\n",
+        f"# Conversation: {key}\n",
+    ]
+    for m in messages:
+        lines.extend(["\n", f"## {m.id}. {_heading(m)}\n", "\n"])
+        quoted = printable(m.body).rstrip("\n").split("\n")
+        lines.extend(f"> {line}\n" if line else ">\n" for line in quoted)
     return "".join(lines).encode("utf-8")
 
 
@@ -316,6 +368,87 @@ def _export_plan(
             prompt=prompt_held,
             settled_before=settled_before,
         )
+
+
+def _export_conversation(
+    conn: sqlite3.Connection,
+    last: int,
+    dirs: _Dirs,
+    seen: _Seen,
+    tally: _Tally,
+    *,
+    settled_before: int,
+) -> None:
+    """Export a ticket's conversation, up to message `last`, unless it is there as it stands.
+
+    Raises:
+        ExportError: it could not be written.
+    """
+    exported = _stat(CONVERSATION_NAME, dirs.dest_fd)
+    if seen.conversation_matches(dirs.key, last, exported):
+        tally.unchanged += 1
+        return
+    # Only up to `last`, so a message added since it was read is left for the next export, which its fingerprint asks.
+    data = conversation_document(dirs.key, _messages(conn, dirs.key, last))
+    held = _held(dirs.dest_fd, CONVERSATION_NAME, data) if CONVERSATION_NAME in dirs.listing else None
+    if held is None:
+        _write(dirs.dest_fd, dirs.dest / CONVERSATION_NAME, data)
+        tally.written.append(f"{dirs.key}/{CONVERSATION_NAME}")
+        return
+    tally.unchanged += 1
+    seen.record_conversation(dirs.key, last, held, settled_before=settled_before)
+
+
+def _last_messages(conn: sqlite3.Connection) -> dict[str, int]:
+    """The newest message of each ticket that has one.
+
+    Returns:
+        The id of each ticket's newest message, by its key.
+    """
+    query = (
+        sql.select("subject_id, MAX(id) AS last")
+        .from_("messages")
+        .where("subject_kind = ?", db.SUBJECT_TICKET)
+        .group_by("subject_id")
+    )
+    return {str(r["subject_id"]): int(r["last"]) for r in sql.execute(conn, query)}
+
+
+def _messages(conn: sqlite3.Connection, key: str, last: int) -> list[records.Message]:
+    """A ticket's messages up to message `last`, oldest first.
+
+    Returns:
+        The messages.
+    """
+    query = (
+        sql.select("*")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND id <= ?", db.SUBJECT_TICKET, key, last)
+        .order_by("id")
+    )
+    return records.fetch_all(conn, records.Message, query)
+
+
+def _heading(m: records.Message) -> str:
+    """What canopy recorded of a message, for its heading: who wrote what, where, for which run, and when.
+
+    Returns:
+        The heading's text, one line, as `worker report, run 41, at 2026-10-22T10:00:00+00:00`.
+    """
+    parts = [f"{m.source} {m.kind}"]
+    # A run's report reaches the journal through the run alone, which its run already says.
+    if m.channel != "run":
+        parts.append(f"through {m.channel}")
+    if m.author is not None:
+        parts.append(f"by {json.dumps(m.author)}")
+    if m.run_id is not None:
+        parts.append(f"run {m.run_id}")
+    if m.answers is not None:
+        parts.append(f"answering {m.answers}")
+    if m.truncated:
+        parts.append("cut short")
+    parts.append(f"at {m.at}")
+    return " ".join(printable(", ".join(parts)).split())
 
 
 def _prompt_paths(conn: sqlite3.Connection, state_dir: Path) -> dict[int, Path]:
@@ -525,6 +658,22 @@ class _Seen:
             self.changed |= self.fingerprints.get(plan) != fingerprint
             self.fingerprints[plan] = fingerprint
 
+    def conversation_matches(self, key: str, last: int, exported: os.stat_result | None) -> bool:
+        """Whether `key`'s conversation was found exported as it stands up to message `last`, and unchanged since.
+
+        Returns:
+            False when its export is missing, or nothing was kept for it.
+        """
+        kept = self.fingerprints.get(_conversation_item(key))
+        return kept is not None and exported is not None and kept == _conversation_fingerprint(last, exported)
+
+    def record_conversation(self, key: str, last: int, exported: os.stat_result, *, settled_before: int) -> None:
+        """Keep that `key`'s conversation was found exported as it stands, unless its export changed too recently."""
+        if max(exported.st_mtime_ns, exported.st_ctime_ns) < settled_before:
+            item, fingerprint = _conversation_item(key), _conversation_fingerprint(last, exported)
+            self.changed |= self.fingerprints.get(item) != fingerprint
+            self.fingerprints[item] = fingerprint
+
     def save(self) -> None:
         """Write the fingerprints if any changed. A file that cannot be written costs the next export its reads only."""
         if not self.changed:
@@ -546,7 +695,8 @@ def _load(path: Path) -> dict[str, str]:
     """The fingerprints kept at `path`.
 
     Returns:
-        Each plan's fingerprint by its `KEY/RUN`; none when the file is missing, unreadable, not
+        Each plan's fingerprint by its `KEY/RUN`, and each conversation's by `KEY/conversation`; none when the file
+        is missing, unreadable, not
         canopy's, or from another format.
     """
     try:
@@ -577,6 +727,25 @@ def _fingerprint(
     prompt_stats = None if prompt is None else [None if s is None else _identity(s) for s in prompt]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
     digested = (_FORMAT, kind, row, exported_name, stats, prompt_stats)
+    return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
+
+
+def _conversation_item(key: str) -> str:
+    """What a ticket's conversation is kept as among the fingerprints, never a plan's `KEY/RUN`.
+
+    Returns:
+        `KEY/conversation`.
+    """
+    return f"{key}/conversation"
+
+
+def _conversation_fingerprint(last: int, exported: os.stat_result) -> str:
+    """A conversation's newest message and the stat of its export, as one digest.
+
+    Returns:
+        The digest, hex.
+    """
+    digested = (_FORMAT, "conversation", last, _identity(exported))
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
