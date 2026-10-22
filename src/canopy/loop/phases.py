@@ -104,6 +104,8 @@ MOVES_TO: Mapping[str, Phase] = {
 CLOSED_ALLOWS: AbstractSet[str] = frozenset({"done"})
 #: What it may decide for an open ticket no row holds for, such as one without a queue label.
 NONE_ALLOWS: AbstractSet[str] = frozenset({"skip", "wait"})
+#: An observed label: its `name`, and `added_at`, None where the tracker does not say.
+type Label = dict[str, str | None]
 #: How a ticket compares with the overseer in one tick.
 type Verdict = Literal["agrees", "disagrees", "stale"]
 
@@ -240,6 +242,99 @@ def describe(counts: Counter[Verdict]) -> str:
     return f"derived {counts['agrees']} agree, {counts['disagrees']} disagree, {counts['stale']} stale"
 
 
+def fresh_repos(
+    conn: sqlite3.Connection,
+    branches: Mapping[str, Sequence[records.ObservedBranch]],
+    cutoff: datetime,
+) -> frozenset[str]:
+    """The repositories whose branches were read whole since `cutoff`.
+
+    One with a branch observed since then was; so was every repository a `vcs` run read everything of, since a
+    repository with no branch under the prefix has no row to date.
+
+    Returns:
+        Their names.
+    """
+    fresh = {repo for repo, found in branches.items() if any(db.parse_time(b.observed_at) >= cutoff for b in found)}
+    runs = records.fetch_all(
+        conn,
+        records.ConnectorRun,
+        sql.select("*")
+        .from_("connector_runs")
+        .where(
+            "kind = ? AND status = ? AND ended_at >= ?",
+            SourceKind.VCS,
+            ConnectorRunStatus.OK,
+            db.format_time(cutoff),
+        ),
+    )
+    for run in runs:
+        asked = json.loads(run.request)
+        for repo in asked.get("repositories", []) if isinstance(asked, dict) else []:
+            if isinstance(repo, dict) and isinstance(repo.get("name"), str):
+                fresh.add(repo["name"])
+    return frozenset(fresh)
+
+
+def labels_of(seen: records.ObservedTicket) -> list[Label]:
+    """A ticket's observed labels, each a `{"name", "added_at"}`, `added_at` None where the tracker does not say.
+
+    Returns:
+        The labels, less any entry that names none.
+    """
+    found = json.loads(seen.labels)
+    return [x for x in found if isinstance(x, dict) and isinstance(x.get("name"), str)]
+
+
+def blockers_of(seen: records.ObservedTicket) -> list[str]:
+    """The keys an observed ticket names as blocking it.
+
+    Returns:
+        The keys, in the tracker's order.
+    """
+    return [str(b) for b in json.loads(seen.blockers)]
+
+
+def branch_of(branches: Iterable[records.ObservedBranch], prefix: str, key: str, branch: str | None) -> str | None:
+    """A ticket's branch among a repository's observed `branches`: `branch`, as recorded, or one named for it.
+
+    `prefix` is `trust.branch_prefix`: a branch named for the ticket is `<prefix><key>`, or that and a slug.
+
+    Returns:
+        The branch's name, or None.
+    """
+    named = f"{prefix}{key}"
+    for b in branches:
+        if (branch is not None and b.name == branch) or b.name == named or b.name.startswith(f"{named}-"):
+            return b.name
+    return None
+
+
+def review_cursor(value: str | None) -> datetime | None:
+    """Read a `review` cursor, a UTC time (DESIGN §7).
+
+    Returns:
+        The time; None when it is empty or not a time, as one an earlier canopy wrote.
+    """
+    try:
+        return datetime.fromisoformat(value).astimezone(UTC) if value else None
+    except ValueError:
+        return None
+
+
+def newer(stamp: str | None, cursor: datetime | None) -> bool:
+    """Whether an item at `stamp` is newer than `cursor`: one at the cursor's own second is handled (DESIGN §7).
+
+    Returns:
+        True when there is no cursor, or the item's second is after it; False for an item with no time.
+    """
+    if cursor is None:
+        return True
+    if stamp is None:
+        return False
+    return db.parse_time(stamp).replace(microsecond=0) > cursor.replace(microsecond=0)
+
+
 def _overseers(action: str) -> bool:
     """Whether `action` is the overseer's own choice about a ticket, not the harness's or a guard's.
 
@@ -352,7 +447,7 @@ class _World:
             checks=checks,
             reviews=reviews,
             branches=branches,
-            fresh_repos=_fresh_repos(conn, branches, cutoff),
+            fresh_repos=fresh_repos(conn, branches, cutoff),
             units_of=db.all_units(conn),
             running=running,
             latest_runs=db.latest_runs(conn),
@@ -377,9 +472,9 @@ class _World:
                 return Derived(key, None, stale=stale)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
-            labels = {label["name"] for label in _labels(seen)}
+            labels = {label["name"] for label in labels_of(seen)}
             candidate = not closed and bool(labels & set(self.ctx.config.tracker.labels))
-            blockers_open = any(self.observed[b].state is TicketState.OPEN for b in _blockers(seen))
+            blockers_open = any(self.observed[b].state is TicketState.OPEN for b in blockers_of(seen))
         if closed:
             return Derived(key, None, candidate=False, closed=True)
         phases: list[Phase] = []
@@ -409,7 +504,7 @@ class _World:
         stale = self._age(key, seen)
         if stale is not None or seen is None:
             return stale
-        for blocker in _blockers(seen):
+        for blocker in blockers_of(seen):
             stale = self._age(f"blocker {blocker}", self.observed.get(blocker))
             if stale is not None:
                 return stale
@@ -443,7 +538,7 @@ class _World:
                 found.append(Phase.HUMAN_REPLIED)
             return found
         seen = self.observed[key]
-        label = next((x for x in _labels(seen) if x["name"] == self.ctx.config.tracker.needs_human_label), None)
+        label = next((x for x in labels_of(seen) if x["name"] == self.ctx.config.tracker.needs_human_label), None)
         replied = False
         if label is not None:
             # Without label history, the worker's question comment is the reference point (DESIGN §17).
@@ -484,11 +579,8 @@ class _World:
         Returns:
             The branch's name, or None.
         """
-        prefix = f"{self.ctx.config.trust.branch_prefix}{key}"
-        for b in self.branches.get(repo, []):
-            if (record is not None and b.name == record.branch) or b.name == prefix or b.name.startswith(f"{prefix}-"):
-                return b.name
-        return None
+        branch = None if record is None else record.branch
+        return branch_of(self.branches.get(repo, []), self.ctx.config.trust.branch_prefix, key, branch)
 
     # A unit's rows
 
@@ -577,20 +669,20 @@ class _World:
         Returns:
             The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`.
         """
-        cursor = _review_cursor(unit.last_review_id)
+        cursor = review_cursor(unit.last_review_id)
         trusted = {t.lower() for t in self.ctx.config.trust.trusted_reviewers}
         found: list[Phase] = []
-        newer = [
+        new = [
             r
             for r in self.reviews.get(pr.url, [])
             if _feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
-            and _newer(r.created_at, cursor)
+            and newer(r.created_at, cursor)
         ]
-        if any((r.author or "").lower() in trusted for r in newer):
+        if any((r.author or "").lower() in trusted for r in new):
             found.append(Phase.CHANGES_REQUESTED)
         operator = self._operator_times(key)
-        untrusted = [r for r in newer if (r.author or "").lower() not in trusted]
+        untrusted = [r for r in new if (r.author or "").lower() not in trusted]
         if any(not any(at > (r.created_at or "") for at in operator) for r in untrusted):
             found.append(Phase.UNTRUSTED_REVIEW)
         if self.ctx.config.review.agent_prs and CANOPY_REVIEWER in trusted and self._findings(pr, cursor):
@@ -624,7 +716,7 @@ class _World:
     def _findings(self, pr: records.ObservedPr, cursor: datetime | None) -> bool:
         done = [r for r in self._runs_of(pr.url) if r.sha == pr.head_sha and r.status is ReviewRunStatus.DONE]
         latest = {r.persona: r for r in reversed(done)}.values()
-        return any(self._kept_findings(r) and _newer(r.ended_at, cursor) for r in latest)
+        return any(self._kept_findings(r) and newer(r.ended_at, cursor) for r in latest)
 
     def _kept_findings(self, run: records.ReviewRun) -> bool:
         stored = result.stored(run.result_json)
@@ -653,49 +745,6 @@ def _query_result(conn: sqlite3.Connection) -> list[str]:
 
 def _done(conn: sqlite3.Connection) -> set[str]:
     return {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
-
-
-def _fresh_repos(
-    conn: sqlite3.Connection,
-    branches: Mapping[str, Sequence[records.ObservedBranch]],
-    cutoff: datetime,
-) -> frozenset[str]:
-    """The repositories whose branches were read whole since `cutoff`.
-
-    One with a branch observed since then was; so was every repository a `vcs` run read everything of, since a
-    repository with no branch under the prefix has no row to date.
-
-    Returns:
-        Their names.
-    """
-    fresh = {repo for repo, found in branches.items() if any(db.parse_time(b.observed_at) >= cutoff for b in found)}
-    runs = records.fetch_all(
-        conn,
-        records.ConnectorRun,
-        sql.select("*")
-        .from_("connector_runs")
-        .where(
-            "kind = ? AND status = ? AND ended_at >= ?",
-            SourceKind.VCS,
-            ConnectorRunStatus.OK,
-            db.format_time(cutoff),
-        ),
-    )
-    for run in runs:
-        asked = json.loads(run.request)
-        for repo in asked.get("repositories", []) if isinstance(asked, dict) else []:
-            if isinstance(repo, dict) and isinstance(repo.get("name"), str):
-                fresh.add(repo["name"])
-    return frozenset(fresh)
-
-
-def _labels(seen: records.ObservedTicket) -> list[dict[str, str | None]]:
-    found = json.loads(seen.labels)
-    return [x for x in found if isinstance(x, dict) and isinstance(x.get("name"), str)]
-
-
-def _blockers(seen: records.ObservedTicket) -> list[str]:
-    return [str(b) for b in json.loads(seen.blockers)]
 
 
 # Whether an observed review or review comment is feedback: not an approval, a dismissal, or an empty review.
@@ -729,24 +778,3 @@ def _ci_cursor(value: str | None) -> int | None:
         return int(value) if value else None
     except ValueError:
         return None
-
-
-# The `review` cursor, a UTC time; None when it is empty or not a time, as one an earlier canopy wrote (DESIGN §7).
-def _review_cursor(value: str | None) -> datetime | None:
-    try:
-        return datetime.fromisoformat(value).astimezone(UTC) if value else None
-    except ValueError:
-        return None
-
-
-def _newer(stamp: str | None, cursor: datetime | None) -> bool:
-    """Whether an item at `stamp` is newer than `cursor`: one at the cursor's own second is handled (DESIGN §7).
-
-    Returns:
-        True when there is no cursor, or the item's second is after it; False for an item with no time.
-    """
-    if cursor is None:
-        return True
-    if stamp is None:
-        return False
-    return db.parse_time(stamp).replace(microsecond=0) > cursor.replace(microsecond=0)

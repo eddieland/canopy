@@ -7,9 +7,11 @@ reviews](PUBLISHED_REVIEWS.md). Next: [One-off tasks](TASKS.md).
 
 ## 35. The overseer reads the journal
 
-Designed, not built (ROADMAP M37). It waits on §30's measurement and on the overseer's tools (§27). Until it is built,
-§4 principle 1, §6, §7, §8, §17, §22, and TRUST_MODEL describe canopy as it is; this section says what changes, and the
-PR that builds it changes those sections and cuts this one to what is left.
+Being built (ROADMAP M37), ahead of §30's measurement at the operator's word. Built: the observations in the state
+block, and the prompt's procedure that decides a fresh subject from them. The claims checked in code, the cursors, and
+comments reaching the conversation wait, and none needs the overseer's tools (§27), whose verbs the commands share.
+Until each is built, §4 principle 1, §6, §7, §8, §17, §22, and TRUST_MODEL describe canopy as it is; this section says
+what changes, and the PR that builds the last of it cuts this one to what is left.
 
 Re-reading the tracker and GitHub every tick is most of the overseer's spend (MEASUREMENTS 2026-10-15), and §30's
 connectors already read the same facts into the journal. So the overseer decides from what they observed, and the
@@ -24,9 +26,11 @@ Judgment stays the overseer's: which repository, a slug and a title, a worker's 
 - A candidate carries its title, state, labels, and blockers; its body until its first unit exists, since the
   repository and slug are chosen from it; and its comments past its `comment` cursor, each with its id, author, time,
   and body, and two marks set in code: whether the author is an authorized replier, and whether it is a worker's
-  (D069).
+  (D069). While the mirror stays, the comments start past the earlier of its `comment` and `mirror` cursors, so what
+  it has yet to copy is there too.
 - A unit carries its PR's state, head, base, draft, and mergeable state; each named check at the head, a human check
-  marked (§30); and the reviews and review comments past its `review` cursor, each marked trusted or not in code (D089).
+  marked (§30); each person's latest verdict, since an approval before the cursor still approves; and the reviews and
+  review comments past its `review` cursor, each marked trusted or not in code (D089).
 - Each subject carries the rows of §7 the derivation found holding (§30): the harness's reading, which the overseer may
   overrule, since §7 has no order yet and a row moves into code only on evidence (D008, §37).
 - The tracker query's result and the review query's (§21), as their sources last read them whole. `canopy_queried` is
@@ -44,10 +48,11 @@ derivation does; or `unobserved`, when no source covers it, such as every ticket
 ### The overseer stops reading
 
 The prompt's procedure drops its reads: no tracker search, no ticket, PR, check, or review read, no mirroring, and no
-provider skill. The overseer calls the tracker's or GitHub's MCP only about a subject marked `stale` or `unobserved`.
-That is the prompt's rule, not a guard, but spend by tool (§11) counts each call. A stale subject's live read can mark
-a closed ticket done or raise an attention item, never start a run (below). An unobserved subject keeps today's
-procedure, provider skill and claims included (Open). A later step takes the MCP servers away (ROADMAP M39).
+provider skill. Built so far: those reads, for a fresh subject; the mirror and the skill stay until comments reach the
+conversation in code (below). The overseer calls the tracker's or GitHub's MCP only about a subject marked `stale` or
+`unobserved`. That is the prompt's rule, not a guard, but spend by tool (§11) counts each call. A stale subject's live
+read can mark a closed ticket done or raise an attention item, never start a run (below). An unobserved subject keeps
+today's procedure, provider skill and claims included (Open). A later step takes the MCP servers away (ROADMAP M39).
 
 ### Claims checked in code
 
@@ -108,5 +113,6 @@ carries it as data with its author. Without a tracker source no comment reaches 
 - Whether a tracker with no connector keeps the live-read procedure, with its provider skill, mirror, and label claim,
   or a `tracker` source is required. Recommended: required. The two shipped cover the operator's trackers, and the
   contract is a page of Python for another. Required, it changes §3's and principle 5's "any tracker with an MCP
-  server", and §17.
-- How many new items a subject shows before the rest are counted, set from the measurement's ticks.
+  server", and §17. Until it is settled, such a tracker keeps the live reads: its tickets are `unobserved`.
+- How many new items a subject shows before the rest are counted, set from the measurement's ticks. Ten until then,
+  the conservative choice: a busy subject waits a tick rather than swelling every block.

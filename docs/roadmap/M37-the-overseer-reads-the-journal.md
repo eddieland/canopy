@@ -57,6 +57,22 @@ Accept: the tests above pass, and the design (§35) is folded into the sections 
 (MEASUREMENTS) with tool-result tokens per tick at a tenth of the first day's median (about 14k), no MCP call on a tick
 whose observations are fresh, and no action missed over a day, checked against the derivation as in M36.
 
-Status: not started. Designed 2026-10-21 (DESIGN §35); the build waits on M36's measurement and M48's stage 2 check.
-Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
-required (recommended: required), and how many new items a subject shows before the rest are counted.
+Status: in progress. Designed 2026-10-21 (DESIGN §35). Started 2026-10-22 ahead of M36's measurement, at the operator's
+word, since M36's connectors and derivation are built; nothing here needs M48's MCP tools, whose stage 2 was not merged,
+so the claims below stay fields of the `canopy` commands until it is. Built (2026-10-22): the first bullet's
+observations in the state block, after its fixed sections (`loop/observations.py`), and the second bullet's reads for a
+fresh subject: the prompt decides a subject marked `fresh` from the block, takes the query's and the review query's
+fresh results instead of running them, mirrors a fresh comment from the block, and calls MCP only about a subject
+`stale` or `unobserved`; snapshot tests over hand-written journals for a candidate with new comments, a non-candidate
+the query returned, a unit with checks and mixed reviewers, and stale and unobserved subjects. The `vcs` request already
+names the PRs review requests wait on (M36). Chosen conservatively, for the operator to change: a subject shows at most
+ten new items (`MAX_NEW_ITEMS`); a tracker with no connector keeps today's live reads, its tickets `unobserved`, leaving
+"required" open; a candidate's comments start past the earlier of its `comment` and `mirror` cursors while the mirror
+stays; a candidate canopy did not hold when its source last read it is stale, since its comments were not recorded; a
+cursor naming no observed comment is passed by larger numeric ids; each person's latest verdict is shown, since an
+approval before the `review` cursor still counts; and a stale or unobserved ticket shows only what is old, never its
+stale text. Left: the duties check owing `canopy queried` only when no source read the query, the claim checks in code
+(`unauthorized`, `unobserved`, `stale`, `handled`), journal-numbered cursors and their migration, the mirror's
+retirement with comments recorded in the conversation, the design folded into the sections it names, and the live
+re-measurement. Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker`
+source is required (recommended: required), and how many new items a subject shows before the rest are counted.
