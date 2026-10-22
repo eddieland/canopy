@@ -57,6 +57,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "pr_titles": None,  # nor did it report its PR's title
         "summary": "did it",
         "question": None,
+        "flaky": False,
     }
     [w] = agent_runs(scenario.agent_log)
     assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
@@ -436,6 +437,13 @@ def test_sigterm_returns_the_slot(scenario: Scenario, git_pool: GitPool, treehou
     assert json.loads(run.row["result_json"]) == {"harness": "stopped by signal SIGTERM"}
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+
+
+def test_only_true_says_a_check_was_flaky_and_nothing_else_costs_the_result() -> None:
+    assert present(worker.parse_result('{"status": "done", "flaky": true}')).flaky
+    for said in ('"yes"', '"true"', "1", "null", "false"):
+        assert not present(worker.parse_result(f'{{"status": "done", "flaky": {said}}}')).flaky
+    assert not present(worker.parse_result('{"status": "done"}')).flaky
 
 
 def test_parse_result_takes_the_last_json_object_line() -> None:

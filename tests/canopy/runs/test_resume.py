@@ -4,15 +4,16 @@ A `resume` takes everything that comes back to a PR, a failed check among it (M5
 still read, and count as `resume` runs.
 """
 
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from canopy.core import db
+from canopy.core import contract, db
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, canopy, in_tick, present, unit_of, waits
+from tests.canopy.helpers import KEY, WORKER_DONE, canopy, in_tick, present, unit_of, waits, worker_does
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -338,6 +339,25 @@ def test_state_block_shows_attempts_the_cooldown_and_a_resumes_reasons(scenario:
     assert state["policy"]["max_resume_attempts"] == 6
     assert state["policy"]["ci_cooldown_minutes"] == 30
     assert db.parse_time(state["now"]) < until
+
+
+def test_a_resume_that_leaves_a_flaky_check_tells_the_overseer_one_bit(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.run(worker=pushes())
+    summary = "Left unit-tests: the runner was lost before any test ran. Run 77 of main lost one the same way."
+    flaky = json.loads(WORKER_DONE) | {"branch": "agent/PROJ-1-work", "summary": summary, "flaky": True}
+    left = scenario.run(resumes(CI), worker=worker_does(result=json.dumps(flaky)))
+    assert left.status == "done"  # it pushed nothing, and needed to push nothing
+    assert contract.stored_object(left.row["result_json"])["flaky"] is True
+    # The overseer reads the bit, never the worker's words: the summary stays in the run (TRUST_MODEL T1).
+    scenario.tick(*waits("PROJ-1", rationale="the check waits on a rerun"))
+    last = scenario.ticket_state("PROJ-1")["last_run"]
+    assert last.get("flaky") is True
+    assert summary not in json.dumps(scenario.state())
+
+    # From a run that was not sent for a failed check, the bit means nothing, and the block leaves it out.
+    scenario.run(resumes(REVIEW), worker=pushes(flaky=True))
+    scenario.tick(*waits("PROJ-1", rationale="nothing new"))
+    assert "flaky" not in scenario.ticket_state("PROJ-1")["last_run"]
 
 
 def test_grant_of_fix_ci_is_refused_naming_resume(scenario: Scenario) -> None:
