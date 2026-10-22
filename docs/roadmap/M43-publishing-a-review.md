@@ -62,4 +62,7 @@ state block with `canopy review revise` as a review run at the reviewed commit, 
 `policy.max_revisions_per_draft` (3, shared and only lowered, raised with `canopy grant review:ID revision`), its
 result line made a new version; TRUST_MODEL T1, T3, T5, and T6 changed with it. The operator's choices taken there: a
 note is refused while a revision runs and at the limit, and a revision whose draft the operator changed while it ran
-makes no version. Left: asking for a revision from the review's page (T8), and the live Accept.
+makes no version. Built 2026-10-22: the review's page asks for a revision with a note through the same function as
+`canopy reply review:ID`, with its refusals, and shows the notes no version has answered and the draft's revisions
+against its limit, running or ended; TRUST_MODEL T8 changed with it. Left: the live Accept, run by the operator on a
+coworker's PR.
