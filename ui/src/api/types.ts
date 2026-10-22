@@ -215,6 +215,8 @@ export type ReviewThread = Schemas['Thread']
 export type ThreadComment = Schemas['ThreadComment']
 /** A comment a run drafted in place of posting it: a worker's text until the operator sends it. */
 export type Draft = Schemas['Draft']
+/** The feedback plan item a thread's draft started from, and whether canopy found the run's text departs from it. */
+export type DraftFromPlan = Schemas['DraftFromPlan']
 /** Where a draft stands, as `canopy draft list` prints it. */
 export type DraftStatus = Schemas['DraftStatusName']
 /** A reaction a thread's draft stages on the comment it names, by GitHub's name for it. */

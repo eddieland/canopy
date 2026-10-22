@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.core import db, feedback_plans, plans, prompts
-from canopy.core.vocab import PlanStatus, RunKind
+from canopy.core.vocab import PlanStatus, ReplyMode, RunKind
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -153,6 +153,8 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
         text = feedback_plans.approved_text(ctx.state_dir, feedback) if feedback is not None else None
         if feedback is not None and text is not None:
             covered = feedback_plans.items(ctx.conn, feedback.id)
+            # Its drafts start from the plan's replies; a worker that posts its own (`post`) is given none (§32).
+            drafting = ctx.config.trust.review_replies is ReplyMode.APPROVE
             note = prompts.feedback_plan_note(
                 copy,
                 plans.outline(text),
@@ -160,6 +162,7 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
                 left_out=[(i.number, i.item_id) for i in covered if i.left_out],
                 message_id=feedback.approved_message_id,
                 by_planner=feedback.approved_channel == plans.PLANNER,
+                proposed={i.number: i.reply for i in covered if drafting and not i.left_out and i.reply is not None},
             )
             return Followed(note=note, feedback_plan_id=feedback.id)
     approved = plans.approved_of(ctx.conn, key)

@@ -6,9 +6,10 @@ import type { SubmitEvent } from 'react'
 
 import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
-import type { Draft, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
+import type { Draft, DraftFromPlan, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
 import { CommentText } from '@/components/comment-text'
+import { Disclosure } from '@/components/disclosure'
 import { Textarea } from '@/components/input'
 import { LinkOut } from '@/components/link-out-icon'
 import { MemoryText } from '@/components/memory-text'
@@ -21,6 +22,7 @@ import { RunLink } from '@/components/run-link'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -396,8 +398,10 @@ export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChang
  * has checked yet, Edit and Drop; a dropped one, Undo. Send reads Sending… until the post returns, and a toast says
  * what it did as well as the line under the card. Its hash is the one a send carries, so what posts is the text shown.
  * A draft superseded by this one that carried the operator's edits is named, since they are not carried over. A
- * ticket's draft names the issue it goes to, as the worker read it, for the operator to check. Each verb calls
- * `onChange` once done, to read again what shows the draft.
+ * ticket's draft names the issue it goes to, as the worker read it, for the operator to check. A draft that started
+ * from a feedback plan's proposed reply (DESIGN §32) wears `as planned`, or `changed from the plan` when canopy found
+ * the run's text, or what it says it did, other than the plan proposed, with that reply to read beside it. Each verb
+ * calls `onChange` once done, to read again what shows the draft.
  */
 export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
     const [said, setSaid] = useState<string | null>(null)
@@ -440,6 +444,12 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                 <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} />
                 {draft.stance !== null && <Word word={draft.stance} className="text-xs text-muted-foreground" />}
                 {draft.edited && <Chip>your text</Chip>}
+                {draft.from_plan !== null &&
+                    (draft.from_plan.departs ? (
+                        <Chip tone="blocked">changed from the plan</Chip>
+                    ) : (
+                        <Chip>as planned</Chip>
+                    ))}
                 <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a send carries">
                     {draft.hash}
                 </span>
@@ -452,6 +462,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                     It replaces a draft you edited, and your edits are not carried over: read it before you send it.
                 </p>
             )}
+            {draft.from_plan?.departs === true && <FromPlan from={draft.from_plan} />}
             {draft.issue_url !== null && (
                 <p className="mt-1 text-xs text-muted-foreground" data-testid="draft-issue">
                     To <span className="font-mono break-all text-foreground">{draft.issue_url}</span>, as the worker
@@ -557,6 +568,39 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                 {said}
             </Notice>
         </article>
+    )
+}
+
+/**
+ * The feedback plan item a draft departs from: its number and what the plan proposed, and the reply it proposed, shown
+ * on demand as plain text, every hidden character named, as the draft's own is. What departs is the run's text, not
+ * the operator's edits of it.
+ */
+function FromPlan({ from }: { from: DraftFromPlan }) {
+    const [shown, setShown] = useState(false)
+    const item = `plan item ${String(from.number)}, which proposed ${from.proposal}`
+    const said = from.left_out
+        ? `Your approval left out ${item}.`
+        : `The run departs from ${item}${from.reply === null ? ' and no reply' : ''}.`
+    return (
+        <Collapsible open={shown} onOpenChange={setShown} className="mt-1">
+            <p
+                className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+                data-testid="draft-from-plan"
+            >
+                {said}
+                {from.reply !== null && <Disclosure open={shown} what="the proposed reply" />}
+            </p>
+            {from.reply !== null && (
+                <CollapsibleContent>
+                    <MemoryText
+                        text={from.reply}
+                        lines
+                        className="mt-1 block border-l-2 pl-2 text-xs text-muted-foreground"
+                    />
+                </CollapsibleContent>
+            )}
+        </Collapsible>
     )
 }
 
