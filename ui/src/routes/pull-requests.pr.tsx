@@ -14,6 +14,8 @@ import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { ListPanel } from '@/components/list-panel'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
+import { ReviewDraftChip } from '@/components/review-draft-chip'
+import { ReviewLink } from '@/components/review-link'
 import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewThreads } from '@/components/review-threads'
 import { ReviewsTable } from '@/components/reviews-table'
@@ -126,6 +128,16 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     <Fields>
                         {/* Its title names its repository, and a ticketless PR says why in its description. */}
                         {pr.ticket_key !== null && <TicketField ticketKey={pr.ticket_key} title={pr.ticket_title} />}
+                        {/* The operator's review of a PR the loop does not own: its newest draft, on its review's
+                            page. */}
+                        {pr.draft !== null && (
+                            <Field label="your review">
+                                <span className="flex min-w-0 items-center gap-2">
+                                    <ReviewDraftChip status={pr.draft.status} />
+                                    <ReviewLink id={pr.draft.review_id} />
+                                </span>
+                            </Field>
+                        )}
                         {pr.branch && (
                             <Field label="branch" mono>
                                 <Copyable text={pr.branch} label="branch" />

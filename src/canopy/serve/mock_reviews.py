@@ -2,9 +2,10 @@
 
 PR 88 (ABC-099) was reviewed twice: its first commit had a blocking finding, its second has two smaller ones, anchored
 on its diff. The operator's own API PR, which no ticket opened, was reviewed clean at their request; PR 91's review
-never reported a result. A coworker's PR 95 waits on its review, at the operator's request. Carol's PR 14 was reviewed
-at the operator's request too, so it has a draft of a review on it (DESIGN §34), as the clean review does: two findings
-on its diff's lines are comments, and one about a file it does not touch is in the body (`drafts`).
+never reported a result. Dana's PR 95 waits on its review, at the operator's request, read once so canopy knows whose
+it is. Carol's PR 14 was reviewed at the operator's request too, so it has a draft of a review on it (DESIGN §34), as
+the clean review does: two findings on its diff's lines are comments, and one about a file it does not touch is in the
+body (`drafts`). Carol's waits on the operator; the clean review's they published, as a comment on their own PR.
 
 The operator has seen every review but the clean one, review 2, which is new to them since they asked for it (DESIGN
 §22). Opening a review's page marks it seen, a write, so no test against the journal that never changes opens review
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db, review_diff, review_drafts, sql
 from canopy.core.review_result import Finding, ReviewResult
+from canopy.core.vocab import ReviewDraftStatus
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -283,13 +285,46 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             notes="The author asked for a close look at the retry loop; I'm not sure it backs off.",
         ),
     )
+    # The reader's read of it, since an open request watches its PR (DESIGN §21): whose it is, before its review.
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_prs",
+            url=PR_95,
+            repository="acme/web",
+            number=95,
+            base_ref="main",
+            state="open",
+            draft=0,
+            author="dana",
+            observed_at=at(-15),
+        ),
+    )
 
 
-def drafts(conn: sqlite3.Connection) -> None:
-    """Make the drafts of the reviews of PRs the loop does not own, as `_review` does once one ends, at its end."""
+def drafts(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
+    """Make the drafts of the reviews of PRs the loop does not own, as `_review` does once one ends, at its end.
+
+    The clean review's the operator has published since, so the lists show a draft that waits and one that posted.
+    """
     for run_id in DRAFTED:
         review_drafts.make(conn, run_id)
     with db.transaction(conn):
+        sql.execute(
+            conn,
+            sql.update("review_drafts")
+            .set(
+                status=ReviewDraftStatus.PUBLISHED,
+                publish_version=1,
+                publish_started_at=at(-75),
+                publish_channel="web",
+                published_at=at(-75),
+                published_review_id=2_480_000_001,
+                published_url=f"{PR_12}#pullrequestreview-2480000001",
+                published_comments="[]",
+            )
+            .where("review_run_id = ?", 2),
+        )
         sql.execute(
             conn,
             sql.update("review_drafts")

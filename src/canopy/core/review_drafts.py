@@ -124,6 +124,12 @@ def of_review(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | No
     return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("review_run_id = ?", run_id))
 
 
+def of_reviews(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int, records.ReviewDraft]:
+    """Return the drafts of those of review runs `run_ids` that have one, by run id."""
+    found = records.fetch_all(conn, records.ReviewDraft, _DRAFTS.where_in("review_run_id", run_ids))
+    return {draft.review_run_id: draft for draft in found}
+
+
 def get(conn: sqlite3.Connection, draft_id: int) -> records.ReviewDraft | None:
     """Return draft `draft_id`, or None."""
     return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("id = ?", draft_id))
