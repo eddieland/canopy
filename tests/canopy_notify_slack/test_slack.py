@@ -116,9 +116,10 @@ def test_the_slack_sink_posts_one_escaped_message(hook: str, tmp_path: Path) -> 
     assert posted["blocks"] == slack.blocks(MESSAGE)
     assert posted["text"].splitlines() == [
         "*canopy* · api: 1 new, 1 resolved, 4 open, 1 event",
-        "+ *PROJ-3* Retry &lt;@U1&gt; checkout · needs_reviewer: &lt;!channel&gt; https://x.test/1",
-        "- *PROJ-4 (web)* · ready_to_merge",
-        "&lt; PROJ-12 run 41 implement ended done: &lt;https://evil|click&gt;",
+        "+ *PROJ-3* Retry &lt;@U1&gt; checkout · needs reviewer: &lt;!channel&gt; https://x.test/1",
+        "- *PROJ-4 (web)* · ready to merge",
+        # Each event as its block's first line shows it, not canopy's text line.
+        ":white_check_mark: *PROJ-12* Add retries · implement run 41 ended *done*",
     ]
 
 
@@ -169,7 +170,7 @@ def test_a_fifo_webhook_file_is_refused_without_opening_it(tmp_path: Path) -> No
 
 
 def test_a_long_slack_message_is_45_lines_with_its_header() -> None:
-    events = [{"kind": "run.started", "line": f"event {n}"} for n in range(60)]
+    events = [{"kind": "test", "text": f"event {n}"} for n in range(60)]
     text = slack.render({"repo": "/r/api", "events": events})
     lines = text.splitlines()
     assert len(lines) == 45
@@ -232,10 +233,10 @@ def test_slack_blocks_are_built_from_the_fields() -> None:
     assert _texts(blocks) == [
         "1 new · 1 resolved · 4 open · 1 event",
         (
-            ":bell: *PROJ-3* Retry &lt;@U1&gt; checkout · needs_reviewer\n&lt;!channel&gt; <https://x.test/1>\n"
+            ":bell: *PROJ-3* Retry &lt;@U1&gt; checkout · needs reviewer\n&lt;!channel&gt; <https://x.test/1>\n"
             "_open since <!date^1790272800^{date_short_pretty} {time}|2026-09-24T18:00:00Z>_"
         ),
-        "*Resolved*\n:heavy_check_mark: ~PROJ-4 (web)~ ready_to_merge",
+        "*Resolved*\n:heavy_check_mark: ~PROJ-4 (web)~ ready to merge",
         (
             ":white_check_mark: *PROJ-12* Add retries · implement run 41 ended *done*\n<https://x.test/pr/7>\n"
             "&lt;https://evil|click&gt;"
@@ -330,6 +331,40 @@ def test_slack_blocks_for_each_event_kind() -> None:
     ]
 
 
+def test_slack_blocks_for_plans_follow_ups_and_tasks() -> None:
+    events: list[dict[str, Any]] = [
+        {"kind": "plan.proposed", "ticket": "P-1", "title": "Fix the build", "run": 2, "plan": 7},
+        {"kind": "plan.approved", "ticket": "P-1", "run": 2, "plan": 8, "feedback": True, "reason": "One <file>"},
+        {"kind": "follow_ups.filed", "ticket": "P-2", "run": 3, "follow_ups": {"P-9": "api", "P-10": None}, "count": 3},
+        {
+            "kind": "task.ended",
+            "task": 4,
+            "run": 5,
+            "status": "blocked",
+            "summary": None,
+            "question": "Which branch?",
+            "branch": "task/4",
+            "head": "0123456789abcdef",
+            "pr": "https://x.test/pr/3",
+            "tickets": ["P-11"],
+        },
+        {"kind": "chore.ended", "chore": "deps", "run": 6, "status": "ok", "findings": 0, "summary": None},
+    ]
+    assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
+        ":clipboard: *P-1* Fix the build · plan 7 waits on your approval\n_read it with_ `canopy show P-1`",
+        ":ballot_box_with_check: *P-1* · feedback plan 8 approved by its planner\n> *Why:* One &lt;file&gt;",
+        (
+            ":seedling: *P-2* · run 3 filed 3 follow-ups\n*P-9* (api), *P-10*, 1 more\n"
+            "_label or `canopy start` each one you want worked_"
+        ),
+        (
+            ":raising_hand: *task 4* · run 5 ended *blocked*\n<https://x.test/pr/3>\n> *Question:* Which branch?\n"
+            "`task/4` at `0123456789ab`\nfiled *P-11*"
+        ),
+        ":white_check_mark: *chore:deps* · run 6 ended *ok* · no findings",
+    ]
+
+
 def test_a_slack_digest_is_fields() -> None:
     digest: dict[str, Any] = {
         "since": "2026-09-24T15:00:00Z",
@@ -344,14 +379,14 @@ def test_a_slack_digest_is_fields() -> None:
         "lines": ["not used"],
     }
     assert _texts(slack.blocks({"repo": "/r/api", "digest": digest}))[1:] == [
-        "*Digest* since <!date^1790262000^{date_short_pretty} {time}|2026-09-24T15:00:00Z>",
-        "*Ticks*\n24 (error 1, ok 23)",
+        ":bar_chart: *Digest* since <!date^1790262000^{date_short_pretty} {time}|2026-09-24T15:00:00Z>",
+        "*Ticks*\n24 (23 ok, 1 error)",
         "*Workers running*\n2",
-        "*Runs started*\nimplement 2",
+        "*Runs started*\n2 implement",
         "*Runs ended*\nnone",
-        "*Needs you*\n3 open (needs_reviewer 3), oldest 3h",
-        "*Spent*\n$1.50 (overseer $0.25, workers $0.75, dry runs $0.50)",
-        ":white_check_mark: *P-1* Fix the build <https://x.test/pr/1>\n:raising_hand: *P-2*",
+        "*Needs you*\n3 open, oldest 3h\n3 needs reviewer",
+        "*Spent*\n*$1.50*\noverseer $0.25 (idle $0.25), workers $0.75, dry runs $0.50",
+        ":white_check_mark: *P-1* Fix the build · <https://x.test/pr/1>\n:raising_hand: *P-2* · blocked",
     ]
 
 
@@ -359,6 +394,7 @@ def test_a_slack_digest_is_fields() -> None:
     ("digest", "spent"),
     [
         ({"spend": {"total": None, "workers": None}}, ["*Spent*\nnone reported"]),
+        ({"spend": {"total": 0.5, "tasks": 0.5}}, ["*Spent*\n*$0.50*\ntasks $0.50"]),
         ({}, []),  # a canopy from before digests carried spend
     ],
 )
@@ -435,7 +471,7 @@ def test_the_slack_sink_posts_with_a_bot_token(api: str, tmp_path: Path) -> None
     assert set(posted) == {"channel", "text", "blocks"}
     assert posted["channel"] == "C0123ABCD"
     assert posted["text"].splitlines()[1] == (
-        "+ *PROJ-3* Retry &lt;@U1&gt; checkout · needs_reviewer: &lt;!channel&gt; https://x.test/1"
+        "+ *PROJ-3* Retry &lt;@U1&gt; checkout · needs reviewer: &lt;!channel&gt; https://x.test/1"
     )
 
 
@@ -616,7 +652,7 @@ def test_threads_hold_tickets_and_reviews_for_a_day_chores_stay_out(threaded: _T
             [
                 "# canopy · api",
                 "2 events",
-                ":white_check_mark: *chore:deps* · run 2 ended *done* · 0 findings",
+                ":white_check_mark: *chore:deps* · run 2 ended *done* · no findings",
                 ":white_check_mark: *The loop recovered* after 3 failed ticks",
             ],
         ),
@@ -811,7 +847,7 @@ def test_slack_links_each_item_and_event_to_its_page_in_the_web_ui() -> None:
     message: dict[str, Any] = {"repo": "/r/api", "ui": ui, "attention": {"added": added, "open": 1}, "events": events}
     assert _texts(slack.blocks(message))[:5] == [
         f"1 new · 0 resolved · 1 open · 3 events · <{ui}|open>",
-        f":bell: *P-1* · needs_reviewer · <{ui}tickets/P-1|open>",
+        f":bell: *P-1* · needs reviewer · <{ui}tickets/P-1|open>",
         ":test_tube: canopy test message",
         # `&` is escaped in a link, as in any of Slack's text.
         f":white_check_mark: *The loop recovered* after 3 failed ticks · <{ui}pull-requests/{escaped}|open>",
