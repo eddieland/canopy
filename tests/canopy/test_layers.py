@@ -32,11 +32,15 @@ SEPARATE = frozenset({"canopy_github", "canopy_jira", "canopy_notify_slack"})
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
 RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
-# Within it, the implementation that alone names the runtime; the one module that imports it; and the modules of what
-# any runtime reports, the only others of the package the implementation may import.
-IMPLEMENTATION = PACKAGE / RUNTIME / "opencode"
+# Within it, the implementations that alone name the runtime, OpenCode 1's and OpenCode 2's, each its own and importing
+# neither the other nor the surface; the one module that imports them; and the modules of what any runtime reports, the
+# only others of the package an implementation may import.
+IMPLEMENTATIONS = (PACKAGE / RUNTIME / "opencode", PACKAGE / RUNTIME / "opencode2")
 BINDING = PACKAGE / RUNTIME / "implementation.py"
 NEUTRAL = frozenset({"canopy.runtime.report", "canopy.runtime.entries", "canopy.runtime.agents"})
+# The one module an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
+# compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both.
+SHARED = {"canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.definitions"})}
 # Modules outside it allowed to name the runtime, with why: none knows how it behaves.
 NAMES_RUNTIME = {
     # The web UI's demo: its made-up pools' slots run the runtime's process, and its made-up runs' transcripts print
@@ -128,8 +132,9 @@ if TYPE_CHECKING:
     ]
 
 
-def test_only_the_implementation_names_the_runtime() -> None:
-    """No string outside `canopy.runtime.opencode` names OpenCode: not its commands, variables, files, or events (D009).
+def test_only_an_implementation_names_the_runtime() -> None:
+    """No string outside an implementation, `canopy.runtime.opencode` or `opencode2`, names OpenCode: not its commands,
+    variables, files, or events (D009).
 
     Not even the rest of `canopy.runtime`, whose surface is what a new runtime implements. A docstring or comment may
     still say why code is so; what the code acts on comes from the implementation.
@@ -137,14 +142,14 @@ def test_only_the_implementation_names_the_runtime() -> None:
     found = [
         v
         for path in modules()
-        if not path.is_relative_to(IMPLEMENTATION) and path.relative_to(PACKAGE).as_posix() not in NAMES_RUNTIME
+        if _implementation_of(path) is None and path.relative_to(PACKAGE).as_posix() not in NAMES_RUNTIME
         for v in naming_runtime(path, path.read_text())
     ]
     assert not found, "\n".join(found)
 
 
-def test_only_the_binding_imports_the_implementation() -> None:
-    """Only `canopy.runtime.implementation` imports the implementation, which imports only what any runtime reports.
+def test_only_the_binding_imports_an_implementation() -> None:
+    """Only `canopy.runtime.implementation` imports an implementation, which imports only what any runtime reports.
 
     So the rest of canopy reaches the runtime through the surface alone, and a new runtime is bound in one place.
     """
@@ -155,16 +160,31 @@ def test_only_the_binding_imports_the_implementation() -> None:
 def implementation_imports(path: Path, source: str) -> list[str]:
     """Each import in `source`, the text of the module at `path`, that crosses the implementation's boundary."""
     where = path.relative_to(PACKAGE.parent)
-    inside = path.is_relative_to(IMPLEMENTATION)
-    prefix = ".".join(("canopy", *IMPLEMENTATION.relative_to(PACKAGE).parts))
+    own = _implementation_of(path)
     found: list[str] = []
     for line, name in imported_modules(ast.parse(source, filename=str(path))):
-        into = name == prefix or name.startswith(f"{prefix}.")
-        if into and not inside and path != BINDING:
+        into = next((i for i in IMPLEMENTATIONS if _within(name, i)), None)
+        if into is not None and own is None and path != BINDING:
             found.append(f"{where}:{line}: imports {name}, which only {BINDING.relative_to(PACKAGE.parent)} may")
-        elif inside and not into and name.startswith(f"canopy.{RUNTIME}") and name not in NEUTRAL:
+        elif own is not None and into is not None and into != own and name not in _shared_with(own):
+            found.append(f"{where}:{line}: imports {name}, another implementation's, which this one may not")
+        elif own is not None and into is None and name.startswith(f"canopy.{RUNTIME}") and name not in NEUTRAL:
             found.append(f"{where}:{line}: imports {name}, which the implementation may not: it is the surface's")
     return found
+
+
+def _shared_with(implementation: Path) -> frozenset[str]:
+    return SHARED.get(".".join(("canopy", *implementation.relative_to(PACKAGE).parts)), frozenset())
+
+
+def _implementation_of(path: Path) -> Path | None:
+    return next((i for i in IMPLEMENTATIONS if path.is_relative_to(i)), None)
+
+
+# Whether module `name` is implementation `implementation` or one of its modules.
+def _within(name: str, implementation: Path) -> bool:
+    prefix = ".".join(("canopy", *implementation.relative_to(PACKAGE).parts))
+    return name == prefix or name.startswith(f"{prefix}.")
 
 
 def imported_modules(tree: ast.Module) -> list[tuple[int, str]]:
@@ -193,13 +213,19 @@ from canopy.runtime import report, transcript
 from canopy.runtime.entries import Text
 from canopy.runtime.opencode import events
 """
+    other = """
+from canopy.runtime.opencode2 import events
+from canopy.runtime.opencode import definitions, events
+"""
     found = implementation_imports(PACKAGE / "runs" / "example.py", outside)
     found += implementation_imports(BINDING, outside)
-    found += implementation_imports(IMPLEMENTATION / "example.py", inside)
+    found += implementation_imports(IMPLEMENTATIONS[0] / "example.py", inside)
+    found += implementation_imports(IMPLEMENTATIONS[1] / "example.py", other)
     assert [v.split(": ", 1)[1] for v in found] == [
         "imports canopy.runtime.opencode.events, which only canopy/runtime/implementation.py may",
         "imports canopy.runtime.opencode.transcript, which only canopy/runtime/implementation.py may",
         "imports canopy.runtime.transcript, which the implementation may not: it is the surface's",
+        "imports canopy.runtime.opencode.events, another implementation's, which this one may not",
     ]
 
 
