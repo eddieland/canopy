@@ -47,13 +47,14 @@ history (§19), the request and text `canopy chore history` has, refused for any
 exact name and denies bash; every other definition denies it. Each run canopy starts drops the variables that name a
 server, so none passes below the run it was given to.
 
-The reviewer and the planner, which have no shell for git, read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git`
-in a review's or a plan's inline config, serves `merge-base`, `diff`, `log`, `show`, and `blame` over the checkouts
-the harness names on its command line for that run, never the agent. An argument is a revision, a path inside the
-repository, or text to search for joined to its option, never an option itself; git reads commits only, inherits no
-`GIT_*` variable, and runs no hook, filesystem monitor, external diff, textconv, pager, signature check, or transport;
-output is bounded. Their definitions deny bash, the planner's but for what `runtime.allow_bash` names (§13), and allow
-each by exact name; every other definition denies `canopy_git_*`. Workers keep their shell, for git's writes.
+The reviewer, which has no shell, and the planner, whose shell runs only what `runtime.allow_bash` names, never git,
+read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git` in a review's or a plan's inline config, serves
+`merge-base`, `diff`, `log`, `show`, and `blame` over the checkouts the harness names on its command line for that run,
+never the agent. An argument is a revision, a path inside the repository, or text to search for joined to its option,
+never an option itself; git reads commits only, inherits no `GIT_*` variable, and runs no hook, filesystem monitor,
+external diff, textconv, pager, signature check, or transport; output is bounded. Their definitions deny bash, the
+planner's but for what `runtime.allow_bash` names (§13), and allow each by exact name; every other definition denies
+`canopy_git_*`. Workers keep their shell, for git's writes.
 
 ### The tools
 

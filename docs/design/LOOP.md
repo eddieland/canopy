@@ -333,7 +333,8 @@ Three steps, all the operator's, in the order they run:
 2. **`post_create` hooks**, in the user-level treehouse config, run on the base when a slot is made or reused. A
    failing hook does not fail the lease. canopy's own pool backend (§18) runs none.
 3. **`runtime.setup_cmd`**, private, runs in each slot of a worker run after its branch is checked out (§8 `_run` step
-   2), and fails the run when it fails. Plans and reviews run none: their agents build nothing.
+   2), and fails the run when it fails. Plans and reviews run none, so a command `runtime.allow_bash` names for the
+   planner runs without it.
 
 `setup_cmd` runs the branch's code on the operator's machine, outside the agent runtime's permissions, so it is wrapped
 as the worker is (§24, TRUST_MODEL T4). A broken setup crashes every run it meets, each spending an attempt (D030).
