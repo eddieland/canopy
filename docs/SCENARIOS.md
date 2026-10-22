@@ -147,6 +147,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   Expect `canopy show` of each run to list `canopy_git_*` among its tools, the transcripts to show the reviewer finding
   where the PR leaves its base and reading the diff from there, and the planner naming each repository with `repo`;
   no tool call fails for the server, and nothing in either checkout changes.
+- **S64. A review's draft revised, published once, and staged** (M43). On a coworker's PR canopy reviewed on request,
+  ask for a revision from the review's page with a note: expect the next tick to revise the draft at the reviewed
+  commit, and its new version to follow the note. Publish it, then publish it again: expect the second refused. On a
+  second PR, stage the draft: expect a pending review under your login holding that version on its lines, and
+  `review_unsettled` on the attention list, until you submit it on GitHub and the next read records it published.
 
 ### Chores and notifications
 
