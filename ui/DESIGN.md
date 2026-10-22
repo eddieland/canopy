@@ -634,6 +634,12 @@ side.
   A `sticky` foot stays at the bottom of the page while its panel scrolls over it, as a sticky header stays at its
   top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
   what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
+- **A draft's card** (`DraftCardFrame`, `src/components/draft-card.tsx`): text canopy holds that would post as the
+  operator on a PR, a thread's reply (`DraftCard`) or a review's comment (`DraftCommentCard`, `NewCommentCard`), is one
+  card: `surface`, a `status-blocked/40` border while it waits on the operator, a header of its `panel-label` and what
+  names it, its text, then its verbs in a row under it, `sm` buttons with the CLI's command on hover, `Edit` outline
+  (`EditVerb`) and `Drop` ghost (`DropVerb`). `Edit` opens `DraftForm`: a `Textarea` with its count against 4,000,
+  `Save` disabled past it or while the text is not one the draft may hold, and `Cancel`.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
   name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
@@ -1433,11 +1439,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   GitHub`, which stages it, each with its command on hover, and a muted line by them saying what posts: as you, on the
   PR's author's PR (`the PR` when canopy has not read it), the body and how many comments, on which commit. A publish
   says what it did in a toast; staged or published, the foot says so in one line linked to GitHub instead, never a raw
-  URL. Each comment's card (`DraftCommentCard`, `surface`, an `accent/40` border
-  to tell it from a finding's `surface-raised`) sits under its line after the findings there, with ghost `xs` `edit` and
-  `drop`. While the draft waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`),
-  shown on the row's hover or its focus, which opens a new comment's form under the line. Each form is a `Textarea` with
-  its count against 4,000, as a draft's.
+  URL. Each comment's card (`DraftCommentCard`, a draft's card, above: its `surface` tells it from a finding's
+  `surface-raised`) sits under its line after the findings there, with `Edit` and `Drop` while the draft waits. While it
+  waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`), shown on the row's hover
+  or its focus, which opens a new comment's card under the line, its form open.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does (a pulsing dot and `run:N`), then its latest review (its state's dot unless a
   run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted) and `requested` while
@@ -1476,7 +1481,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
   `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.
-  A draft's card (`DraftCard`, `surface`, a `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and
+  A draft's card (`DraftCard`, a draft's card, above) heads with `Draft`, `run:N` and
   its number, its status as a chip (`DRAFT_TONE`: waiting, unconfirmed, and staged in `status-blocked`, refused in
   `status-failed`, sending as running, the rest plain), the run's stance as a muted word, `your text` once edited, and
   its hash at the end in muted monospace, the one a send carries; then the harness's reason for a status other than
@@ -1485,9 +1490,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   left out when the draft sends its reaction alone. A thread's draft that stages a reaction says so in a muted line
   under the text (`draft-reaction`): the emoji, hidden from screen readers, then its name and whether it goes with the
   reply or alone; one a failed send already added says so in `status-blocked` (`draft-reacted`). Its
-  verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
-  ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
-  the text in a `Textarea` with its count against 4,000, `Save` disabled past it, and on a thread's draft a `Reaction`
+  verbs: `Send` (default) on a waiting draft, `Edit` and `Drop` on one waiting or unchecked, ghost `Undo` on a dropped
+  one, and a `LinkOut` to a sent one. `Edit`'s form holds, on a thread's draft, a `Reaction`
   `ToggleGroup` of GitHub's eight in its picker's order, each an emoji named for screen readers, the lit one pressed
   again for none; `Save` also takes an empty text beside a reaction. What each verb did goes under it
   (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send

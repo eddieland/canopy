@@ -190,7 +190,7 @@ describe('ReviewDraftPanel', () => {
     it('offers nothing to change once published, and links to the review on GitHub', async () => {
         const url = `${PR}#pullrequestreview-9`
         const found = await panel(reviewDraft({ status: 'published', published_url: url }))
-        expect(within(found).queryByRole('button', { name: 'edit' })).toBeNull()
+        expect(within(found).queryByRole('button', { name: /^edit$/iu })).toBeNull()
         expect(within(found).queryByRole('button', { name: 'Start the review on GitHub' })).toBeNull()
         expect(within(found).getByTestId('draft-published').textContent).toContain('Published version 1 as your review')
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(url)
@@ -217,13 +217,13 @@ describe('DraftCommentCard', () => {
         await renderRouted(<DraftCommentCard run={5} comment={comment} draft={draft} />)
         const card = screen.getByTestId('draft-comment')
         expect(within(card).getByText('from finding 1')).toBeTruthy()
-        fireEvent.click(within(card).getByRole('button', { name: 'edit' }))
+        fireEvent.click(within(card).getByRole('button', { name: 'Edit' }))
         fireEvent.change(within(card).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
         fireEvent.click(within(card).getByRole('button', { name: /Save/u }))
         await waitFor(() => {
             expect(writes()).toHaveLength(1)
         })
-        fireEvent.click(await within(card).findByRole('button', { name: 'drop' }))
+        fireEvent.click(await within(card).findByRole('button', { name: 'Drop' }))
         await waitFor(() => {
             expect(writes()).toHaveLength(2)
         })
@@ -281,6 +281,6 @@ describe('ReviewDiffPanels with a draft', () => {
             />,
         )
         expect(screen.queryByRole('button', { name: /^Comment on /u })).toBeNull()
-        expect(screen.queryByRole('button', { name: 'edit' })).toBeNull()
+        expect(screen.queryByRole('button', { name: /^edit$/iu })).toBeNull()
     })
 })

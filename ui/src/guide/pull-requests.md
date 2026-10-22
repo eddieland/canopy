@@ -274,7 +274,7 @@ a stranger wrote about your coworker's code before signing it: hidden characters
 Change it until it says what you would:
 
 - **edit**, beside **Body**, rewrites the body; empty, the comments post alone.
-- **edit** and **drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
+- **Edit** and **Drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
   **dismiss** on the finding drops its comment too, and **undo** puts it back.
 - The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it.
 
