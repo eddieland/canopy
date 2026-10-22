@@ -561,7 +561,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await form.getByRole('button', { name: 'Show persona and notes' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
     await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
-        /^When you review, name the input that breaks a claim/u,
+        /^Plans and reviews by naming the input that would break each claim/u,
     )
     await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
     await page.keyboard.press('Escape')
