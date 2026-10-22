@@ -8,10 +8,10 @@ import type { DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
 import { ToastContext } from '@/hooks/use-toast'
 import { placeFindings } from '@/lib/reviews'
 import type { NewToast } from '@/lib/toasts'
-import { renderRouted } from '@/test-utils'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { ReviewDiffPanels } from './review-diff'
-import { DraftCommentCard, ReviewDraftPanel } from './review-draft'
+import { DraftCommentCard, ReviewDraftPanel, ReviewDraftState } from './review-draft'
 
 const PR = 'https://github.com/acme/api/pull/14'
 const SHA = `a61f7c08${'4'.repeat(32)}`
@@ -67,8 +67,13 @@ describe('ReviewDraftPanel', () => {
     it('shows what would post word for word, its comments and versions, every hidden character named', async () => {
         const hidden = `Retry${String.fromCodePoint(8203)}s.`
         const found = await panel(reviewDraft({ body: hidden }))
-        expect(within(found).getByText('waiting')).toBeTruthy()
-        expect(within(found).getByText('version 1, 3f9a1c27b0de')).toBeTruthy()
+        // The page's description says its status; what made the version, and its hash, are on the version's hover.
+        expect(within(found).queryByText('waiting')).toBeNull()
+        expect(within(found).queryByText(/3f9a1c27b0de/u, { selector: 'p' })).toBeNull()
+        expect(tipOf(within(found).getByTestId('draft-version'))).toBe(
+            "Version 1: made from review run 5's summary and findings, by the reviewer. " +
+                'A publish carries its hash, 3f9a1c27b0de.',
+        )
         expect(within(found).getByText('<U+200B>')).toBeTruthy()
         const comments = within(found).getByTestId('draft-comments')
         expect(within(comments).getByText('1 of at most 30')).toBeTruthy()
@@ -190,7 +195,7 @@ describe('ReviewDraftPanel', () => {
     it('offers nothing to change once published, and links to the review on GitHub', async () => {
         const url = `${PR}#pullrequestreview-9`
         const found = await panel(reviewDraft({ status: 'published', published_url: url }))
-        expect(within(found).queryByRole('button', { name: 'edit' })).toBeNull()
+        expect(within(found).queryByRole('button', { name: /^edit$/iu })).toBeNull()
         expect(within(found).queryByRole('button', { name: 'Start the review on GitHub' })).toBeNull()
         expect(within(found).getByTestId('draft-published').textContent).toContain('Published version 1 as your review')
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(url)
@@ -217,13 +222,13 @@ describe('DraftCommentCard', () => {
         await renderRouted(<DraftCommentCard run={5} comment={comment} draft={draft} />)
         const card = screen.getByTestId('draft-comment')
         expect(within(card).getByText('from finding 1')).toBeTruthy()
-        fireEvent.click(within(card).getByRole('button', { name: 'edit' }))
+        fireEvent.click(within(card).getByRole('button', { name: 'Edit' }))
         fireEvent.change(within(card).getByRole('textbox'), { target: { value: 'Raise once it gives up.' } })
         fireEvent.click(within(card).getByRole('button', { name: /Save/u }))
         await waitFor(() => {
             expect(writes()).toHaveLength(1)
         })
-        fireEvent.click(await within(card).findByRole('button', { name: 'drop' }))
+        fireEvent.click(await within(card).findByRole('button', { name: 'Drop' }))
         await waitFor(() => {
             expect(writes()).toHaveLength(2)
         })
@@ -281,6 +286,15 @@ describe('ReviewDiffPanels with a draft', () => {
             />,
         )
         expect(screen.queryByRole('button', { name: /^Comment on /u })).toBeNull()
-        expect(screen.queryByRole('button', { name: 'edit' })).toBeNull()
+        expect(screen.queryByRole('button', { name: /^edit$/iu })).toBeNull()
+    })
+})
+
+describe('ReviewDraftState', () => {
+    it("says the draft's status, its version, and what the status means, for the page's description", async () => {
+        await renderRouted(<ReviewDraftState draft={reviewDraft({ status: 'staged', version: 3 })} />)
+        const state = screen.getByTestId('draft-state')
+        expect(within(state).getByText('staged')).toBeTruthy()
+        expect(state.textContent).toBe('stagedversion 3 · pending on GitHub, for you to submit there')
     })
 })

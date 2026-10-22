@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { GitPullRequestDraft, Pencil, Send, Trash2 } from 'lucide-react'
-import { useId, useState } from 'react'
-import type { SubmitEvent } from 'react'
+import { GitPullRequestDraft, Pencil, Send } from 'lucide-react'
+import { useState } from 'react'
 
 import {
     addReviewDraftComment,
@@ -13,22 +12,21 @@ import {
     showReviewDraft,
 } from '@/api/mutations'
 import type { ReviewDraft, ReviewDraftComment } from '@/api/types'
-import { Textarea } from '@/components/input'
+import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
 import { Leaf } from '@/components/leaf'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { ListRow } from '@/components/rows'
-import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
+import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { MAX_DRAFT_CHARS, draftChars } from '@/lib/drafts'
+import { reviewDraftDescription } from '@/lib/descriptions'
 import { reviewDraftEditedText, reviewDraftPublishedText, reviewDraftPublishedToast } from '@/lib/outcomes'
 import { REVIEW_DRAFT_TONE, commentAnchor, editable, versionBy } from '@/lib/review-drafts'
 import type { Adding } from '@/lib/review-drafts'
 import { shortSha } from '@/lib/reviews'
-import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 // What the draft is, around the commit the review read.
@@ -42,14 +40,29 @@ const POSTS_STAGED =
     ': it approves nothing. A review started on GitHub holds the same, seen by you alone until you submit it there.'
 
 /**
+ * A draft's state, for the description of the review's page it leads: its status's chip in its tone, then its version
+ * and what the status means for the operator (`reviewDraftDescription`).
+ */
+export function ReviewDraftState({ draft }: { draft: ReviewDraft }) {
+    return (
+        <span className="inline-flex flex-wrap items-center gap-x-2" data-testid="draft-state">
+            <Chip tone={REVIEW_DRAFT_TONE[draft.status]} word={draft.status} />
+            {reviewDraftDescription(draft)}
+        </span>
+    )
+}
+
+/**
  * A review of a PR the loop does not own as the comment review canopy would post in the operator's name (DESIGN §34):
  * its newest version word for word, the body here and each comment on its line of the diff, every hidden character
  * named, since the reviewer wrote it from the PR's text. While it waits, the body is edited here, each comment on its
  * card, and a comment added on any line of the diff; each change is a new version, as `canopy review edit` makes.
  * Publishing posts the version shown, named by its hash, as one comment review on the commit the review read:
  * submitted now, as `--submit` does, or left pending on GitHub for the operator to submit there. A staged one says
- * where to finish it, a published one links to it. With no diff kept, its comments are listed here.
- * `onFollow` hears a link followed to a comment's card, by its file's index in the diff.
+ * where to finish it, a published one links to it. With no diff kept, its comments are listed here. It leads the
+ * review's page, whose description says its status (`ReviewDraftState`), so its header names only its version, with
+ * what made it and its hash on hover. `onFollow` hears a link followed to a comment's card, by its file's index in
+ * the diff.
  */
 export function ReviewDraftPanel({
     run,
@@ -73,17 +86,23 @@ export function ReviewDraftPanel({
     return (
         <Panel data-testid="review-draft">
             <PanelHeader label="Draft review">
-                <Chip tone={REVIEW_DRAFT_TONE[draft.status]} word={draft.status} />
-                <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a publish carries">
-                    version {draft.version}, {draft.hash}
-                </span>
+                {/* Its status is the page's description; what made the version, and its hash, are on hover. */}
+                <Tip
+                    fact={
+                        `Version ${draft.version}: ${draft.change}, ${versionBy(draft)}. ` +
+                        `A publish carries its hash, ${draft.hash}.`
+                    }
+                >
+                    <span className="readout text-xs text-muted-foreground" data-testid="draft-version">
+                        version {draft.version}
+                    </span>
+                </Tip>
             </PanelHeader>
             <div className="flex flex-col gap-2 p-3 text-sm">
                 <p className="text-muted-foreground">
                     {INTRO[0]}
                     <span className="font-mono text-xs">{shortSha(sha)}</span>
                     {INTRO[1]}
-                    {` Version ${draft.version}: ${draft.change}, ${versionBy(draft)}.`}
                 </p>
                 {draft.moved_head !== null && (
                     <p className="text-status-blocked" data-testid="draft-head-moved">
@@ -378,44 +397,20 @@ export function DraftCommentCard({
     })
     const open = editable(draft)
     return (
-        <article
+        <DraftCardFrame
             id={commentAnchor(comment.number)}
-            className="scroll-mt-16 rounded-md border border-accent/40 bg-surface p-3 text-sm"
-            data-testid="draft-comment"
-        >
-            <header className="flex flex-wrap items-center gap-2">
-                <span className="panel-label">Comment {comment.number}</span>
-                <Chip>{comment.finding === null ? 'yours' : `from finding ${comment.finding}`}</Chip>
-                <span className="font-mono text-xs break-all text-muted-foreground">
-                    {comment.path}:{comment.line}
-                </span>
-                {open && !editing && (
-                    <span className="ml-auto flex items-center gap-1">
-                        <Button
-                            size="xs"
-                            variant="ghost"
-                            className="-my-1 text-muted-foreground"
-                            onClick={() => setEditing(true)}
-                            disabled={drop.isPending}
-                            title={`canopy review edit ${run} --comment ${comment.number} --text TEXT`}
-                        >
-                            <Pencil />
-                            edit
-                        </Button>
-                        <Button
-                            size="xs"
-                            variant="ghost"
-                            className="-my-1 text-muted-foreground"
-                            onClick={() => drop.mutate()}
-                            disabled={drop.isPending}
-                            title={`canopy review edit ${run} --drop ${comment.number}`}
-                        >
-                            <Trash2 />
-                            drop
-                        </Button>
+            waiting={open}
+            testId="draft-comment"
+            header={
+                <>
+                    <span className="panel-label">Comment {comment.number}</span>
+                    <Chip>{comment.finding === null ? 'yours' : `from finding ${comment.finding}`}</Chip>
+                    <span className="font-mono text-xs break-all text-muted-foreground">
+                        {comment.path}:{comment.line}
                     </span>
-                )}
-            </header>
+                </>
+            }
+        >
             {editing ? (
                 <DraftTextForm
                     label={`Edit comment ${comment.number} of review run ${run}'s draft`}
@@ -431,10 +426,24 @@ export function DraftCommentCard({
             ) : (
                 <MemoryText text={comment.text} lines className="mt-1.5 block" />
             )}
+            {open && !editing && (
+                <DraftVerbs>
+                    <EditVerb
+                        onClick={() => setEditing(true)}
+                        disabled={drop.isPending}
+                        title={`canopy review edit ${run} --comment ${comment.number} --text TEXT`}
+                    />
+                    <DropVerb
+                        onClick={() => drop.mutate()}
+                        disabled={drop.isPending}
+                        title={`canopy review edit ${run} --drop ${comment.number}`}
+                    />
+                </DraftVerbs>
+            )}
             <Notice error={drop.error} className="mt-1.5">
                 {said}
             </Notice>
-        </article>
+        </DraftCardFrame>
     )
 }
 
@@ -445,13 +454,18 @@ export function DraftCommentCard({
 export function NewCommentCard({ run, adding, onDone }: { run: number; adding: Adding; onDone: () => void }) {
     const client = useQueryClient()
     return (
-        <article className="rounded-md border border-accent/40 bg-surface p-3 text-sm" data-testid="new-draft-comment">
-            <header className="flex flex-wrap items-center gap-2">
-                <span className="panel-label">New comment</span>
-                <span className="font-mono text-xs break-all text-muted-foreground">
-                    {adding.path}:{adding.line}
-                </span>
-            </header>
+        <DraftCardFrame
+            waiting
+            testId="new-draft-comment"
+            header={
+                <>
+                    <span className="panel-label">New comment</span>
+                    <span className="font-mono text-xs break-all text-muted-foreground">
+                        {adding.path}:{adding.line}
+                    </span>
+                </>
+            }
+        >
             <DraftTextForm
                 label={`Comment on ${adding.path}:${adding.line}`}
                 initial=""
@@ -462,7 +476,7 @@ export function NewCommentCard({ run, adding, onDone }: { run: number; adding: A
                 }}
                 onCancel={onDone}
             />
-        </article>
+        </DraftCardFrame>
     )
 }
 
@@ -485,60 +499,16 @@ function DraftTextForm({
     onSaved: (saved: ReviewDraft) => void
     onCancel: () => void
 }) {
-    const id = useId()
-    const sendKeys = useSendKeys()
     const [text, setText] = useState(initial)
-    const edit = useMutation({ mutationFn: () => save(text), onSuccess: onSaved })
-    const chars = draftChars(text)
-    const fits = (allowEmpty || text.trim() !== '') && chars <= MAX_DRAFT_CHARS
-
-    function submit(event: SubmitEvent<HTMLFormElement>) {
-        event.preventDefault()
-        if (fits && !edit.isPending) {
-            edit.mutate()
-        }
-    }
-
     return (
-        <form onSubmit={submit} aria-label={label} className="mt-1.5 flex flex-col gap-2">
-            <span className="flex items-baseline justify-between gap-3">
-                <label className="panel-label" htmlFor={`${id}-text`}>
-                    In your words
-                </label>
-                <span
-                    className={cn(
-                        'readout text-xs text-muted-foreground',
-                        chars > MAX_DRAFT_CHARS && 'text-status-failed',
-                    )}
-                >
-                    {chars} of {MAX_DRAFT_CHARS}
-                </span>
-            </span>
-            <Textarea
-                id={`${id}-text`}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                onKeyDown={sendKeys.onKeyDown}
-                spellCheck
-                // oxlint-disable-next-line jsx-a11y/no-autofocus -- the form opens on the operator's click, to type in.
-                autoFocus
-                className="min-h-20"
-            />
-            <span className="flex flex-wrap items-center gap-2">
-                <Button
-                    type="submit"
-                    size="sm"
-                    disabled={edit.isPending || !fits}
-                    aria-keyshortcuts={sendKeys.shortcut}
-                >
-                    Save
-                    <SendKeycap keys={sendKeys.shortcut} />
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={edit.isPending}>
-                    Cancel
-                </Button>
-            </span>
-            <Notice error={edit.error} />
-        </form>
+        <DraftForm
+            label={label}
+            text={text}
+            onText={setText}
+            fits={allowEmpty || text.trim() !== ''}
+            save={() => save(text)}
+            onSaved={onSaved}
+            onCancel={onCancel}
+        />
     )
 }
