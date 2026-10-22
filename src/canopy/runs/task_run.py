@@ -286,7 +286,8 @@ def _run_agent(
     prompt = starts.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     runtime = ctx.config.runtime
-    argv = render_command(runtime.worker_template(runtime.private_worker_cmd), prompt, snapshot, f"task:{task.id}")
+    command = render_command(runtime.worker_template(runtime.private_worker_cmd), prompt, snapshot, f"task:{task.id}")
+    argv = command.argv
     timeout_minutes = runtime.worker_timeout_minutes
     log.info(
         "running the task's worker",
@@ -300,6 +301,7 @@ def _run_agent(
         argv,
         cwd=slot,
         env=env,
+        stdin=command.stdin,
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_agent_pid(ctx.conn, "task_runs", run.id, pid),
         on_line=progress.Progress(

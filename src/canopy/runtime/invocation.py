@@ -13,14 +13,14 @@ from canopy.runtime.implementation import invocation
 NAME = invocation.NAME
 
 
-def default_template(agent: str, *, definitions_dir: str, title: str, prompt: str) -> str:
-    """The default template that runs `agent`, from config's placeholders for the definitions, title, and prompt.
+def default_template(agent: str, *, definitions_dir: str, title: str) -> str:
+    """The default template that runs `agent`, from config's placeholders for the definitions and title.
 
     Returns:
-        A template that points the runtime at `definitions_dir`, and runs `agent` with the events canopy reads,
-        `title` as the session's title, and `prompt` as its message.
+        A template that points the runtime at `definitions_dir`, and runs `agent` with the events canopy reads and
+        `title` as the session's title. It places no prompt, so canopy writes the prompt on its stdin (D023).
     """
-    return invocation.default_template(agent, definitions_dir=definitions_dir, title=title, prompt=prompt)
+    return invocation.default_template(agent, definitions_dir=definitions_dir, title=title)
 
 
 def with_config_dir(directory: str, command: str) -> str:

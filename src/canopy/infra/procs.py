@@ -8,6 +8,7 @@ a `Runner` argument, so tests can pass a fake one.
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
 import os
 import queue
@@ -176,7 +177,7 @@ class SubprocessRunner:
 
         Raises:
             CommandNotFoundError: The executable is missing or not executable.
-            ProcError: `cwd` cannot be used as the working directory.
+            ProcError: `cwd` cannot be used as the working directory, or the arguments are too long to start.
             OSError: The process could not be started for any other reason.
             ValueError: Both `on_line` and `stdout_to_file` were given.
         """
@@ -246,6 +247,15 @@ class SubprocessRunner:
             if isinstance(e, PermissionError):
                 reason = "not executable" if _exists(argv[0], cwd=cwd, env=full_env) else "not found"
                 raise CommandNotFoundError(f"command {reason}: {argv[0]}") from e
+            # Linux holds one argument or variable to 128 KiB, and all of them to its ARG_MAX: a prompt placed in the
+            # argv rather than on stdin can pass the first. Both sizes are named, since either may be the cause.
+            if e.errno == errno.E2BIG:
+                longest = max(len(os.fsencode(a)) for a in argv)
+                environ = sum(len(os.fsencode(f"{k}={v}")) + 1 for k, v in (full_env or os.environ).items())
+                raise ProcError(
+                    f"arguments and environment too long to start {argv[0]}: its longest argument is {longest:,} "
+                    f"bytes, its environment {environ:,}",
+                ) from e
             raise
 
         # Leaving the block closes the pipes, which communicate() leaves open when a signal interrupts it.

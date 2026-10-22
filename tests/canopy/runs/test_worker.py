@@ -121,6 +121,21 @@ def test_the_session_title_names_the_ticket_and_its_title(
     assert argv[3] == f"--title={session_title}"
 
 
+def test_a_worker_template_that_places_no_prompt_gets_it_on_stdin(scenario: Scenario, git_pool: GitPool) -> None:
+    """No argument limit applies to a prompt on stdin (D023), and the suffix still follows the template's words."""
+    scenario.configures(
+        runtime={
+            "worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker",
+            "worker_cmd_suffix": "--variant high",
+        },
+    )
+    run = scenario.run(worker=pushes())
+    assert run.status == "done"
+    [w] = agent_runs(scenario.agent_log)
+    assert w["argv"] == ["run", "--agent", "canopy-worker", "--variant", "high"]
+    assert w["stdin"] == run.prompt
+
+
 def test_the_worker_runs_between_the_prefix_and_the_suffix(scenario: Scenario, git_pool: GitPool) -> None:
     """One prefix and suffix wrap every command a worker run starts, such as a sandbox wrapper (DESIGN §12)."""
     scenario.configures(
