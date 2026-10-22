@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from canopy.serve import demo
+from canopy.serve import demo, options
 from canopy.serve.options import ServeOptions
 
 DEMO = "canopy-git-main-acme.vercel.app"
@@ -26,7 +26,7 @@ def browser(tmp_path: Path) -> TestClient:
     (ui / "index.html").write_text("<!doctype html><html><head></head><body></body></html>")
     with (
         mock.patch.object(demo, "ui_dir", autospec=True, return_value=ui),
-        mock.patch.object(demo, "STREAM_SECONDS", 0.2),
+        mock.patch.object(options, "STREAM_SECONDS", 0.2),
     ):
         app = demo.create(VERCEL, tmp_path / "demo")
     return TestClient(app, base_url=f"https://{DEMO}")
