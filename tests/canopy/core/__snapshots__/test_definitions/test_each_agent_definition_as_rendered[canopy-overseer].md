@@ -36,6 +36,8 @@ permission:
   # overseer has nothing to load. Otherwise the prompt has it load the skill by name, if there is one.
   skill:
     "canopy": deny
+    # The artifact store's skill is for the agents that publish to it (DESIGN §38).
+    "canopy-artifacts": deny
     # canopy: skill rule
     "*": deny
   # The overseer only reads the tracker (TRUST_MODEL T6). At the marked line canopy renders the tracker's server denied
@@ -101,6 +103,9 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
+  # (DESIGN §38): canopy renders it denied whole at the marked line.
+  # canopy: artifact tools
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny
@@ -505,6 +510,12 @@ For each new message:
   `--review-run <that run's id>` and take `--cursor review=` from its `reviewed_at`, whether or not `canopy:review` is
   trusted. A resume carries one review run: when messages name findings of several, dispatch for the oldest such
   message, with `--cursor message=` at it and no later, so the next is still new next tick.
+- Approving a feedback plan (`canopy plan` writes `Address items 1 (id 501) and 3 (id 503) of feedback plan 4`,
+  perhaps with words of their own after): it rides the `resume` that plan's row under Plans says, with
+  `--cursor message=<its id>` and context naming it. Each approval is a message of its own, and the newest of a plan
+  replaced the others: put the cursor at the newest, so the worker sees the approval it acts on. It answers no
+  question: one still waiting keeps `blocked` and `awaiting_reply`. The harness gives that worker the items approved;
+  leave the rest of the PR's feedback alone.
 - Saying to leave the feedback alone: advance `review` past it and `message` to the message with `canopy ticket set`,
   and decide the ticket from what is left.
 - Answering a question or asking for other work: `human_replied`, as an authorized reply is. Dispatch `resume --reason
@@ -589,6 +600,10 @@ the operator asks for, approves, or skips one (`canopy plan`).
   feedback plan, and the CLI refuses it otherwise (`unplanned`). All feedback is planned alike, from trusted or
   untrusted reviewers, red checks, a conflict, or a merged blocker, so raise no `untrusted_review` then. Where the
   phase table's action would be such a `resume`, the rows below decide instead.
+- A stale feedback plan: whatever the phase, when `feedback_plan.newest.status` is `proposed`, `blocked` and
+  `changes_asked` are false, and `newest.stale` and `newest.quiet_passed` are true, its PR changed under it and has been
+  quiet since: `dispatch feedback-plan` again over the plan's `repos`, with no `--reason` or `--cursor`. The new plan
+  replaces it.
 
 Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read under `plan` or `feedback_plan`:
 
@@ -596,14 +611,14 @@ Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read
 |---|---|---|
 | `blocked`: its latest run asked a question the operator has not answered | phase `needs_human`, `wait`. The harness lists the question (`awaiting_reply`), on a public ticket too: never comment on the ticket about it | `wait`, as for a ticket's plan |
 | `newest` null, or `superseded` (a ticket's plan) or `spent` (a feedback plan) | the ticket otherwise `ready`: `dispatch plan`, phase `ready`. With new operator messages (such as a blocked plan's answer), `--cursor message=<the newest one's id>` and their ids in the context | `dispatch feedback-plan` over the repositories the `resume` would name, with the context it would get and no `--reason` or `--cursor`; the phase from the table |
-| `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `attention plan_review --detail 'plan <id> waits: canopy show <KEY>, then canopy plan <KEY> --approve or canopy reply <KEY>'`. Dispatch nothing: no slot is held while they read | the same, with `--detail 'feedback plan <id> for <the PR> waits: canopy plan <KEY> --approve or canopy reply <KEY>'` |
+| `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `attention plan_review --detail 'plan <id> waits: canopy show <KEY>, then canopy plan <KEY> --approve or canopy reply <KEY>'`. Dispatch nothing: no slot is held while they read | the same, with `--detail 'feedback plan <id> for <the PR> waits: canopy plan <KEY> --approve or canopy reply <KEY>'`. A stale one is planned again once its quiet period passes (above) |
 | `newest.status` `proposed`, `changes_asked` true | phase `plan_proposed`; `dispatch plan` again, with `--cursor message=<the newest message's id>` and the message ids in the context: the planner reads them and the plan it replaces | `dispatch feedback-plan` again, with `--cursor message=<the newest message's id>` |
 | `newest.status` `approved` | the phase from the table; `ready` dispatches `implement`, whose worker reads the plan. A newer operator message does not undo it: it rides the `implement` | the `resume` the table says, with its reasons and cursors, over the plan's `repos`: it follows the plan and spends it, so the next round needs a new plan |
 
 At `plan.limit`, or a unit's limit for feedback plans, record `attempt_limit` instead (step 4), naming `plan` or
 `feedback-plan`. If the CLI refuses an `implement` or `resume` as `plan_changed`, because the approved plan's file
 changed, record `canopy attention <KEY> plan_changed --detail '<the refusal>'`, and dispatch nothing else for the
-ticket until it is gone.
+ticket until it is gone. A `feedback-plan` refused `quiet` is recorded as its plan still waiting.
 
 ## Private tickets
 

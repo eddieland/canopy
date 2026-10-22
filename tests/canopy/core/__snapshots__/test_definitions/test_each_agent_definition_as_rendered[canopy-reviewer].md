@@ -26,6 +26,8 @@ permission:
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
   skill:
     "canopy": deny
+    # The artifact store's skill is for the agents that publish to it (DESIGN §38).
+    "canopy-artifacts": deny
   # The reviewer reads the ticket and writes nothing to it (TRUST_MODEL T6). At the marked line canopy renders, off a
   # GitHub tracker, GitHub's issue reads denied, then the tracker's server denied by a wildcard and each of its read
   # tools allowed by name, so a write tool no pattern names fails closed (D021). On a GitHub tracker, whose server the
@@ -90,6 +92,9 @@ permission:
   "*list_issue_types*": deny
   "*list_issue_fields*": deny
   "*get_label*": deny
+  # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
+  # (DESIGN §38): canopy renders it denied whole at the marked line.
+  # canopy: artifact tools
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
   # pattern, so none above, such as `*merge*`, closes one.
   "canopy_git_merge-base": allow

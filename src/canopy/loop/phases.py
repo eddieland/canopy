@@ -335,6 +335,20 @@ def newer(stamp: str | None, cursor: datetime | None) -> bool:
     return db.parse_time(stamp).replace(microsecond=0) > cursor.replace(microsecond=0)
 
 
+def is_feedback(review: records.ObservedReview) -> bool:
+    """Whether an observed review or review comment is feedback (DESIGN §7).
+
+    Returns:
+        True for a review comment, a change request, and a review with something to say; False for an approval, a
+        dismissal, and an empty review.
+    """
+    if review.item is ReviewItem.COMMENT:
+        return True
+    return review.state is ReviewState.CHANGES_REQUESTED or (
+        review.state is ReviewState.COMMENTED and bool(review.body.strip())
+    )
+
+
 def _overseers(action: str) -> bool:
     """Whether `action` is the overseer's own choice about a ticket, not the harness's or a guard's.
 
@@ -532,7 +546,7 @@ class _World:
             latest = self.latest_runs.get(key)
             if latest is not None and latest.status is RunStatus.BLOCKED:
                 ended = latest.ended_at or latest.started_at
-                if not any(m.at > ended for m in operator):
+                if not any(m.at > ended and conversation.answers_questions(m) for m in operator):
                     found.append(Phase.NEEDS_HUMAN)
             if operator:
                 found.append(Phase.HUMAN_REPLIED)
@@ -675,7 +689,7 @@ class _World:
         new = [
             r
             for r in self.reviews.get(pr.url, [])
-            if _feedback(r)
+            if is_feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
             and newer(r.created_at, cursor)
         ]
@@ -693,8 +707,11 @@ class _World:
         record = self.tickets.get(key)
         if record is None:
             return []
+        # A verb's instruction, such as a feedback plan's approval, is not the operator speaking to the feedback.
         return [
-            m.at for m in conversation.operator_messages_after(self.ctx.conn, key, record.forgotten_message_id or 0)
+            m.at
+            for m in conversation.operator_messages_after(self.ctx.conn, key, record.forgotten_message_id or 0)
+            if conversation.answers_questions(m)
         ]
 
     def _runs_of(self, url: str) -> list[records.ReviewRun]:
@@ -745,15 +762,6 @@ def _query_result(conn: sqlite3.Connection) -> list[str]:
 
 def _done(conn: sqlite3.Connection) -> set[str]:
     return {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
-
-
-# Whether an observed review or review comment is feedback: not an approval, a dismissal, or an empty review.
-def _feedback(review: records.ObservedReview) -> bool:
-    if review.item is ReviewItem.COMMENT:
-        return True
-    return review.state is ReviewState.CHANGES_REQUESTED or (
-        review.state is ReviewState.COMMENTED and bool(review.body.strip())
-    )
 
 
 def _approved(reviews: Collection[records.ObservedReview]) -> bool:

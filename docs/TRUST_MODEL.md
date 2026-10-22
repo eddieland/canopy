@@ -59,7 +59,8 @@ Controls:
 - canopy has no tracker code, so it cannot read labels, and a live tick showed an overseer can skip its label check
   for a ticket the journal remembers (D051). `canopy dispatch` refuses without `--label` naming one of
   `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
-  ticket. The independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
+  ticket. Where a `tracker` source observes the ticket, it is checked against the observation too (below). The
+  independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
   changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
   judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
 - An approved plan (DESIGN §25) is data, not an operator instruction. A planner wrote it from ticket text, which anyone
@@ -91,9 +92,13 @@ Controls:
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
   trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
   it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut as a mirror cuts it.
-  The marks inform the overseer; no guard checks a claim against them yet (ROADMAP M37), so the label, reply, and
-  review checks above are still the overseer's and the worker's. Residual: an observation is what a connector printed,
-  up to that age old.
+  `canopy dispatch` checks the overseer's claims against them in code, before its other guards: the label must be one
+  observed on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a
+  worker's or at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone
+  else's only with an operator message after it (`unauthorized`), and each cursor must name an item observed and
+  shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused `stale`. A
+  private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
+  guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -104,9 +109,10 @@ Controls:
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
-  about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
-  cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
-  `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR can claim to be it.
+  about it says, and is told who is trusted. Where the `vcs` source observes the PR, the harness checks this too
+  (above); elsewhere both checks are agent judgment, as label checks are (D051). canopy's own reviewer is trusted
+  only when the list names `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR
+  can claim to be it.
 - With `policy.feedback_plan = "approve"` (DESIGN §32, private), D089's gate becomes the operator's approval of a
   feedback plan, checked in code: every `resume` but one for `no_pr` alone is refused (`unplanned`) until the ticket
   has an approved feedback plan no `resume` has spent, and `plan_changed` once its file differs from the hash approved.
@@ -114,9 +120,12 @@ Controls:
   run reads only: canopy's planner, which writes one file and nothing else, with the PR's items as canopy's reader
   observed them, data in its desk, each with its author and whether they are trusted. An item id the reader did not
   return is refused with a note, so a plan cannot name feedback canopy never saw. The `resume` that follows names the
-  approved items by id from the journal, never the plan's text, and spends the approval: one approval, one run.
-  Trust labels then inform the operator rather than gate a run. Residual: the plan's text, model-written from anyone's
-  comments, reaches the worker as its copy, data as an approved plan's is; and approval is of the plan whole for now.
+  approved items by id from the journal, never the plan's text, only those the operator named when they approved by
+  item, and spends the approval: one approval, one run. The approval's operator message names the items by number and
+  observed id, journal values, and never quotes them. Trust labels then inform the operator rather than gate a run.
+  Residual: the plan's text, model-written from anyone's comments, reaches the worker as its copy, data as an approved
+  plan's is, the sections of items left out included, which only its prompt and the operator's message tell it to
+  leave.
 - With `policy.planner_may_approve` (DESIGN §25, private, off by default), a plan or feedback plan whose planner says
   it needs no review, with a reason, is approved by the harness as the planner's approval, recorded so and never as
   the operator's, and its `implement` or `resume` goes ahead without them. That lifts the plan gate on an agent's
@@ -363,8 +372,10 @@ Controls in code, not prompts:
 - Feedback plans (DESIGN §32): a feedback plan run holds its unit's slot within `capacity.max_workers`, has the
   worker's timeout, and counts toward `policy.max_feedback_plan_attempts` per unit (6 by default), never reset, raised
   only by the operator, in config or with `canopy grant KEY feedback-plan`. A new one is refused while the ticket's
-  feedback plan waits on the operator with no change asked, or its approval waits for its `resume`, so a stream of
-  comments from a bot spends a bounded number of plan runs. The quiet period before a re-plan is not built yet.
+  feedback plan waits on the operator with no change asked and nothing changed on its PR, or its approval waits for its
+  `resume`; a stale one is planned again only once its PR has had no new item, reply, head, or check conclusion for
+  `policy.feedback_quiet_minutes` (10 by default; a repository may only raise it), refused `quiet` before then, in code.
+  So a stream of comments or pushes from a bot spends a bounded number of plan runs.
 - Follow-ups (DESIGN §18): at most `policy.max_follow_ups` recorded per run, 5 by default (0 records none, and a
   repository may only lower it), and one generation deep: a follow-up's runs record none. A ticket past them, or one a
   run that rewrote its slot's git reported, is not recorded, and the harness raises `follow_up_unrecorded` naming it.
@@ -565,6 +576,13 @@ Controls:
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
+- With `[artifacts]` set (DESIGN §38), the agents `artifacts.publish_roles` names may call the artifact store's
+  tools by exact name: publish an artifact or a new version of one, read and list them, and reply, comment, and resolve
+  threads on them, never the comment feed. The public worker is the one agent config lets it name, and its definition
+  denies the store's server (`artifacts.mcp_server`) by a wildcard before those allows, so a tool the contract lacks
+  fails closed. Every other definition of canopy's denies the server whole by name, and its skill, `canopy-artifacts`,
+  by name too. The planner and the private worker never publish: config refuses either in `publish_roles`. The keys
+  are private (T7).
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 - Notifications carry text written by agents and org members (attention details, worker summaries and questions,
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
@@ -606,6 +624,14 @@ GitHub's server or another the tracker's rules do not cover, under a name the de
 reviewer post; that is noise, not authority, since the loop reads reviews only from its journal. A steered reviewer
 can put a link carrying data in a comment of a review's draft, which reaches GitHub if the operator publishes it
 unread.
+With a store configured, a public worker steered by what it read can publish the worktree, the ticket, or anything
+else it reads to the store, under any title, where whoever can read canopy's namespace reads it; it can reply on or
+resolve any thread there, and comment on any artifact of the namespace. The namespace bounds where (Louvre's token,
+the local store's `--namespace`), and no tool deletes an artifact or changes who may see it, so what was published
+stays until a person removes it in the store. The skill says to publish only when asked, which no guard checks. An
+artifact's origin, which names its ticket, is the worker's word until canopy sets it per run. A repository's OpenCode
+config naming the store's tools is not refused, as it is for the tracker's on a private run, and an example chore's
+agent, copied at install and never rendered, does not deny the store's server.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
@@ -635,8 +661,9 @@ shares with a team, so anyone who can push there can change that file, and a che
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, authorized repliers, agent memory's
-tiers, or the agents' personas, one commit would be enough to run commands on operators' machines, raise their spend,
-or pick who steers their workers.
+tiers, the agents' personas, or which agents publish artifacts and whose comments on them count, one commit would be
+enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who
+steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each

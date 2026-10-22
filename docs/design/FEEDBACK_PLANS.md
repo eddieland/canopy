@@ -6,7 +6,8 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 
 ## 32. Plans before feedback runs
 
-Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole, and the guards.
+Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole or by item from the CLI and
+its message, the guards, and planning again.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from
@@ -29,7 +30,9 @@ canopy's review findings (§21), a failed check, a conflict with the base, a blo
 authorized reply on the ticket. Fixing CI is part of `resume` (§8), so one plan, and one run, covers a round's
 comments and its red CI together, and a round of red CI alone waits on its plan too. A worker's comments and the
 replies the operator sent through canopy (§29) are not items. A review item's id is the one the `vcs` source observed
-(§29, §30), so a plan's item, a draft's thread, and an observed comment share it.
+(§29, §30), so a plan's item, a draft's thread, and an observed comment share it. A review thread is one item, its
+other comments replies given beside it, so an answer such as the PR author's "won't do" informs the item's proposal
+rather than becoming work of its own.
 
 Feedback no longer splits by reviewer: the plan shows each item's author and whether `trust.trusted_reviewers` lists
 them, so the operator weighs it, and `untrusted_review` is not raised for an item a feedback plan covers.
@@ -47,18 +50,22 @@ never reset (D030), and raised only by the operator's grant.
 
 ### Approving
 
-The operator approves the newest plan whole, or ticks the items to address, from the PR's page or `canopy plan`; only
-the operator's channels do, each refused inside any agent run, the web channel's behind its token (T8), or the planner,
-whose word stands for theirs as in §25 unless the plan replaces one no `resume` spent. Approval records the file's
-hash, and a reply newer than a waiting plan asks for changes. It also writes an operator
-message on the ticket naming the plan and the items to address and to leave, by number, never quoting them, as sending
-findings does (§21): the plan's text stays data, and the message is the instruction (T1).
+The operator approves the newest plan whole, or names the items to address or to leave, by the numbers `canopy show`
+gives them, from the PR's page or `canopy plan`; only the operator's channels do, each refused inside any agent run,
+the web channel's behind its token (T8), or the planner, whose word stands for theirs as in §25 unless the plan
+replaces one no `resume` spent. Approval records the file's hash, and a reply newer than a waiting plan asks for
+changes. It also writes an operator message on the ticket naming the plan and the items to address and to leave, by
+number and observed id, never quoting them, as sending findings does (§21), with any words of the operator's own
+after: the plan's text stays data, and the message is the instruction (T1). Each approval writes a message of its own,
+the newest the one in force, and answers no question a run asked, which still waits on a reply. The planner's approval
+writes none.
 
 The next tick dispatches the `resume` with the approved plan, which its worker follows as in §25 in place of the
-ticket's plan, and the ticked items. Two guards hold it in code: `unplanned` refuses a `resume` under `approve` that
-carries no approved feedback plan, unless its only reason is `no_pr`, and `plan_changed` refuses one whose plan's file
-changed since approval. An approval goes ahead once, spent by the `resume` that starts; its items stay handled unless
-that run ends other than `done` or `blocked`, when the next plan gets them. Later feedback waits for the next plan.
+ticket's plan, the items named, and only those, beside the approval's message. Two guards hold it in code:
+`unplanned` refuses a `resume` under `approve` that carries no approved feedback plan, unless its only reason is
+`no_pr`, and `plan_changed` refuses one whose plan's file changed since approval. An approval goes ahead once, spent by
+the `resume` that starts; its items stay handled unless that run ends other than `done` or `blocked`, when the next
+plan gets them, as it gets the items left out. Later feedback waits for the next plan.
 
 **A plan that changes nothing.** A plan whose items are all `decline`, `ask`, or `leave` changes no code. Under
 `trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` through: that run
@@ -67,14 +74,17 @@ replies would go out unseen.
 
 ### Planning again
 
-A feedback plan records what it was written against: the PR's head, the newest item it covers, and each check's
-conclusion at that head. While it waits, the harness marks it stale, in code, when what the connectors observe (§30)
-shows the head moved, an item arrived, or a check's conclusion changed. A stale plan is planned again once the PR has
-had no new item for `policy.feedback_quiet_minutes`, and a re-plan inside that quiet period is refused in code, so a
-reviewer's burst of comments makes one new plan, not one each, and a bot's stream of them spends a bounded number of
-plan runs (T3). The new plan carries the old one, the operator's edits and comments on it, and what changed, and
-supersedes it; a plan run already running is not stopped. Approving a stale plan is refused `stale` the first time,
-naming what changed; approving it again approves it, and what changed waits for the next plan.
+A feedback plan records what it was written against: the PR's head, each check's conclusion at that head, and each
+item and reply it was given, by id with a hash of its body, never its text. While it waits, the harness marks it stale,
+in code, with a reason for each change, when what the connectors observe (§30) shows the head moved, a check's
+conclusion changed, an item or a reply arrived, or an item it covers was edited or its thread resolved. A stale plan is
+planned again once the PR has had no new item, reply, head, or check conclusion for `policy.feedback_quiet_minutes`,
+each timed from when it was made or canopy first saw it, and a re-plan inside that quiet period is refused in code, so a
+burst of comments or pushes makes one new plan, and a bot's stream of them a bounded number (T3). The new plan carries
+the old one, the operator's edits and comments on it, and what changed, and supersedes it; a plan run already running is
+not stopped. Approving a stale plan is refused `stale` the first time, naming what changed; approving it again approves
+it, and what changed waits for the next plan: what is new since the last plan's record, with what a failed `resume`
+handed back and what no plan covered.
 
 ### The overseer's part
 
