@@ -228,8 +228,8 @@ export function draft(fields: Partial<Draft> = {}): Draft {
 }
 
 /**
- * Review 5's draft of a review on Carol's PR 14, waiting at its first version: the summary and a finding off the diff
- * in the body, and a comment made from finding 1 on line 15 of the diff's first file, `fields` over it.
+ * Review 5's draft of a review on Carol's PR 14, waiting at its first version: a finding off the diff in the body, and
+ * a comment made from finding 1 on line 15 of the diff's first file, `fields` over it.
  */
 export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
     return {
@@ -239,9 +239,9 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
         hash: '3f9a1c27b0de',
         author: 'reviewer',
         channel: null,
-        change: "made from review run 5's summary and findings",
+        change: "made from review run 5's findings",
         refused: [],
-        body: 'The retry works for a 503.\n\n`tests/test_upstream.py`\n\nNo test stops the backoff',
+        body: '`tests/test_upstream.py`\n\nNo test stops the backoff',
         comments: [
             {
                 number: 1,
@@ -261,7 +261,7 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
                 hash: '3f9a1c27b0de',
                 author: 'reviewer',
                 channel: null,
-                change: "made from review run 5's summary and findings",
+                change: "made from review run 5's findings",
                 created_at: '2026-10-08T11:30:00Z',
             },
         ],

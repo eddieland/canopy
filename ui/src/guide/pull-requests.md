@@ -289,8 +289,9 @@ A finished review of a PR the loop doesn't own, a coworker's you asked for or on
 first draft of a review you could leave on it, and its page is about that draft. The title says so, **Your review of
 acme/api#14 by carol**, and the line under it says where the draft stands: waiting on you, staged on GitHub, published,
 or unconfirmed while canopy finds out whether a publish landed. **Draft review** comes first and shows exactly what
-canopy would post in your name: the reviewer's summary as the body, each finding on a line of the diff as a comment on
-that line, and a finding the diff doesn't show tucked into the body under its location. On the diff, each finding is
+canopy would post in your name: each finding on a line of the diff as a comment on that line, and a finding the diff
+doesn't show in the body under its location. The reviewer's summary is written for you, not your coworker, so it stays
+out of the body; write one there if you want to say something overall. On the diff, each finding is
 one card: its severity and title from the reviewer, then the comment as it will post, marked **in your review** or
 **left out**. Every word is the reviewer's, written after reading the PR, so read it as you'd read
 anything a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
