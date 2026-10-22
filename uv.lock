@@ -134,6 +134,12 @@ requires-dist = [
 [[package]]
 name = "canopy-github"
 source = { editable = "packages/canopy-github" }
+dependencies = [
+    { name = "click" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
 
 [[package]]
 name = "canopy-jira"
@@ -148,6 +154,12 @@ requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
 [[package]]
 name = "canopy-notify-slack"
 source = { editable = "packages/canopy-notify-slack" }
+dependencies = [
+    { name = "click" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
 
 [[package]]
 name = "canopy-sandbox"

@@ -48,7 +48,7 @@ dependencies = [
 [project.scripts]
 canopy = "canopy.cli.launcher:main"
 # Notification sinks canopy ships (DESIGN §20). They run as sink commands, never inside the harness.
-canopy-notify-desktop = "canopy.notify.desktop:main"
+canopy-notify-desktop = "canopy.cli.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
 # canopy's GitHub reader and poster, a workspace member too: commands, so the harness holds no token (DESIGN §29).
@@ -221,6 +221,8 @@ ban-relative-imports = "all"
 # A mock is specced, so a call the real thing would refuse fails the test (AGENTS.md, Testing).
 "unittest.mock.Mock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
 "unittest.mock.MagicMock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
+# Every command line is click (D025). The workspace members turn TID251 off below, so review holds them to it.
+"argparse".msg = "Every command line is click (D025)."
 
 # `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
 [tool.ruff.lint.flake8-import-conventions]

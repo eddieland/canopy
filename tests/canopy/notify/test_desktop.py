@@ -10,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+from canopy.cli import desktop as desktop_cli
 from canopy.infra.procs import SubprocessRunner
 from canopy.notify import desktop
 from tests.conftest import executable
@@ -39,7 +40,7 @@ def tools(tmp_path: Path) -> Iterator[Path]:
 
 
 def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
-    assert desktop.run([], io.StringIO(json.dumps(MESSAGE)), runner=SubprocessRunner(), platform="linux") == 0
+    assert desktop_cli.run([], io.StringIO(json.dumps(MESSAGE)), runner=SubprocessRunner(), platform="linux") == 0
     [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
     assert argv[1:4] == ["--app-name=canopy", "--", "canopy: api"]
     assert argv[4] == "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x"
@@ -47,7 +48,7 @@ def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
 
 def test_the_desktop_sink_passes_text_to_osascript_as_arguments(tools: Path) -> None:
     text = 'canopy attention: 1 new, 0 resolved\n+ PROJ-1 crashed: "quoted" and \\ backslash\nFull list: /x\n'
-    assert desktop.run([], io.StringIO(text), runner=SubprocessRunner(), platform="darwin") == 0
+    assert desktop_cli.run([], io.StringIO(text), runner=SubprocessRunner(), platform="darwin") == 0
     [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
     assert argv[1:7] == [
         "-e",
@@ -69,16 +70,16 @@ def test_the_desktop_sink_bounds_its_body() -> None:
 
 def test_the_desktop_sink_without_its_tool(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
-        assert desktop.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
+        assert desktop_cli.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
         assert "notify-send is not installed" in capsys.readouterr().err
-        assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
+        assert desktop_cli.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
 
 
-def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exit_:
-        desktop.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux")
-    assert exit_.value.code == 0
-    assert "usage: canopy-notify-desktop" in capsys.readouterr().out
+def test_the_command_line_is_read_before_stdin(capsys: pytest.CaptureFixture[str]) -> None:
+    assert desktop_cli.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux") == 0
+    assert "Usage: canopy-notify-desktop [OPTIONS]" in capsys.readouterr().out
+    assert desktop_cli.run(["--nope"], _Unread(), runner=SubprocessRunner(), platform="linux") == 2
+    assert "No such option '--nope'" in capsys.readouterr().err
 
 
 class _Unread(io.StringIO):

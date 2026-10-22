@@ -38,7 +38,7 @@ State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is a
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
-import argparse
+import argparse  # noqa: TID251 -- a fake of treehouse, not canopy's: stdlib only, run by whatever python3 is on PATH.
 import fcntl
 import json
 import os

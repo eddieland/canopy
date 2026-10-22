@@ -58,6 +58,9 @@ def layer_of(package: str) -> int:
 
 
 def package_of(path: Path) -> str:
+    # A package's `__main__`, what `python -m` runs, is an entry point as canopy's own is: nothing imports it.
+    if path.name == "__main__.py":
+        return "__main__"
     return path.relative_to(PACKAGE).parts[0].removesuffix(".py")
 
 

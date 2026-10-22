@@ -15,24 +15,26 @@ repositories are on, or on github.com when none is named. What could not be read
 on stderr, so a cut-off read never looks like a PR with no checks or a repository with no branches. Nothing is
 written to GitHub.
 
-Exit codes: 0 everything was read; 1 something was not, and the `end` line names what was; 2 stdin is not usable, and
-nothing was read.
+Exit codes: 0 everything was read; 1 something was not, and the `end` line names what was; 2 stdin or the command line
+is not usable, and nothing was read.
 """
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TextIO
 
+import click
+
 from canopy_github import (
     Client,
     Endpoint,
     GitHubError,
     InputError,
+    Io,
     Ref,
     Repository,
     Token,
@@ -40,6 +42,7 @@ from canopy_github import (
     emit,
     endpoint,
     gh_token,
+    invoke,
     parse_pr,
     parse_repository,
     read_input,
@@ -89,27 +92,9 @@ def run(
     `endpoint_of` and `token_of` map a host to its GraphQL endpoint and its token.
 
     Returns:
-        The exit code: 0 everything read, 1 something was not, 2 nothing was read.
+        The exit code: 0 everything read, 1 something was not, 2 nothing was read or `argv` is not usable.
     """
-    parser = argparse.ArgumentParser(prog="canopy-connect-github", description=__doc__.split("\n", 1)[0])
-    parser.parse_args(argv)
-    try:
-        request = _request(read_input(stdin))
-    except InputError as e:
-        _say(str(e))
-        return 2
-    reader = _Reader(stdout, endpoint_of, token_of)
-    reader.prs(request.prs)
-    end: dict[str, object] = {"kind": "end", "prs": reader.whole_prs}
-    repositories = [] if request.repositories is None else reader.repositories(request)
-    if request.repositories is not None:
-        end["repositories"] = reader.whole_repositories
-    if request.review_query is not None:
-        found = reader.review_query(request.review_query, repositories)
-        if found is not None:
-            end["review_query"] = found
-    emit(stdout, end)
-    return 1 if reader.failed else 0
+    return invoke(command, "canopy-connect-github", argv, Io(stdin, stdout, endpoint_of, token_of))
 
 
 def main() -> int:
@@ -119,6 +104,33 @@ def main() -> int:
         The exit code.
     """
     return run(sys.argv[1:], sys.stdin, sys.stdout)
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.pass_context
+def command(ctx: click.Context) -> None:
+    """Read GitHub's PRs and branches into canopy's journal: canopy's vcs source (DESIGN §29, §30).
+
+    The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
+    """
+    io = ctx.find_object(Io) or Io(sys.stdin, sys.stdout)
+    try:
+        request = _request(read_input(io.stdin))
+    except InputError as e:
+        _say(str(e))
+        ctx.exit(2)
+    reader = _Reader(io.stdout, io.endpoint_of, io.token_of)
+    reader.prs(request.prs)
+    end: dict[str, object] = {"kind": "end", "prs": reader.whole_prs}
+    repositories = [] if request.repositories is None else reader.repositories(request)
+    if request.repositories is not None:
+        end["repositories"] = reader.whole_repositories
+    if request.review_query is not None:
+        found = reader.review_query(request.review_query, repositories)
+        if found is not None:
+            end["review_query"] = found
+    emit(io.stdout, end)
+    ctx.exit(1 if reader.failed else 0)
 
 
 def _request(raw: Mapping[str, object]) -> Request:
