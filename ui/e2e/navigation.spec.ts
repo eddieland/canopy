@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, padDecisions, settled, signIn } from './helpers.ts'
+import { NOW, padDecisions, settled, signIn, windowWidth } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -315,8 +315,9 @@ test("a ticket's page puts its reply before its runs and decisions in a narrow w
     expect(decisions.y).toBeLessThan(memory.y)
 
     // Wide, the conversation sits beside the rest, its top level with the Work panel's, the actions in its foot, and
-    // memory stays in the left column under the decisions rather than spanning the page.
-    await page.setViewportSize({ width: 1600, height: 900 })
+    // memory stays in the left column under the decisions rather than spanning the page. Measured once the rail is
+    // whole, which it becomes a render after the window widens.
+    await windowWidth(page, 1600)
     const wide = await box('ticket-conversation')
     const runsWide = await box('ticket-runs')
     expect(wide.x).toBeGreaterThan(runsWide.x)
