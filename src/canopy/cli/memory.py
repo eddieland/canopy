@@ -212,7 +212,7 @@ def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
 @click.option("--json", "as_json", is_flag=True, help="Print the modes and the lessons as one JSON object instead.")
 @click.pass_context
 def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_json: bool) -> int:
-    """List the lessons you promoted, each with its review date, its reads and citations, and any report it is wrong."""
+    """List the lessons you promoted, each with its review date or pin, reads, citations, and any wrong report."""
     if as_json and digest:
         raise click.UsageError("--json lists lessons: give it without --digest")
     ctx = open_context(click_ctx)
@@ -237,7 +237,7 @@ def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_
         where = f" for {m.repo}" if m.repo else ""
         wrong = f"; run {m.wrong_run_id} reported it wrong at {m.wrong_at}" if m.wrong_at is not None else ""
         click.echo(
-            f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; review at {m.review_at}; "
+            f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; {_review(m)}; "
             f"{_use(m, _read(seen, m))}{wrong}\n{quoted(m.body or '', _INDENT)}",
         )
     return 0
@@ -264,8 +264,7 @@ def cmd_promote(click_ctx: click.Context, memory_id: int, text: str | None, repo
     logs.for_tick(None).info("lesson promoted", extra={"memory": memory_id, "scope": source.scope, "lesson": lesson.id})
     where = f" for {lesson.repo}" if lesson.repo else ""
     click.echo(
-        f"{_kind(source.scope)} {memory_id} is lesson {lesson.id} (`{lesson.key}`){where}, due for review at "
-        f"{lesson.review_at}.",
+        f"{_kind(source.scope)} {memory_id} is lesson {lesson.id} (`{lesson.key}`){where}, {_due(lesson)}.",
     )
     if promoted.superseded is not None:
         click.echo(f"It replaces lesson {promoted.superseded}, which was under the same key.")
@@ -310,7 +309,45 @@ def cmd_renew(click_ctx: click.Context, lesson_id: int) -> int:
     except conversation.Refused as r:
         raise CliError(f"renew refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("lesson renewed", extra={"lesson": lesson_id})
-    click.echo(f"Lesson {lesson_id} is renewed: due for review at {due}.")
+    if due is None:
+        click.echo(f"Lesson {lesson_id} is renewed: any report that it is wrong is cleared. Pinned, it is never due.")
+    else:
+        click.echo(f"Lesson {lesson_id} is renewed: due for review at {due}.")
+    return 0
+
+
+@memory_group.command("pin")
+@click.argument("lesson_id", metavar="ID", type=int)
+@click.pass_context
+def cmd_pin(click_ctx: click.Context, lesson_id: int) -> int:
+    """Pin a lesson: it never comes up for review, and runs read it before every lesson not pinned.
+
+    The pin stays through the lesson's edits, and through a promote under its key, until you unpin it.
+    """
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        memory_manage.pin(ctx.conn, ctx.config, lesson_id)
+    except conversation.Refused as r:
+        raise CliError(f"pin refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("lesson pinned", extra={"lesson": lesson_id})
+    click.echo(f"Lesson {lesson_id} is pinned: never due for review, and served before every lesson not pinned.")
+    return 0
+
+
+@memory_group.command("unpin")
+@click.argument("lesson_id", metavar="ID", type=int)
+@click.pass_context
+def cmd_unpin(click_ctx: click.Context, lesson_id: int) -> int:
+    """Unpin a lesson: it comes up for review again later, and is served as any other."""
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        due = memory_manage.unpin(ctx.conn, ctx.config, lesson_id)
+    except conversation.Refused as r:
+        raise CliError(f"unpin refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("lesson unpinned", extra={"lesson": lesson_id})
+    click.echo(f"Lesson {lesson_id} is unpinned: due for review at {due}.")
     return 0
 
 
@@ -349,8 +386,8 @@ def cmd_edit(click_ctx: click.Context, lesson_id: int, text: str | None, repo: s
     logs.for_tick(None).info("lesson edited", extra={"lesson": lesson_id, "into": lesson.id})
     where = f" for {lesson.repo}" if lesson.repo else ""
     click.echo(
-        f"Lesson {lesson_id} is edited into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, due "
-        f"for review at {lesson.review_at}. Lesson {lesson_id} stays in its history.",
+        f"Lesson {lesson_id} is edited into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, "
+        f"{_due(lesson)}. Lesson {lesson_id} stays in its history.",
     )
     if edited.served:
         click.echo("Every run dispatched from now on reads the new version.")
@@ -549,6 +586,7 @@ def _lesson_json(ctx: Context, lesson: records.Memory, read: memory.Reads) -> di
         if source is None
         else {"scope": source.scope, "id": source.id, "ticket": source.ticket_key, "run_id": source.run_id},
         "review_at": lesson.review_at,
+        "pinned_at": lesson.pinned_at,
         "read_count": read.count,
         "last_read_at": read.last_at,
         "use_count": lesson.use_count,
@@ -557,6 +595,16 @@ def _lesson_json(ctx: Context, lesson: records.Memory, read: memory.Reads) -> di
         "wrong_run_id": lesson.wrong_run_id,
         "text": _text(lesson),
     }
+
+
+def _review(lesson: records.Memory) -> str:
+    """When a lesson comes up for review, as `memory lessons` lists it, or since when it is pinned and never does."""
+    return f"pinned at {lesson.pinned_at}" if lesson.pinned_at is not None else f"review at {lesson.review_at}"
+
+
+def _due(lesson: records.Memory) -> str:
+    """When a lesson just made is due for review, as `promote` and `edit` say it, or that it is pinned and never is."""
+    return "pinned, never due for review" if lesson.pinned_at is not None else f"due for review at {lesson.review_at}"
 
 
 def _text(entry: records.Memory) -> str | None:

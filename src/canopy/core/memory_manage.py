@@ -6,7 +6,7 @@ write-ahead log is checkpointed, so a purged poison or a leaked secret does not 
 the operator runs these, from `canopy memory` or the web UI: they refuse inside canopy's ticks and runs. A lesson is
 made only here, from a proposal or a ticket's note the operator promotes, or from a lesson they edit: no agent writes
 one. Neither changes a lesson's text in place: the new lesson supersedes the one before it, which keeps its text as
-the lesson's history.
+the lesson's history. A pin is the operator's too, and stays with the lesson's key through each new version.
 """
 
 from __future__ import annotations
@@ -146,8 +146,9 @@ def promote(
     The lesson takes `text` in place of the source's own if given, and `repo` in place of a proposal's repository; a
     note names none, so its lesson is for every repository unless `repo` is given. It keeps the source's key,
     supersedes an active lesson under the key, and is due for review `REVIEW_DAYS` on. A proposal is `superseded`; a
-    note stays as it was, its ticket's. At `record` the lesson is recorded and served to no run. `repos` are the
-    workspace's repositories, which `repo` must be one of.
+    note stays as it was, its ticket's. A lesson it supersedes that was pinned leaves its pin to the new one, which is
+    then never due. At `record` the lesson is recorded and served to no run. `repos` are the workspace's repositories,
+    which `repo` must be one of.
 
     Returns:
         The lesson, the memory it came from, the lesson it superseded, and whether runs are served lessons now.
@@ -173,6 +174,7 @@ def promote(
         old = next((m for m in memory.active_lessons(conn) if m.key == source.key), None)
         if old is not None:
             sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id))
+        pinned_at = old.pinned_at if old is not None else None
         cur = sql.execute(
             conn,
             sql.insert(
@@ -187,7 +189,8 @@ def promote(
                 promoted_from=source.id,
                 created_at=stamp,
                 approved_at=stamp,
-                review_at=db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
+                review_at=_review_at(now, pinned_at),
+                pinned_at=pinned_at,
             ),
         )
         lesson_id = int(cur.lastrowid or 0)
@@ -244,26 +247,62 @@ def reject(conn: sqlite3.Connection, config: Config, proposal_id: int) -> record
     return proposal
 
 
-def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
+def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str | None:
     """Keep a lesson: it is due for review `REVIEW_DAYS` from now, and a run's report that it is wrong is cleared.
+
+    A pinned lesson is never due, so renewing one only clears the report.
+
+    Returns:
+        When it is next due for review, as the journal stores it; None for a pinned lesson.
+
+    Raises:
+        Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no
+            lesson in force has the id.
+    """
+    found = _in_force(conn, config, lesson_id)
+    due = _review_at(datetime.now(UTC), found.pinned_at)
+    sql.execute(
+        conn,
+        sql.update("memories").set(review_at=due, wrong_at=None, wrong_run_id=None).where("id = ?", lesson_id),
+    )
+    return due
+
+
+def pin(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
+    """Pin a lesson: it is never due for review, and a run is served it before every lesson not pinned.
+
+    A run's report that it is wrong still raises `lesson_wrong` until the operator renews or forgets it.
+
+    Returns:
+        When it was pinned, as the journal stores it.
+
+    Raises:
+        Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no
+            lesson in force has the id; (`pinned`) it is pinned already.
+    """
+    found = _in_force(conn, config, lesson_id)
+    if found.pinned_at is not None:
+        raise conversation.Refused("pinned", f"lesson {lesson_id} is pinned already, since {found.pinned_at}")
+    stamp = db.now()
+    sql.execute(conn, sql.update("memories").set(pinned_at=stamp, review_at=None).where("id = ?", lesson_id))
+    return stamp
+
+
+def unpin(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
+    """Unpin a lesson: it is due for review `REVIEW_DAYS` from now, as one just renewed, and served as any other.
 
     Returns:
         When it is next due for review, as the journal stores it.
 
     Raises:
         Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no
-            lesson in force has the id.
+            lesson in force has the id; (`not_pinned`) it is not pinned.
     """
-    conversation.check_operator()
-    _check_on(config)
-    found = memory.get(conn, lesson_id)
-    if found is None or found.scope is not MemoryScope.LESSON or found.status is not MemoryStatus.ACTIVE:
-        raise conversation.Refused("unknown", f"no lesson in force has id {lesson_id}")
+    found = _in_force(conn, config, lesson_id)
+    if found.pinned_at is None:
+        raise conversation.Refused("not_pinned", f"lesson {lesson_id} is not pinned")
     due = db.format_time(datetime.now(UTC) + timedelta(days=memory.REVIEW_DAYS))
-    sql.execute(
-        conn,
-        sql.update("memories").set(review_at=due, wrong_at=None, wrong_run_id=None).where("id = ?", lesson_id),
-    )
+    sql.execute(conn, sql.update("memories").set(pinned_at=None, review_at=due).where("id = ?", lesson_id))
     return due
 
 
@@ -295,8 +334,8 @@ def edit(
 
     The new version keeps the key, supersedes the lesson, and is made from it, so the old one stays, with its text, as
     the lesson's history, and what runs read of it and said of it stays with the words they read. It is due for review
-    `REVIEW_DAYS` on, with no run's report that it is wrong: in writing it, the operator vouched for it. `repos` are
-    the workspace's repositories, which `repo` must be one of.
+    `REVIEW_DAYS` on, or never while the lesson is pinned, with no run's report that it is wrong: in writing it, the
+    operator vouched for it. `repos` are the workspace's repositories, which `repo` must be one of.
 
     Returns:
         The new version, the one it replaced, which version it is, and whether runs are served lessons now.
@@ -346,7 +385,8 @@ def edit(
                 promoted_from=old.id,
                 created_at=stamp,
                 approved_at=stamp,
-                review_at=db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
+                review_at=_review_at(now, old.pinned_at),
+                pinned_at=old.pinned_at,
             ),
         )
         new_id = int(cur.lastrowid or 0)
@@ -365,6 +405,20 @@ def edit(
         version=memory.version(conn, lesson),
         served=config.memory.proposals is MemoryMode.USE,
     )
+
+
+def _in_force(conn: sqlite3.Connection, config: Config, lesson_id: int) -> records.Memory:
+    conversation.check_operator()
+    _check_on(config)
+    found = memory.get(conn, lesson_id)
+    if found is None or found.scope is not MemoryScope.LESSON or found.status is not MemoryStatus.ACTIVE:
+        raise conversation.Refused("unknown", f"no lesson in force has id {lesson_id}")
+    return found
+
+
+def _review_at(now: datetime, pinned_at: str | None) -> str | None:
+    # A pinned lesson is never due, so it keeps no review date.
+    return None if pinned_at is not None else db.format_time(now + timedelta(days=memory.REVIEW_DAYS))
 
 
 def _promotable(conn: sqlite3.Connection, config: Config, memory_id: int) -> records.Memory:

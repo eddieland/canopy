@@ -73,7 +73,9 @@ class MemoryEntry(Model):
     """The latest runs that cited it as relied on, newest first, at most five. A run from before canopy named them
     counts in `use_count` but is not here."""
     review_at: datetime | None
-    """A lesson's next review."""
+    """A lesson's next review; None for a pinned one, which is never due."""
+    pinned_at: datetime | None
+    """When the operator pinned a lesson, which runs are served before every lesson not pinned; None if not pinned."""
     wrong_at: datetime | None
     """When a run last reported a lesson wrong, until the operator renews it."""
     wrong_run_id: int | None
@@ -280,6 +282,24 @@ class MemoryRejected(Model):
 
 class MemoryRenewed(Model):
     """A lesson the operator renewed: it comes up for review again later, and a run's report it is wrong is cleared."""
+
+    id: int
+    """The lesson's id."""
+    review_at: datetime | None
+    """When it is next due for review; None for a pinned lesson, which never is."""
+
+
+class MemoryPinned(Model):
+    """A lesson the operator pinned: never due for review, and served before every lesson not pinned."""
+
+    id: int
+    """The lesson's id."""
+    pinned_at: datetime
+    """When it was pinned."""
+
+
+class MemoryUnpinned(Model):
+    """A lesson the operator unpinned: it comes up for review again later, and is served as any other."""
 
     id: int
     """The lesson's id."""

@@ -239,13 +239,13 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
         channel: null,
         change: "made from review run 5's summary and findings",
         refused: [],
-        body: 'The retry works for a 503.\n\n**minor** at `tests/test_upstream.py`: No test stops the backoff',
+        body: 'The retry works for a 503.\n\n`tests/test_upstream.py`\n\nNo test stops the backoff',
         comments: [
             {
                 number: 1,
                 path: 'api/upstream.py',
                 line: 15,
-                text: '**major**: The last 503 is returned as if it were an answer',
+                text: 'The last 503 is returned as if it were an answer',
                 finding: 1,
                 file: 0,
                 diff_line: 15,
