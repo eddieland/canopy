@@ -29,6 +29,7 @@ from canopy.core.context import Context, db_path
 from canopy.infra import logs
 from canopy.serve import live, mock_reviews, secret, server, views
 from canopy.serve import mock as serve_mock
+from canopy.serve import options as serve_options
 from canopy.serve.__main__ import main
 from canopy.serve.api import session
 from canopy.serve.app import create_app
@@ -589,6 +590,13 @@ def test_a_stream_with_a_lifetime_ends_on_its_own_after_its_first_events(ui: Pat
     assert {type(e.root) for e in events} >= {AttentionUpdated, RunsUpdated, TicketsUpdated}
     assert isinstance(events[-1].root, StreamEnding)
     assert not any(isinstance(e.root, StreamEnding) for e in events[:-1])
+
+
+def test_every_server_ends_its_streams_on_its_own(ui: Path, backend: Backend) -> None:
+    # A forwarder can hold a stream open after its page has gone (#1299): only the lifetime ends it then.
+    with mock.patch.object(serve_options, "STREAM_SECONDS", 0.3):
+        response = client(ui, backend).get("/api/events")
+    assert response.text.rstrip().endswith('data: {"type":"stream.ending"}')
 
 
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
