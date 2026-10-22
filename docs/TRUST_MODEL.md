@@ -438,7 +438,7 @@ Controls now:
   directory, and its role's own cache and data directories: no ref another slot shares, no hook, git config, `.git`
   link, or `commondir` that git on the host later reads, and none of the operator's caches or OpenCode data, which the
   host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the operator's logins, and only
-  a refreshed token of a login the operator has is copied back (DESIGN §24, Logins). A review writes none of its
+  a refreshed token of a login the operator has is copied back (DESIGN §24). A review writes none of its
   checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
 - The prefix is in the user file or the workspace's private file, which no repository or workspace file can set (T7)

@@ -56,7 +56,7 @@ any OpenCode upgrade, and before relying on a permission they check.
   every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
   MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
   refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
-  upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes DESIGN §24 (Logins) names.
+  upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes `canopy_sandbox/credentials.py` names.
 
 ## Before a release
 

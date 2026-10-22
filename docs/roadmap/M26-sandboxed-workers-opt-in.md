@@ -97,6 +97,6 @@ each role's OpenCode keeps its data in `~/.local/share/canopy/sandbox/<role>/`, 
 operator has, and it denies writing the operator's OpenCode data whatever the template says, so a template kept from
 before is closed too; `canopy sandbox setup` says when one still names it. Reading OpenCode 1.19.3's source found that
 it drops a login it cannot decode, and the whole of `mcp-auth.json` for one bad entry, so what comes back is checked
-field by field against the shapes OpenCode writes (DESIGN §24, Logins). The canary's new cases pass under `srt` 0.0.79
+field by field against the shapes OpenCode writes (DESIGN §24). The canary's new cases pass under `srt` 0.0.79
 and bubblewrap 0.9 on Ubuntu 24.04, and fail under the fake `srt`, as its others do.
 Next: the canary on the operator's Linux and macOS machines, then a day of `canopy loop` with sandboxed workers.
