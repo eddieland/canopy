@@ -70,4 +70,4 @@ conservatively, for the operator to change: every early tick is held by `loop.mi
 that runs no overseer leaves idle pacing's count as it was; the operator's tick-now runs no overseer with nothing
 listed; and the fallback gate keeps `loop.idle_max_minutes` as its backstop. Open for the operator: whether a `tracker`
 source is required, M37's question, which this needs settled (recommended: required, before the build), and whether
-`runtime.allow_bash`, the overseer's alone, goes with its MCP servers (recommended: yes, and the key with it).
+`runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and that entry with it).

@@ -61,6 +61,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'Agent "fixes" flaky test by deleting the flake, and the test',
         'glow2:Agent hits 99 Debugging; bug still at large',
         'yellow:wave2:Doubling your test coverage, trust me',
+        'green:wave:Review published; says word for word what you read, a first for the genre',
     ],
     tips: [
         'Tip: press / anywhere but a text field to search tickets, messages, and decisions',
@@ -108,6 +109,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'Tip: canopy show KEY --plans prints every plan the ticket has had, oldest first',
         'Tip: select a passage of a plan and press Ctrl+Alt+M to comment on it',
         "Tip: canopy start URL --review has canopy review someone else's PR once, at its head",
+        'Tip: canopy review publish RUN HASH --submit posts a review draft; without it, it waits on GitHub for you',
         'Tip: canopy send review:ID 1 3 sends findings 1 and 3 of a review to a worker',
         'Tip: canopy grant KEY implement --runs 3 allows three more runs, not one',
         'Tip: canopy health shows how the last days of ticks and runs ended, and the newest failures',

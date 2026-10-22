@@ -1,6 +1,7 @@
 """The personas the mock journal's runs and reviews wrote in (DESIGN §31), for `python -m canopy.serve --mock`.
 
-canopy's own, but ABC-099's reviewer, whom the operator set to `skeptic` from its page before its latest review.
+canopy's own, but ABC-099's reviewer, whom the operator set to `skeptic` from its page before its latest review, and
+the second of the two personas the operator asked Carol's PR to be reviewed in.
 ABC-105's newest plan run read canopy's text as it ships; the rest, made-up digests, each kept with its text.
 """
 
@@ -35,7 +36,10 @@ def seed(conn: sqlite3.Connection, cfg: config.Config, at: Callable[[int], str])
     for digest, text in ((canopy.digest, canopy.text), (_CANOPY_DIGEST, canopy.text), (_SKEPTIC_DIGEST, skeptic.text)):
         db.record_persona_text(conn, digest, text)
     sql.execute(conn, sql.update("review_runs").set(persona="canopy", persona_digest=_CANOPY_DIGEST).everything())
-    sql.execute(conn, sql.update("review_runs").set(persona="skeptic", persona_digest=_SKEPTIC_DIGEST).where("id = 4"))
+    sql.execute(
+        conn,
+        sql.update("review_runs").set(persona="skeptic", persona_digest=_SKEPTIC_DIGEST).where_in("id", [4, 6]),
+    )
     sql.execute(
         conn,
         sql.insert(

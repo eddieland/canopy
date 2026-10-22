@@ -28,14 +28,16 @@ loads canopy's definitions loads it, and the snapshot's digest splits runs into 
 JavaScript with no imports, so it loads with no network, inside the sandbox too. It holds each job canopy asks of the
 agent process, the clock its first: each job reads only what the harness hands it for that job, and its hooks run in a
 try of their own, so one that throws fails neither the call nor the jobs after it. A later job joins this file rather
-than shipping a plugin of its own.
+than shipping a plugin of its own. Both of OpenCode's major versions load the one file: its default export carries an
+entry point for each, and each version reads only its own, so binding OpenCode 2 (D009) keeps the clock.
 
 After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
 the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's
 result: the minutes left, and, the first time in a session, to finish what keeps the work (commit and push, or record
 its decisions) and print the result line. The line goes after a built-in tool's output, and first in an MCP tool's
 content, which OpenCode truncates after the hook keeping its head; so the tracker's, GitHub's, and the overseer's own
-tools (§27) carry it too. Counting from its own load, at the session's start, keeps it to one variable.
+tools (§27) carry it too. OpenCode 2 truncates every tool's result after the hook, so there it goes first in all of
+them. Counting from its own load, at the session's start, keeps it to one variable.
 
 What lets it run inside every agent process (TRUST_MODEL T4):
 
@@ -47,7 +49,9 @@ An agent thinking without calling a tool hears nothing until its next call; its 
 
 These rest on OpenCode's source at 1.19.3, read 2026-10-19 and read again on an upgrade: OpenCode loads plugins from
 every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
-a hook that throws fails the call; and an MCP result is truncated after the hook.
+a hook that throws fails the call; and an MCP result is truncated after the hook. OpenCode 2's, at 2.1.2, read
+2026-10-22: it loads a plugin file only by a default export with an id and a `setup` that registers hooks, and
+logs any other and runs without it; and the same three hold, for every tool's result.
 
 ### The snapshot, unwritable
 

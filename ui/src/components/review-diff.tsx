@@ -8,7 +8,7 @@ import { Disclosure } from '@/components/disclosure'
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
 import { Panel, PanelHeader } from '@/components/panel'
-import { DraftCommentCard, NewCommentCard } from '@/components/review-draft'
+import { DraftCommentCard, NewCommentCard, ReviewPointCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
@@ -56,8 +56,10 @@ export interface Wanted {
 /**
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
  * header when the diff does not show its line (`DiffPanels`). `wanted` is the file of the finding or comment whose link
- * the operator last followed. A review with a draft (DESIGN §34) has each of its comments' cards on its line too, after
- * the findings there; while the draft waits, the + beside a line's number opens a new comment's form under it.
+ * the operator last followed. On a review with a draft (DESIGN §34), each finding's card is the point of the
+ * operator's review it makes (`ReviewPointCard`), its comment included, and each comment the operator added has a card
+ * on its line too, after the findings there; while the draft waits, the + beside a line's number opens a new comment's
+ * form under it.
  */
 export function ReviewDiffPanels({
     run,
@@ -84,7 +86,12 @@ export function ReviewDiffPanels({
     const renderCard = (card: ReviewCard) => {
         switch (card.kind) {
             case 'finding': {
-                return <FindingCard key={`finding-${card.numbered.n}`} run={run} numbered={card.numbered} />
+                const key = `finding-${card.numbered.n}`
+                return draft === null ? (
+                    <FindingCard key={key} run={run} numbered={card.numbered} />
+                ) : (
+                    <ReviewPointCard key={key} run={run} numbered={card.numbered} draft={draft} />
+                )
             }
             case 'comment': {
                 return (
