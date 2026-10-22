@@ -9,9 +9,12 @@ import type {
     Forgot,
     Granted,
     MemoryEdited,
+    MemoryEntry,
     MemoryForgotten,
+    MemoryPinned,
     MemoryPromoted,
     MemoryRenewed,
+    MemoryUnpinned,
     NoticeChanged,
     PlanChanged,
     Replied,
@@ -430,7 +433,7 @@ export function promotedText(promoted: MemoryPromoted): string {
     const { lesson, source } = promoted
     const kind = source.scope === 'proposal' ? 'Proposal' : 'Note'
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+    const due = dueText(lesson)
     const head = `${kind} ${source.id} is lesson ${lesson.id} (\`${lesson.key}\`)${where}${due}.`
     const replaces =
         promoted.superseded === null ? '' : ` It replaces lesson ${promoted.superseded}, under the same key.`
@@ -456,7 +459,7 @@ export const PRIVATE_WORDS =
 export function editedText(edited: MemoryEdited): string {
     const { lesson, replaced } = edited
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+    const due = dueText(lesson)
     const head =
         `Lesson ${replaced.id} is edited into lesson ${lesson.id} (\`${lesson.key}\`)${where}, version ` +
         `${lesson.version}${due}. Lesson ${replaced.id} stays in its history.`
@@ -466,14 +469,39 @@ export function editedText(edited: MemoryEdited): string {
     return `${head}${served}`
 }
 
+// When a lesson a promote or an edit made is due for review, as `canopy memory` says it after the lesson's name; a
+// pinned one never is.
+function dueText(lesson: MemoryEntry): string {
+    if (lesson.pinned_at !== null) {
+        return ', pinned, never due for review'
+    }
+    return lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+}
+
 /** What a reject did, as `canopy memory reject` says it. */
 export function rejectedText(id: number): string {
     return `Proposal ${id} is rejected.`
 }
 
-/** What a renew did, as `canopy memory renew` says it: when the lesson is next due for review. */
+/**
+ * What a renew did, as `canopy memory renew` says it: when the lesson is next due for review, or for a pinned one,
+ * which never is, that a run's report it is wrong is cleared.
+ */
 export function renewedText(renewed: MemoryRenewed): string {
+    if (renewed.review_at === null) {
+        return `Lesson ${renewed.id} is renewed: any report that it is wrong is cleared. Pinned, it is never due.`
+    }
     return `Lesson ${renewed.id} is renewed: due for review at ${localTime(renewed.review_at, currentClock())}.`
+}
+
+/** What a pin did, as `canopy memory pin` says it. */
+export function pinnedText(pinned: MemoryPinned): string {
+    return `Lesson ${pinned.id} is pinned: never due for review, and served before every lesson not pinned.`
+}
+
+/** What an unpin did, as `canopy memory unpin` says it: when the lesson is next due for review. */
+export function unpinnedText(unpinned: MemoryUnpinned): string {
+    return `Lesson ${unpinned.id} is unpinned: due for review at ${localTime(unpinned.review_at, currentClock())}.`
 }
 
 /**

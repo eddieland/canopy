@@ -1,7 +1,7 @@
 """Agent memory (DESIGN §28): every tier's memory, a ticket's notes, a run's, a memory's versions, and the verbs.
 
-The verbs, promote, reject, renew, edit, and forget, are `canopy memory`'s, through `canopy.core.memory_manage`, so
-with its refusals. Purging many at once stays the CLI's, in the operator's shell.
+The verbs, promote, reject, renew, pin, unpin, edit, and forget, are `canopy memory`'s, through
+`canopy.core.memory_manage`, so with its refusals. Purging many at once stays the CLI's, in the operator's shell.
 """
 
 from __future__ import annotations
@@ -23,9 +23,11 @@ from canopy.serve.memory_schema import (
     MemoryFound,
     MemoryHistory,
     MemoryOverview,
+    MemoryPinned,
     MemoryPromoted,
     MemoryRejected,
     MemoryRenewed,
+    MemoryUnpinned,
     PromoteRequest,
     RunMemory,
     TicketMemory,
@@ -177,7 +179,8 @@ def reject(memory_id: MemoryId, backend: BackendDep) -> MemoryRejected:
 def renew(memory_id: MemoryId, backend: BackendDep) -> MemoryRenewed:
     """`canopy memory renew ID`: the lesson comes up for review again later, and a run's report it is wrong is cleared.
 
-    Refused `off`, or `unknown` for an id no lesson in force has, as the CLI refuses it.
+    A pinned lesson is never due, so `review_at` is null. Refused `off`, or `unknown` for an id no lesson in force has,
+    as the CLI refuses it.
     """
     with backend.open() as ctx:
         try:
@@ -185,7 +188,38 @@ def renew(memory_id: MemoryId, backend: BackendDep) -> MemoryRenewed:
         except conversation.Refused as r:
             raise RefusedError(r) from None
     _log.info("lesson renewed", extra={"lesson": memory_id, "channel": WEB})
-    return MemoryRenewed(id=memory_id, review_at=db.parse_time(due))
+    return MemoryRenewed(id=memory_id, review_at=db.parse_time(due) if due is not None else None)
+
+
+@router.post("/memory/{memory_id}/pin", operation_id="pinMemory", summary="Pin a lesson", responses=REFUSED)
+def pin(memory_id: MemoryId, backend: BackendDep) -> MemoryPinned:
+    """`canopy memory pin ID`: the lesson is never due for review, and runs are served it before the rest.
+
+    Refused `off`, `unknown` for an id no lesson in force has, or `pinned` for one pinned already, as the CLI refuses
+    it.
+    """
+    with backend.open() as ctx:
+        try:
+            stamp = memory_manage.pin(ctx.conn, ctx.config, memory_id)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("lesson pinned", extra={"lesson": memory_id, "channel": WEB})
+    return MemoryPinned(id=memory_id, pinned_at=db.parse_time(stamp))
+
+
+@router.post("/memory/{memory_id}/unpin", operation_id="unpinMemory", summary="Unpin a lesson", responses=REFUSED)
+def unpin(memory_id: MemoryId, backend: BackendDep) -> MemoryUnpinned:
+    """`canopy memory unpin ID`: the lesson comes up for review again later, and is served as any other.
+
+    Refused `off`, `unknown` for an id no lesson in force has, or `not_pinned`, as the CLI refuses it.
+    """
+    with backend.open() as ctx:
+        try:
+            due = memory_manage.unpin(ctx.conn, ctx.config, memory_id)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("lesson unpinned", extra={"lesson": memory_id, "channel": WEB})
+    return MemoryUnpinned(id=memory_id, review_at=db.parse_time(due))
 
 
 @router.post("/memory/{memory_id}/edit", operation_id="editMemory", summary="Edit a lesson", responses=REFUSED)
