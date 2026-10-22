@@ -119,7 +119,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             stop.armed = False
             release(ctx, run, link, log)
             stored = outcome.result_json()
-            if not tasks.close_run(ctx.conn, run_id, outcome.status, stored, head=outcome.head):
+            if not tasks.close_run(ctx.conn, ctx.config, run_id, outcome.status, stored, head=outcome.head):
                 log.warning("task run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run.log_path))
             log.info("task run finished", extra={**fields, "status": outcome.status, "head": outcome.head})
@@ -140,7 +140,7 @@ def end(ctx: Context, run: records.TaskRun, status: RunStatus, note: str, log: l
     # `_task` is gone, but a worker it started may not be. Stop it before its slot goes back to its pool.
     if run.agent_pid is not None and procs.kill_group(run.agent_pid):
         log.warning("killed the agent a gone process left behind", extra={**fields, "agent_pid": run.agent_pid})
-    if not tasks.close_run(ctx.conn, run.id, status, json.dumps({"harness": note}), head=None):
+    if not tasks.close_run(ctx.conn, ctx.config, run.id, status, json.dumps({"harness": note}), head=None):
         # Its own `_task` closed it first, and returned its slot.
         return set()
     procs.drop_lifelock(Path(run.log_path))
@@ -269,7 +269,8 @@ def _run_agent(
     """Run the private worker's command in the slot with the task's prompt, for the worker's timeout.
 
     The private worker's definition is the one that writes nothing to a ticket (DESIGN §22), so the slot's config must
-    name none of the tracker server's tools either. The session and cost the runtime reported are recorded at once.
+    name none of the tracker server's tools either. The session, cost, and tool calls the runtime reported are recorded
+    at once.
 
     Returns:
         The agent's process and the text its result line is read from.
@@ -314,11 +315,18 @@ def _run_agent(
     out.write(f"\n--- worker stderr ---\n{done.stderr}\n")
     out.write(f"--- worker exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
-    # Also after a timeout: whatever it printed before the kill names its session and what it had spent. Its tool calls
-    # are not rolled up: the journal's tools table names the run tables of tickets', chores', and reviews' runs.
+    # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = stdout.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "task_runs", run.id, output.session_id, output.usage, digest=snapshot.name)
+        db.set_run_report(
+            ctx.conn,
+            "task_runs",
+            run.id,
+            output.session_id,
+            output.usage,
+            digest=snapshot.name,
+            tools=output.tools,
+        )
     return done, output.text
 
 

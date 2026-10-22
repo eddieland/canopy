@@ -33,7 +33,7 @@ from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, archive, attention, connectors, duties, gc_pass, phases, state
+from canopy.loop import acknowledge, archive, attention, connectors, duties, gc_pass, observations, phases, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -67,8 +67,8 @@ MAX_ERRORS_NAMED = 3
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 # What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
-# grant, a task submitted or stopped, a notice set or cleared), a run ending, the operator pressing the loop's tick-now
-# key, or the operator asking from the web UI.
+# grant, a task submitted, replied to, or stopped, a notice set or cleared), a run ending, the operator pressing the
+# loop's tick-now key, or the operator asking from the web UI.
 type Woken = Literal["message", "starts", "grant", "task", "notice", "run", "key", "web"]
 # What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
 # length, one a gate shortened, or what ended one early.
@@ -225,6 +225,7 @@ def _render(
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
+        observations=observations.section(ctx, tick_id, now, tickets),
     )
     owed = duties.owed(
         ctx.conn,

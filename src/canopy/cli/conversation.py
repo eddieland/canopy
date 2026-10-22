@@ -340,12 +340,14 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a ticket, or note something to a chore, with TEXT or, without it, stdin.
+    """Answer a ticket or a task, or note something to a chore, with TEXT or, without it, stdin.
 
     On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
     an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
-    never reaches the ticket. On `chore:NAME` it is a note the chore's next runs read, such as a finding to leave out
-    until a date; the loop does not wake for it.
+    never reaches the ticket. On `task:N` it is your next instruction to the task, answering its run's question if one
+    asked: the next tick starts its next run, on its branch, with the conversation so far, and a waiting loop wakes.
+    On `chore:NAME` it is a note the chore's next runs read, such as a finding to leave out until a date; the loop does
+    not wake for it.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
@@ -362,6 +364,8 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Recorded message {replied.message_id} on {subject}{answered}.")
     else:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
+    if subject.kind == conversation.TASK:
+        tasks_cli.replied(ctx, int(subject.id))
     return 0
 
 

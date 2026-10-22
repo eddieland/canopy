@@ -40,16 +40,39 @@ def cmd_start(click_ctx: click.Context, loop_args: tuple[str, ...]) -> int:
 
 
 @daemon_group.command("stop")
-def cmd_stop() -> int:
-    """Stop the daemon: at once during its wait, or once its running tick ends. Dispatched workers keep running."""
+@click.option(
+    "--wait",
+    "wait_for_runs",
+    is_flag=True,
+    help="Tick no more, and stop once every run has ended, rather than refuse while runs are running.",
+)
+def cmd_stop(*, wait_for_runs: bool) -> int:
+    """Stop the daemon: at once during its wait, or once its running tick ends. Dispatched runs keep running.
+
+    Refuses while runs are running, unless --wait: a canopy that changes the journal does not start under them, so a
+    daemon stopped to upgrade canopy could not start again until they end.
+    """
     _check_operator("stop")
-    stopped = daemon.stop(workspace.find(Path.cwd()).state_dir, waiting=_say_waiting)
+    state_dir = workspace.find(Path.cwd()).state_dir
+    waiting = _say_waiting_for_runs if wait_for_runs else _say_waiting
+    try:
+        stopped = daemon.stop(state_dir, wait_for_runs=wait_for_runs, waiting=waiting)
+    except daemon.RunsRunningError as e:
+        runs = f"{e.runs[0]} is" if len(e.runs) == 1 else f"{', '.join(e.runs)} are"
+        raise CliError(
+            f"canopy daemon not stopped: {runs} still running. `canopy daemon stop --wait` stops it once they end, "
+            "ticking no more meanwhile.",
+        ) from None
     click.echo("canopy daemon is not running" if stopped is None else f"canopy daemon stopped, pid {stopped}")
     return 0
 
 
 def _say_waiting(pid: int) -> None:
     click.echo(f"canopy daemon (pid {pid}) stops once its running tick ends; waiting")
+
+
+def _say_waiting_for_runs(pid: int) -> None:
+    click.echo(f"canopy daemon (pid {pid}) stops once its running tick and every run end; waiting")
 
 
 @daemon_group.command("status")

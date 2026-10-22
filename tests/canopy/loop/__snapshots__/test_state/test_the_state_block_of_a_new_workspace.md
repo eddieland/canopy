@@ -47,6 +47,15 @@ This is a live tick.
   "stopped": [],
   "recently_done": [],
   "attention": [],
+  "observations": {
+    "max_age_minutes": 30,
+    "max_new_items": 10,
+    "query": {
+      "observed": "unobserved",
+      "why": "no tracker source observes tickets"
+    },
+    "tickets": []
+  },
   "capacity": {
     "max_workers": 2,
     "running": 0,

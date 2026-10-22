@@ -86,6 +86,14 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- The overseer's state block carries what canopy's connectors observed (DESIGN §35): each ticket marked a candidate or
+  not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
+  candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
+  trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
+  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut as a mirror cuts it.
+  The marks inform the overseer; no guard checks a claim against them yet (ROADMAP M37), so the label, reply, and
+  review checks above are still the overseer's and the worker's. Residual: an observation is what a connector printed,
+  up to that age old.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -165,8 +173,9 @@ Controls:
   never what a worker may do.
 - A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
   channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
-  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so is `canopy stop task:N`. Its text, and the replies a
-  later run takes, are the operator's instructions; what a run reports is data. A task never reaches the overseer: a
+  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so are `canopy reply task:N`, which queues its next run,
+  and `canopy stop task:N`. Its text, and the replies a later run takes, are the operator's instructions; what a run
+  reports, its summary and question, is data, and a later run's prompt says so. A task never reaches the overseer: a
   tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
   or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
   branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
@@ -275,12 +284,12 @@ still sees only what the branch now holds. A worker's bash still reaches the net
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
-unset, or `canopy task submit` to hand canopy a task in the operator's name, or write the journal file directly: the
-refusal stops a worker that follows injected text naively, not one that works around it. The operator accepted this
-(D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A
-steered overseer can dispatch a `resume` for an untrusted reviewer's comments without a go-ahead; the worker's own
-check and human review of the PR remain, and those comments were never
-instructions to it. A steered overseer can mirror text that was never on the ticket, or
+unset, or `canopy task submit` or `canopy reply task:N` to hand canopy a task, or its next run, in the operator's
+name, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one
+that works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on
+untrusted review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted
+reviewer's comments without a go-ahead; the worker's own check and human review of the PR remain, and those comments
+were never instructions to it. A steered overseer can mirror text that was never on the ticket, or
 name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
 stays its source.
 
@@ -530,7 +539,10 @@ Controls:
   not guards: the PR's draft state and its existence at all are agent judgment, and the create tool the definition
   allows is a private worker's residual below. Filing unlabeled tickets in the project the submission names is ROADMAP
   M61's third stage. A task's PR is the operator's like any other: canopy never drives it, and reviews it only when
-  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2).
+  `review.query` or a request names it. Its text, summaries, and pushed heads stay in the journal (T2). A run's
+  summary, question, branch, head, and PR leave the machine only as a `task.ended` event, to a sink whose events list
+  `tasks`, which none does unless the operator adds it; its `awaiting_reply` item, on every attention sink, names the
+  task and never the question.
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
@@ -651,7 +663,9 @@ agent branches under an unexpected prefix, which branch protection (§7) still g
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
 nothing. The query can still widen what the overseer reads: it reads every ticket a query returns, text and comments,
 before it checks for a label, so a widened query puts tickets nobody labeled, any the operator's tracker account can
-see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. Settled
+see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. With a
+`tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its
+prompt says not to read it (DESIGN §35); a stale or unobserved one is still read live. Settled
 (2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
 who shares the workspace with people they do not trust overrides it in the private file. Checking labels in code before
 any ticket reaches the overseer closes this with ROADMAP M37. The provider also picks the default tracker server and

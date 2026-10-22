@@ -43,6 +43,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy status` | The last tick, attention list, running workers, chores, and sinks. Start here. |
 | `canopy show REF` | A ticket's phase, PRs, runs, conversation, and comments; or `run:ID`, `chore:NAME`, or `task:N`. |
 | `canopy task submit TEXT` | Hands canopy one-off work in your words, about no ticket (`-` reads stdin; `--repo`, `--project`). The next tick starts it on `<branch_prefix>task/N`; `canopy task list` lists them. |
+| `canopy reply task:N [TEXT]` | Answers a task (TEXT or stdin): the next tick starts its next run, on its branch, with the conversation so far. A waiting loop wakes. |
 | `canopy stop task:N [--now]` | No tick starts the task again, and a queued one is dropped; `--now` ends its run. |
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | No dispatch of a started ticket until `canopy start`; `--now` ends its run. |
@@ -76,10 +77,10 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. `--next`: its next run alone, as `canopy start KEY --persona` and `canopy plan KEY --persona` set it. A PR's URL sets its open review request's. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
-| `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
+| `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run, so the operator sees its findings in `canopy status` and the web UI. Suggest `--no-record`, which records nothing, only while a new prompt is first being drafted. |
 | `canopy chore history NAME` | A chore's runs, newest first, with what each found; `--run ID` one in detail. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
-| `canopy daemon start [LOOP OPTIONS]`, `stop` | The loop, detached; output in `.canopy/daemon.log`. The operator runs these. |
+| `canopy daemon start [LOOP OPTIONS]`, `stop [--wait]` | The loop, detached; output in `.canopy/daemon.log`. `stop` refuses while runs run; `--wait` stops it once they end. The operator runs these. |
 | `canopy daemon status` | Whether the detached loop runs, since when, and where its output is. |
 | `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and its private config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size. |

@@ -5433,7 +5433,8 @@ export type components = {
             /**
              * Models
              * @description What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
-             *     plans, chores, reviews, each kind's models the most costly first, and its runs no session named a model for last.
+             *     plans, chores, reviews, tasks, each kind's models the most costly first, and its runs no session named a model for
+             *     last.
              * @default []
              */
             models: components["schemas"]["SpendModel"][];
@@ -5481,7 +5482,7 @@ export type components = {
             totals: components["schemas"]["SpendCosts"];
             /**
              * Unpriced
-             * @description A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews.
+             * @description A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews, tasks.
              */
             unpriced: components["schemas"]["SpendUnpriced"][];
             /**
@@ -5777,7 +5778,7 @@ export type components = {
          * SpendWindow
          * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
          *
-         *     Worker, split, chore, and review runs and each tick's overseer, by when they started.
+         *     Worker, split, chore, review, and task runs and each tick's overseer, by when they started.
          */
         SpendWindow: {
             /**

@@ -42,8 +42,8 @@ for sink in canopy-notify-desktop canopy-notify-slack; do
     usage=$("$sink" --help </dev/null) || fail "$sink --help failed"
     echo "$usage" | grep -q "^usage: $sink " || fail "$sink --help did not print the sink's usage"
 done
-# canopy's GitHub reader and poster too (DESIGN §29), and its Jira connector (§30).
-for program in canopy-connect-github canopy-post-github canopy-connect-jira; do
+# canopy's GitHub reader and poster too (DESIGN §29), its Jira connector (§30), and its local artifact store (§38).
+for program in canopy-connect-github canopy-post-github canopy-connect-jira canopy-artifacts; do
     [ "$(command -v "$program")" = "$UV_TOOL_BIN_DIR/$program" ] || fail "$program was not installed with canopy"
     usage=$("$program" --help </dev/null) || fail "$program --help failed"
     # argparse's usage line or click's, which capitalizes it.

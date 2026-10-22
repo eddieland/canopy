@@ -97,11 +97,11 @@ def signals(
 ) -> Generator[None]:
     """Make SIGINT and SIGTERM ask the loop to stop once the current tick ends, instead of killing it.
 
-    A first SIGINT, a Ctrl-C, also asks the loop to wait for the runs still running to end (`Stop.awaits_runs`); a
-    first SIGTERM, as `canopy daemon stop` sends, does not. A second signal raises KeyboardInterrupt, which aborts the
-    tick in progress: `procs` kills the overseer's process group, and the next tick closes the tick row as `abandoned`.
-    During the wait for runs, it ends the wait instead. Runs are detached and keep going either way. A signal within
-    `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
+    A first SIGINT, a Ctrl-C or `canopy daemon stop --wait`, also asks the loop to wait for the runs still running to
+    end (`Stop.awaits_runs`); a first SIGTERM, as `canopy daemon stop` sends, does not. A second signal raises
+    KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process group, and the next tick
+    closes the tick row as `abandoned`. During the wait for runs, it ends the wait instead. Runs are detached and keep
+    going either way. A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
 
     With `reload`, SIGHUP asks the loop to read its config again instead of ending it. A terminal hanging up sends
     SIGHUP too: when `hung_up()` says it did, the loop ends as SIGHUP always ended it, unless SIGHUP was ignored on
@@ -536,9 +536,9 @@ def _gap_seconds(ctx: Context) -> float:
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
-    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, a task submitted
-    or stopped (DESIGN §36), or a notice to workers set or cleared, after `since`. A note to a chore waits for the
-    chore's next run, and a config reload waits for the next tick.
+    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, a task submitted,
+    replied to, or stopped (DESIGN §36), or a notice to workers set or cleared, after `since`. A note to a chore waits
+    for the chore's next run, and a config reload waits for the next tick.
 
     Returns:
         The first of those that happened, or None.
@@ -614,7 +614,7 @@ def _log_woken(
     elif woken == "grant":
         log.info("a grant ended the wait", extra={"after": since})
     elif woken == "task":
-        log.info("a task submitted or stopped ended the wait", extra={"after": since})
+        log.info("a task submitted, replied to, or stopped ended the wait", extra={"after": since})
     elif woken == "notice":
         log.info("a notice to workers set or cleared ended the wait", extra={"after": since})
     elif woken == "run":

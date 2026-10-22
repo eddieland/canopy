@@ -73,7 +73,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M34. A cacheable overseer prompt](M34-a-cacheable-overseer-prompt.md): done 2026-10-15.
 - [M35. Temporary notices to workers](M35-temporary-notices-to-workers.md): done 2026-10-15.
 - [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): in progress.
-- [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): not started.
+- [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): in progress.
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): not started.
 - [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): not started.
 - [M40. The overseer per decision](M40-the-overseer-per-decision.md): not started.
@@ -98,7 +98,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): in progress.
 - [M60. Personas](M60-personas.md): in progress.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
-- [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): not started.
+- [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 

@@ -225,6 +225,27 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
     return applied_now
 
 
+def live_runs(conn: sqlite3.Connection) -> list[str]:
+    """Every run that is `running` and whose process is alive, read from any schema this canopy or an older one wrote.
+
+    A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+
+    Returns:
+        Each run as a message names it, `run 3` or `review run 4`, by table, then by id.
+    """
+    live: list[str] = []
+    # Every table of detached runs: each process writes its own row when it ends.
+    for table in RUN_TABLES:
+        if not sql.execute(conn, _table_named(table)).fetchone():
+            continue
+        rows = sql.execute(
+            conn,
+            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
+        )
+        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+    return live
+
+
 def _table_named(table: str) -> sql.Select:
     """A query of one row if the journal has a table named `table`, and none if it has not.
 
@@ -237,21 +258,10 @@ def _table_named(table: str) -> sql.Select:
 def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     """Refuse to migrate while a `_run` is alive: it was started by an earlier canopy, which wrote the old schema.
 
-    A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
-
     Raises:
         MigrationError: A run, chore run, review run, or task run is `running` and its process is alive.
     """
-    live: list[str] = []
-    # Every table of detached runs: each process writes its own row when it ends.
-    for table in RUN_TABLES:
-        if not sql.execute(conn, _table_named(table)).fetchone():
-            continue
-        rows = sql.execute(
-            conn,
-            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
-        )
-        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+    live = live_runs(conn)
     if live:
         runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(
@@ -653,6 +663,27 @@ _RUN_SELECT: Mapping[RunTable, sql.Select] = {
 def running_runs(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
     """Return `table`'s runs with status `running`, oldest first."""
     return sql.execute(conn, _RUN_SELECT[table].where("r.status = 'running'").order_by("r.started_at")).fetchall()
+
+
+def live_runs(conn: sqlite3.Connection) -> list[str]:
+    """Every detached run that is `running` and whose own process is alive, of every run table the journal has yet.
+
+    A run whose process is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+
+    Returns:
+        Each as `run 3`, `review run 5`, by table, then by id.
+    """
+    live: list[str] = []
+    # Every table of detached runs: each process writes its own row when it ends.
+    for table in RUN_TABLES:
+        if not sql.execute(conn, _table_named(table)).fetchone():
+            continue
+        rows = sql.execute(
+            conn,
+            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
+        )
+        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+    return live
 
 
 def busy_workers(conn: sqlite3.Connection) -> int:
@@ -1335,8 +1366,9 @@ def insert_message(
     answers: int | None = None,
     submission: str | None = None,
     comment: Comment | None = None,
+    task_run_id: int | None = None,
 ) -> int:
-    """Record a message and return its id.
+    """Record a message and return its id. A worker's names its run: a ticket's in `run_id`, a task's in `task_run_id`.
 
     A submission already recorded for the subject records nothing new: its message's id is returned instead. So does a
     tracker comment already mirrored for the subject.
@@ -1373,6 +1405,7 @@ def insert_message(
         author=comment.author if comment else None,
         commented_at=comment.at if comment else None,
         truncated=int(comment.truncated) if comment else 0,
+        task_run_id=task_run_id,
     )
     return rowid(sql.execute(conn, message))
 

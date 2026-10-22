@@ -143,7 +143,12 @@ _TICKETS = sql.select(
     "  ) WHERE v IS NOT NULL AND v != ''), '') AS text,"
     "  t.last_seen_at AS id",
 ).from_("tickets t")
-_MESSAGES = sql.select("id, subject_kind, subject_id, at, kind, run_id, body AS text").from_("messages")
+# A ticket's or a chore's: a one-off task's conversation has no page to find it on yet (DESIGN §36).
+_MESSAGES = (
+    sql.select("id, subject_kind, subject_id, at, kind, run_id, body AS text")
+    .from_("messages")
+    .where("subject_kind IN ('ticket', 'chore')")
+)
 # A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
 # is valid JSON has one, and only an object is a finding: the JSON functions fail on anything else.
 _CHORE_RUNS = (

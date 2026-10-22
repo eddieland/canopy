@@ -1,11 +1,14 @@
 import { cleanup, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { GuidePiece } from '@/lib/guide'
 import type { Block } from '@/lib/rich-text'
 import { renderRouted } from '@/test-utils'
 
 import { GuideLines, GuideText } from './guide-text'
+
+// A code block's colors, which Shiki stops giving a line it has read for too long: a busy runner's (`untimedShiki`).
+vi.mock('shiki/core', async (importOriginal) => (await import('@/test-utils')).untimedShiki(await importOriginal()))
 
 afterEach(() => {
     cleanup()

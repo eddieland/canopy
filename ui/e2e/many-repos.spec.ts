@@ -17,6 +17,12 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
+// A live event refetches a stubbed read, which can still be in its handler when the page closes and disposes its
+// response: drop it, since it comes after everything a test here checks.
+test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+})
+
 test('a workspace of many pools keeps every slot strip inside the panel, and folds idle slots', async ({ page }) => {
     // About the narrowest window the UI holds up in (DESIGN.md).
     await page.setViewportSize({ width: 820, height: 800 })

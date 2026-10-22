@@ -80,6 +80,8 @@ SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
+# A one-off task's item (DESIGN §36): no ticket, chore, or PR, and no page of its own yet.
+_TASK = "task:"
 _SOURCES: dict[str, MessageSource] = {
     "worker": "worker",
     "operator": "operator",
@@ -109,7 +111,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
         key = item.ticket_key
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
-        ticket = key if key is not None and chore is None and pr is None else None
+        task = key is not None and key.startswith(_TASK)
+        ticket = key if key is not None and chore is None and pr is None and not task else None
         row = db.get_ticket(ctx.conn, ticket) if ticket is not None else None
         found.append(
             AttentionItem(
