@@ -216,11 +216,18 @@ class ReviewItemState(TypedDict):
     body: str
 
 
-def section(ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> ObservationsState:
+def section(
+    ctx: Context,
+    tick_id: int,
+    now: datetime,
+    tickets: Iterable[records.Ticket],
+    *,
+    decided: AbstractSet[str] = frozenset(),
+) -> ObservationsState:
     """Read the observations of tick `tick_id` for the state block, as they stand at `now`.
 
     `tickets` are those the block lists: open and not stopped. The query's tickets join them, less those stopped or
-    marked done, as the derivation's do (§30).
+    marked done, as the derivation's do (§30), and less `decided`, those the harness decided this tick (§37).
 
     Returns:
         The block's `observations`.
@@ -230,11 +237,25 @@ def section(ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records
         "max_age_minutes": ctx.config.connect.max_age_minutes,
         "max_new_items": MAX_NEW_ITEMS,
         "query": reader.query(SourceKind.TRACKER),
-        "tickets": [reader.ticket(key) for key in reader.keys],
+        "tickets": [reader.ticket(key) for key in reader.keys if key not in decided],
     }
     if ctx.config.review.query.strip():
         found["review_query"] = reader.query(SourceKind.VCS)
     return found
+
+
+def fresh_query(ctx: Context, now: datetime) -> list[str] | None:
+    """The tracker query's result when the block shows it `fresh` at `now`: a source read it whole within its age.
+
+    The harness then records it as `canopy queried` would, so the overseer neither runs nor records it (DESIGN §6).
+
+    Returns:
+        The keys, in the order the source read them; None when no source read the query within
+        `connect.max_age_minutes`, or none observes tickets.
+    """
+    run = _query_run(ctx.conn, SourceKind.TRACKER, "query_result")
+    found = _query_state(run, SourceKind.TRACKER, tracked=_tracked(ctx), cutoff=_cutoff(ctx, now))
+    return found.get("result") if found["observed"] == "fresh" else None
 
 
 def past_comments(comments: Sequence[records.ObservedComment], *cursors: str | None) -> list[records.ObservedComment]:
@@ -284,7 +305,7 @@ class Reader:
             The reader.
         """
         conn = ctx.conn
-        cutoff = now - timedelta(minutes=ctx.config.connect.max_age_minutes)
+        cutoff = _cutoff(ctx, now)
         listed = {t.key: t for t in tickets}
         stopped = set(conversation.stopped(conn))
         done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
@@ -334,7 +355,7 @@ class Reader:
             units_of=db.all_units(conn),
             derived={(d.ticket_key, d.repo): d for d in derivations},
             runs=runs,
-            tracked=any(s.kind == SourceKind.TRACKER for s in ctx.config.connect.named().values()),
+            tracked=_tracked(ctx),
         )
 
     # The queries
@@ -345,16 +366,7 @@ class Reader:
         Returns:
             Its freshness, and the result when a run read it.
         """
-        if kind is SourceKind.TRACKER and not self.tracked:
-            return {"observed": "unobserved", "why": NO_TRACKER}
-        run = self.runs.get(kind)
-        if run is None:
-            return {"observed": "stale", "why": "never read to its end"}
-        found: QueryState = {"observed": "fresh", "read_at": run.ended_at, "result": _result(_query_of(run, kind))}
-        if db.parse_time(run.ended_at) < self.cutoff:
-            found["observed"] = "stale"
-            found["why"] = f"last read {run.ended_at}"
-        return found
+        return _query_state(self.runs.get(kind), kind, tracked=self.tracked, cutoff=self.cutoff)
 
     # A ticket
 
@@ -546,6 +558,38 @@ class Reader:
         if r.item is ReviewItem.REVIEW:
             found["state"] = r.state
         return found
+
+
+def _cutoff(ctx: Context, now: datetime) -> datetime:
+    # Before this, an observation is stale.
+    return now - timedelta(minutes=ctx.config.connect.max_age_minutes)
+
+
+def _tracked(ctx: Context) -> bool:
+    return any(s.kind == SourceKind.TRACKER for s in ctx.config.connect.named().values())
+
+
+def _query_state(
+    run: records.ConnectorRun | None,
+    kind: SourceKind,
+    *,
+    tracked: bool,
+    cutoff: datetime,
+) -> QueryState:
+    """A query's result as `run`, the newest run of `kind`'s source that read it to the end, left it.
+
+    Returns:
+        Its freshness, and the result when a run read it.
+    """
+    if kind is SourceKind.TRACKER and not tracked:
+        return {"observed": "unobserved", "why": NO_TRACKER}
+    if run is None:
+        return {"observed": "stale", "why": "never read to its end"}
+    found: QueryState = {"observed": "fresh", "read_at": run.ended_at, "result": _result(_query_of(run, kind))}
+    if db.parse_time(run.ended_at) < cutoff:
+        found["observed"] = "stale"
+        found["why"] = f"last read {run.ended_at}"
+    return found
 
 
 def _query_runs(conn: sqlite3.Connection) -> dict[SourceKind, records.ConnectorRun]:

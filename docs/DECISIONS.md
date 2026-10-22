@@ -81,7 +81,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - What to do about a ticket lives in the overseer prompt; what the loop may never do lives in dispatch guards and agent
   permissions. A prompt cannot relax a guard.
-- Revisit: if prompt behavior proves unstable; then move one rule at a time into code.
+- Revisited (M38, DESIGN §37): the harness decides a ticket in code when every row of §7 holding for it is one it
+  decides, and the overseer is refused `decided` on it. A row moves into code one at a time, by a PR citing a
+  measurement that shows the derivation right on it; one the harness reads from its journal alone needs none.
 
 ## D009. The runtime is a command template, and only its implementation in `canopy.runtime` knows it
 

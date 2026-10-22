@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
 
 from canopy.core import records, sql
-from canopy.core.vocab import Phase, PlanStatus, PoolKind, ResumeReason, SeenKind, StartStatus, TickStatus
+from canopy.core.vocab import Decider, Phase, PlanStatus, PoolKind, ResumeReason, SeenKind, StartStatus, TickStatus
 from canopy.infra import procs
 from canopy.runtime.report import ToolUse, Usage
 
@@ -1184,11 +1184,13 @@ def record_decision(
     repo: str | None = None,
     chore: str | None = None,
     pr: str | None = None,
+    decider: Decider = Decider.OVERSEER,
 ) -> int:
     """Insert a decision for `tick_id` and return its id.
 
     `repo` is set for an item about a repository, `chore` for a decision about a chore, which has no ticket key, and
     `pr` for a decision about a PR the loop reviews, which has a ticket key only for one of the loop's own PRs.
+    `decider` says who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37).
 
     Returns:
         The new decision's id.
@@ -1202,6 +1204,7 @@ def record_decision(
         repo=repo,
         chore=chore,
         pr=pr,
+        decider=decider,
     )
     return rowid(sql.execute(conn, decision))
 
