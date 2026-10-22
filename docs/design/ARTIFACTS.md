@@ -2,7 +2,8 @@
 
 Part of the canopy design, normative like all of it: pages workers publish for people to read, the comments people
 leave on them, and how those comments come back to a ticket. Sections are numbered across the whole design; the
-[README](README.md) has the map. Previous: [The harness decides](HARNESS_DECIDES.md).
+[README](README.md) has the map. Previous: [The harness decides](HARNESS_DECIDES.md). Next: [A tick without the
+overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 38. Artifacts and Louvre
 
